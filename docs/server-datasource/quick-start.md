@@ -1,163 +1,201 @@
-# Quick Start
+# Server Datasource Quick Start
 
-This is the smallest useful path for wiring a grid to a backend datasource.
+This is the golden path for wiring Affino DataGrid to a backend-owned table.
 
-## 1. Frontend Setup
+Use `@affino/datagrid-server-adapters` first. It provides the current app-facing datasource factory for the Affino HTTP endpoint shape. Reach for `@affino/datagrid-server-client` only when you need lower-level polling, invalidation, or custom transport helpers.
 
-Create an HTTP datasource adapter and pass it to the grid path that expects a `DataGridDataSource<T>`.
+## Install
 
-The reference adapter lives at:
+Frontend:
 
-- [`packages/datagrid-sandbox/src/serverDatasourceDemo/serverDemoDatasourceHttpAdapter.ts`](../../packages/datagrid-sandbox/src/serverDatasourceDemo/serverDemoDatasourceHttpAdapter.ts)
-
-The reference fill wrapper lives at:
-
-- [`packages/datagrid-sandbox/src/serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource.ts`](../../packages/datagrid-sandbox/src/serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource.ts)
-
-Minimal shape:
-
-```ts
-import { createServerDemoDatasourceHttpAdapter } from "./serverDatasourceDemo/serverDemoDatasourceHttpAdapter"
-import { createServerDemoDatasourceHttpFillDataSource } from "./serverDatasourceDemo/serverDemoDatasourceHttpFillDataSource"
-
-const httpDatasource = createServerDemoDatasourceHttpAdapter({
-  baseUrl: "http://localhost:8000",
-})
-
-const gridDatasource = createServerDemoDatasourceHttpFillDataSource({
-  enabled: true,
-  fallbackDataSource: httpDatasource,
-  httpDatasource,
-})
+```bash
+pnpm add @affino/datagrid-vue-app @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
-In the sandbox app, that datasource is then passed to the grid component that renders the server-data-source demo route.
+Backend:
 
-## 2. Minimal Backend Endpoints
+```bash
+uv add affino-grid-backend
+```
 
-You need these endpoints for the current feature set:
+or:
 
-- `GET /api/server-demo/health`
-- `POST /api/server-demo/pull`
-- `POST /api/server-demo/histogram`
-- `POST /api/server-demo/edits`
-- `POST /api/server-demo/fill-boundary`
-- `POST /api/server-demo/fill/commit`
-- `POST /api/history/undo`
-- `POST /api/history/redo`
-- `POST /api/history/status`
-- `GET /api/changes?sinceVersion=...`
-- `POST /api/server-demo/operations/{operation_id}/undo`
-- `POST /api/server-demo/operations/{operation_id}/redo`
+```bash
+pip install affino-grid-backend
+```
 
-The demo router is in [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py).
-The stack-history routes live under [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py).
-The change feed route lives under [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py).
+See also:
 
-## 3. Basic Flow
+- [Package installation](./package-installation.md)
+- [Backend FastAPI reference](./backend-fastapi.md)
+- [Backend template](./backend-template.md)
 
-### Pull Rows
+## Minimal Backend Contract
 
-Send the requested row window, sort model, and filter model to `pull`.
+`createAffinoDatasource({ tableId })` calls endpoints under `/api/{tableId}`.
+
+For a read-only grid, implement:
+
+- `POST /api/{tableId}/pull`
+
+For histogram-backed column filter UI, also implement:
+
+- `POST /api/{tableId}/histogram`
+
+The pull request body is:
 
 ```json
 {
   "range": { "startRow": 0, "endRow": 50 },
-  "sortModel": [{ "colId": "value", "sort": "desc" }],
-  "filterModel": {
-    "status": { "type": "equals", "filter": "Active" }
-  }
+  "sortModel": [{ "colId": "amount", "sort": "desc" }],
+  "filterModel": null
 }
 ```
 
-### Commit an Edit
+`endRow` is exclusive. Return rows either as raw row objects with `id` and `index`, or as datasource row entries with `rowId`, `index`, and `row`.
 
-Send a row edit with the current `baseRevision` if you want stale-write protection.
+Minimal raw-row response:
 
 ```json
 {
-  "baseRevision": "17",
-  "edits": [
-    {
-      "rowId": "srv-000010",
-      "columnId": "name",
-      "value": "Renamed Account 10",
-      "previousValue": "Account 00010"
-    }
+  "rows": [
+    { "id": "row-1", "index": 0, "title": "Auction 1", "status": "open", "amount": 1200 }
+  ],
+  "total": 1,
+  "revision": "7",
+  "datasetVersion": 7
+}
+```
+
+Histogram request body:
+
+```json
+{
+  "columnId": "status",
+  "filterModel": null
+}
+```
+
+Histogram response:
+
+```json
+{
+  "entries": [
+    { "value": "open", "text": "Open", "count": 12 },
+    { "value": "closed", "text": "Closed", "count": 4 }
   ]
 }
 ```
 
-### Resolve a Fill Boundary
+The reference backend implementation is in:
 
-Ask the backend how far the fill can safely extend for the current projection.
+- [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py)
+- [`backend/app/features/server_demo/repository.py`](../../backend/app/features/server_demo/repository.py)
+- [`backend/app/features/server_demo/schemas.py`](../../backend/app/features/server_demo/schemas.py)
 
-```json
-{
-  "direction": "down",
-  "baseRange": { "startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0 },
-  "fillColumns": ["status"],
-  "referenceColumns": ["status"],
-  "projection": {
-    "sortModel": [],
-    "filterModel": null,
-    "groupBy": null,
-    "groupExpansion": { "expandedByDefault": false, "toggledGroupKeys": [] },
-    "treeData": null,
-    "pivot": null,
-    "pagination": null
+## Minimal Frontend Usage
+
+Create the datasource with `createAffinoDatasource`, wrap it in a datasource-backed row model, and pass that row model to `DataGrid`.
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount } from "vue"
+import { createDataSourceBackedRowModel } from "@affino/datagrid-vue"
+import { DataGrid } from "@affino/datagrid-vue-app"
+import { createAffinoDatasource } from "@affino/datagrid-server-adapters"
+
+type AuctionRow = {
+  id: string
+  index: number
+  title: string
+  status: string
+  amount: number
+}
+
+const datasource = createAffinoDatasource<AuctionRow>({
+  baseUrl: "http://localhost:8000",
+  tableId: "auctions",
+})
+
+const rowModel = createDataSourceBackedRowModel<AuctionRow>({
+  dataSource: datasource,
+  initialTotal: 0,
+})
+
+const columns = [
+  { key: "title", label: "Title" },
+  { key: "status", label: "Status", capabilities: { sortable: true, filterable: true } },
+  {
+    key: "amount",
+    label: "Amount",
+    dataType: "number",
+    capabilities: { sortable: true, filterable: true },
+    presentation: { align: "right", headerAlign: "right" },
   },
-  "startRowIndex": 20,
-  "startColumnIndex": 0,
-  "limit": 3
-}
+]
+
+onBeforeUnmount(() => {
+  rowModel.dispose()
+})
+</script>
+
+<template>
+  <DataGrid
+    :row-model="rowModel"
+    :columns="columns"
+    virtualization
+  />
+</template>
 ```
 
-### Commit a Fill
+With the minimal contract above, the grid can:
 
-Send the fill boundary metadata back with the source and target row ids.
+- pull viewport rows from the backend
+- send sort model changes to `POST /api/{tableId}/pull`
+- send filter model changes to `POST /api/{tableId}/pull`
+- request histograms through `POST /api/{tableId}/histogram` when the backend supports that endpoint
 
-```json
-{
-  "operationId": "fill-123",
-  "baseRevision": "17",
-  "projectionHash": "sha256:...",
-  "boundaryToken": "v1:...",
-  "sourceRange": { "startRow": 20, "endRow": 20, "startColumn": 0, "endColumn": 0 },
-  "targetRange": { "startRow": 20, "endRow": 21, "startColumn": 0, "endColumn": 0 },
-  "sourceRowIds": ["srv-000020"],
-  "targetRowIds": ["srv-000020", "srv-000021"],
-  "fillColumns": ["status"],
-  "referenceColumns": ["status"],
-  "mode": "copy",
-  "projection": { "...": "same projection snapshot as boundary" }
-}
-```
+## Optional Capabilities
 
-### Undo and Redo
+`createAffinoDatasource` also wires the current Affino endpoint names for write and history-related operations. These only work when your backend implements the matching endpoints.
 
-Normal undo/redo uses stack history scoped by:
+Optional table-scoped endpoints:
 
-- `workspace_id`
-- `table_id`
-- `user_id` and/or `session_id`
+- `POST /api/{tableId}/edits`
+- `POST /api/{tableId}/fill-boundary`
+- `POST /api/{tableId}/fill/commit`
+- `POST /api/{tableId}/operations/{operationId}/undo`
+- `POST /api/{tableId}/operations/{operationId}/redo`
 
-Use the operation-id routes only for legacy/debug/manual replay.
+Optional shared endpoints:
 
-```bash
-POST /api/history/undo
-POST /api/history/redo
-POST /api/history/status
-POST /api/server-demo/operations/fill-123/undo
-POST /api/server-demo/operations/fill-123/redo
-```
+- `POST /api/history/undo`
+- `POST /api/history/redo`
+- `POST /api/history/status`
+- `GET /api/changes?sinceVersion=...`
 
-## Practical Notes
+Use these when you want:
 
-- `pull` is the only required read path for basic scrolling.
-- `commitEdits` should return a revision string so the frontend can invalidate cached rows.
-- `resolveFillBoundary` and `commitFillOperation` are only needed if you want the grid's fill handle to be server-backed.
-- `undo` and `redo` use stack history for normal UX.
-- `GET /api/changes?sinceVersion=...` is the current polling/change-feed fallback when the host app does not have push transport.
-- `POST /api/server-demo/operations/{operation_id}/undo|redo` remains available for low-level diagnostics/manual replay.
-- If you do not need fill yet, you can defer the fill endpoints and keep edit/pull working first.
+- edits committed through `DataGridDataSource.commitEdits`
+- server-backed fill handle operations
+- stack undo/redo backed by the server
+- polling-based change feed updates
+
+The `server_demo` backend shows the full shape:
+
+- [Backend FastAPI reference](./backend-fastapi.md)
+- [HTTP protocol](./protocol.md)
+- [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py)
+- [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py)
+
+## Low-Level Client Package
+
+`@affino/datagrid-server-client` is intentionally lower-level. Use it when the Affino adapter endpoint shape is not enough and you need to build your own datasource adapter around:
+
+- `createServerDatasourceHttpClient`
+- `createChangeFeedPoller`
+- `normalizeDatasourceInvalidation`
+- `normalizeRowSnapshots`
+- `normalizeDatasetVersion`
+
+For ordinary Affino HTTP backend integration, start with `@affino/datagrid-server-adapters`.
