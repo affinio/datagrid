@@ -34,6 +34,12 @@ See also:
 
 `createAffinoDatasource({ tableId })` calls endpoints under `/api/{tableId}`.
 
+It also accepts a few optional adapter-level controls:
+
+- `headers` to forward request headers on all adapter requests
+- `historyScope` to forward workspace and user/session scope into edit, fill, and history bodies
+- `histogram.ignoreSelfFilter` as a default for histogram requests when you want the adapter to exclude the active column unless a call-site override is provided
+
 For a read-only grid, implement:
 
 - `POST /api/{tableId}/pull`
@@ -72,7 +78,13 @@ Histogram request body:
 ```json
 {
   "columnId": "status",
-  "filterModel": null
+  "filterModel": null,
+  "options": {
+    "ignoreSelfFilter": true,
+    "search": "op",
+    "orderBy": "valueAsc",
+    "limit": 25
+  }
 }
 ```
 
@@ -158,6 +170,8 @@ With the minimal contract above, the grid can:
 ## Optional Capabilities
 
 `createAffinoDatasource` also wires the current Affino endpoint names for write and history-related operations. These only work when your backend implements the matching endpoints.
+
+When `historyScope` is provided, the adapter forwards it into edit, fill, and history request bodies as `workspace_id`, `user_id`, and `session_id`, while still keeping `table_id` on the table-scoped endpoints.
 
 Optional table-scoped endpoints:
 

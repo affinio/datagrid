@@ -2,7 +2,9 @@ import {
   serializeColumnValueToToken,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
+  type DataGridColumnHistogramOptions,
   type DataGridDataSource,
+  type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceRowEntry,
 } from "@affino/datagrid-core"
 import {
@@ -18,6 +20,19 @@ export interface AffinoDatasourceOptions {
   baseUrl: string
   tableId: string
   fetchImpl?: typeof fetch
+  headers?: HeadersInit | Record<string, string>
+  historyScope?: AffinoDatasourceHistoryScope
+  histogram?: AffinoDatasourceHistogramOptions
+}
+
+export interface AffinoDatasourceHistoryScope {
+  workspaceId?: string
+  userId?: string
+  sessionId?: string
+}
+
+export interface AffinoDatasourceHistogramOptions {
+  ignoreSelfFilter?: boolean
 }
 
 type RecordLike = Record<string, unknown>
@@ -99,6 +114,65 @@ function resolveAffinoEndpoint(tableId: string, suffix: string): string {
 
 function resolveAffinoUrl(baseUrl: string | undefined, path: string): string {
   return baseUrl ? new URL(path, baseUrl).toString() : path
+}
+
+function createAffinoFetchImpl(fetchImpl: typeof fetch, headers?: HeadersInit | Record<string, string>): typeof fetch {
+  if (!headers) {
+    return fetchImpl
+  }
+  return ((input: RequestInfo | URL, init?: RequestInit) => {
+    const mergedHeaders = new Headers(headers)
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => {
+        mergedHeaders.set(key, value)
+      })
+    }
+    return fetchImpl(input, {
+      ...init,
+      headers: mergedHeaders,
+    })
+  }) as typeof fetch
+}
+
+function resolveAffinoHistoryScopeBody(
+  tableId: string,
+  scope?: AffinoDatasourceHistoryScope,
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    table_id: tableId,
+  }
+  if (typeof scope?.workspaceId === "string") {
+    body.workspace_id = scope.workspaceId
+  }
+  if (typeof scope?.userId === "string") {
+    body.user_id = scope.userId
+  }
+  if (typeof scope?.sessionId === "string") {
+    body.session_id = scope.sessionId
+  }
+  return body
+}
+
+function normalizeAffinoHistogramOptions(
+  request: DataGridDataSourceColumnHistogramRequest,
+  defaultOptions: DataGridColumnHistogramOptions | undefined,
+): Record<string, unknown> {
+  const histogramOptions = request.options
+  const ignoreSelfFilter = histogramOptions.ignoreSelfFilter ?? defaultOptions?.ignoreSelfFilter
+  const search = typeof histogramOptions.search === "string" ? histogramOptions.search.trim() : ""
+  const body: Record<string, unknown> = {
+    ...(ignoreSelfFilter === undefined ? {} : { ignoreSelfFilter }),
+  }
+  if (search.length > 0) {
+    body.search = search
+  }
+  if (histogramOptions.orderBy === "countDesc" || histogramOptions.orderBy === "valueAsc") {
+    body.orderBy = histogramOptions.orderBy
+  }
+  if (typeof histogramOptions.limit === "number" && Number.isFinite(histogramOptions.limit)) {
+    body.limit = Math.max(0, Math.trunc(histogramOptions.limit))
+  }
+  return body
 }
 
 function normalizeAffinoPullRange(range: { start: number; end: number }): { startRow: number; endRow: number } {
@@ -523,9 +597,10 @@ export function createAffinoDatasource<TRow>(
   options: AffinoDatasourceOptions,
 ): AffinoDatasource<TRow> {
   const tableId = options.tableId.trim()
+  const fetchImpl = createAffinoFetchImpl(options.fetchImpl ?? globalThis.fetch.bind(globalThis), options.headers)
   const client = createServerDatasourceHttpClient<TRow>({
     baseUrl: options.baseUrl,
-    fetchImpl: options.fetchImpl,
+    fetchImpl,
     endpoints: {
       pull: resolveAffinoEndpoint(tableId, "pull"),
       histogram: resolveAffinoEndpoint(tableId, "histogram"),
@@ -545,12 +620,13 @@ export function createAffinoDatasource<TRow>(
     mapHistogramRequest: request => ({
       columnId: request.columnId,
       filterModel: request.filterModel,
+      options: normalizeAffinoHistogramOptions(request, options.histogram),
     }),
     mapPullResponse: mapAffinoPullResponse,
     mapHistogramResponse: mapAffinoHistogramResponse,
   })
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const resolveWriteEndpoint = (path: string): string => resolveAffinoUrl(options.baseUrl, path)
+  const historyScopeBody = resolveAffinoHistoryScopeBody(tableId, options.historyScope)
 
   const datasource = {
     ...client,
@@ -558,7 +634,10 @@ export function createAffinoDatasource<TRow>(
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint(resolveAffinoEndpoint(tableId, "edits")),
-        mapCommitEditsRequestBody(request),
+        {
+          ...mapCommitEditsRequestBody(request),
+          ...historyScopeBody,
+        },
         request.signal,
       )
       const normalized = normalizeCommitEditsResult(response)
@@ -587,7 +666,10 @@ export function createAffinoDatasource<TRow>(
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint(resolveAffinoEndpoint(tableId, "fill/commit")),
-        normalizeFillCommitRequestBody(request),
+        {
+          ...normalizeFillCommitRequestBody(request),
+          ...historyScopeBody,
+        },
         request.signal,
       )
       const normalized = normalizeFillUndoResult(response)
@@ -638,7 +720,7 @@ export function createAffinoDatasource<TRow>(
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint("/api/history/undo"),
-        {},
+        historyScopeBody,
       )
       return normalizeHistoryStackResult<TRow>(response)
     },
@@ -646,7 +728,7 @@ export function createAffinoDatasource<TRow>(
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint("/api/history/redo"),
-        {},
+        historyScopeBody,
       )
       return normalizeHistoryStackResult<TRow>(response)
     },
@@ -654,7 +736,7 @@ export function createAffinoDatasource<TRow>(
       const response = await postJson<unknown>(
         fetchImpl,
         resolveWriteEndpoint("/api/history/status"),
-        {},
+        historyScopeBody,
       )
       if (!isRecord(response)) {
         return {}
