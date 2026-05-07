@@ -11,7 +11,6 @@ import {
   type DataGridDataSourcePushEvent,
   type DataGridDataSourcePushListener,
   type DataGridFilterSnapshot,
-  type DataGridDataSourceRowEntry,
 } from "@affino/datagrid-vue"
 
 import {
@@ -27,8 +26,12 @@ import {
 } from "./types"
 import {
   createChangeFeedPoller,
+  type ServerChangeEventLike,
   normalizeDatasetVersion,
   normalizeDatasourceInvalidation,
+  mapServerChangeEvent,
+  normalizeRowSnapshots,
+  type ServerRowSnapshotLike,
 } from "@affino/datagrid-server-client"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 import {
@@ -789,51 +792,6 @@ export function normalizeServerDemoMutationInvalidation(value: unknown): ServerD
   return null
 }
 
-function normalizeChangeFeedRows(
-  rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[] | null | undefined,
-): readonly DataGridDataSourceRowEntry<ServerDemoRow>[] | null {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return null
-  }
-  const normalized: DataGridDataSourceRowEntry<ServerDemoRow>[] = []
-  for (const entry of rows) {
-    if (!entry || typeof entry !== "object") {
-      continue
-    }
-    if ("row" in entry && "rowId" in entry) {
-      const entryRow = entry as ServerDemoDataSourceRowEntry
-      if (typeof entryRow.index !== "number" || !Number.isFinite(entryRow.index)) {
-        continue
-      }
-      if (typeof entryRow.rowId !== "string" && typeof entryRow.rowId !== "number") {
-        continue
-      }
-      normalized.push({
-        index: Math.max(0, Math.trunc(entryRow.index)),
-        rowId: entryRow.rowId,
-        row: entryRow.row,
-        ...(entryRow.kind ? { kind: entryRow.kind } : {}),
-        ...(entryRow.groupMeta ? { groupMeta: entryRow.groupMeta } : {}),
-        ...(entryRow.state ? { state: entryRow.state } : {}),
-      })
-      continue
-    }
-    const rawRow = entry as ServerDemoRow
-    if (typeof rawRow.id !== "string" && typeof rawRow.id !== "number") {
-      continue
-    }
-    if (typeof rawRow.index !== "number" || !Number.isFinite(rawRow.index)) {
-      continue
-    }
-    normalized.push({
-      index: Math.max(0, Math.trunc(rawRow.index)),
-      rowId: rawRow.id,
-      row: rawRow,
-    })
-  }
-  return normalized.length > 0 ? normalized : null
-}
-
 function serializeFillRange(range: {
   startRow?: number
   endRow?: number
@@ -1321,41 +1279,31 @@ export function createServerDemoDatasourceHttpAdapter(
   }
 
   function dispatchChangeFeedChange(change: ServerDemoChangeFeedChange): void {
-    const rows = normalizeChangeFeedRows(change.rows)
-    if (change.type !== "dataset" && rows && rows.length > 0) {
-      changeFeedPoller.incrementAppliedChanges(rows.length)
+    const mapped = mapServerChangeEvent(
+      {
+        ...change,
+        rows: change.rows as readonly ServerRowSnapshotLike<ServerDemoRow>[] | undefined,
+      } as ServerChangeEventLike<ServerDemoRow>,
+      normalizeDatasourceInvalidation,
+    )
+    changeFeedPoller.incrementAppliedChanges(mapped.appliedCount)
+    if (mapped.kind === "upsert") {
       emitPushEvent({
         type: "upsert",
-        rows,
+        rows: mapped.rows,
         datasetVersion: latestDatasetVersion,
       })
       return
     }
-
-    const invalidation = normalizeDatasourceInvalidation(change.invalidation)
-    if (!invalidation) {
-      changeFeedPoller.incrementAppliedChanges()
-      emitPushEvent({
-        type: "invalidate",
-        datasetVersion: latestDatasetVersion,
-        invalidation: {
-          kind: "all",
-          reason: "change-feed",
-        },
-      })
-      return
-    }
-
-    changeFeedPoller.incrementAppliedChanges()
     emitPushEvent({
       type: "invalidate",
       datasetVersion: latestDatasetVersion,
-      invalidation,
+      invalidation: mapped.invalidation,
     })
   }
 
   function applyRowSnapshots(rows: readonly (ServerDemoRow | ServerDemoDataSourceRowEntry)[]): boolean {
-    const normalizedRows = normalizeChangeFeedRows(rows)
+    const normalizedRows = normalizeRowSnapshots(rows as readonly ServerRowSnapshotLike<ServerDemoRow>[])
     if (!normalizedRows || normalizedRows.length === 0) {
       return false
     }
