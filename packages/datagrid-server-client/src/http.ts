@@ -12,18 +12,18 @@ class HttpError extends Error {
   }
 }
 
-function resolveEndpoint(baseUrl: string | undefined, path: string): string {
+export function resolveEndpoint(baseUrl: string | undefined, path: string): string {
   if (!baseUrl) {
     return path
   }
   return new URL(path, baseUrl).toString()
 }
 
-function toAbortError(): DOMException {
+export function toAbortError(): DOMException {
   return new DOMException("Aborted", "AbortError")
 }
 
-function isFetchTransportFailure(caught: unknown): boolean {
+export function isFetchTransportFailure(caught: unknown): boolean {
   if (caught instanceof TypeError) {
     return true
   }
@@ -59,7 +59,7 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
   window.addEventListener("pageshow", resetPageLifecycleTeardownStarted, { capture: true })
 }
 
-function isFetchAbortLikeError(caught: unknown): boolean {
+export function isFetchAbortLikeError(caught: unknown): boolean {
   if (caught instanceof DOMException && caught.name === "AbortError") {
     return true
   }
@@ -72,7 +72,7 @@ function isFetchAbortLikeError(caught: unknown): boolean {
   return caught.name === "AbortError" || caught.message.toLowerCase().includes("abort")
 }
 
-async function parseErrorResponse(response: Response): Promise<HttpError> {
+export async function parseErrorResponse(response: Response): Promise<HttpError> {
   const fallbackMessage = `${response.status} ${response.statusText}`.trim()
   let parsedBody: unknown = null
   let message = fallbackMessage
@@ -104,7 +104,7 @@ async function parseErrorResponse(response: Response): Promise<HttpError> {
   return new HttpError(message, response.status, code, parsedBody ?? text)
 }
 
-async function postJson<TResponse>(
+export async function postJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   body: unknown,
@@ -148,7 +148,7 @@ async function postJson<TResponse>(
   }
 }
 
-async function getJson<TResponse>(
+export async function getJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   signal?: AbortSignal,
@@ -186,11 +186,3 @@ async function getJson<TResponse>(
     throw caught
   }
 }
-
-const internalHttpHelpers = {
-  resolveEndpoint,
-  postJson,
-  getJson,
-}
-
-void internalHttpHelpers

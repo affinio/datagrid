@@ -2,6 +2,7 @@
 
 Framework-agnostic client utilities for server-backed DataGrid:
 
+- HTTP datasource client factory
 - change feed polling
 - invalidation normalization
 - row snapshot mapping
@@ -47,11 +48,16 @@ Use `normalizeRowSnapshots()` to normalize raw row payloads or row-entry payload
 
 Use `normalizeDatasourceInvalidation()` to convert server invalidation payloads into `DataGridDataSourceInvalidation` values.
 
+### HTTP Client Factory
+
+Use `createServerDatasourceHttpClient()` when you want a reusable `DataGridDataSource`-shaped client with server-backed pull, change-feed polling, row snapshot application, and diagnostics.
+
 ## Public API
 
 ```ts
 import {
   createChangeFeedPoller,
+  createServerDatasourceHttpClient,
   mapServerChangeEvent,
   normalizeDatasetVersion,
   normalizeDatasourceInvalidation,
@@ -67,6 +73,7 @@ Types:
 - `ServerRowSnapshotLike`
 - `ServerChangeEventLike`
 - `ServerChangeMappingResult`
+- `ServerDatasourceHttpClientOptions`
 
 ## Usage
 
@@ -98,6 +105,32 @@ if (result.kind === "upsert") {
 
 ```ts
 const rows = normalizeRowSnapshots(serverRows)
+```
+
+### 4. Creating a server datasource client
+
+```ts
+const client = createServerDatasourceHttpClient({
+  endpoints: {
+    pull: "/api/pull",
+    histogram: "/api/histogram",
+    commitEdits: "/api/edits",
+    resolveFillBoundary: "/api/fill-boundary",
+    commitFillOperation: "/api/fill/commit",
+    undoOperation: operationId => `/api/operations/${operationId}/undo`,
+    redoOperation: operationId => `/api/operations/${operationId}/redo`,
+    historyStatus: "/api/history/status",
+    changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${sinceVersion}`,
+  },
+  mapPullResponse: response => ({
+    rows: response.rows,
+    total: response.total,
+    revision: response.revision ?? null,
+    datasetVersion: response.datasetVersion ?? null,
+  }),
+})
+
+client.startChangeFeedPolling()
 ```
 
 ## Design Principles
