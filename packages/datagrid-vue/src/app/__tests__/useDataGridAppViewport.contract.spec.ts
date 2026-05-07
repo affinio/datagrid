@@ -1,5 +1,5 @@
 import { computed, ref } from "vue"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppViewport } from "../useDataGridAppViewport"
 
@@ -94,6 +94,10 @@ function makeBodyViewport(scrollLeft = 0, clientWidth = 800): HTMLElement {
 // ---------------------------------------------------------------------------
 
 describe("useDataGridAppViewport contract", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("falls back to snapshot widths when column overrides are empty", () => {
     const visibleColumns = ref([
       { key: "alpha", pin: "center", width: 180 },
@@ -603,9 +607,115 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(el))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(viewport.viewportColumnStart.value).toBe(15)
-    expect(viewport.viewportColumnEnd.value).toBe(26)
+    expect(viewport.viewportColumnStart.value).toBe(13)
+    expect(viewport.viewportColumnEnd.value).toBe(24)
+    expect(viewport.renderedColumns.value).toBe(firstRenderedColumns)
+
+    el.scrollLeft = 1800
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(12)
+    expect(viewport.viewportColumnEnd.value).toBe(31)
     expect(viewport.renderedColumns.value).not.toBe(firstRenderedColumns)
+  })
+
+  it("resolves the precise rendered column window after horizontal scroll idle", () => {
+    vi.useFakeTimers()
+    const raf = createRafHarness()
+    const cols = makeColumns(80, 100)
+
+    const viewport = makeViewport({
+      visibleColumns: ref(cols),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(1500, 800)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    el.scrollLeft = 1800
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(12)
+    expect(viewport.viewportColumnEnd.value).toBe(31)
+
+    vi.advanceTimersByTime(120)
+
+    expect(viewport.viewportColumnStart.value).toBe(16)
+    expect(viewport.viewportColumnEnd.value).toBe(27)
+  })
+
+  it("resolves the precise rendered column window on forced viewport sync", () => {
+    const raf = createRafHarness()
+    const cols = makeColumns(80, 100)
+
+    const viewport = makeViewport({
+      visibleColumns: ref(cols),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(1500, 800)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    el.scrollLeft = 1800
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(12)
+    expect(viewport.viewportColumnEnd.value).toBe(31)
+
+    viewport.syncViewportFromDom()
+
+    expect(viewport.viewportColumnStart.value).toBe(16)
+    expect(viewport.viewportColumnEnd.value).toBe(27)
+  })
+
+  it("invalidates a retained horizontal column window when column widths change", () => {
+    vi.useFakeTimers()
+    const raf = createRafHarness()
+    const cols = makeColumns(80, 100)
+    const columnWidths = ref<Record<string, number>>({})
+
+    const viewport = makeViewport({
+      visibleColumns: ref(cols),
+      columnWidths,
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(1500, 800)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    const retainedRenderedColumns = viewport.renderedColumns.value
+
+    el.scrollLeft = 1600
+    viewport.handleViewportScroll(createScrollEvent(el))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.viewportColumnStart.value).toBe(13)
+    expect(viewport.viewportColumnEnd.value).toBe(24)
+    expect(viewport.renderedColumns.value).toBe(retainedRenderedColumns)
+
+    columnWidths.value = Object.fromEntries(cols.map(column => [column.key, 80]))
+
+    expect(viewport.viewportColumnStart.value).toBe(14)
+    expect(viewport.viewportColumnEnd.value).toBe(35)
+    expect(viewport.renderedColumns.value).not.toBe(retainedRenderedColumns)
   })
 
   it("clamps column range to boundaries when scrolled past last column", () => {

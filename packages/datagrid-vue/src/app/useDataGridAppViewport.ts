@@ -10,6 +10,8 @@ const DATA_GRID_PERF_TRACE_QUERY_PARAM = "dgPerfTrace"
 const DATA_GRID_PERF_TRACE_STORAGE_KEY = "affino-datagrid-perf-trace"
 const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
 const DATA_GRID_PERF_SAMPLE_LIMIT = 400
+const DATA_GRID_HORIZONTAL_SCROLL_IDLE_MS = 120
+const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 
 type DataGridPerfSample = {
   scope: string
@@ -364,11 +366,18 @@ export function useDataGridAppViewport<TRow>(
     | null = null
   let pendingViewportScrollTop = 0
   let pendingViewportScrollLeft = 0
+  let horizontalScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+  let horizontalScrollActive = false
+  let forceNextColumnWindowSync = false
+  const horizontalScrollIdleRevision = ref(0)
   let cachedViewportElement: HTMLElement | null = null
   let cachedViewportDimensions: ViewportDimensions | null = null
   let lastSyncedColumnRange:
     | {
       columns: readonly DataGridColumnSnapshot[]
+      prefix: readonly number[]
+      totalWidth: number
+      overscan: number
       start: number
       end: number
     }
@@ -405,6 +414,34 @@ export function useDataGridAppViewport<TRow>(
       return
     }
     globalThis.clearTimeout(handle)
+  }
+
+  const clearHorizontalScrollIdleTimer = (): void => {
+    if (horizontalScrollIdleTimer == null) {
+      return
+    }
+    globalThis.clearTimeout(horizontalScrollIdleTimer)
+    horizontalScrollIdleTimer = null
+  }
+
+  const forcePreciseHorizontalColumnWindow = (): void => {
+    clearHorizontalScrollIdleTimer()
+    horizontalScrollActive = false
+    forceNextColumnWindowSync = true
+    horizontalScrollIdleRevision.value += 1
+  }
+
+  const scheduleHorizontalScrollIdleSync = (): void => {
+    clearHorizontalScrollIdleTimer()
+    horizontalScrollActive = true
+    horizontalScrollIdleTimer = globalThis.setTimeout(() => {
+      horizontalScrollIdleTimer = null
+      horizontalScrollActive = false
+      forceNextColumnWindowSync = true
+      horizontalScrollIdleRevision.value += 1
+    }, DATA_GRID_HORIZONTAL_SCROLL_IDLE_MS)
+    const maybeNodeTimer = horizontalScrollIdleTimer as { unref?: () => void }
+    maybeNodeTimer.unref?.()
   }
 
   const captureViewportDimensions = (element: HTMLElement): ViewportDimensions => ({
@@ -575,27 +612,40 @@ export function useDataGridAppViewport<TRow>(
     visibleEnd: number,
     prefix: readonly number[],
     totalWidth: number,
+    retainMode: "precise" | "active",
+    forcePrecise: boolean,
   ): ViewportColumnMetrics => {
+    const overscan = columnOverscan.value
     const previousRange = lastSyncedColumnRange?.columns === columns
+      && lastSyncedColumnRange.prefix === prefix
+      && lastSyncedColumnRange.totalWidth === totalWidth
+      && lastSyncedColumnRange.overscan === overscan
       ? lastSyncedColumnRange
       : null
-    const hysteresis = Math.max(1, Math.floor(columnOverscan.value / 2))
-    const retainPreviousRange = previousRange != null
+    const hysteresis = retainMode === "active" ? 0 : Math.max(1, Math.floor(overscan / 2))
+    const retainPreviousRange = !forcePrecise
+      && previousRange != null
       && visibleStart >= previousRange.start + hysteresis
       && visibleEnd <= previousRange.end - hysteresis
+    const activeOverscan = retainMode === "active"
+      ? Math.max(overscan, Math.ceil(overscan * DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER))
+      : overscan
 
     const start = retainPreviousRange
       ? previousRange.start
-      : Math.max(0, visibleStart - columnOverscan.value)
+      : Math.max(0, visibleStart - activeOverscan)
     const end = retainPreviousRange
       ? previousRange.end
-      : Math.min(columns.length - 1, visibleEnd + columnOverscan.value)
+      : Math.min(columns.length - 1, visibleEnd + activeOverscan)
     const leftSpacerWidth = prefix[start] ?? 0
     const renderedWidth = (prefix[end + 1] ?? totalWidth) - leftSpacerWidth
     const rightSpacerWidth = Math.max(0, totalWidth - leftSpacerWidth - renderedWidth)
 
     lastSyncedColumnRange = {
       columns,
+      prefix,
+      totalWidth,
+      overscan,
       start,
       end,
     }
@@ -604,12 +654,18 @@ export function useDataGridAppViewport<TRow>(
   }
 
   const viewportColumnMetrics = computed(() => {
+    horizontalScrollIdleRevision.value
+    const forcePrecise = forceNextColumnWindowSync
+    forceNextColumnWindowSync = false
     const columns = options.visibleColumns.value
     const totalWidth = mainTrackWidth.value
     if (!resolveMaybeRef(options.columnVirtualizationEnabled) || columns.length <= 0) {
       lastSyncedColumnRange = columns.length > 0
         ? {
           columns,
+          prefix: columnPrefixWidths.value,
+          totalWidth,
+          overscan: columnOverscan.value,
           start: 0,
           end: Math.max(0, columns.length - 1),
         }
@@ -621,6 +677,9 @@ export function useDataGridAppViewport<TRow>(
     if (availableWidth <= 0) {
       lastSyncedColumnRange = {
         columns,
+        prefix: columnPrefixWidths.value,
+        totalWidth,
+        overscan: columnOverscan.value,
         start: 0,
         end: Math.max(0, columns.length - 1),
       }
@@ -645,7 +704,15 @@ export function useDataGridAppViewport<TRow>(
 
     if (visibleStart >= columns.length) {
       const lastIndex = columns.length - 1
-      return resolveBufferedViewportColumnMetrics(columns, lastIndex, lastIndex, prefix, totalWidth)
+      return resolveBufferedViewportColumnMetrics(
+        columns,
+        lastIndex,
+        lastIndex,
+        prefix,
+        totalWidth,
+        horizontalScrollActive ? "active" : "precise",
+        forcePrecise,
+      )
     }
 
     // Binary search: last column whose left edge (prefix[i]) < viewportEndPx.
@@ -659,7 +726,15 @@ export function useDataGridAppViewport<TRow>(
     }
     const visibleEnd = lo
 
-    return resolveBufferedViewportColumnMetrics(columns, visibleStart, visibleEnd, prefix, totalWidth)
+    return resolveBufferedViewportColumnMetrics(
+      columns,
+      visibleStart,
+      visibleEnd,
+      prefix,
+      totalWidth,
+      horizontalScrollActive ? "active" : "precise",
+      forcePrecise,
+    )
   })
 
   const gridContentStyle = computed<Record<string, string>>(() => {
@@ -977,6 +1052,14 @@ export function useDataGridAppViewport<TRow>(
     snapshot: ViewportSnapshot,
     commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
   ): void => {
+    const previousScrollLeft = viewportScrollLeft.value
+    const shouldForceColumnWindow = commitOptions.forceVisibleRows || commitOptions.measureVisibleRowHeights
+    if (shouldForceColumnWindow) {
+      forcePreciseHorizontalColumnWindow()
+    }
+    else if (snapshot.scrollLeft !== previousScrollLeft) {
+      scheduleHorizontalScrollIdleSync()
+    }
     viewportScrollLeft.value = snapshot.scrollLeft
     viewportScrollTop.value = snapshot.scrollTop
     viewportClientWidth.value = snapshot.clientWidth
@@ -1132,6 +1215,8 @@ export function useDataGridAppViewport<TRow>(
   const cancelScheduledViewportSync = (): void => {
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
+    clearHorizontalScrollIdleTimer()
+    horizontalScrollActive = false
     if (viewportSyncRafHandle == null) {
       return
     }
@@ -1150,6 +1235,8 @@ export function useDataGridAppViewport<TRow>(
       }
       cachedViewportElement = null
       cachedViewportDimensions = null
+      clearHorizontalScrollIdleTimer()
+      horizontalScrollActive = false
     })
   }
 
