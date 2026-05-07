@@ -12,7 +12,7 @@ class HttpError extends Error {
   }
 }
 
-export function resolveEndpoint(baseUrl: string | undefined, path: string): string {
+function resolveEndpoint(baseUrl: string | undefined, path: string): string {
   if (!baseUrl) {
     return path
   }
@@ -104,7 +104,7 @@ async function parseErrorResponse(response: Response): Promise<HttpError> {
   return new HttpError(message, response.status, code, parsedBody ?? text)
 }
 
-export async function postJson<TResponse>(
+async function postJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   body: unknown,
@@ -148,7 +148,7 @@ export async function postJson<TResponse>(
   }
 }
 
-export async function getJson<TResponse>(
+async function getJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   signal?: AbortSignal,
@@ -186,3 +186,11 @@ export async function getJson<TResponse>(
     throw caught
   }
 }
+
+const internalHttpHelpers = {
+  resolveEndpoint,
+  postJson,
+  getJson,
+}
+
+void internalHttpHelpers

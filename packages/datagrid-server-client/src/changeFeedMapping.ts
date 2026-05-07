@@ -7,13 +7,13 @@ export interface ServerChangeEventLike<T> {
   invalidation?: unknown
 }
 
-export interface ServerChangeUpsertMappingResult<T> {
+interface ServerChangeUpsertMappingResult<T> {
   kind: "upsert"
   rows: readonly DataGridDataSourceRowEntry<T>[]
   appliedCount: number
 }
 
-export interface ServerChangeInvalidateMappingResult {
+interface ServerChangeInvalidateMappingResult {
   kind: "invalidate"
   invalidation: DataGridDataSourceInvalidation
   appliedCount: number
