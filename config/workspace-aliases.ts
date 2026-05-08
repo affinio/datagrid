@@ -19,6 +19,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-formula-engine-enterprise/*": "packages/datagrid-formula-engine-enterprise/src/*",
   "@affino/datagrid-server-client": "packages/datagrid-server-client/src/index.ts",
   "@affino/datagrid-server-client/*": "packages/datagrid-server-client/src/*",
+  "@affino/datagrid-server-adapters": "packages/datagrid-server-adapters/src/index.ts",
+  "@affino/datagrid-server-adapters/*": "packages/datagrid-server-adapters/src/*",
   "@affino/datagrid-pivot": "packages/datagrid-pivot/src/index.ts",
   "@affino/datagrid-pivot/*": "packages/datagrid-pivot/src/*",
   "@affino/datagrid-core/advanced": "packages/datagrid-core/src/advanced.ts",

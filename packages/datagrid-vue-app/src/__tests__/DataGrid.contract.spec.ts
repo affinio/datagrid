@@ -3299,7 +3299,7 @@ describe("DataGrid app facade contract", () => {
 
   it("loads columnMenu value filters asynchronously and sends search to the row model histogram", async () => {
     type HistogramRequest = {
-      request: { options: { ignoreSelfFilter?: boolean; search?: string } }
+      request: { options: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string } }
       resolve: (entries: readonly { token: string; value: string; count: number; text?: string }[]) => void
       reject: (reason?: unknown) => void
     }
@@ -3351,7 +3351,7 @@ describe("DataGrid app facade contract", () => {
       getPivotModel: () => null,
       setAggregationModel: () => {},
       getAggregationModel: () => null,
-      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string }) => {
+      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string }) => {
         const request = { options: options ?? {} }
         return new Promise<readonly { token: string; value: string; count: number; text?: string }[]>((resolve, reject) => {
           histogramRequests.push({ request, resolve, reject })
@@ -3385,6 +3385,8 @@ describe("DataGrid app facade contract", () => {
     expect(queryColumnMenuRoot()?.textContent).toContain("Loading values")
     expect(histogramRequests).toHaveLength(1)
     expect(histogramRequests[0]?.request.options.ignoreSelfFilter).toBe(true)
+    expect(histogramRequests[0]?.request.options.limit).toBe(120)
+    expect(histogramRequests[0]?.request.options.orderBy).toBe("valueAsc")
 
     histogramRequests[0]?.resolve([
       { token: "string:noc", value: "NOC", count: 2, text: "NOC" },
@@ -3406,6 +3408,7 @@ describe("DataGrid app facade contract", () => {
 
     expect(histogramRequests).toHaveLength(2)
     expect(histogramRequests[1]?.request.options.search).toBe("pay")
+    expect(histogramRequests[1]?.request.options.limit).toBe(120)
     histogramRequests[1]?.resolve([
       { token: "string:payments", value: "Payments", count: 1, text: "Payments" },
     ])
@@ -3420,7 +3423,7 @@ describe("DataGrid app facade contract", () => {
 
   it("defers large columnMenu value histograms until after the menu opens", async () => {
     type HistogramRequest = {
-      request: { options: { ignoreSelfFilter?: boolean; search?: string } }
+      request: { options: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string } }
       resolve: (entries: readonly { token: string; value: string; count: number; text?: string }[]) => void
       reject: (reason?: unknown) => void
     }
@@ -3487,7 +3490,7 @@ describe("DataGrid app facade contract", () => {
       getPivotModel: () => null,
       setAggregationModel: () => {},
       getAggregationModel: () => null,
-      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string }) => {
+      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string }) => {
         const request = { options: options ?? {} }
         return new Promise<readonly { token: string; value: string; count: number; text?: string }[]>((resolve, reject) => {
           histogramRequests.push({ request, resolve, reject })
@@ -3531,6 +3534,7 @@ describe("DataGrid app facade contract", () => {
 
     expect(histogramRequests).toHaveLength(1)
     expect(histogramRequests[0]?.request.options.ignoreSelfFilter).toBe(true)
+    expect(histogramRequests[0]?.request.options.limit).toBe(120)
     histogramRequests[0]?.resolve([
       { token: "string:noc", value: "NOC", count: 2, text: "NOC" },
       { token: "string:payments", value: "Payments", count: 1, text: "Payments" },

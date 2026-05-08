@@ -1232,10 +1232,15 @@ export default defineComponent({
     }
 
     const resolveColumnMenuValueEntries = (columnKey: string, search?: string): DataGridColumnMenuValueEntriesResult => {
+      const normalizedSearch = search?.trim() ?? ""
+      const histogramLimit = props.runtime.api.rows.getSnapshot().kind === "server"
+        ? props.columnMenu.maxFilterValues
+        : undefined
       return props.runtime.api.columns.getHistogram(columnKey, {
         ignoreSelfFilter: true,
         orderBy: "valueAsc",
-        search,
+        ...(normalizedSearch.length > 0 ? { search: normalizedSearch } : {}),
+        ...(typeof histogramLimit === "number" ? { limit: histogramLimit } : {}),
       })
     }
 
