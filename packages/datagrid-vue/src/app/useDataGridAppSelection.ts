@@ -204,10 +204,12 @@ export function useDataGridAppSelection<TRow>(
   )
   const selectionAggregates = computed<{
     count: number
+    loadedCount: number
     sum: number | null
     min: number | null
     max: number | null
     average: number | null
+    isPartial: boolean
   } | null>(() => {
     void rowVersion.value
     if (resolveMaybeRef(options.mode) !== "base") {
@@ -232,6 +234,7 @@ export function useDataGridAppSelection<TRow>(
     }
 
     let selectedCellCount = 0
+    let loadedSelectedCellCount = 0
     let numericCount = 0
     let numericSum = 0
     let numericMin = Number.POSITIVE_INFINITY
@@ -246,16 +249,11 @@ export function useDataGridAppSelection<TRow>(
 
       for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
         const rowNode = options.resolveSelectionRowAtIndex?.(rowIndex) ?? runtime.api.rows.get(rowIndex)
-        if (!rowNode || rowNode.kind === "group") {
-          continue
-        }
         for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
           const cellKey = `${rowIndex}:${columnIndex}`
           if (seenCells.has(cellKey)) {
             continue
           }
-          seenCells.add(cellKey)
-          selectedCellCount += 1
 
           const column = resolveSelectionColumnAtIndex(
             options.visibleColumns.value,
@@ -265,6 +263,14 @@ export function useDataGridAppSelection<TRow>(
           if (!column?.key) {
             continue
           }
+
+          seenCells.add(cellKey)
+          selectedCellCount += 1
+          if (!rowNode || rowNode.kind === "group") {
+            continue
+          }
+
+          loadedSelectedCellCount += 1
           const rawValue = readSelectionCellValue(rowNode, column, options.readSelectionCell)
           const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
           if (!Number.isFinite(numericValue)) {
@@ -284,10 +290,12 @@ export function useDataGridAppSelection<TRow>(
 
     return {
       count: selectedCellCount,
+      loadedCount: loadedSelectedCellCount,
       sum: numericCount > 0 ? numericSum : null,
       min: numericCount > 0 ? numericMin : null,
       max: numericCount > 0 ? numericMax : null,
       average: numericCount > 0 ? numericSum / numericCount : null,
+      isPartial: loadedSelectedCellCount < selectedCellCount,
     }
   })
 
@@ -296,7 +304,10 @@ export function useDataGridAppSelection<TRow>(
     if (!summary) {
       return ""
     }
-    return `Selection: count ${summary.count} · sum ${formatAggregateNumber(summary.sum)} · min ${formatAggregateNumber(summary.min)} · max ${formatAggregateNumber(summary.max)} · avg ${formatAggregateNumber(summary.average)}`
+    const loadedLabel = summary.isPartial
+      ? ` · loaded ${aggregateNumberFormatter.format(summary.loadedCount)}`
+      : ""
+    return `Selection: count ${aggregateNumberFormatter.format(summary.count)}${loadedLabel} · sum ${formatAggregateNumber(summary.sum)} · min ${formatAggregateNumber(summary.min)} · max ${formatAggregateNumber(summary.max)} · avg ${formatAggregateNumber(summary.average)}`
   })
 
   return {

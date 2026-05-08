@@ -322,6 +322,69 @@ describe("useDataGridAppSelection contract", () => {
     )
   })
 
+  it("counts virtual selected cells while aggregating loaded rows only", () => {
+    const runtimeSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 99_999,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: null,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 99_999, colIndex: 0, rowId: null },
+          virtual: {
+            coverage: {
+              isFullyLoaded: false,
+              loadedRowCount: 198,
+              totalRowCount: 100_000,
+              missingIntervals: [{ startRow: 198, endRow: 99_999 }],
+              rowIds: [],
+              scanLimited: true,
+            },
+            isVirtualSelection: true,
+          },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 99_999, colIndex: 0, rowId: null },
+    } as never
+
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      visibleColumns: ref([
+        {
+          key: "amount",
+          column: {
+            key: "amount",
+            label: "Amount",
+          },
+        },
+      ] as never),
+      totalRows: ref(100_000),
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            get: (rowIndex: number) => rowIndex < 198
+              ? { kind: "leaf", data: { amount: 2 } }
+              : undefined,
+          },
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+
+    expect(selection.selectionAggregatesLabel.value).toBe(
+      "Selection: count 100,000 · loaded 198 · sum 396 · min 2 · max 2 · avg 2",
+    )
+  })
+
   it("marks virtual selections projection-stale when row indexes are invalidated by sort changes", async () => {
     let sortDirection: "asc" | "desc" = "asc"
     let runtimeSnapshot = {

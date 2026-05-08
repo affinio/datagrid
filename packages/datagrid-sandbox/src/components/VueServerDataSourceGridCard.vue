@@ -46,8 +46,16 @@
           :report-fill-plumbing-state="reportFillPlumbingState"
           :report-fill-plumbing-detail="reportFillPlumbingDetail"
           @update:state="handleStateUpdate"
+          @selection-change="syncSelectionAggregatesLabel"
           @cell-edit="handleCellEdit"
         />
+        <div
+          v-if="selectionAggregatesLabel"
+          class="server-grid__selection-summary"
+          role="status"
+        >
+          {{ selectionAggregatesLabel }}
+        </div>
       </div>
 
       <aside class="server-grid__diagnostics">
@@ -144,6 +152,10 @@
             <div class="server-grid__diagnostics-card">
               <dt>Blocked op</dt>
               <dd>{{ selectionBlockedReasonLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Summary</dt>
+              <dd>{{ selectionAggregatesLabel || "none" }}</dd>
             </div>
           </dl>
         </div>
@@ -608,6 +620,7 @@ const gridRef = ref<{
     runHistoryAction: (direction: "undo" | "redo") => Promise<string | null>
   }
   restoreFocus?: () => void
+  getSelectionAggregatesLabel?: () => string
 } | null>(null)
 const failureMode = ref(false)
 const commitFailureMode = ref(false)
@@ -731,6 +744,7 @@ const selectionFullyLoadedText = ref("unknown")
 const selectionMissingIntervalsText = ref("none")
 const selectionProjectionStaleText = ref("no")
 const selectionBlockedReasonText = ref("none")
+const selectionAggregatesLabel = ref("")
 const aggregationActive = ref(false)
 const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
@@ -2414,6 +2428,10 @@ function clearRegionAggregation(): void {
   rowModel.setGroupBy(null)
 }
 
+function syncSelectionAggregatesLabel(): void {
+  selectionAggregatesLabel.value = gridRef.value?.getSelectionAggregatesLabel?.() ?? ""
+}
+
 function handleStateUpdate(state: unknown): void {
   const parsedState = state as {
     rows?: {
@@ -2705,6 +2723,7 @@ function handleCellEdit(payload: {
   lastEditRecordedText.value = "pending"
   void Promise.resolve().then(() => {
     lastEditRecordedText.value = canUndoHistory.value ? "yes" : "no"
+    syncSelectionAggregatesLabel()
   })
 }
 
@@ -3014,6 +3033,16 @@ onBeforeUnmount(() => {
 .server-grid__surface {
   min-width: 0;
   min-height: 0;
+}
+
+.server-grid__selection-summary {
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.55rem;
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(35, 42, 48, 0.86);
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .server-grid__diagnostics {

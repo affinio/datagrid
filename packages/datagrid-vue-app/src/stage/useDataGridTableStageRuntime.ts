@@ -5,6 +5,7 @@ import type {
   DataGridGroupExpansionSnapshot,
   DataGridPaginationSnapshot,
   DataGridRowNode,
+  DataGridRowModel,
   DataGridColumnSnapshot,
   DataGridRowSelectionSnapshot,
   DataGridSelectionSnapshot,
@@ -58,6 +59,7 @@ import { useDataGridTableStageRowSelection } from "./useDataGridTableStageRowSel
 import { useDataGridTableStageScrollSync } from "./useDataGridTableStageScrollSync"
 import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageViewportKeyboard"
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
+import { resolveDataGridTableStageAutoSizeRows } from "./dataGridTableStageAutoSizeRows"
 import type {
   DataGridColumnMenuValueEntriesResult,
   DataGridTableRow,
@@ -161,6 +163,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   runtimeRowModel?: {
     subscribe: UseDataGridRuntimeResult<TRow>["rowModel"]["subscribe"]
     getSnapshot: UseDataGridRuntimeResult<TRow>["rowModel"]["getSnapshot"]
+    getRow?: DataGridRowModel<TRow>["getRow"]
+    getRowCount?: DataGridRowModel<TRow>["getRowCount"]
+    getRowsInRange?: DataGridRowModel<TRow>["getRowsInRange"]
     dataSource?: {
       resolveFillBoundary?: (
         request: DataGridAppResolveFillBoundaryRequest,
@@ -368,7 +373,7 @@ type StageInteractionControllerResult<TRow extends Record<string, unknown>> =
       rowOffset: number,
     ) => void
     clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
-  }
+}
 
 export function useDataGridTableStageRuntime<
   TRow extends Record<string, unknown>,
@@ -1663,6 +1668,14 @@ export function useDataGridTableStageRuntime<
       ? interactionSelectionRange.value
       : null
   ))
+  const autoSizeRows = computed<readonly TRow[]>(() => {
+    void options.rowVersion.value
+    return resolveDataGridTableStageAutoSizeRows({
+      rowModel: options.runtimeRowModel,
+      fallbackRows: options.sourceRows?.value ?? options.rows.value,
+      sampleLimit: AUTO_RESIZE_SAMPLE_LIMIT,
+    })
+  })
 
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: selectableRuntime,
@@ -1682,7 +1695,7 @@ export function useDataGridTableStageRuntime<
     dispose: disposeHeaderResize,
   } = useDataGridAppHeaderResize<TRow>({
     visibleColumns: orderedVisibleColumns,
-    rows: options.rows,
+    rows: autoSizeRows,
     persistColumnWidth: (columnKey, width) => {
       options.runtime.api.columns.setWidth(columnKey, width)
     },

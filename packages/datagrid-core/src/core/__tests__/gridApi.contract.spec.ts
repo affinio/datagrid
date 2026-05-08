@@ -1741,6 +1741,87 @@ describe("data grid api facade contracts", () => {
     expect(summary?.columns.latencyMs.metrics.max).toBe(120)
   })
 
+  it("summarizes only cached data-source rows without pulling missing virtual rows", async () => {
+    const pullRequests: unknown[] = []
+    const rowModel = createDataSourceBackedRowModel({
+      dataSource: {
+        async pull(request) {
+          pullRequests.push(request)
+          return {
+            total: 6,
+            rows: [
+              { index: 0, rowId: 1, row: { id: 1, latencyMs: 10 } },
+              { index: 2, rowId: 3, row: { id: 3, latencyMs: 30 } },
+              { index: 4, rowId: 5, row: { id: 5, latencyMs: 50 } },
+            ],
+          }
+        },
+      },
+      resolveRowId: row => row.id,
+      initialTotal: 6,
+      prefetch: { enabled: false },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "latencyMs", label: "Latency" }],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 5,
+          startCol: 0,
+          endCol: 0,
+          startRowId: 1,
+          endRowId: 6,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 5, colIndex: 0, rowId: 6 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 5, colIndex: 0, rowId: 6 },
+    }
+
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    rowModel.setViewportRange({ start: 0, end: 5 })
+    await waitForCellRefreshFrame()
+    expect(pullRequests).toHaveLength(1)
+
+    const summary = api.selection.summarize({
+      columns: [{ key: "latencyMs", aggregations: ["count", "sum", "avg", "min", "max"] }],
+    })
+
+    expect(pullRequests).toHaveLength(1)
+    expect(summary?.isPartial).toBe(true)
+    expect(summary?.missingRowCount).toBe(3)
+    expect(summary?.selectedCells).toBe(3)
+    expect(summary?.columns.latencyMs.metrics.count).toBe(3)
+    expect(summary?.columns.latencyMs.metrics.sum).toBe(90)
+    expect(summary?.columns.latencyMs.metrics.avg).toBe(30)
+    expect(summary?.columns.latencyMs.metrics.min).toBe(10)
+    expect(summary?.columns.latencyMs.metrics.max).toBe(50)
+
+    rowModel.dispose()
+  })
+
   it("roundtrips row/column/filter/pagination/group/selection snapshots deterministically", () => {
     const rowModel = createClientRowModel({
       rows: [
