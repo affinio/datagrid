@@ -147,6 +147,7 @@ export type {
   DataGridColumnMenuDisabledReasons,
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
+  DataGridColumnMenuLabels,
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
   DataGridColumnMenuTriggerMode,

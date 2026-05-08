@@ -1628,10 +1628,16 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS,
         columns: COLUMNS,
         columnMenu: {
+          maxFilterValues: 20,
           labels: {
             group: "Toggle grouping",
             pin: "Pinning",
-          },
+            activeState: "Активно",
+            valueSearchPlaceholder: "Искать значения",
+            filterValuesAriaLabel: "Значения фильтра для {column}",
+            noMatchingValues: "Нет совпадений",
+            selectedValuesSummary: "Выбрано {selected} из {total}",
+            },
           columns: {
             owner: {
               labels: {
@@ -1652,6 +1658,16 @@ describe("DataGrid app facade contract", () => {
     expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Toggle grouping")
     expect(queryColumnMenuAction("pin-submenu")?.textContent).toContain("Pinning")
     expect(queryColumnMenuAction("clear-filter")?.closest("section")?.textContent).toContain("Owner filters")
+    expect(queryColumnMenuRoot()?.querySelector<HTMLInputElement>(".datagrid-column-menu__search")?.placeholder).toBe("Искать значения")
+    expect(queryColumnMenuRoot()?.querySelector<HTMLElement>(".datagrid-column-menu__values-list")?.getAttribute("aria-label")).toBe("Значения фильтра для Owner")
+    expect(queryColumnMenuRoot()?.textContent).toContain("Выбрано 2 из 2")
+
+    const search = queryColumnMenuRoot()?.querySelector<HTMLInputElement>(".datagrid-column-menu__search")
+    search!.value = "missing"
+    search!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()?.textContent).toContain("Нет совпадений")
 
     wrapper.unmount()
   })

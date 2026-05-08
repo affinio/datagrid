@@ -39,7 +39,7 @@
             @select="handleSortSelect('asc')"
           >
             <span :title="resolveActionDisabledTitle('sortAsc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortAscLabel }}</span>
-            <span v-if="sortDirection === 'asc'" class="datagrid-column-menu__state">Active</span>
+            <span v-if="sortDirection === 'asc'" class="datagrid-column-menu__state">{{ activeStateLabel }}</span>
           </UiMenuItem>
 
           <UiMenuItem
@@ -52,7 +52,7 @@
             @select="handleSortSelect('desc')"
           >
             <span :title="resolveActionDisabledTitle('sortDesc', sortSectionDisabled || !sortEnabled, 'sort')">{{ sortDescLabel }}</span>
-            <span v-if="sortDirection === 'desc'" class="datagrid-column-menu__state">Active</span>
+            <span v-if="sortDirection === 'desc'" class="datagrid-column-menu__state">{{ activeStateLabel }}</span>
           </UiMenuItem>
 
           <UiMenuItem
@@ -107,7 +107,7 @@
               @select="$emit('pin', 'left')"
             >
               <span :title="resolveActionDisabledTitle('pinLeft', pinSectionDisabled, 'pin')">{{ pinLeftLabel }}</span>
-              <span v-if="pin === 'left'" class="datagrid-column-menu__state">Active</span>
+              <span v-if="pin === 'left'" class="datagrid-column-menu__state">{{ activeStateLabel }}</span>
             </UiMenuItem>
 
             <UiMenuItem
@@ -120,7 +120,7 @@
               @select="$emit('pin', 'right')"
             >
               <span :title="resolveActionDisabledTitle('pinRight', pinSectionDisabled, 'pin')">{{ pinRightLabel }}</span>
-              <span v-if="pin === 'right'" class="datagrid-column-menu__state">Active</span>
+              <span v-if="pin === 'right'" class="datagrid-column-menu__state">{{ activeStateLabel }}</span>
             </UiMenuItem>
 
             <UiMenuItem
@@ -173,7 +173,7 @@
           :value="textFilterValue"
           class="datagrid-column-menu__search"
           type="search"
-          placeholder="Type to filter rows"
+          :placeholder="textFilterPlaceholderLabel"
           :disabled="filterSectionDisabled"
           :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
           @mousedown.stop
@@ -187,8 +187,8 @@
           class="datagrid-column-menu__hint"
         >
           {{ valueFilterDisabledByRowLimit
-            ? 'Value filter is disabled for this dataset size. Use text filter instead.'
-            : 'Value filter is unavailable here. Use text filter instead.' }}
+            ? valueFilterDisabledByRowLimitHintLabel
+            : valueFilterUnavailableHintLabel }}
         </div>
 
         <input
@@ -197,7 +197,7 @@
           :name="`datagrid-column-menu-value-search-${columnKey}`"
           class="datagrid-column-menu__search"
           type="search"
-          placeholder="Search values"
+          :placeholder="valueSearchPlaceholderLabel"
           :disabled="filterSectionDisabled"
           :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
           @mousedown.stop
@@ -249,7 +249,7 @@
             {{ clearAllValuesLabel }}
           </button>
           <div class="datagrid-column-menu__summary">
-            {{ appliedSelectedCount }} / {{ appliedSelectableCount }} selected
+            {{ selectedValuesSummaryLabel }}
           </div>
         </div>
 
@@ -259,15 +259,15 @@
             class="datagrid-column-menu__values-list"
             role="listbox"
             aria-multiselectable="true"
-            :aria-label="`Filter values for ${columnLabel}`"
+            :aria-label="filterValuesAriaLabel"
             @scroll.passive="handleValuesListScroll"
           >
             <div v-if="valueEntriesLoading" class="datagrid-column-menu__empty">
-              Loading values...
+              {{ loadingValuesLabel }}
             </div>
 
             <div v-else-if="valueEntriesError" class="datagrid-column-menu__empty">
-              Unable to load values
+              {{ unableToLoadValuesLabel }}
             </div>
 
             <template v-else>
@@ -292,17 +292,17 @@
             </template>
 
             <div v-if="!valueEntriesLoading && !valueEntriesError && visibleValues.length === 0" class="datagrid-column-menu__empty">
-              {{ hasSearchQuery ? 'No matching values' : 'No values' }}
+              {{ hasSearchQuery ? noMatchingValuesLabel : noValuesLabel }}
             </div>
           </div>
         </div>
 
         <div v-if="effectiveValueFilterEnabled && hiddenMatchCount > 0" class="datagrid-column-menu__summary">
-          Showing {{ visibleValues.length }} of {{ matchedValues.length }} values. Scroll to load more or search.
+          {{ valuesWindowSummaryLabel }}
         </div>
 
         <div v-if="effectiveValueFilterEnabled && appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
-          Select at least one value to apply the filter.
+          {{ selectAtLeastOneValueHintLabel }}
         </div>
 
         <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
@@ -462,7 +462,9 @@ const groupOrderLabel = computed(() => {
   if (!props.grouped || !Number.isFinite(props.groupOrder)) {
     return null
   }
-  return `Level ${Number(props.groupOrder) + 1}`
+  return formatColumnMenuLabel(props.labels.groupLevel, "Level {level}", {
+    level: Number(props.groupOrder) + 1,
+  })
 })
 
 const resolvedValueFilterRowLimit = computed(() => {
@@ -542,6 +544,30 @@ const selectAllValuesLabel = computed(() => resolveActionLabel("selectAllValues"
 const clearAllValuesLabel = computed(() => resolveActionLabel("clearAllValues", "Clear all"))
 const cancelFilterLabel = computed(() => resolveActionLabel("cancelFilter", "Cancel"))
 const applyFilterLabel = computed(() => resolveActionLabel("applyFilter", "Apply"))
+const activeStateLabel = computed(() => resolveLabel(props.labels.activeState, "Active"))
+const textFilterPlaceholderLabel = computed(() => resolveLabel(props.labels.textFilterPlaceholder, "Type to filter rows"))
+const valueSearchPlaceholderLabel = computed(() => resolveLabel(props.labels.valueSearchPlaceholder, "Search values"))
+const valueFilterDisabledByRowLimitHintLabel = computed(() => resolveLabel(
+  props.labels.valueFilterDisabledByRowLimitHint,
+  "Value filter is disabled for this dataset size. Use text filter instead.",
+))
+const valueFilterUnavailableHintLabel = computed(() => resolveLabel(
+  props.labels.valueFilterUnavailableHint,
+  "Value filter is unavailable here. Use text filter instead.",
+))
+const filterValuesAriaLabel = computed(() => formatColumnMenuLabel(
+  props.labels.filterValuesAriaLabel,
+  "Filter values for {column}",
+  { column: props.columnLabel },
+))
+const loadingValuesLabel = computed(() => resolveLabel(props.labels.loadingValues, "Loading values..."))
+const unableToLoadValuesLabel = computed(() => resolveLabel(props.labels.unableToLoadValues, "Unable to load values"))
+const noMatchingValuesLabel = computed(() => resolveLabel(props.labels.noMatchingValues, "No matching values"))
+const noValuesLabel = computed(() => resolveLabel(props.labels.noValues, "No values"))
+const selectAtLeastOneValueHintLabel = computed(() => resolveLabel(
+  props.labels.selectAtLeastOneValueHint,
+  "Select at least one value to apply the filter.",
+))
 
 const matchedValues = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
@@ -581,6 +607,24 @@ const appliedSelectableCount = computed(() => (
 ))
 
 const appliedSelectedCount = computed(() => appliedFilterTokens.value.length)
+
+const selectedValuesSummaryLabel = computed(() => formatColumnMenuLabel(
+  props.labels.selectedValuesSummary,
+  "{selected} / {total} selected",
+  {
+    selected: appliedSelectedCount.value,
+    total: appliedSelectableCount.value,
+  },
+))
+
+const valuesWindowSummaryLabel = computed(() => formatColumnMenuLabel(
+  props.labels.valuesWindowSummary,
+  "Showing {visible} of {total} values. Scroll to load more or search.",
+  {
+    visible: visibleValues.value.length,
+    total: matchedValues.value.length,
+  },
+))
 
 const isAllValuesSelected = computed(() => (
   valueEntries.value.length > 0
@@ -677,6 +721,22 @@ function resolveActionLabel(actionKey: DataGridColumnMenuActionKey, fallback: st
   return props.actionOptions[actionKey]?.label ?? fallback
 }
 
+function resolveLabel(value: string | undefined, fallback: string): string {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
+}
+
+function formatColumnMenuLabel(
+  value: string | undefined,
+  fallback: string,
+  replacements: Readonly<Record<string, string | number>>,
+): string {
+  let resolved = resolveLabel(value, fallback)
+  for (const [key, replacement] of Object.entries(replacements)) {
+    resolved = resolved.split(`{${key}}`).join(String(replacement))
+  }
+  return resolved
+}
+
 function resolveSectionDisabledReason(sectionKey: DataGridColumnMenuItemKey): string {
   return props.disabledReasons[sectionKey] ?? ""
 }
@@ -714,12 +774,12 @@ function isCustomItemDisabled(item: DataGridColumnMenuCustomItem): boolean {
 
 function formatColumnMenuValueLabel(value: unknown, fallbackText?: string): string {
   if (value == null) {
-    return "(Blanks)"
+    return resolveLabel(props.labels.blankValue, "(Blanks)")
   }
   const text = typeof fallbackText === "string" && fallbackText.length > 0
     ? fallbackText
     : String(value)
-  return text.length > 0 ? text : "(Blanks)"
+  return text.length > 0 ? text : resolveLabel(props.labels.blankValue, "(Blanks)")
 }
 
 function collectColumnMenuValueEntries(

@@ -591,6 +591,8 @@ const columnMenu: DataGridColumnMenuProp = {
   labels: {
     group: "Toggle grouping",
     filter: "Quick filters",
+    valueSearchPlaceholder: "Search values",
+    selectedValuesSummary: "{selected} / {total} selected",
   },
   actions: {
     sortAsc: { label: "Ascending order" },

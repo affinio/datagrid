@@ -11,7 +11,29 @@ export type DataGridColumnMenuCustomItemPlacement =
   | `before:${DataGridColumnMenuItemKey}`
   | `after:${DataGridColumnMenuItemKey}`
 
-export type DataGridColumnMenuItemLabels = Readonly<Partial<Record<DataGridColumnMenuItemKey, string>>>
+export interface DataGridColumnMenuLabels {
+  sort?: string
+  group?: string
+  pin?: string
+  filter?: string
+  activeState?: string
+  groupLevel?: string
+  textFilterPlaceholder?: string
+  valueSearchPlaceholder?: string
+  valueFilterDisabledByRowLimitHint?: string
+  valueFilterUnavailableHint?: string
+  filterValuesAriaLabel?: string
+  loadingValues?: string
+  unableToLoadValues?: string
+  noMatchingValues?: string
+  noValues?: string
+  selectedValuesSummary?: string
+  valuesWindowSummary?: string
+  selectAtLeastOneValueHint?: string
+  blankValue?: string
+}
+
+export type DataGridColumnMenuItemLabels = Readonly<DataGridColumnMenuLabels>
 export type DataGridColumnMenuDisabledReasons = Readonly<Partial<Record<DataGridColumnMenuItemKey, string>>>
 
 export const DATAGRID_COLUMN_MENU_ACTION_KEYS = [
@@ -149,8 +171,26 @@ function normalizeLabels(input: DataGridColumnMenuItemLabels | undefined): DataG
   if (!input) {
     return Object.freeze({})
   }
+  const allowed = new Set<string>([
+    ...DATAGRID_COLUMN_MENU_ITEM_KEYS,
+    "activeState",
+    "groupLevel",
+    "textFilterPlaceholder",
+    "valueSearchPlaceholder",
+    "valueFilterDisabledByRowLimitHint",
+    "valueFilterUnavailableHint",
+    "filterValuesAriaLabel",
+    "loadingValues",
+    "unableToLoadValues",
+    "noMatchingValues",
+    "noValues",
+    "selectedValuesSummary",
+    "valuesWindowSummary",
+    "selectAtLeastOneValueHint",
+    "blankValue",
+  ])
   const entries = Object.entries(input)
-    .filter(([key, value]) => DATAGRID_COLUMN_MENU_ITEM_KEYS.includes(key as DataGridColumnMenuItemKey) && typeof value === "string")
+    .filter(([key, value]) => allowed.has(key) && typeof value === "string")
     .map(([key, value]) => [key, value.trim()] as const)
     .filter(([, value]) => value.length > 0)
   return Object.freeze(Object.fromEntries(entries))
