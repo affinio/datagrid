@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   clearDataGridSelectedRows,
+  deselectDataGridRows,
+  isDataGridRowSelected,
   reconcileDataGridRowSelectionSnapshot,
+  selectAllDataGridRows,
   selectDataGridRows,
   setDataGridRowFocused,
   setDataGridRowSelected,
@@ -26,5 +29,26 @@ describe("rowSelection state", () => {
       focusedRow: null,
       selectedRows: [],
     })
+  })
+
+  it("represents all-row selection with explicit exclusions", () => {
+    const allRows = selectAllDataGridRows(null)
+
+    expect(allRows).toEqual({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    })
+    expect(isDataGridRowSelected(allRows, "r1")).toBe(true)
+
+    const excluded = setDataGridRowSelected(allRows, "r1", false)
+    expect(isDataGridRowSelected(excluded, "r1")).toBe(false)
+    expect(isDataGridRowSelected(excluded, "r2")).toBe(true)
+    expect(excluded.excludedRows).toEqual(["r1"])
+
+    expect(setDataGridRowSelected(excluded, "r1", true).excludedRows).toEqual([])
+    expect(deselectDataGridRows(allRows, ["r2", "r3"]).excludedRows).toEqual(["r2", "r3"])
+    expect(selectDataGridRows(deselectDataGridRows(allRows, ["r2"]), ["r2"]).excludedRows).toEqual([])
   })
 })

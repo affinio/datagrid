@@ -1527,6 +1527,19 @@ const rowSelectionState = ref({
 
 The legacy `row-select` event still exists, but `rowSelectionState` is the stable controlled API when the page wants to bind selected row ids without diffing unified-state updates.
 
+For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
+
+```ts
+{
+  focusedRow: null,
+  selectedRows: [],
+  mode: "all",
+  excludedRows: [],
+}
+```
+
+In `mode: "all"`, visible row checkboxes render as selected unless their id is present in `excludedRows`. This keeps header select-all O(1) for large filtered datasets; `selectedRows` remains the explicit-id list for the default `mode: "explicit"`.
+
 function exportSavedView() {
   return gridRef.value?.getSavedView()
 }

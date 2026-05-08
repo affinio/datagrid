@@ -164,6 +164,7 @@ export {
   normalizeDataGridRowSelectionSnapshot,
   reconcileDataGridRowSelectionSnapshot,
   replaceDataGridSelectedRows,
+  selectAllDataGridRows,
   selectDataGridRows,
   setDataGridRowFocused,
   setDataGridRowSelected,

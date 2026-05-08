@@ -32,7 +32,7 @@
           theme="industrial-neutral"
           virtualization
           :show-row-index="true"
-          :row-selection="false"
+          :row-selection="true"
           :column-menu="columnMenu"
           advanced-filter
           fill-handle

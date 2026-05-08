@@ -4,6 +4,7 @@ import {
   clearDataGridSelectedRows,
   dataGridRowSelectionSnapshotsEqual,
   deselectDataGridRows,
+  isDataGridRowSelected,
   normalizeDataGridRowSelectionSnapshot,
   reconcileDataGridRowSelectionSnapshot,
   selectDataGridRows,
@@ -27,7 +28,7 @@ export interface UseDataGridAppRowSelectionResult<TRow> {
 }
 
 function toNullableSnapshot(snapshot: DataGridRowSelectionSnapshot): DataGridRowSelectionSnapshot | null {
-  return snapshot.focusedRow == null && snapshot.selectedRows.length === 0
+  return (snapshot.mode ?? "explicit") !== "all" && snapshot.focusedRow == null && snapshot.selectedRows.length === 0
     ? null
     : snapshot
 }
@@ -64,7 +65,7 @@ export function useDataGridAppRowSelection<TRow>(
       syncSnapshot(toNullableSnapshot(setDataGridRowFocused(rowSelectionSnapshot.value, rowId)))
     },
     getSelectedRows: () => [...selectedRows.value],
-    isRowSelected: rowId => selectedRows.value.has(rowId),
+    isRowSelected: rowId => isDataGridRowSelected(rowSelectionSnapshot.value, rowId),
     setRowSelected: (rowId, selected) => {
       syncSnapshot(toNullableSnapshot(setDataGridRowSelected(rowSelectionSnapshot.value, rowId, selected)))
     },

@@ -17,20 +17,30 @@ function createRow(rowId: string, kind: "leaf" | "group" = "leaf") {
   } as const
 }
 
-function createRuntime(rows: readonly ReturnType<typeof createRow>[]) {
+function createRuntime(rows: readonly ReturnType<typeof createRow>[], kind: "client" | "server" = "client") {
   const selectRows = vi.fn()
   const deselectRows = vi.fn()
   const setFocusedRow = vi.fn()
   const setSelected = vi.fn()
+  const setSnapshot = vi.fn()
+  const getCount = vi.fn(() => rows.length)
+  const get = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
 
   const runtime = {
     api: {
       rows: {
-        getCount: () => rows.length,
-        get: (rowIndex: number) => rows[rowIndex] ?? null,
+        getSnapshot: () => ({
+          kind,
+          rowCount: rows.length,
+          loading: false,
+          revision: 1,
+        }),
+        getCount,
+        get,
       },
       rowSelection: {
         hasSupport: () => true,
+        setSnapshot,
         selectRows,
         deselectRows,
         setFocusedRow,
@@ -45,6 +55,9 @@ function createRuntime(rows: readonly ReturnType<typeof createRow>[]) {
     deselectRows,
     setFocusedRow,
     setSelected,
+    setSnapshot,
+    getCount,
+    get,
   }
 }
 
@@ -192,5 +205,70 @@ describe("useDataGridTableStageRowSelection", () => {
 
     expect(selection.areAllVisibleRowsSelected.value).toBe(true)
     expect(selection.areSomeVisibleRowsSelected.value).toBe(true)
+  })
+
+  it("selects all server rows without enumerating the unloaded row model", () => {
+    const cachedRows = [createRow("r1"), createRow("r2")]
+    const { runtime, setSnapshot, getCount, get } = createRuntime(cachedRows, "server")
+    const rowSelectionSnapshot = ref<DataGridRowSelectionSnapshot | null>(null)
+
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => createRowSelectionColumn()),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(cachedRows as never),
+      rowSelectionSnapshot,
+      applyRowSelectionMutation: mutator => {
+        mutator(runtime.api.rowSelection)
+      },
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+    })
+
+    selection.toggleVisibleRowsSelected()
+
+    expect(setSnapshot).toHaveBeenCalledWith({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    })
+    expect(getCount).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it("uses excluded rows when rendering server all-row selection", () => {
+    const cachedRows = [createRow("r1"), createRow("r2")]
+    const { runtime, setSelected } = createRuntime(cachedRows, "server")
+    const rowSelectionSnapshot = ref<DataGridRowSelectionSnapshot | null>({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: ["r2"],
+    })
+
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => createRowSelectionColumn()),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(cachedRows as never),
+      rowSelectionSnapshot,
+      applyRowSelectionMutation: mutator => {
+        mutator(runtime.api.rowSelection)
+      },
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+    })
+
+    expect(selection.isRowCheckboxSelected(cachedRows[0] as never)).toBe(true)
+    expect(selection.isRowCheckboxSelected(cachedRows[1] as never)).toBe(false)
+    expect(selection.areAllVisibleRowsSelected.value).toBe(false)
+    expect(selection.areSomeVisibleRowsSelected.value).toBe(true)
+
+    selection.toggleRowCheckboxSelected(cachedRows[1] as never)
+
+    expect(setSelected).toHaveBeenCalledWith("r2", true)
   })
 })

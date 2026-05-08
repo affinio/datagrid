@@ -412,6 +412,9 @@ function rowSelectionSnapshotsEqual(
   if (left?.focusedRow !== right?.focusedRow) {
     return false
   }
+  if ((left?.mode ?? "explicit") !== (right?.mode ?? "explicit")) {
+    return false
+  }
   const leftRows = left?.selectedRows ?? []
   const rightRows = right?.selectedRows ?? []
   if (leftRows.length !== rightRows.length) {
@@ -419,6 +422,16 @@ function rowSelectionSnapshotsEqual(
   }
   for (let index = 0; index < leftRows.length; index += 1) {
     if (leftRows[index] !== rightRows[index]) {
+      return false
+    }
+  }
+  const leftExcludedRows = left?.excludedRows ?? []
+  const rightExcludedRows = right?.excludedRows ?? []
+  if (leftExcludedRows.length !== rightExcludedRows.length) {
+    return false
+  }
+  for (let index = 0; index < leftExcludedRows.length; index += 1) {
+    if (leftExcludedRows[index] !== rightExcludedRows[index]) {
       return false
     }
   }

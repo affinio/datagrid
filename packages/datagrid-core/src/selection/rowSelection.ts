@@ -3,6 +3,8 @@ import type { DataGridRowId } from "../models/index.js"
 export interface DataGridRowSelectionSnapshot {
   focusedRow: DataGridRowId | null
   selectedRows: DataGridRowId[]
+  mode?: "explicit" | "all"
+  excludedRows?: DataGridRowId[]
 }
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
@@ -23,9 +25,22 @@ export function normalizeDataGridRowSelectionSnapshot(
     }
   }
 
-  const selectedRows: DataGridRowId[] = []
+  const selectedRows = normalizeDataGridRowIds(snapshot.selectedRows)
+  const mode = snapshot.mode === "all" ? "all" : "explicit"
+  const excludedRows = mode === "all" ? normalizeDataGridRowIds(snapshot.excludedRows) : []
+
+  return {
+    focusedRow: isDataGridRowId(snapshot.focusedRow) ? snapshot.focusedRow : null,
+    selectedRows,
+    ...(mode === "all" ? { mode, excludedRows } : {}),
+  }
+}
+
+function normalizeDataGridRowIds(input: unknown): DataGridRowId[] {
+  const source = Array.isArray(input) ? input : []
+  const normalizedRowIds: DataGridRowId[] = []
   const seen = new Set<string>()
-  for (const rowId of Array.isArray(snapshot.selectedRows) ? snapshot.selectedRows : []) {
+  for (const rowId of source) {
     if (!isDataGridRowId(rowId)) {
       continue
     }
@@ -34,13 +49,9 @@ export function normalizeDataGridRowSelectionSnapshot(
       continue
     }
     seen.add(signature)
-    selectedRows.push(rowId)
+    normalizedRowIds.push(rowId)
   }
-
-  return {
-    focusedRow: isDataGridRowId(snapshot.focusedRow) ? snapshot.focusedRow : null,
-    selectedRows,
-  }
+  return normalizedRowIds
 }
 
 export function dataGridRowSelectionSnapshotsEqual(
@@ -52,11 +63,24 @@ export function dataGridRowSelectionSnapshotsEqual(
   if (normalizedLeft.focusedRow !== normalizedRight.focusedRow) {
     return false
   }
+  if ((normalizedLeft.mode ?? "explicit") !== (normalizedRight.mode ?? "explicit")) {
+    return false
+  }
   if (normalizedLeft.selectedRows.length !== normalizedRight.selectedRows.length) {
     return false
   }
   for (let index = 0; index < normalizedLeft.selectedRows.length; index += 1) {
     if (normalizedLeft.selectedRows[index] !== normalizedRight.selectedRows[index]) {
+      return false
+    }
+  }
+  const leftExcludedRows = normalizedLeft.excludedRows ?? []
+  const rightExcludedRows = normalizedRight.excludedRows ?? []
+  if (leftExcludedRows.length !== rightExcludedRows.length) {
+    return false
+  }
+  for (let index = 0; index < leftExcludedRows.length; index += 1) {
+    if (leftExcludedRows[index] !== rightExcludedRows[index]) {
       return false
     }
   }
@@ -71,6 +95,7 @@ export function setDataGridRowFocused(
   return {
     focusedRow: rowId,
     selectedRows: [...normalized.selectedRows],
+    ...(normalized.mode === "all" ? { mode: "all" as const, excludedRows: [...(normalized.excludedRows ?? [])] } : {}),
   }
 }
 
@@ -84,7 +109,11 @@ export function isDataGridRowSelected(
   snapshot: DataGridRowSelectionSnapshot | null | undefined,
   rowId: DataGridRowId,
 ): boolean {
-  return normalizeDataGridRowSelectionSnapshot(snapshot).selectedRows.includes(rowId)
+  const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
+  if (normalized.mode === "all") {
+    return !(normalized.excludedRows ?? []).includes(rowId)
+  }
+  return normalized.selectedRows.includes(rowId)
 }
 
 export function setDataGridRowSelected(
@@ -93,6 +122,17 @@ export function setDataGridRowSelected(
   selected: boolean,
 ): DataGridRowSelectionSnapshot {
   const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
+  if (normalized.mode === "all") {
+    const excludedRows = selected
+      ? (normalized.excludedRows ?? []).filter(candidate => candidate !== rowId)
+      : selectDataGridRows({ focusedRow: normalized.focusedRow, selectedRows: normalized.excludedRows ?? [] }, [rowId]).selectedRows
+    return {
+      focusedRow: normalized.focusedRow,
+      selectedRows: [],
+      mode: "all",
+      excludedRows,
+    }
+  }
   const nextSelectedRows = normalized.selectedRows.filter(candidate => candidate !== rowId)
   if (selected) {
     nextSelectedRows.push(rowId)
@@ -100,6 +140,18 @@ export function setDataGridRowSelected(
   return {
     focusedRow: normalized.focusedRow,
     selectedRows: nextSelectedRows,
+  }
+}
+
+export function selectAllDataGridRows(
+  snapshot: DataGridRowSelectionSnapshot | null | undefined,
+): DataGridRowSelectionSnapshot {
+  const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
+  return {
+    focusedRow: normalized.focusedRow,
+    selectedRows: [],
+    mode: "all",
+    excludedRows: [],
   }
 }
 
@@ -122,9 +174,19 @@ export function selectDataGridRows(
   rowIds: Iterable<DataGridRowId>,
 ): DataGridRowSelectionSnapshot {
   const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
+  const nextRows = Array.from(rowIds)
+  if (normalized.mode === "all") {
+    const selected = new Set(nextRows.map(getDataGridRowIdSignature))
+    return {
+      focusedRow: normalized.focusedRow,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: (normalized.excludedRows ?? []).filter(rowId => !selected.has(getDataGridRowIdSignature(rowId))),
+    }
+  }
   const nextSelectedRows = [...normalized.selectedRows]
   const seen = new Set(normalized.selectedRows.map(getDataGridRowIdSignature))
-  for (const rowId of rowIds) {
+  for (const rowId of nextRows) {
     if (!isDataGridRowId(rowId)) {
       continue
     }
@@ -146,7 +208,19 @@ export function deselectDataGridRows(
   rowIds: Iterable<DataGridRowId>,
 ): DataGridRowSelectionSnapshot {
   const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
-  const blocked = new Set(Array.from(rowIds))
+  const blockedRows = Array.from(rowIds)
+  const blocked = new Set(blockedRows)
+  if (normalized.mode === "all") {
+    return {
+      focusedRow: normalized.focusedRow,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: selectDataGridRows(
+        { focusedRow: normalized.focusedRow, selectedRows: normalized.excludedRows ?? [] },
+        blockedRows,
+      ).selectedRows,
+    }
+  }
   return {
     focusedRow: normalized.focusedRow,
     selectedRows: normalized.selectedRows.filter(rowId => !blocked.has(rowId)),
@@ -169,6 +243,16 @@ export function reconcileDataGridRowSelectionSnapshot(
 ): DataGridRowSelectionSnapshot {
   const normalized = normalizeDataGridRowSelectionSnapshot(snapshot)
   const allowed = new Set(Array.from(allowedRowIds))
+  if (normalized.mode === "all") {
+    return {
+      focusedRow: normalized.focusedRow != null && allowed.has(normalized.focusedRow)
+        ? normalized.focusedRow
+        : null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: (normalized.excludedRows ?? []).filter(rowId => allowed.has(rowId)),
+    }
+  }
   return {
     focusedRow: normalized.focusedRow != null && allowed.has(normalized.focusedRow)
       ? normalized.focusedRow

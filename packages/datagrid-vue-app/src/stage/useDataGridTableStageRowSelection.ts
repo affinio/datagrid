@@ -54,13 +54,24 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
       mutator(options.runtime.api.rowSelection)
     })
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
+  const rowSelectionExcludedSet = computed(() => new Set(options.rowSelectionSnapshot.value?.excludedRows ?? []))
+  const isAllRowsSelectionMode = computed(() => options.rowSelectionSnapshot.value?.mode === "all")
+  const shouldUseVirtualAllRowsSelection = computed(() => {
+    const snapshot = options.runtime.api.rows.getSnapshot()
+    return snapshot.kind === "server"
+  })
 
   const isRowFocused = (row: DataGridTableRow<TRow>): boolean => {
     return !isPlaceholderRow(row) && row.rowId != null && options.rowSelectionSnapshot.value?.focusedRow === row.rowId
   }
 
   const isRowCheckboxSelected = (row: DataGridTableRow<TRow>): boolean => {
-    return !isPlaceholderRow(row) && row.kind !== "group" && row.rowId != null && rowSelectionSet.value.has(row.rowId)
+    if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null) {
+      return false
+    }
+    return isAllRowsSelectionMode.value
+      ? !rowSelectionExcludedSet.value.has(row.rowId)
+      : rowSelectionSet.value.has(row.rowId)
   }
 
   const readRowSelectionValue = (row: DataGridTableRow<TRow>): boolean => {
@@ -83,6 +94,9 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   }
 
   const selectableRowIds = computed<DataGridRowId[]>(() => {
+    if (shouldUseVirtualAllRowsSelection.value) {
+      return selectableVisibleRowIds.value
+    }
     const rowCount = options.runtime.api.rows.getCount()
     const rowIds: DataGridRowId[] = []
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
@@ -95,14 +109,33 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     return rowIds
   })
 
+  const selectableVisibleRowIds = computed<DataGridRowId[]>(() => {
+    const rowIds: DataGridRowId[] = []
+    for (const row of options.displayRows.value) {
+      if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null) {
+        continue
+      }
+      rowIds.push(row.rowId)
+    }
+    return rowIds
+  })
+
   const areAllVisibleRowsSelected = computed(() => {
     const rowIds = selectableRowIds.value
-    return rowIds.length > 0 && rowIds.every(rowId => rowSelectionSet.value.has(rowId))
+    return rowIds.length > 0 && rowIds.every(rowId => (
+      isAllRowsSelectionMode.value
+        ? !rowSelectionExcludedSet.value.has(rowId)
+        : rowSelectionSet.value.has(rowId)
+    ))
   })
 
   const areSomeVisibleRowsSelected = computed(() => {
     const rowIds = selectableRowIds.value
-    return rowIds.some(rowId => rowSelectionSet.value.has(rowId))
+    return rowIds.some(rowId => (
+      isAllRowsSelectionMode.value
+        ? !rowSelectionExcludedSet.value.has(rowId)
+        : rowSelectionSet.value.has(rowId)
+    ))
   })
 
   const focusRow = (row: DataGridTableRow<TRow>): void => {
@@ -117,12 +150,27 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
       return
     }
     applyRowSelectionMutation(rowSelectionApi => {
-      rowSelectionApi.setSelected(row.rowId, !rowSelectionSet.value.has(row.rowId))
+      rowSelectionApi.setSelected(row.rowId, !isRowCheckboxSelected(row))
     })
   }
 
   const toggleVisibleRowsSelected = (): void => {
     if (!options.runtime.api.rowSelection.hasSupport()) {
+      return
+    }
+    if (shouldUseVirtualAllRowsSelection.value) {
+      applyRowSelectionMutation(rowSelectionApi => {
+        if (isAllRowsSelectionMode.value && areAllVisibleRowsSelected.value) {
+          rowSelectionApi.clearSelectedRows()
+          return
+        }
+        rowSelectionApi.setSnapshot({
+          focusedRow: options.rowSelectionSnapshot.value?.focusedRow ?? null,
+          selectedRows: [],
+          mode: "all",
+          excludedRows: [],
+        })
+      })
       return
     }
     const rowIds = selectableRowIds.value
