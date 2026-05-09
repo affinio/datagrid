@@ -31,7 +31,7 @@
       - empty query не фильтрует;
       - column filter + quick filter работают вместе.
 
-  ## [] Slice 2.5 — Quick filter benchmarks
+  ## [x] Slice 2.5 — Quick filter benchmarks
 
     Goal:
     Measure quickFilter performance before expanding public API/UI.
