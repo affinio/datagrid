@@ -278,9 +278,47 @@ function matchesColumnFilter(
   return true
 }
 
+function matchesQuickFilter(row: ServerDemoRow, filterModel: DataGridFilterSnapshot): boolean {
+  const query = typeof filterModel.quickFilter?.query === "string"
+    ? filterModel.quickFilter.query.trim().toLowerCase()
+    : ""
+  if (query.length === 0) {
+    return true
+  }
+  const columns = Array.isArray(filterModel.quickFilter?.columns)
+    ? filterModel.quickFilter.columns.map(column => String(column ?? "").trim()).filter(column => column.length > 0)
+    : []
+  if (columns.length === 0) {
+    return false
+  }
+  const mode = filterModel.quickFilter?.mode === "tokens" ? "tokens" : "contains"
+  const tokens = mode === "tokens" ? query.split(/\s+/).filter(Boolean) : []
+  const values: string[] = []
+  for (const columnKey of columns) {
+    const candidate = row[columnKey as keyof ServerDemoRow]
+    if (candidate == null) {
+      continue
+    }
+    const text = String(candidate).toLowerCase()
+    if (mode === "contains" && text.includes(query)) {
+      return true
+    }
+    if (mode === "tokens") {
+      values.push(text)
+    }
+  }
+  if (mode !== "tokens") {
+    return false
+  }
+  return tokens.every(token => values.some(value => value.includes(token)))
+}
+
 function matchesFilterModel(row: ServerDemoRow, filterModel: DataGridFilterSnapshot | null): boolean {
   if (!filterModel) {
     return true
+  }
+  if (!matchesQuickFilter(row, filterModel)) {
+    return false
   }
   for (const [columnKey, filterEntry] of Object.entries(filterModel.columnFilters ?? {})) {
     if (!matchesColumnFilter(row, columnKey, filterEntry)) {

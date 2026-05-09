@@ -544,6 +544,26 @@ function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColu
     }
   }
 
+  const quickFilterQuery = typeof filterModel.quickFilter?.query === "string"
+    ? filterModel.quickFilter.query.trim()
+    : ""
+  if (quickFilterQuery.length > 0) {
+    const columns = Array.isArray(filterModel.quickFilter?.columns)
+      ? Array.from(new Set(
+          filterModel.quickFilter.columns
+            .map(column => String(column ?? "").trim())
+            .filter(column => column.length > 0),
+        ))
+      : []
+    backendFilterModel.quickFilter = {
+      query: quickFilterQuery,
+      ...(columns.length > 0 ? { columns } : {}),
+      ...(filterModel.quickFilter?.mode === "tokens" || filterModel.quickFilter?.mode === "contains"
+        ? { mode: filterModel.quickFilter.mode }
+        : {}),
+    }
+  }
+
   if (Object.keys(backendFilterModel).length === 0) {
     return null
   }

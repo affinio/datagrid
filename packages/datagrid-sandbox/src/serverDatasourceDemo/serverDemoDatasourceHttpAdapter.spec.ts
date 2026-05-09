@@ -900,6 +900,47 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     })
   })
 
+  it("serializes quick filter inside the backend filter model", async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
+      rows: [],
+      total: 0,
+      revision: null,
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }))
+
+    const adapter = createServerDemoDatasourceHttpAdapter({ fetchImpl })
+    await adapter.pull({
+      ...createAbortablePullRequest(),
+      reason: "filter-change",
+      filterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+        quickFilter: {
+          query: " platform ",
+          columns: ["owner", "service", "owner", ""],
+          mode: "tokens",
+        },
+      },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      range: { startRow: 0, endRow: 50 },
+      sortModel: [{ colId: "value", sort: "desc" }],
+      filterModel: {
+        quickFilter: {
+          query: "platform",
+          columns: ["owner", "service"],
+          mode: "tokens",
+        },
+      },
+    })
+  })
+
   it("preserves browser advanced filter expressions for backend evaluation", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       rows: [],

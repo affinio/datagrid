@@ -76,7 +76,7 @@
       - group/tree behavior не ломается;
       - pagination пересчитывается после поиска.
 
-  ## [] Slice 4: Server/DataSource
+  ## [x] Slice 4: Server/DataSource
 
   - Убедиться, что DataGridDataSourcePullRequest.filterModel уже несет quick filter.
   - Обновить normalize/serialization для server client/backend adapter.

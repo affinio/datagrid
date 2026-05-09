@@ -133,6 +133,44 @@ describe("createServerDatasourceHttpClient", () => {
     unsubscribe()
   })
 
+  it("keeps quick filter inside the serialized filterModel", async () => {
+    const bodies: unknown[] = []
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")))
+      return createResponse({
+        rows: [],
+        total: 0,
+        revision: "8",
+        datasetVersion: 8,
+      })
+    })
+    const client = createClient(fetchImpl)
+    const request = createPullRequest(0)
+    request.reason = "filter-change"
+    request.filterModel = {
+      columnFilters: {},
+      advancedFilters: {},
+      quickFilter: {
+        query: "platform",
+        columns: ["owner", "service"],
+        mode: "tokens",
+      },
+    }
+
+    await client.pull(request)
+
+    expect(bodies[0]).toMatchObject({
+      reason: "filter-change",
+      filterModel: {
+        quickFilter: {
+          query: "platform",
+          columns: ["owner", "service"],
+          mode: "tokens",
+        },
+      },
+    })
+  })
+
   it.each([
     {
       label: "upsert",

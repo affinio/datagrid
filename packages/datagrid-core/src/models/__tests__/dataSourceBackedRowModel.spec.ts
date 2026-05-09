@@ -462,10 +462,15 @@ describe("createDataSourceBackedRowModel", () => {
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
       advancedFilters: {},
+      quickFilter: {
+        query: "filtered",
+        columns: ["value"],
+      },
     } satisfies DataGridFilterSnapshot
     model.setFilterModel(filterModel)
 
     expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.reason).toBe("filter-change")
     expect(calls[1]?.request.filterModel).toMatchObject(filterModel)
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual(["old-1", "old-2"])
     expect(model.getSnapshot().initialLoading).toBe(false)
