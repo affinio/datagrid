@@ -174,7 +174,7 @@
 
     <DataGrid :quick-filter="{ placeholder: 'Search accounts', mode: 'tokens' }" />
 
-## [] Slice 14: Sandbox Migration
+## [x] Slice 14: Sandbox Migration
 
   - Убрать ручной quick filter toolbar из sandbox cards.
   - Перевести sandbox на декларативный quick-filter.

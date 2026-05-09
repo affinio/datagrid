@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mount } from "@vue/test-utils"
+import { flushPromises, mount } from "@vue/test-utils"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { defineComponent, h, nextTick } from "vue"
 import type { DataGridGroupBySpec } from "@affino/datagrid-vue"
@@ -89,6 +89,7 @@ vi.mock("@affino/menu-core", () => ({}))
 async function flushUi(): Promise<void> {
   await nextTick()
   await Promise.resolve()
+  await flushPromises()
   await nextTick()
 }
 
@@ -116,6 +117,22 @@ async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
 
 function findButtonByText(wrapper: ReturnType<typeof mount>, label: string) {
   return wrapper.findAll("button").find(candidate => candidate.text() === label)
+}
+
+function resolveComponentProp(wrapper: ReturnType<typeof mount>, key: string): unknown {
+  const component = wrapper as unknown as {
+    props: (name: string) => unknown
+    vm: { $props?: Record<string, unknown>; $attrs?: Record<string, unknown> }
+  }
+  return component.props(key)
+    ?? component.vm.$props?.[key]
+    ?? component.vm.$attrs?.[key]
+}
+
+function findDataGridWithProp(wrapper: ReturnType<typeof mount>, key: string): ReturnType<typeof mount> {
+  return (wrapper.findAllComponents({ name: "DataGrid" }) as Array<ReturnType<typeof mount>>)
+    .find(candidate => resolveComponentProp(candidate, key) !== undefined)
+    ?? wrapper.findComponent({ name: "DataGrid" }) as unknown as ReturnType<typeof mount>
 }
 
 describe("VueShellGridCard", () => {
@@ -492,9 +509,9 @@ describe("VueShellGridCard", () => {
     await flushUi()
     await flushUi()
 
-    const grid = wrapper.findComponent({ name: "DataGrid" })
+    const grid = findDataGridWithProp(wrapper, "gridLines")
     expect(grid.exists()).toBe(true)
-    expect(grid.props("gridLines")).toMatchObject({
+    expect(resolveComponentProp(grid, "gridLines")).toMatchObject({
       body: "all",
       header: "columns",
       pinnedSeparators: true,
@@ -510,7 +527,7 @@ describe("VueShellGridCard", () => {
     await pinnedSeparatorsToggle.setValue(false)
     await flushUi()
 
-    expect(grid.props("gridLines")).toMatchObject({
+    expect(resolveComponentProp(grid, "gridLines")).toMatchObject({
       body: "rows",
       header: "columns",
       pinnedSeparators: false,

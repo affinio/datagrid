@@ -11,24 +11,6 @@
         <div class="mode-badge">Data Source</div>
       </div>
       <div class="server-grid__toolbar">
-        <label class="server-grid__quick-filter">
-          Quick filter
-          <input
-            v-model="quickFilterInput"
-            data-server-quick-filter-input="true"
-            type="search"
-            placeholder="Search account, segment, status, region"
-          />
-        </label>
-        <button
-          type="button"
-          class="server-grid__button"
-          data-server-quick-filter-clear="true"
-          :disabled="!quickFilterActive"
-          @click="clearQuickFilter"
-        >
-          Clear filter
-        </button>
         <button type="button" class="server-grid__button" @click="refreshVisibleRange">Refresh visible range</button>
         <button type="button" class="server-grid__button" :disabled="aggregationActive" @click="applyRegionAggregation">Aggregate value by region</button>
         <button type="button" class="server-grid__button" :disabled="!aggregationActive" @click="clearRegionAggregation">Clear aggregation</button>
@@ -53,6 +35,7 @@
           :row-selection="true"
           :column-menu="columnMenu"
           advanced-filter
+          :quick-filter="quickFilter"
           fill-handle
           range-move
           :history="gridHistory"
@@ -571,10 +554,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue"
 import {
   buildDataGridAdvancedFilterExpressionFromLegacyFilters,
-  cloneDataGridFilterSnapshot,
   createDataSourceBackedRowModel,
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
@@ -631,8 +613,11 @@ const props = defineProps<{
   title: string
 }>()
 
-const QUICK_FILTER_DEBOUNCE_MS = 180
-const SERVER_QUICK_FILTER_COLUMNS = ["name", "segment", "status", "region"] as const
+const quickFilter = {
+  placeholder: "Search account, segment, status, region",
+  columns: ["name", "segment", "status", "region"],
+  mode: "tokens" as const,
+}
 
 const gridKey = ref(0)
 const gridRef = ref<{
@@ -646,8 +631,6 @@ const gridRef = ref<{
 } | null>(null)
 const failureMode = ref(false)
 const commitFailureMode = ref(false)
-const quickFilterInput = ref("")
-const debouncedQuickFilterInput = ref("")
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
 const committedOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
 const pendingOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
@@ -2245,7 +2228,6 @@ const columns = [
 serverFillVisibleColumnText.value = String(columns[4]?.key ?? "missing")
 
 const diagnostics = ref(rowModel.getBackpressureDiagnostics())
-const quickFilterActive = computed(() => quickFilterInput.value.trim().length > 0)
 const sortModelLabel = computed(() => {
   return sortModelText.value
 })
@@ -3037,74 +3019,6 @@ function simulateCommitFailure(): void {
   commitFailureMode.value = true
 }
 
-function createEmptyFilterModel(): DataGridFilterSnapshot {
-  return {
-    columnFilters: {},
-    advancedFilters: {},
-    advancedExpression: null,
-  }
-}
-
-function hasFilterModelEntries(filterModel: DataGridFilterSnapshot): boolean {
-  return (
-    Object.keys(filterModel.columnFilters ?? {}).length > 0
-    || Object.keys(filterModel.columnStyleFilters ?? {}).length > 0
-    || Object.keys(filterModel.advancedFilters ?? {}).length > 0
-    || Boolean(filterModel.advancedExpression)
-    || Boolean(filterModel.quickFilter)
-  )
-}
-
-function mergeQuickFilterIntoFilterModel(
-  currentFilterModel: DataGridFilterSnapshot | null | undefined,
-  query: string,
-): DataGridFilterSnapshot | null {
-  const nextFilterModel = cloneDataGridFilterSnapshot(currentFilterModel ?? createEmptyFilterModel())
-    ?? createEmptyFilterModel()
-  const normalizedQuery = query.trim()
-  if (normalizedQuery.length > 0) {
-    nextFilterModel.quickFilter = {
-      query: normalizedQuery,
-      columns: [...SERVER_QUICK_FILTER_COLUMNS],
-      mode: "tokens",
-    }
-  } else {
-    delete nextFilterModel.quickFilter
-  }
-  return hasFilterModelEntries(nextFilterModel) ? nextFilterModel : null
-}
-
-function applyQuickFilter(): void {
-  rowModel.setFilterModel(mergeQuickFilterIntoFilterModel(
-    rowModel.getSnapshot().filterModel ?? null,
-    debouncedQuickFilterInput.value,
-  ))
-}
-
-function clearQuickFilter(): void {
-  quickFilterInput.value = ""
-  debouncedQuickFilterInput.value = ""
-  applyQuickFilter()
-}
-
-watch(
-  quickFilterInput,
-  (nextQuery, _previousQuery, onCleanup) => {
-    const timeoutId = window.setTimeout(() => {
-      debouncedQuickFilterInput.value = nextQuery
-    }, QUICK_FILTER_DEBOUNCE_MS)
-    onCleanup(() => window.clearTimeout(timeoutId))
-  },
-  { immediate: true },
-)
-
-watch(
-  debouncedQuickFilterInput,
-  () => {
-    applyQuickFilter()
-  },
-)
-
 onMounted(() => {
   invalidateHistoryStatusRefreshes()
   serverHistoryCanUndo.value = false
@@ -3142,26 +3056,6 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-}
-
-.server-grid__quick-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: min(100%, 22rem);
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: rgba(35, 42, 48, 0.78);
-}
-
-.server-grid__quick-filter input {
-  min-width: 13rem;
-  height: 2rem;
-  padding: 0 0.65rem;
-  border: 1px solid rgba(35, 42, 48, 0.16);
-  border-radius: 0.45rem;
-  background: rgba(255, 255, 255, 0.82);
-  color: rgba(35, 42, 48, 0.95);
 }
 
 .server-grid__body {

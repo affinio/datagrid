@@ -85,23 +85,6 @@
             <option value="custom">Custom items + button trigger</option>
           </select>
         </label>
-        <label>
-          Quick filter
-          <input
-            v-model="quickFilterInput"
-            data-sandbox-quick-filter-input="true"
-            type="search"
-            placeholder="Search visible columns"
-          />
-        </label>
-        <button
-          type="button"
-          data-sandbox-quick-filter-clear="true"
-          :disabled="!quickFilterActive"
-          @click="clearQuickFilter"
-        >
-          Clear
-        </button>
         <label v-if="props.mode === 'base' && !props.timesheetShowcase && viewMode === 'gantt'">
           Zoom
           <select v-model="ganttZoomLevel">
@@ -312,6 +295,7 @@
         column-layout
         diagnostics
         advanced-filter
+        :quick-filter="quickFilter"
         :find-replace="props.mode === 'base'"
         aggregations
         :client-row-model-options="clientRowModelOptions"
@@ -388,7 +372,6 @@ import type {
   DataGridAggregationModel,
   DataGridColumnInput,
   DataGridColumnPin,
-  DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridPivotInteropSnapshot,
   DataGridPivotLayoutImportOptions,
@@ -400,7 +383,6 @@ import type {
   DataGridUnifiedColumnState,
   DataGridUnifiedState,
 } from "@affino/datagrid-vue";
-import { cloneDataGridFilterSnapshot } from "@affino/datagrid-vue";
 import {
   buildVueColumns,
   buildVueRows,
@@ -488,7 +470,6 @@ type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | nul
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 type ShellStatusTone = "neutral" | "info" | "warning" | "success";
-const QUICK_FILTER_DEBOUNCE_MS = 180;
 
 const SandboxToolbarButton = defineComponent({
   name: "SandboxToolbarButton",
@@ -1351,8 +1332,10 @@ const showRowLines = ref(true);
 const showColumnLines = ref(true);
 const showHeaderColumnLines = ref(true);
 const showPinnedSeparators = ref(true);
-const quickFilterInput = ref("");
-const debouncedQuickFilterInput = ref("");
+const quickFilter = {
+  placeholder: "Search visible columns",
+  mode: "tokens" as const,
+};
 const pivotViewMode = ref<PivotViewMode>("pivot");
 const pivotLayout = ref<PivotLayoutId>("department-month-revenue");
 const hideUnusedPivotSourceColumns = ref(true);
@@ -1581,13 +1564,6 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
     return column;
   }));
 });
-const quickFilterColumnKeys = computed<readonly string[]>(() => (
-  columns.value
-    .map(column => String(column.key ?? "").trim())
-    .filter(columnKey => columnKey.length > 0)
-));
-const quickFilterActive = computed(() => quickFilterInput.value.trim().length > 0);
-
 const groupBy = computed(() => {
   if (props.mode !== "base") {
     return null;
@@ -1965,68 +1941,6 @@ const clearPersistedSavedView = (): void => {
   }
 };
 
-function createEmptyFilterModel(): DataGridFilterSnapshot {
-  return {
-    columnFilters: {},
-    advancedFilters: {},
-    advancedExpression: null,
-  };
-}
-
-function hasFilterModelEntries(filterModel: DataGridFilterSnapshot): boolean {
-  return (
-    Object.keys(filterModel.columnFilters ?? {}).length > 0
-    || Object.keys(filterModel.columnStyleFilters ?? {}).length > 0
-    || Object.keys(filterModel.advancedFilters ?? {}).length > 0
-    || Boolean(filterModel.advancedExpression)
-    || Boolean(filterModel.quickFilter)
-  );
-}
-
-function mergeQuickFilterIntoFilterModel(
-  currentFilterModel: DataGridFilterSnapshot | null | undefined,
-  query: string,
-  columnKeys: readonly string[],
-): DataGridFilterSnapshot | null {
-  const nextFilterModel = cloneDataGridFilterSnapshot(currentFilterModel ?? createEmptyFilterModel())
-    ?? createEmptyFilterModel();
-  const normalizedQuery = query.trim();
-  if (normalizedQuery.length > 0 && columnKeys.length > 0) {
-    nextFilterModel.quickFilter = {
-      query: normalizedQuery,
-      columns: [...columnKeys],
-      mode: "tokens",
-    };
-  } else {
-    delete nextFilterModel.quickFilter;
-  }
-  return hasFilterModelEntries(nextFilterModel) ? nextFilterModel : null;
-}
-
-function applyQuickFilter(): void {
-  const api = gridRef.value?.getApi() as {
-    rows?: {
-      getSnapshot: () => { filterModel?: DataGridFilterSnapshot | null };
-      setFilterModel: (filterModel: DataGridFilterSnapshot | null) => void;
-    };
-  } | null;
-  const rowsApi = api?.rows;
-  if (!rowsApi) {
-    return;
-  }
-  rowsApi.setFilterModel(mergeQuickFilterIntoFilterModel(
-    rowsApi.getSnapshot().filterModel ?? null,
-    debouncedQuickFilterInput.value,
-    quickFilterColumnKeys.value,
-  ));
-}
-
-function clearQuickFilter(): void {
-  quickFilterInput.value = "";
-  debouncedQuickFilterInput.value = "";
-  applyQuickFilter();
-}
-
 watch(
   () => props.initialViewMode,
   (nextViewMode) => {
@@ -2041,28 +1955,6 @@ watch(
     syncPersistedSavedViewFlag();
   },
   { immediate: true },
-);
-
-watch(
-  quickFilterInput,
-  (nextQuery, _previousQuery, onCleanup) => {
-    const timeoutId = window.setTimeout(() => {
-      debouncedQuickFilterInput.value = nextQuery;
-    }, QUICK_FILTER_DEBOUNCE_MS);
-    onCleanup(() => window.clearTimeout(timeoutId));
-  },
-  { immediate: true },
-);
-
-watch(
-  () => [
-    debouncedQuickFilterInput.value,
-    quickFilterColumnKeys.value.join("|"),
-    gridRef.value,
-  ] as const,
-  () => {
-    applyQuickFilter();
-  },
 );
 
 watch(
