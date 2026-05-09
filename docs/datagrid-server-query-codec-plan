@@ -46,7 +46,7 @@ Backends can either:
   - `quickFilter` is omitted when its normalized query is empty.
   - All DTO values must be JSON-safe and structured-clone safe.
 
-  ## [] Slice 3: Quick Filter Codec
+  ## [x] Slice 3: Quick Filter Codec
 
   - Нормализовать `filterModel.quickFilter`.
   - `query`: trim, empty query drops quickFilter.

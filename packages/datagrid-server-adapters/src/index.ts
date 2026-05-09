@@ -6,6 +6,7 @@ import {
   type DataGridDataSource,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceRowEntry,
+  type DataGridQuickFilterSnapshot,
 } from "@affino/datagrid-core"
 import {
   createServerDatasourceHttpClient,
@@ -106,6 +107,49 @@ export interface DataGridServerQueryCodecOptions {
   columnIdMap?: Readonly<Record<string, string>> | ((columnKey: string) => string | null | undefined)
   quickFilterModeFallback?: DataGridServerQuickFilter["mode"]
   legacyAdvancedFilters?: "preserve" | "drop"
+}
+
+function normalizeQuickFilterMode(
+  mode: unknown,
+  fallback: DataGridServerQuickFilter["mode"] | undefined,
+): DataGridServerQuickFilter["mode"] {
+  if (mode === "contains" || mode === "tokens") {
+    return mode
+  }
+  return fallback === "tokens" ? "tokens" : "contains"
+}
+
+function normalizeQuickFilterColumns(columns: readonly unknown[] | undefined): readonly string[] {
+  if (!Array.isArray(columns)) {
+    return []
+  }
+  const normalizedColumns: string[] = []
+  const seenColumns = new Set<string>()
+  for (const column of columns) {
+    const columnId = String(column ?? "").trim()
+    if (!columnId || seenColumns.has(columnId)) {
+      continue
+    }
+    seenColumns.add(columnId)
+    normalizedColumns.push(columnId)
+  }
+  return Object.freeze(normalizedColumns)
+}
+
+export function normalizeDataGridServerQuickFilter(
+  input: DataGridQuickFilterSnapshot | null | undefined,
+  options: Pick<DataGridServerQueryCodecOptions, "quickFilterModeFallback"> = {},
+): DataGridServerQuickFilter | null {
+  const query = typeof input?.query === "string" ? input.query.trim() : ""
+  if (!query) {
+    return null
+  }
+  const columns = normalizeQuickFilterColumns(input?.columns)
+  return Object.freeze({
+    query,
+    ...(columns.length > 0 ? { columns } : {}),
+    mode: normalizeQuickFilterMode(input?.mode, options.quickFilterModeFallback),
+  })
 }
 
 type AffinoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<unknown>["commitEdits"]>>[0]
