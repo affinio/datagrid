@@ -79,6 +79,11 @@ import {
   type DataGridAdvancedFilterProp,
 } from "./config/dataGridAdvancedFilter"
 import {
+  resolveDataGridQuickFilter,
+  type DataGridQuickFilterProp,
+  type DataGridResolvedQuickFilterOptions,
+} from "./config/dataGridQuickFilter"
+import {
   resolveDataGridFindReplace,
   type DataGridFindReplaceOptions,
   type DataGridFindReplaceProp,
@@ -566,6 +571,10 @@ const dataGridProps = {
     type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
     default: undefined,
   },
+  quickFilter: {
+    type: [Boolean, Object] as PropType<DataGridQuickFilterProp | undefined>,
+    default: undefined,
+  },
   findReplace: {
     type: [Boolean, Object] as PropType<DataGridFindReplaceProp | undefined>,
     default: undefined,
@@ -897,6 +906,9 @@ const DataGridRuntimeComponent = defineComponent({
     })
     const resolvedAdvancedFilter = computed<DataGridAdvancedFilterOptions>(() => {
       return resolveDataGridAdvancedFilter(props.advancedFilter)
+    })
+    const resolvedQuickFilter = computed<DataGridResolvedQuickFilterOptions>(() => {
+      return resolveDataGridQuickFilter(props.quickFilter)
     })
     const resolvedFindReplace = computed<DataGridFindReplaceOptions>(() => {
       return resolveDataGridFindReplace(props.findReplace)
@@ -1364,6 +1376,7 @@ const DataGridRuntimeComponent = defineComponent({
         columnReorder: resolvedColumnReorder.value,
         aggregations: resolvedAggregations.value,
         advancedFilter: resolvedAdvancedFilter.value,
+        quickFilter: resolvedQuickFilter.value,
         findReplace: resolvedFindReplace.value,
         gridLines: resolvedGridLines.value,
         rowHeightMode: props.rowHeightMode,

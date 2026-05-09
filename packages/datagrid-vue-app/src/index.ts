@@ -95,6 +95,11 @@ export type {
   DataGridResolvedAdvancedFilterLabels,
 } from "./config/dataGridAdvancedFilter"
 export type {
+  DataGridQuickFilterOptions,
+  DataGridQuickFilterProp,
+  DataGridResolvedQuickFilterOptions,
+} from "./config/dataGridQuickFilter"
+export type {
   DataGridFindReplaceOptions,
   DataGridFindReplaceProp,
 } from "./config/dataGridFindReplace"

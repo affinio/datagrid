@@ -138,5 +138,61 @@
       - дефолтные searchable columns.
   - Добавить changelog.
 
+## [x] Slice 9: API Contract
+
+  - Добавить в app-layer типы quickFilter?: boolean | DataGridQuickFilterOptions.
+  - Минимальные options: placeholder?, columns?, mode?.
+  - Зафиксировать, что это только shell control поверх filterModel.quickFilter, не новый state channel.
+
+## [] Slice 10: App Toolbar Wiring
+
+  - В DataGridDefaultRenderer добавить quick filter control рядом с advanced filter.
+  - quickFilter={true} включает input.
+  - Изменение input обновляет filterModel.quickFilter.
+  - Clear удаляет quickFilter из snapshot.
+
+## [] Slice 11: Controlled FilterModel Compatibility
+
+  - Проверить controlled/uncontrolled сценарии.
+  - Если consumer передает filterModel, shell должен эмитить обычный update:state/filter change, без локального рассинхрона.
+  - Не добавлять отдельный update:quickFilter.
+
+## [] Slice 12: Searchable Columns Resolution
+
+  - Если quickFilter.columns не задан, app-layer резолвит дефолтные searchable columns.
+  - Учитывать column.capabilities.searchable === false/true.
+  - Не сканировать raw row object.
+
+## [] Slice 13: Vue Public Binding
+
+  - Протащить prop через Vue wrapper/app component.
+  - Поддержать декларативно:
+
+    <DataGrid quick-filter advanced-filter />
+
+  - Поддержать object form:
+
+    <DataGrid :quick-filter="{ placeholder: 'Search accounts', mode: 'tokens' }" />
+
+## [] Slice 14: Sandbox Migration
+
+  - Убрать ручной quick filter toolbar из sandbox cards.
+  - Перевести sandbox на декларативный quick-filter.
+  - Проверить client row model и server data source demo.
+
+## [] Slice 15: Tests
+
+  - Contract/app tests: input renders only when enabled.
+  - Typing tests: boolean и object prop.
+  - Behavior tests: typing updates filterModel.quickFilter, clear removes it.
+  - Server datasource smoke: request still carries filterModel.quickFilter.
+
+## [] Slice 16: Docs + Changelog
+
+  - README пример рядом с advanced-filter.
+  - Документировать, что это shell convenience API.
+  - Отдельно указать, что controlled consumers могут продолжать управлять filterModel.quickFilter напрямую.
+
+
   ### Главное архитектурное правило: 
   quick filter должен быть частью фильтрационной модели и projection pipeline, но не становиться отдельным глобальным сервисом и не тащить UI в core.

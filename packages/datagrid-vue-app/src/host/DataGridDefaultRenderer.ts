@@ -59,6 +59,7 @@ import {
   type DataGridAdvancedFilterOptions,
   type DataGridResolvedAdvancedFilterLabels,
 } from "../config/dataGridAdvancedFilter"
+import type { DataGridResolvedQuickFilterOptions } from "../config/dataGridQuickFilter"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
@@ -822,6 +823,10 @@ export default defineComponent({
     },
     advancedFilter: {
       type: Object as PropType<DataGridAdvancedFilterOptions>,
+      required: true,
+    },
+    quickFilter: {
+      type: Object as PropType<DataGridResolvedQuickFilterOptions>,
       required: true,
     },
     findReplace: {
