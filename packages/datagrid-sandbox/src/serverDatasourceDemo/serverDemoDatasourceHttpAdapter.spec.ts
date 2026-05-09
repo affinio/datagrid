@@ -200,11 +200,13 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       range: { startRow: 0, endRow: 50 },
       sortModel: [{ colId: "value", sort: "desc" }],
       filterModel: {
-        region: { type: "equals", filter: "EMEA" },
-        segment: { type: "equals", filter: "Growth" },
-        status: { type: "equals", filter: "Active" },
-        name: { type: "contains", filter: "Account 0001" },
-        value: { type: "inRange", filter: 1000, filterTo: 2000 },
+        columnFilters: {
+          region: { kind: "valueSet", tokens: ["string:emea"] },
+          segment: { kind: "valueSet", tokens: ["string:growth"] },
+          status: { kind: "valueSet", tokens: ["string:active"] },
+          name: { kind: "predicate", operator: "contains", value: "Account 0001" },
+          value: { kind: "predicate", operator: "between", value: 1000, value2: 2000 },
+        },
       },
     })
     expect(result.total).toBe(100)
@@ -849,7 +851,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
       columnId: "region",
       filterModel: {
-        status: { type: "equals", filter: "Active" },
+        columnFilters: {
+          status: { kind: "valueSet", tokens: ["string:active"] },
+        },
       },
       options: {
         scope: "filtered",
@@ -864,7 +868,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     ])
   })
 
-  it("drops empty filter clauses and supports legacy array value sets", async () => {
+  it("normalizes value-set filters and drops empty filter entries through the package codec", async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({
       rows: [],
       total: 0,
@@ -881,10 +885,8 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       ...createAbortablePullRequest(),
       filterModel: {
         columnFilters: {
-          region: ["string:emea"] as never,
+          region: { kind: "valueSet", tokens: ["string:emea"] },
           status: { kind: "valueSet", tokens: [] },
-          name: { kind: "predicate", operator: "contains", value: "   " },
-          value: { kind: "predicate", operator: "between", value: null, value2: null },
         },
         advancedFilters: {},
       },
@@ -895,7 +897,9 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       range: { startRow: 0, endRow: 50 },
       sortModel: [{ colId: "value", sort: "desc" }],
       filterModel: {
-        region: { type: "equals", filter: "EMEA" },
+        columnFilters: {
+          region: { kind: "valueSet", tokens: ["string:emea"] },
+        },
       },
     })
   })

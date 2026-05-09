@@ -1,5 +1,4 @@
 import {
-  type DataGridColumnFilter,
   serializeColumnValueToToken,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
@@ -13,9 +12,6 @@ import {
 } from "@affino/datagrid-vue"
 
 import {
-  SERVER_DEMO_REGIONS,
-  SERVER_DEMO_SEGMENTS,
-  SERVER_DEMO_STATUSES,
   type ServerDemoRow,
   type ServerDemoChangeFeedDiagnostics,
   type ServerDemoChangeFeedResponse,
@@ -27,6 +23,14 @@ import {
   normalizeDatasourceInvalidation,
   type ServerRowSnapshotLike,
 } from "@affino/datagrid-server-client"
+import {
+  normalizeDataGridServerAdvancedExpression,
+  normalizeDataGridServerAdvancedFilters,
+  normalizeDataGridServerColumnFilters,
+  normalizeDataGridServerQuery,
+  normalizeDataGridServerQuickFilter,
+  type DataGridServerFilterModel,
+} from "@affino/datagrid-server-adapters"
 import type { ServerDemoHistoryScope } from "./serverDemoHistoryScope"
 import {
   normalizeServerDemoHistoryState,
@@ -240,14 +244,6 @@ type ServerDemoFillOperationRequestWithScope = ServerDemoFillOperationRequest & 
 
 export type ServerDemoHttpDatasource = ReturnType<typeof createServerDemoDatasourceHttpAdapter>
 
-type BackendFilterModel = Record<string, unknown>
-
-const ENUM_FILTER_VALUES: Record<string, readonly string[]> = {
-  region: SERVER_DEMO_REGIONS,
-  segment: SERVER_DEMO_SEGMENTS,
-  status: SERVER_DEMO_STATUSES,
-}
-
 let pageLifecycleTeardownStarted = false
 
 function markPageLifecycleTeardownStarted(): void {
@@ -271,304 +267,54 @@ function resolveEndpoint(baseUrl: string | undefined, path: string): string {
   return new URL(path, baseUrl).toString()
 }
 
-function decodeColumnValueToken(token: string): unknown {
-  if (token.startsWith("string:")) {
-    return token.slice("string:".length)
-  }
-  if (token.startsWith("number:")) {
-    const value = Number(token.slice("number:".length))
-    return Number.isFinite(value) ? value : token
-  }
-  if (token === "null") {
-    return null
-  }
-  if (token === "boolean:true") {
-    return true
-  }
-  if (token === "boolean:false") {
-    return false
-  }
-  if (token.startsWith("date:")) {
-    return token.slice("date:".length)
-  }
-  return token
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value))
 }
 
-function normalizeFilterValue(value: unknown): unknown | null {
-  if (value == null) {
-    return null
+function omitServerDemoColumn<T>(
+  input: Readonly<Record<string, T>> | null | undefined,
+  omitColumnId?: string,
+): Readonly<Record<string, T>> | undefined {
+  if (!input || !omitColumnId) {
+    return input ?? undefined
   }
-  if (typeof value === "string") {
-    const trimmed = value.trim()
-    if (trimmed.length === 0) {
-      return null
-    }
-    const decoded = decodeColumnValueToken(trimmed)
-    if (typeof decoded === "string" && decoded.trim().length === 0) {
-      return null
-    }
-    return decoded
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return value
-  }
-  return value
-}
-
-function normalizeFilterValueForColumn(columnId: string, value: unknown): unknown | null {
-  const normalized = normalizeFilterValue(value)
-  if (typeof normalized !== "string") {
-    return normalized
-  }
-
-  const canonicalValues = ENUM_FILTER_VALUES[columnId]
-  if (!canonicalValues) {
-    return normalized
-  }
-
-  const matched = canonicalValues.find(candidate => candidate.toLowerCase() === normalized.toLowerCase())
-  return matched ?? normalized
-}
-
-function normalizeFilterValues(columnId: string, values: readonly unknown[]): unknown[] {
-  const normalized: unknown[] = []
-  for (const value of values) {
-    const nextValue = normalizeFilterValueForColumn(columnId, value)
-    if (nextValue !== null) {
-      normalized.push(nextValue)
+  const filtered: Record<string, T> = {}
+  for (const [columnId, entry] of Object.entries(input)) {
+    if (columnId !== omitColumnId) {
+      filtered[columnId] = entry
     }
   }
-  return normalized
+  return filtered
 }
 
-function normalizeRange(range: DataGridDataSourcePullRequest["range"]): { startRow: number; endRow: number } {
-  const start = Math.max(0, Math.trunc(range.start))
-  const end = Math.max(start, Math.trunc(range.end) + 1)
-  return { startRow: start, endRow: end }
-}
-
-function normalizeSortModel(request: DataGridDataSourcePullRequest): readonly { colId: string; sort: "asc" | "desc" }[] {
-  return request.sortModel.map(sortState => ({
-    colId: sortState.key,
-    sort: sortState.direction,
-  }))
-}
-
-function setBackendFilter(
-  backendFilterModel: BackendFilterModel,
-  columnId: string,
-  value: unknown,
-): void {
-  if (value != null) {
-    backendFilterModel[columnId] = value
-  }
-}
-
-function createValuePredicateFilter(operator: string, value: unknown, value2?: unknown): unknown | null {
-  const filterValue = normalizeFilterValue(value)
-  if (operator === "between" || operator === "range") {
-    const filterToValue = normalizeFilterValue(value2)
-    if (filterValue !== null && filterToValue !== null) {
-      return {
-        type: "inRange",
-        filter: filterValue,
-        filterTo: filterToValue,
-      }
-    }
-    return null
-  }
-  if (filterValue === null) {
-    return null
-  }
-  switch (operator) {
-    case "equals":
-    case "eq":
-    case "is":
-      return { type: "equals", filter: filterValue }
-    case "gt":
-    case ">":
-      return { type: "greaterThan", filter: filterValue }
-    case "gte":
-    case ">=":
-      return { type: "greaterThanOrEqual", filter: filterValue }
-    case "lt":
-    case "<":
-      return { type: "lessThan", filter: filterValue }
-    case "lte":
-    case "<=":
-      return { type: "lessThanOrEqual", filter: filterValue }
-    default:
-      return null
-  }
-}
-
-function createBackendFilterForPredicate(
-  columnId: string,
-  operator: string,
-  value: unknown,
-  value2?: unknown,
-): unknown | null {
-  const normalizedOperator = operator.trim().toLowerCase()
-  if (columnId === "value") {
-    return createValuePredicateFilter(normalizedOperator, value, value2)
-  }
-
-  if (normalizedOperator === "contains" && columnId === "name") {
-    const filterValue = normalizeFilterValueForColumn(columnId, value)
-    return filterValue !== null ? { type: "contains", filter: filterValue } : null
-  }
-
-  if (
-    normalizedOperator === "equals"
-    || normalizedOperator === "eq"
-    || normalizedOperator === "is"
-    || normalizedOperator === "in"
-  ) {
-    const values = Array.isArray(value)
-      ? normalizeFilterValues(columnId, value)
-      : normalizeFilterValues(columnId, [value])
-    if (values.length === 1) {
-      return { type: "equals", filter: values[0] }
-    }
-    if (values.length > 1) {
-      return { type: "equals", values }
-    }
-  }
-
-  return null
-}
-
-function flattenFilterModel(filterModel: DataGridFilterSnapshot | null, omitColumnId?: string): BackendFilterModel | null {
+function normalizeServerDemoFilterModel(
+  filterModel: DataGridFilterSnapshot | null,
+  omitColumnId?: string,
+): DataGridServerFilterModel | null {
   if (!filterModel) {
     return null
   }
-
-  const backendFilterModel: BackendFilterModel = {}
-  const columnFilters = filterModel.columnFilters ?? {}
-
-  for (const [columnId, filterEntry] of Object.entries(columnFilters) as Array<[string, DataGridColumnFilter]>) {
-    if (columnId === omitColumnId) {
-      continue
-    }
-
-    if (Array.isArray(filterEntry)) {
-      const values = normalizeFilterValues(columnId, filterEntry)
-      if (values.length === 1) {
-        backendFilterModel[columnId] = {
-          type: "equals",
-          filter: values[0],
-        }
-      } else if (values.length > 1) {
-        backendFilterModel[columnId] = {
-          type: "equals",
-          values,
-        }
-      }
-      continue
-    }
-
-    if (filterEntry.kind === "valueSet") {
-      const values = normalizeFilterValues(columnId, filterEntry.tokens ?? [])
-      if (values.length === 1) {
-        backendFilterModel[columnId] = {
-          type: "equals",
-          filter: values[0],
-        }
-      } else if (values.length > 1) {
-        backendFilterModel[columnId] = {
-          type: "equals",
-          values,
-        }
-      }
-      continue
-    }
-
-    if (filterEntry.kind !== "predicate") {
-      continue
-    }
-
-    const operator = filterEntry.operator
-    switch (operator) {
-      case "contains":
-      case "equals":
-      case "gt":
-      case "gte":
-      case "lt":
-      case "lte":
-      case "between":
-        setBackendFilter(
-          backendFilterModel,
-          columnId,
-          createBackendFilterForPredicate(columnId, operator, filterEntry.value, filterEntry.value2),
-        )
-        break
-      case "isEmpty":
-      case "isNull":
-      case "notEmpty":
-      case "notNull":
-        break
-      default:
-        break
-    }
+  const columnFilters = normalizeDataGridServerColumnFilters(
+    omitServerDemoColumn(filterModel.columnFilters, omitColumnId),
+  )
+  const columnStyleFilters = normalizeDataGridServerColumnFilters(
+    omitServerDemoColumn(filterModel.columnStyleFilters, omitColumnId),
+  )
+  const advancedFilters = normalizeDataGridServerAdvancedFilters(
+    omitServerDemoColumn(filterModel.advancedFilters, omitColumnId),
+  )
+  const advancedExpression = Object.prototype.hasOwnProperty.call(filterModel, "advancedExpression")
+    ? normalizeDataGridServerAdvancedExpression(filterModel.advancedExpression)
+    : undefined
+  const quickFilter = normalizeDataGridServerQuickFilter(filterModel.quickFilter)
+  const normalized: DataGridServerFilterModel = {
+    ...(columnFilters ? { columnFilters } : {}),
+    ...(columnStyleFilters ? { columnStyleFilters } : {}),
+    ...(advancedFilters ? { advancedFilters } : {}),
+    ...(advancedExpression !== undefined ? { advancedExpression } : {}),
+    ...(quickFilter ? { quickFilter } : {}),
   }
-
-  if (filterModel.advancedExpression != null) {
-    backendFilterModel.advancedExpression = filterModel.advancedExpression
-  }
-  if (filterModel.advancedFilters != null) {
-    const clonedAdvancedFilters: Record<string, unknown> = {}
-    for (const [columnId, advancedFilter] of Object.entries(filterModel.advancedFilters)) {
-      if (columnId === omitColumnId) {
-        continue
-      }
-      if (!advancedFilter || typeof advancedFilter !== "object") {
-        continue
-      }
-      const clonedAdvancedFilter = advancedFilter as unknown as Record<string, unknown>
-      const clauses = Array.isArray((advancedFilter as { clauses?: unknown }).clauses)
-        ? ((advancedFilter as { clauses?: readonly unknown[] }).clauses ?? []).map(clause => (
-            clause && typeof clause === "object" ? { ...(clause as Record<string, unknown>) } : clause
-          ))
-        : []
-      clonedAdvancedFilters[columnId] = {
-        ...clonedAdvancedFilter,
-        clauses,
-      }
-    }
-    if (Object.keys(clonedAdvancedFilters).length > 0) {
-      backendFilterModel.advancedFilters = clonedAdvancedFilters
-    }
-  }
-
-  const quickFilterQuery = typeof filterModel.quickFilter?.query === "string"
-    ? filterModel.quickFilter.query.trim()
-    : ""
-  if (quickFilterQuery.length > 0) {
-    const columns = Array.isArray(filterModel.quickFilter?.columns)
-      ? Array.from(new Set(
-          filterModel.quickFilter.columns
-            .map(column => String(column ?? "").trim())
-            .filter(column => column.length > 0),
-        ))
-      : []
-    backendFilterModel.quickFilter = {
-      query: quickFilterQuery,
-      ...(columns.length > 0 ? { columns } : {}),
-      ...(filterModel.quickFilter?.mode === "tokens" || filterModel.quickFilter?.mode === "contains"
-        ? { mode: filterModel.quickFilter.mode }
-        : {}),
-    }
-  }
-
-  if (Object.keys(backendFilterModel).length === 0) {
-    return null
-  }
-
-  return backendFilterModel
+  return Object.keys(normalized).length > 0 ? normalized : null
 }
 
 function toHistogramEntries(response: ServerDemoHistogramResponse): DataGridColumnHistogram {
@@ -1179,14 +925,13 @@ export function createServerDemoDatasourceHttpAdapter(
         historyStatus: "/api/history/status",
         changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
       },
-      mapPullRequest: request => ({
-        range: normalizeRange(request.range),
-        sortModel: normalizeSortModel(request),
-        filterModel: flattenFilterModel(request.filterModel),
-      }),
+      mapPullRequest: request => normalizeDataGridServerQuery(request),
       mapHistogramRequest: request => ({
         columnId: request.columnId,
-        filterModel: flattenFilterModel(request.filterModel, request.options.ignoreSelfFilter ? request.columnId : undefined),
+        filterModel: normalizeServerDemoFilterModel(
+          request.filterModel,
+          request.options.ignoreSelfFilter ? request.columnId : undefined,
+        ),
       }),
       mapPullResponse: response => {
         const parsed = response as ServerDemoPullResponse
@@ -1276,7 +1021,10 @@ export function createServerDemoDatasourceHttpAdapter(
       const url = resolveEndpoint(options.baseUrl, "/api/server-demo/histogram")
       const response = await postJson<ServerDemoHistogramResponse>(fetchImpl, url, {
         columnId: request.columnId,
-        filterModel: flattenFilterModel(request.filterModel, request.options.ignoreSelfFilter ? request.columnId : undefined),
+        filterModel: normalizeServerDemoFilterModel(
+          request.filterModel,
+          request.options.ignoreSelfFilter ? request.columnId : undefined,
+        ),
         options: {
           scope: request.options.scope,
           ignoreSelfFilter: request.options.ignoreSelfFilter,

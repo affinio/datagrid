@@ -102,7 +102,7 @@ Backends can either:
   - Не ломать существующий `mapPullRequest`.
   - Проверить backward compatibility.
 
-  ## [] Slice 9: Sandbox Migration
+  ## [x] Slice 9: Sandbox Migration
 
   - Убрать demo-local `flattenFilterModel`.
   - Перевести server datasource demo на package codec.
