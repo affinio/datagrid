@@ -21,6 +21,7 @@ import {
   defineDataGridSelectionCellReader,
   useDataGridRef,
   type DataGridAppToolbarModule,
+  type DataGridInstance,
   type DataGridSavedViewSnapshot,
   type DataGridTableStageCustomOverlay,
   type DataGridTableStageHistoryAdapter,
@@ -3422,6 +3423,74 @@ describe("DataGrid app facade contract", () => {
             },
           }),
           rowCount: 0,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("supports public Vue quick-filter binding in template syntax", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(defineComponent({
+      components: { DataGrid },
+      setup() {
+        return {
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+        }
+      },
+      template: '<DataGrid :rows="rows" :columns="columns" quick-filter advanced-filter />',
+    }))
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('[data-datagrid-quick-filter-input="true"]').exists()).toBe(true)
+    expect((await findAdvancedFilterTrigger(wrapper)).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("supports public Vue object quick-filter binding in template syntax", async () => {
+    const wrapper = mount(defineComponent({
+      components: { DataGrid },
+      setup() {
+        const gridRef = ref<DataGridInstance<DemoRow> | null>(null)
+        return {
+          gridRef,
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+          quickFilterOptions: {
+            placeholder: "Search accounts",
+            columns: ["owner"],
+            mode: "tokens" as const,
+          },
+        }
+      },
+      template: '<DataGrid ref="gridRef" :rows="rows" :columns="columns" :quick-filter="quickFilterOptions" />',
+    }))
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.placeholder).toBe("Search accounts")
+
+    await input.setValue("Payments")
+    await flushRuntimeTasks()
+
+    expect((wrapper.vm as unknown as { gridRef: DataGridInstance<DemoRow> | null }).gridRef?.getState()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            quickFilter: {
+              query: "Payments",
+              columns: ["owner"],
+              mode: "tokens",
+            },
+          }),
+          rowCount: 1,
         }),
       }),
     })

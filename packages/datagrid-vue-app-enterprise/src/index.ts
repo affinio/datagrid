@@ -41,6 +41,11 @@ export type {
   DataGridAdvancedFilterProp,
 } from "@affino/datagrid-vue-app"
 export type {
+  DataGridQuickFilterOptions,
+  DataGridQuickFilterProp,
+  DataGridResolvedQuickFilterOptions,
+} from "@affino/datagrid-vue-app"
+export type {
   DataGridFindReplaceOptions,
   DataGridFindReplaceProp,
   DataGridGridLinesHeaderMode,

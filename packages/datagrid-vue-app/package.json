@@ -26,6 +26,10 @@
       "types": "./dist/advanced-filter.d.ts",
       "import": "./dist/advanced-filter.js"
     },
+    "./quick-filter": {
+      "types": "./dist/quick-filter.d.ts",
+      "import": "./dist/quick-filter.js"
+    },
     "./find-replace": {
       "types": "./dist/find-replace.d.ts",
       "import": "./dist/find-replace.js"

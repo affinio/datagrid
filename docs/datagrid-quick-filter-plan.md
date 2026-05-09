@@ -163,7 +163,7 @@
   - Учитывать column.capabilities.searchable === false/true.
   - Не сканировать raw row object.
 
-## [] Slice 13: Vue Public Binding
+## [x] Slice 13: Vue Public Binding
 
   - Протащить prop через Vue wrapper/app component.
   - Поддержать декларативно:

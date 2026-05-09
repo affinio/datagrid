@@ -13,6 +13,7 @@ export default defineConfig({
         gantt: resolve(__dirname, "src/gantt.ts"),
         aggregations: resolve(__dirname, "src/aggregations.ts"),
         "advanced-filter": resolve(__dirname, "src/advanced-filter.ts"),
+        "quick-filter": resolve(__dirname, "src/quick-filter.ts"),
         "find-replace": resolve(__dirname, "src/find-replace.ts"),
         internal: resolve(__dirname, "src/internal.ts"),
       },
