@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  normalizeDataGridServerAdvancedExpression,
+  normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
   normalizeDataGridServerQuickFilter,
 } from "./index"
@@ -39,6 +41,82 @@ describe("normalizeDataGridServerQuickFilter", () => {
       mode: "tokens",
     })
     expect(normalized).not.toHaveProperty("search")
+  })
+})
+
+describe("normalizeDataGridServerAdvancedExpression", () => {
+  it("preserves nested advanced expressions structurally", () => {
+    const expression = {
+      kind: "group",
+      op: "and",
+      children: [
+        { kind: "condition", column: "owner", operator: "contains", value: "NOC" },
+        {
+          kind: "not",
+          child: {
+            kind: "group",
+            op: "or",
+            children: [
+              { kind: "condition", column: "amount", operator: "gt", value: 10 },
+              { kind: "condition", column: "amount", operator: "lt", value: 100 },
+            ],
+          },
+        },
+      ],
+    }
+
+    expect(normalizeDataGridServerAdvancedExpression(expression as never)).toEqual(expression)
+  })
+
+  it("returns null for null or non-json-safe expressions", () => {
+    expect(normalizeDataGridServerAdvancedExpression(null)).toBeNull()
+    expect(normalizeDataGridServerAdvancedExpression({
+      kind: "condition",
+      column: "amount",
+      operator: "equals",
+      value: Number.NaN,
+    } as never)).toBeNull()
+  })
+})
+
+describe("normalizeDataGridServerAdvancedFilters", () => {
+  it("preserves legacy advanced filters by default", () => {
+    expect(normalizeDataGridServerAdvancedFilters({
+      owner: {
+        type: "text",
+        clauses: [
+          { operator: "contains", value: "NOC" },
+        ],
+      },
+    })).toEqual({
+      owner: {
+        type: "text",
+        clauses: [
+          { operator: "contains", value: "NOC" },
+        ],
+      },
+    })
+  })
+
+  it("can drop legacy advanced filters and maps column ids when preserved", () => {
+    const filters = {
+      owner: {
+        type: "text",
+        clauses: [
+          { operator: "contains", value: "NOC" },
+        ],
+      },
+    } as const
+
+    expect(normalizeDataGridServerAdvancedFilters(filters, {
+      legacyAdvancedFilters: "drop",
+      columnIdMap: { owner: "owner_name" },
+    })).toBeNull()
+    expect(normalizeDataGridServerAdvancedFilters(filters, {
+      columnIdMap: { owner: "owner_name" },
+    })).toEqual({
+      owner_name: filters.owner,
+    })
   })
 })
 

@@ -65,7 +65,7 @@ Backends can either:
   - Add optional `columnIdMap`.
   - Покрыть tests.
 
-  ## [] Slice 5: Advanced Filter Codec
+  ## [x] Slice 5: Advanced Filter Codec
 
   - Preserve `advancedExpression` structurally.
   - Decide legacy `advancedFilters` policy:

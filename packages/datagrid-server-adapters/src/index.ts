@@ -1,5 +1,7 @@
 import {
   serializeColumnValueToToken,
+  type DataGridAdvancedFilter,
+  type DataGridAdvancedFilterExpression,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
   type DataGridColumnHistogramOptions,
@@ -224,6 +226,39 @@ export function normalizeDataGridServerColumnFilters(
     }
     const normalizedFilter = normalizeDataGridServerColumnFilterEntry(filter)
     if (!normalizedFilter) {
+      continue
+    }
+    normalizedFilters[resolveServerColumnId(normalizedColumnKey, options.columnIdMap)] = normalizedFilter
+  }
+  return Object.keys(normalizedFilters).length > 0
+    ? Object.freeze(normalizedFilters)
+    : null
+}
+
+export function normalizeDataGridServerAdvancedExpression(
+  input: DataGridAdvancedFilterExpression | null | undefined,
+): DataGridServerJsonValue | null {
+  if (input === null) {
+    return null
+  }
+  return normalizeServerJsonValue(input) ?? null
+}
+
+export function normalizeDataGridServerAdvancedFilters(
+  input: Readonly<Record<string, DataGridAdvancedFilter>> | null | undefined,
+  options: Pick<DataGridServerQueryCodecOptions, "columnIdMap" | "legacyAdvancedFilters"> = {},
+): Readonly<Record<string, DataGridServerJsonValue>> | null {
+  if (!input || options.legacyAdvancedFilters === "drop") {
+    return null
+  }
+  const normalizedFilters: Record<string, DataGridServerJsonValue> = {}
+  for (const [columnKey, filter] of Object.entries(input)) {
+    const normalizedColumnKey = columnKey.trim()
+    if (!normalizedColumnKey) {
+      continue
+    }
+    const normalizedFilter = normalizeServerJsonValue(filter)
+    if (normalizedFilter === undefined) {
       continue
     }
     normalizedFilters[resolveServerColumnId(normalizedColumnKey, options.columnIdMap)] = normalizedFilter
