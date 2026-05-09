@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import type { DataGridDataSourcePullRequest } from "@affino/datagrid-core"
 import {
   normalizeDataGridServerAdvancedExpression,
   normalizeDataGridServerAdvancedFilters,
@@ -6,9 +7,40 @@ import {
   normalizeDataGridServerGroupBy,
   normalizeDataGridServerPagination,
   normalizeDataGridServerQuickFilter,
+  normalizeDataGridServerQuery,
   normalizeDataGridServerRange,
   normalizeDataGridServerSortModel,
 } from "./index"
+
+function createPullRequest(
+  overrides: Partial<DataGridDataSourcePullRequest> = {},
+): DataGridDataSourcePullRequest {
+  return {
+    range: { start: 0, end: 9 },
+    priority: "normal",
+    reason: "viewport-change",
+    signal: new AbortController().signal,
+    sortModel: [],
+    filterModel: null,
+    groupBy: null,
+    groupExpansion: { expandedByDefault: true, toggledGroupKeys: [] },
+    treeData: null,
+    pivot: null,
+    pagination: {
+      snapshot: {
+        enabled: false,
+        pageSize: 100,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: -1,
+        endIndex: -1,
+      },
+      cursor: null,
+    },
+    ...overrides,
+  }
+}
 
 describe("normalizeDataGridServerQuickFilter", () => {
   it("normalizes query, columns, and mode", () => {
@@ -240,5 +272,124 @@ describe("normalizeDataGridServerGroupBy", () => {
   it("drops empty group specs", () => {
     expect(normalizeDataGridServerGroupBy(null)).toBeNull()
     expect(normalizeDataGridServerGroupBy({ fields: [] })).toBeNull()
+  })
+})
+
+describe("normalizeDataGridServerQuery", () => {
+  it("builds a deterministic normalized backend query without mutating the request", () => {
+    const request = createPullRequest({
+      range: { start: 10, end: 19 },
+      sortModel: [
+        { key: " owner ", direction: "asc" },
+        { key: "amount", direction: "desc" },
+      ],
+      filterModel: {
+        columnFilters: {
+          owner: { kind: "valueSet", tokens: [" string:noc ", "string:noc"] },
+        },
+        columnStyleFilters: {
+          status: { kind: "styleValueSet", styleKey: " bg ", tokens: [" #fff "] },
+        },
+        advancedFilters: {
+          amount: {
+            type: "number",
+            clauses: [{ operator: "gt", value: 10 }],
+          },
+        },
+        advancedExpression: {
+          kind: "condition",
+          key: "amount",
+          operator: "gt",
+          value: 10,
+        },
+        quickFilter: {
+          query: " platform ",
+          columns: [" owner ", "owner", "service"],
+          mode: "tokens",
+        },
+      },
+      groupBy: {
+        fields: [" owner ", "service", "owner"],
+        expandedByDefault: true,
+      },
+      pagination: {
+        snapshot: {
+          enabled: true,
+          pageSize: 25,
+          currentPage: 2,
+          pageCount: 5,
+          totalRowCount: 120,
+          startIndex: 50,
+          endIndex: 74,
+        },
+        cursor: "cursor:2",
+      },
+    })
+
+    const normalized = normalizeDataGridServerQuery(request, {
+      columnIdMap: { owner: "owner_name", status: "status_code" },
+    })
+
+    expect(Object.keys(normalized)).toEqual(["range", "sortModel", "filterModel", "groupBy", "pagination"])
+    expect(normalized).toEqual({
+      range: { startRow: 10, endRow: 20 },
+      sortModel: [
+        { colId: "owner_name", sort: "asc" },
+        { colId: "amount", sort: "desc" },
+      ],
+      filterModel: {
+        columnFilters: {
+          owner_name: { kind: "valueSet", tokens: ["string:noc"] },
+        },
+        columnStyleFilters: {
+          status_code: { kind: "styleValueSet", styleKey: "bg", tokens: ["#fff"] },
+        },
+        advancedFilters: {
+          amount: {
+            type: "number",
+            clauses: [{ operator: "gt", value: 10 }],
+          },
+        },
+        advancedExpression: {
+          kind: "condition",
+          key: "amount",
+          operator: "gt",
+          value: 10,
+        },
+        quickFilter: {
+          query: "platform",
+          columns: ["owner", "service"],
+          mode: "tokens",
+        },
+      },
+      groupBy: {
+        fields: ["owner_name", "service"],
+        expandedByDefault: true,
+      },
+      pagination: {
+        pageSize: 25,
+        currentPage: 2,
+      },
+    })
+    expect(request.filterModel?.quickFilter?.query).toBe(" platform ")
+    expect(request.groupBy?.fields).toEqual([" owner ", "service", "owner"])
+  })
+
+  it("prunes empty optional models while preserving explicit null filter state", () => {
+    expect(normalizeDataGridServerQuery(createPullRequest())).toEqual({
+      range: { startRow: 0, endRow: 10 },
+      filterModel: null,
+    })
+
+    expect(normalizeDataGridServerQuery(createPullRequest({
+      filterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+        quickFilter: { query: "   " },
+      },
+    }))).toEqual({
+      range: { startRow: 0, endRow: 10 },
+      filterModel: null,
+    })
   })
 })

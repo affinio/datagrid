@@ -9,7 +9,9 @@ import {
   type DataGridColumnStyleFilter,
   type DataGridDataSource,
   type DataGridDataSourceColumnHistogramRequest,
+  type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
+  type DataGridFilterSnapshot,
   type DataGridGroupBySpec,
   type DataGridPaginationInput,
   type DataGridQuickFilterSnapshot,
@@ -388,6 +390,49 @@ export function normalizeDataGridServerGroupBy(
       ...(typeof input.expandedByDefault === "boolean" ? { expandedByDefault: input.expandedByDefault } : {}),
     })
     : null
+}
+
+function normalizeDataGridServerFilterModel(
+  input: DataGridFilterSnapshot | null | undefined,
+  options: DataGridServerQueryCodecOptions,
+): DataGridServerFilterModel | null {
+  if (!input) {
+    return null
+  }
+  const columnFilters = normalizeDataGridServerColumnFilters(input.columnFilters, options)
+  const columnStyleFilters = normalizeDataGridServerColumnFilters(input.columnStyleFilters, options)
+  const advancedFilters = normalizeDataGridServerAdvancedFilters(input.advancedFilters, options)
+  const advancedExpression = Object.prototype.hasOwnProperty.call(input, "advancedExpression")
+    ? normalizeDataGridServerAdvancedExpression(input.advancedExpression)
+    : undefined
+  const quickFilter = normalizeDataGridServerQuickFilter(input.quickFilter, options)
+  const filterModel: DataGridServerFilterModel = {
+    ...(columnFilters ? { columnFilters } : {}),
+    ...(columnStyleFilters ? { columnStyleFilters } : {}),
+    ...(advancedFilters ? { advancedFilters } : {}),
+    ...(advancedExpression !== undefined ? { advancedExpression } : {}),
+    ...(quickFilter ? { quickFilter } : {}),
+  }
+  return Object.keys(filterModel).length > 0
+    ? Object.freeze(filterModel)
+    : null
+}
+
+export function normalizeDataGridServerQuery(
+  request: DataGridDataSourcePullRequest,
+  options: DataGridServerQueryCodecOptions = {},
+): DataGridServerQuery {
+  const sortModel = normalizeDataGridServerSortModel(request.sortModel, options)
+  const filterModel = normalizeDataGridServerFilterModel(request.filterModel, options)
+  const groupBy = normalizeDataGridServerGroupBy(request.groupBy, options)
+  const pagination = normalizeDataGridServerPagination(request.pagination.snapshot)
+  return Object.freeze({
+    range: normalizeDataGridServerRange(request.range),
+    ...(sortModel ? { sortModel } : {}),
+    filterModel,
+    ...(groupBy ? { groupBy } : {}),
+    ...(pagination ? { pagination } : {}),
+  })
 }
 
 type AffinoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<unknown>["commitEdits"]>>[0]

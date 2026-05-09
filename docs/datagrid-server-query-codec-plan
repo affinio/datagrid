@@ -83,7 +83,7 @@ Backends can either:
   - Drop invalid empty entries.
   - Покрыть stable output tests.
 
-  ## [] Slice 7: Top-Level Query Builder
+  ## [x] Slice 7: Top-Level Query Builder
 
   - Добавить helper:
     - `normalizeDataGridServerQuery(request, options?)`
