@@ -109,7 +109,7 @@ Backends can either:
   - Сохранить demo-specific backend mapping только там, где реально backend-specific.
   - Проверить quickFilter / advancedFilter / column filters.
 
-  ## [] Slice 10: Server Client Tests
+  ## [x] Slice 10: Server Client Tests
 
   - Подтвердить, что `datagrid-server-client` просто сериализует DTO.
   - Не добавлять filter semantics в server client.

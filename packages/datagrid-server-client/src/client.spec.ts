@@ -31,7 +31,10 @@ function createPullRequest(start = 0): DataGridDataSourcePullRequest {
   }
 }
 
-function createClient(fetchImpl: typeof fetch) {
+function createClient(
+  fetchImpl: typeof fetch,
+  mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown,
+) {
   return createServerDatasourceHttpClient({
     fetchImpl,
     endpoints: {
@@ -45,7 +48,7 @@ function createClient(fetchImpl: typeof fetch) {
       historyStatus: "/history/status",
       changesSinceVersion: sinceVersion => `/changes?sinceVersion=${sinceVersion}`,
     },
-    mapPullRequest: request => ({
+    mapPullRequest: mapPullRequest ?? (request => ({
       range: request.range,
       priority: request.priority,
       reason: request.reason,
@@ -56,7 +59,7 @@ function createClient(fetchImpl: typeof fetch) {
       treeData: request.treeData,
       pivot: request.pivot,
       pagination: request.pagination,
-    }),
+    })),
     mapPullResponse: response => {
       const parsed = response as {
         rows?: readonly { id: string; index: number; name: string }[]
@@ -151,8 +154,8 @@ describe("createServerDatasourceHttpClient", () => {
       columnFilters: {},
       advancedFilters: {},
       quickFilter: {
-        query: "platform",
-        columns: ["owner", "service"],
+        query: " platform ",
+        columns: [" owner ", "owner", ""],
         mode: "tokens",
       },
     }
@@ -163,12 +166,48 @@ describe("createServerDatasourceHttpClient", () => {
       reason: "filter-change",
       filterModel: {
         quickFilter: {
+          query: " platform ",
+          columns: [" owner ", "owner", ""],
+          mode: "tokens",
+        },
+      },
+    })
+  })
+
+  it("serializes caller-provided normalized query DTO without interpreting filter semantics", async () => {
+    const bodies: unknown[] = []
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")))
+      return createResponse({
+        rows: [],
+        total: 0,
+        revision: "9",
+        datasetVersion: 9,
+      })
+    })
+    const normalizedQuery = {
+      range: { startRow: 0, endRow: 1 },
+      sortModel: [{ colId: "value", sort: "desc" }],
+      filterModel: {
+        columnFilters: {
+          status: { kind: "valueSet", tokens: ["string:active"] },
+        },
+        quickFilter: {
           query: "platform",
           columns: ["owner", "service"],
           mode: "tokens",
         },
       },
-    })
+      pagination: {
+        pageSize: 50,
+        currentPage: 0,
+      },
+    } as const
+    const client = createClient(fetchImpl, () => normalizedQuery)
+
+    await client.pull(createPullRequest(0))
+
+    expect(bodies[0]).toEqual(normalizedQuery)
   })
 
   it.each([
