@@ -1303,7 +1303,7 @@ export default defineComponent({
       return resolveColumnGroupOrder(columnKey) !== null
     }
 
-    const applySortAndFilter = (): {
+    const applySortAndFilter = (filterModelInput: DataGridFilterSnapshot = filterModelState.value): {
       setSortModelMs: number
       projectionRebuildMs: number
       projectionSortMs: number
@@ -1316,15 +1316,15 @@ export default defineComponent({
         key: entry.key,
         direction: entry.direction,
       }))
-      const advancedExpression = filterModelState.value.advancedExpression ?? null
+      const advancedExpression = filterModelInput.advancedExpression ?? null
       const nextFilterModel = props.advancedFilter.enabled
         ? {
-            ...filterModelState.value,
+            ...filterModelInput,
             advancedFilters: {},
             advancedExpression,
           }
         : {
-            ...filterModelState.value,
+            ...filterModelInput,
             advancedExpression,
           }
 
@@ -1430,7 +1430,7 @@ export default defineComponent({
         }
       }
       filterModelState.value = nextFilterModel
-      applySortAndFilter()
+      applySortAndFilter(nextFilterModel)
     }
 
     const clearQuickFilter = (): void => {
@@ -1440,7 +1440,7 @@ export default defineComponent({
       const nextFilterModel = cloneFilterModelState(filterModelState.value)
       delete nextFilterModel.quickFilter
       filterModelState.value = nextFilterModel
-      applySortAndFilter()
+      applySortAndFilter(nextFilterModel)
     }
 
     watch(

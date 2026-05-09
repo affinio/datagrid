@@ -1,6 +1,9 @@
 import { defineComponent, h, nextTick, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import {
+  createDataSourceBackedRowModel,
+} from "@affino/datagrid-vue"
 import type {
   DataGridRowModel,
   DataGridRowNode,
@@ -3391,6 +3394,81 @@ describe("DataGrid app facade contract", () => {
     })
 
     wrapper.unmount()
+  })
+
+  it("applies declarative quickFilter through an external data-source row model", async () => {
+    const pull = vi.fn(async () => ({
+      rows: [],
+      total: 0,
+    }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: { pull },
+      resolveRowId: row => row.rowId,
+      initialTotal: 0,
+    })
+    const setSortAndFilterModelSpy = vi.spyOn(rowModel, "setSortAndFilterModel")
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        quickFilter: {
+          placeholder: "Search owner",
+          columns: ["owner", "region"],
+          mode: "tokens",
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    pull.mockClear()
+    setSortAndFilterModelSpy.mockClear()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    await input.setValue(" Payments eu ")
+    await flushRuntimeTasks()
+
+    expect(setSortAndFilterModelSpy).toHaveBeenLastCalledWith({
+      sortModel: [],
+      filterModel: expect.objectContaining({
+        quickFilter: {
+          query: "Payments eu",
+          columns: ["owner", "region"],
+          mode: "tokens",
+        },
+      }),
+    })
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      reason: "filter-change",
+      filterModel: expect.objectContaining({
+        quickFilter: {
+          query: "Payments eu",
+          columns: ["owner", "region"],
+          mode: "tokens",
+        },
+      }),
+    }))
+    const request = pull.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined
+    expect(request).not.toHaveProperty("search")
+    expect(request?.filterModel).not.toHaveProperty("search")
+
+    pull.mockClear()
+    setSortAndFilterModelSpy.mockClear()
+
+    await input.setValue("")
+    await flushRuntimeTasks()
+
+    expect(setSortAndFilterModelSpy).toHaveBeenLastCalledWith({
+      sortModel: [],
+      filterModel: null,
+    })
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      reason: "filter-change",
+      filterModel: null,
+    }))
+
+    wrapper.unmount()
+    rowModel.dispose()
   })
 
   it("renders declarative quickFilter input only when enabled", async () => {

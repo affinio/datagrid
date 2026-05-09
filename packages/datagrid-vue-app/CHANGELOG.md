@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Fixed the declarative quick-filter toolbar path when `DataGrid` uses an external data-source row model. Quick filter input now applies the freshly built `filterModel.quickFilter` snapshot directly to `rowModel.setSortAndFilterModel(...)`, so data-source-backed row models see a `filter-change` pull instead of a stale `null` filter model.
+
+  ## User impact
+
+  Apps using `:row-model="createDataSourceBackedRowModel(...)"` with `:quick-filter="{ columns, mode }"` now trigger server pulls on quick-filter input and clear actions without requiring a controlled `filter-model` or `state` prop.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - targeted quick-filter contracts passed for external data-source row model request propagation and existing controlled/uncontrolled quick-filter behavior
+
+- ## Summary
+
   Added the declarative `quick-filter` shell control and `@affino/datagrid-vue-app/quick-filter` entrypoint. The toolbar input writes to the existing `filterModel.quickFilter` snapshot and can sit next to `advanced-filter` without introducing a separate quick-filter state channel.
 
   ## User impact
