@@ -29,6 +29,10 @@ export interface DataGridColumnCapabilities {
   editable?: boolean
   sortable?: boolean
   filterable?: boolean
+  /**
+   * Controls participation in quick filter defaults. Explicit quick-filter columns still win.
+   */
+  searchable?: boolean
   groupable?: boolean
   pivotable?: boolean
   aggregatable?: boolean

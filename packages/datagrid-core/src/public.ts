@@ -296,6 +296,8 @@ export {
   type DataGridColumnHistogramOptions,
   type DataGridFilterClause,
   type DataGridFilterSnapshot,
+  type DataGridQuickFilterMode,
+  type DataGridQuickFilterSnapshot,
   type DataGridFilterCellStyleReader,
   type DataGridSortAndFilterModelInput,
   type DataGridPaginationInput,

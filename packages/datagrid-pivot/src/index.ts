@@ -36,6 +36,8 @@ export type {
   DataGridPivotLayoutColumnModelSnapshot,
   DataGridPivotLayoutRowModel,
   DataGridPivotLayoutRowModelSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridRowId,
   DataGridRowNode,
   DataGridSortDirection,

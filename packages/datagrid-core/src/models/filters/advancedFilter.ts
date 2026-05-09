@@ -8,6 +8,7 @@ import type {
   DataGridAdvancedFilterNot,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridQuickFilterSnapshot,
 } from "../rowModel.js"
 
 export type DataGridAdvancedFilterResolver = (condition: DataGridAdvancedFilterCondition) => unknown
@@ -484,6 +485,7 @@ export function cloneDataGridFilterSnapshot(
   const clonedColumnStyleFilters = Object.fromEntries(
     Object.entries(input.columnStyleFilters ?? {}).map(([key, entry]) => [key, cloneColumnStyleFilterEntry(entry)]),
   )
+  const clonedQuickFilter = cloneDataGridQuickFilterSnapshot(input.quickFilter)
 
   return {
     columnFilters: Object.fromEntries(
@@ -502,6 +504,30 @@ export function cloneDataGridFilterSnapshot(
       ]),
     ),
     advancedExpression: cloneDataGridAdvancedFilterExpression(input.advancedExpression ?? null),
+    ...(clonedQuickFilter ? { quickFilter: clonedQuickFilter } : {}),
+  }
+}
+
+function cloneDataGridQuickFilterSnapshot(
+  input: DataGridQuickFilterSnapshot | null | undefined,
+): DataGridQuickFilterSnapshot | null {
+  if (!input) {
+    return null
+  }
+  const query = typeof input.query === "string" ? input.query.trim() : ""
+  if (query.length === 0) {
+    return null
+  }
+  const columns = Array.isArray(input.columns)
+    ? Array.from(new Set(input.columns.map(column => String(column).trim()).filter(column => column.length > 0)))
+    : []
+  const mode = input.mode === "contains" || input.mode === "tokens"
+    ? input.mode
+    : undefined
+  return {
+    query,
+    ...(columns.length > 0 ? { columns } : {}),
+    ...(mode ? { mode } : {}),
   }
 }
 

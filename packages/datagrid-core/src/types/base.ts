@@ -38,6 +38,8 @@ export type {
   DataGridColumnValueSetFilter,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridSortDirection,
   DataGridSortState,
 } from "@affino/datagrid-pivot"

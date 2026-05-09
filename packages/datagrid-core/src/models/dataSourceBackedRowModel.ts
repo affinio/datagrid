@@ -268,6 +268,7 @@ function cloneFilterSnapshotForHistogram(
     columnStyleFilters,
     advancedFilters,
     advancedExpression: cloned.advancedExpression ?? null,
+    ...(cloned.quickFilter ? { quickFilter: cloned.quickFilter } : {}),
   }
 }
 

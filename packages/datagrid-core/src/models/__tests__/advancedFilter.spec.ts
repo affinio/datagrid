@@ -137,6 +137,11 @@ describe("advanced filter expression", () => {
         operator: "equals",
         value: "noc",
       },
+      quickFilter: {
+        query: "noc",
+        columns: ["owner", "service"],
+        mode: "tokens",
+      },
     }
 
     const cloned = cloneDataGridFilterSnapshot(source)
@@ -149,9 +154,11 @@ describe("advanced filter expression", () => {
 
     cloned.columnFilters.owner = { kind: "valueSet", tokens: ["string:ops"] }
     cloned.advancedFilters.latencyMs.clauses[0]!.operator = "gt"
+    cloned.quickFilter!.columns = ["region"]
 
     expect(source.columnFilters.owner).toEqual({ kind: "valueSet", tokens: ["string:noc"] })
     expect(source.advancedFilters.latencyMs.clauses[0]!.operator).toBe("between")
+    expect(source.quickFilter?.columns).toEqual(["owner", "service"])
   })
 
   it("supports set/date operators in advanced expression", () => {

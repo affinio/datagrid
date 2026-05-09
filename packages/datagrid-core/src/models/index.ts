@@ -19,6 +19,8 @@ export type {
   DataGridFilterCellStyleReader,
   DataGridFilterClause,
   DataGridFilterSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridSortAndFilterModelInput,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,

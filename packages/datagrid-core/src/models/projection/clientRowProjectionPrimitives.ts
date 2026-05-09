@@ -585,6 +585,27 @@ function normalizeColumnStyleFilterEntryForSignature(
   })
 }
 
+function normalizeQuickFilterForSignature(
+  quickFilter: DataGridFilterSnapshot["quickFilter"],
+): { query: string; columns?: readonly string[]; mode?: "contains" | "tokens" } | null {
+  const query = typeof quickFilter?.query === "string" ? quickFilter.query.trim() : ""
+  if (query.length === 0) {
+    return null
+  }
+  const columns = Array.isArray(quickFilter?.columns)
+    ? Array.from(new Set(quickFilter.columns.map(column => String(column).trim()).filter(column => column.length > 0)))
+      .sort((left, right) => left.localeCompare(right))
+    : []
+  const mode = quickFilter?.mode === "contains" || quickFilter?.mode === "tokens"
+    ? quickFilter.mode
+    : undefined
+  return {
+    query,
+    ...(columns.length > 0 ? { columns } : {}),
+    ...(mode ? { mode } : {}),
+  }
+}
+
 function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | null): string {
   if (!filterModel) {
     return "__none__"
@@ -624,6 +645,7 @@ function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | 
     columnStyleFilters: normalizedColumnStyleFilters,
     advancedFilters: normalizedAdvancedFilters,
     advancedExpression: resolveAdvancedExpression(filterModel),
+    quickFilter: normalizeQuickFilterForSignature(filterModel.quickFilter),
   })
 }
 

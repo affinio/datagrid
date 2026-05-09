@@ -92,6 +92,8 @@ export type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
   DataGridSortAndFilterModelInput,

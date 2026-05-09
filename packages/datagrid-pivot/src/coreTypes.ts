@@ -99,11 +99,27 @@ export type DataGridColumnStyleFilter = DataGridColumnStyleValueSetFilter
 
 export type DataGridColumnFilterSnapshotEntry = DataGridColumnFilter
 
+export type DataGridQuickFilterMode = "contains" | "tokens"
+
+export interface DataGridQuickFilterSnapshot {
+  query: string
+  /**
+   * When omitted, the grid searches the default quick-filter column set:
+   * visible non-system grid columns unless a column opts out with `searchable: false`.
+   */
+  columns?: readonly string[]
+  /**
+   * `tokens` matches all whitespace-delimited query terms; `contains` matches the whole query.
+   */
+  mode?: DataGridQuickFilterMode
+}
+
 export interface DataGridFilterSnapshot {
   columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
   columnStyleFilters?: Record<string, DataGridColumnStyleFilter>
   advancedFilters: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
+  quickFilter?: DataGridQuickFilterSnapshot | null
 }
 
 export interface DataGridSortAndFilterModelInput {

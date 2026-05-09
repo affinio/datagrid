@@ -153,6 +153,8 @@ export type {
   DataGridColumnFilter,
   DataGridColumnFilterSnapshotEntry,
   DataGridFilterSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
   DataGridDataSource,

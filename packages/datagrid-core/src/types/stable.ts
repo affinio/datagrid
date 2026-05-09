@@ -40,6 +40,8 @@ export type {
   DataGridColumnPredicateOperator,
   DataGridColumnValueSetFilter,
   DataGridFilterSnapshot,
+  DataGridQuickFilterMode,
+  DataGridQuickFilterSnapshot,
   DataGridServerFilterOptionRequest,
   DataGridServerFilterOption,
   DataGridFilterOptionLoader,
