@@ -6,11 +6,27 @@
 
 - ## Summary
 
+  Added the declarative `quick-filter` shell control and `@affino/datagrid-vue-app/quick-filter` entrypoint. The toolbar input writes to the existing `filterModel.quickFilter` snapshot and can sit next to `advanced-filter` without introducing a separate quick-filter state channel.
+
+  ## User impact
+
+  Vue app consumers can enable grid-wide text filtering with `quick-filter` or configure it with `:quick-filter="{ placeholder, columns, mode }"`. Controlled consumers can continue to manage `filterModel.quickFilter` directly.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: replace custom toolbar quick-filter inputs with the declarative `quick-filter` prop.
+
+  ## Validation
+  - DataGrid app facade contract coverage passed for boolean and object quick-filter props, typing behavior, clear behavior, controlled filter-model compatibility, and default searchable column resolution
+  - sandbox client and server data-source demos were migrated to the declarative shell prop
+
+- ## Summary
+
   Documented and wired the app-facing quick filter path through the existing controlled `filterModel` contract. The default renderer now preserves `quickFilter` when built-in filter controls update column or advanced filters, and the sandbox demos expose quick filter controls for client and server data-source scenarios.
 
   ## User impact
 
-  Vue app consumers can control grid-wide text filtering without a new prop by passing `filterModel.quickFilter`. The app facade keeps quick filter aligned with the core row-model projection pipeline and with server/data-source serialization.
+  Vue app consumers can control grid-wide text filtering by passing `filterModel.quickFilter`; the declarative `quick-filter` shell control added later remains a convenience wrapper over that same snapshot. The app facade keeps quick filter aligned with the core row-model projection pipeline and with server/data-source serialization.
 
   ## Migration
   - No migration required.

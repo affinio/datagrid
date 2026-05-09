@@ -80,4 +80,29 @@ Column histogram `options.search` remains histogram-specific search for value-li
 
 The public app/facade path stays `filterModel`-first. Consumers can control quick filter by passing a controlled `filterModel` that contains `quickFilter`.
 
-The package does not need a separate `quickFilter` prop unless a future UX layer proves that the convenience API is worth the extra public surface.
+The Vue app shell also exposes a declarative convenience control:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  quick-filter
+  advanced-filter
+/>
+```
+
+Object form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :quick-filter="{
+    placeholder: 'Search accounts',
+    columns: ['service', 'owner', 'region'],
+    mode: 'tokens',
+  }"
+/>
+```
+
+This prop is only shell UI over `filterModel.quickFilter`. It must not create a new state channel, `update:quickFilter` event, global service, or core UI dependency. Controlled consumers can continue to manage `filterModel.quickFilter` directly.

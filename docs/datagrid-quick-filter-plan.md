@@ -187,7 +187,7 @@
   - Behavior tests: typing updates filterModel.quickFilter, clear removes it.
   - Server datasource smoke: request still carries filterModel.quickFilter.
 
-## [] Slice 16: Docs + Changelog
+## [x] Slice 16: Docs + Changelog
 
   - README пример рядом с advanced-filter.
   - Документировать, что это shell convenience API.

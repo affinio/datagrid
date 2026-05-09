@@ -82,6 +82,7 @@ Use subpath imports when you want optional feature modules explicitly:
 
 - `@affino/datagrid-vue-app/gantt`
 - `@affino/datagrid-vue-app/advanced-filter`
+- `@affino/datagrid-vue-app/quick-filter`
 - `@affino/datagrid-vue-app/find-replace`
 - `@affino/datagrid-vue-app/aggregations`
 
@@ -89,7 +90,7 @@ Practical implications:
 
 - ordinary `DataGrid` table usage no longer needs to pull `@affino/datagrid-gantt` through the root runtime graph
 - gantt stage code is loaded lazily only when the gantt view is rendered
-- advanced filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
+- advanced filter, quick filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
 
 Consumer-side chunk tuning can still help, but it is now an optimization rather than a workaround for the package boundary.
 
@@ -470,6 +471,7 @@ const toolbarModules: readonly DataGridAppToolbarModule[] = [
     :columns="columns"
     :toolbar-modules="toolbarModules"
     column-layout
+    quick-filter
     advanced-filter
   />
 </template>
@@ -567,6 +569,7 @@ Enable the built-in header menu with one prop:
     :columns="columns"
     column-menu
     column-layout
+    quick-filter
     advanced-filter
     aggregations
     row-hover
@@ -1458,7 +1461,34 @@ The public component exposes full grid state round-tripping.
 
 When `state` is the only controlled input, the built-in app toolbar and filter affordances derive their effective sort, filter, grouping, and pivot state from that unified snapshot. You do not need to mirror the same payload back into separate `sort-model`, `filter-model`, `group-by`, or `pivot-model` props just to keep the default renderer synchronized.
 
-Quick filter is controlled through the same `filter-model` contract:
+Quick filter can be enabled as a built-in toolbar control next to `advanced-filter`:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  quick-filter
+  advanced-filter
+/>
+```
+
+The object form controls placeholder text, explicit searchable columns, and matching mode:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :quick-filter="{
+    placeholder: 'Search accounts',
+    columns: ['service', 'owner', 'region'],
+    mode: 'tokens',
+  }"
+/>
+```
+
+This prop is a shell convenience API. Typing in the input updates `filterModel.quickFilter`; clearing the input removes it from the snapshot. It does not add a separate `update:quickFilter` event or a second state channel.
+
+Controlled consumers can still manage quick filter directly through the same `filter-model` contract:
 
 ```vue
 <DataGrid
@@ -1477,7 +1507,7 @@ Quick filter is controlled through the same `filter-model` contract:
 />
 ```
 
-The app facade intentionally keeps this `filterModel`-first. There is no separate `quickFilter` prop; quick filter must stay serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
+The app facade remains `filterModel`-first. `quick-filter` only drives the existing filter snapshot, so quick filter stays serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
 
 Controlled state:
 
