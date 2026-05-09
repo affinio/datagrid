@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   createClientRowModel,
   type ClientRowModel,
+  type DataGridFilterSnapshot,
   type DataGridRowNodeInput,
 } from "@affino/datagrid-core"
 import {
@@ -123,13 +124,19 @@ describe("datagrid worker parity", () => {
     })
 
     const applyScenario = (model: ClientRowModel<BenchRow>): void => {
-      model.setSortModel([{ key: "revenue", direction: "desc" }])
-      model.setFilterModel({
+      const filterModel = {
         columnFilters: {
           region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },
         },
         advancedFilters: {},
-      })
+        quickFilter: {
+          query: "platform",
+          columns: ["team"],
+        },
+      } satisfies DataGridFilterSnapshot
+
+      model.setSortModel([{ key: "revenue", direction: "desc" }])
+      model.setFilterModel(filterModel)
       model.setGroupBy({
         fields: ["region", "team"],
         expandedByDefault: true,

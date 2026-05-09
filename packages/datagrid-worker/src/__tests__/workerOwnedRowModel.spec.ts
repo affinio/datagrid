@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   createClientRowModel,
   type DataGridAggregationModel,
+  type DataGridFilterSnapshot,
   type DataGridRowModelSnapshot,
   type DataGridRowNodeInput,
 } from "@affino/datagrid-core"
@@ -10,6 +11,7 @@ import {
   DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
+  createDataGridWorkerRowModelCommandMessage,
   createDataGridWorkerRowModelUpdateMessage,
   isDataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelCommand,
@@ -111,6 +113,7 @@ async function flushMessages(): Promise<void> {
 interface BenchRow {
   id: number
   region: string
+  team?: string
   revenue: number
   qty?: number
   total?: number
@@ -118,10 +121,12 @@ interface BenchRow {
 
 function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
   const regions = ["AMER", "EMEA", "APAC"] as const
+  const teams = ["core", "growth", "platform", "payments"] as const
   return Array.from({ length: count }, (_, index) => {
     const row = {
       id: index + 1,
       region: regions[index % regions.length]!,
+      team: teams[index % teams.length]!,
       revenue: 10 + ((index * 11) % 100),
     }
     return {
@@ -181,6 +186,42 @@ describe("worker-owned row model", () => {
     expect(message.payload.schemaVersion).toBe(DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION)
   })
 
+  it("keeps quick filter payloads structured-clone compatible", () => {
+    const filterModel = {
+      columnFilters: {
+        region: { kind: "valueSet", tokens: ["string:AMER"] },
+      },
+      advancedFilters: {},
+      quickFilter: {
+        query: "platform",
+        columns: ["team"],
+        mode: "tokens",
+      },
+    } satisfies DataGridFilterSnapshot
+
+    const commandMessage = createDataGridWorkerRowModelCommandMessage<BenchRow>(
+      1,
+      { type: "set-filter-model", filterModel },
+    )
+    const commandClone = structuredClone(commandMessage)
+    expect(commandClone.payload.filterModel).toEqual(filterModel)
+
+    const updateMessage = createDataGridWorkerRowModelUpdateMessage<BenchRow>(
+      2,
+      {
+        snapshot: {
+          ...createSnapshot(0, { start: 0, end: 0 }),
+          filterModel,
+        },
+        aggregationModel: null,
+        visibleRows: [],
+        visibleRange: { start: 0, end: 0 },
+      },
+    )
+    const updateClone = structuredClone(updateMessage)
+    expect(updateClone.payload.snapshot.filterModel?.quickFilter).toEqual(filterModel.quickFilter)
+  })
+
   it("mirrors snapshot + visible rows from worker-owned host", async () => {
     const rows = buildRows(60)
     const channel = createMessageChannelPair()
@@ -198,21 +239,22 @@ describe("worker-owned row model", () => {
     await flushMessages()
 
     mirror.setSortModel([{ key: "revenue", direction: "desc" }])
-    mirror.setFilterModel({
+    const filterModel = {
       columnFilters: {
         region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },
       },
       advancedFilters: {},
-    })
+      quickFilter: {
+        query: "platform",
+        columns: ["team"],
+      },
+    } satisfies DataGridFilterSnapshot
+
+    mirror.setFilterModel(filterModel)
     mirror.setViewportRange({ start: 0, end: 10 })
 
     expected.setSortModel([{ key: "revenue", direction: "desc" }])
-    expected.setFilterModel({
-      columnFilters: {
-        region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },
-      },
-      advancedFilters: {},
-    })
+    expected.setFilterModel(filterModel)
     expected.setViewportRange({ start: 0, end: 10 })
     await flushMessages()
 
@@ -220,6 +262,7 @@ describe("worker-owned row model", () => {
     const expectedSnapshot = expected.getSnapshot()
     expect(mirrorSnapshot.rowCount).toBe(expectedSnapshot.rowCount)
     expect(mirrorSnapshot.viewportRange).toEqual(expectedSnapshot.viewportRange)
+    expect(mirrorSnapshot.filterModel?.quickFilter).toEqual(filterModel.quickFilter)
 
     const mirrorRows = mirror.getRowsInRange({ start: 0, end: 10 }).map(row => row.rowId)
     const expectedRows = expected.getRowsInRange({ start: 0, end: 10 }).map(row => row.rowId)

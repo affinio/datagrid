@@ -89,7 +89,7 @@
       - projection hash/cache key меняется;
       - filter-change reason остается корректным.
 
-  ## [] Slice 5: Worker Parity
+  ## [x] Slice 5: Worker Parity
 
   - Прокинуть новый filter snapshot через worker protocol.
   - Проверить structured clone compatibility.
