@@ -151,7 +151,7 @@
   - Изменение input обновляет filterModel.quickFilter.
   - Clear удаляет quickFilter из snapshot.
 
-## [] Slice 11: Controlled FilterModel Compatibility
+## [x] Slice 11: Controlled FilterModel Compatibility
 
   - Проверить controlled/uncontrolled сценарии.
   - Если consumer передает filterModel, shell должен эмитить обычный update:state/filter change, без локального рассинхрона.

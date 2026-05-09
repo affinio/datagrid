@@ -3426,6 +3426,103 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps declarative quickFilter compatible with a controlled filterModel prop", async () => {
+    const controlledFilterModel = ref<DataGridFilterSnapshot | null>(null)
+    const stateUpdates: Array<DataGridUnifiedState<Record<string, unknown>> | null> = []
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+          filterModel: controlledFilterModel.value,
+          quickFilter: {
+            columns: ["owner"],
+          },
+          "onUpdate:state": (nextState: DataGridUnifiedState<Record<string, unknown>> | null) => {
+            stateUpdates.push(nextState)
+            controlledFilterModel.value = nextState?.rows?.snapshot?.filterModel ?? null
+          },
+        })
+      },
+    }))
+
+    await flushRuntimeTasks()
+
+    const dataGrid = wrapper.findComponent(DataGrid)
+    const input = dataGrid.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    await input.setValue("Payments")
+    await flushRuntimeTasks()
+
+    expect(controlledFilterModel.value).toMatchObject({
+      quickFilter: {
+        query: "Payments",
+        columns: ["owner"],
+        mode: "contains",
+      },
+    })
+    expect(input.element.value).toBe("Payments")
+    expect(stateUpdates.at(-1)).toMatchObject({
+      rows: {
+        snapshot: {
+          filterModel: expect.objectContaining({
+            quickFilter: {
+              query: "Payments",
+              columns: ["owner"],
+              mode: "contains",
+            },
+          }),
+          rowCount: 1,
+        },
+      },
+    })
+    expect(dataGrid.emitted("update:quickFilter")).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it("clears declarative quickFilter through controlled filterModel state updates", async () => {
+    const controlledFilterModel = ref<DataGridFilterSnapshot | null>({
+      columnFilters: {},
+      advancedFilters: {},
+      advancedExpression: null,
+      quickFilter: {
+        query: "Payments",
+        columns: ["owner"],
+        mode: "contains",
+      },
+    })
+
+    const wrapper = mount(defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: BASE_ROWS,
+          columns: COLUMNS,
+          filterModel: controlledFilterModel.value,
+          quickFilter: {
+            columns: ["owner"],
+          },
+          "onUpdate:state": (nextState: DataGridUnifiedState<Record<string, unknown>> | null) => {
+            controlledFilterModel.value = nextState?.rows?.snapshot?.filterModel ?? null
+          },
+        })
+      },
+    }))
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    expect(input.element.value).toBe("Payments")
+
+    await wrapper.find('[data-datagrid-quick-filter-clear="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(controlledFilterModel.value).toBeNull()
+    expect(input.element.value).toBe("")
+
+    wrapper.unmount()
+  })
+
   it("loads additional columnMenu filter values as the menu list scrolls", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
