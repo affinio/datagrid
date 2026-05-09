@@ -3,6 +3,8 @@ import {
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
   type DataGridColumnHistogramOptions,
+  type DataGridColumnFilterSnapshotEntry,
+  type DataGridColumnStyleFilter,
   type DataGridDataSource,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceRowEntry,
@@ -107,6 +109,128 @@ export interface DataGridServerQueryCodecOptions {
   columnIdMap?: Readonly<Record<string, string>> | ((columnKey: string) => string | null | undefined)
   quickFilterModeFallback?: DataGridServerQuickFilter["mode"]
   legacyAdvancedFilters?: "preserve" | "drop"
+}
+
+function isJsonSafeValue(value: unknown): value is DataGridServerJsonValue {
+  if (value === null) {
+    return true
+  }
+  const valueType = typeof value
+  if (valueType === "string" || valueType === "boolean") {
+    return true
+  }
+  if (valueType === "number") {
+    return Number.isFinite(value)
+  }
+  if (Array.isArray(value)) {
+    return value.every(item => isJsonSafeValue(item))
+  }
+  if (!isRecord(value)) {
+    return false
+  }
+  return Object.values(value).every(entry => isJsonSafeValue(entry))
+}
+
+function normalizeServerJsonValue(value: unknown): DataGridServerJsonValue | undefined {
+  return isJsonSafeValue(value) ? value : undefined
+}
+
+function resolveServerColumnId(
+  columnKey: string,
+  columnIdMap: DataGridServerQueryCodecOptions["columnIdMap"] | undefined,
+): string {
+  if (typeof columnIdMap === "function") {
+    return columnIdMap(columnKey)?.trim() || columnKey
+  }
+  return columnIdMap?.[columnKey]?.trim() || columnKey
+}
+
+function normalizeServerFilterTokens(tokens: readonly unknown[] | undefined): readonly string[] {
+  if (!Array.isArray(tokens)) {
+    return []
+  }
+  const normalizedTokens: string[] = []
+  const seenTokens = new Set<string>()
+  for (const token of tokens) {
+    const normalizedToken = String(token ?? "").trim()
+    if (!normalizedToken || seenTokens.has(normalizedToken)) {
+      continue
+    }
+    seenTokens.add(normalizedToken)
+    normalizedTokens.push(normalizedToken)
+  }
+  return Object.freeze(normalizedTokens)
+}
+
+function normalizeDataGridServerColumnFilterEntry(
+  filter: DataGridColumnFilterSnapshotEntry | DataGridColumnStyleFilter | null | undefined,
+): DataGridServerColumnFilter | null {
+  if (!filter) {
+    return null
+  }
+  if (filter.kind === "valueSet") {
+    const tokens = normalizeServerFilterTokens(filter.tokens)
+    return tokens.length > 0
+      ? Object.freeze({ kind: "valueSet", tokens })
+      : null
+  }
+  if (filter.kind === "styleValueSet") {
+    const styleKey = typeof filter.styleKey === "string" ? filter.styleKey.trim() : ""
+    const tokens = normalizeServerFilterTokens(filter.tokens)
+    return styleKey && tokens.length > 0
+      ? Object.freeze({ kind: "styleValueSet", styleKey, tokens })
+      : null
+  }
+  if (filter.kind === "predicate") {
+    const operator = typeof filter.operator === "string" ? filter.operator.trim() : ""
+    if (!operator) {
+      return null
+    }
+    if (operator === "isEmpty" || operator === "notEmpty" || operator === "isNull" || operator === "notNull") {
+      return Object.freeze({
+        kind: "predicate",
+        operator,
+        ...(filter.caseSensitive === true ? { caseSensitive: true } : {}),
+      })
+    }
+    const value = normalizeServerJsonValue(filter.value)
+    if (value === undefined) {
+      return null
+    }
+    const value2 = normalizeServerJsonValue(filter.value2)
+    return Object.freeze({
+      kind: "predicate",
+      operator,
+      value,
+      ...(value2 !== undefined ? { value2 } : {}),
+      ...(filter.caseSensitive === true ? { caseSensitive: true } : {}),
+    })
+  }
+  return null
+}
+
+export function normalizeDataGridServerColumnFilters(
+  input: Readonly<Record<string, DataGridColumnFilterSnapshotEntry | DataGridColumnStyleFilter>> | null | undefined,
+  options: Pick<DataGridServerQueryCodecOptions, "columnIdMap"> = {},
+): Readonly<Record<string, DataGridServerColumnFilter>> | null {
+  if (!input) {
+    return null
+  }
+  const normalizedFilters: Record<string, DataGridServerColumnFilter> = {}
+  for (const [columnKey, filter] of Object.entries(input)) {
+    const normalizedColumnKey = columnKey.trim()
+    if (!normalizedColumnKey) {
+      continue
+    }
+    const normalizedFilter = normalizeDataGridServerColumnFilterEntry(filter)
+    if (!normalizedFilter) {
+      continue
+    }
+    normalizedFilters[resolveServerColumnId(normalizedColumnKey, options.columnIdMap)] = normalizedFilter
+  }
+  return Object.keys(normalizedFilters).length > 0
+    ? Object.freeze(normalizedFilters)
+    : null
 }
 
 function normalizeQuickFilterMode(

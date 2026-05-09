@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { normalizeDataGridServerQuickFilter } from "./index"
+import {
+  normalizeDataGridServerColumnFilters,
+  normalizeDataGridServerQuickFilter,
+} from "./index"
 
 describe("normalizeDataGridServerQuickFilter", () => {
   it("normalizes query, columns, and mode", () => {
@@ -36,5 +39,63 @@ describe("normalizeDataGridServerQuickFilter", () => {
       mode: "tokens",
     })
     expect(normalized).not.toHaveProperty("search")
+  })
+})
+
+describe("normalizeDataGridServerColumnFilters", () => {
+  it("normalizes value-set filters and preserves stable column order", () => {
+    expect(normalizeDataGridServerColumnFilters({
+      owner: { kind: "valueSet", tokens: [" string:noc ", "", "string:noc", "string:payments"] },
+      empty: { kind: "valueSet", tokens: [] },
+    })).toEqual({
+      owner: {
+        kind: "valueSet",
+        tokens: ["string:noc", "string:payments"],
+      },
+    })
+  })
+
+  it("normalizes predicate filters and drops unusable predicates", () => {
+    expect(normalizeDataGridServerColumnFilters({
+      amount: { kind: "predicate", operator: " between ", value: 10, value2: 20 },
+      name: { kind: "predicate", operator: "contains", value: "NOC", caseSensitive: true },
+      invalid: { kind: "predicate", operator: "contains" },
+      empty: { kind: "predicate", operator: " isEmpty " },
+      nan: { kind: "predicate", operator: "equals", value: Number.NaN },
+    })).toEqual({
+      amount: {
+        kind: "predicate",
+        operator: "between",
+        value: 10,
+        value2: 20,
+      },
+      name: {
+        kind: "predicate",
+        operator: "contains",
+        value: "NOC",
+        caseSensitive: true,
+      },
+      empty: {
+        kind: "predicate",
+        operator: "isEmpty",
+      },
+    })
+  })
+
+  it("normalizes style filters and supports column id mapping", () => {
+    expect(normalizeDataGridServerColumnFilters({
+      status: { kind: "styleValueSet", styleKey: " bg ", tokens: [" #fff ", "#fff", "#000"] },
+      ignored: { kind: "styleValueSet", styleKey: " ", tokens: ["#fff"] },
+    }, {
+      columnIdMap: {
+        status: "status_code",
+      },
+    })).toEqual({
+      status_code: {
+        kind: "styleValueSet",
+        styleKey: "bg",
+        tokens: ["#fff", "#000"],
+      },
+    })
   })
 })

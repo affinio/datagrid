@@ -55,7 +55,7 @@ Backends can either:
   - Не добавлять top-level `search`.
   - Покрыть tests.
 
-  ## [] Slice 4: Column Filter Codec
+  ## [x] Slice 4: Column Filter Codec
 
   - Нормализовать value-set filters.
   - Drop empty token arrays.
