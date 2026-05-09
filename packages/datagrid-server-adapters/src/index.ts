@@ -142,8 +142,29 @@ function isJsonSafeValue(value: unknown): value is DataGridServerJsonValue {
   return Object.values(value).every(entry => isJsonSafeValue(entry))
 }
 
+function stripUndefinedObjectFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(item => stripUndefinedObjectFields(item))
+  }
+  if (!isRecord(value)) {
+    return value
+  }
+  const normalized: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry === undefined) {
+      continue
+    }
+    normalized[key] = stripUndefinedObjectFields(entry)
+  }
+  return normalized
+}
+
 function normalizeServerJsonValue(value: unknown): DataGridServerJsonValue | undefined {
-  return isJsonSafeValue(value) ? value : undefined
+  if (isJsonSafeValue(value)) {
+    return value
+  }
+  const normalized = stripUndefinedObjectFields(value)
+  return isJsonSafeValue(normalized) ? normalized : undefined
 }
 
 function resolveServerColumnId(

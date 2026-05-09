@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Patch Changes
+
+- ## Summary
+
+  Hardened JSON-safe normalization for server query codec values by stripping `undefined` object fields before validating advanced filter payloads and other JSON-like filter snapshots.
+
+  ## User impact
+
+  Server adapters are more tolerant of optional UI snapshot fields that are present with `undefined`, while still rejecting non-JSON-safe values such as `NaN`.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - codec coverage passed for `undefined` field stripping in advanced filter expressions
+
 ### Minor Changes
 
 - ## Summary

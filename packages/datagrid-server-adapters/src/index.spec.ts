@@ -129,6 +129,28 @@ describe("normalizeDataGridServerAdvancedExpression", () => {
       value: Number.NaN,
     } as never)).toBeNull()
   })
+
+  it("strips undefined object fields before the JSON-safe check", () => {
+    expect(normalizeDataGridServerAdvancedExpression({
+      kind: "condition",
+      key: "analysisCategory",
+      type: undefined,
+      operator: "contains",
+      value: "недвижимость",
+      meta: {
+        source: "toolbar",
+        empty: undefined,
+      },
+    } as never)).toEqual({
+      kind: "condition",
+      key: "analysisCategory",
+      operator: "contains",
+      value: "недвижимость",
+      meta: {
+        source: "toolbar",
+      },
+    })
+  })
 })
 
 describe("normalizeDataGridServerAdvancedFilters", () => {
