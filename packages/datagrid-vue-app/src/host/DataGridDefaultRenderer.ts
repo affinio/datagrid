@@ -321,10 +321,17 @@ function pruneFilterModel(filterModel: DataGridFilterSnapshot): DataGridFilterSn
   }
   const advancedFilters = { ...(filterModel.advancedFilters ?? {}) }
   const advancedExpression = filterModel.advancedExpression ?? null
+  const quickFilter = cloneDataGridFilterSnapshot({
+    columnFilters: {},
+    advancedFilters: {},
+    advancedExpression: null,
+    quickFilter: filterModel.quickFilter,
+  })?.quickFilter ?? null
   if (
     Object.keys(columnFilters).length === 0
     && Object.keys(advancedFilters).length === 0
     && !advancedExpression
+    && !quickFilter
   ) {
     return null
   }
@@ -332,6 +339,7 @@ function pruneFilterModel(filterModel: DataGridFilterSnapshot): DataGridFilterSn
     columnFilters,
     advancedFilters,
     advancedExpression,
+    ...(quickFilter ? { quickFilter } : {}),
   }
 }
 

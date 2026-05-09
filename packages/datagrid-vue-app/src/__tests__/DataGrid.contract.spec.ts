@@ -6,6 +6,7 @@ import type {
   DataGridRowNode,
   DataGridRowNodeInput,
   DataGridRowSelectionSnapshot,
+  DataGridFilterSnapshot,
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
@@ -3242,6 +3243,109 @@ describe("DataGrid app facade contract", () => {
             }),
           }),
           rowCount: 2,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("applies and clears quick filter through the controlled filterModel prop", async () => {
+    const quickFilterModel = {
+      columnFilters: {},
+      advancedFilters: {},
+      advancedExpression: null,
+      quickFilter: {
+        query: "payments",
+        columns: ["owner"],
+      },
+    } satisfies DataGridFilterSnapshot
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        filterModel: quickFilterModel,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            quickFilter: quickFilterModel.quickFilter,
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    await wrapper.setProps({ filterModel: null })
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: null,
+          rowCount: 3,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("preserves quick filter when app filter controls update the filterModel", async () => {
+    const quickFilterModel = {
+      columnFilters: {},
+      advancedFilters: {},
+      advancedExpression: null,
+      quickFilter: {
+        query: "eu",
+        columns: ["region"],
+      },
+    } satisfies DataGridFilterSnapshot
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+        filterModel: quickFilterModel,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
+    const paymentsRow = valueRows.find(row => row.textContent?.includes("Payments"))
+    expect(paymentsRow).toBeTruthy()
+
+    const paymentsCheckbox = paymentsRow!.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(paymentsCheckbox).toBeTruthy()
+    paymentsCheckbox!.checked = false
+    paymentsCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: expect.arrayContaining(["string:noc"]),
+              }),
+            }),
+            quickFilter: quickFilterModel.quickFilter,
+          }),
+          rowCount: 1,
         }),
       }),
     })

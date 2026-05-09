@@ -102,7 +102,7 @@
       - quick filter + sort;
       - quick filter + column filter.
 
-  ## [] Slice 6: Public App/Vue Binding
+  ## [x] Slice 6: Public App/Vue Binding
 
   - Добавить controlled prop на app/facade уровне только после стабилизации core контракта.
   - Варианты:
