@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridDataSourcePullRequest } from "@affino/datagrid-core"
 import {
+  createAffinoDatasource,
   normalizeDataGridServerAdvancedExpression,
   normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
@@ -40,6 +41,21 @@ function createPullRequest(
     },
     ...overrides,
   }
+}
+
+function createFetchRecorder(): {
+  bodies: unknown[]
+  fetchImpl: typeof fetch
+} {
+  const bodies: unknown[] = []
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    bodies.push(JSON.parse(String(init?.body ?? "null")) as unknown)
+    return new Response(JSON.stringify({ rows: [], total: 0 }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+  return { bodies, fetchImpl }
 }
 
 describe("normalizeDataGridServerQuickFilter", () => {
@@ -391,5 +407,98 @@ describe("normalizeDataGridServerQuery", () => {
       range: { startRow: 0, endRow: 10 },
       filterModel: null,
     })
+  })
+})
+
+describe("createAffinoDatasource query mapping", () => {
+  it("uses the normalized server query codec by default", async () => {
+    const { bodies, fetchImpl } = createFetchRecorder()
+    const datasource = createAffinoDatasource({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl,
+      queryCodec: {
+        columnIdMap: { owner: "owner_name" },
+      },
+    })
+
+    await datasource.pull(createPullRequest({
+      range: { start: 3, end: 7 },
+      sortModel: [{ key: " owner ", direction: "asc" }],
+      filterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+        quickFilter: {
+          query: " platform ",
+          columns: [" owner "],
+        },
+      },
+      groupBy: {
+        fields: ["owner"],
+      },
+      pagination: {
+        snapshot: {
+          enabled: true,
+          pageSize: 50,
+          currentPage: 1,
+          pageCount: 3,
+          totalRowCount: 125,
+          startIndex: 50,
+          endIndex: 99,
+        },
+        cursor: null,
+      },
+    }))
+
+    expect(bodies[0]).toEqual({
+      range: { startRow: 3, endRow: 8 },
+      sortModel: [{ colId: "owner_name", sort: "asc" }],
+      filterModel: {
+        quickFilter: {
+          query: "platform",
+          columns: ["owner"],
+          mode: "contains",
+        },
+      },
+      groupBy: {
+        fields: ["owner_name"],
+      },
+      pagination: {
+        pageSize: 50,
+        currentPage: 1,
+      },
+    })
+  })
+
+  it("supports normalized mapQuery and raw mapPullRequest escape hatches", async () => {
+    const mapped = createFetchRecorder()
+    const mappedDatasource = createAffinoDatasource({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl: mapped.fetchImpl,
+      mapQuery: query => ({ query, tenantId: "tenant-1" }),
+    })
+
+    await mappedDatasource.pull(createPullRequest({ range: { start: 1, end: 1 } }))
+
+    expect(mapped.bodies[0]).toEqual({
+      query: {
+        range: { startRow: 1, endRow: 2 },
+        filterModel: null,
+      },
+      tenantId: "tenant-1",
+    })
+
+    const raw = createFetchRecorder()
+    const rawDatasource = createAffinoDatasource({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl: raw.fetchImpl,
+      mapPullRequest: request => ({ rawStart: request.range.start }),
+    })
+
+    await rawDatasource.pull(createPullRequest({ range: { start: 4, end: 6 } }))
+
+    expect(raw.bodies[0]).toEqual({ rawStart: 4 })
   })
 })

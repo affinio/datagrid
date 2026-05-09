@@ -93,7 +93,7 @@ Backends can either:
   - No mutation of source request.
   - Покрыть snapshot-style tests.
 
-  ## [] Slice 8: Adapter Integration
+  ## [x] Slice 8: Adapter Integration
 
   - В `createAffinoDatasource` использовать codec по умолчанию.
   - Сохранить escape hatch:

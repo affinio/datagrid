@@ -34,6 +34,9 @@ export interface AffinoDatasourceOptions {
   headers?: HeadersInit | Record<string, string>
   historyScope?: AffinoDatasourceHistoryScope
   histogram?: AffinoDatasourceHistogramOptions
+  queryCodec?: DataGridServerQueryCodecOptions
+  mapQuery?: (query: DataGridServerQuery, request: DataGridDataSourcePullRequest) => unknown
+  mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown
 }
 
 export interface AffinoDatasourceHistoryScope {
@@ -574,21 +577,6 @@ function normalizeAffinoHistogramOptions(
   return body
 }
 
-function normalizeAffinoPullRange(range: { start: number; end: number }): { startRow: number; endRow: number } {
-  const start = Math.max(0, Math.trunc(range.start))
-  const end = Math.max(start, Math.trunc(range.end) + 1)
-  return { startRow: start, endRow: end }
-}
-
-function normalizeAffinoSortModel(
-  sortModel: readonly { key: string; direction: "asc" | "desc" }[],
-): readonly { colId: string; sort: "asc" | "desc" }[] {
-  return sortModel.map(sortState => ({
-    colId: sortState.key,
-    sort: sortState.direction,
-  }))
-}
-
 class AffinoDatasourceHttpError extends Error {
   readonly status: number
   readonly code: string | null
@@ -992,6 +980,14 @@ function mapAffinoHistogramResponse(response: unknown): DataGridColumnHistogram 
   })
 }
 
+function mapAffinoPullRequest(request: DataGridDataSourcePullRequest, options: AffinoDatasourceOptions): unknown {
+  if (options.mapPullRequest) {
+    return options.mapPullRequest(request)
+  }
+  const query = normalizeDataGridServerQuery(request, options.queryCodec)
+  return options.mapQuery ? options.mapQuery(query, request) : query
+}
+
 export function createAffinoDatasource<TRow>(
   options: AffinoDatasourceOptions,
 ): AffinoDatasource<TRow> {
@@ -1011,11 +1007,7 @@ export function createAffinoDatasource<TRow>(
       historyStatus: "/api/history/status",
       changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
     },
-    mapPullRequest: request => ({
-      range: normalizeAffinoPullRange(request.range),
-      sortModel: normalizeAffinoSortModel(request.sortModel),
-      filterModel: request.filterModel,
-    }),
+    mapPullRequest: request => mapAffinoPullRequest(request, options),
     mapHistogramRequest: request => ({
       columnId: request.columnId,
       filterModel: request.filterModel,
