@@ -125,7 +125,7 @@ Backends can either:
     - quickFilter behavior.
   - Явно указать: codec is not SQL compiler.
 
-  ## [] Slice 12: Changelog
+  ## [x] Slice 12: Changelog
 
   - Описать новый server query codec.
   - Migration: optional adoption.
