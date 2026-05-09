@@ -144,7 +144,7 @@
   - Минимальные options: placeholder?, columns?, mode?.
   - Зафиксировать, что это только shell control поверх filterModel.quickFilter, не новый state channel.
 
-## [] Slice 10: App Toolbar Wiring
+## [x] Slice 10: App Toolbar Wiring
 
   - В DataGridDefaultRenderer добавить quick filter control рядом с advanced filter.
   - quickFilter={true} включает input.

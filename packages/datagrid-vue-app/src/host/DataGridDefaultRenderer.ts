@@ -52,6 +52,7 @@ import DataGridModuleHost, {
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
 import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
+import DataGridQuickFilterInput from "./DataGridQuickFilterInput"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
 import {
@@ -1350,6 +1351,11 @@ export default defineComponent({
     const effectiveAdvancedExpression = computed<DataGridAdvancedExpressionEntry | null>(() => {
       return filterModelState.value.advancedExpression ?? null
     })
+    const activeQuickFilterQuery = computed(() => {
+      return typeof filterModelState.value.quickFilter?.query === "string"
+        ? filterModelState.value.quickFilter.query.trim()
+        : ""
+    })
 
     const activeFilterSummaryItems = computed<readonly string[]>(() => {
       const resolveColumnLabel = (columnKey: string): string => columnLabelByKey.value.get(columnKey) ?? columnKey
@@ -1379,6 +1385,9 @@ export default defineComponent({
           advancedLabels,
         ))
       }
+      if (activeQuickFilterQuery.value) {
+        items.push(`Quick ${activeQuickFilterQuery.value}`)
+      }
 
       return Object.freeze(items)
     })
@@ -1388,6 +1397,37 @@ export default defineComponent({
     const resetAllFilters = (): void => {
       filterModelState.value = createEmptyFilterModel()
       clearAdvancedFilterPanel()
+      applySortAndFilter()
+    }
+
+    const updateQuickFilterQuery = (value: string): void => {
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      const query = value.trim()
+      if (!query) {
+        delete nextFilterModel.quickFilter
+      } else {
+        const currentQuickFilter = nextFilterModel.quickFilter
+        nextFilterModel.quickFilter = {
+          query,
+          ...(props.quickFilter.columns?.length
+            ? { columns: props.quickFilter.columns }
+            : currentQuickFilter?.columns?.length
+              ? { columns: currentQuickFilter.columns }
+              : {}),
+          mode: props.quickFilter.mode ?? currentQuickFilter?.mode ?? "contains",
+        }
+      }
+      filterModelState.value = nextFilterModel
+      applySortAndFilter()
+    }
+
+    const clearQuickFilter = (): void => {
+      if (!filterModelState.value.quickFilter) {
+        return
+      }
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      delete nextFilterModel.quickFilter
+      filterModelState.value = nextFilterModel
       applySortAndFilter()
     }
 
@@ -3868,6 +3908,19 @@ export default defineComponent({
             },
             onApply: applyColumnLayoutPanel,
             onCancel: cancelColumnLayoutPanel,
+          },
+        })
+      }
+      if (props.quickFilter.enabled) {
+        modules.push({
+          key: "quick-filter",
+          component: DataGridQuickFilterInput as Component,
+          props: {
+            value: activeQuickFilterQuery.value,
+            placeholder: props.quickFilter.placeholder,
+            active: Boolean(activeQuickFilterQuery.value),
+            onUpdateValue: updateQuickFilterQuery,
+            onClear: clearQuickFilter,
           },
         })
       }

@@ -3353,6 +3353,79 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("renders declarative quickFilter toolbar control and applies query through filterModel", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        quickFilter: {
+          placeholder: "Search owner",
+          columns: ["owner"],
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.placeholder).toBe("Search owner")
+
+    await input.setValue("Payments")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            quickFilter: {
+              query: "Payments",
+              columns: ["owner"],
+              mode: "contains",
+            },
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
+  it("clears declarative quickFilter from the toolbar", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        quickFilter: {
+          columns: ["owner"],
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    await input.setValue("Payments")
+    await flushRuntimeTasks()
+
+    const clearButton = wrapper.find('[data-datagrid-quick-filter-clear="true"]')
+    expect(clearButton.attributes("disabled")).toBeUndefined()
+    await clearButton.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: null,
+          rowCount: 3,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
   it("loads additional columnMenu filter values as the menu list scrolls", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

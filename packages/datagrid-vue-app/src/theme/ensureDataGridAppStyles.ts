@@ -425,6 +425,74 @@ const DATA_GRID_APP_STYLES = `
   color: var(--datagrid-accent-strong);
 }
 
+.datagrid-app-quick-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 220px;
+  height: var(--datagrid-app-toolbar-button-height, 32px);
+  padding: 0 6px 0 var(--datagrid-app-toolbar-button-padding-inline, 12px);
+  border: 1px solid var(--datagrid-filter-trigger-border);
+  border-radius: 8px;
+  background: var(--datagrid-editor-bg);
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-app-quick-filter--active {
+  border-color: color-mix(in srgb, var(--datagrid-accent-strong) 46%, var(--datagrid-filter-trigger-border));
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 10%, var(--datagrid-editor-bg));
+}
+
+.datagrid-app-quick-filter__label {
+  flex: 0 0 auto;
+  color: var(--datagrid-text-muted);
+  font-size: var(--datagrid-app-toolbar-button-font-size, 12px);
+  font-weight: 600;
+}
+
+.datagrid-app-quick-filter__input {
+  min-width: 0;
+  width: 160px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--datagrid-text-primary);
+  font: inherit;
+  font-size: var(--datagrid-app-toolbar-button-font-size, 12px);
+}
+
+.datagrid-app-quick-filter__input::placeholder {
+  color: var(--datagrid-text-muted);
+}
+
+.datagrid-app-quick-filter:focus-within {
+  box-shadow: 0 0 0 2px var(--datagrid-column-menu-focus-ring);
+}
+
+.datagrid-app-quick-filter__clear {
+  flex: 0 0 auto;
+  height: calc(var(--datagrid-app-toolbar-button-height, 32px) - 10px);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--datagrid-text-muted);
+  font: inherit;
+  font-size: var(--datagrid-app-toolbar-button-font-size, 12px);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.datagrid-app-quick-filter__clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 72%, transparent);
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-app-quick-filter__clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .datagrid-overlay-drag-handle {
   display: flex;
   flex-direction: column;
