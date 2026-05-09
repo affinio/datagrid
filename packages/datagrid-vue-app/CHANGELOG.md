@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Fixed the declarative advanced-filter toolbar path when `DataGrid` uses an external data-source row model. Applying the panel now forwards the freshly built `advancedExpression` snapshot directly through `rowModel.setSortAndFilterModel(...)`.
+
+  ## User impact
+
+  Apps using `:row-model="createDataSourceBackedRowModel(...)"` with `advanced-filter` now trigger server pulls with the real `filterModel.advancedExpression` instead of a stale `null` expression.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - targeted advanced-filter contract coverage passed for external data-source row model request propagation
+
+- ## Summary
+
   Fixed the declarative quick-filter toolbar path when `DataGrid` uses an external data-source row model. Quick filter input now applies the freshly built `filterModel.quickFilter` snapshot directly to `rowModel.setSortAndFilterModel(...)`, so data-source-backed row models see a `filter-change` pull instead of a stale `null` filter model.
 
   ## User impact

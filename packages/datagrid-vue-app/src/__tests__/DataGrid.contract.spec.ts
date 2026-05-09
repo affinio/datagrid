@@ -4451,6 +4451,65 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("applies declarative advancedFilter through an external data-source row model", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const pull = vi.fn(async () => ({
+      rows: [],
+      total: 0,
+    }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: { pull },
+      resolveRowId: row => row.rowId,
+      initialTotal: 0,
+    })
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        advancedFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+    pull.mockClear()
+
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    await trigger.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()
+    const valueInput = popover?.querySelector<HTMLInputElement>('.datagrid-advanced-filter__field--value input[type="text"]')
+    expect(valueInput).toBeTruthy()
+    valueInput!.value = "недвижимость"
+    valueInput!.dispatchEvent(new Event("input", { bubbles: true }))
+
+    popover?.querySelector<HTMLElement>(".datagrid-advanced-filter__primary")?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      reason: "filter-change",
+      filterModel: expect.objectContaining({
+        columnFilters: {},
+        advancedFilters: {},
+        advancedExpression: {
+          kind: "condition",
+          key: "owner",
+          type: "text",
+          operator: "contains",
+          value: "недвижимость",
+        },
+      }),
+    }))
+
+    wrapper.unmount()
+    rowModel.dispose()
+  })
+
   it("uses declarative labels for the advanced filter panel and operators", async () => {
     await preloadAdvancedFilterPopover()
 

@@ -1131,9 +1131,6 @@ export default defineComponent({
     const advancedFilterDraftClauses = computed(() => (
       advancedFilterBuilderRef.value?.advancedFilterDraftClauses.value ?? []
     ))
-    const appliedAdvancedFilterExpression = computed<DataGridAdvancedExpressionEntry | null>(() => (
-      advancedFilterBuilderRef.value?.appliedAdvancedFilterExpression.value ?? null
-    ))
     const ensureAdvancedFilterBuilder = async (): Promise<UseDataGridAppAdvancedFilterBuilderResult> => {
       if (advancedFilterBuilderRef.value) {
         return advancedFilterBuilderRef.value
@@ -1183,8 +1180,13 @@ export default defineComponent({
     const cancelAdvancedFilterPanel = (): void => {
       advancedFilterBuilderRef.value?.cancelAdvancedFilterPanel()
     }
-    const commitAdvancedFilterPanelDraft = (): void => {
-      advancedFilterBuilderRef.value?.applyAdvancedFilterPanel()
+    const commitAdvancedFilterPanelDraft = (): DataGridAdvancedExpressionEntry | null => {
+      const builder = advancedFilterBuilderRef.value
+      if (!builder) {
+        return null
+      }
+      builder.applyAdvancedFilterPanel()
+      return builder.appliedAdvancedFilterExpression.value
     }
     const clearAdvancedFilterPanel = (): void => {
       advancedFilterBuilderRef.value?.clearAdvancedFilterPanel()
@@ -1460,14 +1462,15 @@ export default defineComponent({
     }
 
     const applyAdvancedFilterPanel = (): void => {
-      commitAdvancedFilterPanelDraft()
-      filterModelState.value = {
+      const advancedExpression = commitAdvancedFilterPanelDraft()
+      const nextFilterModel = {
         ...cloneFilterModelState(filterModelState.value),
         columnFilters: {},
         advancedFilters: {},
-        advancedExpression: appliedAdvancedFilterExpression.value,
+        advancedExpression,
       }
-      applySortAndFilter()
+      filterModelState.value = nextFilterModel
+      applySortAndFilter(nextFilterModel)
     }
 
     const toggleSortForColumn = (columnKey: string, additive = false): void => {
