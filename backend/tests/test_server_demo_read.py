@@ -158,6 +158,50 @@ async def test_server_demo_pull_name_contains_filter(client: AsyncClient) -> Non
     assert all("Account 0001" in row["name"] for row in body["rows"])
 
 
+async def test_server_demo_pull_quick_filter_contains(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 20},
+            "filterModel": {
+                "quickFilter": {
+                    "query": "Account 0001",
+                    "columns": ["name", "segment", "status", "region"],
+                    "mode": "contains",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 10
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
+    assert all("Account 0001" in row["name"] for row in body["rows"])
+
+
+async def test_server_demo_pull_quick_filter_tokens_match_across_columns(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "filterModel": {
+                "quickFilter": {
+                    "query": "Account EMEA",
+                    "columns": ["name", "segment", "status", "region"],
+                    "mode": "tokens",
+                }
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 25_000
+    assert body["revision"] == EXPECTED_SERVER_DEMO_REVISION
+    assert all("Account" in row["name"] and row["region"] == "EMEA" for row in body["rows"])
+
+
 async def test_server_demo_pull_no_match_returns_stable_revision(client: AsyncClient) -> None:
     response = await client.post(
         "/api/server-demo/pull",

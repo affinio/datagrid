@@ -38,6 +38,13 @@ def normalize_history_scope_value(value: str | None) -> str | None:
     return normalized or None
 
 
+def normalize_server_demo_table_id(value: str | None) -> str | None:
+    normalized = normalize_history_scope_value(value)
+    if normalized in {SERVER_DEMO_TABLE.table_id, "server-demo"}:
+        return SERVER_DEMO_TABLE.table_id
+    return normalized
+
+
 def operation_scope_from_request(request: Any) -> tuple[str | None, str | None]:
     user_id = normalize_history_scope_value(getattr(request, "user_id", None))
     session_id = normalize_history_scope_value(getattr(request, "session_id", None))

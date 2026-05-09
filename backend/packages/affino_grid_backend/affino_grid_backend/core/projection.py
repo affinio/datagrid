@@ -48,6 +48,10 @@ class GridProjectionService:
             column = getattr(self._model, definition.model_attr)
             conditions.extend(self._build_column_filter_conditions(definition, column, raw_filter))
 
+        quick_filter_condition = self._build_quick_filter_condition(filter_model.get("quickFilter"))
+        if quick_filter_condition is not None:
+            conditions.append(quick_filter_condition)
+
         advanced_expression = self._resolve_advanced_expression(filter_model)
         if advanced_expression is not None:
             advanced_condition = self._build_advanced_expression_condition(advanced_expression)
@@ -61,12 +65,58 @@ class GridProjectionService:
         if isinstance(column_filters, Mapping):
             return tuple((str(column_id), raw_filter) for column_id, raw_filter in column_filters.items())
 
-        control_keys = {"advancedExpression", "advancedFilters", "columnStyleFilters"}
+        control_keys = {"advancedExpression", "advancedFilters", "columnStyleFilters", "quickFilter"}
         return tuple(
             (str(column_id), raw_filter)
             for column_id, raw_filter in filter_model.items()
             if column_id not in control_keys
         )
+
+    def _build_quick_filter_condition(self, raw_quick_filter: Any) -> Any | None:
+        if not isinstance(raw_quick_filter, Mapping):
+            return None
+
+        normalized_query = self._normalize_text_value(raw_quick_filter.get("query"))
+        if normalized_query is None:
+            return None
+
+        definitions = self._resolve_quick_filter_columns(raw_quick_filter)
+        if not definitions:
+            return literal(False)
+
+        mode = str(raw_quick_filter.get("mode") or "contains").strip().lower()
+        terms = normalized_query.split() if mode == "tokens" else [normalized_query]
+        terms = [term for term in terms if term]
+        if not terms:
+            return None
+
+        column_texts = [
+            self._text_column_expression(getattr(self._model, definition.model_attr))
+            for definition in definitions
+        ]
+        term_conditions = [
+            or_(*(column_text.contains(term) for column_text in column_texts))
+            for term in terms
+        ]
+        return and_(*term_conditions) if len(term_conditions) > 1 else term_conditions[0]
+
+    def _resolve_quick_filter_columns(self, raw_quick_filter: Mapping[str, Any]) -> list[GridColumnDefinition]:
+        raw_columns = raw_quick_filter.get("columns")
+        if isinstance(raw_columns, Sequence) and not isinstance(raw_columns, (str, bytes)):
+            column_ids = [str(column_id) for column_id in raw_columns]
+        else:
+            column_ids = [column_id for column_id, definition in self._columns.items() if definition.filterable]
+
+        definitions: list[GridColumnDefinition] = []
+        seen: set[str] = set()
+        for column_id in column_ids:
+            if column_id in seen:
+                continue
+            seen.add(column_id)
+            definition = self._column_definition(column_id)
+            if definition is not None:
+                definitions.append(definition)
+        return definitions
 
     def _build_column_filter_conditions(
         self,

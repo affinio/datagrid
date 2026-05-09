@@ -173,6 +173,27 @@ async def test_history_status_reports_empty_stack(client: AsyncClient) -> None:
     }
 
 
+async def test_history_status_accepts_route_table_alias(client: AsyncClient) -> None:
+    workspace_id = "history-status-route-alias"
+    await insert_workspace_rows(workspace_id=workspace_id, id_prefix="hist-status-alias")
+
+    response = await client.post(
+        "/api/history/status",
+        json={
+            "workspace_id": workspace_id,
+            "table_id": "server-demo",
+            "user_id": "history-user-a",
+            "session_id": "history-session-a",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["table_id"] == "server_demo"
+    assert body["canUndo"] is False
+    assert body["canRedo"] is False
+
+
 async def test_history_status_tracks_commit_undo_redo_state(client: AsyncClient) -> None:
     workspace_id = "history-status-flow"
     row_id = "hist-flow-000000"

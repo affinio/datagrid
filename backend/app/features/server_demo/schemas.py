@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.features.server_demo.history import (
     DEFAULT_SERVER_DEMO_SESSION_ID,
+    normalize_server_demo_table_id,
 )
 
 
@@ -182,7 +183,7 @@ class ServerDemoFillCommitRequest(BaseModel):
     @model_validator(mode="after")
     def normalize_scope(self) -> "ServerDemoFillCommitRequest":
         self.workspace_id = _normalize_scope_value(self.workspace_id)
-        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.table_id = normalize_server_demo_table_id(self.table_id) or "server_demo"
         self.user_id = _normalize_scope_value(self.user_id)
         self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
@@ -231,7 +232,7 @@ class ServerDemoCommitEditsRequest(BaseModel):
     @model_validator(mode="after")
     def normalize_scope(self) -> "ServerDemoCommitEditsRequest":
         self.workspace_id = _normalize_scope_value(self.workspace_id)
-        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.table_id = normalize_server_demo_table_id(self.table_id) or "server_demo"
         self.user_id = _normalize_scope_value(self.user_id)
         self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
@@ -342,7 +343,7 @@ class ServerDemoHistoryStackRequest(BaseModel):
     @model_validator(mode="after")
     def require_user_or_session(self) -> "ServerDemoHistoryStackRequest":
         self.workspace_id = _normalize_scope_value(self.workspace_id)
-        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.table_id = normalize_server_demo_table_id(self.table_id) or "server_demo"
         self.user_id = _normalize_scope_value(self.user_id)
         self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
@@ -363,7 +364,7 @@ class ServerDemoHistoryStatusRequest(BaseModel):
     @model_validator(mode="after")
     def require_user_or_session(self) -> "ServerDemoHistoryStatusRequest":
         self.workspace_id = _normalize_scope_value(self.workspace_id)
-        self.table_id = _default_scope_value(self.table_id, "server_demo")
+        self.table_id = normalize_server_demo_table_id(self.table_id) or "server_demo"
         self.user_id = _normalize_scope_value(self.user_id)
         self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
         return self
