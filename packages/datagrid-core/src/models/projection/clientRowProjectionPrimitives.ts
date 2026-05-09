@@ -29,6 +29,14 @@ export type DataGridFilterCellStyleValueReader<T> = (
   styleKey: string,
 ) => unknown
 
+export interface DataGridFilterPredicateOptions<T> {
+  ignoreColumnFilterKey?: string
+  readRowField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
+  readFilterCell?: DataGridFilterCellValueReader<T>
+  readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
+  quickFilterColumnKeys?: readonly string[]
+}
+
 export interface ResolveDataGridFilterCellValueOptions<T> {
   rowNode: DataGridRowNode<T>
   columnKey: string
@@ -245,14 +253,34 @@ function normalizeColumnStyleFilterEntries(
   return normalized
 }
 
+function normalizeQuickFilterQuery(query: unknown): string {
+  return typeof query === "string" ? query.trim().toLowerCase() : ""
+}
+
+function normalizeQuickFilterColumnKeys(columnKeys: readonly unknown[] | undefined): readonly string[] {
+  if (!Array.isArray(columnKeys)) {
+    return []
+  }
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const rawColumnKey of columnKeys) {
+    const columnKey = String(rawColumnKey ?? "").trim()
+    if (columnKey.length === 0 || seen.has(columnKey)) {
+      continue
+    }
+    seen.add(columnKey)
+    normalized.push(columnKey)
+  }
+  return normalized
+}
+
+function normalizeQuickFilterTokens(query: string): readonly string[] {
+  return query.split(/\s+/).filter(token => token.length > 0)
+}
+
 export function createFilterPredicate<T>(
   filterModel: DataGridFilterSnapshot | null,
-  options: {
-    ignoreColumnFilterKey?: string
-    readRowField?: (rowNode: DataGridRowNode<T>, key: string, field?: string) => unknown
-    readFilterCell?: DataGridFilterCellValueReader<T>
-    readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
-  } = {},
+  options: DataGridFilterPredicateOptions<T> = {},
 ): (rowNode: DataGridRowNode<T>) => boolean {
   if (!filterModel) {
     return () => true
@@ -316,6 +344,7 @@ export function createFilterPredicate<T>(
       columnStyleFilters: nextColumnStyleFilters,
       advancedFilters: nextAdvancedFilters,
       advancedExpression: filterModel.advancedExpression ?? null,
+      ...(filterModel.quickFilter ? { quickFilter: filterModel.quickFilter } : {}),
     } satisfies DataGridFilterSnapshot
   })()
 
@@ -326,6 +355,51 @@ export function createFilterPredicate<T>(
     (effectiveFilterModel.columnStyleFilters ?? {}) as Record<string, DataGridColumnStyleFilter>,
   )
   const advancedExpression = resolveAdvancedExpression(effectiveFilterModel)
+  const quickFilterQuery = normalizeQuickFilterQuery(effectiveFilterModel.quickFilter?.query)
+  const quickFilterColumnKeys = normalizeQuickFilterColumnKeys(
+    effectiveFilterModel.quickFilter?.columns?.length
+      ? effectiveFilterModel.quickFilter.columns
+      : options.quickFilterColumnKeys,
+  )
+  const quickFilterMode = effectiveFilterModel.quickFilter?.mode === "tokens" ? "tokens" : "contains"
+  const quickFilterTokens = quickFilterMode === "tokens"
+    ? normalizeQuickFilterTokens(quickFilterQuery)
+    : []
+
+  const rowMatchesQuickFilter = (rowNode: DataGridRowNode<T>): boolean => {
+    if (quickFilterQuery.length === 0) {
+      return true
+    }
+    if (quickFilterColumnKeys.length === 0) {
+      return false
+    }
+    if (quickFilterMode === "tokens" && quickFilterTokens.length === 0) {
+      return true
+    }
+    const values: string[] = []
+    for (const columnKey of quickFilterColumnKeys) {
+      const value = resolveDataGridFilterCellValue({
+        rowNode,
+        columnKey,
+        readFilterCell,
+        readField,
+      })
+      if (value == null) {
+        continue
+      }
+      const normalizedValue = String(value).toLowerCase()
+      if (quickFilterMode === "contains" && normalizedValue.includes(quickFilterQuery)) {
+        return true
+      }
+      if (quickFilterMode === "tokens") {
+        values.push(normalizedValue)
+      }
+    }
+    if (quickFilterMode !== "tokens") {
+      return false
+    }
+    return quickFilterTokens.every(token => values.some(value => value.includes(token)))
+  }
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
@@ -361,7 +435,7 @@ export function createFilterPredicate<T>(
     }
 
     if (advancedExpression) {
-      return evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
+      if (!evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
         return resolveDataGridFilterCellValue({
           rowNode,
           columnKey: condition.key,
@@ -369,10 +443,12 @@ export function createFilterPredicate<T>(
           readFilterCell,
           readField,
         })
-      })
+      })) {
+        return false
+      }
     }
 
-    return true
+    return rowMatchesQuickFilter(rowNode)
   }
 }
 
@@ -397,7 +473,10 @@ export function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null)
   if (advancedKeys.length > 0) {
     return true
   }
-  return resolveAdvancedExpression(filterModel) !== null
+  if (resolveAdvancedExpression(filterModel) !== null) {
+    return true
+  }
+  return normalizeQuickFilterQuery(filterModel.quickFilter?.query).length > 0
 }
 
 export function alwaysMatchesFilter<T>(_row: DataGridRowNode<T>): boolean {

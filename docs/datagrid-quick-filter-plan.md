@@ -16,7 +16,7 @@
   - type-check datagrid-pivot, datagrid-core.
   - snapshot clone/normalize tests.
 
-  ## [] Slice 2: Predicate Layer
+  ## [x] Slice 2: Predicate Layer
 
   - Расширить создание filter predicate так, чтобы quick filter композился с column/advanced/style filters через AND.
   - Добавить нормализацию текста: trim, case-insensitive, locale-neutral по дефолту.

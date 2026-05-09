@@ -1,5 +1,6 @@
 import type { DataGridFilterSnapshot, DataGridRowId, DataGridRowNode } from "../rowModel.js"
 import type {
+  DataGridFilterPredicateOptions,
   DataGridFilterCellStyleValueReader,
   DataGridFilterCellValueReader,
 } from "./clientRowProjectionPrimitives.js"
@@ -31,12 +32,7 @@ export interface ClientRowDerivedCacheRuntimeContext<T> {
   readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
   createFilterPredicate: (
     filterModel: DataGridFilterSnapshot | null,
-    options: {
-      ignoreColumnFilterKey?: string
-      readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
-      readFilterCell?: DataGridFilterCellValueReader<T>
-      readFilterCellStyle?: DataGridFilterCellStyleValueReader<T>
-    },
+    options: DataGridFilterPredicateOptions<T>,
   ) => (rowNode: DataGridRowNode<T>) => boolean
   sourceColumnCacheLimit: number | null
 }
