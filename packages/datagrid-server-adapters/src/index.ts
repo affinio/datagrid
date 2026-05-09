@@ -36,6 +36,78 @@ export interface AffinoDatasourceHistogramOptions {
 }
 
 type RecordLike = Record<string, unknown>
+export type DataGridServerJsonPrimitive = string | number | boolean | null
+export type DataGridServerJsonValue =
+  | DataGridServerJsonPrimitive
+  | readonly DataGridServerJsonValue[]
+  | { readonly [key: string]: DataGridServerJsonValue }
+
+export interface DataGridServerRange {
+  startRow: number
+  endRow: number
+}
+
+export interface DataGridServerSort {
+  colId: string
+  sort: "asc" | "desc"
+}
+
+export interface DataGridServerQuickFilter {
+  query: string
+  columns?: readonly string[]
+  mode?: "contains" | "tokens"
+}
+
+export type DataGridServerColumnFilter =
+  | {
+    kind: "valueSet"
+    tokens: readonly string[]
+  }
+  | {
+    kind: "styleValueSet"
+    styleKey: string
+    tokens: readonly string[]
+  }
+  | {
+    kind: "predicate"
+    operator: string
+    value?: DataGridServerJsonValue
+    value2?: DataGridServerJsonValue
+    caseSensitive?: boolean
+  }
+
+export interface DataGridServerFilterModel {
+  columnFilters?: Readonly<Record<string, DataGridServerColumnFilter>>
+  columnStyleFilters?: Readonly<Record<string, DataGridServerColumnFilter>>
+  advancedFilters?: Readonly<Record<string, DataGridServerJsonValue>>
+  advancedExpression?: DataGridServerJsonValue | null
+  quickFilter?: DataGridServerQuickFilter
+}
+
+export interface DataGridServerGroupBy {
+  fields: readonly string[]
+  expandedByDefault?: boolean
+}
+
+export interface DataGridServerPagination {
+  pageSize: number
+  currentPage: number
+}
+
+export interface DataGridServerQuery {
+  range: DataGridServerRange
+  sortModel?: readonly DataGridServerSort[]
+  filterModel?: DataGridServerFilterModel | null
+  groupBy?: DataGridServerGroupBy | null
+  pagination?: DataGridServerPagination | null
+}
+
+export interface DataGridServerQueryCodecOptions {
+  columnIdMap?: Readonly<Record<string, string>> | ((columnKey: string) => string | null | undefined)
+  quickFilterModeFallback?: DataGridServerQuickFilter["mode"]
+  legacyAdvancedFilters?: "preserve" | "drop"
+}
+
 type AffinoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<unknown>["commitEdits"]>>[0]
 type AffinoCommitEditsResult = Awaited<ReturnType<NonNullable<DataGridDataSource<unknown>["commitEdits"]>>>
 type AffinoResolveFillBoundaryRequest = Parameters<NonNullable<DataGridDataSource<unknown>["resolveFillBoundary"]>>[0]

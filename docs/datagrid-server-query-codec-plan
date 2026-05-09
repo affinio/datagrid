@@ -24,7 +24,7 @@ Backends can either:
   - Codec должен нормализовать DataGrid request в stable backend DTO.
   - Server client остается transport layer и не интерпретирует filter semantics.
 
-## [] Slice 2: DTO Types
+## [x] Slice 2: DTO Types
 
   - Добавить public types:
     - `DataGridServerQuery`
@@ -36,6 +36,15 @@ Backends can either:
     - `DataGridServerQueryCodecOptions`
   - DTO должен быть JSON-safe.
   - Все optional поля должны иметь понятное правило prune/null.
+
+  DTO boundary:
+
+  - `DataGridServerQuery.range` is required.
+  - Empty `sortModel`, `columnFilters`, `columnStyleFilters`, `advancedFilters`, and `groupBy.fields` should be pruned by the codec.
+  - `filterModel` is `null` when the input explicitly has no filters, and omitted only when the codec caller is not serializing filter state.
+  - `advancedExpression` may be `null` to explicitly clear expression state.
+  - `quickFilter` is omitted when its normalized query is empty.
+  - All DTO values must be JSON-safe and structured-clone safe.
 
   ## [] Slice 3: Quick Filter Codec
 
