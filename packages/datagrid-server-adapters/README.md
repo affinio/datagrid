@@ -41,6 +41,93 @@ const datasource = createAffinoDatasource<AuctionRow>({
 - `headers` forwards request headers on adapter-owned requests
 - `historyScope` forwards `workspace_id`, `user_id`, and `session_id` into edit, fill, and history bodies
 - `histogram.ignoreSelfFilter` sets the default histogram behavior for requests that should ignore the active column filter
+- `queryCodec` configures the default pull request codec, including `columnIdMap`, `quickFilterModeFallback`, and `legacyAdvancedFilters`
+- `mapQuery` receives the normalized backend DTO and can adapt it to a backend-specific request body
+- `mapPullRequest` receives the raw `DataGridDataSourcePullRequest` and bypasses the package codec entirely
+
+## Server Query Codec
+
+Pull requests are normalized into a stable backend DTO by default. The codec is a boundary helper: it converts DataGrid request state into JSON-safe transport data, but it is not a SQL compiler, ORM adapter, permissions layer, or backend execution engine.
+
+```ts
+import { normalizeDataGridServerQuery } from "@affino/datagrid-server-adapters"
+
+const query = normalizeDataGridServerQuery(request, {
+  columnIdMap: {
+    updatedAt: "updated_at",
+  },
+  quickFilterModeFallback: "contains",
+  legacyAdvancedFilters: "preserve",
+})
+```
+
+The normalized shape keeps request concerns explicit:
+
+```ts
+{
+  range: { startRow: 0, endRow: 50 },
+  sortModel: [{ colId: "updated_at", sort: "desc" }],
+  filterModel: {
+    columnFilters: {
+      status: { kind: "valueSet", tokens: ["string:active"] },
+    },
+    quickFilter: {
+      query: "platform",
+      columns: ["name", "status"],
+      mode: "tokens",
+    },
+  },
+  pagination: { pageSize: 50, currentPage: 0 },
+}
+```
+
+`quickFilter` stays inside `filterModel`. The codec trims the query, dedupes columns, defaults invalid modes to `"contains"` unless configured otherwise, and never creates a top-level `search` field.
+
+## Request Mapping
+
+Use the default normalized DTO when your backend accepts the package request shape:
+
+```ts
+const datasource = createAffinoDatasource<AuctionRow>({
+  baseUrl: "http://localhost:8000",
+  tableId: "auctions",
+  queryCodec: {
+    columnIdMap: {
+      updatedAt: "updated_at",
+    },
+  },
+})
+```
+
+Use `mapQuery` when the backend needs small shape changes while still relying on the package codec:
+
+```ts
+const datasource = createAffinoDatasource<AuctionRow>({
+  baseUrl: "http://localhost:8000",
+  tableId: "auctions",
+  mapQuery: query => ({
+    rows: query.range,
+    order: query.sortModel ?? [],
+    filters: query.filterModel,
+  }),
+})
+```
+
+Use `mapPullRequest` only when the backend expects the raw DataGrid protocol or a fully custom body:
+
+```ts
+const datasource = createAffinoDatasource<AuctionRow>({
+  baseUrl: "http://localhost:8000",
+  tableId: "auctions",
+  mapPullRequest: request => ({
+    range: request.range,
+    sortModel: request.sortModel,
+    filterModel: request.filterModel,
+    groupBy: request.groupBy,
+    pagination: request.pagination,
+  }),
+})
+```
 
 ## Backend Capabilities
 

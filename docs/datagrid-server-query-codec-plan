@@ -115,7 +115,7 @@ Backends can either:
   - Не добавлять filter semantics в server client.
   - Добавить regression test на quickFilter внутри `filterModel` / normalized query body.
 
-  ## [] Slice 11: Docs
+  ## [x] Slice 11: Docs
 
   - README для `datagrid-server-adapters`.
   - Пример:
