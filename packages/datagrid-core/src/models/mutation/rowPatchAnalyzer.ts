@@ -80,6 +80,17 @@ export function collectFilterModelFields(filterModel: DataGridFilterSnapshot | n
   }
   const expression = resolveAdvancedExpression(filterModel)
   collectAdvancedExpressionFields(expression, fields)
+  const quickFilterQuery = typeof filterModel.quickFilter?.query === "string"
+    ? filterModel.quickFilter.query.trim()
+    : ""
+  if (quickFilterQuery.length > 0) {
+    for (const column of filterModel.quickFilter?.columns ?? []) {
+      const normalized = String(column ?? "").trim()
+      if (normalized.length > 0) {
+        fields.add(normalized)
+      }
+    }
+  }
   return fields
 }
 

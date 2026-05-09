@@ -1956,6 +1956,87 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("applies quick filter inside the filter stage before sort and pagination", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, service: "api", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, service: "worker", score: 40 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, service: "api", score: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: 4, service: "api-admin", score: 20 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+    })
+
+    model.setPagination({ pageSize: 2, currentPage: 0 })
+    model.setSortAndFilterModel({
+      filterModel: {
+        columnFilters: {},
+        advancedFilters: {},
+        quickFilter: { query: "api", columns: ["service"] },
+      },
+      sortModel: [{ key: "score", direction: "desc" }],
+    })
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.pagination.totalRowCount).toBe(3)
+    expect(snapshot.pagination.pageCount).toBe(2)
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r3", "r4"])
+
+    model.dispose()
+  })
+
+  it("feeds quick filter membership into grouped aggregation", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", status: "enabled", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", status: "disabled", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, team: "B", status: "enabled", score: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      advancedFilters: {},
+      quickFilter: { query: "enabled", columns: ["status"] },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const groups = rows.filter(row => row.kind === "group")
+    expect(groups.map(row => row.groupMeta?.groupValue)).toEqual(["A", "B"])
+    expect(groups.map(row => row.groupMeta?.aggregates)).toEqual([{ score: 10 }, { score: 30 }])
+
+    model.dispose()
+  })
+
+  it("uses quick filter membership for parent treeData projection", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "child-2", parentId: "root", value: "drop" }, rowId: "child-2", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      advancedFilters: {},
+      quickFilter: { query: "keep", columns: ["value"] },
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    expect(rows.map(row => row.rowId)).toEqual(["root", "child-1"])
+    expect(rows[0]?.kind).toBe("group")
+    expect(rows[1]?.kind).toBe("leaf")
+
+    model.dispose()
+  })
+
   it("supports batched sort+filter update with a single projection recompute cycle", () => {
     const rows = [
       { row: { id: "r1", owner: "noc", score: 20 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -4061,6 +4142,33 @@ describe("createClientRowModel", () => {
       { recomputeFilter: true },
     )
     expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r2"])
+
+    model.dispose()
+  })
+
+  it("recomputes quick filter membership when patchRows updates a searched column", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, label: "target" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, label: "other" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+
+    model.setFilterModel({
+      columnFilters: {},
+      advancedFilters: {},
+      quickFilter: { query: "target", columns: ["label"] },
+    })
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.patchRows([{ rowId: "r2", data: { label: "target also" } }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+    model.patchRows(
+      [{ rowId: "r2", data: { label: "target final" } }],
+      { recomputeFilter: true },
+    )
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r2"])
 
     model.dispose()
   })

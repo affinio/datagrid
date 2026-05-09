@@ -4,6 +4,7 @@ import {
   analyzeRowPatchChangeSet,
   buildPatchProjectionExecutionPlan,
   collectAggregationModelFields,
+  collectFilterModelFields,
   collectPivotModelFields,
   type DataGridPatchStageRule,
 } from "../mutation/rowPatchAnalyzer"
@@ -29,6 +30,19 @@ describe("rowPatchAnalyzer change-set", () => {
     })
 
     expect(Array.from(fields.values())).toEqual(["team", "owner", "status", "revenue"])
+  })
+
+  it("collects quick filter dependency fields from explicit columns", () => {
+    const fields = collectFilterModelFields({
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
+      advancedFilters: {},
+      quickFilter: {
+        query: "platform",
+        columns: ["owner", " service ", "", "owner"],
+      },
+    })
+
+    expect(Array.from(fields.values())).toEqual(["status", "owner", "service"])
   })
 
   it("derives sort impact and row-scoped sort cache eviction for specific sort fields", () => {

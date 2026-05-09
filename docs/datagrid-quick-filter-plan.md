@@ -61,7 +61,7 @@
     - Run type-check.
     - git diff --check.
   
-  ## [] Slice 3: Projection Pipeline
+  ## [x] Slice 3: Projection Pipeline
 
   - Не добавлять новый stage.
   - Оставить quick filter внутри filter stage.

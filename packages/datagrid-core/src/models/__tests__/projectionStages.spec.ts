@@ -45,4 +45,16 @@ describe("projectionStages invalidation mapping", () => {
       "visible",
     ])
   })
+
+  it("expands filterChanged to the filter projection tail", () => {
+    expect(resolveClientProjectionInvalidationStages(["filterChanged"])).toEqual([
+      "filter",
+      "sort",
+      "group",
+      "pivot",
+      "aggregate",
+      "paginate",
+      "visible",
+    ])
+  })
 })
