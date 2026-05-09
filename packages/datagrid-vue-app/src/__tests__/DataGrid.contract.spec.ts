@@ -3392,6 +3392,43 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("resolves declarative quickFilter columns from searchable visible columns", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: [
+          { key: "owner", label: "Owner", width: 180, capabilities: { searchable: false } },
+          { key: "region", label: "Region", width: 160 },
+          { key: "amount", label: "Amount", width: 140, capabilities: { searchable: true } },
+        ] as const,
+        quickFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    await input.setValue("Payments")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            quickFilter: {
+              query: "Payments",
+              columns: ["region", "amount"],
+              mode: "contains",
+            },
+          }),
+          rowCount: 0,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
   it("clears declarative quickFilter from the toolbar", async () => {
     const wrapper = mount(DataGrid, {
       props: {

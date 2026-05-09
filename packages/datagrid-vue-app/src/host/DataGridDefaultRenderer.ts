@@ -179,6 +179,18 @@ function normalizeToolbarModule(module: DataGridAppToolbarModule): DataGridAppTo
   }
 }
 
+function resolveDefaultQuickFilterColumnKeys(columns: readonly DataGridColumnSnapshot[]): readonly string[] {
+  const keys: string[] = []
+  for (const column of columns) {
+    const key = column.key.trim()
+    if (!key || column.column.capabilities?.searchable === false) {
+      continue
+    }
+    keys.push(key)
+  }
+  return Object.freeze(keys)
+}
+
 function resolveDataGridPerfNow(): number {
   if (typeof performance !== "undefined" && typeof performance.now === "function") {
     return performance.now()
@@ -1356,6 +1368,7 @@ export default defineComponent({
         ? filterModelState.value.quickFilter.query.trim()
         : ""
     })
+    const defaultQuickFilterColumnKeys = computed(() => resolveDefaultQuickFilterColumnKeys(visibleColumns.value))
 
     const activeFilterSummaryItems = computed<readonly string[]>(() => {
       const resolveColumnLabel = (columnKey: string): string => columnLabelByKey.value.get(columnKey) ?? columnKey
@@ -1407,13 +1420,12 @@ export default defineComponent({
         delete nextFilterModel.quickFilter
       } else {
         const currentQuickFilter = nextFilterModel.quickFilter
+        const columns = props.quickFilter.columns?.length
+          ? props.quickFilter.columns
+          : defaultQuickFilterColumnKeys.value
         nextFilterModel.quickFilter = {
           query,
-          ...(props.quickFilter.columns?.length
-            ? { columns: props.quickFilter.columns }
-            : currentQuickFilter?.columns?.length
-              ? { columns: currentQuickFilter.columns }
-              : {}),
+          ...(columns.length ? { columns } : {}),
           mode: props.quickFilter.mode ?? currentQuickFilter?.mode ?? "contains",
         }
       }

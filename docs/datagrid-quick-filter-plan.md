@@ -157,7 +157,7 @@
   - Если consumer передает filterModel, shell должен эмитить обычный update:state/filter change, без локального рассинхрона.
   - Не добавлять отдельный update:quickFilter.
 
-## [] Slice 12: Searchable Columns Resolution
+## [x] Slice 12: Searchable Columns Resolution
 
   - Если quickFilter.columns не задан, app-layer резолвит дефолтные searchable columns.
   - Учитывать column.capabilities.searchable === false/true.
