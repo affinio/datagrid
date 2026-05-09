@@ -31,6 +31,8 @@ Import path:
 - `signal` - abort signal (abort-first cancellation contract)
 - `sortModel`, `filterModel`, `groupBy`, `groupExpansion` - canonical model state snapshot
 
+`filterModel` may include `quickFilter`. Data sources must treat it as part of the normal filter context, apply it before server-side sort/group/pivot/pagination, and include it in request/cache signatures. Do not add a separate top-level row-pull `search` field for quick filter.
+
 `DataGridDataSourceColumnHistogramRequest`:
 
 - `columnId` - target column key
@@ -41,6 +43,8 @@ Import path:
 When `ignoreSelfFilter` is true, `DataSourceBackedRowModel` removes the current column's value/style/legacy advanced filter entries before calling the data source. The data source should still apply the remaining filter context so the returned values represent the current table scope without the current column collapsing its own value list.
 
 When `search` is present, the data source should apply it server-side to the histogram value text/domain where possible. Client-backed row models keep the same option and filter the in-memory histogram locally.
+
+Histogram `options.search` is scoped only to value-list search. It is independent from `filterModel.quickFilter`, which filters rows.
 
 `DataGridDataSourcePushEvent<T>`:
 

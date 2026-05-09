@@ -38,7 +38,7 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | Query | Sort model (single/multi column) | Core + Adapter | all | Deterministic sort state and projection stage integration. |
 | Query | Column filters | Core + Adapter | all | Predicate-based column filtering with snapshot state. |
 | Query | Advanced filter expressions | Core + Adapter | all | Structured boolean expression tree normalization/evaluation. |
-| Query | Quick/global filter actions | Core + Adapter | main-thread, worker-owned | Adapter-level orchestration hooks for global text filtering UX. |
+| Query | Quick filter (`filterModel.quickFilter`) | Core + Adapter + App + Backend | all | Grid-wide text filtering is part of `DataGridFilterSnapshot`, runs inside the filter stage before sort/group/pivot/pagination, and stays structured-clone/serialization safe. Server-side data sources receive it through `DataGridDataSourcePullRequest.filterModel` and must apply it backend-side. See [DataGrid Quick Filter](./datagrid-quick-filter.md). |
 | Grouping | Group by model + expansion state | Core + Adapter | all | Deterministic group projection with expand/collapse controls. |
 | Tree data | Tree projection and subtree toggles | Core + Adapter | all | Tree data projection paths and group-like expansion controls. |
 | Aggregation | Built-in aggregations (`sum/count/countNonNull/avg/min/max/first/last`) | Core + Adapter | all | Incremental paths where applicable; deterministic finalize behavior. |

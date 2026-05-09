@@ -6,6 +6,23 @@
 
 - ## Summary
 
+  Documented and wired the app-facing quick filter path through the existing controlled `filterModel` contract. The default renderer now preserves `quickFilter` when built-in filter controls update column or advanced filters, and the sandbox demos expose quick filter controls for client and server data-source scenarios.
+
+  ## User impact
+
+  Vue app consumers can control grid-wide text filtering without a new prop by passing `filterModel.quickFilter`. The app facade keeps quick filter aligned with the core row-model projection pipeline and with server/data-source serialization.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: control quick filtering with `filter-model.quickFilter` and keep any debounce in UI code, not in core.
+
+  ## Validation
+  - DataGrid app facade contract coverage passed for controlled quick filter, clear behavior, and preserving quick filter while built-in filter controls update the model
+  - sandbox type-check passed
+  - known existing sandbox component-test failures remain unrelated to quick filter docs/UI
+
+- ## Summary
+
   Added typed facade helpers to the public app package surface, promoted explicit `readFilterCell` / `readSelectionCell` hooks into the declarative `DataGrid` facade, and tightened stage rendering so multi-range selection, copied-range visuals, effective-value filter menus, and committed selection overlays stay aligned across pinned panes and workbook-style flows. This unreleased patch also expands the native `cellMenu` surface with declarative custom items, nested submenus, and a built-in `Paste special` section.
 
   ## User impact

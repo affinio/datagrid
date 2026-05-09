@@ -103,6 +103,8 @@ Client projection is internally modeled as a stage graph:
 
 - `filter -> sort -> group -> pivot -> aggregate -> paginate -> visible`
 
+Quick filter is part of the filter model, not a separate global service. Use `filterModel.quickFilter` for grid-wide text filtering; it runs inside the filter stage and therefore invalidates sort/group/pivot/aggregate/pagination/visible results through the normal projection dependency chain. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
+
 Stage dirty state is propagated through dependencies, and snapshot includes `projection` diagnostics (`version`, `staleStages`) for devtools/integration debugging.
 `patchRows` uses field-aware invalidation internally: only stages whose dependency fields intersect patched fields are invalidated.
 Projection recompute is dirty-stage driven (not full-pass): blocked stages (`recompute* = false`) run in non-recompute mode for data continuity and remain marked stale until an explicit recompute is allowed.

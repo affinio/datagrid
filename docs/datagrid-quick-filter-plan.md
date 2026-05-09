@@ -129,7 +129,7 @@
   - targeted sandbox/component tests, если есть.
   - ручная проверка client + server datasource demo.
 
-  ## [] Slice 8: Docs And Guardrails
+  ## [x] Slice 8: Docs And Guardrails
 
   - Документировать:
       - quick filter является частью filterModel;

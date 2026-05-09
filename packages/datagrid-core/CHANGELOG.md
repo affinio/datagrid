@@ -6,6 +6,27 @@
 
 - ## Summary
 
+  Added the canonical quick filter contract to `DataGridFilterSnapshot`, including client projection support, worker-safe snapshot propagation, data-source request serialization, and guardrail documentation.
+
+  ## User impact
+
+  Integrators can now implement grid-wide text filtering through the existing `filterModel` surface. Quick filter composes with column/style/advanced filters, runs before sort/group/pivot/pagination, and is carried through data-source pull requests for server-side interpretation.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption:
+    - add `filterModel.quickFilter` with `query`, optional `columns`, and optional `mode`,
+    - use explicit `quickFilter.columns` when server or facade defaults should be deterministic,
+    - apply `quickFilter` inside server data sources rather than adding a separate top-level pull request search field.
+
+  ## Validation
+  - core filter/projection/data-source regressions passed during staged implementation
+  - worker parity and structured-clone coverage passed
+  - server client and sandbox adapter serialization coverage passed
+  - quick filter benchmark scenario added for client row-model scale checks
+
+- ## Summary
+
   Added effective-value hooks for client filtering, histograms, and selection summary so package consumers can resolve workbook/formula/display values without mutating raw row payloads. The public core surface now also exports the reusable selection-cell resolver and the stable bivariant callback helper used by higher-level typed facades.
 
   The spreadsheet helpers now also expose reusable formula-reference bounds and decoration builders so workbook-style adapters can derive overlay lanes from parsed formula references without duplicating sheet/column range resolution in UI components.

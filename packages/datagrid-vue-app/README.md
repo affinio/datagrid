@@ -1458,6 +1458,27 @@ The public component exposes full grid state round-tripping.
 
 When `state` is the only controlled input, the built-in app toolbar and filter affordances derive their effective sort, filter, grouping, and pivot state from that unified snapshot. You do not need to mirror the same payload back into separate `sort-model`, `filter-model`, `group-by`, or `pivot-model` props just to keep the default renderer synchronized.
 
+Quick filter is controlled through the same `filter-model` contract:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :filter-model="{
+    columnFilters: {},
+    advancedFilters: {},
+    advancedExpression: null,
+    quickFilter: {
+      query: 'platform eu',
+      columns: ['service', 'owner', 'region'],
+      mode: 'tokens',
+    },
+  }"
+/>
+```
+
+The app facade intentionally keeps this `filterModel`-first. There is no separate `quickFilter` prop; quick filter must stay serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
+
 Controlled state:
 
 ```vue
