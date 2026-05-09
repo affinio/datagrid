@@ -1,0 +1,133 @@
+# DataGrid Server Query Codec Plan
+
+## Contract Boundary
+
+Server query codec belongs to `@affino/datagrid-server-adapters`.
+
+It is a boundary helper between DataGrid row-model pull requests and backend HTTP/query DTOs. It must not change core projection, sort, filter, group, pivot, or pagination semantics.
+
+The codec normalizes DataGrid request data into a stable JSON-safe backend DTO. It is not a SQL compiler, ORM adapter, permissions engine, or backend execution layer.
+
+`@affino/datagrid-server-client` remains a transport package. It serializes request bodies and parses responses, but it must not interpret DataGrid filter semantics or special-case quick filter, advanced filter, grouping, or pagination behavior.
+
+Backends can either:
+
+- accept the raw DataGrid protocol and ignore this codec;
+- use the normalized DTO as a production default;
+- override codec output with package-level mapping hooks when their API shape differs.
+
+## [x] Slice 1: Contract Boundary
+
+  - Зафиксировать, что codec живет в `@affino/datagrid-server-adapters`.
+  - Не менять core projection/filter semantics.
+  - Не делать SQL/ORM compiler.
+  - Codec должен нормализовать DataGrid request в stable backend DTO.
+  - Server client остается transport layer и не интерпретирует filter semantics.
+
+## [] Slice 2: DTO Types
+
+  - Добавить public types:
+    - `DataGridServerQuery`
+    - `DataGridServerRange`
+    - `DataGridServerSort`
+    - `DataGridServerFilterModel`
+    - `DataGridServerColumnFilter`
+    - `DataGridServerQuickFilter`
+    - `DataGridServerQueryCodecOptions`
+  - DTO должен быть JSON-safe.
+  - Все optional поля должны иметь понятное правило prune/null.
+
+  ## [] Slice 3: Quick Filter Codec
+
+  - Нормализовать `filterModel.quickFilter`.
+  - `query`: trim, empty query drops quickFilter.
+  - `columns`: trim, drop empty, dedupe preserving order.
+  - `mode`: only `"contains"` / `"tokens"`, fallback configurable.
+  - Не добавлять top-level `search`.
+  - Покрыть tests.
+
+  ## [] Slice 4: Column Filter Codec
+
+  - Нормализовать value-set filters.
+  - Drop empty token arrays.
+  - Нормализовать predicate filters.
+  - Drop empty predicates where operator/value is unusable.
+  - Preserve column keys by default.
+  - Add optional `columnIdMap`.
+  - Покрыть tests.
+
+  ## [] Slice 5: Advanced Filter Codec
+
+  - Preserve `advancedExpression` structurally.
+  - Decide legacy `advancedFilters` policy:
+    - default preserve if non-empty;
+    - option to drop legacy map if backend only accepts expression.
+  - Не пытаться компилировать expression в backend predicates.
+  - Покрыть nested expression clone/serialization tests.
+
+  ## [] Slice 6: Sort / Range / Pagination / Group Codec
+
+  - Normalize range to `{ startRow, endRow }`.
+  - Normalize sort to stable array `{ colId, sort }`.
+  - Normalize pagination if present.
+  - Normalize groupBy fields if present.
+  - Drop invalid empty entries.
+  - Покрыть stable output tests.
+
+  ## [] Slice 7: Top-Level Query Builder
+
+  - Добавить helper:
+    - `normalizeDataGridServerQuery(request, options?)`
+  - Input: `DataGridDataSourcePullRequest`.
+  - Output: `DataGridServerQuery`.
+  - Stable key order / deterministic output.
+  - No mutation of source request.
+  - Покрыть snapshot-style tests.
+
+  ## [] Slice 8: Adapter Integration
+
+  - В `createAffinoDatasource` использовать codec по умолчанию.
+  - Сохранить escape hatch:
+    - `mapQuery?: (request) => unknown`
+    - или `mapFilterModel?: (...) => unknown`
+  - Не ломать существующий `mapPullRequest`.
+  - Проверить backward compatibility.
+
+  ## [] Slice 9: Sandbox Migration
+
+  - Убрать demo-local `flattenFilterModel`.
+  - Перевести server datasource demo на package codec.
+  - Сохранить demo-specific backend mapping только там, где реально backend-specific.
+  - Проверить quickFilter / advancedFilter / column filters.
+
+  ## [] Slice 10: Server Client Tests
+
+  - Подтвердить, что `datagrid-server-client` просто сериализует DTO.
+  - Не добавлять filter semantics в server client.
+  - Добавить regression test на quickFilter внутри `filterModel` / normalized query body.
+
+  ## [] Slice 11: Docs
+
+  - README для `datagrid-server-adapters`.
+  - Пример:
+    - raw DataGrid protocol passthrough;
+    - normalized backend DTO;
+    - custom `columnIdMap`;
+    - quickFilter behavior.
+  - Явно указать: codec is not SQL compiler.
+
+  ## [] Slice 12: Changelog
+
+  - Описать новый server query codec.
+  - Migration: optional adoption.
+  - Указать sandbox demo migration.
+
+  Ключевое API, которое я бы сначала согласовал:
+
+  normalizeDataGridServerQuery(request, {
+    columnIdMap,
+    quickFilterModeFallback: "contains",
+    legacyAdvancedFilters: "preserve",
+  })
+
+  Это хороший production default, но без ложного обещания “универсального backend protocol для всех”.
