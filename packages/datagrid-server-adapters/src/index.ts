@@ -10,7 +10,11 @@ import {
   type DataGridDataSource,
   type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourceRowEntry,
+  type DataGridGroupBySpec,
+  type DataGridPaginationInput,
   type DataGridQuickFilterSnapshot,
+  type DataGridSortState,
+  type DataGridViewportRange,
 } from "@affino/datagrid-core"
 import {
   createServerDatasourceHttpClient,
@@ -309,6 +313,81 @@ export function normalizeDataGridServerQuickFilter(
     ...(columns.length > 0 ? { columns } : {}),
     mode: normalizeQuickFilterMode(input?.mode, options.quickFilterModeFallback),
   })
+}
+
+export function normalizeDataGridServerRange(
+  range: DataGridViewportRange,
+): DataGridServerRange {
+  const start = Number.isFinite(range.start) ? Math.max(0, Math.trunc(range.start)) : 0
+  const rawEnd = Number.isFinite(range.end) ? Math.trunc(range.end) + 1 : start
+  return Object.freeze({
+    startRow: start,
+    endRow: Math.max(start, rawEnd),
+  })
+}
+
+export function normalizeDataGridServerSortModel(
+  input: readonly DataGridSortState[] | null | undefined,
+  options: Pick<DataGridServerQueryCodecOptions, "columnIdMap"> = {},
+): readonly DataGridServerSort[] | null {
+  if (!Array.isArray(input)) {
+    return null
+  }
+  const sortModel: DataGridServerSort[] = []
+  for (const sortState of input) {
+    const key = typeof sortState.key === "string" ? sortState.key.trim() : ""
+    if (!key || (sortState.direction !== "asc" && sortState.direction !== "desc")) {
+      continue
+    }
+    sortModel.push(Object.freeze({
+      colId: resolveServerColumnId(key, options.columnIdMap),
+      sort: sortState.direction,
+    }))
+  }
+  return sortModel.length > 0
+    ? Object.freeze(sortModel)
+    : null
+}
+
+export function normalizeDataGridServerPagination(
+  input: (Partial<DataGridPaginationInput> & { enabled?: boolean }) | null | undefined,
+): DataGridServerPagination | null {
+  if (!input || input.enabled === false || !Number.isFinite(input.pageSize) || !Number.isFinite(input.currentPage)) {
+    return null
+  }
+  return Object.freeze({
+    pageSize: Math.max(1, Math.trunc(input.pageSize as number)),
+    currentPage: Math.max(0, Math.trunc(input.currentPage as number)),
+  })
+}
+
+export function normalizeDataGridServerGroupBy(
+  input: DataGridGroupBySpec | null | undefined,
+  options: Pick<DataGridServerQueryCodecOptions, "columnIdMap"> = {},
+): DataGridServerGroupBy | null {
+  if (!input || !Array.isArray(input.fields)) {
+    return null
+  }
+  const fields: string[] = []
+  const seenFields = new Set<string>()
+  for (const field of input.fields) {
+    const normalizedField = typeof field === "string" ? field.trim() : ""
+    if (!normalizedField) {
+      continue
+    }
+    const columnId = resolveServerColumnId(normalizedField, options.columnIdMap)
+    if (seenFields.has(columnId)) {
+      continue
+    }
+    seenFields.add(columnId)
+    fields.push(columnId)
+  }
+  return fields.length > 0
+    ? Object.freeze({
+      fields: Object.freeze(fields),
+      ...(typeof input.expandedByDefault === "boolean" ? { expandedByDefault: input.expandedByDefault } : {}),
+    })
+    : null
 }
 
 type AffinoCommitEditsRequest = Parameters<NonNullable<DataGridDataSource<unknown>["commitEdits"]>>[0]

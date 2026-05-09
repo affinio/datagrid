@@ -74,7 +74,7 @@ Backends can either:
   - Не пытаться компилировать expression в backend predicates.
   - Покрыть nested expression clone/serialization tests.
 
-  ## [] Slice 6: Sort / Range / Pagination / Group Codec
+  ## [x] Slice 6: Sort / Range / Pagination / Group Codec
 
   - Normalize range to `{ startRow, endRow }`.
   - Normalize sort to stable array `{ colId, sort }`.

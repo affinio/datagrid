@@ -3,7 +3,11 @@ import {
   normalizeDataGridServerAdvancedExpression,
   normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
+  normalizeDataGridServerGroupBy,
+  normalizeDataGridServerPagination,
   normalizeDataGridServerQuickFilter,
+  normalizeDataGridServerRange,
+  normalizeDataGridServerSortModel,
 } from "./index"
 
 describe("normalizeDataGridServerQuickFilter", () => {
@@ -175,5 +179,66 @@ describe("normalizeDataGridServerColumnFilters", () => {
         tokens: ["#fff", "#000"],
       },
     })
+  })
+})
+
+describe("normalizeDataGridServerRange", () => {
+  it("normalizes viewport range to exclusive backend rows", () => {
+    expect(normalizeDataGridServerRange({ start: 2.8, end: 5.9 })).toEqual({
+      startRow: 2,
+      endRow: 6,
+    })
+    expect(normalizeDataGridServerRange({ start: -4, end: -1 })).toEqual({
+      startRow: 0,
+      endRow: 0,
+    })
+    expect(normalizeDataGridServerRange({ start: 6, end: 3 })).toEqual({
+      startRow: 6,
+      endRow: 6,
+    })
+  })
+})
+
+describe("normalizeDataGridServerSortModel", () => {
+  it("drops invalid entries and maps stable column ids", () => {
+    expect(normalizeDataGridServerSortModel([
+      { key: " owner ", direction: "asc" },
+      { key: "", direction: "desc" },
+      { key: "amount", direction: "bad" as "asc" },
+    ], {
+      columnIdMap: { owner: "owner_name" },
+    })).toEqual([
+      { colId: "owner_name", sort: "asc" },
+    ])
+  })
+})
+
+describe("normalizeDataGridServerPagination", () => {
+  it("normalizes optional pagination input", () => {
+    expect(normalizeDataGridServerPagination({ pageSize: 25.9, currentPage: 2.2 })).toEqual({
+      pageSize: 25,
+      currentPage: 2,
+    })
+    expect(normalizeDataGridServerPagination({ enabled: false, pageSize: 25, currentPage: 2 })).toBeNull()
+    expect(normalizeDataGridServerPagination({ pageSize: Number.NaN, currentPage: 2 })).toBeNull()
+  })
+})
+
+describe("normalizeDataGridServerGroupBy", () => {
+  it("normalizes group fields with stable dedupe and mapping", () => {
+    expect(normalizeDataGridServerGroupBy({
+      fields: [" owner ", "", "service", "owner"],
+      expandedByDefault: false,
+    }, {
+      columnIdMap: { owner: "owner_name" },
+    })).toEqual({
+      fields: ["owner_name", "service"],
+      expandedByDefault: false,
+    })
+  })
+
+  it("drops empty group specs", () => {
+    expect(normalizeDataGridServerGroupBy(null)).toBeNull()
+    expect(normalizeDataGridServerGroupBy({ fields: [] })).toBeNull()
   })
 })
