@@ -3393,6 +3393,78 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("renders declarative quickFilter input only when enabled", async () => {
+    const defaultWrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+    expect(defaultWrapper.find('[data-datagrid-quick-filter-input="true"]').exists()).toBe(false)
+    defaultWrapper.unmount()
+
+    const disabledWrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        quickFilter: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+    expect(disabledWrapper.find('[data-datagrid-quick-filter-input="true"]').exists()).toBe(false)
+    disabledWrapper.unmount()
+
+    const enabledWrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        quickFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+    const input = enabledWrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.placeholder).toBe("Search rows")
+    enabledWrapper.unmount()
+  })
+
+  it("applies boolean quickFilter prop through the filterModel", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        quickFilter: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    await input.setValue("eu-west")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            quickFilter: {
+              query: "eu-west",
+              columns: ["owner", "region", "amount"],
+              mode: "contains",
+            },
+          }),
+          rowCount: 2,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
   it("resolves declarative quickFilter columns from searchable visible columns", async () => {
     const wrapper = mount(DataGrid, {
       props: {

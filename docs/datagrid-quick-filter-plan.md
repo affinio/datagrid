@@ -180,7 +180,7 @@
   - Перевести sandbox на декларативный quick-filter.
   - Проверить client row model и server data source demo.
 
-## [] Slice 15: Tests
+## [x] Slice 15: Tests
 
   - Contract/app tests: input renders only when enabled.
   - Typing tests: boolean и object prop.
