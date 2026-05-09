@@ -117,7 +117,7 @@
       - clear quick filter;
       - no uncontrolled state drift.
 
-  ## [] Slice 7: Sandbox/Demo UI
+  ## [x] Slice 7: Sandbox/Demo UI
 
   - Добавить простой input в controls.
   - Debounce только в UI, не в core.
