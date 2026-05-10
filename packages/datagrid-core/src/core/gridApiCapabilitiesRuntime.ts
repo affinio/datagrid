@@ -2,6 +2,7 @@ import type { DataGridRowModel } from "../models/index.js"
 import type {
   DataGridCoreSelectionService,
   DataGridCoreTransactionService,
+  DataGridCoreViewportService,
 } from "./gridCore"
 import {
   type DataGridBackpressureControlCapability,
@@ -13,6 +14,7 @@ import {
   type DataGridSelectionCapability,
   type DataGridSortFilterBatchCapability,
   type DataGridTransactionCapability,
+  type DataGridViewportPositionCapability,
   resolveBackpressureControlCapability,
   resolveColumnHistogramCapability,
   resolveComputeCapability,
@@ -22,6 +24,7 @@ import {
   resolveSelectionCapability,
   resolveSortFilterBatchCapability,
   resolveTransactionCapability,
+  resolveViewportPositionCapability,
 } from "./gridApiCapabilities"
 
 export interface DataGridApiCapabilityFlags {
@@ -34,6 +37,7 @@ export interface DataGridApiCapabilityFlags {
   readonly transaction: boolean
   readonly histogram: boolean
   readonly sortFilterBatch: boolean
+  readonly viewportPosition: boolean
 }
 
 export interface DataGridApiCapabilityRuntime<TRow = unknown> {
@@ -47,12 +51,14 @@ export interface DataGridApiCapabilityRuntime<TRow = unknown> {
   getComputeCapability: () => DataGridComputeCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   getColumnHistogramCapability: () => DataGridColumnHistogramCapability | null
+  getViewportPositionCapability: () => DataGridViewportPositionCapability | null
 }
 
 export interface CreateDataGridApiCapabilityRuntimeInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   getSelectionService: () => DataGridCoreSelectionService | null
   getTransactionService: () => DataGridCoreTransactionService | null
+  getViewportService: () => DataGridCoreViewportService | null
 }
 
 function createLazyResolver<T>(resolveValue: () => T): () => T {
@@ -99,6 +105,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const getColumnHistogramCapability = createLazyResolver<DataGridColumnHistogramCapability | null>(() =>
     resolveColumnHistogramCapability(input.rowModel),
   )
+  const getViewportPositionCapability = createLazyResolver<DataGridViewportPositionCapability | null>(() =>
+    resolveViewportPositionCapability(input.getViewportService()),
+  )
 
   const capabilities: DataGridApiCapabilityFlags = Object.freeze({
     get patch() {
@@ -128,6 +137,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     get sortFilterBatch() {
       return getSortFilterBatchCapability() !== null
     },
+    get viewportPosition() {
+      return getViewportPositionCapability() !== null
+    },
   })
 
   return {
@@ -141,5 +153,6 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     getComputeCapability,
     getSortFilterBatchCapability,
     getColumnHistogramCapability,
+    getViewportPositionCapability,
   }
 }

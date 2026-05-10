@@ -84,6 +84,16 @@ describe("data grid api facade contracts", () => {
       ],
     })
     let viewportRange = { start: -1, end: -1 }
+    const viewportPosition = {
+      version: 1 as const,
+      range: { start: 0, end: 1 },
+      anchor: { rowId: 1, rowIndex: 0, columnKey: "name", columnIndex: 1 },
+      scroll: { top: 64, left: 128 },
+    }
+    let restoredViewportPosition: unknown = null
+    let scrolledRow: unknown = null
+    let scrolledColumn: unknown = null
+    let scrolledCell: unknown = null
 
     const core = createDataGridCore({
       services: {
@@ -93,6 +103,21 @@ describe("data grid api facade contracts", () => {
           name: "viewport",
           setViewportRange(range) {
             viewportRange = { ...range }
+          },
+          getViewportPosition() {
+            return viewportPosition
+          },
+          setViewportPosition(position) {
+            restoredViewportPosition = position
+          },
+          scrollToRow(target) {
+            scrolledRow = target
+          },
+          scrollToColumn(target) {
+            scrolledColumn = target
+          },
+          scrollToCell(target) {
+            scrolledCell = target
           },
         },
       },
@@ -113,6 +138,10 @@ describe("data grid api facade contracts", () => {
     api.rows.setPageSize(1)
     api.rows.setCurrentPage(1)
     api.view.setViewportRange({ start: 0, end: 1 })
+    api.view.setViewportPosition(viewportPosition)
+    api.view.scrollToRow({ rowId: 1, align: "start" })
+    api.view.scrollToColumn({ columnKey: "name", align: "nearest" })
+    api.view.scrollToCell({ rowId: 1, columnKey: "name", align: "center" })
     api.columns.setVisibility("id", false)
     api.columns.setWidth("name", 280)
     api.columns.setPin("name", "left")
@@ -152,6 +181,12 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.pagination.totalRowCount).toBe(2)
     expect(rowSnapshot.viewportRange).toEqual({ start: 0, end: 0 })
     expect(viewportRange).toEqual({ start: 0, end: 1 })
+    expect(api.view.getViewportPosition()).toEqual(viewportPosition)
+    expect(restoredViewportPosition).toEqual(viewportPosition)
+    expect(scrolledRow).toEqual({ rowId: 1, align: "start" })
+    expect(scrolledColumn).toEqual({ columnKey: "name", align: "nearest" })
+    expect(scrolledCell).toEqual({ rowId: 1, columnKey: "name", align: "center" })
+    expect(api.capabilities.viewportPosition).toBe(true)
     expect(api.rows.getCount()).toBe(1)
     expect(api.rows.getPagination().currentPage).toBe(1)
     const maxIndex = Math.max(0, api.rows.getCount() - 1)
@@ -162,6 +197,37 @@ describe("data grid api facade contracts", () => {
     expect(api.columns.get("id")?.visible).toBe(false)
     expect(api.columns.get("name")?.pin).toBe("left")
     expect(api.columns.get("name")?.width).toBe(280)
+  })
+
+  it("treats viewport position as an optional view capability", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "name", label: "Name" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const position = {
+      version: 1 as const,
+      range: { start: 0, end: 0 },
+      anchor: { rowId: 1, rowIndex: 0, columnKey: "name", columnIndex: 0 },
+      scroll: { top: 0, left: 0 },
+    }
+
+    expect(api.capabilities.viewportPosition).toBe(false)
+    expect(api.meta.getCapabilities().viewportPosition).toBe(false)
+    expect(api.view.getViewportPosition()).toBeNull()
+    expect(() => api.view.setViewportPosition(position)).not.toThrow()
+    expect(() => api.view.scrollToRow({ rowId: 1 })).not.toThrow()
+    expect(() => api.view.scrollToColumn({ columnKey: "name" })).not.toThrow()
+    expect(() => api.view.scrollToCell({ rowId: 1, columnKey: "name" })).not.toThrow()
+    expect(() => api.view.setViewportPosition(position, { strict: true })).toThrow(/setViewportPosition/)
   })
 
   it("exposes style histograms through the columns namespace", () => {
@@ -1328,6 +1394,7 @@ describe("data grid api facade contracts", () => {
     expect(capabilities.dataMutation).toBe(true)
     expect(capabilities.backpressureControl).toBe(false)
     expect(capabilities.compute).toBe(true)
+    expect(capabilities.viewportPosition).toBe(false)
     expect(runtime.lifecycleState).toBe("idle")
     expect(api.meta.getApiVersion()).toBe(DATAGRID_PUBLIC_PACKAGE_VERSION)
     expect(api.meta.getProtocolVersion()).toBe(DATAGRID_PUBLIC_PROTOCOL_VERSION)

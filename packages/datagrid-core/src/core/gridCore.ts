@@ -2,6 +2,13 @@ import type { DataGridColumnModel, DataGridEditModel, DataGridRowModel, DataGrid
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type {
+  DataGridSetViewportPositionOptions,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
+} from "./gridApiViewContracts"
+import type {
   DataGridTransactionInput,
   DataGridTransactionSnapshot,
 } from "./transactionService"
@@ -84,6 +91,14 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
   readonly name: "viewport"
   getViewportRange?(): DataGridViewportRange
   setViewportRange?(range: DataGridViewportRange): void
+  getViewportPosition?(): DataGridViewportPositionSnapshot | null
+  setViewportPosition?(
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ): void
+  scrollToRow?(target: DataGridViewportRowTarget): void
+  scrollToColumn?(target: DataGridViewportColumnTarget): void
+  scrollToCell?(target: DataGridViewportCellTarget): void
   setRowHeightMode?(mode: "fixed" | "auto"): void
   setBaseRowHeight?(height: number): void
   measureRowHeight?(): void

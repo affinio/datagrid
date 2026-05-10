@@ -69,6 +69,13 @@ import type {
 } from "./gridApiCellRefresh"
 import type { DataGridCore } from "./gridCore"
 import type {
+  DataGridSetViewportPositionOptions,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
+} from "./gridApiViewContracts"
+import type {
   DataGridTransactionInput,
   DataGridTransactionSnapshot,
 } from "./transactionService"
@@ -217,6 +224,14 @@ export interface DataGridApiColumnsNamespace {
 
 export interface DataGridApiViewNamespace {
   setViewportRange(range: DataGridViewportRange): void
+  getViewportPosition(): DataGridViewportPositionSnapshot | null
+  setViewportPosition(
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ): void
+  scrollToRow(target: DataGridViewportRowTarget): void
+  scrollToColumn(target: DataGridViewportColumnTarget): void
+  scrollToCell(target: DataGridViewportCellTarget): void
   setRowHeightMode(mode: "fixed" | "auto"): void
   setBaseRowHeight(height: number): void
   measureRowHeight(): void
@@ -512,6 +527,7 @@ export interface DataGridApiCapabilities {
   readonly transaction: boolean
   readonly histogram: boolean
   readonly sortFilterBatch: boolean
+  readonly viewportPosition: boolean
 }
 
 export interface DataGridApi<TRow = unknown> {

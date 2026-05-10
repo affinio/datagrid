@@ -9,6 +9,13 @@ import type {
   DataGridCellsRefreshListener,
 } from "./gridApiCellRefresh"
 import type { DataGridCoreViewportService } from "./gridCore"
+import type {
+  DataGridSetViewportPositionOptions,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
+} from "./gridApiViewContracts"
 
 export interface DataGridApiCellRefreshQueue {
   queueByRowKeys: (
@@ -25,6 +32,14 @@ export interface DataGridApiCellRefreshQueue {
 
 export interface DataGridApiViewMethods {
   setViewportRange: (range: DataGridViewportRange) => void
+  getViewportPosition: () => DataGridViewportPositionSnapshot | null
+  setViewportPosition: (
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ) => void
+  scrollToRow: (target: DataGridViewportRowTarget) => void
+  scrollToColumn: (target: DataGridViewportColumnTarget) => void
+  scrollToCell: (target: DataGridViewportCellTarget) => void
   setRowHeightMode: (mode: "fixed" | "auto") => void
   setBaseRowHeight: (height: number) => void
   measureRowHeight: () => void
@@ -86,10 +101,43 @@ export function createDataGridApiViewMethods<TRow = unknown>(
     return Math.max(1, Math.trunc(value))
   }
 
+  const assertViewportPositionSupport = (
+    operation: string,
+    options?: DataGridSetViewportPositionOptions,
+  ): boolean => {
+    if (!options?.strict) {
+      return false
+    }
+    throw new Error(`[DataGridApi] viewport service does not implement ${operation} capability.`)
+  }
+
   return {
     setViewportRange(range: DataGridViewportRange) {
       rowModel.setViewportRange(range)
       getViewportService()?.setViewportRange?.(range)
+    },
+    getViewportPosition() {
+      return getViewportService()?.getViewportPosition?.() ?? null
+    },
+    setViewportPosition(
+      position: DataGridViewportPositionSnapshot,
+      options?: DataGridSetViewportPositionOptions,
+    ) {
+      const viewportService = getViewportService()
+      if (typeof viewportService?.setViewportPosition !== "function") {
+        assertViewportPositionSupport("setViewportPosition", options)
+        return
+      }
+      viewportService.setViewportPosition(position, options)
+    },
+    scrollToRow(target: DataGridViewportRowTarget) {
+      getViewportService()?.scrollToRow?.(target)
+    },
+    scrollToColumn(target: DataGridViewportColumnTarget) {
+      getViewportService()?.scrollToColumn?.(target)
+    },
+    scrollToCell(target: DataGridViewportCellTarget) {
+      getViewportService()?.scrollToCell?.(target)
     },
     setRowHeightMode(mode: "fixed" | "auto") {
       getViewportService()?.setRowHeightMode?.(mode)

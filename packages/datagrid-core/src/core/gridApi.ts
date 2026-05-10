@@ -107,6 +107,17 @@ export type {
   DataGridPivotInteropSnapshot,
 } from "./gridApiPivotLayout"
 
+export type {
+  DataGridSetViewportPositionOptions,
+  DataGridViewportAlignment,
+  DataGridViewportAnchorSnapshot,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
+  DataGridViewportScrollSnapshot,
+} from "./gridApiViewContracts"
+
 export function createDataGridApi<TRow = unknown>(
   options: CreateDataGridApiOptions<TRow>,
 ): DataGridApi<TRow> {
@@ -133,6 +144,7 @@ export function createDataGridApi<TRow = unknown>(
     rowModel,
     getSelectionService,
     getTransactionService,
+    getViewportService,
   })
   const {
     capabilities,

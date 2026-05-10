@@ -42,6 +42,7 @@ function cloneCapabilities(capabilities: DataGridApiCapabilities): DataGridApiCa
     transaction: capabilities.transaction,
     histogram: capabilities.histogram,
     sortFilterBatch: capabilities.sortFilterBatch,
+    viewportPosition: capabilities.viewportPosition,
   }
 }
 

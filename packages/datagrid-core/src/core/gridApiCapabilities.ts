@@ -12,6 +12,7 @@ import type {
 import type {
   DataGridCoreSelectionService,
   DataGridCoreTransactionService,
+  DataGridCoreViewportService,
 } from "./gridCore"
 
 export type DataGridSelectionCapability = Required<
@@ -71,6 +72,10 @@ export type DataGridBackpressureControlCapability = {
   resumeBackpressure: () => boolean
   flushBackpressure: () => Promise<void> | void
 }
+
+export type DataGridViewportPositionCapability = Required<
+  Pick<DataGridCoreViewportService, "getViewportPosition" | "setViewportPosition">
+>
 
 export type DataGridTransactionCapability = Required<
   Pick<
@@ -173,6 +178,24 @@ export function resolveTransactionCapability(
     canRedoTransaction: service.canRedoTransaction,
     undoTransaction: service.undoTransaction,
     redoTransaction: service.redoTransaction,
+  }
+}
+
+export function resolveViewportPositionCapability(
+  service: DataGridCoreViewportService | null,
+): DataGridViewportPositionCapability | null {
+  if (!service) {
+    return null
+  }
+  if (
+    typeof service.getViewportPosition !== "function" ||
+    typeof service.setViewportPosition !== "function"
+  ) {
+    return null
+  }
+  return {
+    getViewportPosition: service.getViewportPosition,
+    setViewportPosition: service.setViewportPosition,
   }
 }
 

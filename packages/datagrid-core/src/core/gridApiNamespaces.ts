@@ -107,6 +107,11 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setColumnPin: DataGridApi<TRow>["columns"]["setPin"]
   getColumnHistogram: DataGridApi<TRow>["columns"]["getHistogram"]
   setViewportRange: DataGridApi<TRow>["view"]["setViewportRange"]
+  getViewportPosition: DataGridApi<TRow>["view"]["getViewportPosition"]
+  setViewportPosition: DataGridApi<TRow>["view"]["setViewportPosition"]
+  scrollToRow: DataGridApi<TRow>["view"]["scrollToRow"]
+  scrollToColumn: DataGridApi<TRow>["view"]["scrollToColumn"]
+  scrollToCell: DataGridApi<TRow>["view"]["scrollToCell"]
   setRowHeightMode: DataGridApi<TRow>["view"]["setRowHeightMode"]
   setBaseRowHeight: DataGridApi<TRow>["view"]["setBaseRowHeight"]
   measureRowHeight: DataGridApi<TRow>["view"]["measureRowHeight"]
@@ -272,6 +277,11 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     columns,
     view: {
       setViewportRange: methodSet.setViewportRange,
+      getViewportPosition: methodSet.getViewportPosition,
+      setViewportPosition: methodSet.setViewportPosition,
+      scrollToRow: methodSet.scrollToRow,
+      scrollToColumn: methodSet.scrollToColumn,
+      scrollToCell: methodSet.scrollToCell,
       setRowHeightMode: methodSet.setRowHeightMode,
       setBaseRowHeight: methodSet.setBaseRowHeight,
       measureRowHeight: methodSet.measureRowHeight,
