@@ -1,6 +1,6 @@
 # DataGrid Unified Grid API
 
-Updated: `2026-03-05`
+Updated: `2026-05-10`
 
 `DataGridApi` is the semver-safe, namespace-based facade for model/service operations in `@affino/datagrid-core`.
 
@@ -54,6 +54,7 @@ Flat API methods are removed from `DataGridApi`.
 - `transaction`
 - `histogram`
 - `sortFilterBatch`
+- `viewportPosition`
 
 Use it as guard before capability-dependent mutating calls.
 
@@ -62,6 +63,7 @@ Use it as guard before capability-dependent mutating calls.
 - `rows.applyEdits(...)` mutates data (optionally with reapply policy).
 - `rows.batch(...)` is an explicit bulk mutation boundary with one coalesced facade event-cycle.
 - `view.reapply()` recomputes projection only.
+- `view.getViewportPosition()/setViewportPosition(...)` expose semantic viewport state when the adapter provides the viewport capability.
 - `pivot` remains a separate analytical subsystem (intentionally not nested under `rows`).
 - `data.pause()/resume()/flush()` is the public backpressure control surface for supported server/data-source row models.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).
@@ -128,6 +130,41 @@ Semantics:
 - Per-row resize/autosize persistence is owned by Core `view` state, not sandbox/component-local maps.
 - `rowIndex` addresses displayed row index in active row model projection.
 - Passing `null` to `setRowHeightOverride` removes the override for that row.
+
+## Persisting sort, selection, and viewport position
+
+Use unified state as the persistence boundary for saved views and page reload restore. By default, `api.state.get()` includes model, column layout, and selection state. Viewport position is opt-in because it depends on an adapter viewport capability.
+
+```ts
+const savedState = api.state.get({ includeViewportPosition: true })
+
+localStorage.setItem("orders-grid-state", JSON.stringify(savedState))
+```
+
+Restore after rows, columns, and the adapter viewport are ready:
+
+```ts
+const rawState = localStorage.getItem("orders-grid-state")
+const migratedState = rawState ? api.state.migrate(JSON.parse(rawState)) : null
+
+if (migratedState) {
+  api.state.set(migratedState, {
+    applyViewportPosition: true,
+  })
+}
+```
+
+Restore order is semantic: row projection state such as sort, filter, group, pivot, and pagination is applied first, then column layout, selection, and finally viewport position. The viewport anchor prefers `rowId` and `columnKey`; if those cannot be resolved after the new projection or column visibility is applied, it falls back to `rowIndex` and `columnIndex`, then to raw `scroll.top` and `scroll.left`.
+
+The public viewport API is:
+
+- `api.view.getViewportPosition()`
+- `api.view.setViewportPosition(position, options?)`
+- `api.view.scrollToRow(target)`
+- `api.view.scrollToColumn(target)`
+- `api.view.scrollToCell(target)`
+
+DOM scroll remains an adapter detail. Consumers should persist the semantic snapshot returned by `api.state.get({ includeViewportPosition: true })` or `api.view.getViewportPosition()`, not read scroll offsets directly from rendered elements.
 
 ## Viewport integration boundary
 
