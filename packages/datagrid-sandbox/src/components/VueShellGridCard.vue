@@ -315,6 +315,7 @@
         :base-row-height="baseRowHeight"
         :row-hover="rowHover"
         :striped-rows="stripedRows"
+        :state-persistence="sandboxViewportPersistence"
         :grid-lines="gridLines"
         :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
@@ -1403,6 +1404,19 @@ const showPlaceholderTailControls = computed(() => {
   return props.mode === "base" && !props.timesheetShowcase && viewMode.value === "table";
 });
 
+const sandboxViewportPersistenceEnabled = computed(() => {
+  return props.mode === "base"
+    && !props.groupedShowcase
+    && !props.ganttShowcase
+    && !props.timesheetShowcase;
+});
+
+const sandboxViewportPersistence = computed(() => {
+  return sandboxViewportPersistenceEnabled.value
+    ? "affino-datagrid-sandbox:vue-shell-base-grid:state-with-viewport"
+    : null;
+});
+
 function buildSandboxPlaceholderRow(visualRowIndex: number): Record<string, unknown> {
   const now = new Date();
   const startDateIso = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
@@ -2269,7 +2283,7 @@ const applyStatePayload = (): void => {
   if (!migrated) {
     return;
   }
-  if (gridRef.value?.applyState(migrated)) {
+  if (gridRef.value?.applyState(migrated, { applyViewportPosition: true })) {
     stateModel.value = migrated;
     stateOutputText.value = serializePretty(migrated);
   }

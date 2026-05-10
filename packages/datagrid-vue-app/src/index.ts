@@ -114,6 +114,11 @@ export type {
   DataGridSavedViewStorageLike,
 } from "./config/dataGridSavedView"
 export type {
+  DataGridStatePersistenceOptions,
+  DataGridStatePersistenceProp,
+  DataGridStatePersistenceStorage,
+} from "./config/dataGridStatePersistence"
+export type {
   DataGridColumnLayoutLabels,
   DataGridColumnLayoutOptions,
   DataGridColumnLayoutProp,

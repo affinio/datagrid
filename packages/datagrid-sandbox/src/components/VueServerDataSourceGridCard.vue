@@ -46,6 +46,7 @@
           :report-center-pane-diagnostics="reportCenterPaneDiagnostics"
           :report-fill-plumbing-state="reportFillPlumbingState"
           :report-fill-plumbing-detail="reportFillPlumbingDetail"
+          state-persistence="affino-datagrid-sandbox:vue-server-data-source-grid:state-with-viewport"
           @update:state="handleStateUpdate"
           @selection-change="syncSelectionAggregatesLabel"
           @cell-edit="handleCellEdit"

@@ -133,6 +133,11 @@ export default defineComponent({
       columnSnapshot: runtime.columnSnapshot,
       getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
       resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
+      getViewportPosition: runtime.getViewportPosition,
+      setViewportPosition: runtime.setViewportPosition,
+      scrollToRow: runtime.scrollToRow,
+      scrollToColumn: runtime.scrollToColumn,
+      scrollToCell: runtime.scrollToCell,
     }
 
     const syncPaginationState = (): void => {

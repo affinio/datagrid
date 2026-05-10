@@ -144,6 +144,11 @@ type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
   virtualWindow: UseDataGridRuntimeResult<TRow>["virtualWindow"]
   columnSnapshot: UseDataGridRuntimeResult<TRow>["columnSnapshot"]
   setVirtualWindowRange?: (range: { start: number; end: number }) => void
+  getViewportPosition?: UseDataGridRuntimeResult<TRow>["getViewportPosition"]
+  setViewportPosition?: UseDataGridRuntimeResult<TRow>["setViewportPosition"]
+  scrollToRow?: UseDataGridRuntimeResult<TRow>["scrollToRow"]
+  scrollToColumn?: UseDataGridRuntimeResult<TRow>["scrollToColumn"]
+  scrollToCell?: UseDataGridRuntimeResult<TRow>["scrollToCell"]
 } & {
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null
   resolveBodyRowIndexById: (rowId: string | number) => number

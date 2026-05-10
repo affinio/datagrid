@@ -401,6 +401,20 @@ function findToolbarAction(wrapper: ReturnType<typeof mount>, action: string) {
   return wrapper.find(`[data-datagrid-toolbar-action="${action}"]`)
 }
 
+function createMemoryStorage(initial: Record<string, string> = {}) {
+  const values = new Map<string, string>(Object.entries(initial))
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value)
+    },
+    removeItem: (key: string) => {
+      values.delete(key)
+    },
+    read: (key: string) => values.get(key) ?? null,
+  }
+}
+
 type ResolvedRowModelSnapshot = Record<string, unknown> & {
   rowCount?: number
 }
@@ -6828,6 +6842,100 @@ describe("DataGrid app facade contract", () => {
 
     source.unmount()
     target.unmount()
+  })
+
+  it("persists unified state with viewport position through declarative statePersistence", async () => {
+    const storage = createMemoryStorage()
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        sortModel: [{ key: "amount", direction: "desc" }],
+        statePersistence: {
+          key: "grid-state",
+          storage,
+          debounceMs: 0,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    wrapper.unmount()
+
+    const saved = JSON.parse(storage.read("grid-state") ?? "null") as DataGridUnifiedState<Record<string, unknown>> | null
+
+    expect(saved?.rows.snapshot.sortModel).toEqual([{ key: "amount", direction: "desc" }])
+    expect(saved?.view?.viewportPosition).toMatchObject({
+      version: 1,
+      range: expect.any(Object),
+    })
+  })
+
+  it("restores declarative statePersistence before emitting ready", async () => {
+    const storage = createMemoryStorage({
+      "grid-state": JSON.stringify({
+        version: 1,
+        rows: {
+          snapshot: {
+            kind: "client",
+            rowCount: 3,
+            rows: [],
+            sortModel: [{ key: "amount", direction: "desc" }],
+            filterModel: null,
+            groupBy: null,
+            groupExpansion: null,
+            pagination: { pageSize: 100, currentPage: 0 },
+            viewportRange: { start: 0, end: 0 },
+            loading: false,
+            initialLoading: false,
+            refreshing: false,
+            revision: 0,
+            projection: null,
+            pivotModel: null,
+            pivotColumns: [],
+          },
+          aggregationModel: null,
+        },
+        columns: {
+          order: ["owner", "region", "amount"],
+          visibility: { owner: true, region: true, amount: true },
+          widths: { owner: 180, region: 160, amount: 140 },
+          pins: { owner: "none", region: "none", amount: "none" },
+        },
+        selection: null,
+        rowSelection: null,
+        transaction: null,
+        view: {
+          viewportPosition: {
+            version: 1,
+            range: { start: 0, end: 0 },
+            anchor: { rowId: "r1", rowIndex: 0, columnKey: "owner", columnIndex: 0 },
+            scroll: { top: 0, left: 0 },
+          },
+        },
+      } satisfies DataGridUnifiedState<Record<string, unknown>>),
+    })
+    let readyState: DataGridUnifiedState<Record<string, unknown>> | null = null
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        statePersistence: {
+          key: "grid-state",
+          storage,
+        },
+        onReady: (payload: { api: { state: { get: () => DataGridUnifiedState<Record<string, unknown>> } } }) => {
+          readyState = payload.api.state.get()
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(readyState?.rows.snapshot.sortModel).toEqual([{ key: "amount", direction: "desc" }])
+    expect(resolveVm(wrapper).getState?.()?.rows.snapshot.sortModel).toEqual([{ key: "amount", direction: "desc" }])
+
+    wrapper.unmount()
   })
 
   it("round-trips saved views through facade helpers including view mode", async () => {
