@@ -83,6 +83,11 @@ export {
 } from "./viewport/dataGridViewportController.js"
 
 export {
+  createDataGridViewportCoreService,
+  type CreateDataGridViewportCoreServiceOptions,
+} from "./viewport/dataGridViewportCoreService.js"
+
+export {
   createDataSourceBackedRowModel,
   type CreateDataSourceBackedRowModelOptions,
   type DataSourceBackedRowModel,
