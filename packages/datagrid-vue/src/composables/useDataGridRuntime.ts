@@ -19,6 +19,7 @@ import type {
   DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridViewportRange,
+  DataGridGetStateOptions,
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "@affino/datagrid-core"
@@ -126,7 +127,7 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   hasPlugin: (id: string) => boolean
   listPlugins: () => readonly string[]
   clearPlugins: () => void
-  getUnifiedState: () => DataGridUnifiedState<TRow>
+  getUnifiedState: (options?: DataGridGetStateOptions) => DataGridUnifiedState<TRow>
   migrateUnifiedState: (
     state: unknown,
     options?: DataGridMigrateStateOptions,

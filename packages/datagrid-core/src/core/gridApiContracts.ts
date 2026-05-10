@@ -376,19 +376,29 @@ export interface DataGridUnifiedRowsState<TRow = unknown> {
   aggregationModel: DataGridAggregationModel<TRow> | null
 }
 
+export interface DataGridUnifiedViewState {
+  viewportPosition: DataGridViewportPositionSnapshot | null
+}
+
 export interface DataGridUnifiedState<TRow = unknown> {
   version: 1
   rows: DataGridUnifiedRowsState<TRow>
   columns: DataGridUnifiedColumnState
+  view?: DataGridUnifiedViewState
   selection: DataGridSelectionSnapshot | null
   rowSelection: DataGridRowSelectionSnapshot | null
   transaction: DataGridTransactionSnapshot | null
+}
+
+export interface DataGridGetStateOptions {
+  includeViewportPosition?: boolean
 }
 
 export interface DataGridSetStateOptions {
   applyColumns?: boolean
   applySelection?: boolean
   applyViewport?: boolean
+  applyViewportPosition?: boolean
   strict?: boolean
 }
 
@@ -397,7 +407,7 @@ export interface DataGridMigrateStateOptions {
 }
 
 export interface DataGridApiStateNamespace<TRow = unknown> {
-  get(): DataGridUnifiedState<TRow>
+  get(options?: DataGridGetStateOptions): DataGridUnifiedState<TRow>
   migrate(state: unknown, options?: DataGridMigrateStateOptions): DataGridUnifiedState<TRow> | null
   set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): void
 }

@@ -20,14 +20,16 @@ import type {
 } from "./gridApiCapabilities"
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
 import type {
+  DataGridGetStateOptions,
   DataGridMigrateStateOptions,
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "./gridApiContracts"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
+import type { DataGridViewportPositionSnapshot } from "./gridApiViewContracts"
 
 export interface DataGridApiStateMethods<TRow = unknown> {
-  getUnifiedState: () => DataGridUnifiedState<TRow>
+  getUnifiedState: (options?: DataGridGetStateOptions) => DataGridUnifiedState<TRow>
   migrateUnifiedState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
   setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => void
 }
@@ -40,6 +42,11 @@ export interface CreateDataGridApiStateMethodsInput<TRow = unknown> {
   getTransactionCapability: () => DataGridTransactionCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   setViewportRange: (range: DataGridViewportRange) => void
+  getViewportPosition: () => DataGridViewportPositionSnapshot | null
+  setViewportPosition: (
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetStateOptions,
+  ) => void
   onSelectionChanged?: (snapshot: DataGridSelectionSnapshot | null) => void
   onRowSelectionChanged?: (snapshot: DataGridRowSelectionSnapshot | null) => void
   onStateImported?: (state: DataGridUnifiedState<TRow>) => void
@@ -138,6 +145,44 @@ function normalizePaginationInput(value: unknown): DataGridPaginationInput | nul
   return { pageSize, currentPage }
 }
 
+function normalizeNullableNumber(value: unknown): number | null {
+  return Number.isFinite(value) ? Math.trunc(value as number) : null
+}
+
+function normalizeViewportPosition(value: unknown): DataGridViewportPositionSnapshot | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const candidate = value as Partial<DataGridViewportPositionSnapshot>
+  if (candidate.version !== 1) {
+    return null
+  }
+  const range = normalizeViewportRange(candidate.range)
+  if (!range) {
+    return null
+  }
+  const anchor = candidate.anchor && typeof candidate.anchor === "object"
+    ? {
+        rowId: candidate.anchor.rowId ?? null,
+        rowIndex: normalizeNullableNumber(candidate.anchor.rowIndex),
+        columnKey: typeof candidate.anchor.columnKey === "string" ? candidate.anchor.columnKey : null,
+        columnIndex: normalizeNullableNumber(candidate.anchor.columnIndex),
+      }
+    : null
+  const scroll = candidate.scroll && typeof candidate.scroll === "object"
+    ? {
+        top: Number.isFinite(candidate.scroll.top) ? Math.max(0, candidate.scroll.top) : 0,
+        left: Number.isFinite(candidate.scroll.left) ? Math.max(0, candidate.scroll.left) : 0,
+      }
+    : null
+  return {
+    version: 1,
+    range,
+    anchor,
+    scroll,
+  }
+}
+
 export function createDataGridApiStateMethods<TRow = unknown>(
   input: CreateDataGridApiStateMethodsInput<TRow>,
 ): DataGridApiStateMethods<TRow> {
@@ -149,6 +194,8 @@ export function createDataGridApiStateMethods<TRow = unknown>(
     getTransactionCapability,
     getSortFilterBatchCapability,
     setViewportRange,
+    getViewportPosition,
+    setViewportPosition,
     onSelectionChanged,
     onRowSelectionChanged,
     onStateImported,
@@ -177,7 +224,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
   }
 
   return {
-    getUnifiedState() {
+    getUnifiedState(options: DataGridGetStateOptions = {}) {
       const rowSnapshot = rowModel.getSnapshot()
       const columnSnapshot = columnModel.getSnapshot()
       const visibility: Record<string, boolean> = {}
@@ -188,7 +235,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         widths[column.key] = column.width
         pins[column.key] = column.pin
       }
-      return {
+      const state: DataGridUnifiedState<TRow> = {
         version: 1,
         rows: {
           snapshot: cloneSerializable(rowSnapshot),
@@ -204,6 +251,12 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         rowSelection: cloneSerializable(getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null),
         transaction: cloneSerializable(getTransactionCapability()?.getTransactionSnapshot() ?? null),
       }
+      if (options.includeViewportPosition) {
+        state.view = {
+          viewportPosition: cloneSerializable(getViewportPosition()),
+        }
+      }
+      return state
     },
     migrateUnifiedState(state: unknown, options?: DataGridMigrateStateOptions) {
       return migrateUnifiedState(state, options)
@@ -289,6 +342,13 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           }
         } else if (options.strict && migratedState.rowSelection) {
           throw new Error("[DataGridApi] Cannot restore rowSelection state without rowSelection capability.")
+        }
+      }
+
+      if (options.applyViewport !== false && options.applyViewportPosition !== false) {
+        const viewportPosition = normalizeViewportPosition(migratedState.view?.viewportPosition)
+        if (viewportPosition) {
+          setViewportPosition(viewportPosition, { strict: options.strict })
         }
       }
 

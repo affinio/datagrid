@@ -2283,6 +2283,84 @@ describe("data grid api facade contracts", () => {
     expect(api.selection.getSnapshot()).toEqual(saved.selection)
   })
 
+  it("exports and restores viewport position through unified state opt-in", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops" }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "id", label: "ID" },
+        { key: "owner", label: "Owner" },
+      ],
+    })
+    const viewportPosition = {
+      version: 1 as const,
+      range: { start: 1, end: 1 },
+      anchor: { rowId: 2, rowIndex: 1, columnKey: "owner", columnIndex: 1 },
+      scroll: { top: 48, left: 96 },
+    }
+    let restoredViewportPosition: unknown = null
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        viewport: {
+          name: "viewport",
+          getViewportPosition() {
+            return viewportPosition
+          },
+          setViewportPosition(position) {
+            restoredViewportPosition = position
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const defaultState = api.state.get()
+    const stateWithViewport = api.state.get({ includeViewportPosition: true })
+
+    expect(defaultState.view).toBeUndefined()
+    expect(stateWithViewport.view?.viewportPosition).toEqual(viewportPosition)
+
+    api.state.set(stateWithViewport, { applyViewportPosition: false })
+    expect(restoredViewportPosition).toBeNull()
+
+    api.state.set(stateWithViewport)
+    expect(restoredViewportPosition).toEqual(viewportPosition)
+  })
+
+  it("fails strict viewport position state restore when capability is missing", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const state = api.state.get()
+    state.view = {
+      viewportPosition: {
+        version: 1,
+        range: { start: 0, end: 0 },
+        anchor: { rowId: 1, rowIndex: 0, columnKey: "owner", columnIndex: 0 },
+        scroll: { top: 0, left: 0 },
+      },
+    }
+
+    expect(() => api.state.set(state)).not.toThrow()
+    expect(() => api.state.set(state, { strict: true })).toThrow(/setViewportPosition/)
+  })
+
   it("roundtrips serializable column style filters through unified state", () => {
     const rowModel = createClientRowModel({
       rows: [
