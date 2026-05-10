@@ -1,6 +1,6 @@
 import { computed, ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
+import type { DataGridColumnSnapshot, DataGridViewportPositionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppViewport } from "../useDataGridAppViewport"
 
 function createScrollEvent(target: HTMLElement): Event {
@@ -87,6 +87,25 @@ function makeRows(count: number) {
 
 function makeBodyViewport(scrollLeft = 0, clientWidth = 800): HTMLElement {
   return { scrollTop: 0, scrollLeft, clientHeight: 600, clientWidth } as HTMLElement
+}
+
+function createEventHarness() {
+  const listeners = new Map<string, Set<() => void>>()
+  return {
+    on(event: string, listener: () => void): () => void {
+      const eventListeners = listeners.get(event) ?? new Set<() => void>()
+      eventListeners.add(listener)
+      listeners.set(event, eventListeners)
+      return () => {
+        eventListeners.delete(listener)
+      }
+    },
+    emit(event: string): void {
+      for (const listener of listeners.get(event) ?? []) {
+        listener()
+      }
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +777,101 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.mainTrackWidth.value).toBe(1000)
     cols.value = makeColumns(20, 100)
     expect(viewport.mainTrackWidth.value).toBe(2000)
+  })
+
+  // -------------------------------------------------------------------------
+  // Runtime viewport position binding
+  // -------------------------------------------------------------------------
+
+  it("syncs DOM scroll into runtime viewport position state", () => {
+    const rows = makeRows(100)
+    const setViewportPosition = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(10, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const element = { scrollTop: 120, scrollLeft: 250, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+    viewport.syncViewportFromDom()
+
+    expect(setViewportPosition).toHaveBeenCalledTimes(1)
+    expect(setViewportPosition).toHaveBeenLastCalledWith({
+      version: 1,
+      range: { start: 5, end: 11 },
+      anchor: {
+        rowId: "r6",
+        rowIndex: 6,
+        columnKey: "col-2",
+        columnIndex: 2,
+      },
+      scroll: { top: 120, left: 250 },
+    })
+  })
+
+  it("restores DOM scroll from runtime viewport position after state import", () => {
+    const rows = makeRows(100)
+    const events = createEventHarness()
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 40, end: 45 },
+      anchor: {
+        rowId: "r42",
+        rowIndex: 42,
+        columnKey: "col-3",
+        columnIndex: 3,
+      },
+      scroll: { top: 10, left: 10 },
+    }
+    const setViewportPosition = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getViewportPosition: () => viewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(8, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(element.scrollTop).toBe(840)
+    expect(element.scrollLeft).toBe(300)
+    expect(setViewportPosition).not.toHaveBeenCalled()
+    expect(viewport.renderedViewportRange.value).toEqual({ start: 42, end: 46 })
   })
 
   // -------------------------------------------------------------------------

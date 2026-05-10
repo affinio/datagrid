@@ -75,6 +75,7 @@ export function createDataGridRuntime<TRow = unknown>(
   })
   const columnModel = createDataGridColumnModel({ columns: options.columns })
   let viewportRange: DataGridViewportRange = { start: 0, end: 0 }
+  let viewportAnchorRowIndex: number | null = null
   let viewportColumnIndex = 0
   let viewportScroll = { top: 0, left: 0 }
   let virtualizationEnabled = true
@@ -122,7 +123,11 @@ export function createDataGridRuntime<TRow = unknown>(
   }
 
   const resolveViewportAnchor = (): DataGridViewportPositionSnapshot["anchor"] => {
-    const rowIndex = normalizeRange(viewportRange.start, viewportRange.end, rowModel.getRowCount()).start
+    const rowCount = rowModel.getRowCount()
+    const fallbackRowIndex = normalizeRange(viewportRange.start, viewportRange.end, rowCount).start
+    const rowIndex = rowCount > 0
+      ? Math.min(viewportAnchorRowIndex ?? fallbackRowIndex, rowCount - 1)
+      : 0
     const visibleColumns = columnModel.getSnapshot().visibleColumns
     const columnIndex = Math.min(viewportColumnIndex, Math.max(0, visibleColumns.length - 1))
     const row = rowModel.getRow(rowIndex)
@@ -137,6 +142,7 @@ export function createDataGridRuntime<TRow = unknown>(
 
   const setViewportRowIndex = (rowIndex: number): void => {
     const rowCount = rowModel.getRowCount()
+    viewportAnchorRowIndex = rowCount > 0 ? Math.min(rowIndex, rowCount - 1) : 0
     viewportRange = normalizeRange(rowIndex, rowIndex, rowCount)
     rowModel.setViewportRange(viewportRange)
   }
@@ -162,6 +168,7 @@ export function createDataGridRuntime<TRow = unknown>(
     name: "viewport",
     setViewportRange(range) {
       viewportRange = normalizeRange(range.start, range.end, rowModel.getRowCount())
+      viewportAnchorRowIndex = viewportRange.start
       rowModel.setViewportRange(viewportRange)
     },
     getViewportRange() {
@@ -184,7 +191,7 @@ export function createDataGridRuntime<TRow = unknown>(
       }
       const rowIndex = resolveRowIndex(position.anchor ?? {})
       if (rowIndex != null) {
-        setViewportRowIndex(rowIndex)
+        viewportAnchorRowIndex = rowIndex
       }
       const columnIndex = resolveColumnIndex(position.anchor ?? {})
       if (columnIndex != null) {

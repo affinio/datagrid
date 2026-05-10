@@ -1,5 +1,11 @@
 import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, type Ref } from "vue"
-import type { DataGridColumnSnapshot, DataGridRowNode, DataGridViewportRange } from "@affino/datagrid-core"
+import type {
+  DataGridColumnSnapshot,
+  DataGridRowId,
+  DataGridRowNode,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRange,
+} from "@affino/datagrid-core"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowRenderMode } from "./useDataGridAppControls"
@@ -145,7 +151,13 @@ export type DataGridAppBodyViewportRuntime<TRow> = Pick<
 > & {
   setViewportRange?: UseDataGridRuntimeResult<TRow>["setViewportRange"]
   setVirtualWindowRange?: UseDataGridRuntimeResult<TRow>["setVirtualWindowRange"]
+  getViewportPosition?: UseDataGridRuntimeResult<TRow>["getViewportPosition"]
+  setViewportPosition?: UseDataGridRuntimeResult<TRow>["setViewportPosition"]
+  scrollToRow?: UseDataGridRuntimeResult<TRow>["scrollToRow"]
+  scrollToColumn?: UseDataGridRuntimeResult<TRow>["scrollToColumn"]
+  scrollToCell?: UseDataGridRuntimeResult<TRow>["scrollToCell"]
   getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
+  api?: Pick<UseDataGridRuntimeResult<TRow>["api"], "events">
 }
 
 export interface UseDataGridAppViewportOptions<TRow> {
@@ -369,6 +381,9 @@ export function useDataGridAppViewport<TRow>(
   let horizontalScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   let horizontalScrollActive = false
   let forceNextColumnWindowSync = false
+  let isApplyingRuntimeViewportPosition = false
+  let isSyncingRuntimeViewportPosition = false
+  let pendingRuntimeViewportPosition: DataGridViewportPositionSnapshot | null = null
   const horizontalScrollIdleRevision = ref(0)
   let cachedViewportElement: HTMLElement | null = null
   let cachedViewportDimensions: ViewportDimensions | null = null
@@ -835,6 +850,153 @@ export function useDataGridAppViewport<TRow>(
     return { start, end }
   }
 
+  const normalizeViewportPositionIndex = (value: unknown): number | null => {
+    if (!Number.isFinite(value)) {
+      return null
+    }
+    const normalized = Math.trunc(value as number)
+    return normalized >= 0 ? normalized : null
+  }
+
+  const resolveBodyRowIndexById = (rowId: DataGridRowId | null | undefined): number | null => {
+    if (rowId == null || typeof options.runtime.getBodyRowAtIndex !== "function") {
+      return null
+    }
+    const total = resolveScrollableBodyRowCount()
+    for (let rowIndex = 0; rowIndex < total; rowIndex += 1) {
+      if (options.runtime.getBodyRowAtIndex(rowIndex)?.rowId === rowId) {
+        return rowIndex
+      }
+    }
+    return null
+  }
+
+  const resolveBodyRowOffset = (rowIndex: number): number => {
+    if (typeof options.resolveRowOffset === "function") {
+      return Math.max(0, options.resolveRowOffset(rowIndex))
+    }
+    return Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
+  }
+
+  const resolveColumnIndexByKey = (columnKey: string | null | undefined): number | null => {
+    if (typeof columnKey !== "string") {
+      return null
+    }
+    const index = options.visibleColumns.value.findIndex(column => column.key === columnKey)
+    return index >= 0 ? index : null
+  }
+
+  const resolveColumnIndexFromPosition = (
+    position: DataGridViewportPositionSnapshot,
+  ): number | null => {
+    const columns = options.visibleColumns.value
+    if (columns.length <= 0) {
+      return null
+    }
+    const anchor = position.anchor
+    const keyIndex = resolveColumnIndexByKey(anchor?.columnKey)
+    if (keyIndex != null) {
+      return keyIndex
+    }
+    const columnIndex = normalizeViewportPositionIndex(anchor?.columnIndex)
+    if (columnIndex == null) {
+      return null
+    }
+    return Math.min(columnIndex, columns.length - 1)
+  }
+
+  const resolveVisibleColumnIndexFromScrollLeft = (scrollLeft: number): number | null => {
+    const columns = options.visibleColumns.value
+    if (columns.length <= 0) {
+      return null
+    }
+    const prefix = columnPrefixWidths.value
+    const totalWidth = mainTrackWidth.value
+    const viewportStartPx = Math.max(0, scrollLeft)
+    let lo = 0
+    let hi = columns.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      const rightEdge = prefix[mid + 1] ?? totalWidth
+      if (rightEdge <= viewportStartPx) lo = mid + 1
+      else hi = mid
+    }
+    return Math.min(lo, columns.length - 1)
+  }
+
+  const resolveViewportPositionScrollTop = (
+    position: DataGridViewportPositionSnapshot,
+  ): number | null => {
+    const anchor = position.anchor
+    const rowIdIndex = resolveBodyRowIndexById(anchor?.rowId)
+    const rowIndex = rowIdIndex ?? normalizeViewportPositionIndex(anchor?.rowIndex)
+    if (rowIndex != null) {
+      return resolveBodyRowOffset(Math.min(rowIndex, Math.max(0, resolveScrollableBodyRowCount() - 1)))
+    }
+    return Number.isFinite(position.scroll?.top) ? Math.max(0, position.scroll?.top ?? 0) : null
+  }
+
+  const resolveViewportPositionScrollLeft = (
+    position: DataGridViewportPositionSnapshot,
+  ): number | null => {
+    const columnIndex = resolveColumnIndexFromPosition(position)
+    if (columnIndex != null) {
+      return Math.max(0, columnPrefixWidths.value[columnIndex] ?? 0)
+    }
+    return Number.isFinite(position.scroll?.left) ? Math.max(0, position.scroll?.left ?? 0) : null
+  }
+
+  const buildViewportPositionSnapshot = (
+    snapshot: ViewportSnapshot,
+  ): DataGridViewportPositionSnapshot => {
+    const visibleRowRange = resolveVisibleRowRangeFromSnapshot({
+      scrollTop: snapshot.scrollTop,
+      clientHeight: snapshot.clientHeight,
+    })
+    const rowIndex = visibleRowRange.start
+    const columnIndex = resolveVisibleColumnIndexFromScrollLeft(snapshot.scrollLeft)
+    const column = columnIndex == null ? null : options.visibleColumns.value[columnIndex] ?? null
+    const row = typeof options.runtime.getBodyRowAtIndex === "function"
+      ? options.runtime.getBodyRowAtIndex(rowIndex)
+      : null
+    const range = lastSyncedRange ?? resolveViewportRangeFromSnapshot({
+      scrollTop: snapshot.scrollTop,
+      clientHeight: snapshot.clientHeight,
+    })
+
+    return {
+      version: 1,
+      range: { start: range.start, end: range.end },
+      anchor: {
+        rowId: row?.rowId ?? null,
+        rowIndex,
+        columnKey: column?.key ?? null,
+        columnIndex,
+      },
+      scroll: {
+        top: Math.max(0, snapshot.scrollTop),
+        left: Math.max(0, snapshot.scrollLeft),
+      },
+    }
+  }
+
+  const syncRuntimeViewportPosition = (snapshot: ViewportSnapshot): void => {
+    if (
+      isApplyingRuntimeViewportPosition
+      || isSyncingRuntimeViewportPosition
+      || typeof options.runtime.setViewportPosition !== "function"
+    ) {
+      return
+    }
+    isSyncingRuntimeViewportPosition = true
+    try {
+      options.runtime.setViewportPosition(buildViewportPositionSnapshot(snapshot))
+    }
+    finally {
+      isSyncingRuntimeViewportPosition = false
+    }
+  }
+
   const canRetainLastSyncedRange = (visibleRange: DataGridViewportRange): boolean => {
     if (!lastSyncedRange) {
       return false
@@ -1096,6 +1258,8 @@ export function useDataGridAppViewport<TRow>(
     if (commitOptions.measureVisibleRowHeights) {
       options.measureVisibleRowHeights?.()
     }
+
+    syncRuntimeViewportPosition(snapshot)
   }
 
   const flushPendingViewportSync = (): void => {
@@ -1194,6 +1358,12 @@ export function useDataGridAppViewport<TRow>(
   }
 
   const syncViewportFromDom = (): void => {
+    if (pendingRuntimeViewportPosition) {
+      const position = pendingRuntimeViewportPosition
+      pendingRuntimeViewportPosition = null
+      applyViewportPositionSnapshot(position)
+      return
+    }
     const element = bodyViewportRef.value
     if (!element) {
       return
@@ -1224,6 +1394,55 @@ export function useDataGridAppViewport<TRow>(
     viewportSyncRafHandle = null
   }
 
+  const applyViewportPositionSnapshot = (position: DataGridViewportPositionSnapshot): void => {
+    if (isSyncingRuntimeViewportPosition) {
+      return
+    }
+    const element = bodyViewportRef.value
+    if (!element) {
+      pendingRuntimeViewportPosition = position
+      return
+    }
+    const nextScrollTop = resolveViewportPositionScrollTop(position)
+    const nextScrollLeft = resolveViewportPositionScrollLeft(position)
+    if (nextScrollTop == null && nextScrollLeft == null) {
+      return
+    }
+
+    cancelScheduledViewportSync()
+    isApplyingRuntimeViewportPosition = true
+    try {
+      if (nextScrollTop != null && element.scrollTop !== nextScrollTop) {
+        element.scrollTop = nextScrollTop
+      }
+      if (nextScrollLeft != null && element.scrollLeft !== nextScrollLeft) {
+        element.scrollLeft = nextScrollLeft
+      }
+      commitViewportSnapshot(captureViewportSnapshot(element), {
+        forceVisibleRows: true,
+        measureVisibleRowHeights: true,
+      })
+    }
+    finally {
+      isApplyingRuntimeViewportPosition = false
+    }
+  }
+
+  const applyViewportPositionFromRuntime = (): void => {
+    if (typeof options.runtime.getViewportPosition !== "function") {
+      return
+    }
+    const position = options.runtime.getViewportPosition()
+    if (!position) {
+      return
+    }
+    applyViewportPositionSnapshot(position)
+  }
+
+  const unsubscribeStateImportViewportRestore = options.runtime.api?.events.on("state:import:end", () => {
+    applyViewportPositionFromRuntime()
+  }) ?? null
+
   // Guard: onBeforeUnmount requires an active component instance.
   // When this composable is used outside a component context (e.g. unit tests) the
   // cleanup is handled by the caller via cancelScheduledViewportSync().
@@ -1237,6 +1456,7 @@ export function useDataGridAppViewport<TRow>(
       cachedViewportDimensions = null
       clearHorizontalScrollIdleTimer()
       horizontalScrollActive = false
+      unsubscribeStateImportViewportRestore?.()
     })
   }
 

@@ -21,7 +21,12 @@ import type {
   DataGridViewportRange,
   DataGridGetStateOptions,
   DataGridSetStateOptions,
+  DataGridSetViewportPositionOptions,
   DataGridUnifiedState,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
 } from "@affino/datagrid-core"
 import type {
   DataGridPivotCellDrilldown,
@@ -154,6 +159,14 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
    * Pinned rows are excluded from this coordinate system.
    */
   setViewportRange: (range: DataGridViewportRange) => void
+  getViewportPosition: () => DataGridViewportPositionSnapshot | null
+  setViewportPosition: (
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ) => void
+  scrollToRow: (target: DataGridViewportRowTarget) => void
+  scrollToColumn: (target: DataGridViewportColumnTarget) => void
+  scrollToCell: (target: DataGridViewportCellTarget) => void
   /**
    * Cheap body-relative viewport window update for render pipelines.
    * Keeps the canonical virtualWindow in sync without forcing a full row-model snapshot emit.
@@ -707,6 +720,11 @@ export function useDataGridRuntime<TRow = unknown>(
     getBodyRowAtIndex,
     resolveBodyRowIndexById,
     setViewportRange,
+    getViewportPosition: runtime.getViewportPosition,
+    setViewportPosition: runtime.setViewportPosition,
+    scrollToRow: runtime.scrollToRow,
+    scrollToColumn: runtime.scrollToColumn,
+    scrollToCell: runtime.scrollToCell,
     setVirtualWindowRange,
     getViewportRange,
     getProjectionMode: api.policy.getProjectionMode,
