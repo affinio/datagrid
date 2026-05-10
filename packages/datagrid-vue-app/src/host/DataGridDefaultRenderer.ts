@@ -1003,6 +1003,7 @@ export default defineComponent({
     const pendingColumnMenuSort = ref<ColumnMenuSortRequest | null>(null)
     let pendingColumnMenuSortFrameId: number | null = null
     let pendingColumnMenuSortRequestId = 0
+    let quickFilterDebounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null
     const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
     const columnFilterTextByKey = computed<Record<string, string>>(() => (
       resolveInitialFilterTexts(filterModelState.value)
@@ -1034,6 +1035,7 @@ export default defineComponent({
     onBeforeUnmount(() => {
       unsubscribeRowModel()
       cancelPendingColumnMenuSortFrame()
+      cancelPendingQuickFilterDebounce()
     })
 
     watch(
@@ -1370,6 +1372,8 @@ export default defineComponent({
         ? filterModelState.value.quickFilter.query.trim()
         : ""
     })
+    const quickFilterDraft = ref(activeQuickFilterQuery.value)
+    const isQuickFilterDraftDirty = computed(() => quickFilterDraft.value.trim() !== activeQuickFilterQuery.value)
     const defaultQuickFilterColumnKeys = computed(() => resolveDefaultQuickFilterColumnKeys(visibleColumns.value))
 
     const activeFilterSummaryItems = computed<readonly string[]>(() => {
@@ -1415,7 +1419,7 @@ export default defineComponent({
       applySortAndFilter()
     }
 
-    const updateQuickFilterQuery = (value: string): void => {
+    const buildQuickFilterModel = (value: string): DataGridFilterSnapshot => {
       const nextFilterModel = cloneFilterModelState(filterModelState.value)
       const query = value.trim()
       if (!query) {
@@ -1431,19 +1435,81 @@ export default defineComponent({
           mode: props.quickFilter.mode ?? currentQuickFilter?.mode ?? "contains",
         }
       }
+      return nextFilterModel
+    }
+
+    function cancelPendingQuickFilterDebounce(): void {
+      if (quickFilterDebounceTimer === null) {
+        return
+      }
+      globalThis.clearTimeout(quickFilterDebounceTimer)
+      quickFilterDebounceTimer = null
+    }
+
+    const commitQuickFilterQuery = (value: string): void => {
+      const nextFilterModel = buildQuickFilterModel(value)
       filterModelState.value = nextFilterModel
       applySortAndFilter(nextFilterModel)
     }
 
-    const clearQuickFilter = (): void => {
-      if (!filterModelState.value.quickFilter) {
+    const scheduleDebouncedQuickFilterCommit = (): void => {
+      cancelPendingQuickFilterDebounce()
+      if (!isQuickFilterDraftDirty.value) {
         return
       }
-      const nextFilterModel = cloneFilterModelState(filterModelState.value)
-      delete nextFilterModel.quickFilter
-      filterModelState.value = nextFilterModel
-      applySortAndFilter(nextFilterModel)
+      quickFilterDebounceTimer = globalThis.setTimeout(() => {
+        quickFilterDebounceTimer = null
+        commitQuickFilterQuery(quickFilterDraft.value)
+      }, props.quickFilter.debounceMs)
     }
+
+    const updateQuickFilterQuery = (value: string): void => {
+      quickFilterDraft.value = value
+      if (props.quickFilter.applyMode === "manual") {
+        cancelPendingQuickFilterDebounce()
+        return
+      }
+      if (props.quickFilter.applyMode === "debounce") {
+        scheduleDebouncedQuickFilterCommit()
+        return
+      }
+      cancelPendingQuickFilterDebounce()
+      commitQuickFilterQuery(value)
+    }
+
+    const applyQuickFilterDraft = (): void => {
+      cancelPendingQuickFilterDebounce()
+      if (!isQuickFilterDraftDirty.value) {
+        return
+      }
+      commitQuickFilterQuery(quickFilterDraft.value)
+    }
+
+    const clearQuickFilter = (): void => {
+      cancelPendingQuickFilterDebounce()
+      const hasCommittedQuickFilter = Boolean(filterModelState.value.quickFilter)
+      if (!hasCommittedQuickFilter && !quickFilterDraft.value.trim()) {
+        return
+      }
+      quickFilterDraft.value = ""
+      if (hasCommittedQuickFilter) {
+        commitQuickFilterQuery("")
+      }
+    }
+
+    watch(
+      activeQuickFilterQuery,
+      query => {
+        quickFilterDraft.value = query
+      },
+    )
+
+    watch(
+      () => [props.quickFilter.applyMode, props.quickFilter.debounceMs] as const,
+      () => {
+        cancelPendingQuickFilterDebounce()
+      },
+    )
 
     watch(
       filterModelState,
@@ -3931,10 +3997,13 @@ export default defineComponent({
           key: "quick-filter",
           component: DataGridQuickFilterInput as Component,
           props: {
-            value: activeQuickFilterQuery.value,
+            value: quickFilterDraft.value,
             placeholder: props.quickFilter.placeholder,
-            active: Boolean(activeQuickFilterQuery.value),
+            active: Boolean(activeQuickFilterQuery.value || quickFilterDraft.value.trim()),
+            dirty: isQuickFilterDraftDirty.value,
+            manual: props.quickFilter.applyMode === "manual",
             onUpdateValue: updateQuickFilterQuery,
+            onApply: applyQuickFilterDraft,
             onClear: clearQuickFilter,
           },
         })

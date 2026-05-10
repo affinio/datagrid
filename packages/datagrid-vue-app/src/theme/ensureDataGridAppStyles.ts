@@ -469,6 +469,7 @@ const DATA_GRID_APP_STYLES = `
   box-shadow: 0 0 0 2px var(--datagrid-column-menu-focus-ring);
 }
 
+.datagrid-app-quick-filter__apply,
 .datagrid-app-quick-filter__clear {
   flex: 0 0 auto;
   height: calc(var(--datagrid-app-toolbar-button-height, 32px) - 10px);
@@ -483,11 +484,17 @@ const DATA_GRID_APP_STYLES = `
   cursor: pointer;
 }
 
+.datagrid-app-quick-filter__apply {
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-app-quick-filter__apply:hover:not(:disabled),
 .datagrid-app-quick-filter__clear:hover:not(:disabled) {
   background: color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 72%, transparent);
   color: var(--datagrid-text-primary);
 }
 
+.datagrid-app-quick-filter__apply:disabled,
 .datagrid-app-quick-filter__clear:disabled {
   opacity: 0.45;
   cursor: not-allowed;

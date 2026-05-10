@@ -1482,11 +1482,13 @@ The object form controls placeholder text, explicit searchable columns, and matc
     placeholder: 'Search accounts',
     columns: ['service', 'owner', 'region'],
     mode: 'tokens',
+    applyMode: 'debounce',
+    debounceMs: 400,
   }"
 />
 ```
 
-This prop is a shell convenience API. Typing in the input updates `filterModel.quickFilter`; clearing the input removes it from the snapshot. It does not add a separate `update:quickFilter` event or a second state channel.
+This prop is a shell convenience API. By default, typing in the input updates `filterModel.quickFilter` immediately. `applyMode: 'debounce'` commits after `debounceMs`, while `applyMode: 'manual'` keeps a local draft until Enter or the built-in Apply button. Clearing the input removes quick filter from the snapshot. It does not add a separate `update:quickFilter` event or a second state channel.
 
 Controlled consumers can still manage quick filter directly through the same `filter-model` contract:
 

@@ -95,6 +95,7 @@ export type {
   DataGridResolvedAdvancedFilterLabels,
 } from "./config/dataGridAdvancedFilter"
 export type {
+  DataGridQuickFilterApplyMode,
   DataGridQuickFilterOptions,
   DataGridQuickFilterProp,
   DataGridResolvedQuickFilterOptions,

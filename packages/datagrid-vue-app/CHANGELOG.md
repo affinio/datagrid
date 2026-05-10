@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Added native quick-filter apply timing controls to the app shell. `quick-filter` now supports `applyMode: "input" | "debounce" | "manual"` plus `debounceMs`; manual mode shows built-in Apply/Clear controls while still committing only to `filterModel.quickFilter`.
+
+  ## User impact
+
+  Data-source-backed row models can avoid one `filter-change` pull per keystroke by using debounced or manual quick-filter commits.
+
+  ## Migration
+  - No migration required. The default `applyMode` remains `"input"`.
+
+  ## Validation
+  - targeted quick-filter contracts passed for input, debounce, manual, controlled, and external data-source row model behavior
+
+- ## Summary
+
   Fixed the declarative advanced-filter toolbar path when `DataGrid` uses an external data-source row model. Applying the panel now forwards the freshly built `advancedExpression` snapshot directly through `rowModel.setSortAndFilterModel(...)`.
 
   ## User impact

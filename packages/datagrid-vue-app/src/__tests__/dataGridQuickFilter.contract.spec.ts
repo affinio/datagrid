@@ -9,6 +9,8 @@ describe("resolveDataGridQuickFilter contract", () => {
       placeholder: "Search rows",
       columns: null,
       mode: "contains",
+      applyMode: "input",
+      debounceMs: 300,
     })
   })
 
@@ -18,12 +20,16 @@ describe("resolveDataGridQuickFilter contract", () => {
       placeholder: "Search rows",
       columns: null,
       mode: "contains",
+      applyMode: "input",
+      debounceMs: 300,
     })
     expect(resolveDataGridQuickFilter(false)).toEqual({
       enabled: false,
       placeholder: "Search rows",
       columns: null,
       mode: "contains",
+      applyMode: "input",
+      debounceMs: 300,
     })
   })
 
@@ -32,11 +38,15 @@ describe("resolveDataGridQuickFilter contract", () => {
       placeholder: " Search accounts ",
       columns: [" name ", "", "status", "name"],
       mode: "tokens",
+      applyMode: "debounce",
+      debounceMs: 400.8,
     })).toEqual({
       enabled: true,
       placeholder: "Search accounts",
       columns: ["name", "status"],
       mode: "tokens",
+      applyMode: "debounce",
+      debounceMs: 400,
     })
   })
 })

@@ -4,6 +4,8 @@ export interface DataGridQuickFilterOptions {
   placeholder?: string
   columns?: readonly string[]
   mode?: DataGridQuickFilterMode
+  applyMode?: DataGridQuickFilterApplyMode
+  debounceMs?: number
 }
 
 export type DataGridQuickFilterProp =
@@ -11,15 +13,21 @@ export type DataGridQuickFilterProp =
   | DataGridQuickFilterOptions
   | null
 
+export type DataGridQuickFilterApplyMode = "input" | "debounce" | "manual"
+
 export interface DataGridResolvedQuickFilterOptions {
   enabled: boolean
   placeholder: string
   columns: readonly string[] | null
   mode: DataGridQuickFilterMode
+  applyMode: DataGridQuickFilterApplyMode
+  debounceMs: number
 }
 
 const DEFAULT_PLACEHOLDER = "Search rows"
 const DEFAULT_MODE: DataGridQuickFilterMode = "contains"
+const DEFAULT_APPLY_MODE: DataGridQuickFilterApplyMode = "input"
+const DEFAULT_DEBOUNCE_MS = 300
 
 function resolvePlaceholder(value: string | undefined): string {
   return typeof value === "string" && value.trim().length > 0
@@ -29,6 +37,17 @@ function resolvePlaceholder(value: string | undefined): string {
 
 function resolveMode(value: DataGridQuickFilterMode | undefined): DataGridQuickFilterMode {
   return value === "tokens" ? "tokens" : DEFAULT_MODE
+}
+
+function resolveApplyMode(value: DataGridQuickFilterApplyMode | undefined): DataGridQuickFilterApplyMode {
+  return value === "debounce" || value === "manual" ? value : DEFAULT_APPLY_MODE
+}
+
+function resolveDebounceMs(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_DEBOUNCE_MS
+  }
+  return Math.max(0, Math.trunc(value))
 }
 
 function resolveColumns(value: readonly string[] | undefined): readonly string[] | null {
@@ -50,6 +69,8 @@ export function resolveDataGridQuickFilter(
       placeholder: DEFAULT_PLACEHOLDER,
       columns: null,
       mode: DEFAULT_MODE,
+      applyMode: DEFAULT_APPLY_MODE,
+      debounceMs: DEFAULT_DEBOUNCE_MS,
     })
   }
   if (!input) {
@@ -58,6 +79,8 @@ export function resolveDataGridQuickFilter(
       placeholder: DEFAULT_PLACEHOLDER,
       columns: null,
       mode: DEFAULT_MODE,
+      applyMode: DEFAULT_APPLY_MODE,
+      debounceMs: DEFAULT_DEBOUNCE_MS,
     })
   }
   return Object.freeze({
@@ -65,5 +88,7 @@ export function resolveDataGridQuickFilter(
     placeholder: resolvePlaceholder(input.placeholder),
     columns: resolveColumns(input.columns),
     mode: resolveMode(input.mode),
+    applyMode: resolveApplyMode(input.applyMode),
+    debounceMs: resolveDebounceMs(input.debounceMs),
   })
 }

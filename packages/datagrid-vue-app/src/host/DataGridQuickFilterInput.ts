@@ -15,9 +15,21 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    dirty: {
+      type: Boolean,
+      default: false,
+    },
+    manual: {
+      type: Boolean,
+      default: false,
+    },
     onUpdateValue: {
       type: Function as PropType<(value: string) => void>,
       required: true,
+    },
+    onApply: {
+      type: Function as PropType<() => void>,
+      default: undefined,
     },
     onClear: {
       type: Function as PropType<() => void>,
@@ -44,7 +56,24 @@ export default defineComponent({
         onInput: (event: Event) => {
           props.onUpdateValue((event.target as HTMLInputElement | null)?.value ?? "")
         },
+        onKeydown: (event: KeyboardEvent) => {
+          if (event.key !== "Enter" || !props.manual) {
+            return
+          }
+          event.preventDefault()
+          props.onApply?.()
+        },
       }),
+      props.manual
+        ? h("button", {
+            type: "button",
+            class: "datagrid-app-quick-filter__apply",
+            disabled: !props.dirty,
+            "aria-label": "Apply quick filter",
+            "data-datagrid-quick-filter-apply": "true",
+            onClick: () => props.onApply?.(),
+          }, "Apply")
+        : null,
       h("button", {
         type: "button",
         class: "datagrid-app-quick-filter__clear",

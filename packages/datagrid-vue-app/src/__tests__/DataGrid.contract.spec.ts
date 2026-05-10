@@ -3485,6 +3485,161 @@ describe("DataGrid app facade contract", () => {
     rowModel.dispose()
   })
 
+  it("debounces declarative quickFilter before applying an external data-source row model", async () => {
+    const pull = vi.fn(async () => ({
+      rows: [],
+      total: 0,
+    }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: { pull },
+      resolveRowId: row => row.rowId,
+      initialTotal: 0,
+    })
+    const setSortAndFilterModelSpy = vi.spyOn(rowModel, "setSortAndFilterModel")
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        quickFilter: {
+          columns: ["owner"],
+          applyMode: "debounce",
+          debounceMs: 400,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    pull.mockClear()
+    setSortAndFilterModelSpy.mockClear()
+    vi.useFakeTimers()
+
+    try {
+      const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+      await input.setValue("Pay")
+      await input.setValue("Payments")
+      await flushRuntimeTasks()
+
+      expect(input.element.value).toBe("Payments")
+      expect(setSortAndFilterModelSpy).not.toHaveBeenCalled()
+      expect(pull).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(399)
+      await flushRuntimeTasks()
+      expect(setSortAndFilterModelSpy).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      await flushRuntimeTasks()
+
+      expect(setSortAndFilterModelSpy).toHaveBeenCalledTimes(1)
+      expect(setSortAndFilterModelSpy).toHaveBeenLastCalledWith({
+        sortModel: [],
+        filterModel: expect.objectContaining({
+          quickFilter: {
+            query: "Payments",
+            columns: ["owner"],
+            mode: "contains",
+          },
+        }),
+      })
+      expect(pull).toHaveBeenCalledTimes(1)
+      expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+        reason: "filter-change",
+        filterModel: expect.objectContaining({
+          quickFilter: {
+            query: "Payments",
+            columns: ["owner"],
+            mode: "contains",
+          },
+        }),
+      }))
+    }
+    finally {
+      vi.useRealTimers()
+      wrapper.unmount()
+      rowModel.dispose()
+    }
+  })
+
+  it("keeps manual declarative quickFilter as a draft until Enter or Apply", async () => {
+    const pull = vi.fn(async () => ({
+      rows: [],
+      total: 0,
+    }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: { pull },
+      resolveRowId: row => row.rowId,
+      initialTotal: 0,
+    })
+    const setSortAndFilterModelSpy = vi.spyOn(rowModel, "setSortAndFilterModel")
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        quickFilter: {
+          columns: ["owner"],
+          applyMode: "manual",
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    pull.mockClear()
+    setSortAndFilterModelSpy.mockClear()
+
+    const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
+    const applyButton = wrapper.find('[data-datagrid-quick-filter-apply="true"]')
+    expect(applyButton.exists()).toBe(true)
+
+    await input.setValue("Pay")
+    await flushRuntimeTasks()
+    expect(input.element.value).toBe("Pay")
+    expect(setSortAndFilterModelSpy).not.toHaveBeenCalled()
+    expect(pull).not.toHaveBeenCalled()
+
+    await input.trigger("keydown", { key: "Enter" })
+    await flushRuntimeTasks()
+
+    expect(setSortAndFilterModelSpy).toHaveBeenCalledTimes(1)
+    expect(setSortAndFilterModelSpy).toHaveBeenLastCalledWith({
+      sortModel: [],
+      filterModel: expect.objectContaining({
+        quickFilter: {
+          query: "Pay",
+          columns: ["owner"],
+          mode: "contains",
+        },
+      }),
+    })
+
+    setSortAndFilterModelSpy.mockClear()
+    pull.mockClear()
+
+    await input.setValue("NOC")
+    await flushRuntimeTasks()
+    expect(setSortAndFilterModelSpy).not.toHaveBeenCalled()
+
+    await applyButton.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(setSortAndFilterModelSpy).toHaveBeenCalledTimes(1)
+    expect(setSortAndFilterModelSpy).toHaveBeenLastCalledWith({
+      sortModel: [],
+      filterModel: expect.objectContaining({
+        quickFilter: {
+          query: "NOC",
+          columns: ["owner"],
+          mode: "contains",
+        },
+      }),
+    })
+    expect(wrapper.findComponent(DataGrid).emitted("update:quickFilter")).toBeUndefined()
+
+    wrapper.unmount()
+    rowModel.dispose()
+  })
+
   it("renders declarative quickFilter input only when enabled", async () => {
     const defaultWrapper = mount(DataGrid, {
       props: {
