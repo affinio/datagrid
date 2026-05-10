@@ -12,7 +12,11 @@ import {
   type DataGridCore,
   type DataGridCoreServiceRegistry,
   type DataGridRowModel,
+  type DataGridViewportCellTarget,
+  type DataGridViewportColumnTarget,
+  type DataGridViewportPositionSnapshot,
   type DataGridViewportRange,
+  type DataGridViewportRowTarget,
 } from "@affino/datagrid-core"
 
 export type DataGridRuntimeOverrides = Omit<
@@ -39,6 +43,29 @@ export interface DataGridRuntime<TRow = unknown> {
   api: DataGridApi<TRow>
 }
 
+function normalizeIndex(value: unknown): number | null {
+  if (!Number.isFinite(value)) {
+    return null
+  }
+  const normalized = Math.trunc(value as number)
+  return normalized >= 0 ? normalized : null
+}
+
+function normalizeRange(start: unknown, end: unknown, total: number): DataGridViewportRange {
+  if (total <= 0) {
+    return { start: 0, end: 0 }
+  }
+  const normalizedStart = normalizeIndex(start) ?? 0
+  const normalizedEnd = normalizeIndex(end) ?? normalizedStart
+  const safeStart = Math.max(0, Math.min(total - 1, normalizedStart))
+  const safeEnd = Math.max(safeStart, Math.min(total - 1, normalizedEnd))
+  return { start: safeStart, end: safeEnd }
+}
+
+function normalizeScrollOffset(value: unknown): number {
+  return Number.isFinite(value) ? Math.max(0, value as number) : 0
+}
+
 export function createDataGridRuntime<TRow = unknown>(
   options: CreateDataGridRuntimeOptions<TRow>,
 ): DataGridRuntime<TRow> {
@@ -48,6 +75,8 @@ export function createDataGridRuntime<TRow = unknown>(
   })
   const columnModel = createDataGridColumnModel({ columns: options.columns })
   let viewportRange: DataGridViewportRange = { start: 0, end: 0 }
+  let viewportColumnIndex = 0
+  let viewportScroll = { top: 0, left: 0 }
   let virtualizationEnabled = true
   let baseRowHeight = 31
   const rowHeightOverrides = new Map<number, number>()
@@ -60,17 +89,143 @@ export function createDataGridRuntime<TRow = unknown>(
     nextHeight: number | null
   } | null = null
 
+  const resolveRowIndex = (target: DataGridViewportRowTarget): number | null => {
+    const rowId = target.rowId
+    if (rowId != null) {
+      const count = rowModel.getRowCount()
+      for (let index = 0; index < count; index += 1) {
+        if (rowModel.getRow(index)?.rowId === rowId) {
+          return index
+        }
+      }
+    }
+    const rowIndex = normalizeIndex(target.rowIndex)
+    if (rowIndex == null) {
+      return null
+    }
+    return Math.min(rowIndex, Math.max(0, rowModel.getRowCount() - 1))
+  }
+
+  const resolveColumnIndex = (target: DataGridViewportColumnTarget): number | null => {
+    const visibleColumns = columnModel.getSnapshot().visibleColumns
+    if (typeof target.columnKey === "string") {
+      const keyIndex = visibleColumns.findIndex(column => column.key === target.columnKey)
+      if (keyIndex >= 0) {
+        return keyIndex
+      }
+    }
+    const columnIndex = normalizeIndex(target.columnIndex)
+    if (columnIndex == null) {
+      return null
+    }
+    return Math.min(columnIndex, Math.max(0, visibleColumns.length - 1))
+  }
+
+  const resolveViewportAnchor = (): DataGridViewportPositionSnapshot["anchor"] => {
+    const rowIndex = normalizeRange(viewportRange.start, viewportRange.end, rowModel.getRowCount()).start
+    const visibleColumns = columnModel.getSnapshot().visibleColumns
+    const columnIndex = Math.min(viewportColumnIndex, Math.max(0, visibleColumns.length - 1))
+    const row = rowModel.getRow(rowIndex)
+    const column = visibleColumns[columnIndex]
+    return {
+      rowId: row?.rowId ?? null,
+      rowIndex,
+      columnKey: column?.key ?? null,
+      columnIndex: visibleColumns.length > 0 ? columnIndex : null,
+    }
+  }
+
+  const setViewportRowIndex = (rowIndex: number): void => {
+    const rowCount = rowModel.getRowCount()
+    viewportRange = normalizeRange(rowIndex, rowIndex, rowCount)
+    rowModel.setViewportRange(viewportRange)
+  }
+
+  const setViewportColumnIndex = (columnIndex: number): void => {
+    const visibleColumnCount = columnModel.getSnapshot().visibleColumns.length
+    viewportColumnIndex = normalizeRange(columnIndex, columnIndex, visibleColumnCount).start
+  }
+
   const defaultViewportService: DataGridCoreServiceRegistry["viewport"] & {
     setVirtualizationEnabled: (enabled: boolean) => void
     getVirtualizationEnabled: () => boolean
+    getVirtualWindow: () => {
+      rowStart: number
+      rowEnd: number
+      rowTotal: number
+      colStart: number
+      colEnd: number
+      colTotal: number
+      overscan: { top: number; bottom: number; left: number; right: number }
+    }
   } = {
     name: "viewport",
     setViewportRange(range) {
-      viewportRange = range
-      rowModel.setViewportRange(range)
+      viewportRange = normalizeRange(range.start, range.end, rowModel.getRowCount())
+      rowModel.setViewportRange(viewportRange)
     },
     getViewportRange() {
       return viewportRange
+    },
+    getViewportPosition() {
+      return {
+        version: 1,
+        range: viewportRange,
+        anchor: resolveViewportAnchor(),
+        scroll: { ...viewportScroll },
+      }
+    },
+    setViewportPosition(position) {
+      viewportRange = normalizeRange(position.range.start, position.range.end, rowModel.getRowCount())
+      rowModel.setViewportRange(viewportRange)
+      viewportScroll = {
+        top: normalizeScrollOffset(position.scroll?.top),
+        left: normalizeScrollOffset(position.scroll?.left),
+      }
+      const rowIndex = resolveRowIndex(position.anchor ?? {})
+      if (rowIndex != null) {
+        setViewportRowIndex(rowIndex)
+      }
+      const columnIndex = resolveColumnIndex(position.anchor ?? {})
+      if (columnIndex != null) {
+        setViewportColumnIndex(columnIndex)
+      }
+    },
+    scrollToRow(target) {
+      const rowIndex = resolveRowIndex(target)
+      if (rowIndex != null) {
+        setViewportRowIndex(rowIndex)
+      }
+    },
+    scrollToColumn(target) {
+      const columnIndex = resolveColumnIndex(target)
+      if (columnIndex != null) {
+        setViewportColumnIndex(columnIndex)
+      }
+    },
+    scrollToCell(target: DataGridViewportCellTarget) {
+      const rowIndex = resolveRowIndex(target)
+      if (rowIndex != null) {
+        setViewportRowIndex(rowIndex)
+      }
+      const columnIndex = resolveColumnIndex(target)
+      if (columnIndex != null) {
+        setViewportColumnIndex(columnIndex)
+      }
+    },
+    getVirtualWindow() {
+      const rowRange = normalizeRange(viewportRange.start, viewportRange.end, rowModel.getRowCount())
+      const colTotal = columnModel.getSnapshot().visibleColumns.length
+      const colRange = normalizeRange(viewportColumnIndex, viewportColumnIndex, colTotal)
+      return {
+        rowStart: rowRange.start,
+        rowEnd: rowRange.end,
+        rowTotal: rowModel.getRowCount(),
+        colStart: colRange.start,
+        colEnd: colRange.end,
+        colTotal,
+        overscan: { top: 0, bottom: 0, left: 0, right: 0 },
+      }
     },
     setVirtualizationEnabled(enabled) {
       virtualizationEnabled = Boolean(enabled)

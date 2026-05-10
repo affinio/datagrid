@@ -198,4 +198,54 @@ describe("useDataGridRuntimeService contract", () => {
     expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
     runtime.stop()
   })
+
+  it("roundtrips semantic viewport position through runtime service", () => {
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [
+        { rowId: "r1", name: "alpha" },
+        { rowId: "r2", name: "bravo" },
+      ],
+      columns: [
+        { key: "name", label: "Name" },
+        { key: "status", label: "Status" },
+      ],
+    })
+
+    expect(runtime.api.capabilities.viewportPosition).toBe(true)
+
+    runtime.scrollToCell({ rowId: "r2", columnKey: "status" })
+
+    expect(runtime.getVirtualWindowSnapshot()).toMatchObject({
+      rowStart: 1,
+      rowEnd: 1,
+      colStart: 1,
+      colEnd: 1,
+    })
+    expect(runtime.getViewportPosition()).toEqual({
+      version: 1,
+      range: { start: 1, end: 1 },
+      anchor: { rowId: "r2", rowIndex: 1, columnKey: "status", columnIndex: 1 },
+      scroll: { top: 0, left: 0 },
+    })
+
+    const state = runtime.api.state.get({ includeViewportPosition: true })
+    runtime.setViewportPosition({
+      version: 1,
+      range: { start: 0, end: 0 },
+      anchor: { rowId: "r1", rowIndex: 0, columnKey: "name", columnIndex: 0 },
+      scroll: { top: 12, left: 24 },
+    })
+    expect(runtime.getVirtualWindowSnapshot()).toMatchObject({
+      rowStart: 0,
+      colStart: 0,
+    })
+
+    runtime.api.state.set(state)
+    expect(runtime.getVirtualWindowSnapshot()).toMatchObject({
+      rowStart: 1,
+      colStart: 1,
+    })
+
+    runtime.stop()
+  })
 })

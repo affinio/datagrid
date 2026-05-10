@@ -27,4 +27,12 @@ export type {
   DataGridPivotValueSpec,
   DataGridPivotColumn,
   DataGridPivotColumnPathSegment,
+  DataGridSetViewportPositionOptions,
+  DataGridViewportAlignment,
+  DataGridViewportAnchorSnapshot,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
+  DataGridViewportRowTarget,
+  DataGridViewportScrollSnapshot,
 } from "@affino/datagrid-core"

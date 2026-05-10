@@ -8,7 +8,12 @@ import type {
   DataGridPivotColumn,
   DataGridRowNode,
   DataGridRowModel,
+  DataGridSetViewportPositionOptions,
+  DataGridViewportCellTarget,
+  DataGridViewportColumnTarget,
+  DataGridViewportPositionSnapshot,
   DataGridViewportRange,
+  DataGridViewportRowTarget,
 } from "@affino/datagrid-core"
 import { createDataGridRuntime, type CreateDataGridRuntimeOptions, type DataGridRuntime } from "./createDataGridRuntime"
 
@@ -56,6 +61,14 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
   setColumns: (columns: readonly DataGridColumnInput[]) => void
   setViewportRange: (range: DataGridViewportRange) => void
   setVirtualWindowRange: (range: DataGridViewportRange) => void
+  getViewportPosition: () => DataGridViewportPositionSnapshot | null
+  setViewportPosition: (
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ) => void
+  scrollToRow: (target: DataGridViewportRowTarget) => void
+  scrollToColumn: (target: DataGridViewportColumnTarget) => void
+  scrollToCell: (target: DataGridViewportCellTarget) => void
   start: () => Promise<void>
   stop: () => void
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
@@ -504,6 +517,9 @@ export function useDataGridRuntimeService<TRow = unknown>(
   const unsubscribeColumnModelForWindow = columnModel.subscribe(() => {
     recomputeVirtualWindow()
   })
+  const unsubscribeStateImportForWindow = api.events.on("state:import:end", () => {
+    recomputeVirtualWindow()
+  })
 
   function getColumnSnapshot(): DataGridColumnModelSnapshot {
     return api.columns.getSnapshot()
@@ -564,6 +580,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
     }
     unsubscribeRowModel()
     unsubscribeColumnModelForWindow()
+    unsubscribeStateImportForWindow()
     virtualWindowListeners.clear()
     void core.dispose()
     started = false
@@ -575,6 +592,48 @@ export function useDataGridRuntimeService<TRow = unknown>(
       return
     }
     api.view.setViewportRange(range)
+    recomputeVirtualWindow()
+  }
+
+  function getViewportPosition(): DataGridViewportPositionSnapshot | null {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return null
+    }
+    return api.view.getViewportPosition()
+  }
+
+  function setViewportPosition(
+    position: DataGridViewportPositionSnapshot,
+    options?: DataGridSetViewportPositionOptions,
+  ): void {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return
+    }
+    api.view.setViewportPosition(position, options)
+    recomputeVirtualWindow()
+  }
+
+  function scrollToRow(target: DataGridViewportRowTarget): void {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return
+    }
+    api.view.scrollToRow(target)
+    recomputeVirtualWindow()
+  }
+
+  function scrollToColumn(target: DataGridViewportColumnTarget): void {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return
+    }
+    api.view.scrollToColumn(target)
+    recomputeVirtualWindow()
+  }
+
+  function scrollToCell(target: DataGridViewportCellTarget): void {
+    if (disposed || api.lifecycle.state === "disposed") {
+      return
+    }
+    api.view.scrollToCell(target)
     recomputeVirtualWindow()
   }
 
@@ -617,6 +676,11 @@ export function useDataGridRuntimeService<TRow = unknown>(
     setColumns,
     setViewportRange,
     setVirtualWindowRange,
+    getViewportPosition,
+    setViewportPosition,
+    scrollToRow,
+    scrollToColumn,
+    scrollToCell,
     start,
     stop,
     syncRowsInRange,
