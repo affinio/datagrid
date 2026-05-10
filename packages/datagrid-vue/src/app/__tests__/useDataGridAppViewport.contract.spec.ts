@@ -874,6 +874,97 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.renderedViewportRange.value).toEqual({ start: 42, end: 46 })
   })
 
+  it("restores columnKey anchors after visible columns are reordered", () => {
+    const rows = makeRows(10)
+    const events = createEventHarness()
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 0, end: 4 },
+      anchor: {
+        rowId: "r1",
+        rowIndex: 1,
+        columnKey: "col-1",
+        columnIndex: 0,
+      },
+      scroll: { top: 0, left: 0 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        getViewportPosition: () => viewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref([
+        { key: "col-0", pin: "center", width: 100 },
+        { key: "col-2", pin: "center", width: 100 },
+        { key: "col-1", pin: "center", width: 100 },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(element.scrollLeft).toBe(200)
+  })
+
+  it("falls back to columnIndex when restored columnKey is hidden", () => {
+    const rows = makeRows(10)
+    const events = createEventHarness()
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 0, end: 4 },
+      anchor: {
+        rowId: "missing",
+        rowIndex: 2,
+        columnKey: "hidden-col",
+        columnIndex: 2,
+      },
+      scroll: { top: 5, left: 5 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        getViewportPosition: () => viewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(4, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(element.scrollTop).toBe(40)
+    expect(element.scrollLeft).toBe(200)
+  })
+
   // -------------------------------------------------------------------------
   // RAF lifecycle
   // -------------------------------------------------------------------------

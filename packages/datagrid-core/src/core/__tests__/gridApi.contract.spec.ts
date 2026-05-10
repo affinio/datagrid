@@ -2333,6 +2333,83 @@ describe("data grid api facade contracts", () => {
     expect(restoredViewportPosition).toEqual(viewportPosition)
   })
 
+  it("preserves selection anchor while restoring viewport position from unified state", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 },
+        { row: { id: 2, owner: "ops" }, rowId: 2, originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "id", label: "ID" },
+        { key: "owner", label: "Owner" },
+      ],
+    })
+    const viewportPosition = {
+      version: 1 as const,
+      range: { start: 1, end: 1 },
+      anchor: { rowId: 2, rowIndex: 1, columnKey: "owner", columnIndex: 1 },
+      scroll: { top: 48, left: 96 },
+    }
+    const selectionBeforeRestore: DataGridSelectionSnapshot = {
+      ranges: [
+        {
+          startRow: 1,
+          endRow: 1,
+          startCol: 1,
+          endCol: 1,
+          startRowId: 2,
+          endRowId: 2,
+          anchor: { rowIndex: 1, colIndex: 1, rowId: 2 },
+          focus: { rowIndex: 1, colIndex: 1, rowId: 2 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: 2 },
+    }
+    let selectionSnapshot: DataGridSelectionSnapshot | null = null
+    let selectionDuringViewportRestore: DataGridSelectionSnapshot | null = null
+    let api!: ReturnType<typeof createDataGridApi>
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+        viewport: {
+          name: "viewport",
+          getViewportPosition() {
+            return viewportPosition
+          },
+          setViewportPosition() {
+            selectionDuringViewportRestore = api.selection.getSnapshot()
+          },
+        },
+      },
+    })
+    api = createDataGridApi({ core })
+
+    api.selection.setSnapshot(selectionBeforeRestore)
+    const state = api.state.get({ includeViewportPosition: true })
+    api.selection.clear()
+
+    api.state.set(state)
+
+    expect(selectionDuringViewportRestore).toEqual(selectionBeforeRestore)
+    expect(api.selection.getSnapshot()).toEqual(selectionBeforeRestore)
+  })
+
   it("fails strict viewport position state restore when capability is missing", () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
