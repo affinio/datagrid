@@ -396,7 +396,7 @@ Validation:
 
 ---
 
-## [] Slice 14 — Replace heavy string signatures with revisions
+## [x] Slice 14 — Replace heavy string signatures with revisions
 
 Goal: убрать риск тяжёлых computed signatures.
 

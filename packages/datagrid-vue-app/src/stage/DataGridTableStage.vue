@@ -635,14 +635,6 @@ const isRangeMoving = computed(() => selection.value.isRangeMoving)
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 
-const leftPaneWidth = computed(() => {
-  return indexColumnWidthPx.value + (pinnedLeftColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-})
-
-const rightPaneWidth = computed(() => {
-  return (pinnedRightColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-})
-
 const stageRootEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
@@ -862,6 +854,14 @@ const rowIndexState = useDataGridStageRowIndex({
   isDataGridPlaceholderSurfaceRow,
 })
 
+const leftPaneWidth = computed(() => {
+  return rowIndexState.indexColumnWidthPx.value + (pinnedLeftColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+})
+
+const rightPaneWidth = computed(() => {
+  return (pinnedRightColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+})
+
 const {
   bodyViewportEl,
   bottomViewportEl,
@@ -900,14 +900,8 @@ const {
   hasPivotHeaderGroups,
   rowMetrics,
   pinnedBottomRowMetrics,
-  rowMetricsSignature,
-  pinnedBottomRowMetricsSignature,
-  rowBandsSignature,
-  pinnedBottomRowBandsSignature,
-  leftChromeColumnsSignature,
-  centerChromeColumnsSignature,
-  rightChromeColumnsSignature,
-  headerPivotGroupsSignature,
+  chromeColumnsRevision,
+  chromeRowsRevision,
   resolveVisibleRowMetricsFromDom,
 } = useDataGridStageChromeModel({
   mode,
@@ -1072,14 +1066,7 @@ resolveGridChromeSyncers = () => ({
 })
 
 watch(
-  () => [
-    leftPaneWidth.value,
-    rightPaneWidth.value,
-    leftChromeColumnsSignature.value,
-    centerChromeColumnsSignature.value,
-    rightChromeColumnsSignature.value,
-    headerPivotGroupsSignature.value,
-  ].join("|"),
+  chromeColumnsRevision,
   () => {
     syncBodyViewportMetrics()
     scheduleGridChromeRedraw()
@@ -1097,12 +1084,7 @@ watch(
 )
 
 watch(
-  () => [
-    rowMetricsSignature.value,
-    pinnedBottomRowMetricsSignature.value,
-    rowBandsSignature.value,
-    pinnedBottomRowBandsSignature.value,
-  ].join("|"),
+  chromeRowsRevision,
   () => {
     // Auto-height row metrics can shift during scroll; redraw chrome, but avoid
     // re-reading shell/header layout metrics that belong to resize/column sync.

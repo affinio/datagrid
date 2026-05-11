@@ -1,4 +1,4 @@
-import { computed, type ComputedRef, type Ref } from "vue"
+import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
 import {
   buildDataGridChromeRenderModel,
   type DataGridChromeRowBand,
@@ -60,6 +60,8 @@ export interface UseDataGridStageChromeModelResult {
   hasPivotHeaderGroups: ComputedRef<boolean>
   rowMetrics: ComputedRef<readonly { top: number; height: number }[]>
   pinnedBottomRowMetrics: ComputedRef<readonly { top: number; height: number }[]>
+  chromeColumnsRevision: Ref<number>
+  chromeRowsRevision: Ref<number>
   rowMetricsSignature: ComputedRef<string>
   pinnedBottomRowMetricsSignature: ComputedRef<string>
   rowBandsSignature: ComputedRef<string>
@@ -137,6 +139,9 @@ export function useDataGridStageChromeModel(
     }
     return options.visibleColumns.value.some(column => (options.readPivotHeaderMeta(column)?.groupLabels?.length ?? 0) > 0)
   })
+
+  const chromeColumnsRevision = ref(0)
+  const chromeRowsRevision = ref(0)
 
   const buildEstimatedVisibleRowMetrics = (): readonly { top: number; height: number }[] => {
     const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
@@ -345,6 +350,44 @@ export function useDataGridStageChromeModel(
     })
   ))
 
+  watch(
+    () => [
+      options.leftPaneWidth.value,
+      options.rightPaneWidth.value,
+      options.visibleColumns.value,
+      options.renderedColumns.value,
+      options.pinnedLeftColumns.value,
+      options.pinnedRightColumns.value,
+      hasPivotHeaderGroups.value,
+      options.resolveLeftColumnSpacerWidth(),
+      options.resolveRightColumnSpacerWidth(),
+      ...options.renderedColumns.value.map(options.resolveColumnWidth),
+      ...options.pinnedLeftColumns.value.map(options.resolveColumnWidth),
+      ...options.pinnedRightColumns.value.map(options.resolveColumnWidth),
+      ...(hasPivotHeaderGroups.value
+        ? options.visibleColumns.value.flatMap(column => {
+          const groupLabels = options.readPivotHeaderMeta(column)?.groupLabels ?? []
+          return [column.key, ...groupLabels]
+        })
+        : []),
+    ],
+    () => {
+      chromeColumnsRevision.value += 1
+    },
+  )
+
+  watch(
+    () => [
+      rowMetrics.value,
+      pinnedBottomRowMetrics.value,
+      rowBands.value,
+      pinnedBottomRowBands.value,
+    ],
+    () => {
+      chromeRowsRevision.value += 1
+    },
+  )
+
   const rowMetricsSignature = computed(() => (
     rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
   ))
@@ -395,6 +438,8 @@ export function useDataGridStageChromeModel(
     hasPivotHeaderGroups,
     rowMetrics,
     pinnedBottomRowMetrics,
+    chromeColumnsRevision,
+    chromeRowsRevision,
     rowMetricsSignature,
     pinnedBottomRowMetricsSignature,
     rowBandsSignature,
