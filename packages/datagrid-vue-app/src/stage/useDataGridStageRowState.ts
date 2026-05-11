@@ -16,6 +16,7 @@ export interface UseDataGridStageRowStateOptions {
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
   }>>
   selectionRange: Readonly<Ref<{ startRow: number; endRow: number; startColumn: number; endColumn: number } | null>>
+  selectionRanges: Readonly<Ref<readonly { startRow: number; endRow: number; startColumn: number; endColumn: number }[]>>
   displayRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
   visibleColumns: Readonly<Ref<readonly DataGridTableStageBodyColumn[]>>
   viewportRowStart: Readonly<Ref<number>>
@@ -96,7 +97,8 @@ export function useDataGridStageRowState(
     if (!ranges) {
       return true
     }
-    return !(ranges.startRow === ranges.endRow && ranges.startColumn === ranges.endColumn)
+    return options.selectionRanges.value.length > 1
+      || !(ranges.startRow === ranges.endRow && ranges.startColumn === ranges.endColumn)
   }
 
   function isRowSelectionColumn(column: DataGridTableStageBodyColumn): boolean {

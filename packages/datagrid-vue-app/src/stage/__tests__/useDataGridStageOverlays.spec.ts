@@ -62,7 +62,7 @@ describe("useDataGridStageOverlays", () => {
       pinnedBottomRowMetrics: computed(() => []),
       isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 1 && columnIndex <= 2,
       isCellInFillPreviewSafe: () => false,
-      isSingleSelectedCell: computed(() => false),
+      isAdditiveSelection: computed(() => false),
       isFillDragging: computed(() => false),
       isRangeMoving: computed(() => false),
       resolveVisibleRangeBounds(rangeValue) {

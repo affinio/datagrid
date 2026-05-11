@@ -709,10 +709,19 @@ describe("DataGridTableStage contract", () => {
     })
 
     const centerSegments = wrapper.findAll(".grid-body-viewport .grid-selection-overlay__segment")
+    const previousSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerA"]')
     const activeSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
 
-    expect(centerSegments).toHaveLength(2)
+    expect(centerSegments).toHaveLength(1)
+    expect(centerSegments[0]?.attributes("style")).toContain("border-top-width: 2px;")
+    expect(centerSegments[0]?.attributes("style")).toContain("border-right-width: 2px;")
+    expect(centerSegments[0]?.attributes("style")).toContain("border-bottom-width: 2px;")
+    expect(centerSegments[0]?.attributes("style")).toContain("border-left-width: 2px;")
+    expect(previousSelectedCell.classes()).toContain("grid-cell--selected")
+    expect(previousSelectedCell.classes()).not.toContain("grid-cell--selection-anchor")
     expect(activeSelectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(activeSelectedCell.classes()).not.toContain("grid-cell--selected")
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--additive-selection")
 
     wrapper.unmount()
   })

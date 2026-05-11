@@ -35,7 +35,7 @@ export interface UseDataGridStageOverlaysOptions {
   pinnedBottomRowMetrics: ComputedRef<readonly DataGridStageOverlayMetricsSource[]>
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isCellInFillPreviewSafe: (rowOffset: number, columnIndex: number) => boolean
-  isSingleSelectedCell: ComputedRef<boolean>
+  isAdditiveSelection: ComputedRef<boolean>
   isFillDragging: ComputedRef<boolean>
   isRangeMoving: ComputedRef<boolean>
   resolveVisibleRangeBounds: (range: DataGridOverlayRange | null) => DataGridStageOverlayBounds | null
@@ -168,12 +168,19 @@ export function useDataGridStageOverlays(
     return mergeOverlayBounds(visibleSelectionBounds.value, visibleFillPreviewBounds.value)
   })
 
+  const visibleSelectionOverlayRanges = computed<readonly DataGridOverlayRange[]>(() => {
+    if (!options.isAdditiveSelection.value) {
+      return options.selectionRanges.value
+    }
+    return options.selectionRange.value ? [options.selectionRange.value] : []
+  })
+
   const visibleSelectionOverlayMetricsList = computed(() => {
     if (visibleFillPreviewBounds.value) {
       return []
     }
     return resolveOverlayMetricsList(
-      options.selectionRanges.value,
+      visibleSelectionOverlayRanges.value,
       options.resolveVisibleRangeBounds,
       options.rowMetrics.value,
     )
@@ -192,7 +199,7 @@ export function useDataGridStageOverlays(
       return []
     }
     return resolveOverlayMetricsList(
-      options.selectionRanges.value,
+      visibleSelectionOverlayRanges.value,
       options.resolvePinnedBottomVisibleRangeBounds,
       options.pinnedBottomRowMetrics.value,
     )
@@ -213,7 +220,6 @@ export function useDataGridStageOverlays(
 
   const selectionOverlayOptions = {
     borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: options.isSingleSelectedCell.value,
   }
   const fillPreviewOverlayOptions = {
     borderColor: "var(--datagrid-selection-overlay-fill-border)",

@@ -10,6 +10,7 @@
       'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
       'grid-stage--single-cell-selection': isSingleSelectedCell,
+      'grid-stage--additive-selection': isAdditiveSelection,
     }"
     :style="layout.stageStyle"
   >
@@ -714,6 +715,7 @@ const rowStateRuntime = useDataGridStageRowState({
   rows,
   selection,
   selectionRange,
+  selectionRanges,
   displayRows,
   visibleColumns,
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
@@ -1055,6 +1057,8 @@ const isSingleSelectedCell = computed(() => {
     && range.startColumn === range.endColumn
 })
 
+const isAdditiveSelection = computed(() => selectionRanges.value.length > 1)
+
 function columnIndexByKey(columnKey: string): number {
   return visibleColumnIndexByKey.value.get(columnKey) ?? 0
 }
@@ -1193,7 +1197,7 @@ const {
   pinnedBottomRowMetrics,
   isCellSelectedSafe,
   isCellInFillPreviewSafe,
-  isSingleSelectedCell,
+  isAdditiveSelection,
   isFillDragging,
   isRangeMoving,
   resolveVisibleRangeBounds,

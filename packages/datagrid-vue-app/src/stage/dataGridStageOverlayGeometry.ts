@@ -231,7 +231,6 @@ export function buildPaneOverlaySegments(
         width,
         metrics.height,
         {
-          hideBorder: isSingleSelectionSegment,
           omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
           topBleed,
           bottomBleed,
@@ -276,7 +275,6 @@ export function buildPaneOverlaySegments(
         width,
         metrics.height,
         {
-          hideBorder: isSingleSelectionSegment,
           omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
           omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
           topBleed,
@@ -321,7 +319,6 @@ export function buildPaneOverlaySegments(
       width,
       metrics.height,
       {
-        hideBorder: isSingleSelectionSegment,
         omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
         topBleed,
         bottomBleed,

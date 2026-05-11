@@ -1262,11 +1262,6 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-row-background-color) !important;
 }
 
-.affino-datagrid-app-root .grid-stage--single-cell-selection .grid-cell--selection-anchor {
-  outline: var(--datagrid-selection-stroke-width) solid var(--datagrid-selection-overlay-border);
-  outline-offset: calc(-1 * var(--datagrid-selection-stroke-width));
-}
-
 .grid-cell--selection-edge {
   --selection-edge-top-size: 0px;
   --selection-edge-right-size: 0px;
