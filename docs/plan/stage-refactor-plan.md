@@ -51,7 +51,7 @@ Validation:
 
 ---
 
-## [] Slice 3 — Extract chrome canvas renderer
+## [x] Slice 3 — Extract chrome canvas renderer
 
 Goal: вынести canvas chrome lifecycle/rendering из stage.
 

@@ -163,7 +163,6 @@ import {
 import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
 import {
   buildDataGridChromeRenderModel,
-  type DataGridChromePaneModel,
   type DataGridChromeRowBand,
 } from "@affino/datagrid-chrome"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
@@ -172,8 +171,6 @@ import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
 import {
   resolveDataGridVirtualChromeRowMetrics,
-  resolveDeviceAlignedCanvasLineWidth,
-  resolveDeviceAlignedCanvasStrokeCenter,
 } from "./dataGridChromeCanvasMath"
 import type {
   DataGridTableStageBodyColumn as TableColumn,
@@ -203,6 +200,7 @@ import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilte
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
+import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 
 ensureDataGridAppStyles()
@@ -998,18 +996,7 @@ useDataGridPerfTrace({
 const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
 const restoreBodyCursor = ref<string | null>(null)
 const restoreDocumentCursor = ref<string | null>(null)
-let gridChromeAnimationFrame = 0
-let gridChromeResizeObserver: ResizeObserver | null = null
-type GridChromeRedrawMode = "full" | "center-scroll"
-let pendingGridChromeRedrawMode: GridChromeRedrawMode = "full"
 let teardownTouchPanGuard: (() => void) | null = null
-
-function mergeGridChromeRedrawMode(
-  current: GridChromeRedrawMode,
-  next: GridChromeRedrawMode,
-): GridChromeRedrawMode {
-  return current === "full" || next === "full" ? "full" : "center-scroll"
-}
 
 function syncGlobalFillDragCursor(active: boolean): void {
   if (typeof document === "undefined") {
@@ -1788,445 +1775,6 @@ function syncBodyViewportScrollState(viewport: HTMLElement): void {
   bodyViewportClientHeight.value = viewport.clientHeight
 }
 
-function syncPinnedBottomViewportScrollLeft(): void {
-  const viewport = bottomViewportEl.value
-  if (!viewport || viewport.scrollLeft === bodyViewportScrollLeft.value) {
-    return
-  }
-  viewport.scrollLeft = bodyViewportScrollLeft.value
-}
-
-function syncPinnedBottomViewportMetrics(): void {
-  pinnedBottomViewportClientHeight.value = bottomViewportEl.value?.clientHeight ?? 0
-}
-
-function syncBodyViewportMetrics(): void {
-  const viewport = bodyViewportEl.value
-  const shell = bodyShellRef.value
-  if (!viewport || !shell) {
-    return
-  }
-  syncBodyViewportScrollState(viewport)
-  const viewportRect = viewport.getBoundingClientRect()
-  const shellRect = shell.getBoundingClientRect()
-  bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
-  headerShellHeight.value = resolveHeaderShellElement()?.getBoundingClientRect().height ?? 0
-  headerViewportClientWidth.value = resolveHeaderViewportElement()?.clientWidth ?? bodyViewportClientWidth.value
-  syncPinnedBottomViewportMetrics()
-  syncPinnedBottomViewportScrollLeft()
-}
-
-function resolveGridChromeDevicePixelRatio(): number {
-  if (typeof window === "undefined") {
-    return 1
-  }
-  return Math.max(1, window.devicePixelRatio || 1)
-}
-
-function resolveGridChromeVariable(variableName: string): string {
-  if (typeof window === "undefined") {
-    return ""
-  }
-  let element: HTMLElement | null = stageRootEl.value
-  while (element) {
-    const value = window.getComputedStyle(element).getPropertyValue(variableName).trim()
-    if (value.length > 0) {
-      return value
-    }
-    element = element.parentElement
-  }
-  return window.getComputedStyle(document.documentElement).getPropertyValue(variableName).trim()
-}
-
-function resolveGridChromeColor(variableName: string, fallback: string): string {
-  const value = resolveGridChromeVariable(variableName)
-  return value || fallback
-}
-
-function resolveGridChromeLineWidth(variableName: string, fallback: number): number {
-  const rawValue = resolveGridChromeVariable(variableName)
-  if (rawValue.length === 0) {
-    return fallback
-  }
-  const value = Number.parseFloat(rawValue)
-  return Number.isFinite(value) && value >= 0 ? value : fallback
-}
-
-function prepareGridChromeCanvas(
-  canvas: HTMLCanvasElement | null,
-  width: number,
-  height: number,
-): CanvasRenderingContext2D | null {
-  if (!canvas || width <= 0 || height <= 0) {
-    if (canvas) {
-      const context = canvas.getContext("2d")
-      context?.clearRect(0, 0, canvas.width, canvas.height)
-    }
-    return null
-  }
-  const dpr = resolveGridChromeDevicePixelRatio()
-  const pixelWidth = Math.max(1, Math.round(width * dpr))
-  const pixelHeight = Math.max(1, Math.round(height * dpr))
-  if (canvas.width !== pixelWidth) {
-    canvas.width = pixelWidth
-  }
-  if (canvas.height !== pixelHeight) {
-    canvas.height = pixelHeight
-  }
-  const context = canvas.getContext("2d")
-  if (!context) {
-    return null
-  }
-  context.setTransform(dpr, 0, 0, dpr, 0, 0)
-  context.clearRect(0, 0, width, height)
-  return context
-}
-
-function drawGridChromeHorizontalLines(
-  context: CanvasRenderingContext2D,
-  pane: DataGridChromePaneModel,
-  rowDividerColor: string,
-  rowDividerWidth: number,
-): void {
-  if (pane.width <= 0 || pane.height <= 0 || rowDividerWidth <= 0) {
-    return
-  }
-  const devicePixelRatio = resolveGridChromeDevicePixelRatio()
-  const alignedRowDividerWidth = resolveDeviceAlignedCanvasLineWidth(rowDividerWidth, devicePixelRatio)
-  context.save()
-  context.strokeStyle = rowDividerColor
-  context.lineWidth = alignedRowDividerWidth
-  context.beginPath()
-  for (const line of pane.horizontalLines) {
-    const y = resolveDeviceAlignedCanvasStrokeCenter(line.position, alignedRowDividerWidth, devicePixelRatio)
-    if (y < -alignedRowDividerWidth || y > pane.height + alignedRowDividerWidth) {
-      continue
-    }
-    context.moveTo(0, y)
-    context.lineTo(pane.width, y)
-  }
-  context.stroke()
-  context.restore()
-}
-
-function resolveGridChromeBandColor(kind: string): string {
-  switch (kind) {
-    case "hover":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-hover-bg",
-        "rgba(251, 146, 60, 0.18)",
-      )
-    case "base":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-base-bg",
-        "rgba(255, 255, 255, 1)",
-      )
-    case "striped":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-striped-bg",
-        "rgba(59, 130, 246, 0.06)",
-      )
-    case "group":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-group-bg",
-        "rgba(59, 130, 246, 0.08)",
-      )
-    case "tree":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-tree-bg",
-        "rgba(59, 130, 246, 0.12)",
-      )
-    case "pivot":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-pivot-bg",
-        "rgba(59, 130, 246, 0.1)",
-      )
-    case "pivot-group":
-      return resolveGridChromeColor(
-        "--datagrid-row-band-pivot-group-bg",
-        "rgba(59, 130, 246, 0.14)",
-      )
-    default:
-      return ""
-  }
-}
-
-function drawGridChromeBands(
-  context: CanvasRenderingContext2D,
-  pane: DataGridChromePaneModel,
-): void {
-  if (pane.width <= 0 || pane.height <= 0 || pane.bands.length === 0) {
-    return
-  }
-  context.save()
-  for (const band of pane.bands) {
-    const fillStyle = resolveGridChromeBandColor(band.kind)
-    if (!fillStyle) {
-      continue
-    }
-    const top = Math.round(band.top)
-    const height = Math.max(1, Math.round(band.height))
-    const clippedTop = Math.max(0, top)
-    const clippedBottom = Math.min(pane.height, top + height)
-    const clippedHeight = clippedBottom - clippedTop
-    if (clippedHeight <= 0) {
-      continue
-    }
-    context.fillStyle = fillStyle
-    context.fillRect(0, clippedTop, pane.width, clippedHeight)
-  }
-  context.restore()
-}
-
-function drawGridChromeVerticalLines(
-  context: CanvasRenderingContext2D,
-  pane: DataGridChromePaneModel,
-  columnDividerColor: string,
-  columnDividerWidth: number,
-): void {
-  if (pane.height <= 0 || columnDividerWidth <= 0 || pane.verticalLines.length === 0) {
-    return
-  }
-  const devicePixelRatio = resolveGridChromeDevicePixelRatio()
-  const alignedColumnDividerWidth = resolveDeviceAlignedCanvasLineWidth(columnDividerWidth, devicePixelRatio)
-  context.save()
-  context.strokeStyle = columnDividerColor
-  context.lineWidth = alignedColumnDividerWidth
-  context.beginPath()
-  for (const line of pane.verticalLines) {
-    // Pane boundaries already have dedicated CSS borders; avoid double-width seams
-    // by skipping chrome lines that land exactly on the pane edges.
-    if (line.position <= 0.5 || line.position >= pane.width - 0.5) {
-      continue
-    }
-    const x = resolveDeviceAlignedCanvasStrokeCenter(line.position, alignedColumnDividerWidth, devicePixelRatio)
-    if (x < -alignedColumnDividerWidth || x > pane.width + alignedColumnDividerWidth) {
-      continue
-    }
-    context.moveTo(x, 0)
-    context.lineTo(x, pane.height)
-  }
-  context.stroke()
-  context.restore()
-}
-
-function drawGridChromeBodyPane(
-  context: CanvasRenderingContext2D | null,
-  pane: DataGridChromePaneModel,
-  rowDividerColor: string,
-  rowDividerWidth: number,
-  columnDividerColor: string,
-  columnDividerWidth: number,
-): void {
-  if (!context) {
-    return
-  }
-  drawGridChromeBands(context, pane)
-  drawGridChromeHorizontalLines(context, pane, rowDividerColor, rowDividerWidth)
-  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
-}
-
-function drawGridChromeHeaderPane(
-  context: CanvasRenderingContext2D | null,
-  pane: DataGridChromePaneModel,
-  columnDividerColor: string,
-  columnDividerWidth: number,
-): void {
-  if (!context || hasPivotHeaderGroups.value) {
-    return
-  }
-  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
-}
-
-function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
-  gridChromeAnimationFrame = 0
-  pendingGridChromeRedrawMode = "full"
-  const headerRenderModel = headerChromeRenderModel.value
-  const renderModel = chromeRenderModel.value
-  const rowDividerColor = resolveGridChromeColor("--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
-  const columnDividerColor = resolveGridChromeColor("--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
-  const headerColumnDividerColor = resolveGridChromeColor("--datagrid-header-column-divider-color", columnDividerColor)
-  const rowDividerWidth = resolveGridChromeLineWidth("--datagrid-row-divider-size", 1)
-  const columnDividerWidth = resolveGridChromeLineWidth("--datagrid-column-divider-size", 1)
-  const headerColumnDividerWidth = resolveGridChromeLineWidth("--datagrid-header-column-divider-size", columnDividerWidth)
-
-  const leftHeaderContext = mode === "full"
-    ? prepareGridChromeCanvas(
-      leftHeaderChromeCanvasEl.value,
-      headerRenderModel.left.width,
-      headerRenderModel.left.height,
-    )
-    : null
-  if (leftHeaderContext) {
-    drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, headerColumnDividerWidth)
-  }
-
-  const centerHeaderContext = prepareGridChromeCanvas(
-    centerHeaderChromeCanvasEl.value,
-    headerRenderModel.center.width,
-    headerRenderModel.center.height,
-  )
-  drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, headerColumnDividerWidth)
-
-  const rightHeaderContext = mode === "full"
-    ? prepareGridChromeCanvas(
-      rightHeaderChromeCanvasEl.value,
-      headerRenderModel.right.width,
-      headerRenderModel.right.height,
-    )
-    : null
-  if (rightHeaderContext) {
-    drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, headerColumnDividerWidth)
-  }
-
-  const leftContext = mode === "full"
-    ? prepareGridChromeCanvas(leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
-    : null
-  if (leftContext) {
-    drawGridChromeBodyPane(
-      leftContext,
-      renderModel.left,
-      rowDividerColor,
-      rowDividerWidth,
-      columnDividerColor,
-      0,
-    )
-  }
-
-  const centerContext = prepareGridChromeCanvas(centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
-  drawGridChromeBodyPane(
-    centerContext,
-    renderModel.center,
-    rowDividerColor,
-    rowDividerWidth,
-    columnDividerColor,
-    columnDividerWidth,
-  )
-
-  const rightContext = mode === "full"
-    ? prepareGridChromeCanvas(rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
-    : null
-  if (rightContext) {
-    drawGridChromeBodyPane(
-      rightContext,
-      renderModel.right,
-      rowDividerColor,
-      rowDividerWidth,
-      columnDividerColor,
-      0,
-    )
-  }
-
-  const bottomRenderModel = pinnedBottomChromeRenderModel.value
-
-  const leftBottomContext = mode === "full"
-    ? prepareGridChromeCanvas(
-      leftBottomChromeCanvasEl.value,
-      bottomRenderModel.left.width,
-      bottomRenderModel.left.height,
-    )
-    : null
-  if (leftBottomContext) {
-    drawGridChromeBodyPane(
-      leftBottomContext,
-      bottomRenderModel.left,
-      rowDividerColor,
-      rowDividerWidth,
-      columnDividerColor,
-      0,
-    )
-  }
-
-  const centerBottomContext = prepareGridChromeCanvas(
-    centerBottomChromeCanvasEl.value,
-    bottomRenderModel.center.width,
-    bottomRenderModel.center.height,
-  )
-  drawGridChromeBodyPane(
-    centerBottomContext,
-    bottomRenderModel.center,
-    rowDividerColor,
-    rowDividerWidth,
-    columnDividerColor,
-    columnDividerWidth,
-  )
-
-  const rightBottomContext = mode === "full"
-    ? prepareGridChromeCanvas(
-      rightBottomChromeCanvasEl.value,
-      bottomRenderModel.right.width,
-      bottomRenderModel.right.height,
-    )
-    : null
-  if (rightBottomContext) {
-    drawGridChromeBodyPane(
-      rightBottomContext,
-      bottomRenderModel.right,
-      rowDividerColor,
-      rowDividerWidth,
-      columnDividerColor,
-      0,
-    )
-  }
-}
-
-function scheduleGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
-  pendingGridChromeRedrawMode = gridChromeAnimationFrame === 0
-    ? mode
-    : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
-  if (typeof window === "undefined") {
-    drawGridChromeCanvas(pendingGridChromeRedrawMode)
-    return
-  }
-  if (gridChromeAnimationFrame !== 0) {
-    return
-  }
-  gridChromeAnimationFrame = window.requestAnimationFrame(() => {
-    drawGridChromeCanvas(pendingGridChromeRedrawMode)
-  })
-}
-
-function flushGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
-  const nextMode = gridChromeAnimationFrame === 0
-    ? mode
-    : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
-  if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
-    window.cancelAnimationFrame(gridChromeAnimationFrame)
-    gridChromeAnimationFrame = 0
-  }
-  drawGridChromeCanvas(nextMode)
-}
-
-function connectGridChromeResizeObserver(): void {
-  if (typeof ResizeObserver === "undefined") {
-    return
-  }
-  if (!gridChromeResizeObserver) {
-    gridChromeResizeObserver = new ResizeObserver(() => {
-      syncBodyViewportMetrics()
-      scheduleGridChromeRedraw()
-    })
-  }
-  gridChromeResizeObserver.disconnect()
-  if (bodyViewportEl.value) {
-    gridChromeResizeObserver.observe(bodyViewportEl.value)
-  }
-  if (bottomViewportEl.value) {
-    gridChromeResizeObserver.observe(bottomViewportEl.value)
-  }
-  if (bodyShellRef.value) {
-    gridChromeResizeObserver.observe(bodyShellRef.value)
-  }
-  const headerShell = resolveHeaderShellElement()
-  if (headerShell) {
-    gridChromeResizeObserver.observe(headerShell)
-  }
-  const headerViewport = resolveHeaderViewportElement()
-  if (headerViewport) {
-    gridChromeResizeObserver.observe(headerViewport)
-  }
-}
-
 const chromeRenderModel = computed(() => (
   buildDataGridChromeRenderModel({
     rowMetrics: resolveChromeRowMetrics(),
@@ -2322,6 +1870,42 @@ const hasPivotHeaderGroups = computed(() => {
     return false
   }
   return visibleColumns.value.some(column => (readPivotHeaderMeta(column)?.groupLabels?.length ?? 0) > 0)
+})
+
+const {
+  syncBodyViewportMetrics,
+  syncPinnedBottomViewportMetrics,
+  syncPinnedBottomViewportScrollLeft,
+  scheduleGridChromeRedraw,
+  flushGridChromeRedraw,
+  connectGridChromeResizeObserver,
+  disconnectGridChromeResizeObserver,
+} = useDataGridStageChromeCanvas({
+  stageRootEl,
+  bodyShellRef,
+  bodyViewportEl,
+  bottomViewportEl,
+  leftHeaderChromeCanvasEl,
+  centerHeaderChromeCanvasEl,
+  rightHeaderChromeCanvasEl,
+  leftChromeCanvasEl,
+  centerChromeCanvasEl,
+  rightChromeCanvasEl,
+  leftBottomChromeCanvasEl,
+  centerBottomChromeCanvasEl,
+  rightBottomChromeCanvasEl,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  pinnedBottomViewportClientHeight,
+  bodyViewportTopOffset,
+  headerShellHeight,
+  headerViewportClientWidth,
+  chromeRenderModel,
+  headerChromeRenderModel,
+  pinnedBottomChromeRenderModel,
+  hasPivotHeaderGroups,
 })
 
 function clamp(value: number, min: number, max: number): number {
@@ -2649,12 +2233,7 @@ onBeforeUnmount(() => {
   managedWheelScroll.reset()
   teardownTouchPanGuard?.()
   teardownTouchPanGuard = null
-  if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
-    window.cancelAnimationFrame(gridChromeAnimationFrame)
-    gridChromeAnimationFrame = 0
-  }
-  gridChromeResizeObserver?.disconnect()
-  gridChromeResizeObserver = null
+  disconnectGridChromeResizeObserver()
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", syncBodyViewportMetrics)
   }
