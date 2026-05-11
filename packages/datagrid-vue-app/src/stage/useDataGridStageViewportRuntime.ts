@@ -1,0 +1,229 @@
+import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
+import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll } from "@affino/datagrid-vue/advanced"
+import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
+import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
+
+export interface UseDataGridStageViewportRuntimeSyncers {
+  syncBodyViewportMetrics: () => void
+  syncPinnedBottomViewportMetrics: () => void
+  syncPinnedBottomViewportScrollLeft: () => void
+  scheduleGridChromeRedraw: (mode?: "full" | "center-scroll") => void
+  flushGridChromeRedraw: (mode?: "full" | "center-scroll") => void
+  connectGridChromeResizeObserver: () => void
+  disconnectGridChromeResizeObserver: () => void
+}
+
+export interface UseDataGridStageViewportRuntimeOptions {
+  stageRootEl: Readonly<Ref<HTMLElement | null>>
+  viewport: Readonly<Ref<DataGridTableStageViewportSection>>
+  resolveGridChromeSyncers: () => UseDataGridStageViewportRuntimeSyncers
+  leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
+  rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
+}
+
+export interface UseDataGridStageViewportRuntimeResult {
+  bodyViewportEl: Ref<HTMLElement | null>
+  bottomViewportEl: Ref<HTMLElement | null>
+  bodyViewportScrollTop: Ref<number>
+  bodyViewportScrollLeft: Ref<number>
+  bodyViewportClientWidth: Ref<number>
+  bodyViewportClientHeight: Ref<number>
+  pinnedBottomViewportClientHeight: Ref<number>
+  bodyViewportTopOffset: Ref<number>
+  headerShellHeight: Ref<number>
+  headerViewportClientWidth: Ref<number>
+  captureBodyViewportRef: (value: Element | ComponentPublicInstance | null) => void
+  capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
+  handleCenterViewportScroll: (event: Event) => void
+  handlePinnedBottomViewportScroll: (event: Event) => void
+  handleLinkedViewportWheel: (event: WheelEvent) => void
+  handleBodyViewportWheel: (event: WheelEvent) => void
+}
+
+function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
+  if (value instanceof HTMLElement) {
+    return value
+  }
+  if (value && "$el" in value) {
+    const element = value.$el
+    return element instanceof HTMLElement ? element : null
+  }
+  return null
+}
+
+function createSyntheticScrollEvent(target: HTMLElement): Event {
+  return { target } as unknown as Event
+}
+
+export function useDataGridStageViewportRuntime(
+  options: UseDataGridStageViewportRuntimeOptions,
+): UseDataGridStageViewportRuntimeResult {
+  const bodyViewportEl = ref<HTMLElement | null>(null)
+  const bottomViewportEl = ref<HTMLElement | null>(null)
+  const headerShellHeight = ref(0)
+  const headerViewportClientWidth = ref(0)
+  const bodyViewportScrollTop = ref(0)
+  const bodyViewportScrollLeft = ref(0)
+  const bodyViewportClientWidth = ref(0)
+  const bodyViewportClientHeight = ref(0)
+  const pinnedBottomViewportClientHeight = ref(0)
+  const bodyViewportTopOffset = ref(0)
+  let teardownTouchPanGuard: (() => void) | null = null
+
+  const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
+    resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
+    mode: "direct-transform",
+    resolvePaneElements: () => [options.leftPaneContentRef.value, options.rightPaneContentRef.value],
+  })
+
+  const managedWheelScroll = useDataGridManagedWheelScroll({
+    resolveBodyViewport: () => bodyViewportEl.value,
+    resolveMainViewport: () => bodyViewportEl.value,
+    setHandledScrollTop: (value: number) => {
+      if (bodyViewportEl.value) {
+        bodyViewportEl.value.scrollTop = value
+      }
+    },
+    setHandledScrollLeft: (value: number) => {
+      if (bodyViewportEl.value) {
+        bodyViewportEl.value.scrollLeft = value
+      }
+    },
+    syncLinkedScroll: (scrollTop: number) => {
+      linkedPaneScrollSync.syncNow(scrollTop)
+    },
+    scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,
+    isLinkedScrollSyncLoopScheduled: linkedPaneScrollSync.isSyncLoopScheduled,
+    onWheelConsumed: () => {
+      const bodyViewport = bodyViewportEl.value
+      if (!bodyViewport) {
+        return
+      }
+      options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
+    },
+  })
+
+  function resolveHeaderShellElement(): HTMLElement | null {
+    return options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null
+  }
+
+  function resolveHeaderViewportElement(): HTMLElement | null {
+    return resolveHeaderShellElement()?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+  }
+
+  function resolveScrollContainers(): HTMLElement[] {
+    return [
+      bodyViewportEl.value,
+      bottomViewportEl.value,
+      resolveHeaderViewportElement(),
+    ].filter((value): value is HTMLElement => value instanceof HTMLElement)
+  }
+
+  function syncBodyViewportScrollState(viewport: HTMLElement): void {
+    bodyViewportScrollTop.value = viewport.scrollTop
+    bodyViewportScrollLeft.value = viewport.scrollLeft
+    bodyViewportClientWidth.value = viewport.clientWidth
+    bodyViewportClientHeight.value = viewport.clientHeight
+  }
+
+  function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
+    bodyViewportEl.value = resolveElementRef(value)
+    options.viewport.value.bodyViewportRef(value)
+    const syncers = options.resolveGridChromeSyncers()
+    syncers.syncBodyViewportMetrics()
+    syncers.connectGridChromeResizeObserver()
+    syncers.scheduleGridChromeRedraw()
+  }
+
+  function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
+    bottomViewportEl.value = resolveElementRef(value)
+    const syncers = options.resolveGridChromeSyncers()
+    syncers.syncPinnedBottomViewportMetrics()
+    syncers.syncPinnedBottomViewportScrollLeft()
+  }
+
+  function handleCenterViewportScroll(event: Event): void {
+    options.viewport.value.handleViewportScroll(event)
+    const element = event.target as HTMLElement | null
+    if (!element) {
+      return
+    }
+    const previousScrollTop = bodyViewportScrollTop.value
+    const previousScrollLeft = bodyViewportScrollLeft.value
+    if (element.scrollTop !== previousScrollTop) {
+      linkedPaneScrollSync.onSourceScroll(element.scrollTop)
+    }
+    syncBodyViewportScrollState(element)
+    options.resolveGridChromeSyncers().syncPinnedBottomViewportScrollLeft()
+    if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
+      options.resolveGridChromeSyncers().flushGridChromeRedraw("center-scroll")
+      return
+    }
+    options.resolveGridChromeSyncers().scheduleGridChromeRedraw("full")
+  }
+
+  function handlePinnedBottomViewportScroll(event: Event): void {
+    const element = event.target as HTMLElement | null
+    const bodyViewport = bodyViewportEl.value
+    if (!element || !bodyViewport || bodyViewport.scrollLeft === element.scrollLeft) {
+      return
+    }
+    bodyViewport.scrollLeft = element.scrollLeft
+    options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
+    syncBodyViewportScrollState(bodyViewport)
+    options.resolveGridChromeSyncers().flushGridChromeRedraw("center-scroll")
+  }
+
+  function handleLinkedViewportWheel(event: WheelEvent): void {
+    managedWheelScroll.onLinkedViewportWheel(event)
+  }
+
+  function handleBodyViewportWheel(event: WheelEvent): void {
+    managedWheelScroll.onBodyViewportWheel(event)
+  }
+
+  onMounted(() => {
+    options.resolveGridChromeSyncers().syncBodyViewportMetrics()
+    options.resolveGridChromeSyncers().connectGridChromeResizeObserver()
+    options.resolveGridChromeSyncers().scheduleGridChromeRedraw()
+    if (options.stageRootEl.value) {
+      teardownTouchPanGuard = installDataGridTouchPanGuard({
+        root: options.stageRootEl.value,
+        resolveScrollContainers,
+      })
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", options.resolveGridChromeSyncers().syncBodyViewportMetrics)
+    }
+  })
+
+  onBeforeUnmount(() => {
+    linkedPaneScrollSync.reset()
+    managedWheelScroll.reset()
+    teardownTouchPanGuard?.()
+    teardownTouchPanGuard = null
+    options.resolveGridChromeSyncers().disconnectGridChromeResizeObserver()
+    if (typeof window !== "undefined") {
+      window.removeEventListener("resize", options.resolveGridChromeSyncers().syncBodyViewportMetrics)
+    }
+  })
+
+  return {
+    bodyViewportEl,
+    bottomViewportEl,
+    bodyViewportScrollTop,
+    bodyViewportScrollLeft,
+    bodyViewportClientWidth,
+    bodyViewportClientHeight,
+    pinnedBottomViewportClientHeight,
+    bodyViewportTopOffset,
+    headerShellHeight,
+    headerViewportClientWidth,
+    captureBodyViewportRef,
+    capturePinnedBottomViewportRef,
+    handleCenterViewportScroll,
+    handlePinnedBottomViewportScroll,
+    handleLinkedViewportWheel,
+    handleBodyViewportWheel,
+  }
+}

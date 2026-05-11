@@ -148,11 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
-import {
-  useDataGridLinkedPaneScrollSync,
-  useDataGridManagedWheelScroll,
-} from "@affino/datagrid-vue/advanced"
+import { computed, nextTick, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
 import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
@@ -175,7 +171,6 @@ import {
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
 import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
-import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
@@ -184,6 +179,10 @@ import { useDataGridStageCellState } from "./useDataGridStageCellState"
 import { useDataGridStageFillAction } from "./useDataGridStageFillAction"
 import { useDataGridStagePointerInteractions } from "./useDataGridStagePointerInteractions"
 import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
+import {
+  useDataGridStageViewportRuntime,
+  type UseDataGridStageViewportRuntimeSyncers,
+} from "./useDataGridStageViewportRuntime"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -339,10 +338,6 @@ function resolveElementRef(value: Element | ComponentPublicInstance | null): HTM
     return element instanceof HTMLElement ? element : null
   }
   return null
-}
-
-function createSyntheticScrollEvent(target: HTMLElement): Event {
-  return { target } as unknown as Event
 }
 
 function parsePixelValue(value: unknown, fallback: number): number {
@@ -694,8 +689,6 @@ const centerBottomChromeCanvasStyle = computed<CSSProperties>(() => ({
 }))
 
 const stageRootEl = ref<HTMLElement | null>(null)
-const bodyViewportEl = ref<HTMLElement | null>(null)
-const bottomViewportEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
@@ -711,20 +704,14 @@ const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
-const headerShellHeight = ref(0)
-const headerViewportClientWidth = ref(0)
-const bodyViewportScrollTop = ref(0)
-const bodyViewportScrollLeft = ref(0)
-const bodyViewportClientWidth = ref(0)
-const bodyViewportClientHeight = ref(0)
-const pinnedBottomViewportClientHeight = ref(0)
-const bodyViewportTopOffset = ref(0)
-
-let teardownTouchPanGuard: (() => void) | null = null
-useDataGridPerfTrace({
-  viewport,
-  displayRows,
-  bodyViewportScrollTop,
+let resolveGridChromeSyncers: () => UseDataGridStageViewportRuntimeSyncers = () => ({
+  syncBodyViewportMetrics: () => {},
+  syncPinnedBottomViewportMetrics: () => {},
+  syncPinnedBottomViewportScrollLeft: () => {},
+  scheduleGridChromeRedraw: () => {},
+  flushGridChromeRedraw: () => {},
+  connectGridChromeResizeObserver: () => {},
+  disconnectGridChromeResizeObserver: () => {},
 })
 
 function clearHoveredRow(): void {
@@ -866,14 +853,6 @@ function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
   return null
 }
 
-function resolveHeaderViewportElement(): HTMLElement | null {
-  return resolveHeaderShellElement()?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
-}
-
-function resolveHeaderShellElement(): HTMLElement | null {
-  return stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null
-}
-
 function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
   left: number
   right: number
@@ -915,19 +894,49 @@ function restoreAnchorCellFocus(): void {
   void restoreDataGridFocus(focusVisibleAnchorCell)
 }
 
-function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
-  bodyViewportEl.value = resolveElementRef(value)
-  viewport.value.bodyViewportRef(value)
-  syncBodyViewportMetrics()
-  connectGridChromeResizeObserver()
-  scheduleGridChromeRedraw()
-}
+const rowIndexState = useDataGridStageRowIndex({
+  rows,
+  layout,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  selectionRange,
+  visibleColumns,
+  isHoveredRow,
+  isStripedRow,
+  resolveAbsoluteRowIndex,
+  resolveInlineRowStateFill,
+  isDataGridPlaceholderSurfaceRow,
+})
 
-function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
-  bottomViewportEl.value = resolveElementRef(value)
-  syncPinnedBottomViewportMetrics()
-  syncPinnedBottomViewportScrollLeft()
-}
+const {
+  bodyViewportEl,
+  bottomViewportEl,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  pinnedBottomViewportClientHeight,
+  bodyViewportTopOffset,
+  headerShellHeight,
+  headerViewportClientWidth,
+  captureBodyViewportRef,
+  capturePinnedBottomViewportRef,
+  handleCenterViewportScroll,
+  handlePinnedBottomViewportScroll,
+  handleLinkedViewportWheel,
+  handleBodyViewportWheel,
+} = useDataGridStageViewportRuntime({
+  stageRootEl,
+  viewport,
+  leftPaneContentRef,
+  rightPaneContentRef,
+  resolveGridChromeSyncers: () => resolveGridChromeSyncers(),
+})
+
+useDataGridPerfTrace({
+  viewport,
+  displayRows,
+  bodyViewportScrollTop,
+})
 
 function captureLeftPaneContentRef(value: Element | ComponentPublicInstance | null): void {
   leftPaneContentRef.value = resolveElementRef(value)
@@ -944,26 +953,6 @@ function captureLeftBottomPaneContentRef(value: Element | ComponentPublicInstanc
 function captureRightBottomPaneContentRef(value: Element | ComponentPublicInstance | null): void {
   rightBottomPaneContentRef.value = resolveElementRef(value)
 }
-
-function syncBodyViewportScrollState(viewport: HTMLElement): void {
-  bodyViewportScrollTop.value = viewport.scrollTop
-  bodyViewportScrollLeft.value = viewport.scrollLeft
-  bodyViewportClientWidth.value = viewport.clientWidth
-  bodyViewportClientHeight.value = viewport.clientHeight
-}
-
-const rowIndexState = useDataGridStageRowIndex({
-  rows,
-  layout,
-  viewportRowStart: computed(() => viewport.value.viewportRowStart),
-  selectionRange,
-  visibleColumns,
-  isHoveredRow,
-  isStripedRow,
-  resolveAbsoluteRowIndex,
-  resolveInlineRowStateFill,
-  isDataGridPlaceholderSurfaceRow,
-})
 
 const {
   chromeRenderModel,
@@ -1133,6 +1122,16 @@ const {
   hasPivotHeaderGroups,
 })
 
+resolveGridChromeSyncers = () => ({
+  syncBodyViewportMetrics,
+  syncPinnedBottomViewportMetrics,
+  syncPinnedBottomViewportScrollLeft,
+  scheduleGridChromeRedraw,
+  flushGridChromeRedraw,
+  connectGridChromeResizeObserver,
+  disconnectGridChromeResizeObserver,
+})
+
 watch(
   () => [
     leftPaneWidth.value,
@@ -1215,7 +1214,6 @@ const {
   handleCellMouseMove,
   handleFillHandleMouseDown,
   handleFillHandleDoubleClick,
-  resetGlobalFillDragCursor,
 } = useDataGridStagePointerInteractions({
   mode,
   selection,
@@ -1231,113 +1229,9 @@ const {
 
 isRangeMoveHandleHoverCellImpl = isRangeMoveHandleHoverCellFromPointer
 
-const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
-  resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
-  mode: "direct-transform",
-  resolvePaneElements: () => [leftPaneContentRef.value, rightPaneContentRef.value],
-})
-
-const managedWheelScroll = useDataGridManagedWheelScroll({
-  resolveBodyViewport: () => bodyViewportEl.value,
-  resolveMainViewport: () => bodyViewportEl.value,
-  setHandledScrollTop: (value: number) => {
-    if (bodyViewportEl.value) {
-      bodyViewportEl.value.scrollTop = value
-    }
-  },
-  setHandledScrollLeft: (value: number) => {
-    if (bodyViewportEl.value) {
-      bodyViewportEl.value.scrollLeft = value
-    }
-  },
-  syncLinkedScroll: (scrollTop: number) => {
-    linkedPaneScrollSync.syncNow(scrollTop)
-  },
-  scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,
-  isLinkedScrollSyncLoopScheduled: linkedPaneScrollSync.isSyncLoopScheduled,
-  onWheelConsumed: () => {
-    const bodyViewport = bodyViewportEl.value
-    if (!bodyViewport) {
-      return
-    }
-    viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
-  },
-})
-
-function handleCenterViewportScroll(event: Event): void {
-  viewport.value.handleViewportScroll(event)
-  const element = event.target as HTMLElement | null
-  if (!element) {
-    return
-  }
-  const previousScrollTop = bodyViewportScrollTop.value
-  const previousScrollLeft = bodyViewportScrollLeft.value
-  if (element.scrollTop !== previousScrollTop) {
-    linkedPaneScrollSync.onSourceScroll(element.scrollTop)
-  }
-  syncBodyViewportScrollState(element)
-  syncPinnedBottomViewportScrollLeft()
-  if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
-    flushGridChromeRedraw("center-scroll")
-    return
-  }
-  scheduleGridChromeRedraw("full")
-}
-
-function handlePinnedBottomViewportScroll(event: Event): void {
-  const element = event.target as HTMLElement | null
-  const bodyViewport = bodyViewportEl.value
-  if (!element || !bodyViewport || bodyViewport.scrollLeft === element.scrollLeft) {
-    return
-  }
-  bodyViewport.scrollLeft = element.scrollLeft
-  viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
-  syncBodyViewportScrollState(bodyViewport)
-  flushGridChromeRedraw("center-scroll")
-}
-
 function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)
 }
-
-function handleLinkedViewportWheel(event: WheelEvent): void {
-  managedWheelScroll.onLinkedViewportWheel(event)
-}
-
-function handleBodyViewportWheel(event: WheelEvent): void {
-  managedWheelScroll.onBodyViewportWheel(event)
-}
-
-onBeforeUnmount(() => {
-  resetGlobalFillDragCursor()
-  linkedPaneScrollSync.reset()
-  managedWheelScroll.reset()
-  teardownTouchPanGuard?.()
-  teardownTouchPanGuard = null
-  disconnectGridChromeResizeObserver()
-  if (typeof window !== "undefined") {
-    window.removeEventListener("resize", syncBodyViewportMetrics)
-  }
-})
-
-onMounted(() => {
-  syncBodyViewportMetrics()
-  connectGridChromeResizeObserver()
-  scheduleGridChromeRedraw()
-  if (stageRootEl.value) {
-    teardownTouchPanGuard = installDataGridTouchPanGuard({
-      root: stageRootEl.value,
-      resolveScrollContainers: () => [
-        bodyViewportEl.value,
-        bottomViewportEl.value,
-        resolveHeaderViewportElement(),
-      ],
-    })
-  }
-  if (typeof window !== "undefined") {
-    window.addEventListener("resize", syncBodyViewportMetrics)
-  }
-})
 
 const leftTrackStyle = computed<CSSProperties>(() => ({
   width: `${leftPaneWidth.value}px`,
@@ -1758,7 +1652,7 @@ const rightPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => 
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
-  getHeaderElement: () => resolveHeaderShellElement(),
+  getHeaderElement: () => stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null,
   getBodyViewportElement: () => bodyViewportEl.value,
   getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(rowMetrics.value),
 })

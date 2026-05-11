@@ -330,7 +330,7 @@ Validation:
 
 ---
 
-## [] Slice 12 — Extract viewport/scroll sync runtime
+## [x] Slice 12 — Extract viewport/scroll sync runtime
 
 Goal: вынести viewport refs, scroll metrics, pinned bottom scroll sync, wheel sync.
 
