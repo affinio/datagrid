@@ -364,7 +364,7 @@ Validation:
 
 ---
 
-## [] Slice 13 — Extract pane model builders
+## [x] Slice 13 — Extract pane model builders
 
 Goal: уменьшить `DataGridTableStage.vue` до сборки stage.
 

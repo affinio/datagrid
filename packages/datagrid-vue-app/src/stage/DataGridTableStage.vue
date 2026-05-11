@@ -148,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, ref, watch, type CSSProperties, type PropType } from "vue"
 import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
@@ -158,7 +158,6 @@ import type {
   DataGridTableStageBodyColumn as TableColumn,
   DataGridTableStageBodyRow as TableRow,
   DataGridTableStageCenterPaneRenderApi,
-  DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
 } from "./dataGridTableStageBody.types"
 import type {
@@ -183,6 +182,7 @@ import {
   useDataGridStageViewportRuntime,
   type UseDataGridStageViewportRuntimeSyncers,
 } from "./useDataGridStageViewportRuntime"
+import { useDataGridStagePanes } from "./useDataGridStagePanes"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -327,17 +327,6 @@ function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: numbe
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selection"]["selectionRange"]>
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
-}
-
-function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
-  if (value instanceof HTMLElement) {
-    return value
-  }
-  if (value && "$el" in value) {
-    const element = value.$el
-    return element instanceof HTMLElement ? element : null
-  }
-  return null
 }
 
 function parsePixelValue(value: unknown, fallback: number): number {
@@ -654,40 +643,6 @@ const rightPaneWidth = computed(() => {
   return (pinnedRightColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
 })
 
-const paneLayoutStyle = computed<CSSProperties>(() => ({
-  gridTemplateColumns: `${leftPaneWidth.value}px minmax(0, 1fr) ${rightPaneWidth.value}px`,
-}))
-
-const leftPaneStyle = computed<CSSProperties>(() => ({
-  width: `${leftPaneWidth.value}px`,
-  minWidth: `${leftPaneWidth.value}px`,
-  maxWidth: `${leftPaneWidth.value}px`,
-}))
-
-const rightPaneStyle = computed<CSSProperties>(() => ({
-  width: `${rightPaneWidth.value}px`,
-  minWidth: `${rightPaneWidth.value}px`,
-  maxWidth: `${rightPaneWidth.value}px`,
-}))
-
-const centerHeaderChromeCanvasStyle = computed<CSSProperties>(() => ({
-  left: `${leftPaneWidth.value}px`,
-  width: `${Math.max(0, headerViewportClientWidth.value)}px`,
-  height: `${Math.max(0, headerShellHeight.value)}px`,
-}))
-
-const centerChromeCanvasStyle = computed<CSSProperties>(() => ({
-  left: `${leftPaneWidth.value}px`,
-  width: `${Math.max(0, bodyViewportClientWidth.value)}px`,
-  height: `${Math.max(0, bodyViewportClientHeight.value)}px`,
-}))
-
-const centerBottomChromeCanvasStyle = computed<CSSProperties>(() => ({
-  left: `${leftPaneWidth.value}px`,
-  width: `${Math.max(0, bodyViewportClientWidth.value)}px`,
-  height: `${Math.max(0, pinnedBottomViewportClientHeight.value)}px`,
-}))
-
 const stageRootEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
@@ -937,22 +892,6 @@ useDataGridPerfTrace({
   displayRows,
   bodyViewportScrollTop,
 })
-
-function captureLeftPaneContentRef(value: Element | ComponentPublicInstance | null): void {
-  leftPaneContentRef.value = resolveElementRef(value)
-}
-
-function captureRightPaneContentRef(value: Element | ComponentPublicInstance | null): void {
-  rightPaneContentRef.value = resolveElementRef(value)
-}
-
-function captureLeftBottomPaneContentRef(value: Element | ComponentPublicInstance | null): void {
-  leftBottomPaneContentRef.value = resolveElementRef(value)
-}
-
-function captureRightBottomPaneContentRef(value: Element | ComponentPublicInstance | null): void {
-  rightBottomPaneContentRef.value = resolveElementRef(value)
-}
 
 const {
   chromeRenderModel,
@@ -1233,18 +1172,6 @@ function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)
 }
 
-const leftTrackStyle = computed<CSSProperties>(() => ({
-  width: `${leftPaneWidth.value}px`,
-  minWidth: `${leftPaneWidth.value}px`,
-  maxWidth: `${leftPaneWidth.value}px`,
-}))
-
-const rightTrackStyle = computed<CSSProperties>(() => ({
-  width: `${rightPaneWidth.value}px`,
-  minWidth: `${rightPaneWidth.value}px`,
-  maxWidth: `${rightPaneWidth.value}px`,
-}))
-
 const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
   bodyViewportClientHeight: bodyViewportClientHeight.value,
   indexColumnWidthPx: indexColumnWidthPx.value,
@@ -1444,6 +1371,78 @@ const {
   customOverlays,
 })
 
+const {
+  paneLayoutStyle,
+  leftPaneStyle,
+  rightPaneStyle,
+  leftTrackStyle,
+  rightTrackStyle,
+  centerHeaderChromeCanvasStyle,
+  centerChromeCanvasStyle,
+  centerBottomChromeCanvasStyle,
+  leftPinnedPane,
+  rightPinnedPane,
+  leftPinnedBottomPane,
+  rightPinnedBottomPane,
+} = useDataGridStagePanes({
+  leftPaneWidth,
+  rightPaneWidth,
+  leftPaneContentRef,
+  rightPaneContentRef,
+  leftBottomPaneContentRef,
+  rightBottomPaneContentRef,
+  displayRows,
+  pinnedBottomRows,
+  showRowIndex: rowIndexState.showRowIndex,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+  leftSelectionOverlaySegments,
+  leftSelectionSeamOverlaySegments,
+  centerSelectionOverlaySegments,
+  rightSelectionOverlaySegments,
+  rightSelectionSeamOverlaySegments,
+  leftPinnedBottomSelectionOverlaySegments,
+  leftPinnedBottomSelectionSeamOverlaySegments,
+  centerPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionSeamOverlaySegments,
+  leftFillPreviewOverlaySegments,
+  leftFillPreviewSeamOverlaySegments,
+  centerFillPreviewOverlaySegments,
+  rightFillPreviewOverlaySegments,
+  rightFillPreviewSeamOverlaySegments,
+  leftPinnedBottomFillPreviewOverlaySegments,
+  leftPinnedBottomFillPreviewSeamOverlaySegments,
+  centerPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewSeamOverlaySegments,
+  leftMovePreviewOverlaySegments,
+  leftMovePreviewSeamOverlaySegments,
+  centerMovePreviewOverlaySegments,
+  rightMovePreviewOverlaySegments,
+  rightMovePreviewSeamOverlaySegments,
+  leftPinnedBottomMovePreviewOverlaySegments,
+  leftPinnedBottomMovePreviewSeamOverlaySegments,
+  centerPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewSeamOverlaySegments,
+  leftCustomOverlayLanes,
+  centerCustomOverlayLanes,
+  rightCustomOverlayLanes,
+  leftCustomSeamOverlayLanes,
+  rightCustomSeamOverlayLanes,
+  leftPinnedBottomCustomOverlayLanes,
+  centerPinnedBottomCustomOverlayLanes,
+  rightPinnedBottomCustomOverlayLanes,
+  leftPinnedBottomCustomSeamOverlayLanes,
+  rightPinnedBottomCustomSeamOverlayLanes,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  pinnedBottomViewportClientHeight,
+  headerShellHeight,
+  headerViewportClientWidth,
+})
+
 const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   handleLinkedViewportWheel,
   absoluteRowIndex: resolveAbsoluteRowIndex,
@@ -1569,86 +1568,6 @@ const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   readResolvedDisplayCell,
   renderResolvedCellContent,
 }
-
-const leftPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
-  side: "left" as const,
-  width: leftPaneWidth.value,
-  style: leftPaneStyle.value,
-  contentStyle: {} as CSSProperties,
-  contentRef: captureLeftPaneContentRef,
-  columns: pinnedLeftColumns.value,
-  showIndexColumn: showRowIndex.value,
-  displayRows: displayRows.value,
-  topSpacerHeight: viewport.value.topSpacerHeight,
-  bottomSpacerHeight: viewport.value.bottomSpacerHeight,
-  selectionOverlaySegments: leftSelectionOverlaySegments.value,
-  fillPreviewOverlaySegments: leftFillPreviewOverlaySegments.value,
-  movePreviewOverlaySegments: leftMovePreviewOverlaySegments.value,
-  overlayLanes: leftCustomOverlayLanes.value,
-  selectionSeamOverlaySegments: leftSelectionSeamOverlaySegments.value,
-  fillPreviewSeamOverlaySegments: leftFillPreviewSeamOverlaySegments.value,
-  movePreviewSeamOverlaySegments: leftMovePreviewSeamOverlaySegments.value,
-  seamOverlayLanes: leftCustomSeamOverlayLanes.value,
-}))
-
-const rightPinnedPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
-  side: "right" as const,
-  width: rightPaneWidth.value,
-  style: rightPaneStyle.value,
-  contentStyle: {} as CSSProperties,
-  contentRef: captureRightPaneContentRef,
-  columns: pinnedRightColumns.value,
-  showIndexColumn: false,
-  displayRows: displayRows.value,
-  topSpacerHeight: viewport.value.topSpacerHeight,
-  bottomSpacerHeight: viewport.value.bottomSpacerHeight,
-  selectionOverlaySegments: rightSelectionOverlaySegments.value,
-  fillPreviewOverlaySegments: rightFillPreviewOverlaySegments.value,
-  movePreviewOverlaySegments: rightMovePreviewOverlaySegments.value,
-  overlayLanes: rightCustomOverlayLanes.value,
-  selectionSeamOverlaySegments: rightSelectionSeamOverlaySegments.value,
-  fillPreviewSeamOverlaySegments: rightFillPreviewSeamOverlaySegments.value,
-  movePreviewSeamOverlaySegments: rightMovePreviewSeamOverlaySegments.value,
-  seamOverlayLanes: rightCustomSeamOverlayLanes.value,
-}))
-
-const leftPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
-  side: "left" as const,
-  width: leftPaneWidth.value,
-  style: leftPaneStyle.value,
-  contentStyle: {} as CSSProperties,
-  contentRef: captureLeftBottomPaneContentRef,
-  columns: pinnedLeftColumns.value,
-  showIndexColumn: showRowIndex.value,
-  displayRows: pinnedBottomRows.value,
-  selectionOverlaySegments: leftPinnedBottomSelectionOverlaySegments.value,
-  fillPreviewOverlaySegments: leftPinnedBottomFillPreviewOverlaySegments.value,
-  movePreviewOverlaySegments: leftPinnedBottomMovePreviewOverlaySegments.value,
-  overlayLanes: leftPinnedBottomCustomOverlayLanes.value,
-  selectionSeamOverlaySegments: leftPinnedBottomSelectionSeamOverlaySegments.value,
-  fillPreviewSeamOverlaySegments: leftPinnedBottomFillPreviewSeamOverlaySegments.value,
-  movePreviewSeamOverlaySegments: leftPinnedBottomMovePreviewSeamOverlaySegments.value,
-  seamOverlayLanes: leftPinnedBottomCustomSeamOverlayLanes.value,
-}))
-
-const rightPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => ({
-  side: "right" as const,
-  width: rightPaneWidth.value,
-  style: rightPaneStyle.value,
-  contentStyle: {} as CSSProperties,
-  contentRef: captureRightBottomPaneContentRef,
-  columns: pinnedRightColumns.value,
-  showIndexColumn: false,
-  displayRows: pinnedBottomRows.value,
-  selectionOverlaySegments: rightPinnedBottomSelectionOverlaySegments.value,
-  fillPreviewOverlaySegments: rightPinnedBottomFillPreviewOverlaySegments.value,
-  movePreviewOverlaySegments: rightPinnedBottomMovePreviewOverlaySegments.value,
-  overlayLanes: rightPinnedBottomCustomOverlayLanes.value,
-  selectionSeamOverlaySegments: rightPinnedBottomSelectionSeamOverlaySegments.value,
-  fillPreviewSeamOverlaySegments: rightPinnedBottomFillPreviewSeamOverlaySegments.value,
-  movePreviewSeamOverlaySegments: rightPinnedBottomMovePreviewSeamOverlaySegments.value,
-  seamOverlayLanes: rightPinnedBottomCustomSeamOverlayLanes.value,
-}))
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
