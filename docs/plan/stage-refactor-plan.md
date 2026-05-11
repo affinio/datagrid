@@ -300,7 +300,7 @@ Validation:
 
 ---
 
-## [] Slice 11 — Extract fill/range move pointer runtime
+## [x] Slice 11 — Extract fill/range move pointer runtime
 
 Goal: вынести fill handle and range move hover logic.
 

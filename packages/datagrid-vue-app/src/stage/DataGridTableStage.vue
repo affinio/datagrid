@@ -182,6 +182,7 @@ import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageCellState } from "./useDataGridStageCellState"
 import { useDataGridStageFillAction } from "./useDataGridStageFillAction"
+import { useDataGridStagePointerInteractions } from "./useDataGridStagePointerInteractions"
 import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
@@ -328,8 +329,6 @@ type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
 }
-
-const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
@@ -502,22 +501,6 @@ function cellTabIndex(rowOffset: number, columnIndex: number): number {
   return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
 }
 
-function handleFillHandleMouseDown(event: MouseEvent): void {
-  fillActionMenuOpen.value = false
-  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  const cell = handle?.closest<HTMLElement>(".grid-cell")
-  cell?.focus({ preventScroll: true })
-  selection.value.startFillHandleDrag(event)
-}
-
-function handleFillHandleDoubleClick(event: MouseEvent): void {
-  fillActionMenuOpen.value = false
-  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  const cell = handle?.closest<HTMLElement>(".grid-cell")
-  cell?.focus({ preventScroll: true })
-  selection.value.startFillHandleDoubleClick(event)
-}
-
 function resolveViewportRowStart(): number {
   return viewport.value?.viewportRowStart ?? 0
 }
@@ -635,6 +618,17 @@ function isCellEditableSafe(
     : isColumnEditable(column)
 }
 
+function isCellOnSelectionEdgeSafe(
+  rowOffset: number,
+  columnIndex: number,
+  edge: "top" | "right" | "bottom" | "left",
+): boolean {
+  const evaluate = cells.value.isCellOnSelectionEdge
+  return typeof evaluate === "function"
+    ? evaluate(rowOffset, columnIndex, edge)
+    : false
+}
+
 function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
   const evaluate = selection.value.isFillHandleCell
   return typeof evaluate === "function"
@@ -716,7 +710,6 @@ const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
-const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const headerShellHeight = ref(0)
 const headerViewportClientWidth = ref(0)
@@ -727,64 +720,12 @@ const bodyViewportClientHeight = ref(0)
 const pinnedBottomViewportClientHeight = ref(0)
 const bodyViewportTopOffset = ref(0)
 
+let teardownTouchPanGuard: (() => void) | null = null
 useDataGridPerfTrace({
   viewport,
   displayRows,
   bodyViewportScrollTop,
 })
-
-const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
-const restoreBodyCursor = ref<string | null>(null)
-const restoreDocumentCursor = ref<string | null>(null)
-let teardownTouchPanGuard: (() => void) | null = null
-
-function syncGlobalFillDragCursor(active: boolean): void {
-  if (typeof document === "undefined") {
-    return
-  }
-  const body = document.body
-  const root = document.documentElement
-  if (!body || !root) {
-    return
-  }
-  if (active) {
-    if (restoreBodyCursor.value == null) {
-      restoreBodyCursor.value = body.style.cursor
-    }
-    if (restoreDocumentCursor.value == null) {
-      restoreDocumentCursor.value = root.style.cursor
-    }
-    root.classList.add(GLOBAL_FILL_DRAG_CURSOR_CLASS)
-    body.classList.add(GLOBAL_FILL_DRAG_CURSOR_CLASS)
-    root.style.setProperty("cursor", "crosshair", "important")
-    body.style.setProperty("cursor", "crosshair", "important")
-    return
-  }
-  root.classList.remove(GLOBAL_FILL_DRAG_CURSOR_CLASS)
-  body.classList.remove(GLOBAL_FILL_DRAG_CURSOR_CLASS)
-  if (restoreDocumentCursor.value != null) {
-    if (restoreDocumentCursor.value) {
-      root.style.setProperty("cursor", restoreDocumentCursor.value)
-    }
-    else {
-      root.style.removeProperty("cursor")
-    }
-    restoreDocumentCursor.value = null
-  }
-  if (restoreBodyCursor.value != null) {
-    if (restoreBodyCursor.value) {
-      body.style.setProperty("cursor", restoreBodyCursor.value)
-    }
-    else {
-      body.style.removeProperty("cursor")
-    }
-    restoreBodyCursor.value = null
-  }
-}
-
-function clearRangeMoveHandleHover(): void {
-  hoveredRangeMoveHandleCell.value = null
-}
 
 function clearHoveredRow(): void {
   hoveredRowIndex.value = null
@@ -839,74 +780,6 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
   }
 }
 
-function isCellOnSelectionEdgeSafe(
-  rowOffset: number,
-  columnIndex: number,
-  edge: "top" | "right" | "bottom" | "left",
-): boolean {
-  const evaluate = cells.value.isCellOnSelectionEdge
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex, edge)
-    : false
-}
-
-function isNearRangeMoveSelectionEdge(
-  event: MouseEvent,
-  rowOffset: number,
-  columnIndex: number,
-): boolean {
-  if (mode.value !== "base" || isRangeMoving.value || !selectionRange.value) {
-    return false
-  }
-  if (!isCellSelectedSafe(rowOffset, columnIndex)) {
-    return false
-  }
-  const row = displayRows.value[rowOffset]
-  const column = visibleColumns.value[columnIndex]
-  if (!row || !column || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
-    return false
-  }
-  const cell = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  if (!cell) {
-    return false
-  }
-  const rect = cell.getBoundingClientRect()
-  if (rect.width <= 0 || rect.height <= 0) {
-    return false
-  }
-  const edgeThreshold = Math.max(
-    1,
-    Math.min(
-      RANGE_MOVE_HANDLE_HOVER_EDGE_PX,
-      Math.floor(rect.width / 2),
-      Math.floor(rect.height / 2),
-    ),
-  )
-  const offsetX = event.clientX - rect.left
-  const offsetY = event.clientY - rect.top
-  return (
-    (offsetY <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "top"))
-    || (rect.height - offsetY <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "bottom"))
-    || (offsetX <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "left"))
-    || (rect.width - offsetX <= edgeThreshold && isCellOnSelectionEdgeSafe(rowOffset, columnIndex, "right"))
-  )
-}
-
-function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
-  if (isFillDragging.value || selection.value.rangeMoveEnabled !== true) {
-    clearRangeMoveHandleHover()
-    return
-  }
-  if (isNearRangeMoveSelectionEdge(event, rowOffset, columnIndex)) {
-    hoveredRangeMoveHandleCell.value = {
-      rowIndex: rowOffset + viewport.value.viewportRowStart,
-      columnIndex,
-    }
-    return
-  }
-  clearRangeMoveHandleHover()
-}
-
 function handleGroupCellClick(row: TableRow): void {
   if (row.kind !== "group") {
     return
@@ -940,16 +813,6 @@ function handleBodyCellClick(
     return
   }
   interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
-}
-
-function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
-  if (isFillDragging.value || selection.value.rangeMoveEnabled !== true) {
-    return false
-  }
-  return (
-    hoveredRangeMoveHandleCell.value?.rowIndex === rowOffset + viewport.value.viewportRowStart
-    && hoveredRangeMoveHandleCell.value?.columnIndex === columnIndex
-  )
 }
 
 function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: number } | null {
@@ -1200,6 +1063,12 @@ const {
   columnIndexByKey,
 })
 
+let isRangeMoveHandleHoverCellImpl = (_rowOffset: number, _columnIndex: number) => false
+
+function isRangeMoveHandleHoverCellSafe(rowOffset: number, columnIndex: number): boolean {
+  return isRangeMoveHandleHoverCellImpl(rowOffset, columnIndex)
+}
+
 const {
   builtInCellClasses,
   cellStateClasses,
@@ -1222,7 +1091,7 @@ const {
   resolveCellEditorMode,
   isVisualSelectionAnchorCell,
   shouldHighlightSelectedCellVisual,
-  isRangeMoveHandleHoverCell,
+  isRangeMoveHandleHoverCell: isRangeMoveHandleHoverCellSafe,
   isCellInFillPreviewSafe,
   isCellInPendingClipboardRangeSafe,
   isCellOnPendingClipboardEdgeSafe,
@@ -1340,13 +1209,27 @@ const {
   restoreAnchorCellFocus,
 })
 
-watch(
-  () => selection.value.isFillDragging,
-  active => {
-    syncGlobalFillDragCursor(active)
-  },
-  { immediate: true },
-)
+const {
+  clearRangeMoveHandleHover,
+  isRangeMoveHandleHoverCell: isRangeMoveHandleHoverCellFromPointer,
+  handleCellMouseMove,
+  handleFillHandleMouseDown,
+  handleFillHandleDoubleClick,
+  resetGlobalFillDragCursor,
+} = useDataGridStagePointerInteractions({
+  mode,
+  selection,
+  selectionRange,
+  visibleColumns,
+  displayRows,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  fillActionMenuOpen,
+  isCellSelectedSafe,
+  isCellEditableSafe,
+  isCellOnSelectionEdgeSafe,
+})
+
+isRangeMoveHandleHoverCellImpl = isRangeMoveHandleHoverCellFromPointer
 
 const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
   resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -1426,7 +1309,7 @@ function handleBodyViewportWheel(event: WheelEvent): void {
 }
 
 onBeforeUnmount(() => {
-  syncGlobalFillDragCursor(false)
+  resetGlobalFillDragCursor()
   linkedPaneScrollSync.reset()
   managedWheelScroll.reset()
   teardownTouchPanGuard?.()
