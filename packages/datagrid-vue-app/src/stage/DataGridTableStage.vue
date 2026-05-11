@@ -179,8 +179,6 @@ import type {
   DataGridTableStageBodyColumn as TableColumn,
   DataGridTableStageBodyRow as TableRow,
   DataGridTableStageCenterPaneRenderApi,
-  DataGridTableStageOverlayLane,
-  DataGridTableStageOverlaySegment as OverlaySegment,
   DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
   DataGridTableStageSelectEditorOption as SelectEditorOption,
@@ -195,6 +193,7 @@ import {
   type DataGridTableStageContext,
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
+import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
 import type {
   DataGridAppCellRendererInteractiveContext,
   DataGridAppRowSurfaceContext,
@@ -204,17 +203,7 @@ import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilte
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
-import {
-  buildCustomOverlayLane as buildDataGridStageCustomOverlayLane,
-  buildCustomSeamOverlayLane as buildDataGridStageCustomSeamOverlayLane,
-  buildPaneOverlaySegments as buildDataGridStagePaneOverlaySegments,
-  buildPaneOverlaySegmentsForMetricsList as buildDataGridStagePaneOverlaySegmentsForMetricsList,
-  buildPinnedPaneSeamOverlaySegments as buildDataGridStagePinnedPaneSeamOverlaySegments,
-  buildPinnedPaneSeamOverlaySegmentsForMetricsList as buildDataGridStagePinnedPaneSeamOverlaySegmentsForMetricsList,
-  mergeOverlayBounds,
-  resolveOverlayMetricsList,
-  type DataGridStageOverlayGeometryContext,
-} from "./dataGridStageOverlayGeometry"
+import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 
 ensureDataGridAppStyles()
 
@@ -2938,76 +2927,6 @@ const visibleColumnIndexByKey = computed(() => {
   return indexByKey
 })
 
-const visibleSelectionBounds = computed(() => {
-  let startRowOffset: number | null = null
-  let endRowOffset: number | null = null
-  let startColumnIndex: number | null = null
-  let endColumnIndex: number | null = null
-
-  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
-      if (!isCellSelectedSafe(rowOffset, columnIndex)) {
-        continue
-      }
-      startRowOffset ??= rowOffset
-      endRowOffset = rowOffset
-      startColumnIndex = startColumnIndex == null ? columnIndex : Math.min(startColumnIndex, columnIndex)
-      endColumnIndex = endColumnIndex == null ? columnIndex : Math.max(endColumnIndex, columnIndex)
-    }
-  }
-
-  if (
-    startRowOffset == null
-    || endRowOffset == null
-    || startColumnIndex == null
-    || endColumnIndex == null
-  ) {
-    return null
-  }
-
-  return {
-    startRowOffset,
-    endRowOffset,
-    startColumnIndex,
-    endColumnIndex,
-  }
-})
-
-const visibleFillPreviewBounds = computed(() => {
-  let startRowOffset: number | null = null
-  let endRowOffset: number | null = null
-  let startColumnIndex: number | null = null
-  let endColumnIndex: number | null = null
-
-  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
-      if (!isCellInFillPreviewSafe(rowOffset, columnIndex)) {
-        continue
-      }
-      startRowOffset ??= rowOffset
-      endRowOffset = rowOffset
-      startColumnIndex = startColumnIndex == null ? columnIndex : Math.min(startColumnIndex, columnIndex)
-      endColumnIndex = endColumnIndex == null ? columnIndex : Math.max(endColumnIndex, columnIndex)
-    }
-  }
-
-  if (
-    startRowOffset == null
-    || endRowOffset == null
-    || startColumnIndex == null
-    || endColumnIndex == null
-  ) {
-    return null
-  }
-
-  return {
-    startRowOffset,
-    endRowOffset,
-    startColumnIndex,
-    endColumnIndex,
-  }
-})
-
 const isSingleSelectedCell = computed(() => {
   const ranges = selectionRanges.value
   if (ranges.length !== 1) {
@@ -3041,16 +2960,6 @@ function spacerStyle(width: number): CSSProperties {
     minWidth: px,
     maxWidth: px,
   }
-}
-
-function rangesEqual(left: OverlayRange | null, right: OverlayRange | null): boolean {
-  if (!left || !right) {
-    return false
-  }
-  return left.startRow === right.startRow
-    && left.endRow === right.endRow
-    && left.startColumn === right.startColumn
-    && left.endColumn === right.endColumn
 }
 
 function resolveVisibleRangeBoundsForRows(
@@ -3131,546 +3040,69 @@ function resolvePinnedBottomVisibleRangeBounds(range: OverlayRange | null) {
   return resolveVisibleRangeBoundsForRows(range, pinnedBottomRows.value)
 }
 
-function resolveOverlayMetrics(bounds: {
-  startRowOffset: number
-  endRowOffset: number
-  startColumnIndex: number
-  endColumnIndex: number
-} | null,
-  metricsSource = rowMetrics.value,
-) {
-  if (!bounds) {
-    return null
-  }
-  const startMetric = metricsSource[bounds.startRowOffset]
-  const endMetric = metricsSource[bounds.endRowOffset]
-  if (!startMetric || !endMetric) {
-    return null
-  }
-
-  return {
-    ...bounds,
-    top: startMetric.top,
-    height: Math.max(1, (endMetric.top + endMetric.height) - startMetric.top),
-  }
-}
-
 const customOverlays = computed(() => props.customOverlays ?? [])
-
-function buildPaneOverlaySegments(
-  metrics: {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  } | null,
-  pane: "left" | "center" | "right",
-  keyPrefix: string,
-  options?: {
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    hideSingleCell?: boolean
-    zIndex?: number
-  },
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): OverlaySegment[] {
-  return buildDataGridStagePaneOverlaySegments(overlayGeometryContext.value, metrics, pane, keyPrefix, options, viewportHeight)
-}
-
-function buildPinnedPaneSeamOverlaySegments(
-  metrics: {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  } | null,
-  pane: "left" | "right",
-  keyPrefix: string,
-  options?: {
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    hideSingleCell?: boolean
-    zIndex?: number
-  },
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): OverlaySegment[] {
-  return buildDataGridStagePinnedPaneSeamOverlaySegments(overlayGeometryContext.value, metrics, pane, keyPrefix, options, viewportHeight)
-}
-
-function buildPaneOverlaySegmentsForMetricsList(
-  metricsList: readonly {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  }[],
-  pane: "left" | "center" | "right",
-  keyPrefix: string,
-  options?: {
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    hideSingleCell?: boolean
-    zIndex?: number
-  },
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): OverlaySegment[] {
-  return buildDataGridStagePaneOverlaySegmentsForMetricsList(
-    overlayGeometryContext.value,
-    metricsList,
-    pane,
-    keyPrefix,
-    options,
-    viewportHeight,
-  )
-}
-
-function buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-  metricsList: readonly {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  }[],
-  pane: "left" | "right",
-  keyPrefix: string,
-  options?: {
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    hideSingleCell?: boolean
-    zIndex?: number
-  },
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): OverlaySegment[] {
-  return buildDataGridStagePinnedPaneSeamOverlaySegmentsForMetricsList(
-    overlayGeometryContext.value,
-    metricsList,
-    pane,
-    keyPrefix,
-    options,
-    viewportHeight,
-  )
-}
-
-function buildCustomOverlayLane(
-  overlay: DataGridTableStageCustomOverlay,
-  pane: "left" | "center" | "right",
-  metricsList: readonly {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  }[],
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): DataGridTableStageOverlayLane | null {
-  return buildDataGridStageCustomOverlayLane(overlayGeometryContext.value, overlay, pane, metricsList, viewportHeight)
-}
-
-function buildCustomSeamOverlayLane(
-  overlay: DataGridTableStageCustomOverlay,
-  pane: "left" | "right",
-  metricsList: readonly {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  }[],
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): DataGridTableStageOverlayLane | null {
-  return buildDataGridStageCustomSeamOverlayLane(overlayGeometryContext.value, overlay, pane, metricsList, viewportHeight)
-}
-
-const customOverlayMetrics = computed(() => customOverlays.value.map(overlay => ({
-  overlay,
-  body: resolveOverlayMetricsList(overlay.ranges, resolveVisibleRangeBounds),
-  pinnedBottom: resolveOverlayMetricsList(
-    overlay.ranges,
-    resolvePinnedBottomVisibleRangeBounds,
-    pinnedBottomRowMetrics.value,
-  ),
-})))
-
-const leftCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, body }) => buildCustomOverlayLane(overlay, "left", body))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const centerCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, body }) => buildCustomOverlayLane(overlay, "center", body))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const rightCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, body }) => buildCustomOverlayLane(overlay, "right", body))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const leftCustomSeamOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, body }) => buildCustomSeamOverlayLane(overlay, "left", body))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const rightCustomSeamOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, body }) => buildCustomSeamOverlayLane(overlay, "right", body))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const leftPinnedBottomCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(
-    overlay,
-    "left",
-    pinnedBottom,
-    bottomViewportEl.value?.clientHeight ?? 0,
-  ))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const centerPinnedBottomCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(
-    overlay,
-    "center",
-    pinnedBottom,
-    bottomViewportEl.value?.clientHeight ?? 0,
-  ))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const rightPinnedBottomCustomOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(
-    overlay,
-    "right",
-    pinnedBottom,
-    bottomViewportEl.value?.clientHeight ?? 0,
-  ))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const leftPinnedBottomCustomSeamOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, pinnedBottom }) => buildCustomSeamOverlayLane(
-    overlay,
-    "left",
-    pinnedBottom,
-    bottomViewportEl.value?.clientHeight ?? 0,
-  ))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const rightPinnedBottomCustomSeamOverlayLanes = computed<DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-  .map(({ overlay, pinnedBottom }) => buildCustomSeamOverlayLane(
-    overlay,
-    "right",
-    pinnedBottom,
-    bottomViewportEl.value?.clientHeight ?? 0,
-  ))
-  .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
-
-const normalizedMovePreviewRange = computed<OverlayRange | null>(() => {
-  if (!selection.value.isRangeMoving || !selection.value.rangeMovePreviewRange) {
-    return null
-  }
-  return rangesEqual(selection.value.rangeMovePreviewRange, selectionRange.value)
-    ? null
-    : selection.value.rangeMovePreviewRange
+const {
+  leftSelectionOverlaySegments,
+  leftSelectionSeamOverlaySegments,
+  centerSelectionOverlaySegments,
+  rightSelectionOverlaySegments,
+  rightSelectionSeamOverlaySegments,
+  leftPinnedBottomSelectionOverlaySegments,
+  leftPinnedBottomSelectionSeamOverlaySegments,
+  centerPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionSeamOverlaySegments,
+  leftFillPreviewOverlaySegments,
+  leftFillPreviewSeamOverlaySegments,
+  centerFillPreviewOverlaySegments,
+  rightFillPreviewOverlaySegments,
+  rightFillPreviewSeamOverlaySegments,
+  leftPinnedBottomFillPreviewOverlaySegments,
+  leftPinnedBottomFillPreviewSeamOverlaySegments,
+  centerPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewSeamOverlaySegments,
+  leftMovePreviewOverlaySegments,
+  leftMovePreviewSeamOverlaySegments,
+  centerMovePreviewOverlaySegments,
+  rightMovePreviewOverlaySegments,
+  rightMovePreviewSeamOverlaySegments,
+  leftPinnedBottomMovePreviewOverlaySegments,
+  leftPinnedBottomMovePreviewSeamOverlaySegments,
+  centerPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewSeamOverlaySegments,
+  leftCustomOverlayLanes,
+  centerCustomOverlayLanes,
+  rightCustomOverlayLanes,
+  leftCustomSeamOverlayLanes,
+  rightCustomSeamOverlayLanes,
+  leftPinnedBottomCustomOverlayLanes,
+  centerPinnedBottomCustomOverlayLanes,
+  rightPinnedBottomCustomOverlayLanes,
+  leftPinnedBottomCustomSeamOverlayLanes,
+  rightPinnedBottomCustomSeamOverlayLanes,
+} = useDataGridStageOverlays({
+  overlayGeometryContext,
+  bodyViewportClientHeight,
+  bottomViewportClientHeight: pinnedBottomViewportClientHeight,
+  visibleColumns,
+  displayRows,
+  selectionRanges,
+  selectionRange,
+  fillPreviewRange: computed(() => selection.value?.fillPreviewRange ?? null),
+  rangeMovePreviewRange: computed(() => selection.value?.rangeMovePreviewRange ?? null),
+  rowMetrics,
+  pinnedBottomRowMetrics,
+  isCellSelectedSafe,
+  isCellInFillPreviewSafe,
+  isSingleSelectedCell,
+  isFillDragging,
+  isRangeMoving,
+  resolveVisibleRangeBounds,
+  resolvePinnedBottomVisibleRangeBounds,
+  customOverlays,
 })
-
-const visibleCombinedFillPreviewBounds = computed(() => {
-  if (!visibleFillPreviewBounds.value) {
-    return null
-  }
-  return mergeOverlayBounds(visibleSelectionBounds.value, visibleFillPreviewBounds.value)
-})
-const visibleSelectionOverlayMetricsList = computed(() => {
-  if (visibleFillPreviewBounds.value) {
-    return []
-  }
-  return resolveOverlayMetricsList(selectionRanges.value, resolveVisibleRangeBounds)
-})
-const visibleFillPreviewOverlayMetrics = computed(() => resolveOverlayMetrics(visibleCombinedFillPreviewBounds.value))
-const visibleMovePreviewOverlayMetrics = computed(() => (
-  resolveOverlayMetrics(resolveVisibleRangeBounds(normalizedMovePreviewRange.value))
-))
-const visiblePinnedBottomSelectionOverlayMetricsList = computed(() => {
-  if (visibleFillPreviewBounds.value) {
-    return []
-  }
-  return resolveOverlayMetricsList(
-    selectionRanges.value,
-    resolvePinnedBottomVisibleRangeBounds,
-    pinnedBottomRowMetrics.value,
-  )
-})
-const visiblePinnedBottomFillPreviewOverlayMetrics = computed(() => resolveOverlayMetrics(
-  mergeOverlayBounds(
-    resolvePinnedBottomVisibleRangeBounds(selectionRange.value),
-    resolvePinnedBottomVisibleRangeBounds(selection.value.fillPreviewRange),
-  ),
-  pinnedBottomRowMetrics.value,
-))
-const visiblePinnedBottomMovePreviewOverlayMetrics = computed(() => resolveOverlayMetrics(
-  resolvePinnedBottomVisibleRangeBounds(normalizedMovePreviewRange.value),
-  pinnedBottomRowMetrics.value,
-))
-
-const leftSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visibleSelectionOverlayMetricsList.value,
-  "left",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-))
-
-const leftSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-  visibleSelectionOverlayMetricsList.value,
-  "left",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-))
-
-const centerSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visibleSelectionOverlayMetricsList.value,
-  "center",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-))
-
-const rightSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visibleSelectionOverlayMetricsList.value,
-  "right",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-))
-
-const rightSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-  visibleSelectionOverlayMetricsList.value,
-  "right",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-))
-
-const leftPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visiblePinnedBottomSelectionOverlayMetricsList.value,
-  "left",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-  bottomViewportEl.value?.clientHeight ?? 0,
-))
-
-const leftPinnedBottomSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-  visiblePinnedBottomSelectionOverlayMetricsList.value,
-  "left",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-  bottomViewportEl.value?.clientHeight ?? 0,
-))
-
-const centerPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visiblePinnedBottomSelectionOverlayMetricsList.value,
-  "center",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-  bottomViewportEl.value?.clientHeight ?? 0,
-))
-
-const rightPinnedBottomSelectionOverlaySegments = computed<OverlaySegment[]>(() => buildPaneOverlaySegmentsForMetricsList(
-  visiblePinnedBottomSelectionOverlayMetricsList.value,
-  "right",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-  bottomViewportEl.value?.clientHeight ?? 0,
-))
-
-const rightPinnedBottomSelectionSeamOverlaySegments = computed<OverlaySegment[]>(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-  visiblePinnedBottomSelectionOverlayMetricsList.value,
-  "right",
-  "selection",
-  {
-    borderColor: "var(--datagrid-selection-overlay-border)",
-    hideSingleCell: isSingleSelectedCell.value,
-  },
-  bottomViewportEl.value?.clientHeight ?? 0,
-))
-
-const leftFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "left", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  })
-))
-
-const leftFillPreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visibleFillPreviewOverlayMetrics.value, "left", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  })
-))
-
-const centerFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "center", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  })
-))
-
-const rightFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleFillPreviewOverlayMetrics.value, "right", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  })
-))
-
-const rightFillPreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visibleFillPreviewOverlayMetrics.value, "right", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  })
-))
-
-const leftPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "left", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const leftPinnedBottomFillPreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "left", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const centerPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "center", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const rightPinnedBottomFillPreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "right", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const rightPinnedBottomFillPreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visiblePinnedBottomFillPreviewOverlayMetrics.value, "right", "fill-preview", {
-    borderColor: "var(--datagrid-selection-overlay-fill-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-fill-bg)",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const leftMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "left", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  })
-))
-
-const leftMovePreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visibleMovePreviewOverlayMetrics.value, "left", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  })
-))
-
-const centerMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "center", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  })
-))
-
-const rightMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visibleMovePreviewOverlayMetrics.value, "right", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  })
-))
-
-const rightMovePreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visibleMovePreviewOverlayMetrics.value, "right", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  })
-))
-
-const leftPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "left", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const leftPinnedBottomMovePreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "left", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const centerPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "center", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const rightPinnedBottomMovePreviewOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPaneOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "right", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
-
-const rightPinnedBottomMovePreviewSeamOverlaySegments = computed<OverlaySegment[]>(() => (
-  buildPinnedPaneSeamOverlaySegments(visiblePinnedBottomMovePreviewOverlayMetrics.value, "right", "move-preview", {
-    borderColor: "var(--datagrid-selection-overlay-move-border)",
-    backgroundColor: "var(--datagrid-selection-overlay-move-bg)",
-    borderStyle: "dashed",
-  }, bottomViewportEl.value?.clientHeight ?? 0)
-))
 
 const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   handleLinkedViewportWheel,

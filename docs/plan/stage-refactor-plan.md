@@ -146,7 +146,7 @@ Validation:
 
 ---
 
-## [] Slice 6 — Extract overlay composable
+## [x] Slice 6 — Extract overlay composable
 
 Goal: вынести computed overlay lanes from stage.
 

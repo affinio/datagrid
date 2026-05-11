@@ -3,6 +3,7 @@ import { h, nextTick } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
+import type { DataGridTableStageCustomOverlay } from "../dataGridTableStage.types"
 import DataGridTableStage from "../DataGridTableStage.vue"
 
 type DemoRow = Record<string, unknown>
@@ -95,6 +96,7 @@ function createStageProps(
     fillActionAnchorCell?: { rowIndex: number; columnIndex: number } | null
     fillActionBehavior?: "copy" | "series" | null
     applyFillActionBehavior?: (behavior: "copy" | "series") => void
+    customOverlays?: readonly DataGridTableStageCustomOverlay[]
     isCellEditable?: (
       row: DataGridTableRow<DemoRow>,
       rowOffset: number,
@@ -200,6 +202,7 @@ function createStageProps(
       autosizeRow: () => undefined,
       consumeRecentRowResizeInteraction: () => false,
     },
+    customOverlays: options?.customOverlays,
     selection: {
       selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
       selectionRanges: options?.selectionRanges,
@@ -836,6 +839,26 @@ describe("DataGridTableStage contract", () => {
     expect(rightSeamSegment.exists()).toBe(true)
     expect(centerFillSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
+
+    wrapper.unmount()
+  })
+
+  it("renders custom overlay lanes", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        () => false,
+        {
+          customOverlays: [{
+            key: "custom",
+            ranges: [{ startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 }],
+            className: "custom-overlay",
+          }],
+        },
+      ),
+    })
+
+    expect(wrapper.find('[data-datagrid-overlay-lane="custom"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
