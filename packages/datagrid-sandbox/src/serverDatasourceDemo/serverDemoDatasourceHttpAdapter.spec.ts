@@ -855,13 +855,6 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           status: { kind: "valueSet", tokens: ["string:active"] },
         },
       },
-      options: {
-        scope: "filtered",
-        ignoreSelfFilter: true,
-        search: "EM",
-        limit: 2,
-        orderBy: "countDesc",
-      },
     })
     expect(histogram).toEqual([
       { token: "string:EMEA", value: "EMEA", text: "string:EMEA", count: 5 },

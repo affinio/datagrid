@@ -1176,7 +1176,6 @@ function resolveColumnMenuInstanceKey(columnKey: string): string {
     columnKey,
     columns.value.columnMenuValueFilterEnabled === false ? "text-only" : "value-filter",
     columnMenuValueFilterRowLimit.value,
-    sourceRows.value.length,
   ].join(":")
 }
 

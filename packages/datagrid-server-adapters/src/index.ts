@@ -4,11 +4,9 @@ import {
   type DataGridAdvancedFilterExpression,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
-  type DataGridColumnHistogramOptions,
   type DataGridColumnFilterSnapshotEntry,
   type DataGridColumnStyleFilter,
   type DataGridDataSource,
-  type DataGridDataSourceColumnHistogramRequest,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
   type DataGridFilterSnapshot,
@@ -576,28 +574,6 @@ function resolveAffinoHistoryScopeBody(
   return body
 }
 
-function normalizeAffinoHistogramOptions(
-  request: DataGridDataSourceColumnHistogramRequest,
-  defaultOptions: DataGridColumnHistogramOptions | undefined,
-): Record<string, unknown> {
-  const histogramOptions = request.options
-  const ignoreSelfFilter = histogramOptions.ignoreSelfFilter ?? defaultOptions?.ignoreSelfFilter
-  const search = typeof histogramOptions.search === "string" ? histogramOptions.search.trim() : ""
-  const body: Record<string, unknown> = {
-    ...(ignoreSelfFilter === undefined ? {} : { ignoreSelfFilter }),
-  }
-  if (search.length > 0) {
-    body.search = search
-  }
-  if (histogramOptions.orderBy === "countDesc" || histogramOptions.orderBy === "valueAsc") {
-    body.orderBy = histogramOptions.orderBy
-  }
-  if (typeof histogramOptions.limit === "number" && Number.isFinite(histogramOptions.limit)) {
-    body.limit = Math.max(0, Math.trunc(histogramOptions.limit))
-  }
-  return body
-}
-
 class AffinoDatasourceHttpError extends Error {
   readonly status: number
   readonly code: string | null
@@ -1032,7 +1008,6 @@ export function createAffinoDatasource<TRow>(
     mapHistogramRequest: request => ({
       columnId: request.columnId,
       filterModel: request.filterModel,
-      options: normalizeAffinoHistogramOptions(request, options.histogram),
     }),
     mapPullResponse: mapAffinoPullResponse,
     mapHistogramResponse: mapAffinoHistogramResponse,

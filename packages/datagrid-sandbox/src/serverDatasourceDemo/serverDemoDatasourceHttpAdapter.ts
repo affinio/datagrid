@@ -1025,16 +1025,6 @@ export function createServerDemoDatasourceHttpAdapter(
           request.filterModel,
           request.options.ignoreSelfFilter ? request.columnId : undefined,
         ),
-        options: {
-          scope: request.options.scope,
-          ignoreSelfFilter: request.options.ignoreSelfFilter,
-          search: request.options.search,
-          limit: typeof request.options.limit === "number" && Number.isFinite(request.options.limit)
-            ? Math.max(0, Math.trunc(request.options.limit))
-            : undefined,
-          orderBy: request.options.orderBy,
-          styleKey: request.options.styleKey,
-        },
       }, request.signal)
 
       let entries = toHistogramEntries(response)
