@@ -281,8 +281,6 @@ const selection = stageContext.selection
 const editing = stageContext.editing
 const cells = stageContext.cells
 const interaction = stageContext.interaction
-let rowStateRuntime: ReturnType<typeof useDataGridStageRowState> | null = null
-let focusRuntime: ReturnType<typeof useDataGridStageFocusRuntime> | null = null
 
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
@@ -743,7 +741,7 @@ const {
   columnIndexByKey,
 })
 
-rowStateRuntime = useDataGridStageRowState({
+const rowStateRuntime = useDataGridStageRowState({
   rows,
   selection,
   selectionRange,
@@ -880,7 +878,7 @@ const effectiveBodyViewportWidth = computed(() => {
     : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
 })
 
-focusRuntime = useDataGridStageFocusRuntime({
+const focusRuntime = useDataGridStageFocusRuntime({
   bodyShellRef,
   bodyViewportEl,
   leftPaneContentRef,
@@ -919,11 +917,11 @@ const {
   pinnedRightColumns,
   resolveColumnWidth,
   resolveViewportRowStart,
-  resolveVisibleCellElement: focusRuntime!.resolveVisibleCellElement,
-  resolveVisibleRowElement: focusRuntime!.resolveVisibleRowElement,
-  resolveRelativeCellRect: focusRuntime!.resolveRelativeCellRect,
+  resolveVisibleCellElement: focusRuntime.resolveVisibleCellElement,
+  resolveVisibleRowElement: focusRuntime.resolveVisibleRowElement,
+  resolveRelativeCellRect: focusRuntime.resolveRelativeCellRect,
   isVisibleCellEditableByAbsoluteCoord,
-  restoreAnchorCellFocus: focusRuntime!.restoreAnchorCellFocus,
+  restoreAnchorCellFocus: focusRuntime.restoreAnchorCellFocus,
 })
 
 const {
