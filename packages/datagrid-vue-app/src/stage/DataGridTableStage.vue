@@ -161,17 +161,10 @@ import {
   useDataGridManagedWheelScroll,
 } from "@affino/datagrid-vue/advanced"
 import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
-import {
-  buildDataGridChromeRenderModel,
-  type DataGridChromeRowBand,
-} from "@affino/datagrid-chrome"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
-import {
-  resolveDataGridVirtualChromeRowMetrics,
-} from "./dataGridChromeCanvasMath"
 import type {
   DataGridTableStageBodyColumn as TableColumn,
   DataGridTableStageBodyRow as TableRow,
@@ -200,6 +193,7 @@ import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilte
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
+import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 
@@ -709,31 +703,6 @@ function resolveViewportRowEnd(): number {
   return actualCount > 0
     ? resolveViewportRowStart() + actualCount - 1
     : resolveViewportRowStart() - 1
-}
-
-function resolveVirtualRowTotal(): number {
-  const explicitTotal = viewport.value?.virtualRowTotal
-  if (Number.isFinite(explicitTotal)) {
-    return Math.max(0, Math.trunc(explicitTotal as number))
-  }
-  return Math.max(
-    resolveViewportRowEnd() + 1,
-    displayRows.value.length,
-    selection.value?.totalRowCount ?? 0,
-  )
-}
-
-function resolveBaseRowHeight(): number {
-  const explicitHeight = viewport.value?.baseRowHeight
-  if (Number.isFinite(explicitHeight) && (explicitHeight as number) > 0) {
-    return Math.max(1, Math.trunc(explicitHeight as number))
-  }
-  const firstRow = displayRows.value[0]
-  if (firstRow) {
-    const style = rows.value?.rowStyle(firstRow, resolveViewportRowOffset(firstRow, 0)) ?? {}
-    return Math.max(1, Math.trunc(parsePixelValue(style.height ?? style.minHeight, 31)))
-  }
-  return 31
 }
 
 function resolveLeftColumnSpacerWidth(): number {
@@ -1775,101 +1744,54 @@ function syncBodyViewportScrollState(viewport: HTMLElement): void {
   bodyViewportClientHeight.value = viewport.clientHeight
 }
 
-const chromeRenderModel = computed(() => (
-  buildDataGridChromeRenderModel({
-    rowMetrics: resolveChromeRowMetrics(),
-    rowBands: resolveChromeRowBands(),
-    scrollTop: bodyViewportScrollTop.value,
-    leftPaneWidth: leftPaneWidth.value,
-    centerPaneWidth: bodyViewportClientWidth.value,
-    rightPaneWidth: rightPaneWidth.value,
-    viewportHeight: bodyViewportClientHeight.value,
-    leftColumnWidths: [
-      indexColumnWidthPx.value,
-      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
-    ].filter(width => width > 0),
-    centerColumnWidths: [
-      resolveLeftColumnSpacerWidth(),
-      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
-      resolveRightColumnSpacerWidth(),
-    ].filter(width => width > 0),
-    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
-    centerScrollLeft: bodyViewportScrollLeft.value,
-  })
-))
-
-const headerChromeRenderModel = computed(() => (
-  buildDataGridChromeRenderModel({
-    rowMetrics: headerShellHeight.value > 0
-      ? [{ top: 0, height: headerShellHeight.value }]
-      : [],
-    scrollTop: 0,
-    leftPaneWidth: leftPaneWidth.value,
-    centerPaneWidth: headerViewportClientWidth.value,
-    rightPaneWidth: rightPaneWidth.value,
-    viewportHeight: headerShellHeight.value,
-    leftColumnWidths: [
-      indexColumnWidthPx.value,
-      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
-    ].filter(width => width > 0),
-    centerColumnWidths: [
-      resolveLeftColumnSpacerWidth(),
-      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
-      resolveRightColumnSpacerWidth(),
-    ].filter(width => width > 0),
-    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
-    centerScrollLeft: bodyViewportScrollLeft.value,
-  })
-))
-
-const pinnedBottomRowBands = computed<readonly DataGridChromeRowBand[]>(() => (
-  pinnedBottomRows.value.flatMap((row, rowOffset) => {
-    const metric = pinnedBottomRowMetrics.value[rowOffset]
-    const kind = resolveChromeRowBandKind(row, resolveViewportRowOffset(row, rowOffset))
-    if (!metric || !kind) {
-      return []
-    }
-    return [{
-      rowIndex: rowOffset,
-      top: metric.top,
-      height: metric.height,
-      kind,
-    }]
-  })
-))
-
-function resolvePinnedBottomChromeRowBands(): readonly DataGridChromeRowBand[] {
-  return pinnedBottomRowBands.value ?? []
-}
-
-const pinnedBottomChromeRenderModel = computed(() => (
-  buildDataGridChromeRenderModel({
-    rowMetrics: resolvePinnedBottomChromeRowMetrics(),
-    rowBands: resolvePinnedBottomChromeRowBands(),
-    scrollTop: 0,
-    leftPaneWidth: leftPaneWidth.value,
-    centerPaneWidth: bodyViewportClientWidth.value,
-    rightPaneWidth: rightPaneWidth.value,
-    viewportHeight: pinnedBottomViewportClientHeight.value,
-    leftColumnWidths: [
-      indexColumnWidthPx.value,
-      ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
-    ].filter(width => width > 0),
-    centerColumnWidths: [
-      resolveLeftColumnSpacerWidth(),
-      ...(renderedColumns.value ?? []).map(resolveColumnWidth),
-      resolveRightColumnSpacerWidth(),
-    ].filter(width => width > 0),
-    rightColumnWidths: (pinnedRightColumns.value ?? []).map(resolveColumnWidth),
-    centerScrollLeft: bodyViewportScrollLeft.value,
-  })
-))
-
-const hasPivotHeaderGroups = computed(() => {
-  if (mode.value !== "pivot") {
-    return false
-  }
-  return visibleColumns.value.some(column => (readPivotHeaderMeta(column)?.groupLabels?.length ?? 0) > 0)
+const {
+  chromeRenderModel,
+  headerChromeRenderModel,
+  pinnedBottomChromeRenderModel,
+  hasPivotHeaderGroups,
+  rowMetrics,
+  pinnedBottomRowMetrics,
+  rowMetricsSignature,
+  pinnedBottomRowMetricsSignature,
+  rowBandsSignature,
+  pinnedBottomRowBandsSignature,
+  leftChromeColumnsSignature,
+  centerChromeColumnsSignature,
+  rightChromeColumnsSignature,
+  headerPivotGroupsSignature,
+  resolveVisibleRowMetricsFromDom,
+} = useDataGridStageChromeModel({
+  mode,
+  rowHeightMode,
+  layout,
+  viewport,
+  rows,
+  visibleColumns,
+  renderedColumns,
+  displayRows,
+  pinnedBottomRows,
+  selectionTotalRowCount: computed(() => selection.value?.totalRowCount ?? null),
+  leftPaneWidth,
+  rightPaneWidth,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  pinnedBottomViewportClientHeight,
+  headerShellHeight,
+  headerViewportClientWidth,
+  bodyViewportEl,
+  indexColumnWidthPx,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+  resolveColumnWidth,
+  resolveLeftColumnSpacerWidth,
+  resolveRightColumnSpacerWidth,
+  resolveAbsoluteRowIndex,
+  resolveViewportRowOffset,
+  isHoveredRow,
+  isStripedRow,
+  readPivotHeaderMeta,
 })
 
 const {
@@ -1907,6 +1829,45 @@ const {
   pinnedBottomChromeRenderModel,
   hasPivotHeaderGroups,
 })
+
+watch(
+  () => [
+    leftPaneWidth.value,
+    rightPaneWidth.value,
+    leftChromeColumnsSignature.value,
+    centerChromeColumnsSignature.value,
+    rightChromeColumnsSignature.value,
+    headerPivotGroupsSignature.value,
+  ].join("|"),
+  () => {
+    syncBodyViewportMetrics()
+    scheduleGridChromeRedraw()
+  },
+)
+
+watch(
+  () => props.chromeSignature,
+  () => {
+    void nextTick(() => {
+      syncBodyViewportMetrics()
+      scheduleGridChromeRedraw()
+    })
+  },
+)
+
+watch(
+  () => [
+    rowMetricsSignature.value,
+    pinnedBottomRowMetricsSignature.value,
+    rowBandsSignature.value,
+    pinnedBottomRowBandsSignature.value,
+  ].join("|"),
+  () => {
+    // Auto-height row metrics can shift during scroll; redraw chrome, but avoid
+    // re-reading shell/header layout metrics that belong to resize/column sync.
+    scheduleGridChromeRedraw()
+  },
+)
 
 function clamp(value: number, min: number, max: number): number {
   if (max < min) {
@@ -2283,220 +2244,6 @@ const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() 
   resolveColumnWidth,
   resolveLeftColumnSpacerWidth,
 }))
-
-function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: number }[] {
-  const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
-    rowStart: resolveViewportRowStart(),
-    rowEnd: resolveViewportRowEnd(),
-    rowTotal: resolveVirtualRowTotal(),
-    topSpacerHeight: viewport.value?.topSpacerHeight ?? 0,
-    baseRowHeight: resolveBaseRowHeight(),
-    resolveRowHeight: viewport.value?.resolveRowHeight,
-    resolveRowOffset: viewport.value?.resolveRowOffset,
-  })
-  return virtualMetrics.map(metric => ({
-    top: metric.top,
-    height: metric.height,
-  }))
-}
-
-const rowMetrics = computed(() => {
-  const estimated = buildEstimatedVisibleRowMetrics()
-  if (mode.value === "base" && rowHeightMode.value === "auto") {
-    bodyViewportScrollTop.value
-    return resolveVisibleRowMetricsFromDom(estimated)
-  }
-  return estimated
-})
-
-function resolveChromeRowMetrics(): readonly { top: number; height: number }[] {
-  return rowMetrics.value ?? []
-}
-
-const pinnedBottomRowMetrics = computed(() => {
-  const metrics: Array<{ top: number; height: number }> = []
-  let currentTop = 0
-  pinnedBottomRows.value.forEach((row, rowOffset) => {
-    const style = rows.value?.rowStyle(row, resolveViewportRowOffset(row, rowOffset)) ?? {}
-    const height = parsePixelValue(style.height ?? style.minHeight, 31)
-    metrics.push({
-      top: currentTop,
-      height,
-    })
-    currentTop += height
-  })
-  return metrics
-})
-
-function resolvePinnedBottomChromeRowMetrics(): readonly { top: number; height: number }[] {
-  return pinnedBottomRowMetrics.value ?? []
-}
-
-const rowMetricsSignature = computed(() => (
-  rowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
-))
-
-const pinnedBottomRowMetricsSignature = computed(() => (
-  pinnedBottomRowMetrics.value.map(metric => `${metric.top}:${metric.height}`).join("|")
-))
-
-function resolveChromeRowBandKind(row: TableRow, rowOffset: number): string | null {
-  if (isHoveredRow(row, rowOffset)) {
-    return "hover"
-  }
-  const className = rows.value.rowClass(row)
-  if (className.includes("row--group") && className.includes("row--pivot")) {
-    return "pivot-group"
-  }
-  if (className.includes("row--group")) {
-    return "group"
-  }
-  if (className.includes("row--tree")) {
-    return "tree"
-  }
-  if (className.includes("row--pivot")) {
-    return "pivot"
-  }
-  if (isStripedRow(row, rowOffset)) {
-    return "striped"
-  }
-  return "base"
-}
-
-const rowBands = computed<readonly DataGridChromeRowBand[]>(() => {
-  const viewportRowStart = resolveViewportRowStart()
-  const virtualBands = rowMetrics.value.map((metric, metricOffset) => {
-    const absoluteRowIndex = viewportRowStart + metricOffset
-    return {
-      rowIndex: metricOffset,
-      top: metric.top,
-      height: metric.height,
-      kind: rows.value.stripedRows === true && absoluteRowIndex % 2 === 1 ? "striped" : "base",
-    }
-  })
-  const loadedBands = displayRows.value.flatMap((row, rowOffset) => {
-    const metricOffset = resolveAbsoluteRowIndex(row, rowOffset) - viewportRowStart
-    const metric = rowMetrics.value[metricOffset]
-    const kind = resolveChromeRowBandKind(row, resolveViewportRowOffset(row, rowOffset))
-    if (!metric || !kind) {
-      return []
-    }
-    return [{
-      rowIndex: metricOffset,
-      top: metric.top,
-      height: metric.height,
-      kind,
-    }]
-  })
-  return [
-    ...virtualBands,
-    ...loadedBands,
-  ]
-})
-
-function resolveChromeRowBands(): readonly DataGridChromeRowBand[] {
-  return rowBands.value ?? []
-}
-
-const rowBandsSignature = computed(() => (
-  rowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
-))
-
-const pinnedBottomRowBandsSignature = computed(() => (
-  pinnedBottomRowBands.value.map(band => `${band.kind}:${band.top}:${band.height}`).join("|")
-))
-
-const leftChromeColumnsSignature = computed(() => (
-  [
-    indexColumnWidthPx.value,
-    ...(pinnedLeftColumns.value ?? []).map(resolveColumnWidth),
-  ].join("|")
-))
-
-const centerChromeColumnsSignature = computed(() => (
-  [
-    resolveLeftColumnSpacerWidth(),
-    ...(renderedColumns.value ?? []).map(resolveColumnWidth),
-    resolveRightColumnSpacerWidth(),
-  ].join("|")
-))
-
-const rightChromeColumnsSignature = computed(() => (
-  (pinnedRightColumns.value ?? []).map(resolveColumnWidth).join("|")
-))
-
-const headerPivotGroupsSignature = computed(() => (
-  hasPivotHeaderGroups.value
-    ? visibleColumns.value
-      .map(column => `${column.key}:${readPivotHeaderMeta(column)?.groupLabels?.join(">") ?? ""}`)
-      .join("|")
-    : "none"
-))
-
-watch(
-  () => [
-    leftPaneWidth.value,
-    rightPaneWidth.value,
-    leftChromeColumnsSignature.value,
-    centerChromeColumnsSignature.value,
-    rightChromeColumnsSignature.value,
-    headerPivotGroupsSignature.value,
-  ].join("|"),
-  () => {
-    syncBodyViewportMetrics()
-    scheduleGridChromeRedraw()
-  },
-)
-
-watch(
-  () => props.chromeSignature,
-  () => {
-    void nextTick(() => {
-      syncBodyViewportMetrics()
-      scheduleGridChromeRedraw()
-    })
-  },
-)
-
-watch(
-  () => [
-    rowMetricsSignature.value,
-    pinnedBottomRowMetricsSignature.value,
-    rowBandsSignature.value,
-    pinnedBottomRowBandsSignature.value,
-  ].join("|"),
-  () => {
-    // Auto-height row metrics can shift during scroll; redraw chrome, but avoid
-    // re-reading shell/header layout metrics that belong to resize/column sync.
-    scheduleGridChromeRedraw()
-  },
-)
-
-function resolveVisibleRowMetricsFromDom(
-  fallbackMetrics: readonly { top: number; height: number }[],
-): readonly { top: number; height: number }[] {
-  if (displayRows.value.length !== fallbackMetrics.length) {
-    return fallbackMetrics
-  }
-  const viewport = bodyViewportEl.value
-  if (!viewport) {
-    return fallbackMetrics
-  }
-  const viewportRect = viewport.getBoundingClientRect()
-  const rowElements = Array.from(
-    viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"),
-  )
-  if (rowElements.length !== displayRows.value.length) {
-    return fallbackMetrics
-  }
-  return rowElements.map(rowElement => {
-    const rowRect = rowElement.getBoundingClientRect()
-    return {
-      top: viewport.scrollTop + (rowRect.top - viewportRect.top),
-      height: rowRect.height,
-    }
-  })
-}
 
 const visibleColumnIndexByKey = computed(() => {
   const indexByKey = new Map<string, number>()

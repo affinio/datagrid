@@ -84,7 +84,7 @@ Validation:
 
 ---
 
-## [] Slice 4 — Extract chrome model inputs
+## [x] Slice 4 — Extract chrome model inputs
 
 Goal: отделить вычисление chrome render model inputs от Vue stage body.
 
