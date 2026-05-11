@@ -426,7 +426,7 @@ Validation:
 
 ---
 
-## [] Slice 15 — Final stage cleanup
+## [x] Slice 15 — Final stage cleanup
 
 Goal: сделать `DataGridTableStage.vue` orchestration-only.
 
