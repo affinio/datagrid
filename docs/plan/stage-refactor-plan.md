@@ -1,6 +1,6 @@
 # DataGridTableStage refactor plan
 
-## Slice 1 — Extract perf tracing
+## [x] Slice 1 — Extract perf tracing
 
 Goal: вынести perf/debug store из `DataGridTableStage.vue`.
 
@@ -28,7 +28,7 @@ Validation:
 
 ---
 
-## Slice 2 — Extract runtime diagnostics
+## [] Slice 2 — Extract runtime diagnostics
 
 Goal: убрать demo-specific/runtime diagnostics из stage.
 
@@ -51,7 +51,7 @@ Validation:
 
 ---
 
-## Slice 3 — Extract chrome canvas renderer
+## [] Slice 3 — Extract chrome canvas renderer
 
 Goal: вынести canvas chrome lifecycle/rendering из stage.
 
@@ -84,7 +84,7 @@ Validation:
 
 ---
 
-## Slice 4 — Extract chrome model inputs
+## [] Slice 4 — Extract chrome model inputs
 
 Goal: отделить вычисление chrome render model inputs от Vue stage body.
 
@@ -115,7 +115,7 @@ Validation:
 
 ---
 
-## Slice 5 — Extract overlay geometry builder
+## [] Slice 5 — Extract overlay geometry builder
 
 Goal: вынести generic overlay segment math.
 
@@ -146,7 +146,7 @@ Validation:
 
 ---
 
-## Slice 6 — Extract overlay composable
+## [] Slice 6 — Extract overlay composable
 
 Goal: вынести computed overlay lanes from stage.
 
@@ -172,7 +172,7 @@ Validation:
 
 ---
 
-## Slice 7 — Extract cell editor/rendering runtime
+## [] Slice 7 — Extract cell editor/rendering runtime
 
 Goal: вынести cell rendering/editor resolving from stage.
 
@@ -208,7 +208,7 @@ Validation:
 
 ---
 
-## Slice 8 — Extract cell state/accessibility helpers
+## [] Slice 8 — Extract cell state/accessibility helpers
 
 Goal: вынести cell classes and aria helpers.
 
@@ -240,7 +240,7 @@ Validation:
 
 ---
 
-## Slice 9 — Extract row index runtime
+## [] Slice 9 — Extract row index runtime
 
 Goal: вынести row index click/keyboard/drag/drop logic.
 
@@ -270,7 +270,7 @@ Validation:
 
 ---
 
-## Slice 10 — Extract fill action UI positioning
+## [] Slice 10 — Extract fill action UI positioning
 
 Goal: вынести floating fill action menu positioning and behavior.
 
@@ -300,7 +300,7 @@ Validation:
 
 ---
 
-## Slice 11 — Extract fill/range move pointer runtime
+## [] Slice 11 — Extract fill/range move pointer runtime
 
 Goal: вынести fill handle and range move hover logic.
 
@@ -330,7 +330,7 @@ Validation:
 
 ---
 
-## Slice 12 — Extract viewport/scroll sync runtime
+## [] Slice 12 — Extract viewport/scroll sync runtime
 
 Goal: вынести viewport refs, scroll metrics, pinned bottom scroll sync, wheel sync.
 
@@ -364,7 +364,7 @@ Validation:
 
 ---
 
-## Slice 13 — Extract pane model builders
+## [] Slice 13 — Extract pane model builders
 
 Goal: уменьшить `DataGridTableStage.vue` до сборки stage.
 
@@ -396,7 +396,7 @@ Validation:
 
 ---
 
-## Slice 14 — Replace heavy string signatures with revisions
+## [] Slice 14 — Replace heavy string signatures with revisions
 
 Goal: убрать риск тяжёлых computed signatures.
 
@@ -426,7 +426,7 @@ Validation:
 
 ---
 
-## Slice 15 — Final stage cleanup
+## [] Slice 15 — Final stage cleanup
 
 Goal: сделать `DataGridTableStage.vue` orchestration-only.
 
