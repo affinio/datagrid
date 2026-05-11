@@ -1146,6 +1146,13 @@ type GridChromeRedrawMode = "full" | "center-scroll"
 let pendingGridChromeRedrawMode: GridChromeRedrawMode = "full"
 let teardownTouchPanGuard: (() => void) | null = null
 
+function mergeGridChromeRedrawMode(
+  current: GridChromeRedrawMode,
+  next: GridChromeRedrawMode,
+): GridChromeRedrawMode {
+  return current === "full" || next === "full" ? "full" : "center-scroll"
+}
+
 function syncGlobalFillDragCursor(active: boolean): void {
   if (typeof document === "undefined") {
     return
@@ -2371,7 +2378,7 @@ function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
 function scheduleGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
   pendingGridChromeRedrawMode = gridChromeAnimationFrame === 0
     ? mode
-    : (mode === "full" || pendingGridChromeRedrawMode === "full" ? "full" : "center-scroll")
+    : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
   if (typeof window === "undefined") {
     drawGridChromeCanvas(pendingGridChromeRedrawMode)
     return
@@ -2382,6 +2389,17 @@ function scheduleGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
   gridChromeAnimationFrame = window.requestAnimationFrame(() => {
     drawGridChromeCanvas(pendingGridChromeRedrawMode)
   })
+}
+
+function flushGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
+  const nextMode = gridChromeAnimationFrame === 0
+    ? mode
+    : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
+  if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
+    window.cancelAnimationFrame(gridChromeAnimationFrame)
+    gridChromeAnimationFrame = 0
+  }
+  drawGridChromeCanvas(nextMode)
 }
 
 function connectGridChromeResizeObserver(): void {
@@ -2794,14 +2812,16 @@ function handleCenterViewportScroll(event: Event): void {
   }
   const previousScrollTop = bodyViewportScrollTop.value
   const previousScrollLeft = bodyViewportScrollLeft.value
-  linkedPaneScrollSync.onSourceScroll(element.scrollTop)
+  if (element.scrollTop !== previousScrollTop) {
+    linkedPaneScrollSync.onSourceScroll(element.scrollTop)
+  }
   syncBodyViewportScrollState(element)
   syncPinnedBottomViewportScrollLeft()
-  scheduleGridChromeRedraw(
-    element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop
-      ? "center-scroll"
-      : "full",
-  )
+  if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
+    flushGridChromeRedraw("center-scroll")
+    return
+  }
+  scheduleGridChromeRedraw("full")
 }
 
 function handlePinnedBottomViewportScroll(event: Event): void {
@@ -2813,7 +2833,7 @@ function handlePinnedBottomViewportScroll(event: Event): void {
   bodyViewport.scrollLeft = element.scrollLeft
   viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
   syncBodyViewportScrollState(bodyViewport)
-  scheduleGridChromeRedraw("center-scroll")
+  flushGridChromeRedraw("center-scroll")
 }
 
 function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {

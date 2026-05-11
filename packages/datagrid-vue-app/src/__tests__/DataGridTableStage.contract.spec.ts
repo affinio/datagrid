@@ -1376,6 +1376,46 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("redraws center chrome immediately during horizontal-only body scroll", () => {
+    const canvasContextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+      }),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    Object.defineProperty(viewport, "clientWidth", {
+      configurable: true,
+      value: 250,
+    })
+    Object.defineProperty(viewport, "clientHeight", {
+      configurable: true,
+      value: 96,
+    })
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 0,
+    })
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      writable: true,
+      value: 40,
+    })
+
+    canvasContextSpy.mockClear()
+
+    viewport.dispatchEvent(new Event("scroll"))
+
+    expect(canvasContextSpy).toHaveBeenCalled()
+
+    canvasContextSpy.mockRestore()
+    wrapper.unmount()
+  })
+
   it("shows fill action menu and reapplies the selected behavior", async () => {
     const applyFillActionBehavior = vi.fn()
     const wrapper = mount(DataGridTableStage, {
