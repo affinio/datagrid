@@ -115,7 +115,7 @@ Validation:
 
 ---
 
-## [] Slice 5 — Extract overlay geometry builder
+## [x] Slice 5 — Extract overlay geometry builder
 
 Goal: вынести generic overlay segment math.
 

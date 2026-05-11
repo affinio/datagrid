@@ -204,6 +204,17 @@ import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilte
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
+import {
+  buildCustomOverlayLane as buildDataGridStageCustomOverlayLane,
+  buildCustomSeamOverlayLane as buildDataGridStageCustomSeamOverlayLane,
+  buildPaneOverlaySegments as buildDataGridStagePaneOverlaySegments,
+  buildPaneOverlaySegmentsForMetricsList as buildDataGridStagePaneOverlaySegmentsForMetricsList,
+  buildPinnedPaneSeamOverlaySegments as buildDataGridStagePinnedPaneSeamOverlaySegments,
+  buildPinnedPaneSeamOverlaySegmentsForMetricsList as buildDataGridStagePinnedPaneSeamOverlaySegmentsForMetricsList,
+  mergeOverlayBounds,
+  resolveOverlayMetricsList,
+  type DataGridStageOverlayGeometryContext,
+} from "./dataGridStageOverlayGeometry"
 
 ensureDataGridAppStyles()
 
@@ -2691,6 +2702,20 @@ const rightTrackStyle = computed<CSSProperties>(() => ({
   maxWidth: `${rightPaneWidth.value}px`,
 }))
 
+const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
+  bodyViewportClientHeight: bodyViewportClientHeight.value,
+  indexColumnWidthPx: indexColumnWidthPx.value,
+  leftPaneWidth: leftPaneWidth.value,
+  rightPaneWidth: rightPaneWidth.value,
+  renderedColumns: renderedColumns.value,
+  pinnedLeftColumns: pinnedLeftColumns.value,
+  pinnedRightColumns: pinnedRightColumns.value,
+  layoutGridContentWidth: parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
+  columnIndexByKey,
+  resolveColumnWidth,
+  resolveLeftColumnSpacerWidth,
+}))
+
 function buildEstimatedVisibleRowMetrics(): readonly { top: number; height: number }[] {
   const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
     rowStart: resolveViewportRowStart(),
@@ -3130,119 +3155,29 @@ function resolveOverlayMetrics(bounds: {
   }
 }
 
-function mergeOverlayBounds(
-  left: {
+const customOverlays = computed(() => props.customOverlays ?? [])
+
+function buildPaneOverlaySegments(
+  metrics: {
     startRowOffset: number
     endRowOffset: number
     startColumnIndex: number
     endColumnIndex: number
+    top: number
+    height: number
   } | null,
-  right: {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-  } | null,
-) {
-  if (!left) {
-    return right
-  }
-  if (!right) {
-    return left
-  }
-  return {
-    startRowOffset: Math.min(left.startRowOffset, right.startRowOffset),
-    endRowOffset: Math.max(left.endRowOffset, right.endRowOffset),
-    startColumnIndex: Math.min(left.startColumnIndex, right.startColumnIndex),
-    endColumnIndex: Math.max(left.endColumnIndex, right.endColumnIndex),
-  }
-}
-
-function buildOverlaySegment(
-  key: string,
-  top: number,
-  left: number,
-  width: number,
-  height: number,
+  pane: "left" | "center" | "right",
+  keyPrefix: string,
   options?: {
-    omitLeftBorder?: boolean
-    omitRightBorder?: boolean
-    hideBorder?: boolean
     borderColor?: string
     backgroundColor?: string
     borderStyle?: "solid" | "dashed"
+    hideSingleCell?: boolean
     zIndex?: number
-    topBleed?: number
-    bottomBleed?: number
-    leftBleed?: number
-    rightBleed?: number
   },
-): OverlaySegment {
-  const topBleed = Math.max(0, options?.topBleed ?? 1)
-  const bottomBleed = Math.max(0, options?.bottomBleed ?? 1)
-  const leftBleed = options?.omitLeftBorder ? 0 : Math.max(0, options?.leftBleed ?? 1)
-  const rightBleed = options?.omitRightBorder ? 0 : Math.max(0, options?.rightBleed ?? 1)
-  return {
-    key,
-    style: {
-      position: "absolute",
-      top: `${top - topBleed}px`,
-      left: `${left - leftBleed}px`,
-      width: `${Math.max(1, width + leftBleed + rightBleed)}px`,
-      height: `${Math.max(1, height + topBleed + bottomBleed)}px`,
-      border: `${options?.hideBorder ? 0 : 2}px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
-      borderLeftWidth: options?.hideBorder || options?.omitLeftBorder ? "0px" : "2px",
-      borderRightWidth: options?.hideBorder || options?.omitRightBorder ? "0px" : "2px",
-      borderTopWidth: options?.hideBorder ? "0px" : "2px",
-      borderBottomWidth: options?.hideBorder ? "0px" : "2px",
-      background: options?.backgroundColor ?? "transparent",
-      boxSizing: "border-box",
-      borderTopLeftRadius: options?.omitLeftBorder ? "0px" : "1px",
-      borderBottomLeftRadius: options?.omitLeftBorder ? "0px" : "1px",
-      borderTopRightRadius: options?.omitRightBorder ? "0px" : "1px",
-      borderBottomRightRadius: options?.omitRightBorder ? "0px" : "1px",
-      pointerEvents: "none",
-      zIndex: options?.zIndex ?? 6,
-    },
-  }
-}
-
-function buildPinnedPaneSeamOverlaySegment(
-  key: string,
-  top: number,
-  height: number,
-  side: "left" | "right",
-  options?: {
-    hideBorder?: boolean
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    zIndex?: number
-    topBleed?: number
-    bottomBleed?: number
-  },
-): OverlaySegment {
-  const topBleed = Math.max(0, options?.topBleed ?? 1)
-  const bottomBleed = Math.max(0, options?.bottomBleed ?? 1)
-  return {
-    key,
-    style: {
-      position: "absolute",
-      top: `${top - topBleed}px`,
-      left: side === "left" ? "calc(100% - var(--datagrid-pinned-pane-separator-size))" : "0px",
-      width: "var(--datagrid-pinned-pane-separator-size)",
-      height: `${Math.max(1, height + topBleed + bottomBleed)}px`,
-      border: `${options?.hideBorder ? 0 : 2}px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
-      borderLeftWidth: "0px",
-      borderRightWidth: "0px",
-      borderTopWidth: options?.hideBorder ? "0px" : "2px",
-      borderBottomWidth: options?.hideBorder ? "0px" : "2px",
-      background: options?.backgroundColor ?? "transparent",
-      boxSizing: "border-box",
-      pointerEvents: "none",
-      zIndex: options?.zIndex ?? 6,
-    },
-  }
+  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
+): OverlaySegment[] {
+  return buildDataGridStagePaneOverlaySegments(overlayGeometryContext.value, metrics, pane, keyPrefix, options, viewportHeight)
 }
 
 function buildPinnedPaneSeamOverlaySegments(
@@ -3265,270 +3200,7 @@ function buildPinnedPaneSeamOverlaySegments(
   },
   viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): OverlaySegment[] {
-  if (!metrics) {
-    return []
-  }
-  const isSingleSelectionSegment = options?.hideSingleCell === true
-    && metrics.startRowOffset === metrics.endRowOffset
-    && metrics.startColumnIndex === metrics.endColumnIndex
-  if (isSingleSelectionSegment) {
-    return []
-  }
-
-  const topBleed = metrics.top <= 0 ? 0 : 1
-  const bottomBleed = viewportHeight > 0 && metrics.top + metrics.height >= viewportHeight ? 0 : 1
-
-  if (pane === "left") {
-    const selectedColumns = pinnedLeftColumns.value.filter(column => {
-      const index = columnIndexByKey(column.key)
-      return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
-    })
-    if (selectedColumns.length === 0) {
-      return []
-    }
-    const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-    if (metrics.endColumnIndex <= lastSelectedIndex) {
-      return []
-    }
-    return [
-      buildPinnedPaneSeamOverlaySegment(
-        `${keyPrefix}-left-seam-${metrics.startRowOffset}-${metrics.endRowOffset}`,
-        metrics.top,
-        metrics.height,
-        "left",
-        {
-          topBleed,
-          bottomBleed,
-          borderColor: options?.borderColor,
-          backgroundColor: options?.backgroundColor,
-          borderStyle: options?.borderStyle,
-          zIndex: options?.zIndex,
-        },
-      ),
-    ]
-  }
-
-  const selectedColumns = pinnedRightColumns.value.filter(column => {
-    const index = columnIndexByKey(column.key)
-    return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
-  })
-  if (selectedColumns.length === 0) {
-    return []
-  }
-  const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
-  if (metrics.startColumnIndex >= firstSelectedIndex) {
-    return []
-  }
-  return [
-    buildPinnedPaneSeamOverlaySegment(
-      `${keyPrefix}-right-seam-${metrics.startRowOffset}-${metrics.endRowOffset}`,
-      metrics.top,
-      metrics.height,
-      "right",
-      {
-        topBleed,
-        bottomBleed,
-        borderColor: options?.borderColor,
-        backgroundColor: options?.backgroundColor,
-        borderStyle: options?.borderStyle,
-        zIndex: options?.zIndex,
-      },
-    ),
-  ]
-}
-
-function buildPaneOverlaySegments(
-  metrics: {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-    top: number
-    height: number
-  } | null,
-  pane: "left" | "center" | "right",
-  keyPrefix: string,
-  options?: {
-    borderColor?: string
-    backgroundColor?: string
-    borderStyle?: "solid" | "dashed"
-    hideSingleCell?: boolean
-    zIndex?: number
-  },
-  viewportHeight = Math.max(0, bodyViewportClientHeight.value),
-): OverlaySegment[] {
-  if (!metrics) {
-    return []
-  }
-  const isSingleSelectionSegment = options?.hideSingleCell === true
-    && metrics.startRowOffset === metrics.endRowOffset
-    && metrics.startColumnIndex === metrics.endColumnIndex
-  if (isSingleSelectionSegment) {
-    return []
-  }
-
-  const topBleed = metrics.top <= 0 ? 0 : 1
-  const bottomBleed = viewportHeight > 0 && metrics.top + metrics.height >= viewportHeight ? 0 : 1
-
-  if (pane === "left") {
-    const selectedColumns = pinnedLeftColumns.value.filter(column => {
-      const index = columnIndexByKey(column.key)
-      return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
-    })
-    if (selectedColumns.length === 0) {
-      return []
-    }
-
-    let left = indexColumnWidthPx.value
-    for (const column of pinnedLeftColumns.value) {
-      if (column.key === selectedColumns[0]?.key) {
-        break
-      }
-      left += resolveColumnWidth(column)
-    }
-
-    const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-    const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-    const paneWidth = leftPaneWidth.value
-    const leftBleed = left <= 0 ? 0 : 1
-    const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
-    return [
-      buildOverlaySegment(
-        `${keyPrefix}-left-${metrics.startRowOffset}-${metrics.endRowOffset}`,
-        metrics.top,
-        left,
-        width,
-        metrics.height,
-        {
-          hideBorder: isSingleSelectionSegment,
-          omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
-          topBleed,
-          bottomBleed,
-          leftBleed,
-          rightBleed,
-          borderColor: options?.borderColor,
-          backgroundColor: options?.backgroundColor,
-          borderStyle: options?.borderStyle,
-          zIndex: options?.zIndex,
-        },
-      ),
-    ]
-  }
-
-  if (pane === "center") {
-    const selectedColumns = renderedColumns.value.filter(column => {
-      const index = columnIndexByKey(column.key)
-      return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
-    })
-    if (selectedColumns.length === 0) {
-      return []
-    }
-
-    let left = resolveLeftColumnSpacerWidth()
-    for (const column of renderedColumns.value) {
-      if (column.key === selectedColumns[0]?.key) {
-        break
-      }
-      left += resolveColumnWidth(column)
-    }
-
-    const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-    const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
-    const lastSelectedIndex = columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-    const contentWidth = Math.max(
-      0,
-      parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
-    )
-    const leftBleed = left <= 0 ? 0 : 1
-    const rightBleed = contentWidth > 0 && left + width >= contentWidth ? 0 : 1
-    return [
-      buildOverlaySegment(
-        `${keyPrefix}-center-${metrics.startRowOffset}-${metrics.endRowOffset}`,
-        metrics.top,
-        left,
-        width,
-        metrics.height,
-        {
-          hideBorder: isSingleSelectionSegment,
-          omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
-          omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
-          topBleed,
-          bottomBleed,
-          leftBleed,
-          rightBleed,
-          borderColor: options?.borderColor,
-          backgroundColor: options?.backgroundColor,
-          borderStyle: options?.borderStyle,
-          zIndex: options?.zIndex,
-        },
-      ),
-    ]
-  }
-
-  const selectedColumns = pinnedRightColumns.value.filter(column => {
-    const index = columnIndexByKey(column.key)
-    return index >= metrics.startColumnIndex && index <= metrics.endColumnIndex
-  })
-  if (selectedColumns.length === 0) {
-    return []
-  }
-
-  let left = 0
-  for (const column of pinnedRightColumns.value) {
-    if (column.key === selectedColumns[0]?.key) {
-      break
-    }
-    left += resolveColumnWidth(column)
-  }
-
-  const width = selectedColumns.reduce((sum, column) => sum + resolveColumnWidth(column), 0)
-  const firstSelectedIndex = columnIndexByKey(selectedColumns[0]?.key ?? "")
-  const paneWidth = rightPaneWidth.value
-  const leftBleed = left <= 0 ? 0 : 1
-  const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
-  return [
-    buildOverlaySegment(
-      `${keyPrefix}-right-${metrics.startRowOffset}-${metrics.endRowOffset}`,
-      metrics.top,
-      left,
-      width,
-      metrics.height,
-      {
-        hideBorder: isSingleSelectionSegment,
-        omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
-        topBleed,
-        bottomBleed,
-        leftBleed,
-        rightBleed,
-        borderColor: options?.borderColor,
-        backgroundColor: options?.backgroundColor,
-        borderStyle: options?.borderStyle,
-        zIndex: options?.zIndex,
-      },
-    ),
-  ]
-}
-
-function resolveOverlayMetricsList(
-  ranges: readonly OverlayRange[],
-  resolveBounds: (range: OverlayRange | null) => {
-    startRowOffset: number
-    endRowOffset: number
-    startColumnIndex: number
-    endColumnIndex: number
-  } | null,
-  metricsSource = rowMetrics.value,
-): Array<{
-  startRowOffset: number
-  endRowOffset: number
-  startColumnIndex: number
-  endColumnIndex: number
-  top: number
-  height: number
-}> {
-  return ranges
-    .map(range => resolveOverlayMetrics(resolveBounds(range), metricsSource))
-    .filter((metrics): metrics is NonNullable<typeof metrics> => metrics != null)
+  return buildDataGridStagePinnedPaneSeamOverlaySegments(overlayGeometryContext.value, metrics, pane, keyPrefix, options, viewportHeight)
 }
 
 function buildPaneOverlaySegmentsForMetricsList(
@@ -3551,16 +3223,14 @@ function buildPaneOverlaySegmentsForMetricsList(
   },
   viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): OverlaySegment[] {
-  if (metricsList.length === 0) {
-    return []
-  }
-  return metricsList.flatMap((metrics, index) => buildPaneOverlaySegments(
-    metrics,
+  return buildDataGridStagePaneOverlaySegmentsForMetricsList(
+    overlayGeometryContext.value,
+    metricsList,
     pane,
-    metricsList.length === 1 ? keyPrefix : `${keyPrefix}-${index}`,
+    keyPrefix,
     options,
     viewportHeight,
-  ))
+  )
 }
 
 function buildPinnedPaneSeamOverlaySegmentsForMetricsList(
@@ -3583,19 +3253,15 @@ function buildPinnedPaneSeamOverlaySegmentsForMetricsList(
   },
   viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): OverlaySegment[] {
-  if (metricsList.length === 0) {
-    return []
-  }
-  return metricsList.flatMap((metrics, index) => buildPinnedPaneSeamOverlaySegments(
-    metrics,
+  return buildDataGridStagePinnedPaneSeamOverlaySegmentsForMetricsList(
+    overlayGeometryContext.value,
+    metricsList,
     pane,
-    metricsList.length === 1 ? keyPrefix : `${keyPrefix}-${index}`,
+    keyPrefix,
     options,
     viewportHeight,
-  ))
+  )
 }
-
-const customOverlays = computed(() => props.customOverlays ?? [])
 
 function buildCustomOverlayLane(
   overlay: DataGridTableStageCustomOverlay,
@@ -3610,28 +3276,7 @@ function buildCustomOverlayLane(
   }[],
   viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): DataGridTableStageOverlayLane | null {
-  const segments = buildPaneOverlaySegmentsForMetricsList(
-    metricsList,
-    pane,
-    overlay.key,
-    {
-      borderColor: overlay.borderColor,
-      backgroundColor: overlay.backgroundColor,
-      borderStyle: overlay.borderStyle,
-      hideSingleCell: overlay.hideSingleCell,
-      zIndex: overlay.zIndex,
-    },
-    viewportHeight,
-  )
-  if (segments.length === 0) {
-    return null
-  }
-  return {
-    key: overlay.key,
-    className: overlay.className,
-    segmentClassName: overlay.segmentClassName,
-    segments,
-  }
+  return buildDataGridStageCustomOverlayLane(overlayGeometryContext.value, overlay, pane, metricsList, viewportHeight)
 }
 
 function buildCustomSeamOverlayLane(
@@ -3647,28 +3292,7 @@ function buildCustomSeamOverlayLane(
   }[],
   viewportHeight = Math.max(0, bodyViewportClientHeight.value),
 ): DataGridTableStageOverlayLane | null {
-  const segments = buildPinnedPaneSeamOverlaySegmentsForMetricsList(
-    metricsList,
-    pane,
-    overlay.key,
-    {
-      borderColor: overlay.borderColor,
-      backgroundColor: overlay.backgroundColor,
-      borderStyle: overlay.borderStyle,
-      hideSingleCell: overlay.hideSingleCell,
-      zIndex: overlay.zIndex,
-    },
-    viewportHeight,
-  )
-  if (segments.length === 0) {
-    return null
-  }
-  return {
-    key: overlay.key,
-    className: overlay.className,
-    segmentClassName: overlay.segmentClassName,
-    segments,
-  }
+  return buildDataGridStageCustomSeamOverlayLane(overlayGeometryContext.value, overlay, pane, metricsList, viewportHeight)
 }
 
 const customOverlayMetrics = computed(() => customOverlays.value.map(overlay => ({
