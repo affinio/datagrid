@@ -208,7 +208,7 @@ Validation:
 
 ---
 
-## [] Slice 8 — Extract cell state/accessibility helpers
+## [x] Slice 8 — Extract cell state/accessibility helpers
 
 Goal: вынести cell classes and aria helpers.
 

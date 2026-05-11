@@ -149,7 +149,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
-import { resolveDataGridCellInteraction } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
@@ -181,6 +180,7 @@ import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
+import { useDataGridStageCellState } from "./useDataGridStageCellState"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -1009,116 +1009,6 @@ function isRowCheckboxSelectedSafe(row: TableRow): boolean {
   return typeof rows.value.isRowCheckboxSelected === "function" ? rows.value.isRowCheckboxSelected(row) : false
 }
 
-function isCheckboxColumn(column: TableColumn): boolean {
-  return column.column.cellType === "checkbox"
-}
-
-function isRowSelectionColumn(column: TableColumn): boolean {
-  return column.column.meta?.rowSelection === true
-}
-
-function shouldRenderCheckboxCell(row: TableRow, column: TableColumn): boolean {
-  return row.kind !== "group" && isCheckboxColumn(column)
-}
-
-function checkboxValueIsChecked(row: TableRow, column: TableColumn): boolean {
-  const value = cells.value.readCell(row, column.key).trim().toLowerCase()
-  return value === "true" || value === "1" || value === "yes" || value === "on"
-}
-
-function builtInCellClasses(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): Record<string, boolean> {
-  const editorMode = row.kind !== "group" ? resolveCellEditorMode(row, column) : "none"
-  const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
-  const interaction = resolveCellInteraction(row, rowOffset, column, columnIndex)
-  return {
-    "grid-cell--checkbox": shouldRenderCheckboxCell(row, column),
-    "grid-cell--row-selection": isRowSelectionColumn(column),
-    "grid-cell--select": editable && editorMode === "select",
-    "grid-cell--date": editable && (editorMode === "date" || editorMode === "datetime"),
-    "grid-cell--interactive": interaction !== null,
-  }
-}
-
-function resolveCellInteraction(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-) {
-  return resolveDataGridCellInteraction({
-    column: column.column,
-    row: row.kind !== "group" ? row.data : undefined,
-    rowId: row.rowId,
-    editable: isCellEditableSafe(row, rowOffset, column, columnIndex),
-  })
-}
-
-function cellAriaRole(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): string | undefined {
-  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.role
-    ?? (shouldRenderCheckboxCell(row, column) ? "checkbox" : undefined)
-}
-
-function cellAriaChecked(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): "true" | "false" | "mixed" | undefined {
-  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.checked
-    ?? (shouldRenderCheckboxCell(row, column)
-      ? (checkboxValueIsChecked(row, column) ? "true" : "false")
-      : undefined)
-}
-
-function cellAriaPressed(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): "true" | "false" | "mixed" | undefined {
-  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.pressed
-}
-
-function cellAriaLabel(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): string | undefined {
-  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.label
-}
-
-function cellAriaDisabled(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): "true" | undefined {
-  return resolveCellInteraction(row, rowOffset, column, columnIndex)?.disabled ? "true" : undefined
-}
-
-function checkboxIndicatorClass(row: TableRow, column: TableColumn): Record<string, boolean> {
-  return {
-    "grid-checkbox-indicator--checked": checkboxValueIsChecked(row, column),
-  }
-}
-
-function checkboxIndicatorMarkClass(row: TableRow, column: TableColumn): Record<string, boolean> {
-  return {
-    "grid-checkbox-indicator__mark--checked": checkboxValueIsChecked(row, column),
-  }
-}
-
 function handleRowClickSafe(row: TableRow): void {
   rows.value.handleRowClick?.(row)
 }
@@ -1485,6 +1375,34 @@ const {
   isCellEditableSafe,
   isEditingCellSafe,
   columnIndexByKey,
+})
+
+const {
+  builtInCellClasses,
+  cellStateClasses,
+  cellAriaRole,
+  cellAriaChecked,
+  cellAriaPressed,
+  cellAriaLabel,
+  cellAriaDisabled,
+  isRowSelectionColumn,
+  shouldRenderCheckboxCell,
+  checkboxIndicatorClass,
+  checkboxIndicatorMarkClass,
+} = useDataGridStageCellState({
+  visibleColumns,
+  cells: computed(() => ({
+    readCell: cells.value.readCell,
+  })),
+  isCellEditableSafe,
+  isEditingCellSafe,
+  resolveCellEditorMode,
+  isVisualSelectionAnchorCell,
+  shouldHighlightSelectedCellVisual,
+  isRangeMoveHandleHoverCell,
+  isCellInFillPreviewSafe,
+  isCellInPendingClipboardRangeSafe,
+  isCellOnPendingClipboardEdgeSafe,
 })
 
 const {
@@ -2328,23 +2246,6 @@ const rightPinnedBottomPane = computed<DataGridTableStagePinnedPaneProps>(() => 
   movePreviewSeamOverlaySegments: rightPinnedBottomMovePreviewSeamOverlaySegments.value,
   seamOverlayLanes: rightPinnedBottomCustomSeamOverlayLanes.value,
 }))
-
-function cellStateClasses(row: TableRow, rowOffset: number, columnIndex: number): Record<string, boolean> {
-  const columnKey = visibleColumns.value[columnIndex]?.key ?? ""
-  const isAnchorCell = isVisualSelectionAnchorCell(rowOffset, columnIndex)
-  return {
-    "grid-cell--selected": !isAnchorCell && shouldHighlightSelectedCellVisual(rowOffset, columnIndex),
-    "grid-cell--selection-anchor": isAnchorCell,
-    "grid-cell--range-move-handle-hover": isRangeMoveHandleHoverCell(rowOffset, columnIndex),
-    "grid-cell--fill-preview": isCellInFillPreviewSafe(rowOffset, columnIndex),
-    "grid-cell--clipboard-pending": isCellInPendingClipboardRangeSafe(rowOffset, columnIndex),
-    "grid-cell--clipboard-pending-top": isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, "top"),
-    "grid-cell--clipboard-pending-right": isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, "right"),
-    "grid-cell--clipboard-pending-bottom": isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, "bottom"),
-    "grid-cell--clipboard-pending-left": isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, "left"),
-    "grid-cell--editing": isEditingCellSafe(row, columnKey),
-  }
-}
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
