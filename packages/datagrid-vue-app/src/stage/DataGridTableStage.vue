@@ -167,6 +167,13 @@ import {
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
 import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
+import {
+  hasGroupCellRenderer,
+  parsePixelValue,
+  readPivotHeaderMeta,
+  resolveColumnWidth as resolveColumnWidthFromHelper,
+  resolveTextAlign,
+} from "./dataGridTableStageHelpers"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
@@ -302,6 +309,10 @@ function columnStyle(key: string): CSSProperties {
   return layout.value.columnStyle(key)
 }
 
+function resolveColumnWidth(column: TableColumn): number {
+  return resolveColumnWidthFromHelper(column, layout.value.columnStyle)
+}
+
 function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   interaction.value.handleCellMouseDown(event, row, rowOffset, columnIndex)
 }
@@ -325,48 +336,6 @@ function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: numbe
 }
 
 type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selection"]["selectionRange"]>
-interface DataGridPivotHeaderMeta {
-  groupLabels?: readonly string[]
-}
-
-function parsePixelValue(value: unknown, fallback: number): number {
-  const parsed = Number.parseFloat(String(value ?? ""))
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
-function resolveColumnWidth(column: TableColumn): number {
-  const style = layout.value.columnStyle(column.key)
-  return parsePixelValue(style.width ?? style.minWidth ?? column.width, column.width ?? 140)
-}
-
-function readPivotHeaderMeta(column: TableColumn): DataGridPivotHeaderMeta | null {
-  const rawMeta = column.column.meta?.affinoPivotHeader
-  if (!isRecord(rawMeta)) {
-    return null
-  }
-  const groupLabels = Array.isArray(rawMeta.groupLabels)
-    ? rawMeta.groupLabels.filter((value): value is string => typeof value === "string" && value.length > 0)
-    : []
-  return groupLabels.length > 0 ? { groupLabels } : null
-}
-
-function resolveTextAlign(value: unknown): CSSProperties["textAlign"] | undefined {
-  return value === "left" || value === "center" || value === "right"
-    ? value
-    : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object"
-}
-
-function hasGroupCellRenderer(column: TableColumn): boolean {
-  const authoredColumn = column.column as typeof column.column & {
-    groupCellRenderer?: unknown
-  }
-  return typeof authoredColumn.groupCellRenderer === "function"
-}
-
 function isColumnEditable(column: TableColumn): boolean {
   return column.column.capabilities?.editable !== false
 }
