@@ -5,6 +5,9 @@ import type {
 } from "./dataGridTableStageBody.types"
 import type { DataGridTableStageCustomOverlay } from "./dataGridTableStage.types"
 
+const overlayStrokeWidth = "var(--datagrid-selection-stroke-width)"
+const pinnedPaneSeamOverlayWidth = `max(var(--datagrid-pinned-pane-separator-size), ${overlayStrokeWidth})`
+
 export interface DataGridStageOverlayMetrics {
   startRowOffset: number
   endRowOffset: number
@@ -111,6 +114,7 @@ export function buildOverlaySegment(
   const bottomBleed = Math.max(0, options?.bottomBleed ?? 1)
   const leftBleed = options?.omitLeftBorder ? 0 : Math.max(0, options?.leftBleed ?? 1)
   const rightBleed = options?.omitRightBorder ? 0 : Math.max(0, options?.rightBleed ?? 1)
+  const borderWidth = options?.hideBorder ? "0px" : overlayStrokeWidth
   return {
     key,
     style: {
@@ -119,11 +123,11 @@ export function buildOverlaySegment(
       left: `${left - leftBleed}px`,
       width: `${Math.max(1, width + leftBleed + rightBleed)}px`,
       height: `${Math.max(1, height + topBleed + bottomBleed)}px`,
-      border: `${options?.hideBorder ? 0 : 2}px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
-      borderLeftWidth: options?.hideBorder || options?.omitLeftBorder ? "0px" : "2px",
-      borderRightWidth: options?.hideBorder || options?.omitRightBorder ? "0px" : "2px",
-      borderTopWidth: options?.hideBorder ? "0px" : "2px",
-      borderBottomWidth: options?.hideBorder ? "0px" : "2px",
+      border: `${borderWidth} ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
+      borderLeftWidth: options?.hideBorder || options?.omitLeftBorder ? "0px" : overlayStrokeWidth,
+      borderRightWidth: options?.hideBorder || options?.omitRightBorder ? "0px" : overlayStrokeWidth,
+      borderTopWidth: borderWidth,
+      borderBottomWidth: borderWidth,
       background: options?.backgroundColor ?? "transparent",
       boxSizing: "border-box",
       borderTopLeftRadius: options?.omitLeftBorder ? "0px" : "1px",
@@ -143,6 +147,7 @@ export function buildPinnedPaneSeamOverlaySegment(
   side: "left" | "right",
   options?: {
     hideBorder?: boolean
+    seamEdge?: "left" | "right"
     borderColor?: string
     backgroundColor?: string
     borderStyle?: "solid" | "dashed"
@@ -153,19 +158,21 @@ export function buildPinnedPaneSeamOverlaySegment(
 ): DataGridTableStageOverlaySegment {
   const topBleed = Math.max(0, options?.topBleed ?? 1)
   const bottomBleed = Math.max(0, options?.bottomBleed ?? 1)
+  const borderWidth = options?.hideBorder ? "0px" : overlayStrokeWidth
+  const verticalBorderWidth = options?.hideBorder ? "0px" : overlayStrokeWidth
   return {
     key,
     style: {
       position: "absolute",
       top: `${top - topBleed}px`,
-      left: side === "left" ? "calc(100% - var(--datagrid-pinned-pane-separator-size))" : "0px",
-      width: "var(--datagrid-pinned-pane-separator-size)",
+      left: side === "left" ? `calc(100% - ${pinnedPaneSeamOverlayWidth})` : "0px",
+      width: pinnedPaneSeamOverlayWidth,
       height: `${Math.max(1, height + topBleed + bottomBleed)}px`,
-      border: `${options?.hideBorder ? 0 : 2}px ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
-      borderLeftWidth: "0px",
-      borderRightWidth: "0px",
-      borderTopWidth: options?.hideBorder ? "0px" : "2px",
-      borderBottomWidth: options?.hideBorder ? "0px" : "2px",
+      border: `${borderWidth} ${options?.borderStyle ?? "solid"} ${options?.borderColor ?? "var(--datagrid-selection-overlay-border)"}`,
+      borderLeftWidth: options?.seamEdge === "left" ? verticalBorderWidth : "0px",
+      borderRightWidth: options?.seamEdge === "right" ? verticalBorderWidth : "0px",
+      borderTopWidth: borderWidth,
+      borderBottomWidth: borderWidth,
       background: options?.backgroundColor ?? "transparent",
       boxSizing: "border-box",
       pointerEvents: "none",
@@ -220,7 +227,9 @@ export function buildPaneOverlaySegments(
 
     const width = selectedColumns.reduce((sum, column) => sum + context.resolveColumnWidth(column), 0)
     const lastSelectedIndex = context.columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
+    const lastPinnedIndex = context.columnIndexByKey(context.pinnedLeftColumns[context.pinnedLeftColumns.length - 1]?.key ?? "")
     const paneWidth = context.leftPaneWidth
+    const touchesPinnedSeam = lastPinnedIndex >= 0 && lastSelectedIndex === lastPinnedIndex
     const leftBleed = left <= 0 ? 0 : 1
     const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
     return [
@@ -231,7 +240,7 @@ export function buildPaneOverlaySegments(
         width,
         metrics.height,
         {
-          omitRightBorder: metrics.endColumnIndex > lastSelectedIndex,
+          omitRightBorder: touchesPinnedSeam || metrics.endColumnIndex > lastSelectedIndex,
           topBleed,
           bottomBleed,
           leftBleed,
@@ -308,7 +317,9 @@ export function buildPaneOverlaySegments(
 
   const width = selectedColumns.reduce((sum, column) => sum + context.resolveColumnWidth(column), 0)
   const firstSelectedIndex = context.columnIndexByKey(selectedColumns[0]?.key ?? "")
+  const firstPinnedIndex = context.columnIndexByKey(context.pinnedRightColumns[0]?.key ?? "")
   const paneWidth = context.rightPaneWidth
+  const touchesPinnedSeam = firstPinnedIndex >= 0 && firstSelectedIndex === firstPinnedIndex
   const leftBleed = left <= 0 ? 0 : 1
   const rightBleed = paneWidth > 0 && left + width >= paneWidth ? 0 : 1
   return [
@@ -319,7 +330,7 @@ export function buildPaneOverlaySegments(
       width,
       metrics.height,
       {
-        omitLeftBorder: metrics.startColumnIndex < firstSelectedIndex,
+        omitLeftBorder: touchesPinnedSeam || metrics.startColumnIndex < firstSelectedIndex,
         topBleed,
         bottomBleed,
         leftBleed,
@@ -369,9 +380,11 @@ export function buildPinnedPaneSeamOverlaySegments(
       return []
     }
     const lastSelectedIndex = context.columnIndexByKey(selectedColumns[selectedColumns.length - 1]?.key ?? "")
-    if (metrics.endColumnIndex <= lastSelectedIndex) {
+    const lastPinnedIndex = context.columnIndexByKey(context.pinnedLeftColumns[context.pinnedLeftColumns.length - 1]?.key ?? "")
+    if (lastSelectedIndex !== lastPinnedIndex) {
       return []
     }
+    const crossesIntoCenter = metrics.endColumnIndex > lastSelectedIndex
     return [
       buildPinnedPaneSeamOverlaySegment(
         `${keyPrefix}-left-seam-${metrics.startRowOffset}-${metrics.endRowOffset}`,
@@ -379,6 +392,7 @@ export function buildPinnedPaneSeamOverlaySegments(
         metrics.height,
         "left",
         {
+          seamEdge: crossesIntoCenter ? undefined : "right",
           topBleed,
           bottomBleed,
           borderColor: options?.borderColor,
@@ -398,9 +412,11 @@ export function buildPinnedPaneSeamOverlaySegments(
     return []
   }
   const firstSelectedIndex = context.columnIndexByKey(selectedColumns[0]?.key ?? "")
-  if (metrics.startColumnIndex >= firstSelectedIndex) {
+  const firstPinnedIndex = context.columnIndexByKey(context.pinnedRightColumns[0]?.key ?? "")
+  if (firstSelectedIndex !== firstPinnedIndex) {
     return []
   }
+  const crossesIntoCenter = metrics.startColumnIndex < firstSelectedIndex
   return [
     buildPinnedPaneSeamOverlaySegment(
       `${keyPrefix}-right-seam-${metrics.startRowOffset}-${metrics.endRowOffset}`,
@@ -408,6 +424,7 @@ export function buildPinnedPaneSeamOverlaySegments(
       metrics.height,
       "right",
       {
+        seamEdge: crossesIntoCenter ? undefined : "left",
         topBleed,
         bottomBleed,
         borderColor: options?.borderColor,

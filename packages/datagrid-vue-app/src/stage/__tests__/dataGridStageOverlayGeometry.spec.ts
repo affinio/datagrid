@@ -69,6 +69,7 @@ describe("dataGridStageOverlayGeometry", () => {
       left: "71px",
       width: "101px",
       height: "22px",
+      borderRightWidth: "0px",
     })
   })
 
@@ -87,8 +88,46 @@ describe("dataGridStageOverlayGeometry", () => {
     expect(seamSegments[0]?.style).toMatchObject({
       top: "19px",
       left: "0px",
-      width: "var(--datagrid-pinned-pane-separator-size)",
+      width: "max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width))",
       height: "20px",
+      borderLeftWidth: "0px",
+      borderRightWidth: "0px",
+    })
+  })
+
+  it("draws pinned seam edge overlays above the pane separator", () => {
+    const context = createGeometryContext()
+
+    const leftSeamSegments = buildPinnedPaneSeamOverlaySegments(context, {
+      startRowOffset: 1,
+      endRowOffset: 2,
+      startColumnIndex: 0,
+      endColumnIndex: 0,
+      top: 20,
+      height: 18,
+    }, "left", "selection")
+    const rightSeamSegments = buildPinnedPaneSeamOverlaySegments(context, {
+      startRowOffset: 1,
+      endRowOffset: 2,
+      startColumnIndex: 2,
+      endColumnIndex: 2,
+      top: 20,
+      height: 18,
+    }, "right", "selection")
+
+    expect(leftSeamSegments).toHaveLength(1)
+    expect(leftSeamSegments[0]?.style).toMatchObject({
+      left: "calc(100% - max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width)))",
+      width: "max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width))",
+      borderLeftWidth: "0px",
+      borderRightWidth: "var(--datagrid-selection-stroke-width)",
+    })
+    expect(rightSeamSegments).toHaveLength(1)
+    expect(rightSeamSegments[0]?.style).toMatchObject({
+      left: "0px",
+      width: "max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width))",
+      borderLeftWidth: "var(--datagrid-selection-stroke-width)",
+      borderRightWidth: "0px",
     })
   })
 
