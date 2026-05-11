@@ -148,8 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type CSSProperties, type PropType } from "vue"
-import { restoreDataGridFocus } from "@affino/datagrid-vue/app"
+import { computed, nextTick, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -174,7 +173,9 @@ import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageCellState } from "./useDataGridStageCellState"
 import { useDataGridStageFillAction } from "./useDataGridStageFillAction"
+import { useDataGridStageFocusRuntime } from "./useDataGridStageFocusRuntime"
 import { useDataGridStagePointerInteractions } from "./useDataGridStagePointerInteractions"
+import { useDataGridStageRowState } from "./useDataGridStageRowState"
 import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
 import {
   useDataGridStageViewportRuntime,
@@ -280,6 +281,8 @@ const selection = stageContext.selection
 const editing = stageContext.editing
 const cells = stageContext.cells
 const interaction = stageContext.interaction
+let rowStateRuntime: ReturnType<typeof useDataGridStageRowState> | null = null
+let focusRuntime: ReturnType<typeof useDataGridStageFocusRuntime> | null = null
 
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
@@ -375,58 +378,6 @@ function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
   return textAlign ? { textAlign } : {}
 }
 
-function resolveInlineRowStateFill(
-  row: TableRow,
-  rowOffset: number,
-  options: { fullBleed?: boolean } = {},
-): CSSProperties | null {
-  let overlayColor: string | null = null
-  if (isHoveredRow(row, rowOffset)) {
-    overlayColor = "var(--datagrid-row-band-hover-bg)"
-  } else if (isStripedRow(row, rowOffset)) {
-    overlayColor = "var(--datagrid-row-band-striped-bg)"
-  }
-  if (!overlayColor) {
-    return null
-  }
-  if (options.fullBleed === true) {
-    return {
-      backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
-      backgroundSize: "100% calc(100% - var(--datagrid-row-divider-size))",
-      backgroundPosition: "top left",
-      backgroundRepeat: "no-repeat",
-    }
-  }
-  return {
-    backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
-    backgroundSize: "calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size))",
-    backgroundPosition: "top left",
-    backgroundRepeat: "no-repeat",
-  }
-}
-
-function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: number, columnIndex: number): CSSProperties {
-  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
-    if (column.pin === "left") {
-      return { background: "var(--datagrid-pinned-left-bg)" }
-    }
-    if (column.pin === "right") {
-      return { background: "var(--datagrid-pinned-right-bg)" }
-    }
-    return { background: "var(--datagrid-row-background-color)" }
-  }
-  if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
-    return { background: "var(--datagrid-selection-range-bg)" }
-  }
-  const rowStateFill = resolveInlineRowStateFill(row, rowOffset, {
-    fullBleed: column.pin === "left" || column.pin === "right",
-  })
-  if (rowStateFill) {
-    return rowStateFill
-  }
-  return {}
-}
-
 function resolveCellCustomClass(
   row: TableRow,
   rowOffset: number,
@@ -445,43 +396,8 @@ function resolveCellCustomStyle(
   return cells.value.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
 }
 
-function isSelectCellTriggerClick(event: MouseEvent, row: TableRow, column: TableColumn): boolean {
-  if (row.kind === "group" || resolveCellEditorMode(row, column) !== "select") {
-    return false
-  }
-  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  if (!target) {
-    return false
-  }
-  const rect = target.getBoundingClientRect()
-  if (rect.width <= 0) {
-    return false
-  }
-  const offsetX = event.clientX - rect.left
-  const triggerWidth = Math.min(24, Math.max(16, Math.floor(rect.width * 0.22)))
-  return offsetX >= rect.width - triggerWidth
-}
-
-function isDateCellTriggerClick(event: MouseEvent, row: TableRow, column: TableColumn): boolean {
-  const editorMode = row.kind === "group" ? "none" : resolveCellEditorMode(row, column)
-  if (editorMode !== "date" && editorMode !== "datetime") {
-    return false
-  }
-  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  if (!target) {
-    return false
-  }
-  const rect = target.getBoundingClientRect()
-  if (rect.width <= 0) {
-    return false
-  }
-  const offsetX = event.clientX - rect.left
-  const triggerWidth = Math.min(24, Math.max(16, Math.floor(rect.width * 0.22)))
-  return offsetX >= rect.width - triggerWidth
-}
-
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
-  return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
+  return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true ? 0 : -1
 }
 
 function resolveViewportRowStart(): number {
@@ -514,82 +430,45 @@ function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
     : false
 }
 
-function resolveVisualSelectionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
-  if (
-    selectionRange.value
-    && selectionRange.value.startRow === selectionRange.value.endRow
-    && selectionRange.value.startColumn === selectionRange.value.endColumn
-  ) {
-    return {
-      rowIndex: selectionRange.value.startRow,
-      columnIndex: selectionRange.value.startColumn,
-    }
-  }
-  return selection.value.selectionAnchorCell ?? null
+function resolveInlineRowStateFill(
+  row: TableRow,
+  rowOffset: number,
+  options: { fullBleed?: boolean } = {},
+): CSSProperties | null {
+  return rowStateRuntime?.resolveInlineRowStateFill(row, rowOffset, options) ?? null
 }
 
-function isVisualSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
-  const anchorCell = resolveVisualSelectionAnchorCell()
-  return Boolean(
-    anchorCell
-    && viewport.value.viewportRowStart + rowOffset === anchorCell.rowIndex
-    && columnIndex === anchorCell.columnIndex,
-  )
+function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
+  return rowStateRuntime?.rowStateClasses(row, rowOffset) ?? {}
 }
 
-function shouldHighlightSelectedCellVisual(rowOffset: number, columnIndex: number): boolean {
-  if (!isCellSelectedSafe(rowOffset, columnIndex)) {
-    return false
-  }
-  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
-    return false
-  }
-  return !isSingleSelectedCell.value
-}
-
-function isSelectionAnchorCellSafe(rowOffset: number, columnIndex: number): boolean {
-  if (isVisualSelectionAnchorCell(rowOffset, columnIndex)) {
-    return true
-  }
-  const evaluate = cells.value.isSelectionAnchorCell
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex)
-    : false
-}
-
-function isCellInFillPreviewSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = cells.value.isCellInFillPreview
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex)
-    : false
-}
-
-function isCellInPendingClipboardRangeSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = cells.value.isCellInPendingClipboardRange
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex)
-    : false
-}
-
-function isCellOnPendingClipboardEdgeSafe(
+function bodyCellSelectionStyle(
+  row: TableRow,
+  column: TableColumn,
   rowOffset: number,
   columnIndex: number,
-  edge: "top" | "right" | "bottom" | "left",
-): boolean {
-  const evaluate = cells.value.isCellOnPendingClipboardEdge
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex, edge)
-    : false
+): CSSProperties {
+  return rowStateRuntime?.bodyCellSelectionStyle(row, column, rowOffset, columnIndex) ?? {}
 }
 
-function isEditingCellSafe(row: TableRow, columnKey: string): boolean {
+function handleBodyCellClick(
+  event: MouseEvent,
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): void {
+  rowStateRuntime?.handleBodyCellClick(event, row, rowOffset, column, columnIndex)
+}
+
+function isEditingCellSafeBase(row: TableRow, columnKey: string): boolean {
   const evaluate = editing.value.isEditingCell
   return typeof evaluate === "function"
     ? evaluate(row, columnKey)
     : false
 }
 
-function isCellEditableSafe(
+function isCellEditableSafeBase(
   row: TableRow,
   rowOffset: number,
   column: TableColumn,
@@ -601,32 +480,61 @@ function isCellEditableSafe(
     : isColumnEditable(column)
 }
 
+function isVisualSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true
+}
+
+function shouldHighlightSelectedCellVisual(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.shouldHighlightSelectedCellVisual(rowOffset, columnIndex) === true
+}
+
+function isSelectionAnchorCellSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isSelectionAnchorCellSafe(rowOffset, columnIndex) === true
+}
+
+function isCellInFillPreviewSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isCellInFillPreviewSafe(rowOffset, columnIndex) === true
+}
+
+function isCellInPendingClipboardRangeSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isCellInPendingClipboardRangeSafe(rowOffset, columnIndex) === true
+}
+
+function isCellOnPendingClipboardEdgeSafe(
+  rowOffset: number,
+  columnIndex: number,
+  edge: "top" | "right" | "bottom" | "left",
+): boolean {
+  return rowStateRuntime?.isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, edge) === true
+}
+
+function isEditingCellSafe(row: TableRow, columnKey: string): boolean {
+  return rowStateRuntime?.isEditingCellSafe(row, columnKey) === true
+}
+
+function isCellEditableSafe(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  return rowStateRuntime?.isCellEditableSafe(row, rowOffset, column, columnIndex) === true
+}
+
 function isCellOnSelectionEdgeSafe(
   rowOffset: number,
   columnIndex: number,
   edge: "top" | "right" | "bottom" | "left",
 ): boolean {
-  const evaluate = cells.value.isCellOnSelectionEdge
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex, edge)
-    : false
+  return rowStateRuntime?.isCellOnSelectionEdgeSafe(rowOffset, columnIndex, edge) === true
 }
 
 function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
-  const evaluate = selection.value.isFillHandleCell
-  return typeof evaluate === "function"
-    ? evaluate(rowOffset, columnIndex)
-    : false
+  return rowStateRuntime?.isFillHandleCellSafe(rowOffset, columnIndex) === true
 }
 
 function isVisibleCellEditableByAbsoluteCoord(rowIndex: number, columnIndex: number): boolean {
-  const rowOffset = rowIndex - viewport.value.viewportRowStart
-  const row = displayRows.value[rowOffset]
-  const column = visibleColumns.value[columnIndex]
-  if (rowOffset < 0 || !row || !column) {
-    return false
-  }
-  return isCellEditableSafe(row, rowOffset, column, columnIndex)
+  return rowStateRuntime?.isVisibleCellEditableByAbsoluteCoord(rowIndex, columnIndex) === true
 }
 
 const isRangeMoving = computed(() => selection.value.isRangeMoving)
@@ -650,7 +558,7 @@ const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
-let resolveGridChromeSyncers: () => UseDataGridStageViewportRuntimeSyncers = () => ({
+const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
   syncBodyViewportMetrics: () => {},
   syncPinnedBottomViewportMetrics: () => {},
   syncPinnedBottomViewportScrollLeft: () => {},
@@ -687,157 +595,6 @@ function isHoveredRow(row: TableRow, rowOffset: number): boolean {
 
 function isStripedRow(row: TableRow, rowOffset: number): boolean {
   return rows.value.stripedRows === true && resolveAbsoluteRowIndex(row, rowOffset) % 2 === 1
-}
-
-function isRowFocusedSafe(row: TableRow): boolean {
-  return typeof rows.value.isRowFocused === "function" ? rows.value.isRowFocused(row) : false
-}
-
-function isRowCheckboxSelectedSafe(row: TableRow): boolean {
-  return typeof rows.value.isRowCheckboxSelected === "function" ? rows.value.isRowCheckboxSelected(row) : false
-}
-
-function handleRowContainerClick(row: TableRow): void {
-  handleRowClickSafe(row)
-}
-
-function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
-  return {
-    "grid-row--hoverable": rows.value.rowHover === true,
-    "grid-row--hovered": isHoveredRow(row, rowOffset),
-    "grid-row--striped": isStripedRow(row, rowOffset),
-    "grid-row--group-explicit-trigger": row.kind === "group" && hasExplicitGroupCellRenderer.value,
-    "grid-row--clipboard-pending": rows.value.isRowInPendingClipboardCut?.(row) === true,
-    "grid-row--focused": isRowFocusedSafe(row),
-    "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
-  }
-}
-
-function handleGroupCellClick(row: TableRow): void {
-  if (row.kind !== "group") {
-    return
-  }
-  if (hasExplicitGroupCellRenderer.value) {
-    return
-  }
-  rows.value.toggleGroupRow(row)
-}
-
-function handleBodyCellClick(
-  event: MouseEvent,
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): void {
-  if (isRowSelectionColumn(column)) {
-    if (row.kind === "group") {
-      return
-    }
-    interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
-    return
-  }
-  handleGroupCellClick(row)
-  if (row.kind === "group") {
-    return
-  }
-  if (!isEditingCellSafe(row, column.key) && (isSelectCellTriggerClick(event, row, column) || isDateCellTriggerClick(event, row, column))) {
-    startInlineEditIfAllowed(row, column, rowOffset)
-    return
-  }
-  interaction.value.handleCellClick(row, rowOffset, column, columnIndex)
-}
-
-function resolveVisibleAnchorCellPosition(): { rowIndex: number; columnIndex: number } | null {
-  for (let rowOffset = 0; rowOffset < displayRows.value.length; rowOffset += 1) {
-    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
-      if (!isSelectionAnchorCellSafe(rowOffset, columnIndex)) {
-        continue
-      }
-      return {
-        rowIndex: resolveAbsoluteRowIndex(displayRows.value[rowOffset] as TableRow, rowOffset),
-        columnIndex,
-      }
-    }
-  }
-  return null
-}
-
-function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLElement | null {
-  const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
-  for (const root of [
-    leftPaneContentRef.value,
-    bodyViewportEl.value,
-    rightPaneContentRef.value,
-    leftBottomPaneContentRef.value,
-    bottomViewportEl.value,
-    rightBottomPaneContentRef.value,
-  ]) {
-    const match = root?.querySelector<HTMLElement>(selector)
-    if (match) {
-      return match
-    }
-  }
-  return null
-}
-
-function resolveVisibleRowElement(rowIndex: number): HTMLElement | null {
-  const selector = `.grid-cell[data-row-index="${rowIndex}"]`
-  for (const root of [
-    leftPaneContentRef.value,
-    bodyViewportEl.value,
-    rightPaneContentRef.value,
-    leftBottomPaneContentRef.value,
-    bottomViewportEl.value,
-    rightBottomPaneContentRef.value,
-  ]) {
-    const match = root?.querySelector<HTMLElement>(selector)
-    if (match) {
-      return match
-    }
-  }
-  return null
-}
-
-function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
-  left: number
-  right: number
-  top: number
-  bottom: number
-} | null {
-  if (!cell) {
-    return null
-  }
-  const cellElement = resolveVisibleCellElement(cell.rowIndex, cell.columnIndex)
-  const shellRect = bodyShellRef.value?.getBoundingClientRect()
-  if (!cellElement || !shellRect) {
-    return null
-  }
-  const cellRect = cellElement.getBoundingClientRect()
-  return {
-    left: cellRect.left - shellRect.left,
-    right: cellRect.right - shellRect.left,
-    top: cellRect.top - shellRect.top,
-    bottom: cellRect.bottom - shellRect.top,
-  }
-}
-
-function focusVisibleAnchorCell(): void {
-  const anchorCell = resolveVisibleAnchorCellPosition()
-  if (!anchorCell) {
-    bodyViewportEl.value?.focus({ preventScroll: true })
-    return
-  }
-  const cellElement = resolveVisibleCellElement(anchorCell.rowIndex, anchorCell.columnIndex)
-  if (cellElement) {
-    cellElement.focus({ preventScroll: true })
-    return
-  }
-  bodyViewportEl.value?.focus({ preventScroll: true })
-}
-
-function restoreAnchorCellFocus(): void {
-  void restoreDataGridFocus(focusVisibleAnchorCell)
 }
 
 const rowIndexState = useDataGridStageRowIndex({
@@ -883,7 +640,7 @@ const {
   viewport,
   leftPaneContentRef,
   rightPaneContentRef,
-  resolveGridChromeSyncers: () => resolveGridChromeSyncers(),
+  gridChromeSyncers,
 })
 
 useDataGridPerfTrace({
@@ -954,6 +711,8 @@ const {
   clearRowIndexDragState,
 } = rowIndexState
 
+const handleRowContainerClick = handleRowClickSafe
+
 const {
   startInlineEditIfAllowed,
   resolveCellEditorMode,
@@ -979,15 +738,40 @@ const {
   rows,
   cells,
   editing,
-  isCellEditableSafe,
-  isEditingCellSafe,
+  isCellEditableSafe: isCellEditableSafeBase,
+  isEditingCellSafe: isEditingCellSafeBase,
   columnIndexByKey,
 })
 
-let isRangeMoveHandleHoverCellImpl = (_rowOffset: number, _columnIndex: number) => false
+rowStateRuntime = useDataGridStageRowState({
+  rows,
+  selection,
+  selectionRange,
+  displayRows,
+  visibleColumns,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  isHoveredRow,
+  isStripedRow,
+  resolveAbsoluteRowIndex,
+  isCellSelectedSafe,
+  isEditingCellSafe: isEditingCellSafeBase,
+  isCellEditableSafe: isCellEditableSafeBase,
+  resolveCellEditorMode,
+  startInlineEditIfAllowed,
+  handleCellClick: (row, rowOffset, column, columnIndex) => interaction.value.handleCellClick(row, rowOffset, column, columnIndex),
+  hasExplicitGroupCellRenderer,
+  cells: computed(() => ({
+    isSelectionAnchorCell: cells.value.isSelectionAnchorCell,
+    isCellInFillPreview: cells.value.isCellInFillPreview,
+    isCellInPendingClipboardRange: cells.value.isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge: cells.value.isCellOnPendingClipboardEdge,
+    isCellOnSelectionEdge: cells.value.isCellOnSelectionEdge,
+  })),
+})
+const isRangeMoveHandleHoverCellBridge = shallowRef<(rowOffset: number, columnIndex: number) => boolean>(() => false)
 
 function isRangeMoveHandleHoverCellSafe(rowOffset: number, columnIndex: number): boolean {
-  return isRangeMoveHandleHoverCellImpl(rowOffset, columnIndex)
+  return isRangeMoveHandleHoverCellBridge.value(rowOffset, columnIndex)
 }
 
 const {
@@ -998,7 +782,6 @@ const {
   cellAriaPressed,
   cellAriaLabel,
   cellAriaDisabled,
-  isRowSelectionColumn,
   shouldRenderCheckboxCell,
   checkboxIndicatorClass,
   checkboxIndicatorMarkClass,
@@ -1054,7 +837,7 @@ const {
   hasPivotHeaderGroups,
 })
 
-resolveGridChromeSyncers = () => ({
+gridChromeSyncers.value = {
   syncBodyViewportMetrics,
   syncPinnedBottomViewportMetrics,
   syncPinnedBottomViewportScrollLeft,
@@ -1062,7 +845,7 @@ resolveGridChromeSyncers = () => ({
   flushGridChromeRedraw,
   connectGridChromeResizeObserver,
   disconnectGridChromeResizeObserver,
-})
+}
 
 watch(
   chromeColumnsRevision,
@@ -1097,6 +880,21 @@ const effectiveBodyViewportWidth = computed(() => {
     : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
 })
 
+focusRuntime = useDataGridStageFocusRuntime({
+  bodyShellRef,
+  bodyViewportEl,
+  leftPaneContentRef,
+  rightPaneContentRef,
+  leftBottomPaneContentRef,
+  rightBottomPaneContentRef,
+  displayRows,
+  visibleColumns,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  resolveAbsoluteRowIndex,
+  isSelectionAnchorCellSafe,
+  isCellEditableSafe: isCellEditableSafeBase,
+})
+
 const {
   fillActionMenuOpen,
   floatingFillActionStyle,
@@ -1121,11 +919,11 @@ const {
   pinnedRightColumns,
   resolveColumnWidth,
   resolveViewportRowStart,
-  resolveVisibleCellElement,
-  resolveVisibleRowElement,
-  resolveRelativeCellRect,
+  resolveVisibleCellElement: focusRuntime!.resolveVisibleCellElement,
+  resolveVisibleRowElement: focusRuntime!.resolveVisibleRowElement,
+  resolveRelativeCellRect: focusRuntime!.resolveRelativeCellRect,
   isVisibleCellEditableByAbsoluteCoord,
-  restoreAnchorCellFocus,
+  restoreAnchorCellFocus: focusRuntime!.restoreAnchorCellFocus,
 })
 
 const {
@@ -1147,7 +945,7 @@ const {
   isCellOnSelectionEdgeSafe,
 })
 
-isRangeMoveHandleHoverCellImpl = isRangeMoveHandleHoverCellFromPointer
+isRangeMoveHandleHoverCellBridge.value = isRangeMoveHandleHoverCellFromPointer
 
 function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)

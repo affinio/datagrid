@@ -16,7 +16,7 @@ export interface UseDataGridStageViewportRuntimeSyncers {
 export interface UseDataGridStageViewportRuntimeOptions {
   stageRootEl: Readonly<Ref<HTMLElement | null>>
   viewport: Readonly<Ref<DataGridTableStageViewportSection>>
-  resolveGridChromeSyncers: () => UseDataGridStageViewportRuntimeSyncers
+  gridChromeSyncers: Readonly<Ref<UseDataGridStageViewportRuntimeSyncers>>
   leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
   rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
 }
@@ -129,7 +129,7 @@ export function useDataGridStageViewportRuntime(
   function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
     bodyViewportEl.value = resolveElementRef(value)
     options.viewport.value.bodyViewportRef(value)
-    const syncers = options.resolveGridChromeSyncers()
+    const syncers = options.gridChromeSyncers.value
     syncers.syncBodyViewportMetrics()
     syncers.connectGridChromeResizeObserver()
     syncers.scheduleGridChromeRedraw()
@@ -137,7 +137,7 @@ export function useDataGridStageViewportRuntime(
 
   function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
     bottomViewportEl.value = resolveElementRef(value)
-    const syncers = options.resolveGridChromeSyncers()
+    const syncers = options.gridChromeSyncers.value
     syncers.syncPinnedBottomViewportMetrics()
     syncers.syncPinnedBottomViewportScrollLeft()
   }
@@ -154,12 +154,12 @@ export function useDataGridStageViewportRuntime(
       linkedPaneScrollSync.onSourceScroll(element.scrollTop)
     }
     syncBodyViewportScrollState(element)
-    options.resolveGridChromeSyncers().syncPinnedBottomViewportScrollLeft()
+    options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
-      options.resolveGridChromeSyncers().flushGridChromeRedraw("center-scroll")
+      options.gridChromeSyncers.value.flushGridChromeRedraw("center-scroll")
       return
     }
-    options.resolveGridChromeSyncers().scheduleGridChromeRedraw("full")
+    options.gridChromeSyncers.value.scheduleGridChromeRedraw("full")
   }
 
   function handlePinnedBottomViewportScroll(event: Event): void {
@@ -171,7 +171,7 @@ export function useDataGridStageViewportRuntime(
     bodyViewport.scrollLeft = element.scrollLeft
     options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
     syncBodyViewportScrollState(bodyViewport)
-    options.resolveGridChromeSyncers().flushGridChromeRedraw("center-scroll")
+    options.gridChromeSyncers.value.flushGridChromeRedraw("center-scroll")
   }
 
   function handleLinkedViewportWheel(event: WheelEvent): void {
@@ -183,9 +183,9 @@ export function useDataGridStageViewportRuntime(
   }
 
   onMounted(() => {
-    options.resolveGridChromeSyncers().syncBodyViewportMetrics()
-    options.resolveGridChromeSyncers().connectGridChromeResizeObserver()
-    options.resolveGridChromeSyncers().scheduleGridChromeRedraw()
+    options.gridChromeSyncers.value.syncBodyViewportMetrics()
+    options.gridChromeSyncers.value.connectGridChromeResizeObserver()
+    options.gridChromeSyncers.value.scheduleGridChromeRedraw()
     if (options.stageRootEl.value) {
       teardownTouchPanGuard = installDataGridTouchPanGuard({
         root: options.stageRootEl.value,
@@ -193,7 +193,7 @@ export function useDataGridStageViewportRuntime(
       })
     }
     if (typeof window !== "undefined") {
-      window.addEventListener("resize", options.resolveGridChromeSyncers().syncBodyViewportMetrics)
+      window.addEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)
     }
   })
 
@@ -202,9 +202,9 @@ export function useDataGridStageViewportRuntime(
     managedWheelScroll.reset()
     teardownTouchPanGuard?.()
     teardownTouchPanGuard = null
-    options.resolveGridChromeSyncers().disconnectGridChromeResizeObserver()
+    options.gridChromeSyncers.value.disconnectGridChromeResizeObserver()
     if (typeof window !== "undefined") {
-      window.removeEventListener("resize", options.resolveGridChromeSyncers().syncBodyViewportMetrics)
+      window.removeEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)
     }
   })
 
