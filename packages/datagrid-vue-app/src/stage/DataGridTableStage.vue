@@ -157,8 +157,6 @@ import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
 import type {
   DataGridTableStageBodyColumn as TableColumn,
   DataGridTableStageBodyRow as TableRow,
-  DataGridTableStageCenterPaneRenderApi,
-  DataGridTableStagePinnedPaneRenderApi,
 } from "./dataGridTableStageBody.types"
 import type {
   DataGridTableStageCustomOverlay,
@@ -183,6 +181,7 @@ import {
   type UseDataGridStageViewportRuntimeSyncers,
 } from "./useDataGridStageViewportRuntime"
 import { useDataGridStagePanes } from "./useDataGridStagePanes"
+import { useDataGridStageRenderApis } from "./useDataGridStageRenderApis"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -1193,24 +1192,6 @@ function columnIndexByKey(columnKey: string): number {
   return visibleColumnIndexByKey.value.get(columnKey) ?? 0
 }
 
-function paneRowStyle(row: TableRow, rowOffset: number, paneWidth: number): CSSProperties {
-  return {
-    ...rows.value.rowStyle(row, resolveViewportRowOffset(row, rowOffset)),
-    width: `${paneWidth}px`,
-    minWidth: `${paneWidth}px`,
-    maxWidth: `${paneWidth}px`,
-  }
-}
-
-function spacerStyle(width: number): CSSProperties {
-  const px = `${width}px`
-  return {
-    width: px,
-    minWidth: px,
-    maxWidth: px,
-  }
-}
-
 function resolveVisibleRangeBoundsForRows(
   range: OverlayRange | null,
   laneRows: readonly TableRow[],
@@ -1425,28 +1406,48 @@ const {
   headerViewportClientWidth,
 })
 
-const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
-  handleLinkedViewportWheel,
-  absoluteRowIndex: resolveAbsoluteRowIndex,
-  viewportRowOffset: resolveViewportRowOffset,
+const {
+  pinnedPaneRenderApi,
+  centerPaneRenderApi,
+} = useDataGridStageRenderApis({
+  mode,
+  rows,
+  selection,
+  selectionRange,
+  selectionRanges,
+  visibleColumns,
+  displayRows,
+  editing,
+  cells,
+  isCellEditableSafe,
+  isEditingCellSafe,
+  isCellSelectedSafe,
+  isSelectionAnchorCellSafe,
+  shouldHighlightSelectedCellVisual,
+  isCellInFillPreviewSafe,
+  isCellInPendingClipboardRangeSafe,
+  isCellOnPendingClipboardEdgeSafe,
+  isCellOnSelectionEdgeSafe,
+  isFillHandleCellSafe,
+  isVisibleCellEditableByAbsoluteCoord,
+  resolveAbsoluteRowIndex,
+  resolveViewportRowOffset,
   rowStateClasses,
-  paneRowStyle,
   handleRowContainerClick,
   setHoveredRow,
   isFullRowSelectionSafe,
-  get rowIndexColumnStyle() {
-    return resolvedRowIndexColumnStyle.value
-  },
+  rowIndexColumnStyle: resolvedRowIndexColumnStyle,
   rowIndexCellClasses,
   rowIndexCellStyle,
   rowIndexTabIndex,
   isRowIndexDraggable,
   handleRowIndexClickSafe,
-  handleRowIndexKeydown: handleRowIndexKeydownSafe,
+  handleRowIndexKeydownSafe,
   handleRowIndexDragStart,
   handleRowIndexDragOver,
   handleRowIndexDrop,
-  handleRowIndexDragEnd: clearRowIndexDragState,
+  clearRowIndexDragState,
+  columnIndexByKey,
   builtInCellClasses,
   cellStateClasses,
   resolveCellCustomClass,
@@ -1454,7 +1455,6 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   bodyCellPresentationStyle,
   bodyCellSelectionStyle,
   resolveCellCustomStyle,
-  columnIndexByKey,
   cellTabIndex,
   cellAriaRole,
   cellAriaChecked,
@@ -1467,9 +1467,6 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   clearRangeMoveHandleHover,
   handleCellKeydown,
   startInlineEditIfAllowed,
-  isCellEditableSafe,
-  isFillHandleCellSafe,
-  isEditingCellSafe,
   handleFillHandleMouseDown,
   handleFillHandleDoubleClick,
   isSelectEditorCell,
@@ -1491,65 +1488,11 @@ const pinnedPaneRenderApi: DataGridTableStagePinnedPaneRenderApi = {
   checkboxIndicatorMarkClass,
   readResolvedDisplayCell,
   renderResolvedCellContent,
-}
-
-const centerPaneRenderApi: DataGridTableStageCenterPaneRenderApi = {
   handleCenterViewportScroll,
   handleBodyViewportWheel,
-  absoluteRowIndex: resolveAbsoluteRowIndex,
-  viewportRowOffset: resolveViewportRowOffset,
-  handleViewportKeydown(event) {
-    viewport.value.handleViewportKeydown(event)
-  },
-  rowStateClasses,
-  handleRowContainerClick,
-  setHoveredRow,
-  spacerStyle,
-  builtInCellClasses,
-  cellStateClasses,
-  resolveCellCustomClass,
-  columnStyle,
-  bodyCellPresentationStyle,
-  bodyCellSelectionStyle,
-  resolveCellCustomStyle,
-  columnIndexByKey,
-  cellTabIndex,
-  cellAriaRole,
-  cellAriaChecked,
-  cellAriaPressed,
-  cellAriaLabel,
-  cellAriaDisabled,
-  handleCellMouseDown,
-  handleBodyCellClick,
-  handleCellMouseMove,
-  clearRangeMoveHandleHover,
-  handleCellKeydown,
-  startInlineEditIfAllowed,
-  isCellEditableSafe,
-  isFillHandleCellSafe,
-  isEditingCellSafe,
-  handleFillHandleMouseDown,
-  handleFillHandleDoubleClick,
-  isSelectEditorCell,
-  resolveSelectEditorValue,
-  resolveSelectEditorOptions,
-  resolveSelectEditorOptionsLoader,
-  handleSelectEditorCommit,
-  handleSelectEditorCancel,
-  handleSelectEditorOptionsResolved,
-  isDateEditorCell,
-  resolveDateEditorInputType,
-  handleDateEditorChange,
-  isTextEditorCell,
-  updateEditingCellValue,
-  handleEditorKeydown,
-  handleTextEditorBlur,
-  shouldRenderCheckboxCell,
-  checkboxIndicatorClass,
-  checkboxIndicatorMarkClass,
-  readResolvedDisplayCell,
-  renderResolvedCellContent,
-}
+  handleViewportKeydown: (event: KeyboardEvent) => viewport.value.handleViewportKeydown(event),
+  handleLinkedViewportWheel,
+})
 
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
