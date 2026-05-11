@@ -172,7 +172,7 @@ Validation:
 
 ---
 
-## [] Slice 7 — Extract cell editor/rendering runtime
+## [x] Slice 7 — Extract cell editor/rendering runtime
 
 Goal: вынести cell rendering/editor resolving from stage.
 

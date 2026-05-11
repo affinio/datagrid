@@ -148,14 +148,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType, type VNodeChild } from "vue"
-import {
-  buildDataGridCellRenderModel,
-  getDataGridRowRenderMeta,
-  invokeDataGridCellInteraction,
-  resolveDataGridCellInteraction,
-  type DataGridCellInteractionInvocationTrigger,
-} from "@affino/datagrid-vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
+import { resolveDataGridCellInteraction } from "@affino/datagrid-vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
@@ -171,8 +165,6 @@ import type {
   DataGridTableStageCenterPaneRenderApi,
   DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
-  DataGridTableStageSelectEditorOption as SelectEditorOption,
-  DataGridTableStageSelectEditorOptionsLoader as SelectEditorOptionsLoader,
 } from "./dataGridTableStageBody.types"
 import type {
   DataGridTableStageCustomOverlay,
@@ -184,15 +176,11 @@ import {
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
 import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
-import type {
-  DataGridAppCellRendererInteractiveContext,
-  DataGridAppRowSurfaceContext,
-} from "../config/dataGridFormulaOptions"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
-import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
+import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -312,14 +300,6 @@ function columnStyle(key: string): CSSProperties {
   return layout.value.columnStyle(key)
 }
 
-function updateEditingCellValue(value: string): void {
-  editing.value.updateEditingCellValue(value)
-}
-
-function handleEditorKeydown(event: KeyboardEvent): void {
-  editing.value.handleEditorKeydown(event)
-}
-
 function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   interaction.value.handleCellMouseDown(event, row, rowOffset, columnIndex)
 }
@@ -352,8 +332,6 @@ const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
 const FILL_ACTION_TRIGGER_SIZE_PX = 14
 const FILL_ACTION_VIEWPORT_MARGIN_PX = 8
 const FILL_ACTION_HANDLE_CLEARANCE_PX = 10
-
-const asyncSelectOptionCache = ref(new Map<string, readonly SelectEditorOption[]>())
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
@@ -406,13 +384,6 @@ function hasGroupCellRenderer(column: TableColumn): boolean {
     groupCellRenderer?: unknown
   }
   return typeof authoredColumn.groupCellRenderer === "function"
-}
-
-function isPromiseLike<TValue>(value: unknown): value is PromiseLike<TValue> {
-  return typeof value === "object"
-    && value !== null
-    && "then" in value
-    && typeof (value as { then?: unknown }).then === "function"
 }
 
 function isColumnEditable(column: TableColumn): boolean {
@@ -538,20 +509,6 @@ function resolveCellCustomStyle(
   columnIndex: number,
 ): CSSProperties {
   return cells.value.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
-}
-
-function startInlineEditIfAllowed(row: TableRow, column: TableColumn, rowOffset: number): void {
-  const columnIndex = columnIndexByKey(column.key)
-  if (rowOffset < 0 || !isCellEditableSafe(row, rowOffset, column, columnIndex)) {
-    return
-  }
-  editing.value.startInlineEdit(
-    row,
-    column.key,
-    resolveCellEditorMode(row, column) === "select"
-      ? { openOnMount: true }
-      : undefined,
-  )
 }
 
 function isSelectCellTriggerClick(event: MouseEvent, row: TableRow, column: TableColumn): boolean {
@@ -1162,300 +1119,6 @@ function checkboxIndicatorMarkClass(row: TableRow, column: TableColumn): Record<
   }
 }
 
-function resolveCellEditorMode(row: TableRow, column: TableColumn): "none" | "text" | "select" | "date" | "datetime" {
-  return buildDataGridCellRenderModel({
-    column: column.column,
-    row: row.kind !== "group" ? row.data : undefined,
-    editable: true,
-  }).editorMode
-}
-
-function normalizeSelectEditorOption(option: unknown): SelectEditorOption {
-  if (option && typeof option === "object" && "label" in option) {
-    const record = option as { label?: unknown; value?: unknown }
-    const label = String(record.label ?? "")
-    return {
-      label,
-      value: String(record.value ?? label),
-    }
-  }
-  return {
-    label: String(option ?? ""),
-    value: String(option ?? ""),
-  }
-}
-
-function buildSelectEditorCacheKey(row: TableRow, columnKey: string): string | null {
-  if (row.kind === "group") {
-    return null
-  }
-  return `${String(row.rowId)}::${columnKey}`
-}
-
-function readCachedSelectEditorOptions(row: TableRow, columnKey: string): readonly SelectEditorOption[] {
-  const cacheKey = buildSelectEditorCacheKey(row, columnKey)
-  if (!cacheKey) {
-    return []
-  }
-  return asyncSelectOptionCache.value.get(cacheKey) ?? []
-}
-
-function readRowCellValue(row: TableRow, column: TableColumn): unknown {
-  if (row.kind === "group") {
-    return undefined
-  }
-  if (typeof column.column.accessor === "function") {
-    return column.column.accessor(row.data)
-  }
-  if (typeof column.column.valueGetter === "function") {
-    return column.column.valueGetter(row.data)
-  }
-  const field = typeof column.column.field === "string" && column.column.field.length > 0
-    ? column.column.field
-    : column.key
-  return isRecord(row.data) ? row.data[field] : undefined
-}
-
-function resolveSelectEditorOptionsSource(row: TableRow, column: TableColumn): unknown {
-  const source = column.column.presentation?.options
-  return typeof source === "function"
-    ? (row.kind !== "group" ? source(row.data) : [])
-    : source
-}
-
-function resolveSelectEditorOptions(row: TableRow, column: TableColumn): readonly SelectEditorOption[] {
-  const resolved = resolveSelectEditorOptionsSource(row, column)
-  if (Array.isArray(resolved)) {
-    return resolved.map(normalizeSelectEditorOption)
-  }
-  if (isPromiseLike<readonly unknown[]>(resolved)) {
-    return readCachedSelectEditorOptions(row, column.key)
-  }
-  return []
-}
-
-function resolveSelectEditorOptionsLoader(
-  row: TableRow,
-  column: TableColumn,
-): SelectEditorOptionsLoader | undefined {
-  if (row.kind === "group") {
-    return undefined
-  }
-  const resolvedSource = resolveSelectEditorOptionsSource(row, column)
-  if (!isPromiseLike<readonly unknown[]>(resolvedSource)) {
-    return undefined
-  }
-  return async (_query: string) => {
-    const resolved = resolveSelectEditorOptionsSource(row, column)
-    if (isPromiseLike<readonly unknown[]>(resolved)) {
-      const loaded = await resolved
-      return Array.isArray(loaded) ? loaded.map(normalizeSelectEditorOption) : []
-    }
-    return Array.isArray(resolved) ? resolved.map(normalizeSelectEditorOption) : []
-  }
-}
-
-function handleSelectEditorOptionsResolved(
-  row: TableRow,
-  column: TableColumn,
-  options: ReadonlyArray<DataGridFilterableComboboxOption>,
-): void {
-  const cacheKey = buildSelectEditorCacheKey(row, column.key)
-  if (!cacheKey) {
-    return
-  }
-  const currentOptions = asyncSelectOptionCache.value.get(cacheKey)
-  if (
-    currentOptions
-    && currentOptions.length === options.length
-    && currentOptions.every((option, index) => (
-      option.value === options[index]?.value && option.label === options[index]?.label
-    ))
-  ) {
-    return
-  }
-  const nextCache = new Map(asyncSelectOptionCache.value)
-  nextCache.set(cacheKey, [...options])
-  asyncSelectOptionCache.value = nextCache
-}
-
-function readResolvedDisplayCell(row: TableRow, column: TableColumn): string {
-  const displayValue = cells.value.readDisplayCell(row, column.key)
-  if (row.kind === "group" || resolveCellEditorMode(row, column) !== "select") {
-    return displayValue
-  }
-  const cachedOptions = readCachedSelectEditorOptions(row, column.key)
-  if (cachedOptions.length === 0) {
-    return displayValue
-  }
-  const rawValue = readRowCellValue(row, column)
-  const match = cachedOptions.find(option => option.value === String(rawValue ?? ""))
-  return match?.label ?? displayValue
-}
-
-function resolveRowSurfaceContext(row: TableRow): DataGridAppRowSurfaceContext {
-  return {
-    kind: isDataGridPlaceholderSurfaceRow(row) ? "placeholder" : "real",
-  }
-}
-
-function renderResolvedCellContent(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): VNodeChild {
-  const displayValue = readResolvedDisplayCell(row, column)
-  const surface = resolveRowSurfaceContext(row)
-  const editable = isCellEditableSafe(row, rowOffset, column, columnIndex)
-  const interaction = resolveDataGridCellInteraction({
-    column: column.column,
-    row: row.kind !== "group" ? row.data : undefined,
-    rowId: row.rowId,
-    editable,
-  })
-
-  const interactive: DataGridAppCellRendererInteractiveContext | null = interaction
-    ? {
-      enabled: interaction.disabled !== true,
-      click: interaction.click,
-      keyboard: interaction.keyboard,
-      role: interaction.role,
-      ariaLabel: interaction.label,
-      ariaPressed: interaction.pressed,
-      ariaChecked: interaction.checked,
-      ariaDisabled: interaction.disabled ? "true" : undefined,
-      activate: (trigger?: DataGridCellInteractionInvocationTrigger) => invokeDataGridCellInteraction({
-        column: column.column,
-        row: row.kind !== "group" ? row.data : undefined,
-        rowId: row.rowId,
-        editable,
-        trigger: trigger ?? "click",
-      }),
-    }
-    : null
-
-  if (row.kind === "group") {
-    const renderer = column.column.groupCellRenderer ?? column.column.cellRenderer
-    if (typeof renderer !== "function") {
-      return displayValue
-    }
-    const groupRow = row as TableRow & { kind: "group" }
-    const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
-      ? Math.max(0, Math.trunc(row.groupMeta?.childrenCount as number))
-      : 0
-    const renderMeta = getDataGridRowRenderMeta(groupRow)
-    return renderer({
-      row: undefined,
-      rowNode: groupRow,
-      surface,
-      rowOffset,
-      column,
-      columnIndex,
-      value: cells.value.readCell(row, column.key),
-      displayValue,
-      interactive,
-      group: {
-        key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
-        field: String(row.groupMeta?.groupField ?? "group"),
-        value: String(row.groupMeta?.groupValue ?? row.rowId ?? ""),
-        childrenCount,
-        isLabelColumn: props.mode === "tree"
-          ? column.key === "name"
-          : column.key === (props.columns.visibleColumns[0]?.key ?? "name"),
-        renderMeta: {
-          ...renderMeta,
-          isGroup: true,
-        },
-        toggle: () => {
-          rows.value.toggleGroupRow(row)
-        },
-      },
-    }) ?? displayValue
-  }
-
-  const renderer = column.column.cellRenderer
-  if (typeof renderer !== "function") {
-    return displayValue
-  }
-
-  return renderer({
-    row: row.data,
-    rowNode: row,
-    surface,
-    rowOffset,
-    column,
-    columnIndex,
-    value: cells.value.readCell(row, column.key),
-    displayValue,
-    interactive,
-  }) ?? displayValue
-}
-
-function resolveSelectEditorValue(row: TableRow, column: TableColumn): string {
-  const rawValue = readRowCellValue(row, column)
-  return rawValue == null ? "" : String(rawValue)
-}
-
-function isSelectEditorCell(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): boolean {
-  return isCellEditableSafe(row, rowOffset, column, columnIndex)
-    && isEditingCellSafe(row, column.key)
-    && resolveCellEditorMode(row, column) === "select"
-}
-
-function isDateEditorCell(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): boolean {
-  const editorMode = resolveCellEditorMode(row, column)
-  return isCellEditableSafe(row, rowOffset, column, columnIndex)
-    && isEditingCellSafe(row, column.key)
-    && (editorMode === "date" || editorMode === "datetime")
-}
-
-function resolveDateEditorInputType(row: TableRow, column: TableColumn): "date" | "datetime-local" {
-  return resolveCellEditorMode(row, column) === "datetime" ? "datetime-local" : "date"
-}
-
-function isTextEditorCell(
-  row: TableRow,
-  rowOffset: number,
-  column: TableColumn,
-  columnIndex: number,
-): boolean {
-  return isCellEditableSafe(row, rowOffset, column, columnIndex)
-    && isEditingCellSafe(row, column.key)
-    && resolveCellEditorMode(row, column) === "text"
-}
-
-function handleSelectEditorCommit(
-  value: string,
-  target: "stay" | "next" | "previous" = "stay",
-): void {
-  editing.value.updateEditingCellValue(value)
-  editing.value.commitInlineEdit(target)
-}
-
-function handleSelectEditorCancel(): void {
-  editing.value.cancelInlineEdit()
-}
-
-function handleDateEditorChange(value: string, target: "stay" | "next" | "previous" = "stay"): void {
-  editing.value.updateEditingCellValue(value)
-  editing.value.commitInlineEdit(target)
-}
-
-function handleTextEditorBlur(): void {
-  editing.value.handleEditorBlur()
-}
-
 function handleRowClickSafe(row: TableRow): void {
   rows.value.handleRowClick?.(row)
 }
@@ -1792,6 +1455,36 @@ const {
   isHoveredRow,
   isStripedRow,
   readPivotHeaderMeta,
+})
+
+const {
+  startInlineEditIfAllowed,
+  resolveCellEditorMode,
+  resolveSelectEditorOptions,
+  resolveSelectEditorOptionsLoader,
+  handleSelectEditorOptionsResolved,
+  readResolvedDisplayCell,
+  renderResolvedCellContent,
+  resolveSelectEditorValue,
+  isSelectEditorCell,
+  isDateEditorCell,
+  resolveDateEditorInputType,
+  isTextEditorCell,
+  handleSelectEditorCommit,
+  handleSelectEditorCancel,
+  handleDateEditorChange,
+  handleTextEditorBlur,
+  updateEditingCellValue,
+  handleEditorKeydown,
+} = useDataGridStageCellRendering({
+  mode,
+  visibleColumns,
+  rows,
+  cells,
+  editing,
+  isCellEditableSafe,
+  isEditingCellSafe,
+  columnIndexByKey,
 })
 
 const {
