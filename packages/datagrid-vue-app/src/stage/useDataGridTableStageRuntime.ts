@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, ref, watch, type ComputedRef, type CSSProperties, type Ref } from "vue"
+import { computed, nextTick, ref, watch, type ComputedRef, type CSSProperties, type Ref } from "vue"
 import type {
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
@@ -1049,11 +1049,6 @@ export function useDataGridTableStageRuntime<
 
   const editingCellRef = computed(() => editingCell.value)
 
-  onMounted(() => {
-    options.reportFillPlumbingState?.("runtime_diagnostics_alive", true)
-    options.reportFillPlumbingDetail?.("runtime_diagnostics_alive", "yes")
-  })
-
   function buildFillProjectionContext(): DataGridAppFillProjectionContext {
     const snapshot = options.runtime.api.rows.getSnapshot() as {
       sortModel?: readonly DataGridSortState[]
@@ -1081,34 +1076,6 @@ export function useDataGridTableStageRuntime<
     }
   }
 
-  function formatRuntimeRowModelSnapshot(): string {
-    const snapshot = options.runtimeRowModel?.getSnapshot?.()
-    if (!snapshot) {
-      return "none"
-    }
-    const viewport = snapshot.viewportRange
-    return [
-      `rowCount=${snapshot.rowCount}`,
-      `loading=${snapshot.loading ? "yes" : "no"}`,
-      `viewport=${viewport.start}..${viewport.end}`,
-      `revision=${snapshot.revision ?? "none"}`,
-    ].join(" ")
-  }
-
-  function readDebugRegion(row: DataGridRowNode<TRow> | null | undefined): string {
-    if (!row || row.kind === "group") {
-      return "none"
-    }
-    return String((row.row as Record<string, unknown>).region ?? (row.data as Record<string, unknown>).region ?? "none")
-  }
-
-  function formatDebugRow(row: DataGridRowNode<TRow> | null | undefined): string {
-    if (!row) {
-      return "none"
-    }
-    return `${String(row.rowId)}:${readDebugRegion(row)}`
-  }
-
   function resolveRenderedBodyViewportRange(): DataGridCopyRange | null {
     const rows = displayRows.value
     if (rows.length === 0) {
@@ -1134,57 +1101,6 @@ export function useDataGridTableStageRuntime<
       startColumn: 0,
       endColumn: Math.max(0, options.visibleColumns.value.length - 1),
     }
-  }
-
-  function reportRendererViewportDiagnostics(reason: string): void {
-    const sampleRowId = "srv-000025"
-    const sampleVisibleIndex = selectableRuntime.resolveBodyRowIndexById(sampleRowId)
-    const sampleRow = sampleVisibleIndex >= 0
-      ? selectableRuntime.getBodyRowAtIndex(sampleVisibleIndex)
-      : null
-    const sampleValue = sampleRow && sampleRow.kind !== "group"
-      ? String((sampleRow.row as Record<string, unknown>).region ?? "none")
-      : "none"
-    const firstVisibleRows = [
-      selectableRuntime.getBodyRowAtIndex(0),
-      selectableRuntime.getBodyRowAtIndex(1),
-      selectableRuntime.getBodyRowAtIndex(2),
-      selectableRuntime.getBodyRowAtIndex(3),
-      selectableRuntime.getBodyRowAtIndex(4),
-    ]
-      .filter((row): row is DataGridRowNode<TRow> => row != null)
-      .map(row => String(row.rowId))
-      .join(", ")
-    options.reportFillPlumbingDetail?.("runtime_viewport_range", `${viewportRowStart.value}..${viewportRowEnd.value}`)
-    options.reportFillPlumbingDetail?.("runtime_rowModel_snapshot", formatRuntimeRowModelSnapshot())
-    options.reportFillPlumbingDetail?.("runtime_visible_first5", firstVisibleRows || "none")
-    options.reportFillPlumbingDetail?.("runtime_sample_row25_visible_index", sampleVisibleIndex >= 0 ? String(sampleVisibleIndex) : "none")
-    options.reportFillPlumbingDetail?.("runtime_sample_row25_region", sampleValue)
-    const sourceRow1BeforeSync = options.runtime.getBodyRowAtIndex(1)
-    const sourceSyncRows = options.runtime.syncBodyRowsInRange({
-      start: 0,
-      end: Math.min(23, Math.max(0, options.runtime.rowPartition.value.bodyRowCount - 1)),
-    })
-    const sourceSyncRow1 = sourceSyncRows.find(row => Math.trunc(row.displayIndex) === 1) ?? sourceSyncRows[1] ?? null
-    const sourceRow1AfterSync = options.runtime.getBodyRowAtIndex(1)
-    const displayRow1 = displayRows.value[1] ?? null
-    options.reportFillPlumbingDetail?.(
-      "server_fill_row1_cache_status",
-      sourceRow1BeforeSync != null && sourceSyncRow1 != null && sourceRow1BeforeSync === sourceSyncRow1
-        ? "cache-hit"
-        : "pulled-fresh",
-    )
-    options.reportFillPlumbingDetail?.("server_fill_row1_sync_value", formatDebugRow(sourceSyncRow1))
-    options.reportFillPlumbingDetail?.("source_body_row1", formatDebugRow(sourceRow1AfterSync))
-    options.reportFillPlumbingDetail?.("source_body_row1_identity", [
-      `before=${formatDebugRow(sourceRow1BeforeSync)}`,
-      `sameDisplay=${sourceRow1AfterSync != null && displayRow1 != null && sourceRow1AfterSync === displayRow1 ? "yes" : "no"}`,
-      `sameSync=${sourceRow1AfterSync != null && sourceSyncRow1 != null && sourceRow1AfterSync === sourceSyncRow1 ? "yes" : "no"}`,
-      `revision=${runtimeRowModelRevision.value ?? "none"}`,
-    ].join(" "))
-    options.reportFillPlumbingDetail?.("source_sync_row1", formatDebugRow(sourceSyncRow1))
-    options.reportFillPlumbingState?.("runtime_redraw_happened", true)
-    options.reportFillPlumbingDetail?.("runtime_redraw_reason", reason)
   }
 
   async function refreshVisibleViewportAfterServerFill(
@@ -1292,7 +1208,6 @@ export function useDataGridTableStageRuntime<
       syncViewportFromDom()
     }
     await nextTick()
-    reportRendererViewportDiagnostics("server-fill-refresh")
   }
 
   function formatRenderedBodyViewport(

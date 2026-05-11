@@ -1003,13 +1003,91 @@ function formatRowModelSnapshot(snapshot: {
   loading?: boolean
   initialLoading?: boolean
   refreshing?: boolean
-  viewportRange?: DataGridViewportRange
+  viewportRange?: DataGridViewportRange | null
 } | null | undefined): string {
   if (!snapshot) {
     return "none"
   }
   const viewport = snapshot.viewportRange
   return `rowCount=${snapshot.rowCount ?? 0} loading=${snapshot.loading ? "yes" : "no"} initialLoading=${snapshot.initialLoading ? "yes" : "no"} refreshing=${snapshot.refreshing ? "yes" : "no"} viewport=${viewport ? `${viewport.start}..${viewport.end}` : "none"}`
+}
+
+function readDebugRegion(row: { kind?: string; row?: unknown; data?: unknown } | null | undefined): string {
+  if (!row || row.kind === "group") {
+    return "none"
+  }
+  const rawRow = row.row as Record<string, unknown> | undefined
+  const dataRow = row.data as Record<string, unknown> | undefined
+  return String(rawRow?.region ?? dataRow?.region ?? "none")
+}
+
+function formatDebugRow(row: { rowId?: string | number; kind?: string; row?: unknown; data?: unknown } | null | undefined): string {
+  if (!row) {
+    return "none"
+  }
+  return `${String(row.rowId)}:${readDebugRegion(row)}`
+}
+
+function reportRuntimeBodyDiagnostics(reason: string): void {
+  const snapshot = rowModel?.getSnapshot?.() as {
+    viewportRange?: DataGridViewportRange | null
+    rowCount?: number
+    loading?: boolean
+    revision?: string | number | null
+  } | null | undefined
+  const viewportRange = snapshot?.viewportRange ?? lastViewportRange.value
+  const visibleRows = viewportRange && rowModel?.getRowsInRange
+    ? rowModel.getRowsInRange(viewportRange)
+    : []
+  const sampleRowId = "srv-000025"
+  const sampleVisibleIndex = visibleRows.findIndex((row: { rowId?: string | number }) => String(row.rowId) === sampleRowId)
+  const sampleRow = sampleVisibleIndex >= 0 ? visibleRows[sampleVisibleIndex] : null
+  const firstVisibleRows = visibleRows
+    .slice(0, 5)
+    .map((row: { rowId?: string | number }) => String(row.rowId))
+    .join(", ")
+  const sourceRow1BeforeSync = rowModel?.getRow?.(1) ?? null
+  const sourceSyncRows = rowModel?.getRowsInRange?.({
+    start: 0,
+    end: Math.min(23, Math.max(0, (snapshot?.rowCount ?? loadedRows.value) - 1)),
+  }) ?? []
+  const sourceSyncRow1 = sourceSyncRows.find((row: { displayIndex?: number }) => Math.trunc(Number(row.displayIndex)) === 1) ?? sourceSyncRows[1] ?? null
+  const sourceRow1AfterSync = rowModel?.getRow?.(1) ?? null
+  const displayRow1 = visibleRows[1] ?? null
+
+  runtimeViewportRangeText.value = viewportRange ? `${viewportRange.start}..${viewportRange.end}` : "none"
+  runtimeRowModelSnapshotText.value = formatRowModelSnapshot(snapshot ?? null)
+  runtimeVisibleFirst5Text.value = firstVisibleRows || "none"
+  runtimeSampleRow25VisibleIndexText.value = sampleVisibleIndex >= 0 ? String(sampleVisibleIndex) : "none"
+  runtimeSampleRow25RegionText.value = sampleRow && sampleRow.kind !== "group"
+    ? String((sampleRow.row as Record<string, unknown>).region ?? "none")
+    : "none"
+  sourceBodyRow1Text.value = formatDebugRow(sourceRow1AfterSync)
+  sourceBodyRow1IdentityText.value = [
+    `before=${formatDebugRow(sourceRow1BeforeSync)}`,
+    `sameDisplay=${sourceRow1AfterSync != null && displayRow1 != null && sourceRow1AfterSync === displayRow1 ? "yes" : "no"}`,
+    `sameSync=${sourceRow1AfterSync != null && sourceSyncRow1 != null && sourceRow1AfterSync === sourceSyncRow1 ? "yes" : "no"}`,
+    `revision=${snapshot?.revision ?? "none"}`,
+  ].join(" ")
+  sourceSyncRow1Text.value = formatDebugRow(sourceSyncRow1)
+  serverFillRow1CacheStatusText.value = sourceRow1BeforeSync != null && sourceSyncRow1 != null && sourceRow1BeforeSync === sourceSyncRow1
+    ? "cache-hit"
+    : "pulled-fresh"
+  serverFillRow1SyncValueText.value = formatDebugRow(sourceSyncRow1)
+  runtimeRedrawHappenedText.value = "yes"
+  runtimeRedrawReasonText.value = reason
+  reportFillPlumbingState("runtime_redraw_happened", true)
+  reportFillPlumbingDetail("runtime_viewport_range", runtimeViewportRangeText.value)
+  reportFillPlumbingDetail("runtime_rowModel_snapshot", runtimeRowModelSnapshotText.value)
+  reportFillPlumbingDetail("runtime_visible_first5", runtimeVisibleFirst5Text.value)
+  reportFillPlumbingDetail("runtime_sample_row25_visible_index", runtimeSampleRow25VisibleIndexText.value)
+  reportFillPlumbingDetail("runtime_sample_row25_region", runtimeSampleRow25RegionText.value)
+  reportFillPlumbingDetail("source_body_row1", sourceBodyRow1Text.value)
+  reportFillPlumbingDetail("source_body_row1_identity", sourceBodyRow1IdentityText.value)
+  reportFillPlumbingDetail("source_sync_row1", sourceSyncRow1Text.value)
+  reportFillPlumbingDetail("server_fill_row1_cache_status", serverFillRow1CacheStatusText.value)
+  reportFillPlumbingDetail("server_fill_row1_sync_value", serverFillRow1SyncValueText.value)
+  reportFillPlumbingDetail("runtime_redraw_reason", runtimeRedrawReasonText.value)
 }
 
 function parseSampleRowIndex(): number | null {
@@ -2546,6 +2624,7 @@ function handleStateUpdate(state: unknown): void {
   serverFillRowModelSnapshotText.value = rowModelSnapshotText
   runtimeRowModelSnapshotText.value = rowModelSnapshotText
   diagnostics.value = rowModel.getBackpressureDiagnostics()
+  reportRuntimeBodyDiagnostics("body-rows-update")
 }
 
 function formatSelectionMissingIntervals(intervals: readonly { startRow: number; endRow: number }[]): string {
@@ -3037,6 +3116,8 @@ onMounted(() => {
       })
     }
   })
+  reportFillPlumbingState("runtime_diagnostics_alive", true)
+  reportFillPlumbingDetail("runtime_diagnostics_alive", "yes")
   lastEditRecordedText.value = "no"
 })
 

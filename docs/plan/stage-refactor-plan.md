@@ -28,7 +28,7 @@ Validation:
 
 ---
 
-## [] Slice 2 — Extract runtime diagnostics
+## [x] Slice 2 — Extract runtime diagnostics
 
 Goal: убрать demo-specific/runtime diagnostics из stage.
 

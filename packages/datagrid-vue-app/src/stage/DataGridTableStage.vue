@@ -324,27 +324,6 @@ function updateEditingCellValue(value: string): void {
   editing.value.updateEditingCellValue(value)
 }
 
-function emitRuntimeBodyDiagnostics(reason: string): void {
-  const viewportStart = viewport.value.viewportRowStart
-  const viewportEnd = viewport.value.viewportRowEnd ?? (viewportStart + Math.max(0, displayRows.value.length - 1))
-  const visibleRows = displayRows.value
-  const firstVisibleRows = visibleRows
-    .slice(0, 5)
-    .map(row => String(row.rowId))
-    .join(", ")
-  const sampleVisibleIndex = visibleRows.findIndex(row => String(row.rowId) === "srv-000025")
-  const sampleRow = sampleVisibleIndex >= 0 ? visibleRows[sampleVisibleIndex] : null
-  const sampleValue = sampleRow && sampleRow.kind !== "group"
-    ? String((sampleRow.row as Record<string, unknown>).region ?? "none")
-    : "none"
-  props.reportFillPlumbingDetail?.("runtime_viewport_range", `${viewportStart}..${viewportEnd}`)
-  props.reportFillPlumbingDetail?.("runtime_visible_first5", firstVisibleRows || "none")
-  props.reportFillPlumbingDetail?.("runtime_sample_row25_visible_index", sampleVisibleIndex >= 0 ? String(sampleVisibleIndex) : "none")
-  props.reportFillPlumbingDetail?.("runtime_sample_row25_region", sampleValue)
-  props.reportFillPlumbingDetail?.("runtime_redraw_reason", reason)
-  props.reportFillPlumbingState?.("runtime_redraw_happened", true)
-}
-
 function handleEditorKeydown(event: KeyboardEvent): void {
   editing.value.handleEditorKeydown(event)
 }
@@ -1808,22 +1787,6 @@ function syncBodyViewportScrollState(viewport: HTMLElement): void {
   bodyViewportClientWidth.value = viewport.clientWidth
   bodyViewportClientHeight.value = viewport.clientHeight
 }
-
-watch(
-  () => [
-    viewport.value.viewportRowStart,
-    viewport.value.viewportRowEnd,
-    displayRows.value
-      .map(row => `${String(row.rowId)}:${String((row.row as Record<string, unknown> | undefined)?.region ?? "")}`)
-      .join("|"),
-  ].join("|"),
-  () => {
-    void nextTick(() => {
-      emitRuntimeBodyDiagnostics("body-rows-update")
-    })
-  },
-  { immediate: true },
-)
 
 function syncPinnedBottomViewportScrollLeft(): void {
   const viewport = bottomViewportEl.value
