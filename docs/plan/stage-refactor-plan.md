@@ -270,7 +270,7 @@ Validation:
 
 ---
 
-## [] Slice 10 — Extract fill action UI positioning
+## [x] Slice 10 — Extract fill action UI positioning
 
 Goal: вынести floating fill action menu positioning and behavior.
 

@@ -181,6 +181,7 @@ import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlacehol
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageCellState } from "./useDataGridStageCellState"
+import { useDataGridStageFillAction } from "./useDataGridStageFillAction"
 import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
@@ -329,10 +330,6 @@ interface DataGridPivotHeaderMeta {
 }
 
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
-const FILL_ACTION_ROOT_SELECTOR = ".grid-fill-action"
-const FILL_ACTION_TRIGGER_SIZE_PX = 14
-const FILL_ACTION_VIEWPORT_MARGIN_PX = 8
-const FILL_ACTION_HANDLE_CLEARANCE_PX = 10
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
@@ -544,35 +541,6 @@ function resolveRightColumnSpacerWidth(): number {
   return viewport.value?.rightColumnSpacerWidth ?? 0
 }
 
-function focusFillActionAnchorCell(): void {
-  const anchorCell = selection.value.fillActionAnchorCell
-  if (!anchorCell) {
-    bodyViewportEl.value?.focus({ preventScroll: true })
-    return
-  }
-  const cellElement = resolveVisibleCellElement(anchorCell.rowIndex, anchorCell.columnIndex)
-  if (cellElement) {
-    cellElement.focus({ preventScroll: true })
-    return
-  }
-  bodyViewportEl.value?.focus({ preventScroll: true })
-}
-
-function toggleFloatingFillActionMenu(event: MouseEvent): void {
-  if (!floatingFillActionStyle.value) {
-    return
-  }
-  event.preventDefault()
-  event.stopPropagation()
-  focusFillActionAnchorCell()
-  fillActionMenuOpen.value = !fillActionMenuOpen.value
-}
-
-function handleFillActionSelection(): void {
-  fillActionMenuOpen.value = false
-  focusFillActionAnchorCell()
-}
-
 function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
   const evaluate = cells.value.isCellSelected
   return typeof evaluate === "function"
@@ -750,7 +718,6 @@ const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
-const fillActionMenuOpen = ref(false)
 const headerShellHeight = ref(0)
 const headerViewportClientWidth = ref(0)
 const bodyViewportScrollTop = ref(0)
@@ -1336,238 +1303,41 @@ watch(
   },
 )
 
-function clamp(value: number, min: number, max: number): number {
-  if (max < min) {
-    return min
-  }
-  return Math.min(Math.max(value, min), max)
-}
-
-const centerColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
-
 const effectiveBodyViewportWidth = computed(() => {
   return bodyViewportClientWidth.value > 0
     ? bodyViewportClientWidth.value
     : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
 })
 
-function resolveVisibleFillActionAnchorCell(): { rowIndex: number; columnIndex: number } | null {
-  const anchorCell = selection.value.fillActionAnchorCell
-  if (!anchorCell) {
-    return null
-  }
-
-  const visibleRowStart = resolveViewportRowStart()
-  const visibleRowEnd = resolveViewportRowStart() + Math.max(0, displayRows.value.length - 1)
-  const range = selectionRange.value
-  const selectionRowStart = range ? Math.min(range.startRow, range.endRow) : anchorCell.rowIndex
-  const selectionRowEnd = range ? Math.max(range.startRow, range.endRow) : anchorCell.rowIndex
-  const selectionColumnStart = range ? Math.min(range.startColumn, range.endColumn) : anchorCell.columnIndex
-  const selectionColumnEnd = range ? Math.max(range.startColumn, range.endColumn) : anchorCell.columnIndex
-  const clampedRowStart = Math.max(selectionRowStart, visibleRowStart)
-  const clampedRowEnd = Math.min(selectionRowEnd, visibleRowEnd)
-  const rowIndex = clampedRowStart <= clampedRowEnd
-    ? clamp(anchorCell.rowIndex, clampedRowStart, clampedRowEnd)
-    : anchorCell.rowIndex
-
-  const visibleCenterColumnKeys = new Set((renderedColumns.value ?? []).map(column => column.key))
-  const visibleColumnIndexes = visibleColumns.value
-    .map((column, columnIndex) => ({ column, columnIndex }))
-    .filter(({ column, columnIndex }) => {
-      if (columnIndex < selectionColumnStart || columnIndex > selectionColumnEnd) {
-        return false
-      }
-      return column.pin === "left"
-        || column.pin === "right"
-        || visibleCenterColumnKeys.has(column.key)
-    })
-    .map(({ columnIndex }) => columnIndex)
-
-  const columnIndex = visibleColumnIndexes.length > 0
-    ? clamp(
-        anchorCell.columnIndex,
-        visibleColumnIndexes[0] ?? anchorCell.columnIndex,
-        visibleColumnIndexes[visibleColumnIndexes.length - 1] ?? anchorCell.columnIndex,
-      )
-    : anchorCell.columnIndex
-
-  if (!isVisibleCellEditableByAbsoluteCoord(rowIndex, columnIndex)) {
-    return null
-  }
-
-  return {
-    rowIndex,
-    columnIndex,
-  }
-}
-
-function resolveFloatingFillActionLeft(): number | null {
-  const anchorCell = resolveVisibleFillActionAnchorCell()
-  if (!anchorCell) {
-    return null
-  }
-  const relativeCellRect = resolveRelativeCellRect(anchorCell)
-  if (relativeCellRect) {
-    return clamp(
-      relativeCellRect.right - FILL_ACTION_TRIGGER_SIZE_PX,
-      FILL_ACTION_VIEWPORT_MARGIN_PX,
-      leftPaneWidth.value + effectiveBodyViewportWidth.value + rightPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
-    )
-  }
-  const column = visibleColumns.value[anchorCell.columnIndex]
-  if (!column) {
-    return null
-  }
-
-  if (column.pin === "left") {
-    let cellRight = indexColumnWidthPx.value
-    for (const pinnedColumn of pinnedLeftColumns.value) {
-      cellRight += resolveColumnWidth(pinnedColumn)
-      if (pinnedColumn.key === column.key) {
-        break
-      }
-    }
-    return clamp(
-      cellRight - FILL_ACTION_TRIGGER_SIZE_PX,
-      FILL_ACTION_VIEWPORT_MARGIN_PX,
-      Math.max(FILL_ACTION_VIEWPORT_MARGIN_PX, leftPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX),
-    )
-  }
-
-  if (column.pin === "right") {
-    let cellRight = leftPaneWidth.value + effectiveBodyViewportWidth.value
-    for (const pinnedColumn of pinnedRightColumns.value) {
-      cellRight += resolveColumnWidth(pinnedColumn)
-      if (pinnedColumn.key === column.key) {
-        break
-      }
-    }
-    const rightPaneStart = leftPaneWidth.value + effectiveBodyViewportWidth.value
-    return clamp(
-      cellRight - FILL_ACTION_TRIGGER_SIZE_PX,
-      rightPaneStart + FILL_ACTION_VIEWPORT_MARGIN_PX,
-      Math.max(
-        rightPaneStart + FILL_ACTION_VIEWPORT_MARGIN_PX,
-        rightPaneStart + rightPaneWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX,
-      ),
-    )
-  }
-
-  let cellRight = leftPaneWidth.value - bodyViewportScrollLeft.value
-  for (const centerColumn of centerColumns.value) {
-    cellRight += resolveColumnWidth(centerColumn)
-    if (centerColumn.key === column.key) {
-      break
-    }
-  }
-  const viewportLeft = leftPaneWidth.value + FILL_ACTION_VIEWPORT_MARGIN_PX
-  const viewportRight = leftPaneWidth.value + effectiveBodyViewportWidth.value - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_VIEWPORT_MARGIN_PX
-  return clamp(cellRight - FILL_ACTION_TRIGGER_SIZE_PX, viewportLeft, viewportRight)
-}
-
-function resolveFloatingFillActionTop(): number | null {
-  const viewportTop = bodyViewportTopOffset.value + FILL_ACTION_VIEWPORT_MARGIN_PX
-  const viewportBottom = bodyViewportTopOffset.value + Math.max(
-    0,
-    bodyViewportClientHeight.value
-      - FILL_ACTION_TRIGGER_SIZE_PX
-      - FILL_ACTION_VIEWPORT_MARGIN_PX
-      - FILL_ACTION_HANDLE_CLEARANCE_PX,
-  )
-  const anchorCell = selection.value.fillActionAnchorCell
-  const targetCell = resolveVisibleFillActionAnchorCell()
-  if (!targetCell) {
-    return null
-  }
-  if (anchorCell && anchorCell.rowIndex !== targetCell.rowIndex) {
-    return viewportBottom
-  }
-  const relativeCellRect = resolveRelativeCellRect(targetCell)
-  if (relativeCellRect) {
-    return clamp(
-      relativeCellRect.bottom - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_HANDLE_CLEARANCE_PX,
-      viewportTop,
-      viewportBottom,
-    )
-  }
-  const shellRect = bodyShellRef.value?.getBoundingClientRect()
-  const rowElement = targetCell ? resolveVisibleRowElement(targetCell.rowIndex) : null
-  if (!shellRect || !rowElement) {
-    return viewportBottom
-  }
-  const rowRect = rowElement.getBoundingClientRect()
-  const rowBottom = rowRect.bottom - shellRect.top - FILL_ACTION_TRIGGER_SIZE_PX - FILL_ACTION_HANDLE_CLEARANCE_PX
-  return clamp(rowBottom, viewportTop, viewportBottom)
-}
-
-const floatingFillActionStyle = computed<CSSProperties | null>(() => {
-  if (!selection.value.fillActionAnchorCell) {
-    return null
-  }
-  const left = resolveFloatingFillActionLeft()
-  const top = resolveFloatingFillActionTop()
-  if (left == null || top == null) {
-    return null
-  }
-  return {
-    left: `${left}px`,
-    top: `${top}px`,
-  }
-})
-
-watch(
-  () => selection.value.fillPreviewRange,
-  (nextRange, previousRange) => {
-    if (previousRange && !nextRange) {
-      restoreAnchorCellFocus()
-    }
-  },
-)
-
-watch(
-  () => selection.value.fillActionAnchorCell
-    ? `${selection.value.fillActionAnchorCell.rowIndex}:${selection.value.fillActionAnchorCell.columnIndex}`
-    : "",
-  () => {
-    fillActionMenuOpen.value = false
-  },
-)
-
-watch(
-  () => selection.value.isFillDragging,
-  active => {
-    if (active) {
-      clearRangeMoveHandleHover()
-    }
-  },
-)
-
-watch(fillActionMenuOpen, (open, _previous, onCleanup) => {
-  if (!open || typeof window === "undefined") {
-    return
-  }
-
-  const handlePointerDown = (event: MouseEvent) => {
-    const target = event.target instanceof HTMLElement ? event.target : null
-    if (target?.closest(FILL_ACTION_ROOT_SELECTOR)) {
-      return
-    }
-    fillActionMenuOpen.value = false
-  }
-
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      fillActionMenuOpen.value = false
-      focusFillActionAnchorCell()
-    }
-  }
-
-  window.addEventListener("mousedown", handlePointerDown, true)
-  window.addEventListener("keydown", handleKeydown)
-  onCleanup(() => {
-    window.removeEventListener("mousedown", handlePointerDown, true)
-    window.removeEventListener("keydown", handleKeydown)
-  })
+const {
+  fillActionMenuOpen,
+  floatingFillActionStyle,
+  toggleFloatingFillActionMenu,
+  handleFillActionSelection,
+} = useDataGridStageFillAction({
+  selection,
+  selectionRange,
+  visibleColumns,
+  renderedColumns,
+  displayRows,
+  bodyViewportEl,
+  bodyShellRef,
+  bodyViewportClientHeight,
+  bodyViewportTopOffset,
+  bodyViewportScrollLeft,
+  leftPaneWidth,
+  rightPaneWidth,
+  effectiveBodyViewportWidth,
+  indexColumnWidthPx,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+  resolveColumnWidth,
+  resolveViewportRowStart,
+  resolveVisibleCellElement,
+  resolveVisibleRowElement,
+  resolveRelativeCellRect,
+  isVisibleCellEditableByAbsoluteCoord,
+  restoreAnchorCellFocus,
 })
 
 watch(
