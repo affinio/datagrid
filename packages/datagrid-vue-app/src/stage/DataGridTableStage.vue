@@ -181,6 +181,7 @@ import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlacehol
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageCellState } from "./useDataGridStageCellState"
+import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
@@ -447,52 +448,6 @@ function bodyCellSelectionStyle(row: TableRow, column: TableColumn, rowOffset: n
   return {}
 }
 
-function rowIndexCellStyle(row: TableRow, rowOffset: number): CSSProperties {
-  const rowStateFill = resolveInlineRowStateFill(row, rowOffset, { fullBleed: true })
-  if (!rowStateFill) {
-    return resolvedRowIndexColumnStyle.value
-  }
-  return {
-    ...resolvedRowIndexColumnStyle.value,
-    ...rowStateFill,
-  }
-}
-
-function isFullRowSelectionIndex(rowIndex: number): boolean {
-  const range = selectionRange.value
-  const lastColumnIndex = visibleColumns.value.length - 1
-  if (!range || lastColumnIndex < 0) {
-    return false
-  }
-  return rowIndex >= range.startRow
-    && rowIndex <= range.endRow
-    && range.startColumn === 0
-    && range.endColumn >= lastColumnIndex
-}
-
-function rowIndexCellClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
-  const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
-  const rowId = row.rowId == null ? null : String(row.rowId)
-  const classes: Record<string, boolean> = {
-    "grid-cell--index-reorder-source": rowId != null && draggedRowIndexRowId.value === rowId,
-    "grid-cell--index-drop-before": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "before",
-    "grid-cell--index-drop-after": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "after",
-  }
-  if (!isFullRowSelectionIndex(rowIndex)) {
-    return classes
-  }
-  const previousSelected = isFullRowSelectionIndex(rowIndex - 1)
-  const nextSelected = isFullRowSelectionIndex(rowIndex + 1)
-  return {
-    ...classes,
-    "grid-cell--index-selected": true,
-    "grid-cell--index-selected-single": !previousSelected && !nextSelected,
-    "grid-cell--index-selected-top": !previousSelected && nextSelected,
-    "grid-cell--index-selected-middle": previousSelected && nextSelected,
-    "grid-cell--index-selected-bottom": previousSelected && !nextSelected,
-  }
-}
-
 function resolveCellCustomClass(
   row: TableRow,
   rowOffset: number,
@@ -548,87 +503,6 @@ function isDateCellTriggerClick(event: MouseEvent, row: TableRow, column: TableC
 
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
   return isVisualSelectionAnchorCell(rowOffset, columnIndex) ? 0 : -1
-}
-
-function rowIndexTabIndex(row: TableRow): number {
-  return isRowFocusedSafe(row) ? 0 : -1
-}
-
-function clearRowIndexDragState(): void {
-  draggedRowIndexRowId.value = null
-  dragOverRowIndexRowId.value = null
-  dragOverRowIndexPlacement.value = null
-}
-
-function isRowIndexDraggable(row: TableRow): boolean {
-  return typeof rows.value.reorderRowsByIndex === "function"
-    && row.kind !== "group"
-    && row.rowId != null
-    && row.state.pinned === "none"
-    && !isDataGridPlaceholderSurfaceRow(row)
-}
-
-function resolveRowIndexDropPlacement(event: DragEvent): "before" | "after" {
-  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  const rect = target?.getBoundingClientRect()
-  if (!rect || rect.height <= 0) {
-    return "after"
-  }
-  return event.clientY < rect.top + rect.height / 2 ? "before" : "after"
-}
-
-function handleRowIndexDragStart(event: DragEvent, row: TableRow, rowOffset: number): void {
-  if (!isRowIndexDraggable(row)) {
-    clearRowIndexDragState()
-    return
-  }
-  draggedRowIndexRowId.value = String(row.rowId)
-  dragOverRowIndexRowId.value = null
-  dragOverRowIndexPlacement.value = null
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = "move"
-    event.dataTransfer.dropEffect = "move"
-    event.dataTransfer.setData("text/plain", `${String(row.rowId)}:${resolveAbsoluteRowIndex(row, rowOffset)}`)
-  }
-}
-
-function handleRowIndexDragOver(event: DragEvent, row: TableRow, _rowOffset: number): void {
-  if (!draggedRowIndexRowId.value || !isRowIndexDraggable(row)) {
-    dragOverRowIndexRowId.value = null
-    dragOverRowIndexPlacement.value = null
-    return
-  }
-  const targetRowId = String(row.rowId)
-  if (draggedRowIndexRowId.value === targetRowId) {
-    dragOverRowIndexRowId.value = null
-    dragOverRowIndexPlacement.value = null
-    return
-  }
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = "move"
-  }
-  dragOverRowIndexRowId.value = targetRowId
-  dragOverRowIndexPlacement.value = resolveRowIndexDropPlacement(event)
-}
-
-function handleRowIndexDrop(event: DragEvent, row: TableRow, _rowOffset: number): void {
-  if (!draggedRowIndexRowId.value || !isRowIndexDraggable(row)) {
-    clearRowIndexDragState()
-    return
-  }
-  const targetRowId = String(row.rowId)
-  if (draggedRowIndexRowId.value === targetRowId) {
-    clearRowIndexDragState()
-    return
-  }
-  event.preventDefault()
-  rows.value.reorderRowsByIndex?.({
-    sourceRowId: draggedRowIndexRowId.value,
-    targetRowId,
-    placement: resolveRowIndexDropPlacement(event),
-  })
-  clearRowIndexDragState()
 }
 
 function handleFillHandleMouseDown(event: MouseEvent): void {
@@ -810,30 +684,6 @@ function isVisibleCellEditableByAbsoluteCoord(rowIndex: number, columnIndex: num
   return isCellEditableSafe(row, rowOffset, column, columnIndex)
 }
 
-const DEFAULT_INDEX_COLUMN_WIDTH = 72
-const showRowIndex = computed(() => rows.value.showRowIndex !== false)
-
-const indexColumnWidthPx = computed(() => {
-  if (!showRowIndex.value) {
-    return 0
-  }
-  const width = parsePixelValue(
-    layout.value.indexColumnStyle.width ?? layout.value.indexColumnStyle.minWidth,
-    DEFAULT_INDEX_COLUMN_WIDTH,
-  )
-  return width > 0 ? width : DEFAULT_INDEX_COLUMN_WIDTH
-})
-
-const resolvedRowIndexColumnStyle = computed<CSSProperties>(() => {
-  const width = `${indexColumnWidthPx.value}px`
-  return {
-    ...layout.value.indexColumnStyle,
-    width,
-    minWidth: width,
-    maxWidth: width,
-  }
-})
-
 const isRangeMoving = computed(() => selection.value.isRangeMoving)
 
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
@@ -900,9 +750,6 @@ const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
-const draggedRowIndexRowId = ref<string | null>(null)
-const dragOverRowIndexRowId = ref<string | null>(null)
-const dragOverRowIndexPlacement = ref<"before" | "after" | null>(null)
 const fillActionMenuOpen = ref(false)
 const headerShellHeight = ref(0)
 const headerViewportClientWidth = ref(0)
@@ -1009,23 +856,6 @@ function isRowCheckboxSelectedSafe(row: TableRow): boolean {
   return typeof rows.value.isRowCheckboxSelected === "function" ? rows.value.isRowCheckboxSelected(row) : false
 }
 
-function handleRowClickSafe(row: TableRow): void {
-  rows.value.handleRowClick?.(row)
-}
-
-function handleRowIndexClickSafe(row: TableRow, rowOffset: number, event: MouseEvent): void {
-  if (rows.value.consumeRecentRowResizeInteraction?.() === true) {
-    return
-  }
-  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  target?.focus({ preventScroll: true })
-  rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
-}
-
-function handleRowIndexKeydownSafe(event: KeyboardEvent, row: TableRow, rowOffset: number): void {
-  rows.value.handleRowIndexKeydown?.(event, row, rowOffset)
-}
-
 function handleRowContainerClick(row: TableRow): void {
   handleRowClickSafe(row)
 }
@@ -1040,11 +870,6 @@ function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boole
     "grid-row--focused": isRowFocusedSafe(row),
     "grid-row--checkbox-selected": isRowCheckboxSelectedSafe(row),
   }
-}
-
-function isFullRowSelectionSafe(rowOffset: number, row?: TableRow): boolean {
-  const rowIndex = row ? resolveAbsoluteRowIndex(row, rowOffset) : viewport.value.viewportRowStart + rowOffset
-  return isFullRowSelectionIndex(rowIndex)
 }
 
 function isCellOnSelectionEdgeSafe(
@@ -1297,6 +1122,19 @@ function syncBodyViewportScrollState(viewport: HTMLElement): void {
   bodyViewportClientHeight.value = viewport.clientHeight
 }
 
+const rowIndexState = useDataGridStageRowIndex({
+  rows,
+  layout,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  selectionRange,
+  visibleColumns,
+  isHoveredRow,
+  isStripedRow,
+  resolveAbsoluteRowIndex,
+  resolveInlineRowStateFill,
+  isDataGridPlaceholderSurfaceRow,
+})
+
 const {
   chromeRenderModel,
   headerChromeRenderModel,
@@ -1334,7 +1172,7 @@ const {
   headerShellHeight,
   headerViewportClientWidth,
   bodyViewportEl,
-  indexColumnWidthPx,
+  indexColumnWidthPx: rowIndexState.indexColumnWidthPx,
   pinnedLeftColumns,
   pinnedRightColumns,
   resolveColumnWidth,
@@ -1346,6 +1184,24 @@ const {
   isStripedRow,
   readPivotHeaderMeta,
 })
+
+const {
+  showRowIndex,
+  indexColumnWidthPx,
+  resolvedRowIndexColumnStyle,
+  rowIndexCellClasses,
+  rowIndexCellStyle,
+  rowIndexTabIndex,
+  isFullRowSelectionSafe,
+  isRowIndexDraggable,
+  handleRowClickSafe,
+  handleRowIndexClickSafe,
+  handleRowIndexKeydownSafe,
+  handleRowIndexDragStart,
+  handleRowIndexDragOver,
+  handleRowIndexDrop,
+  clearRowIndexDragState,
+} = rowIndexState
 
 const {
   startInlineEditIfAllowed,

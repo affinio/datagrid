@@ -240,7 +240,7 @@ Validation:
 
 ---
 
-## [] Slice 9 — Extract row index runtime
+## [x] Slice 9 — Extract row index runtime
 
 Goal: вынести row index click/keyboard/drag/drop logic.
 
