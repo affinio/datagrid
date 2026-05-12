@@ -161,6 +161,7 @@ type DataGridDataSourceLoadingRowData = {
 
 type DataGridDataSourceLoadingRowNode<T> = DataGridRowNode<T> & {
   readonly __dataSourceLoadingRow: true
+  readonly __placeholder: true
 }
 
 function isAbortError(error: unknown): boolean {
@@ -929,6 +930,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     } as DataGridDataSourceLoadingRowData as T
     return {
       __dataSourceLoadingRow: true,
+      __placeholder: true,
       kind: "leaf",
       data: row,
       row,

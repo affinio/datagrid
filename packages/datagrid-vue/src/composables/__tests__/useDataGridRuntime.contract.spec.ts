@@ -555,6 +555,48 @@ describe("useDataGridRuntime contract", () => {
     rowModel.dispose()
   })
 
+  it("keeps sparse data-source loading rows materialized in synced body ranges", async () => {
+    const pull = vi.fn((_request) => new Promise<Awaited<ReturnType<NonNullable<DataGridDataSource<RuntimeRow>["pull"]>>>>(() => {}))
+    const rowModel = createDataSourceBackedRowModel<RuntimeRow>({
+      dataSource: { pull },
+      initialTotal: 300,
+      prefetch: { enabled: false },
+    })
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeSparseLoadingRowsHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rowModel,
+          columns: COLUMNS,
+          autoStart: false,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    runtime!.setVirtualWindowRange({ start: 128, end: 130 })
+    await flushRuntimeTasks()
+
+    const rows = runtime!.syncBodyRowsInRange({ start: 128, end: 130 })
+    expect(rows).toHaveLength(3)
+    expect(rows.map(row => row.displayIndex)).toEqual([128, 129, 130])
+    expect(rows.every(row => (row as { __placeholder?: boolean }).__placeholder === true)).toBe(true)
+    expect(rows.map(row => String(row.rowId))).toEqual([
+      "__affino_datagrid_data_source_loading__:128",
+      "__affino_datagrid_data_source_loading__:129",
+      "__affino_datagrid_data_source_loading__:130",
+    ])
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+    rowModel.dispose()
+  })
+
   it("passes plugin definitions from composable options into runtime api", async () => {
     const pluginEvents: string[] = []
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
