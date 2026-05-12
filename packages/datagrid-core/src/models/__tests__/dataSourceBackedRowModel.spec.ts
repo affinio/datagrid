@@ -308,6 +308,11 @@ describe("createDataSourceBackedRowModel", () => {
       "__affino_datagrid_data_source_loading__:5",
     ])
     expect(rows.slice(2).map(row => row.row.value)).toEqual([undefined, undefined, undefined])
+    expect(rows.slice(2).map(row => (row.row as Record<string, unknown>).__affinoDataGridDataSourceRowStatus)).toEqual([
+      "loading",
+      "loading",
+      "loading",
+    ])
 
     model.dispose()
   })

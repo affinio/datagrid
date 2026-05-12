@@ -57,6 +57,11 @@ import {
   isSamePullAggregationModel,
   normalizePivotColumnsFromUnknown,
 } from "./server/pullRowModelSerialization.js"
+import {
+  createDataGridRangeCache,
+  type DataGridRangeCacheLoadToken,
+  type DataGridRangeCacheIndexState,
+} from "./server/rangeCache.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -117,6 +122,7 @@ interface InFlightPull {
   priority: DataGridDataSourcePullPriority
   reason: DataGridDataSourcePullReason
   affectsLoading: boolean
+  rangeCacheToken: DataGridRangeCacheLoadToken
 }
 
 interface PendingPull {
@@ -143,11 +149,14 @@ const DEFAULT_ROW_CACHE_LIMIT = 4096
 const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
 const DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR = 1
 const DEFAULT_PREFETCH_WINDOW_VIEWPORT_FACTOR = 3
+const DEFAULT_RANGE_CACHE_CHUNK_SIZE = 256
 const DATA_SOURCE_LOADING_ROW_ID_PREFIX = "__affino_datagrid_data_source_loading__:"
 const DATA_SOURCE_LOADING_ROW_DATA_FLAG = "__affinoDataGridDataSourceLoadingRow"
+const DATA_SOURCE_LOADING_ROW_STATUS_FIELD = "__affinoDataGridDataSourceRowStatus"
 
 type DataGridDataSourceLoadingRowData = {
   [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true
+  [DATA_SOURCE_LOADING_ROW_STATUS_FIELD]: DataGridRangeCacheIndexState
 }
 
 type DataGridDataSourceLoadingRowNode<T> = DataGridRowNode<T> & {
@@ -371,6 +380,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
   })()
 
   const rowCache = new Map<number, DataGridRowNode<T>>()
+  const rangeCache = createDataGridRangeCache<DataGridRowNode<T>>({
+    chunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
+    maxChunks: Math.max(1, Math.ceil(rowCacheLimit / DEFAULT_RANGE_CACHE_CHUNK_SIZE)),
+  })
   const listeners = new Set<DataGridRowModelListener<T>>()
   const diagnostics: DataGridDataSourceBackpressureDiagnostics = {
     pullRequested: 0,
@@ -447,6 +460,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         break
       }
       if (rowCache.delete(evictIndex)) {
+        rangeCache.deleteRow(evictIndex)
         diagnostics.rowCacheEvicted += 1
       }
     }
@@ -482,6 +496,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       rowCache.delete(index)
     }
     rowCache.set(index, row)
+    rangeCache.setRow(index, row)
     enforceRowCacheLimit()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
@@ -653,6 +668,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     for (const index of rowCache.keys()) {
       if (index >= rowCount) {
         rowCache.delete(index)
+        rangeCache.deleteRow(index)
       }
     }
     diagnostics.rowCacheSize = rowCache.size
@@ -899,10 +915,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function createLoadingRowNode(visibleIndex: number, sourceIndex: number): DataGridDataSourceLoadingRowNode<T> {
+  function createLoadingRowNode(
+    visibleIndex: number,
+    sourceIndex: number,
+    status: DataGridRangeCacheIndexState,
+  ): DataGridDataSourceLoadingRowNode<T> {
     const rowId = `${DATA_SOURCE_LOADING_ROW_ID_PREFIX}${sourceIndex}`
     const row = {
       [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true,
+      [DATA_SOURCE_LOADING_ROW_STATUS_FIELD]: status,
     } as DataGridDataSourceLoadingRowData as T
     return {
       __dataSourceLoadingRow: true,
@@ -951,6 +972,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         continue
       }
       if (rowCache.delete(index)) {
+        rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
         changed = true
       }
@@ -998,6 +1020,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         continue
       }
       if (rowCache.delete(index)) {
+        rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
         changed = true
         if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
@@ -1041,6 +1064,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     diagnostics.invalidatedRows += rowCache.size
     rowCache.clear()
+    rangeCache.clear()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
   }
@@ -1187,6 +1211,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (!active) {
       return
     }
+    rangeCache.cancelLoad(active.rangeCacheToken)
     if (!active.controller.signal.aborted) {
       active.controller.abort()
       diagnostics.pullAborted += 1
@@ -1427,6 +1452,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     const requestId = requestCounter + 1
     requestCounter = requestId
     const controller = new AbortController()
+    const rangeCacheToken = rangeCache.beginLoad(requestRange)
     const requestPromise = (async () => {
       diagnostics.paused = backpressurePaused
       diagnostics.pullRequested += 1
@@ -1502,6 +1528,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (changed) {
           bumpRevision()
         }
+        rangeCache.completeLoad(rangeCacheToken)
         diagnostics.pullCompleted += 1
         if (priority === "background") {
           diagnostics.prefetchCompleted += 1
@@ -1516,6 +1543,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
         if (priority !== "background") {
           error = reasonError instanceof Error ? reasonError : new Error(String(reasonError))
+          rangeCache.failLoad(rangeCacheToken, error)
+        } else {
+          rangeCache.cancelLoad(rangeCacheToken)
         }
       } finally {
         const active = readLaneInFlight(priority)
@@ -1551,6 +1581,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       priority,
       reason,
       affectsLoading: options?.affectsLoading !== false,
+      rangeCacheToken,
     })
 
     return requestPromise
@@ -1644,6 +1675,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         const index = Number.isFinite(rawIndex) ? Math.max(0, Math.trunc(rawIndex)) : -1
         if (index >= 0) {
           changed = rowCache.delete(index) || changed
+          rangeCache.deleteRow(index)
         }
       }
       diagnostics.rowCacheSize = rowCache.size
@@ -1847,7 +1879,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (row) {
           rows.push(row)
         } else {
-          rows.push(createLoadingRowNode(index, sourceIndex))
+          rows.push(createLoadingRowNode(index, sourceIndex, rangeCache.readIndex(sourceIndex).state))
         }
       }
       return rows
@@ -2305,6 +2337,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       abortLaneInFlight("background", "stale")
       listeners.clear()
       rowCache.clear()
+      rangeCache.clear()
       pendingCriticalPull = null
       pendingBackgroundPull = null
       diagnostics.inFlight = false
