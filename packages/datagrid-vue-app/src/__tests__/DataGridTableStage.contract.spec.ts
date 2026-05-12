@@ -1021,9 +1021,14 @@ describe("DataGridTableStage contract", () => {
 
     const selectedCell = wrapper.find('[data-row-index="0"][data-column-index="1"]')
     const staleAnchorCell = wrapper.find('[data-row-index="0"][data-column-index="2"]')
+    const overlaySegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
 
     expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--single-cell-selection")
+    expect(overlaySegment.exists()).toBe(true)
+    expect(overlaySegment.element.style.width).toBe("121px")
     expect(selectedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(selectedCell.classes()).not.toContain("grid-cell--selected")
+    expect(selectedCell.classes()).not.toContain("grid-cell--selection-edge")
     expect(staleAnchorCell.classes()).not.toContain("grid-cell--selection-anchor")
 
     wrapper.unmount()

@@ -1262,42 +1262,6 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-row-background-color) !important;
 }
 
-.grid-cell--selection-edge {
-  --selection-edge-top-size: 0px;
-  --selection-edge-right-size: 0px;
-  --selection-edge-bottom-size: 0px;
-  --selection-edge-left-size: 0px;
-  --selection-edge-top-color: transparent;
-  --selection-edge-right-color: transparent;
-  --selection-edge-bottom-color: transparent;
-  --selection-edge-left-color: transparent;
-  box-shadow:
-    inset 0 var(--selection-edge-top-size) 0 0 var(--selection-edge-top-color),
-    inset calc(-1 * var(--selection-edge-right-size)) 0 0 0 var(--selection-edge-right-color),
-    inset 0 calc(-1 * var(--selection-edge-bottom-size)) 0 0 var(--selection-edge-bottom-color),
-    inset var(--selection-edge-left-size) 0 0 0 var(--selection-edge-left-color);
-}
-
-.grid-cell--selection-edge-top {
-  --selection-edge-top-size: var(--datagrid-selection-stroke-width);
-  --selection-edge-top-color: var(--datagrid-selection-handle-border);
-}
-
-.grid-cell--selection-edge-right {
-  --selection-edge-right-size: var(--datagrid-selection-stroke-width);
-  --selection-edge-right-color: var(--datagrid-selection-handle-border);
-}
-
-.grid-cell--selection-edge-bottom {
-  --selection-edge-bottom-size: var(--datagrid-selection-stroke-width);
-  --selection-edge-bottom-color: var(--datagrid-selection-handle-border);
-}
-
-.grid-cell--selection-edge-left {
-  --selection-edge-left-size: var(--datagrid-selection-stroke-width);
-  --selection-edge-left-color: var(--datagrid-selection-handle-border);
-}
-
 .grid-selection-overlay {
   position: absolute;
   inset: 0;
