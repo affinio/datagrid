@@ -1312,7 +1312,7 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("enforces abort-first backpressure under viewport overload", async () => {
+  it("coalesces viewport overload into the latest critical pull", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
@@ -1340,18 +1340,24 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 100, end: 120 })
     model.setViewportRange({ start: 200, end: 220 })
 
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.request.signal.aborted).toBe(false)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(true)
+
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
     expect(calls[0]?.request.signal.aborted).toBe(true)
-    expect(calls[1]?.request.signal.aborted).toBe(true)
-    expect(calls[2]?.request.signal.aborted).toBe(false)
-    expect(calls[2]?.request.groupBy).toBeNull()
-    expect(calls[2]?.request.groupExpansion).toEqual({
+    expect(calls[1]?.request.signal.aborted).toBe(false)
+    expect(calls[1]?.request.range).toEqual({ start: 200, end: 220 })
+    expect(calls[1]?.request.groupBy).toBeNull()
+    expect(calls[1]?.request.groupExpansion).toEqual({
       expandedByDefault: false,
       toggledGroupKeys: [],
     })
-    expect(calls[2]?.request.treeData).toBeNull()
+    expect(calls[1]?.request.treeData).toBeNull()
 
-    calls[2]?.resolve({
+    calls[1]?.resolve({
       rows: Array.from({ length: 21 }, (_, offset) => {
         const index = 200 + offset
         return {
@@ -1368,8 +1374,10 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getRow(0)).toBeUndefined()
 
     const diagnostics = model.getBackpressureDiagnostics()
-    expect(diagnostics.pullRequested).toBe(3)
-    expect(diagnostics.pullAborted).toBeGreaterThanOrEqual(2)
+    expect(diagnostics.pullRequested).toBe(2)
+    expect(diagnostics.pullDeferred).toBeGreaterThanOrEqual(2)
+    expect(diagnostics.pullCoalesced).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.pullAborted).toBeGreaterThanOrEqual(1)
     expect(diagnostics.pullCompleted).toBe(1)
 
     model.dispose()
@@ -1474,6 +1482,49 @@ describe("createDataSourceBackedRowModel", () => {
     expect(diagnostics.pullRequested).toBe(1)
     expect(diagnostics.pullCoalesced).toBeGreaterThanOrEqual(1)
     expect(diagnostics.pullAborted).toBe(0)
+
+    model.dispose()
+  })
+
+  it("coalesces rapid viewport changes while a critical pull is inflight", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 2_000,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    expect(calls).toHaveLength(1)
+
+    model.setViewportRange({ start: 30, end: 59 })
+    model.setViewportRange({ start: 60, end: 89 })
+    model.setViewportRange({ start: 90, end: 119 })
+
+    expect(calls).toHaveLength(1)
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(calls[1]?.request.reason).toBe("viewport-change")
+    expect(calls[1]?.request.priority).toBe("critical")
+    expect(calls[1]?.request.range).toEqual({ start: 90, end: 119 })
+
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.pullDeferred).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.pullCoalesced).toBeGreaterThanOrEqual(2)
 
     model.dispose()
   })
@@ -1902,6 +1953,10 @@ describe("createDataSourceBackedRowModel", () => {
     expect(calls[0]?.request.priority).toBe("normal")
 
     model.setViewportRange({ start: 400, end: 430 })
+    expect(calls).toHaveLength(1)
+
+    await flushMicrotasks()
+
     expect(calls).toHaveLength(2)
     expect(calls[0]?.request.signal.aborted).toBe(true)
     expect(calls[1]?.request.priority).toBe("critical")
@@ -1922,7 +1977,7 @@ describe("createDataSourceBackedRowModel", () => {
     const diagnostics = model.getBackpressureDiagnostics()
     expect(diagnostics.pullRequested).toBe(2)
     expect(diagnostics.pullAborted).toBeGreaterThanOrEqual(1)
-    expect(diagnostics.pullDeferred).toBe(0)
+    expect(diagnostics.pullDeferred).toBeGreaterThanOrEqual(1)
 
     model.dispose()
   })
@@ -2124,7 +2179,7 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
-  it("keeps only last pull active under sustained viewport churn", async () => {
+  it("coalesces sustained viewport churn into the final pull", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
       pull(request) {
@@ -2152,12 +2207,18 @@ describe("createDataSourceBackedRowModel", () => {
       model.setViewportRange({ start: index * 25, end: index * 25 + 30 })
     }
 
-    expect(calls).toHaveLength(150)
-    expect(calls.slice(0, -1).every(call => call.request.signal.aborted)).toBe(true)
-    expect(calls[calls.length - 1]?.request.signal.aborted).toBe(false)
+    expect(calls).toHaveLength(1)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(true)
+
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(calls[1]?.request.signal.aborted).toBe(false)
 
     const finalStart = (150 - 1) * 25
-    calls[calls.length - 1]?.resolve({
+    expect(calls[1]?.request.range).toEqual({ start: finalStart, end: finalStart + 30 })
+    calls[1]?.resolve({
       rows: Array.from({ length: 31 }, (_, offset) => {
         const rowIndex = finalStart + offset
         return {
@@ -2171,7 +2232,10 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     expect(model.getRow(finalStart)?.row.value).toBe(`row-${finalStart}`)
-    expect(model.getBackpressureDiagnostics().pullAborted).toBeGreaterThanOrEqual(149)
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.pullRequested).toBe(2)
+    expect(diagnostics.pullCoalesced).toBeGreaterThanOrEqual(148)
+    expect(diagnostics.pullAborted).toBeGreaterThanOrEqual(1)
 
     model.dispose()
   })

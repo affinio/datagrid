@@ -342,6 +342,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let backgroundInFlight: InFlightPull | null = null
   let pendingCriticalPull: PendingPull | null = null
   let pendingBackgroundPull: PendingPull | null = null
+  let scheduledViewportPull: PendingPull | null = null
+  let viewportPullSchedulePending = false
   let optimisticEditTransactionCounter = 0
   const optimisticEditTransactions = new Map<number, OptimisticEditTransaction<T>>()
   const optimisticEditTransactionOrder: number[] = []
@@ -1029,7 +1031,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (pendingBackgroundPull && index >= pendingBackgroundPull.range.start && index <= pendingBackgroundPull.range.end) {
           diagnostics.prefetchDroppedStale += 1
           pendingBackgroundPull = null
-          diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+          updatePendingPullDiagnostics()
         }
       }
     }
@@ -1197,13 +1199,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return priority === "background" ? pendingBackgroundPull : pendingCriticalPull
   }
 
+  function updatePendingPullDiagnostics(): void {
+    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull || scheduledViewportPull)
+  }
+
   function writePendingPull(priority: DataGridDataSourcePullPriority, value: PendingPull | null): void {
     if (priority === "background") {
       pendingBackgroundPull = value
     } else {
       pendingCriticalPull = value
     }
-    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+    updatePendingPullDiagnostics()
   }
 
   function abortLaneInFlight(priority: DataGridDataSourcePullPriority, reason: "stale" | "preempted" = "preempted") {
@@ -1233,7 +1239,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       pendingBackgroundPull = null
     }
-    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+    updatePendingPullDiagnostics()
+  }
+
+  function clearScheduledViewportPull(): void {
+    if (!scheduledViewportPull) {
+      return
+    }
+    scheduledViewportPull = null
+    diagnostics.pullDropped += 1
+    updatePendingPullDiagnostics()
   }
 
   function buildRequestStateKey(): string {
@@ -1334,6 +1349,40 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return active?.promise ?? Promise.resolve()
   }
 
+  function scheduleViewportPull(
+    requestRange: DataGridViewportRange,
+    requestStateKey: string,
+    treePullContext: DataGridDataSourceTreePullContext | null = null,
+  ): void {
+    scheduledViewportPull = {
+      range: requestRange,
+      reason: "viewport-change",
+      priority: "critical",
+      key: buildRequestKey(requestRange, "viewport-change", "critical", treePullContext, requestStateKey),
+      stateKey: requestStateKey,
+      treeData: treePullContext,
+    }
+    diagnostics.pullCoalesced += viewportPullSchedulePending ? 1 : 0
+    diagnostics.pullDeferred += 1
+    updatePendingPullDiagnostics()
+    if (viewportPullSchedulePending) {
+      emit()
+      return
+    }
+    viewportPullSchedulePending = true
+    queueMicrotask(() => {
+      viewportPullSchedulePending = false
+      const next = scheduledViewportPull
+      scheduledViewportPull = null
+      updatePendingPullDiagnostics()
+      if (!next || disposed) {
+        return
+      }
+      void pullRange(next.range, next.reason, next.priority, next.treeData)
+    })
+    emit()
+  }
+
   async function drainCriticalBackpressureQueue(): Promise<void> {
     while (!disposed) {
       const activeCritical = criticalInFlight?.promise ?? null
@@ -1344,7 +1393,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const nextCritical = pendingCriticalPull
       if (nextCritical) {
         pendingCriticalPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        updatePendingPullDiagnostics()
         await pullRange(nextCritical.range, nextCritical.reason, nextCritical.priority, nextCritical.treeData)
         continue
       }
@@ -1361,6 +1410,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
   ): Promise<void> {
     if (disposed) {
       return
+    }
+    if (priority !== "background" && reason !== "viewport-change") {
+      clearScheduledViewportPull()
     }
     const requestRange = normalizeRequestedRange(range)
     const treePullContext = normalizeTreePullContext(treeData)
@@ -1434,7 +1486,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (pendingBackgroundPull && pendingBackgroundPull.stateKey !== requestStateKey) {
         diagnostics.prefetchDroppedStale += 1
         pendingBackgroundPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        updatePendingPullDiagnostics()
       }
       if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {
         const nextRank = resolvePriorityRank(priority)
@@ -1556,12 +1608,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
             if (!criticalInFlight && pendingCriticalPull) {
               const next = pendingCriticalPull
               pendingCriticalPull = null
-              diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+              updatePendingPullDiagnostics()
               void pullRange(next.range, next.reason, next.priority, next.treeData)
             } else if (!backgroundInFlight && !criticalInFlight && pendingBackgroundPull) {
               const next = pendingBackgroundPull
               pendingBackgroundPull = null
-              diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+              updatePendingPullDiagnostics()
               void pullRange(next.range, next.reason, next.priority, next.treeData)
             }
           }
@@ -1921,6 +1973,20 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
 
+      if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {
+        const requestStateKey = buildRequestStateKey()
+        if (
+          criticalInFlight.stateKey === requestStateKey &&
+          rangeContains(criticalInFlight.range, sourceViewport)
+        ) {
+          diagnostics.pullCoalesced += 1
+          emit()
+          return
+        }
+        scheduleViewportPull(sourceViewport, requestStateKey)
+        return
+      }
+
       void pullRange(sourceViewport, "viewport-change", "critical")
       emit()
     },
@@ -1935,6 +2001,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       paginationInput = normalized
       resetPaginationCursor()
+      clearScheduledViewportPull()
       clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
@@ -1951,6 +2018,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         currentPage: 0,
       }
       resetPaginationCursor()
+      clearScheduledViewportPull()
       clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
@@ -1970,6 +2038,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         currentPage: normalizedPage,
       }
       resetPaginationCursor()
+      clearScheduledViewportPull()
       clearBackgroundPrefetchState("stale")
       viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
       bumpRevision()
@@ -2224,7 +2293,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (pendingBackgroundPull && rangesOverlap(pendingBackgroundPull.range, sourceRange)) {
         diagnostics.prefetchDroppedStale += 1
         pendingBackgroundPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        updatePendingPullDiagnostics()
       }
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
@@ -2277,12 +2346,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (pendingCriticalPull && !criticalInFlight) {
         const next = pendingCriticalPull
         pendingCriticalPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        updatePendingPullDiagnostics()
         void pullRange(next.range, next.reason, next.priority, next.treeData)
       } else if (pendingBackgroundPull && !criticalInFlight && !backgroundInFlight) {
         const next = pendingBackgroundPull
         pendingBackgroundPull = null
-        diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+        updatePendingPullDiagnostics()
         void pullRange(next.range, next.reason, next.priority, next.treeData)
       } else {
         emit()
@@ -2313,7 +2382,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       diagnostics.criticalInFlight = Boolean(criticalInFlight)
       diagnostics.backgroundInFlight = Boolean(backgroundInFlight)
       diagnostics.inFlight = diagnostics.criticalInFlight || diagnostics.backgroundInFlight
-      diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull)
+      updatePendingPullDiagnostics()
       diagnostics.paused = backpressurePaused
       diagnostics.rowCacheSize = rowCache.size
       updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
@@ -2340,6 +2409,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       rangeCache.clear()
       pendingCriticalPull = null
       pendingBackgroundPull = null
+      scheduledViewportPull = null
+      viewportPullSchedulePending = false
       diagnostics.inFlight = false
       diagnostics.criticalInFlight = false
       diagnostics.backgroundInFlight = false
