@@ -277,6 +277,41 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("returns stable loading rows for missing indexes in a pending viewport range", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 1, end: 2 })
+    calls[0]?.resolve({
+      rows: buildRows(1, 2),
+      total: 20,
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 1, end: 5 })
+    expect(calls).toHaveLength(2)
+
+    const rows = model.getRowsInRange({ start: 1, end: 5 })
+    expect(rows).toHaveLength(5)
+    expect(rows.map(row => row.displayIndex)).toEqual([1, 2, 3, 4, 5])
+    expect(rows.slice(0, 2).map(row => row.row.value)).toEqual(["row-1", "row-2"])
+    expect(rows.slice(2).map(row => String(row.rowId))).toEqual([
+      "__affino_datagrid_data_source_loading__:3",
+      "__affino_datagrid_data_source_loading__:4",
+      "__affino_datagrid_data_source_loading__:5",
+    ])
+    expect(rows.slice(2).map(row => row.row.value)).toEqual([undefined, undefined, undefined])
+
+    model.dispose()
+  })
+
   it("applies resolved viewport rows after the pending pull completes", async () => {
     const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
     const model = createDataSourceBackedRowModel({

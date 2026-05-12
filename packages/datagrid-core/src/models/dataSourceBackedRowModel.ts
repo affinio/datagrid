@@ -143,6 +143,16 @@ const DEFAULT_ROW_CACHE_LIMIT = 4096
 const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
 const DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR = 1
 const DEFAULT_PREFETCH_WINDOW_VIEWPORT_FACTOR = 3
+const DATA_SOURCE_LOADING_ROW_ID_PREFIX = "__affino_datagrid_data_source_loading__:"
+const DATA_SOURCE_LOADING_ROW_DATA_FLAG = "__affinoDataGridDataSourceLoadingRow"
+
+type DataGridDataSourceLoadingRowData = {
+  [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true
+}
+
+type DataGridDataSourceLoadingRowNode<T> = DataGridRowNode<T> & {
+  readonly __dataSourceLoadingRow: true
+}
 
 function isAbortError(error: unknown): boolean {
   if (!error) {
@@ -886,6 +896,30 @@ export function createDataSourceBackedRowModel<T = unknown>(
         },
         index,
       ),
+    }
+  }
+
+  function createLoadingRowNode(visibleIndex: number, sourceIndex: number): DataGridDataSourceLoadingRowNode<T> {
+    const rowId = `${DATA_SOURCE_LOADING_ROW_ID_PREFIX}${sourceIndex}`
+    const row = {
+      [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true,
+    } as DataGridDataSourceLoadingRowData as T
+    return {
+      __dataSourceLoadingRow: true,
+      kind: "leaf",
+      data: row,
+      row,
+      rowKey: rowId,
+      rowId,
+      sourceIndex,
+      originalIndex: sourceIndex,
+      displayIndex: visibleIndex,
+      state: {
+        selected: false,
+        group: false,
+        pinned: "none",
+        expanded: false,
+      },
     }
   }
 
@@ -1806,11 +1840,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (visibleCount <= 0) {
         return []
       }
-      const rows = []
+      const rows: DataGridRowNode<T>[] = []
       for (let index = normalized.start; index <= normalized.end; index += 1) {
-        const row = readRowCache(toSourceIndex(index))
+        const sourceIndex = toSourceIndex(index)
+        const row = readRowCache(sourceIndex)
         if (row) {
           rows.push(row)
+        } else {
+          rows.push(createLoadingRowNode(index, sourceIndex))
         }
       }
       return rows
