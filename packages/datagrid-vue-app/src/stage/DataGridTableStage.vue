@@ -1186,6 +1186,7 @@ const {
 } = useDataGridStageOverlays({
   overlayGeometryContext,
   bodyViewportClientHeight,
+  bodyViewportScrollTop,
   bottomViewportClientHeight: pinnedBottomViewportClientHeight,
   visibleColumns,
   displayRows,

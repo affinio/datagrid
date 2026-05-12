@@ -48,6 +48,7 @@ describe("useDataGridStageOverlays", () => {
     const result = useDataGridStageOverlays({
       overlayGeometryContext: geometryContext,
       bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(0),
       bottomViewportClientHeight: ref(120),
       visibleColumns: computed(() => createGeometryContext().renderedColumns),
       displayRows: computed(() => [{}, {}]),
@@ -97,5 +98,56 @@ describe("useDataGridStageOverlays", () => {
     expect(result.rightSelectionSeamOverlaySegments.value).toHaveLength(0)
     expect(result.centerCustomOverlayLanes.value).toHaveLength(1)
     expect(result.centerCustomOverlayLanes.value[0]?.segments).toHaveLength(1)
+  })
+
+  it("keeps body pinned seam overlays aligned with transformed pinned content on scroll", () => {
+    const geometryContext = computed(() => createGeometryContext())
+    const range: DataGridOverlayRange = {
+      startRow: 43,
+      endRow: 64,
+      startColumn: 0,
+      endColumn: 0,
+    }
+
+    const result = useDataGridStageOverlays({
+      overlayGeometryContext: geometryContext,
+      bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(1_302),
+      bottomViewportClientHeight: ref(120),
+      visibleColumns: computed(() => createGeometryContext().renderedColumns),
+      displayRows: computed(() => Array.from({ length: 22 }, () => ({}))),
+      selectionRanges: computed(() => [range]),
+      selectionRange: computed(() => range),
+      fillPreviewRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rowMetrics: computed(() => Array.from({ length: 22 }, (_unused, offset) => ({
+        top: 1_333 + offset * 31,
+        height: 31,
+      }))),
+      pinnedBottomRowMetrics: computed(() => []),
+      isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset >= 0 && rowOffset <= 21 && columnIndex === 0,
+      isCellInFillPreviewSafe: () => false,
+      isAdditiveSelection: computed(() => false),
+      isFillDragging: computed(() => false),
+      isRangeMoving: computed(() => false),
+      resolveVisibleRangeBounds(rangeValue) {
+        if (!rangeValue) {
+          return null
+        }
+        return {
+          startRowOffset: 0,
+          endRowOffset: rangeValue.endRow - rangeValue.startRow,
+          startColumnIndex: rangeValue.startColumn,
+          endColumnIndex: rangeValue.endColumn,
+        }
+      },
+      resolvePinnedBottomVisibleRangeBounds() {
+        return null
+      },
+      customOverlays: computed(() => []),
+    })
+
+    expect(result.leftSelectionOverlaySegments.value[0]?.style.top).toBe("1332px")
+    expect(result.leftSelectionSeamOverlaySegments.value[0]?.style.top).toBe("30px")
   })
 })

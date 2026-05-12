@@ -24,6 +24,7 @@ import {
 export interface UseDataGridStageOverlaysOptions {
   overlayGeometryContext: ComputedRef<DataGridStageOverlayGeometryContext>
   bodyViewportClientHeight: Ref<number>
+  bodyViewportScrollTop: Ref<number>
   bottomViewportClientHeight: Ref<number>
   visibleColumns: ComputedRef<readonly DataGridTableStageBodyColumn[]>
   displayRows: ComputedRef<readonly unknown[]>
@@ -137,6 +138,30 @@ function rangesEqual(left: DataGridOverlayRange | null, right: DataGridOverlayRa
   )
 }
 
+function normalizeBodyPinnedPaneSeamMetricsList<TMetrics extends DataGridStageOverlayMetricsSource>(
+  metricsList: readonly TMetrics[],
+  scrollTop: number,
+): TMetrics[] {
+  const topOffset = Math.max(0, Number.isFinite(scrollTop) ? scrollTop : 0)
+  if (topOffset <= 0) {
+    return [...metricsList]
+  }
+  return metricsList.map(metrics => ({
+    ...metrics,
+    top: metrics.top - topOffset,
+  }))
+}
+
+function normalizeBodyPinnedPaneSeamMetric<TMetrics extends DataGridStageOverlayMetricsSource>(
+  metrics: TMetrics | null,
+  scrollTop: number,
+): TMetrics | null {
+  if (!metrics) {
+    return null
+  }
+  return normalizeBodyPinnedPaneSeamMetricsList([metrics], scrollTop)[0] ?? null
+}
+
 export function useDataGridStageOverlays(
   options: UseDataGridStageOverlaysOptions,
 ): UseDataGridStageOverlaysResult {
@@ -233,6 +258,15 @@ export function useDataGridStageOverlays(
 
   const bodyViewportHeight = computed(() => Math.max(0, options.bodyViewportClientHeight.value))
   const bottomViewportHeight = computed(() => Math.max(0, options.bottomViewportClientHeight.value))
+  const bodyPinnedPaneSeamSelectionOverlayMetricsList = computed(() => (
+    normalizeBodyPinnedPaneSeamMetricsList(visibleSelectionOverlayMetricsList.value, options.bodyViewportScrollTop.value)
+  ))
+  const bodyPinnedPaneSeamFillPreviewOverlayMetrics = computed(() => (
+    normalizeBodyPinnedPaneSeamMetric(visibleFillPreviewOverlayMetrics.value, options.bodyViewportScrollTop.value)
+  ))
+  const bodyPinnedPaneSeamMovePreviewOverlayMetrics = computed(() => (
+    normalizeBodyPinnedPaneSeamMetric(visibleMovePreviewOverlayMetrics.value, options.bodyViewportScrollTop.value)
+  ))
 
   const leftSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
@@ -244,7 +278,7 @@ export function useDataGridStageOverlays(
 
   const leftSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
-    visibleSelectionOverlayMetricsList.value,
+    bodyPinnedPaneSeamSelectionOverlayMetricsList.value,
     "left",
     "selection",
     selectionOverlayOptions,
@@ -268,7 +302,7 @@ export function useDataGridStageOverlays(
 
   const rightSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
-    visibleSelectionOverlayMetricsList.value,
+    bodyPinnedPaneSeamSelectionOverlayMetricsList.value,
     "right",
     "selection",
     selectionOverlayOptions,
@@ -330,7 +364,7 @@ export function useDataGridStageOverlays(
 
   const leftFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleFillPreviewOverlayMetrics.value,
+    bodyPinnedPaneSeamFillPreviewOverlayMetrics.value,
     "left",
     "fill-preview",
     fillPreviewOverlayOptions,
@@ -357,7 +391,7 @@ export function useDataGridStageOverlays(
 
   const rightFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleFillPreviewOverlayMetrics.value,
+    bodyPinnedPaneSeamFillPreviewOverlayMetrics.value,
     "right",
     "fill-preview",
     fillPreviewOverlayOptions,
@@ -420,7 +454,7 @@ export function useDataGridStageOverlays(
 
   const leftMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleMovePreviewOverlayMetrics.value,
+    bodyPinnedPaneSeamMovePreviewOverlayMetrics.value,
     "left",
     "move-preview",
     movePreviewOverlayOptions,
@@ -447,7 +481,7 @@ export function useDataGridStageOverlays(
 
   const rightMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleMovePreviewOverlayMetrics.value,
+    bodyPinnedPaneSeamMovePreviewOverlayMetrics.value,
     "right",
     "move-preview",
     movePreviewOverlayOptions,
@@ -504,6 +538,7 @@ export function useDataGridStageOverlays(
     return {
       overlay,
       body,
+      bodyPinnedPaneSeam: normalizeBodyPinnedPaneSeamMetricsList(body, options.bodyViewportScrollTop.value),
       pinnedBottom: resolveOverlayMetricsList(
         overlay.ranges,
         options.resolvePinnedBottomVisibleRangeBounds,
@@ -525,11 +560,11 @@ export function useDataGridStageOverlays(
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
   const leftCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-    .map(({ overlay, body }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "left", body))
+    .map(({ overlay, bodyPinnedPaneSeam }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "left", bodyPinnedPaneSeam))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
   const rightCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
-    .map(({ overlay, body }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "right", body))
+    .map(({ overlay, bodyPinnedPaneSeam }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "right", bodyPinnedPaneSeam))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
   const leftPinnedBottomCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
