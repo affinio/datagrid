@@ -3054,8 +3054,8 @@ export function useDataGridAppInteractionController<
       stopFillSelection(true)
     }
     if (isPointerSelectingCells.value) {
-      const anchorCoord = restoreSelectionActiveCellToAnchor()
-      restoreActiveCellFocus(anchorCoord)
+      restoreSelectionActiveCellToAnchor()
+      focusViewport()
     }
     stopPointerSelection()
     pointerAutoScroll.stopAutoScrollFrameIfIdle()

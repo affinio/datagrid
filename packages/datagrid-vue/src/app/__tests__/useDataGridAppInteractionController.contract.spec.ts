@@ -797,7 +797,7 @@ describe("useDataGridAppInteractionController contract", () => {
     elementFromPointSpy.mockRestore()
   })
 
-  it("restores the active cell to the anchor after pointer range selection ends", async () => {
+  it("restores the active cell to the anchor without scrolling after pointer range selection ends", async () => {
     const { controller, row, selectionSnapshot, ensureKeyboardActiveCellVisible } = createControllerHarness({
       rowCount: 6,
       columnWidths: [100, 100],
@@ -828,7 +828,7 @@ describe("useDataGridAppInteractionController contract", () => {
     await nextTick()
 
     expect(selectionSnapshot.value?.activeCell).toMatchObject({ rowIndex: 0, colIndex: 0 })
-    expect(ensureKeyboardActiveCellVisible).toHaveBeenCalledWith(0, 0)
+    expect(ensureKeyboardActiveCellVisible).not.toHaveBeenCalled()
   })
 
   it("maps ctrl+a to select all filtered rows and visible columns", () => {
