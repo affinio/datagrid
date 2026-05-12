@@ -389,6 +389,110 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps loaded rows visible, marks failed missing rows as error, and retries the viewport", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: buildRows(0, 2),
+      total: 20,
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 0, end: 5 })
+    expect(calls).toHaveLength(2)
+    calls[1]?.reject(new Error("viewport failed"))
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    const failedRows = model.getRowsInRange({ start: 0, end: 5 })
+    expect(failedRows.map(row => row.displayIndex)).toEqual([0, 1, 2, 3, 4, 5])
+    expect(failedRows.slice(0, 3).map(row => row.row.value)).toEqual(["row-0", "row-1", "row-2"])
+    expect(failedRows.slice(3).map(row => (row.row as Record<string, unknown>).__affinoDataGridDataSourceRowStatus)).toEqual([
+      "error",
+      "error",
+      "error",
+    ])
+    expect(model.getSnapshot().error?.message).toBe("viewport failed")
+
+    model.setViewportRange({ start: 0, end: 5 })
+    expect(calls).toHaveLength(3)
+    const retryRows = model.getRowsInRange({ start: 0, end: 5 })
+    expect(retryRows.slice(3).map(row => (row.row as Record<string, unknown>).__affinoDataGridDataSourceRowStatus)).toEqual([
+      "loading",
+      "loading",
+      "loading",
+    ])
+
+    calls[2]?.resolve({
+      rows: buildRows(0, 5),
+      total: 20,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 5 }).map(row => row.row.value)).toEqual([
+      "row-0",
+      "row-1",
+      "row-2",
+      "row-3",
+      "row-4",
+      "row-5",
+    ])
+    expect(model.getSnapshot().error).toBeNull()
+
+    model.dispose()
+  })
+
+  it("ignores stale rejected viewport pulls after a state reset", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 20,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    expect(calls).toHaveLength(1)
+
+    model.setSortModel([{ key: "value", direction: "desc" }])
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+
+    calls[1]?.resolve({
+      rows: [
+        { index: 0, row: { id: 2, value: "sorted-2" } },
+        { index: 1, row: { id: 1, value: "sorted-1" } },
+      ],
+      total: 2,
+    })
+    await flushMicrotasks()
+
+    calls[0]?.reject(new Error("stale failed"))
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 1 }).map(row => row.row.value)).toEqual([
+      "sorted-2",
+      "sorted-1",
+    ])
+    expect(model.getSnapshot().error).toBeNull()
+
+    model.dispose()
+  })
+
   it("clears loading flags after a pending sort refresh resolves", async () => {
     const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
     const model = createDataSourceBackedRowModel({

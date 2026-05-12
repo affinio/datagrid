@@ -62,6 +62,38 @@ describe("createDataGridRangeCache", () => {
     expect(cache.readIndex(1)).toEqual({ index: 1, state: "missing" })
   })
 
+  it("ignores stale failures after a generation reset", () => {
+    const cache = createDataGridRangeCache<string>({
+      chunkSize: 4,
+      maxChunks: 4,
+    })
+
+    const stale = cache.beginLoad({ start: 0, end: 3 })
+    cache.reset()
+    const current = cache.beginLoad({ start: 0, end: 3 })
+
+    expect(cache.failLoad(stale, new Error("stale failed"))).toBe(false)
+    expect(cache.readIndex(1).state).toBe("loading")
+    expect(cache.completeLoad(current, [{ index: 1, row: "row-1" }])).toBe(true)
+    expect(cache.readIndex(1)).toEqual({ index: 1, state: "loaded", row: "row-1" })
+  })
+
+  it("retries error chunks through loading into loaded state", () => {
+    const cache = createDataGridRangeCache<string>({
+      chunkSize: 4,
+      maxChunks: 4,
+    })
+
+    const failed = cache.beginLoad({ start: 0, end: 3 })
+    expect(cache.failLoad(failed, new Error("load failed"))).toBe(true)
+    expect(cache.readIndex(1).state).toBe("error")
+
+    const retry = cache.beginLoad({ start: 0, end: 3 })
+    expect(cache.readIndex(1).state).toBe("loading")
+    expect(cache.completeLoad(retry, [{ index: 1, row: "row-1" }])).toBe(true)
+    expect(cache.readIndex(1)).toEqual({ index: 1, state: "loaded", row: "row-1" })
+  })
+
   it("evicts least recently used non-loading chunks", () => {
     const cache = createDataGridRangeCache<string>({
       chunkSize: 2,

@@ -1068,7 +1068,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     diagnostics.invalidatedRows += rowCache.size
     rowCache.clear()
-    rangeCache.clear()
+    rangeCache.reset()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
   }
@@ -1593,6 +1593,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
       } catch (reasonError) {
         if (isAbortError(reasonError)) {
+          return
+        }
+        const active = readLaneInFlight(priority)
+        if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
+          diagnostics.pullDropped += 1
+          if (priority === "background") {
+            diagnostics.prefetchDroppedStale += 1
+          }
           return
         }
         if (priority !== "background") {
