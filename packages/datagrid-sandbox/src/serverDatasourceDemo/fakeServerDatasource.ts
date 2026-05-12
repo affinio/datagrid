@@ -61,6 +61,13 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+function normalizeLatencyMs(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return SERVER_DEMO_LATENCY_MS
+  }
+  return Math.max(0, Math.trunc(value))
+}
+
 function resolveRowId(index: number): string {
   return `srv-${index.toString().padStart(6, "0")}`
 }
@@ -825,6 +832,7 @@ export function createFakeServerDatasource(hooks: ServerDemoDatasourceHooks = {}
     lastViewportRange: { start: 0, end: 0 },
     totalRows: 0,
     loadedRows: 0,
+    latencyMs: SERVER_DEMO_LATENCY_MS,
   }
   const aggregationDiagnostics: ServerDemoAggregationDiagnostics = {
     lastAggregationRequest: "none",
@@ -861,9 +869,10 @@ export function createFakeServerDatasource(hooks: ServerDemoDatasourceHooks = {}
       pullDiagnostics.loading = true
       pullDiagnostics.error = null
       pullDiagnostics.lastViewportRange = request.range
+      pullDiagnostics.latencyMs = normalizeLatencyMs(hooks.resolvePullDelayMs?.(request) ?? SERVER_DEMO_LATENCY_MS)
       emitPullDiagnostics()
       try {
-        await wait(SERVER_DEMO_LATENCY_MS, request.signal)
+        await wait(pullDiagnostics.latencyMs, request.signal)
         if (hooks.shouldSimulatePullFailure?.() === true) {
           throw new Error("Simulated backend failure")
         }

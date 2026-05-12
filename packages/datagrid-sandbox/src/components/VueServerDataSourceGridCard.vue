@@ -18,6 +18,32 @@
         <button type="button" class="server-grid__button" :disabled="!canRedoHistory" @click="runHistoryAction('redo')">Redo</button>
         <button type="button" class="server-grid__button" @click="simulateErrorOnce">Simulate one error</button>
         <button type="button" class="server-grid__button" @click="simulateCommitFailure">Simulate commit failure</button>
+        <button type="button" class="server-grid__button" @click="jumpToRow(50_000)">Jump 50k</button>
+        <button type="button" class="server-grid__button" @click="jumpToRow(99_500)">Jump tail</button>
+        <button
+          type="button"
+          class="server-grid__button"
+          :aria-pressed="latencyProfile === 'steady'"
+          @click="setLatencyProfile('steady')"
+        >
+          Steady latency
+        </button>
+        <button
+          type="button"
+          class="server-grid__button"
+          :aria-pressed="latencyProfile === 'jitter'"
+          @click="setLatencyProfile('jitter')"
+        >
+          Jitter latency
+        </button>
+        <button
+          type="button"
+          class="server-grid__button"
+          :aria-pressed="latencyProfile === 'slow'"
+          @click="setLatencyProfile('slow')"
+        >
+          Slow backend
+        </button>
       </div>
     </header>
 
@@ -68,6 +94,10 @@
             <div class="server-grid__diagnostics-card">
               <dt>Status</dt>
               <dd>{{ loadingLabel }}</dd>
+            </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Latency</dt>
+              <dd>{{ latencyLabel }}</dd>
             </div>
             <div class="server-grid__diagnostics-card">
               <dt>Error</dt>
@@ -622,6 +652,7 @@ const quickFilter = {
 
 const gridKey = ref(0)
 const gridRef = ref<{
+  scrollToRow?: (target: { rowIndex?: number | null; align?: "start" | "center" | "nearest" }) => void
   history: {
     canUndo: () => boolean
     canRedo: () => boolean
@@ -632,6 +663,9 @@ const gridRef = ref<{
 } | null>(null)
 const failureMode = ref(false)
 const commitFailureMode = ref(false)
+type ServerDemoLatencyProfile = "steady" | "jitter" | "slow"
+const latencyProfile = ref<ServerDemoLatencyProfile>("jitter")
+const lastLatencyMs = ref(LATENCY_MS)
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
 const committedOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
 const pendingOverrides = ref(new Map<string, Partial<ServerDemoRow>>())
@@ -776,6 +810,7 @@ type ServerDemoPullDiagnosticsState = {
   lastViewportRange: { start: number; end: number }
   totalRows: number
   loadedRows: number
+  latencyMs: number
 }
 
 function applyPullDiagnostics(state: ServerDemoPullDiagnosticsState): void {
@@ -785,6 +820,30 @@ function applyPullDiagnostics(state: ServerDemoPullDiagnosticsState): void {
   lastViewportRange.value = state.lastViewportRange
   totalRows.value = state.totalRows
   loadedRows.value = state.loadedRows
+  lastLatencyMs.value = state.latencyMs
+}
+
+function setLatencyProfile(profile: ServerDemoLatencyProfile): void {
+  latencyProfile.value = profile
+}
+
+function resolveDemoPullDelayMs(request: DataGridDataSourcePullRequest): number {
+  if (latencyProfile.value === "steady") {
+    return LATENCY_MS
+  }
+  if (latencyProfile.value === "slow") {
+    return 420
+  }
+  const start = Math.max(0, Math.trunc(request.range.start))
+  const end = Math.max(start, Math.trunc(request.range.end))
+  const deterministicJitter = ((start * 31) + (end * 17)) % 90
+  return LATENCY_MS + deterministicJitter
+}
+
+function jumpToRow(rowIndex: number): void {
+  const normalized = Math.max(0, Math.min(ROW_COUNT - 1, Math.trunc(rowIndex)))
+  gridRef.value?.scrollToRow?.({ rowIndex: normalized, align: "start" })
+  rowModel?.setViewportRange?.({ start: normalized, end: Math.min(ROW_COUNT - 1, normalized + 32) })
 }
 
 function supportsHttpReadPath(request: Pick<DataGridDataSourcePullRequest, "groupBy" | "pivot" | "treeData">): boolean {
@@ -854,6 +913,7 @@ function resetHttpDatasourceAvailability(): void {
 }
 
 const serverDatasource = createFakeServerDatasource({
+  resolvePullDelayMs: resolveDemoPullDelayMs,
   shouldSimulatePullFailure: () => failureMode.value,
   shouldRejectCommittedRow: rowId => {
     if (!commitFailureMode.value) {
@@ -2494,6 +2554,7 @@ const loadingLabel = computed(() => {
   return "idle"
 })
 const errorLabel = computed(() => error.value?.message ?? "none")
+const latencyLabel = computed(() => `${latencyProfile.value} / ${lastLatencyMs.value}ms`)
 const totalRowsLabel = computed(() => totalRows.value.toLocaleString())
 const viewportLabel = computed(() => `${lastViewportRange.value.start}..${lastViewportRange.value.end}`)
 const renderedViewportLabel = computed(() => {
@@ -3138,6 +3199,11 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.server-grid__button[aria-pressed="true"] {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .server-grid__body {

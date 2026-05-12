@@ -119,6 +119,7 @@ export interface ServerDemoPullDiagnostics {
   lastViewportRange: DataGridViewportRange
   totalRows: number
   loadedRows: number
+  latencyMs: number
 }
 
 export interface ServerDemoSampleDiagnostics {
@@ -198,6 +199,7 @@ export interface ServerDemoDatasourceHooks {
   captureFillBoundary?: (result: ServerDemoFillBoundaryResult | null) => void
   captureFillBoundarySide?: (side: "left" | "right", result: ServerDemoFillBoundaryResult | null) => void
   scheduleRenderedSampleDiagnostics?: () => void
+  resolvePullDelayMs?: (request: ServerDemoPullRequest) => number
   shouldSimulatePullFailure?: () => boolean
   shouldRejectCommittedRow?: (rowId: string) => boolean
 }
