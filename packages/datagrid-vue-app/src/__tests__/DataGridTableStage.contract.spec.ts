@@ -625,10 +625,10 @@ describe("DataGridTableStage contract", () => {
     expect(centerSegment.attributes("style")).toContain("border-left-width: 0px;")
     expect(centerSegment.attributes("style")).toContain("border-right-width: 0px;")
     expect(rightSegment.attributes("style")).toContain("border-left-width: 0px;")
-    expect(leftSeamSegment.attributes("style")).toContain("width: var(--datagrid-pinned-pane-separator-size);")
+    expect(leftSeamSegment.attributes("style")).toContain("width: max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width));")
     expect(leftSeamSegment.attributes("style")).toContain("border-left-width: 0px;")
     expect(leftSeamSegment.attributes("style")).toContain("border-right-width: 0px;")
-    expect(rightSeamSegment.attributes("style")).toContain("width: var(--datagrid-pinned-pane-separator-size);")
+    expect(rightSeamSegment.attributes("style")).toContain("width: max(var(--datagrid-pinned-pane-separator-size), var(--datagrid-selection-stroke-width));")
     expect(rightSeamSegment.attributes("style")).toContain("border-left-width: 0px;")
     expect(rightSeamSegment.attributes("style")).toContain("border-right-width: 0px;")
 
@@ -661,7 +661,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("renders separate overlay segments for committed multi-range selections", () => {
+  it("renders the active overlay segment for committed multi-range selections", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(
@@ -682,7 +682,7 @@ describe("DataGridTableStage contract", () => {
     const firstSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerA"]')
     const secondSelectedCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
 
-    expect(centerSegments).toHaveLength(2)
+    expect(centerSegments).toHaveLength(1)
     expect(firstSelectedCell.classes()).toContain("grid-cell--selection-anchor")
     expect(secondSelectedCell.classes()).toContain("grid-cell--selected")
     expect(wrapper.find(".grid-body-pane--left .grid-selection-overlay__segment").exists()).toBe(false)
@@ -717,12 +717,32 @@ describe("DataGridTableStage contract", () => {
     expect(centerSegments[0]?.attributes("style")).toContain("border-right-width: var(--datagrid-selection-stroke-width);")
     expect(centerSegments[0]?.attributes("style")).toContain("border-bottom-width: var(--datagrid-selection-stroke-width);")
     expect(centerSegments[0]?.attributes("style")).toContain("border-left-width: var(--datagrid-selection-stroke-width);")
+
+    const singleWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => columnIndex === 1 && rowOffset === 1,
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          selectionRanges: [
+            { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+          ],
+          selectionAnchorCell: { rowIndex: 1, columnIndex: 1 },
+        },
+      ),
+    })
+    const singleSegment = singleWrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
+    expect(centerSegments[0]?.element.style.left).toBe(singleSegment.element.style.left)
+    expect(centerSegments[0]?.element.style.width).toBe(singleSegment.element.style.width)
+
     expect(previousSelectedCell.classes()).toContain("grid-cell--selected")
     expect(previousSelectedCell.classes()).not.toContain("grid-cell--selection-anchor")
     expect(activeSelectedCell.classes()).toContain("grid-cell--selection-anchor")
     expect(activeSelectedCell.classes()).not.toContain("grid-cell--selected")
     expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--additive-selection")
 
+    singleWrapper.unmount()
     wrapper.unmount()
   })
 
@@ -913,7 +933,9 @@ describe("DataGridTableStage contract", () => {
     ))
     await nextTick()
 
-    expect(wrapper.find(".grid-body-viewport .grid-selection-overlay__segment").exists()).toBe(false)
+    const updatedSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
+    expect(updatedSegment.exists()).toBe(true)
+    expect(updatedSegment.element.style.width).toBe("121px")
 
     wrapper.unmount()
   })
