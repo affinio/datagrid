@@ -150,9 +150,7 @@ export function useDataGridStageViewportRuntime(
     }
     const previousScrollTop = bodyViewportScrollTop.value
     const previousScrollLeft = bodyViewportScrollLeft.value
-    if (element.scrollTop !== previousScrollTop) {
-      linkedPaneScrollSync.onSourceScroll(element.scrollTop)
-    }
+    linkedPaneScrollSync.syncNow(element.scrollTop)
     syncBodyViewportScrollState(element)
     options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {

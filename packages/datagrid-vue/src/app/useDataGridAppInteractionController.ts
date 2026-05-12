@@ -773,6 +773,14 @@ export function useDataGridAppInteractionController<
     return Math.max(deltaX, deltaY) >= DRAG_SELECTION_POINTER_THRESHOLD_PX
   }
 
+  const syncViewportAfterProgrammaticScroll = (): void => {
+    options.syncViewport()
+    const viewport = options.bodyViewportRef.value
+    if (viewport && typeof viewport.dispatchEvent === "function" && typeof globalThis.Event === "function") {
+      viewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
+    }
+  }
+
   const activatePendingDragSelection = (pointer: DataGridAppPointer): boolean => {
     if (!pendingDragSelection.value || !pendingDragCoord.value) {
       return false
@@ -1755,7 +1763,7 @@ export function useDataGridAppInteractionController<
     resolveHeaderHeight: () => 0,
     resolveAxisAutoScrollDelta: axisAutoScroll.resolveAxisAutoScrollDelta,
     setScrollPosition: () => {
-      options.syncViewport()
+      syncViewportAfterProgrammaticScroll()
     },
     applyRangeMovePreviewFromPointer: () => {
       pointerPreviewRouter.applyRangeMovePreviewFromPointer()

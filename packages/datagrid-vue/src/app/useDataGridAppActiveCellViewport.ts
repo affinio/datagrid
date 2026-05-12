@@ -29,6 +29,13 @@ export function useDataGridAppActiveCellViewport(
     return Math.max(18, Math.min(96, Math.floor(size * 0.18)))
   }
 
+  const syncViewportAfterProgrammaticScroll = (viewport: HTMLElement): void => {
+    options.syncViewport()
+    if (typeof viewport.dispatchEvent === "function" && typeof globalThis.Event === "function") {
+      viewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
+    }
+  }
+
   const resolveCellElement = (rowIndex: number, columnIndex: number): HTMLElement | null => {
     const viewport = options.bodyViewportRef.value
     if (!viewport) {
@@ -66,10 +73,10 @@ export function useDataGridAppActiveCellViewport(
 
     if (estimatedTop < visibleTop + comfortMarginPx) {
       viewport.scrollTop = Math.max(0, estimatedTop - comfortMarginPx)
-      options.syncViewport()
+      syncViewportAfterProgrammaticScroll(viewport)
     } else if (estimatedBottom > visibleBottom - comfortMarginPx) {
       viewport.scrollTop = Math.max(0, estimatedBottom - viewport.clientHeight + comfortMarginPx)
-      options.syncViewport()
+      syncViewportAfterProgrammaticScroll(viewport)
     }
   }
 
@@ -152,7 +159,7 @@ export function useDataGridAppActiveCellViewport(
     }
 
     viewport.scrollLeft = nextScrollLeft
-    options.syncViewport()
+    syncViewportAfterProgrammaticScroll(viewport)
     return true
   }
 
@@ -179,7 +186,7 @@ export function useDataGridAppActiveCellViewport(
     nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
     if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
       viewport.scrollLeft = nextScrollLeft
-      options.syncViewport()
+      syncViewportAfterProgrammaticScroll(viewport)
     }
   }
 
@@ -225,7 +232,7 @@ export function useDataGridAppActiveCellViewport(
         nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
         if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
           viewport.scrollLeft = nextScrollLeft
-          options.syncViewport()
+          syncViewportAfterProgrammaticScroll(viewport)
         }
       }
     }

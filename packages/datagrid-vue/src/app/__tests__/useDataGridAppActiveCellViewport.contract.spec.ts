@@ -96,6 +96,8 @@ describe("useDataGridAppActiveCellViewport contract", () => {
 
     const centerCell = appendStageCell(stage, 3, 0)
     const syncViewport = vi.fn()
+    const scrollListener = vi.fn()
+    viewport.addEventListener("scroll", scrollListener)
     const rowOffsets = [0, 30, 90, 120]
     const rowHeights = [30, 60, 30, 45]
 
@@ -115,6 +117,7 @@ describe("useDataGridAppActiveCellViewport contract", () => {
 
     expect(viewport.scrollTop).toBe(45)
     expect(syncViewport).toHaveBeenCalledTimes(1)
+    expect(scrollListener).toHaveBeenCalledTimes(1)
     expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
   })
 
