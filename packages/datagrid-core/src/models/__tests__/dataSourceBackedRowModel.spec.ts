@@ -1610,6 +1610,71 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("drops scheduled viewport pulls on dispose", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 20 })
+    model.setViewportRange({ start: 500, end: 520 })
+
+    expect(calls).toHaveLength(1)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(true)
+
+    model.dispose()
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(false)
+  })
+
+  it("clears scheduled viewport pulls when a state reset starts", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 20 })
+    model.setViewportRange({ start: 500, end: 520 })
+
+    expect(calls).toHaveLength(1)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(true)
+
+    model.setSortModel([{ key: "value", direction: "desc" }])
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(calls[1]?.request.reason).toBe("sort-change")
+
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(false)
+
+    const sortRange = calls[1]?.request.range ?? { start: 0, end: 0 }
+    calls[1]?.resolve({
+      rows: buildRows(sortRange.start, sortRange.end),
+      total: 1_000,
+    })
+    await flushMicrotasks()
+
+    model.dispose()
+  })
+
   it("coalesces identical inflight viewport pulls instead of spawning duplicate requests", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
