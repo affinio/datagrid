@@ -119,6 +119,7 @@ import {
 } from "@affino/datagrid-vue-app-enterprise";
 import {
   defineDataGridColumns,
+  defineDataGridColumnMenu,
   clearDataGridSavedViewInStorage,
   readDataGridSavedViewFromStorage,
   useDataGridRef,
@@ -163,7 +164,6 @@ type FormulaSavedViewRow = FormulaSandboxRow & Record<string, unknown>;
 type FormulaSavedView = DataGridSavedViewSnapshot<FormulaSavedViewRow>;
 
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
-type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
 
 const FORMULA_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:formula-saved-view";
 
@@ -173,16 +173,16 @@ function getBrowserStorage(): Storage | null {
 
 const ROW_OPTIONS = [100, 1_000, 5_000] as const;
 const PATCH_OPTIONS = [1, 10, 100] as const;
-const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const COMPACT_COLUMN_MENU = defineDataGridColumnMenu({
   items: ["sort", "group", "pin"],
   columns: {
     total: {
       hide: ["group"],
     },
   },
-};
+});
 
-const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const LABELLED_COLUMN_MENU = defineDataGridColumnMenu({
   labels: {
     group: "Toggle segment grouping",
     pin: "Freeze columns",
@@ -200,9 +200,9 @@ const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
-const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const ACTION_COLUMN_MENU = defineDataGridColumnMenu({
   actions: {
     sortAsc: { label: "Ascending order" },
     clearSort: { hidden: true },
@@ -225,9 +225,9 @@ const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
-const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const LOCKED_COLUMN_MENU = defineDataGridColumnMenu({
   disabled: ["pin"],
   disabledReasons: {
     pin: "Pinning is locked in this scenario",
@@ -248,7 +248,7 @@ const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
 const columns = defineDataGridColumns<FormulaSandboxRow>()([
   {

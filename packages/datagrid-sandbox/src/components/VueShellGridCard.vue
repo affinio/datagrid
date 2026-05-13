@@ -353,6 +353,7 @@ import {
 } from "@affino/datagrid-vue-app-enterprise";
 import {
   clearDataGridSavedViewInStorage,
+  defineDataGridColumnMenu,
   readDataGridSavedViewFromStorage,
   type DataGridAppToolbarModule,
   type DataGridCellMenuProp,
@@ -467,7 +468,6 @@ interface PublicDataGridExpose {
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked" | "custom";
-type DeclarativeColumnMenuConfig = Exclude<DataGridColumnMenuProp, boolean | null>;
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 type ShellStatusTone = "neutral" | "info" | "warning" | "success";
@@ -523,16 +523,16 @@ const TREE_STATUS_OPTIONS = [
 
 const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
 
-const COMPACT_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const COMPACT_COLUMN_MENU = defineDataGridColumnMenu({
   items: ["sort", "group", "pin"],
   columns: {
     amount: {
       hide: ["group"],
     },
   },
-};
+});
 
-const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const LABELLED_COLUMN_MENU = defineDataGridColumnMenu({
   labels: {
     group: "Toggle grouping",
     pin: "Pinning",
@@ -550,9 +550,9 @@ const LABELLED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
-const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const ACTION_COLUMN_MENU = defineDataGridColumnMenu({
   actions: {
     sortAsc: { label: "Ascending order" },
     clearSort: { hidden: true },
@@ -575,9 +575,9 @@ const ACTION_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
-const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
+const LOCKED_COLUMN_MENU = defineDataGridColumnMenu({
   disabled: ["pin"],
   disabledReasons: {
     pin: "Pinning is locked in this scenario",
@@ -598,7 +598,7 @@ const LOCKED_COLUMN_MENU: DeclarativeColumnMenuConfig = {
       },
     },
   },
-};
+});
 
 const SANDBOX_INSERTED_COLUMN_WIDTH = 148;
 
@@ -1702,7 +1702,7 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
     case "locked":
       return LOCKED_COLUMN_MENU;
     case "custom":
-      return {
+      return defineDataGridColumnMenu({
         trigger: "button",
         customItems: [
           {
@@ -1731,7 +1731,7 @@ const columnMenu = computed<DataGridColumnMenuProp>(() => {
             ],
           },
         ])),
-      } satisfies DeclarativeColumnMenuConfig;
+      });
     default:
       return true;
   }
