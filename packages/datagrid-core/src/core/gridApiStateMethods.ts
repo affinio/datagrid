@@ -13,6 +13,7 @@ import type {
   DataGridViewportRange,
 } from "../models/index.js"
 import type {
+  DataGridBackpressureControlCapability,
   DataGridRowSelectionCapability,
   DataGridSelectionCapability,
   DataGridSortFilterBatchCapability,
@@ -41,6 +42,7 @@ export interface CreateDataGridApiStateMethodsInput<TRow = unknown> {
   getRowSelectionCapability: () => DataGridRowSelectionCapability | null
   getTransactionCapability: () => DataGridTransactionCapability | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
+  getBackpressureControlCapability?: () => DataGridBackpressureControlCapability | null
   setViewportRange: (range: DataGridViewportRange) => void
   getViewportPosition: () => DataGridViewportPositionSnapshot | null
   setViewportPosition: (
@@ -193,6 +195,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
     getRowSelectionCapability,
     getTransactionCapability,
     getSortFilterBatchCapability,
+    getBackpressureControlCapability,
     setViewportRange,
     getViewportPosition,
     setViewportPosition,
@@ -267,96 +270,113 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         return
       }
 
-      const rowSnapshot = migratedState.rows?.snapshot
-      if (rowSnapshot) {
-        const sortModel = normalizeSortModel(rowSnapshot.sortModel)
-        const filterModel = normalizeFilterModel(rowSnapshot.filterModel)
-        const batchedInput: DataGridSortAndFilterModelInput = {
-          sortModel,
-          filterModel,
-        }
-        const sortFilterBatchCapability = getSortFilterBatchCapability()
-        if (sortFilterBatchCapability) {
-          sortFilterBatchCapability.setSortAndFilterModel(batchedInput)
-        } else {
-          rowModel.setFilterModel(batchedInput.filterModel)
-          rowModel.setSortModel(batchedInput.sortModel)
-        }
+      const dataSourceOptions = options.dataSource
+      const backpressureCapability = dataSourceOptions && dataSourceOptions.atomic !== false
+        ? getBackpressureControlCapability?.() ?? null
+        : null
+      const pausedByStateImport = backpressureCapability?.pauseBackpressure() ?? false
 
-        rowModel.setGroupBy(normalizeGroupBy(rowSnapshot.groupBy))
-        rowModel.setPivotModel(normalizePivotModel(rowSnapshot.pivotModel))
-        rowModel.setAggregationModel(normalizeAggregationModel(migratedState.rows?.aggregationModel))
-        rowModel.setGroupExpansion(normalizeGroupExpansion(rowSnapshot.groupExpansion))
-        rowModel.setPagination(normalizePaginationInput(rowSnapshot.pagination))
-        if (options.applyViewport !== false) {
-          const viewportRange = normalizeViewportRange(rowSnapshot.viewportRange)
-          if (viewportRange) {
-            setViewportRange(viewportRange)
+      try {
+        const rowSnapshot = migratedState.rows?.snapshot
+        if (rowSnapshot) {
+          const dataSourceResetViewportRange = normalizeViewportRange(dataSourceOptions?.resetViewportRange)
+          if (options.applyViewport !== false && dataSourceResetViewportRange) {
+            setViewportRange(dataSourceResetViewportRange)
           }
-        }
-      }
 
-      if (options.applyColumns !== false && migratedState.columns) {
-        const order = Array.isArray(migratedState.columns.order) ? migratedState.columns.order : []
-        if (order.length > 0) {
-          columnModel.setColumnOrder(order)
-        }
-        for (const [key, value] of Object.entries(migratedState.columns.visibility ?? {})) {
-          columnModel.setColumnVisibility(key, Boolean(value))
-        }
-        for (const [key, value] of Object.entries(migratedState.columns.widths ?? {})) {
-          const width = Number.isFinite(value) ? Math.max(0, Math.trunc(value as number)) : null
-          columnModel.setColumnWidth(key, width)
-        }
-        for (const [key, value] of Object.entries(migratedState.columns.pins ?? {})) {
-          const pin = normalizePin(value)
-          if (!pin) {
-            continue
+          const sortModel = normalizeSortModel(rowSnapshot.sortModel)
+          const filterModel = normalizeFilterModel(rowSnapshot.filterModel)
+          const batchedInput: DataGridSortAndFilterModelInput = {
+            sortModel,
+            filterModel,
           }
-          columnModel.setColumnPin(key, pin)
-        }
-      }
-
-      if (options.applySelection !== false) {
-        const selectionCapability = getSelectionCapability()
-        if (selectionCapability) {
-          if (migratedState.selection) {
-            selectionCapability.setSelectionSnapshot(cloneSerializable(migratedState.selection))
-            onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
+          const sortFilterBatchCapability = getSortFilterBatchCapability()
+          if (sortFilterBatchCapability) {
+            sortFilterBatchCapability.setSortAndFilterModel(batchedInput)
           } else {
-            selectionCapability.clearSelection()
-            onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
+            rowModel.setFilterModel(batchedInput.filterModel)
+            rowModel.setSortModel(batchedInput.sortModel)
           }
-        } else if (options.strict && migratedState.selection) {
-          throw new Error("[DataGridApi] Cannot restore selection state without selection capability.")
-        }
 
-        const rowSelectionCapability = getRowSelectionCapability()
-        if (rowSelectionCapability) {
-          if (migratedState.rowSelection) {
-            rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(migratedState.rowSelection))
-            onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
-          } else {
-            rowSelectionCapability.clearRowSelection()
-            onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+          rowModel.setGroupBy(normalizeGroupBy(rowSnapshot.groupBy))
+          rowModel.setPivotModel(normalizePivotModel(rowSnapshot.pivotModel))
+          rowModel.setAggregationModel(normalizeAggregationModel(migratedState.rows?.aggregationModel))
+          rowModel.setGroupExpansion(normalizeGroupExpansion(rowSnapshot.groupExpansion))
+          rowModel.setPagination(normalizePaginationInput(rowSnapshot.pagination))
+          if (options.applyViewport !== false && !dataSourceResetViewportRange) {
+            const viewportRange = normalizeViewportRange(rowSnapshot.viewportRange)
+            if (viewportRange) {
+              setViewportRange(viewportRange)
+            }
           }
-        } else if (options.strict && migratedState.rowSelection) {
-          throw new Error("[DataGridApi] Cannot restore rowSelection state without rowSelection capability.")
+        }
+
+        if (options.applyColumns !== false && migratedState.columns) {
+          const order = Array.isArray(migratedState.columns.order) ? migratedState.columns.order : []
+          if (order.length > 0) {
+            columnModel.setColumnOrder(order)
+          }
+          for (const [key, value] of Object.entries(migratedState.columns.visibility ?? {})) {
+            columnModel.setColumnVisibility(key, Boolean(value))
+          }
+          for (const [key, value] of Object.entries(migratedState.columns.widths ?? {})) {
+            const width = Number.isFinite(value) ? Math.max(0, Math.trunc(value as number)) : null
+            columnModel.setColumnWidth(key, width)
+          }
+          for (const [key, value] of Object.entries(migratedState.columns.pins ?? {})) {
+            const pin = normalizePin(value)
+            if (!pin) {
+              continue
+            }
+            columnModel.setColumnPin(key, pin)
+          }
+        }
+
+        if (options.applySelection !== false) {
+          const selectionCapability = getSelectionCapability()
+          if (selectionCapability) {
+            if (migratedState.selection) {
+              selectionCapability.setSelectionSnapshot(cloneSerializable(migratedState.selection))
+              onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
+            } else {
+              selectionCapability.clearSelection()
+              onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
+            }
+          } else if (options.strict && migratedState.selection) {
+            throw new Error("[DataGridApi] Cannot restore selection state without selection capability.")
+          }
+
+          const rowSelectionCapability = getRowSelectionCapability()
+          if (rowSelectionCapability) {
+            if (migratedState.rowSelection) {
+              rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(migratedState.rowSelection))
+              onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+            } else {
+              rowSelectionCapability.clearRowSelection()
+              onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+            }
+          } else if (options.strict && migratedState.rowSelection) {
+            throw new Error("[DataGridApi] Cannot restore rowSelection state without rowSelection capability.")
+          }
+        }
+
+        if (options.applyViewport !== false && options.applyViewportPosition !== false) {
+          const viewportPosition = normalizeViewportPosition(migratedState.view?.viewportPosition)
+          if (viewportPosition) {
+            setViewportPosition(viewportPosition, { strict: options.strict })
+          }
+        }
+
+        if (options.strict && migratedState.transaction) {
+          throw new Error("[DataGridApi] Transaction state restore is not supported by current facade.")
+        }
+
+        onStateImported?.(cloneSerializable(migratedState))
+      } finally {
+        if (pausedByStateImport) {
+          backpressureCapability?.resumeBackpressure()
         }
       }
-
-      if (options.applyViewport !== false && options.applyViewportPosition !== false) {
-        const viewportPosition = normalizeViewportPosition(migratedState.view?.viewportPosition)
-        if (viewportPosition) {
-          setViewportPosition(viewportPosition, { strict: options.strict })
-        }
-      }
-
-      if (options.strict && migratedState.transaction) {
-        throw new Error("[DataGridApi] Transaction state restore is not supported by current facade.")
-      }
-
-      onStateImported?.(cloneSerializable(migratedState))
     },
   }
 }

@@ -1356,6 +1356,91 @@ describe("data grid api facade contracts", () => {
     await expect(api.data.flush()).rejects.toThrow(/backpressure control capability/i)
   })
 
+  it("restores datasource state atomically with a reset viewport range", async () => {
+    const requests: Array<{
+      range: { start: number; end: number }
+      sortModel: readonly unknown[]
+      filterModel: unknown
+    }> = []
+    const rowModel = createDataSourceBackedRowModel({
+      initialTotal: 200,
+      dataSource: {
+        async pull(request) {
+          requests.push({
+            range: { ...request.range },
+            sortModel: request.sortModel,
+            filterModel: request.filterModel,
+          })
+          const rows = []
+          for (let index = request.range.start; index <= request.range.end; index += 1) {
+            rows.push({
+              index,
+              row: { id: index, owner: `owner-${index}` },
+              rowId: index,
+            })
+          }
+          return {
+            rows,
+            total: 200,
+          }
+        },
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.view.setViewportRange({ start: 40, end: 50 })
+    await api.data.flush()
+    expect(requests).toHaveLength(1)
+
+    const importedRequestCounts: number[] = []
+    const unsubscribeImported = api.events.on("state:imported", () => {
+      importedRequestCounts.push(requests.length)
+    })
+    const saved = api.state.get()
+    const nextState = {
+      ...saved,
+      rows: {
+        ...saved.rows,
+        snapshot: {
+          ...saved.rows.snapshot,
+          sortModel: [{ key: "owner", direction: "desc" as const }],
+          filterModel: {
+            columnFilters: { owner: { kind: "valueSet" as const, tokens: ["string:owner-1"] } },
+            advancedFilters: {},
+          },
+          viewportRange: { start: 90, end: 100 },
+        },
+      },
+    }
+
+    api.state.set(nextState, {
+      dataSource: {
+        resetViewportRange: { start: 0, end: 24 },
+      },
+    })
+    unsubscribeImported()
+
+    expect(importedRequestCounts).toEqual([1])
+    expect(rowModel.getSnapshot().viewportRange).toEqual({ start: 0, end: 24 })
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.range).toEqual({ start: 0, end: 24 })
+    expect(requests[1]?.sortModel).toEqual([{ key: "owner", direction: "desc" }])
+    expect(requests[1]?.filterModel).toEqual({
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:owner-1"] } },
+      advancedFilters: {},
+      advancedExpression: null,
+    })
+  })
+
   it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: "r1", owner: "noc" }, rowId: "r1", originalIndex: 0 }],

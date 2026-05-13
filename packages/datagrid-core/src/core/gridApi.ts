@@ -292,6 +292,7 @@ export function createDataGridApi<TRow = unknown>(
     getRowSelectionCapability,
     getTransactionCapability,
     getSortFilterBatchCapability,
+    getBackpressureControlCapability,
     setViewportRange: viewMethods.setViewportRange,
     getViewportPosition: viewMethods.getViewportPosition,
     setViewportPosition: viewMethods.setViewportPosition,

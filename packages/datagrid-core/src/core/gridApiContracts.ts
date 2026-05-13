@@ -399,7 +399,13 @@ export interface DataGridSetStateOptions {
   applySelection?: boolean
   applyViewport?: boolean
   applyViewportPosition?: boolean
+  dataSource?: DataGridSetStateDataSourceOptions
   strict?: boolean
+}
+
+export interface DataGridSetStateDataSourceOptions {
+  atomic?: boolean
+  resetViewportRange?: DataGridViewportRange | null
 }
 
 export interface DataGridMigrateStateOptions {
