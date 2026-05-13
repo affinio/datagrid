@@ -532,6 +532,8 @@ export { createDataGridServerPivotRowId } from "./server/dataSourceProtocol.js"
 export type {
   CreateDataSourceBackedRowModelOptions,
   DataGridDataSourcePrefetchOptions,
+  DataGridExternalRowUpdate,
+  DataGridExternalRowUpdateOptions,
   DataSourceBackedRowModel,
 } from "./dataSourceBackedRowModel.js"
 export { createDataSourceBackedRowModel } from "./dataSourceBackedRowModel.js"

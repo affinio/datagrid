@@ -85,6 +85,7 @@ export type {
   DataGridApiSelectionChangedEvent,
   DataGridGetStateOptions,
   DataGridMigrateStateOptions,
+  DataGridSetStateDataSourceOptions,
   DataGridSetStateOptions,
   DataGridUnifiedRowsState,
   DataGridUnifiedColumnState,
@@ -154,6 +155,7 @@ export function createDataGridApi<TRow = unknown>(
     getRowSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
+    getExternalUpdateCapability,
     getRowsDataMutationCapability,
     getBackpressureControlCapability,
     getComputeCapability,
@@ -238,6 +240,7 @@ export function createDataGridApi<TRow = unknown>(
   const rowsMethods = createDataGridApiRowsMethods<TRow>({
     rowModel,
     getPatchCapability,
+    getExternalUpdateCapability,
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
     getProjectionMode: () => projectionMode,

@@ -21,6 +21,8 @@ import type {
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
   DataGridDataSourceBackpressureDiagnostics,
+  DataGridExternalRowUpdate,
+  DataGridExternalRowUpdateOptions,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,
@@ -173,6 +175,7 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   expandAllGroups(): void
   collapseAllGroups(): void
   hasPatchSupport(): boolean
+  hasExternalUpdateSupport(): boolean
   hasComputedSupport(): boolean
   registerComputedField(definition: DataGridComputedFieldDefinition<TRow>): void
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
@@ -195,6 +198,10 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   applyEdits(
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridApplyEditsOptions,
+  ): void | Promise<void>
+  applyExternalUpdates(
+    updates: readonly DataGridExternalRowUpdate<TRow>[],
+    options?: DataGridExternalRowUpdateOptions,
   ): void | Promise<void>
   setAutoReapply(value: boolean): void
   getAutoReapply(): boolean
@@ -535,6 +542,7 @@ export interface DataGridApiLifecycleNamespace {
 
 export interface DataGridApiCapabilities {
   readonly patch: boolean
+  readonly externalUpdate: boolean
   readonly dataMutation: boolean
   readonly backpressureControl: boolean
   readonly compute: boolean

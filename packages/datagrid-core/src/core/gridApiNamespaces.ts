@@ -74,6 +74,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   expandAllGroups: DataGridApi<TRow>["rows"]["expandAllGroups"]
   collapseAllGroups: DataGridApi<TRow>["rows"]["collapseAllGroups"]
   hasPatchSupport: DataGridApi<TRow>["rows"]["hasPatchSupport"]
+  hasExternalUpdateSupport: DataGridApi<TRow>["rows"]["hasExternalUpdateSupport"]
   hasComputedSupport: DataGridApi<TRow>["rows"]["hasComputedSupport"]
   registerComputedField: DataGridApi<TRow>["rows"]["registerComputedField"]
   getComputedFields: DataGridApi<TRow>["rows"]["getComputedFields"]
@@ -88,6 +89,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getFormulaFunctionNames: DataGridApi<TRow>["rows"]["getFormulaFunctionNames"]
   patchRows: DataGridApi<TRow>["rows"]["patch"]
   applyEdits: DataGridApi<TRow>["rows"]["applyEdits"]
+  applyExternalUpdates: DataGridApi<TRow>["rows"]["applyExternalUpdates"]
   setAutoReapply: DataGridApi<TRow>["rows"]["setAutoReapply"]
   getAutoReapply: DataGridApi<TRow>["rows"]["getAutoReapply"]
   batchRows: DataGridApi<TRow>["rows"]["batch"]
@@ -186,6 +188,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     expandAllGroups: methodSet.expandAllGroups,
     collapseAllGroups: methodSet.collapseAllGroups,
     hasPatchSupport: methodSet.hasPatchSupport,
+    hasExternalUpdateSupport: methodSet.hasExternalUpdateSupport,
     hasComputedSupport: methodSet.hasComputedSupport,
     registerComputedField: methodSet.registerComputedField,
     getComputedFields: methodSet.getComputedFields,
@@ -200,6 +203,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     getFormulaFunctionNames: methodSet.getFormulaFunctionNames,
     patch: methodSet.patchRows,
     applyEdits: methodSet.applyEdits,
+    applyExternalUpdates: methodSet.applyExternalUpdates,
     setAutoReapply: methodSet.setAutoReapply,
     getAutoReapply: methodSet.getAutoReapply,
     batch: methodSet.batchRows,

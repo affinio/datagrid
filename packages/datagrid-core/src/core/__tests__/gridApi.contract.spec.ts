@@ -793,12 +793,16 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     expect(api.rows.hasPatchSupport()).toBe(false)
+    expect(api.rows.hasExternalUpdateSupport()).toBe(false)
     expect(() => {
       api.rows.patch([{ rowId: "r1", data: { tested_at: 200 } }])
     }).toThrow(/patchRows capability/i)
     expect(() => {
       api.rows.applyEdits([{ rowId: "r1", data: { tested_at: 200 } }])
     }).toThrow(/patchRows capability/i)
+    expect(() => {
+      api.rows.applyExternalUpdates([{ rowId: "r1", data: { tested_at: 200 } }])
+    }).toThrow(/applyExternalUpdates capability/i)
 
     api.view.reapply()
     expect(refreshSpy).toHaveBeenCalledWith("reapply")
@@ -1439,6 +1443,54 @@ describe("data grid api facade contracts", () => {
       advancedFilters: {},
       advancedExpression: null,
     })
+  })
+
+  it("routes external datasource row updates outside the edit commit pipeline", async () => {
+    const rows = [
+      { id: 1, owner: "noc" },
+      { id: 2, owner: "ops" },
+    ]
+    const commitEdits = vi.fn(async () => ({ committed: [] }))
+    const rowModel = createDataSourceBackedRowModel({
+      initialTotal: rows.length,
+      resolveRowId: row => row.id,
+      dataSource: {
+        async pull(request) {
+          return {
+            rows: rows
+              .slice(request.range.start, request.range.end + 1)
+              .map((row, offset) => ({
+                index: request.range.start + offset,
+                row,
+                rowId: row.id,
+              })),
+            total: rows.length,
+          }
+        },
+        commitEdits,
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.view.setViewportRange({ start: 0, end: 1 })
+    await api.data.flush()
+    expect(api.rows.hasExternalUpdateSupport()).toBe(true)
+
+    api.rows.applyExternalUpdates([
+      { rowId: 1, data: { owner: "secops" } },
+    ])
+
+    expect(commitEdits).not.toHaveBeenCalled()
+    expect(api.rows.get(0)?.row.owner).toBe("secops")
   })
 
   it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {

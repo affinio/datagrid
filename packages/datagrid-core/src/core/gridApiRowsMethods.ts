@@ -5,6 +5,8 @@ import type {
   DataGridComputedFieldComputeContext,
   DataGridComputedFieldDefinition,
   DataGridComputedFieldSnapshot,
+  DataGridExternalRowUpdate,
+  DataGridExternalRowUpdateOptions,
   DataGridFormulaContextRecomputeRequest,
   DataGridFormulaFieldDefinition,
   DataGridFormulaFieldSnapshot,
@@ -23,7 +25,9 @@ import type {
 } from "../models/index.js"
 import {
   assertPatchCapability,
+  assertExternalUpdateCapability,
   assertRowsDataMutationCapability,
+  type DataGridExternalUpdateCapability,
   type DataGridPatchCapability,
   type DataGridRowsDataMutationCapability,
   type DataGridSortFilterBatchCapability,
@@ -74,6 +78,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   insertDataBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
   insertDataAfter: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]) => boolean
   hasPatchSupport: () => boolean
+  hasExternalUpdateSupport: () => boolean
   hasComputedSupport: () => boolean
   registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
   getComputedFields: () => readonly DataGridComputedFieldSnapshot[]
@@ -97,6 +102,10 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridRowsApplyEditsOptions,
   ) => void | Promise<void>
+  applyExternalUpdates: (
+    updates: readonly DataGridExternalRowUpdate<TRow>[],
+    options?: DataGridExternalRowUpdateOptions,
+  ) => void | Promise<void>
   setAutoReapply: (value: boolean) => void
   getAutoReapply: () => boolean
   batch: <TResult>(fn: () => TResult) => TResult
@@ -105,6 +114,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
 export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
+  getExternalUpdateCapability: () => DataGridExternalUpdateCapability<TRow> | null
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   getProjectionMode?: () => DataGridApiProjectionMode
@@ -116,6 +126,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
   const {
     rowModel,
     getPatchCapability,
+    getExternalUpdateCapability,
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
     getProjectionMode,
@@ -275,6 +286,9 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     hasPatchSupport() {
       return getPatchCapability() !== null
     },
+    hasExternalUpdateSupport() {
+      return getExternalUpdateCapability() !== null
+    },
     hasComputedSupport() {
       return typeof rowModel.registerComputedField === "function"
     },
@@ -375,6 +389,15 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         emit: options?.emit,
         signal: options?.signal,
       })
+    },
+    applyExternalUpdates(
+      updates: readonly DataGridExternalRowUpdate<TRow>[],
+      options?: DataGridExternalRowUpdateOptions,
+    ) {
+      assertMutationsAllowed("apply external row updates")
+      assertNotAborted(options?.signal, "rows.applyExternalUpdates")
+      const capability = assertExternalUpdateCapability(getExternalUpdateCapability())
+      return capability.applyExternalUpdates(updates, options)
     },
     setAutoReapply(value: boolean) {
       autoReapply = Boolean(value)

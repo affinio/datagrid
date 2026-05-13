@@ -91,6 +91,8 @@ export {
   createDataSourceBackedRowModel,
   type CreateDataSourceBackedRowModelOptions,
   type DataSourceBackedRowModel,
+  type DataGridExternalRowUpdate,
+  type DataGridExternalRowUpdateOptions,
   type DataGridDataSource,
   type DataGridDataSourceBackpressureDiagnostics,
   type DataGridDataSourceColumnHistogramRequest,

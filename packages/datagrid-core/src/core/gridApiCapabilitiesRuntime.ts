@@ -8,6 +8,7 @@ import {
   type DataGridBackpressureControlCapability,
   type DataGridColumnHistogramCapability,
   type DataGridComputeCapability,
+  type DataGridExternalUpdateCapability,
   type DataGridRowsDataMutationCapability,
   type DataGridPatchCapability,
   type DataGridRowSelectionCapability,
@@ -18,6 +19,7 @@ import {
   resolveBackpressureControlCapability,
   resolveColumnHistogramCapability,
   resolveComputeCapability,
+  resolveExternalUpdateCapability,
   resolvePatchCapability,
   resolveRowSelectionCapability,
   resolveRowsDataMutationCapability,
@@ -29,6 +31,7 @@ import {
 
 export interface DataGridApiCapabilityFlags {
   readonly patch: boolean
+  readonly externalUpdate: boolean
   readonly dataMutation: boolean
   readonly backpressureControl: boolean
   readonly compute: boolean
@@ -46,6 +49,7 @@ export interface DataGridApiCapabilityRuntime<TRow = unknown> {
   getRowSelectionCapability: () => DataGridRowSelectionCapability | null
   getTransactionCapability: () => DataGridTransactionCapability | null
   getPatchCapability: () => DataGridPatchCapability<TRow> | null
+  getExternalUpdateCapability: () => DataGridExternalUpdateCapability<TRow> | null
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
   getBackpressureControlCapability: () => DataGridBackpressureControlCapability | null
   getComputeCapability: () => DataGridComputeCapability | null
@@ -90,6 +94,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const getPatchCapability = createLazyResolver<DataGridPatchCapability<TRow> | null>(() =>
     resolvePatchCapability(input.rowModel),
   )
+  const getExternalUpdateCapability = createLazyResolver<DataGridExternalUpdateCapability<TRow> | null>(() =>
+    resolveExternalUpdateCapability(input.rowModel),
+  )
   const getRowsDataMutationCapability = createLazyResolver<DataGridRowsDataMutationCapability<TRow> | null>(() =>
     resolveRowsDataMutationCapability(input.rowModel),
   )
@@ -112,6 +119,9 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
   const capabilities: DataGridApiCapabilityFlags = Object.freeze({
     get patch() {
       return getPatchCapability() !== null
+    },
+    get externalUpdate() {
+      return getExternalUpdateCapability() !== null
     },
     get dataMutation() {
       return getRowsDataMutationCapability() !== null
@@ -148,6 +158,7 @@ export function createDataGridApiCapabilityRuntime<TRow = unknown>(
     getRowSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
+    getExternalUpdateCapability,
     getRowsDataMutationCapability,
     getBackpressureControlCapability,
     getComputeCapability,

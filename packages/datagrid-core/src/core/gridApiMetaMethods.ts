@@ -34,6 +34,7 @@ export interface CreateDataGridApiMetaMethodsInput<TRow = unknown> {
 function cloneCapabilities(capabilities: DataGridApiCapabilities): DataGridApiCapabilities {
   return {
     patch: capabilities.patch,
+    externalUpdate: capabilities.externalUpdate,
     dataMutation: capabilities.dataMutation,
     backpressureControl: capabilities.backpressureControl,
     compute: capabilities.compute,

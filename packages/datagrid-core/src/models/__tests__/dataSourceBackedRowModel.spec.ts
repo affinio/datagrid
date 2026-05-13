@@ -905,6 +905,63 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("applies external updates to loaded datasource rows without commitEdits", async () => {
+    const rows = [
+      { id: 1, value: "row-1", status: "open" },
+      { id: 2, value: "row-2", status: "open" },
+    ]
+    const commitEdits = vi.fn(async () => ({ committed: [] }))
+    const dataSource: DataGridDataSource<{ id: number; value: string; status: string }> = {
+      async pull(request) {
+        return {
+          rows: rows
+            .slice(request.range.start, request.range.end + 1)
+            .map((row, offset) => ({
+              index: request.range.start + offset,
+              row,
+              rowId: row.id,
+            })),
+          total: rows.length,
+        }
+      },
+      commitEdits,
+    }
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: rows.length,
+    })
+    const snapshots: unknown[] = []
+    const unsubscribe = model.subscribe(snapshot => {
+      snapshots.push(snapshot)
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    await flushMicrotasks()
+    expect(typeof model.applyExternalUpdates).toBe("function")
+
+    model.applyExternalUpdates?.([
+      { rowId: 1, data: { value: "server-updated" } },
+    ])
+
+    expect(commitEdits).not.toHaveBeenCalled()
+    expect(model.getRow(0)?.row.value).toBe("server-updated")
+    expect(model.getRow(0)?.row.status).toBe("open")
+    expect(snapshots.length).toBeGreaterThan(0)
+
+    const invalidBothUpdate = [{
+      rowId: 1,
+      data: { value: "patch-ignored" },
+      row: { id: 1, value: "row-wins", status: "closed" },
+    }] as unknown as Parameters<NonNullable<typeof model.applyExternalUpdates>>[0]
+    model.applyExternalUpdates?.(invalidBothUpdate)
+
+    expect(model.getRow(0)?.row).toEqual({ id: 1, value: "row-wins", status: "closed" })
+
+    unsubscribe()
+    model.dispose()
+  })
+
   it("keeps cleared values in optimistic commitEdits payloads", async () => {
     const rows = [
       { id: 1, value: "row-1" },

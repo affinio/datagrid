@@ -7,6 +7,8 @@ import type {
   DataGridColumnHistogramOptions,
   DataGridRowModel,
   DataGridRowNodeInput,
+  DataGridExternalRowUpdate,
+  DataGridExternalRowUpdateOptions,
   DataGridSortAndFilterModelInput,
 } from "../models/index.js"
 import type {
@@ -41,6 +43,13 @@ export type DataGridPatchCapability<TRow = unknown> = {
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
   ) => void
+}
+
+export type DataGridExternalUpdateCapability<TRow = unknown> = {
+  applyExternalUpdates: (
+    updates: readonly DataGridExternalRowUpdate<TRow>[],
+    options?: DataGridExternalRowUpdateOptions,
+  ) => void | Promise<void>
 }
 
 export type DataGridRowsDataMutationCapability<TRow = unknown> = {
@@ -240,6 +249,18 @@ export function resolvePatchCapability<TRow>(
   }
 }
 
+export function resolveExternalUpdateCapability<TRow>(
+  rowModel: DataGridRowModel<TRow>,
+): DataGridExternalUpdateCapability<TRow> | null {
+  const candidate = rowModel as DataGridRowModel<TRow> & Partial<DataGridExternalUpdateCapability<TRow>>
+  if (typeof candidate.applyExternalUpdates !== "function") {
+    return null
+  }
+  return {
+    applyExternalUpdates: candidate.applyExternalUpdates.bind(rowModel),
+  }
+}
+
 export function resolveRowsDataMutationCapability<TRow>(
   rowModel: DataGridRowModel<TRow>,
 ): DataGridRowsDataMutationCapability<TRow> | null {
@@ -323,6 +344,15 @@ export function assertPatchCapability<TRow>(
 ): DataGridPatchCapability<TRow> {
   if (!capability) {
     throw new Error('[DataGridApi] rowModel does not implement patchRows capability.')
+  }
+  return capability
+}
+
+export function assertExternalUpdateCapability<TRow>(
+  capability: DataGridExternalUpdateCapability<TRow> | null,
+): DataGridExternalUpdateCapability<TRow> {
+  if (!capability) {
+    throw new Error("[DataGridApi] rowModel does not implement applyExternalUpdates capability.")
   }
   return capability
 }
