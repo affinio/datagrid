@@ -2650,6 +2650,50 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("copies a shift-clicked row-index selection range when row selection is enabled", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowSelection: true,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const secondRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r2"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect(secondRowIndexCell.exists()).toBe(true)
+
+    await firstRowIndexCell.trigger("click")
+    await secondRowIndexCell.trigger("click", { shiftKey: true })
+    await flushRuntimeTasks()
+
+    ;(secondRowIndexCell.element as HTMLElement).focus()
+    await secondRowIndexCell.trigger("keydown", { key: "c", ctrlKey: true })
+    await flushRuntimeTasks()
+
+    const leftRows = wrapper.findAll('.grid-body-pane--left .grid-row')
+    const centerRows = wrapper.findAll('.grid-body-viewport .grid-row')
+    expect(leftRows.at(0)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(leftRows.at(0)?.classes()).toContain("grid-row--clipboard-pending-top")
+    expect(leftRows.at(0)?.classes()).not.toContain("grid-row--clipboard-pending-bottom")
+    expect(leftRows.at(1)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(leftRows.at(1)?.classes()).not.toContain("grid-row--clipboard-pending-top")
+    expect(leftRows.at(1)?.classes()).toContain("grid-row--clipboard-pending-bottom")
+    expect(centerRows.at(0)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(centerRows.at(0)?.classes()).toContain("grid-row--clipboard-pending-top")
+    expect(centerRows.at(0)?.classes()).not.toContain("grid-row--clipboard-pending-bottom")
+    expect(centerRows.at(1)?.classes()).toContain("grid-row--clipboard-pending")
+    expect(centerRows.at(1)?.classes()).not.toContain("grid-row--clipboard-pending-top")
+    expect(centerRows.at(1)?.classes()).toContain("grid-row--clipboard-pending-bottom")
+
+    wrapper.unmount()
+  })
+
   it("supports Ctrl+X and Ctrl+V on the row index to move a cut row", async () => {
     const wrapper = mount(DataGrid, {
       props: {

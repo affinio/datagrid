@@ -1765,10 +1765,10 @@ body.datagrid-fill-drag-cursor * {
   pointer-events: none;
   z-index: 7;
   background-image:
-    repeating-linear-gradient(90deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
-    repeating-linear-gradient(90deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
-    repeating-linear-gradient(0deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px),
-    repeating-linear-gradient(0deg, var(--datagrid-selection-copied-border) 0 6px, transparent 6px 12px);
+    repeating-linear-gradient(90deg, var(--clipboard-row-pending-top, transparent) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(90deg, var(--clipboard-row-pending-bottom, transparent) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, var(--clipboard-row-pending-left, var(--datagrid-selection-copied-border)) 0 6px, transparent 6px 12px),
+    repeating-linear-gradient(0deg, var(--clipboard-row-pending-right, var(--datagrid-selection-copied-border)) 0 6px, transparent 6px 12px);
   background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
   background-size:
     calc(100% - 4px) 2px,
@@ -1780,11 +1780,25 @@ body.datagrid-fill-drag-cursor * {
     2px calc(100% - 2px),
     2px 2px,
     calc(100% - 2px) 2px;
-  box-shadow:
-    0 0 0 1px var(--datagrid-selection-copied-contrast),
-    0 0 0 2px var(--datagrid-selection-copied-glow);
   border-radius: 2px;
   animation: grid-clipboard-ants 0.7s linear infinite;
+}
+
+.grid-row--clipboard-pending-top {
+  --clipboard-row-pending-top: var(--datagrid-selection-copied-border);
+}
+
+.grid-row--clipboard-pending-bottom {
+  --clipboard-row-pending-bottom: var(--datagrid-selection-copied-border);
+}
+
+.grid-body-pane--left .grid-row--clipboard-pending {
+  --clipboard-row-pending-right: transparent;
+}
+
+.grid-body-viewport .grid-row--clipboard-pending,
+.grid-body-pane--right .grid-row--clipboard-pending {
+  --clipboard-row-pending-left: transparent;
 }
 
 .grid-spacer {

@@ -2135,11 +2135,17 @@ export default defineComponent({
       return sourceRowIds[0] ?? null
     }
 
+    const resolveFullRowSelectionEndColumnIndex = (): number => {
+      return visibleColumns.value.length - 1 + (
+        props.rowSelection && props.runtime.api.rowSelection.hasSupport() ? 1 : 0
+      )
+    }
+
     const buildRowIndexSelectionSnapshot = (
       rowIds: readonly string[],
       focusRowId: string,
     ): import("@affino/datagrid-vue").DataGridSelectionSnapshot | null => {
-      const lastColumnIndex = visibleColumns.value.length - 1
+      const lastColumnIndex = resolveFullRowSelectionEndColumnIndex()
       if (rowIds.length === 0 || lastColumnIndex < 0) {
         return null
       }
@@ -2590,43 +2596,52 @@ export default defineComponent({
         return row != null && row.kind !== "group" && !isDataGridPlaceholderSurfaceRow(row)
       }
 
-      const selectedRowIds = props.rowSelectionSnapshot.value?.selectedRows ?? []
-      const normalizedSelected = selectedRowIds
-        .map(rowId => String(rowId))
-        .filter(rowId => rowId.length > 0 && isDeletableRuntimeRowId(rowId))
-      if (normalizedSelected.length > 0) {
-        return normalizedSelected
-      }
-
-      const selectionRange = resolveCurrentSelectionRange()
-      const lastVisibleColumnIndex = visibleColumns.value.length - 1
-      if (selectionRange && lastVisibleColumnIndex >= 0) {
+      const resolveCurrentFullRowRangeRowIds = (): readonly string[] => {
+        const selectionRange = resolveCurrentSelectionRange()
+        const lastColumnIndex = resolveFullRowSelectionEndColumnIndex()
+        if (!selectionRange || lastColumnIndex < 0) {
+          return []
+        }
         const startColumn = Math.min(selectionRange.startColumn, selectionRange.endColumn)
         const endColumn = Math.max(selectionRange.startColumn, selectionRange.endColumn)
         const startRow = Math.min(selectionRange.startRow, selectionRange.endRow)
         const endRow = Math.max(selectionRange.startRow, selectionRange.endRow)
         const targetRowIndex = targetRowId.length > 0 ? props.runtime.resolveBodyRowIndexById(targetRowId) : -1
         if (
-          startColumn === 0
-          && endColumn === lastVisibleColumnIndex
-          && (targetRowIndex < 0 || (targetRowIndex >= startRow && targetRowIndex <= endRow))
+          startColumn !== 0
+          || endColumn !== lastColumnIndex
+          || (targetRowIndex >= 0 && (targetRowIndex < startRow || targetRowIndex > endRow))
         ) {
-          const rangedRowIds: string[] = []
-          for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
-            const row = props.runtime.getBodyRowAtIndex(rowIndex)
-            if (!row || row.kind === "group" || row.rowId == null) {
-              continue
-            }
-            const rowId = String(row.rowId)
-            if (!isDeletableRuntimeRowId(rowId)) {
-              continue
-            }
-            rangedRowIds.push(rowId)
-          }
-          if (rangedRowIds.length > 0) {
-            return rangedRowIds
-          }
+          return []
         }
+        const rangedRowIds: string[] = []
+        for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+          const row = props.runtime.getBodyRowAtIndex(rowIndex)
+          if (!row || row.kind === "group" || row.rowId == null) {
+            continue
+          }
+          const rowId = String(row.rowId)
+          if (!isDeletableRuntimeRowId(rowId)) {
+            continue
+          }
+          rangedRowIds.push(rowId)
+        }
+        return rangedRowIds
+      }
+
+      const selectedRowIds = props.rowSelectionSnapshot.value?.selectedRows ?? []
+      const normalizedSelected = selectedRowIds
+        .map(rowId => String(rowId))
+        .filter(rowId => rowId.length > 0 && isDeletableRuntimeRowId(rowId))
+      const rangedRowIds = resolveCurrentFullRowRangeRowIds()
+      if (rangedRowIds.length > 1) {
+        return rangedRowIds
+      }
+      if (normalizedSelected.length > 0) {
+        return normalizedSelected
+      }
+      if (rangedRowIds.length > 0) {
+        return rangedRowIds
       }
 
       return targetRowId.length > 0 && isDeletableRuntimeRowId(targetRowId) ? [targetRowId] : []

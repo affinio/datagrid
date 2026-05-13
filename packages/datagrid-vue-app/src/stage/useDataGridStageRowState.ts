@@ -212,12 +212,24 @@ export function useDataGridStageRowState(
   }
 
   function rowStateClasses(row: DataGridTableStageBodyRow, rowOffset: number): Record<string, boolean> {
+    const isRowInPendingClipboard = options.rows.value.isRowInPendingClipboardCut?.(row) === true
+    const previousRow = options.displayRows.value[rowOffset - 1]
+    const nextRow = options.displayRows.value[rowOffset + 1]
+    const isPreviousRowInPendingClipboard = previousRow
+      ? options.rows.value.isRowInPendingClipboardCut?.(previousRow) === true
+      : false
+    const isNextRowInPendingClipboard = nextRow
+      ? options.rows.value.isRowInPendingClipboardCut?.(nextRow) === true
+      : false
     return {
       "grid-row--hoverable": options.rows.value.rowHover === true,
       "grid-row--hovered": options.isHoveredRow(row, rowOffset),
       "grid-row--striped": options.isStripedRow(row, rowOffset),
       "grid-row--group-explicit-trigger": row.kind === "group" && options.hasExplicitGroupCellRenderer.value,
-      "grid-row--clipboard-pending": options.rows.value.isRowInPendingClipboardCut?.(row) === true,
+      "grid-row--clipboard-pending": isRowInPendingClipboard,
+      "grid-row--clipboard-pending-top": isRowInPendingClipboard && !isPreviousRowInPendingClipboard,
+      "grid-row--clipboard-pending-middle": isRowInPendingClipboard && isPreviousRowInPendingClipboard && isNextRowInPendingClipboard,
+      "grid-row--clipboard-pending-bottom": isRowInPendingClipboard && !isNextRowInPendingClipboard,
       "grid-row--focused": typeof options.rows.value.isRowFocused === "function" ? options.rows.value.isRowFocused(row) : false,
       "grid-row--checkbox-selected": typeof options.rows.value.isRowCheckboxSelected === "function" ? options.rows.value.isRowCheckboxSelected(row) : false,
     }
