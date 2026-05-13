@@ -54,6 +54,11 @@ import {
 } from "./dataGridStructuralRowActions"
 import type { DataGridBivariantCallback } from "./types/bivariance"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
+import type {
+  DataGridCaptureFocusAnchorOptions,
+  DataGridFocusAnchor,
+  DataGridRestoreFocusAnchorOptions,
+} from "./host/DataGridRuntimeHost"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
 import {
   resolveDataGridColumns,
@@ -169,6 +174,12 @@ import type {
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "./stage/dataGridTableStage.types"
+
+export type {
+  DataGridCaptureFocusAnchorOptions,
+  DataGridFocusAnchor,
+  DataGridRestoreFocusAnchorOptions,
+} from "./host/DataGridRuntimeHost"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -400,6 +411,11 @@ interface LowLevelGridExpose {
   getBodyRowAtIndex: DataGridBodyAwareRuntime["getBodyRowAtIndex"]
   resolveBodyRowIndexById: DataGridBodyAwareRuntime["resolveBodyRowIndexById"]
   virtualWindow: unknown
+  captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) => DataGridFocusAnchor<DataGridRowId> | null
+  restoreFocusAnchor: (
+    anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+    options?: DataGridRestoreFocusAnchorOptions,
+  ) => Promise<boolean>
   restoreFocus: () => void
   start: () => Promise<void>
   stop: () => void
@@ -828,6 +844,11 @@ export interface DataGridExposed<TRow = unknown> {
   getHistory: () => DataGridHistoryController
   getApi: () => DataGridApi<TRow> | null
   getRuntime: () => DataGridExposedRuntime<TRow> | null
+  captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) => DataGridFocusAnchor<DataGridRowId> | null
+  restoreFocusAnchor: (
+    anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+    options?: DataGridRestoreFocusAnchorOptions,
+  ) => Promise<boolean>
   restoreFocus: () => void
   getSelectionAggregatesLabel: () => string
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
@@ -1447,6 +1468,14 @@ const DataGridRuntimeComponent = defineComponent({
       getApi: () => dataGridRef.value?.api ?? null,
       getRuntime: () => dataGridRef.value?.runtime ?? null,
       getCore: () => dataGridRef.value?.core ?? null,
+      captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) =>
+        dataGridRef.value?.captureFocusAnchor(options) ?? null,
+      restoreFocusAnchor: (
+        anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+        options?: DataGridRestoreFocusAnchorOptions,
+      ) => (
+        dataGridRef.value?.restoreFocusAnchor(anchor, options) ?? Promise.resolve(false)
+      ),
       restoreFocus: () => {
         dataGridRef.value?.restoreFocus()
       },

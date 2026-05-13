@@ -446,7 +446,9 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
     }
     getApi?: () => {
       selection?: {
+        getSnapshot?: () => unknown
         setSnapshot?: (snapshot: unknown) => void
+        clear?: () => void
       }
       rowSelection: {
         getSnapshot?: () => unknown
@@ -458,6 +460,14 @@ function resolveVm(wrapper: ReturnType<typeof mount>) {
       }
     } | null
     getSelectionAggregatesLabel?: () => string
+    captureFocusAnchor?: () => {
+      rowId: string | number | null
+      rowIndex: number | null
+      columnKey: string | null
+      columnIndex: number | null
+      selection: unknown
+    } | null
+    restoreFocusAnchor?: (anchor: unknown, options?: { retries?: number }) => Promise<boolean>
     getView?: () => "table" | "gantt"
     setView?: (mode: "table" | "gantt") => void
     getSavedView?: () => DataGridSavedViewSnapshot<Record<string, unknown>> | null
@@ -1267,6 +1277,61 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(queryBodyCell(wrapper, 0, 2).classes()).toContain("grid-cell--selection-anchor")
+
+    wrapper.unmount()
+  })
+
+  it("captures and restores grid focus anchors with selection snapshots", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = resolveVm(wrapper).getApi?.()
+    api?.selection?.setSnapshot?.({
+      ranges: [{
+        startRow: 1,
+        endRow: 1,
+        startCol: 1,
+        endCol: 1,
+        anchor: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        startRowId: "r2",
+        endRowId: "r2",
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    const regionCell = queryBodyCell(wrapper, 1, 1)
+    ;(regionCell.element as HTMLElement).focus()
+    const anchor = resolveVm(wrapper).captureFocusAnchor?.()
+
+    expect(anchor).toMatchObject({
+      rowId: "r2",
+      rowIndex: 1,
+      columnKey: "region",
+      columnIndex: 1,
+    })
+
+    api?.selection?.clear?.()
+    ;(wrapper.find(".grid-body-viewport").element as HTMLElement).focus()
+    await flushRuntimeTasks()
+
+    await expect(resolveVm(wrapper).restoreFocusAnchor?.(anchor, { retries: 1 })).resolves.toBe(true)
+    await flushRuntimeTasks()
+
+    expect((document.activeElement as HTMLElement | null)?.getAttribute("data-row-id")).toBe("r2")
+    expect((document.activeElement as HTMLElement | null)?.getAttribute("data-column-key")).toBe("region")
+    expect(api?.selection?.getSnapshot?.()).toMatchObject({
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+    })
 
     wrapper.unmount()
   })

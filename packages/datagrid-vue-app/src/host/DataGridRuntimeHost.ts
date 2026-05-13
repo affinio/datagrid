@@ -17,6 +17,7 @@ import type {
   DataGridColumnInput,
   DataGridCoreServiceRegistry,
   DataGridPaginationInput,
+  DataGridRowId,
   DataGridRowSelectionSnapshot,
   DataGridRowModel,
   DataGridRowNode,
@@ -38,8 +39,71 @@ type DataGridRuntimeOverrides = Omit<
   viewport?: DataGridCoreServiceRegistry["viewport"]
 }
 
+export interface DataGridFocusAnchor<TRowKey = DataGridRowId> {
+  version: 1
+  rowId: TRowKey | null
+  rowIndex: number | null
+  columnKey: string | null
+  columnIndex: number | null
+  selection: DataGridSelectionSnapshot<TRowKey> | null
+  rowSelection: DataGridRowSelectionSnapshot | null
+}
+
+export interface DataGridCaptureFocusAnchorOptions {
+  includeSelection?: boolean
+  includeRowSelection?: boolean
+}
+
+export interface DataGridRestoreFocusAnchorOptions {
+  applySelection?: boolean
+  applyRowSelection?: boolean
+  focus?: boolean
+  preventScroll?: boolean
+  scrollIntoView?: boolean
+  retries?: number
+}
+
 interface DataGridRowsChangedEvent {
   snapshot: DataGridRowModelSnapshot<unknown>
+}
+
+function cloneSerializable<T>(value: T): T {
+  if (value == null) {
+    return value
+  }
+  const structuredCloneRef = (globalThis as typeof globalThis & {
+    structuredClone?: <U>(input: U) => U
+  }).structuredClone
+  if (typeof structuredCloneRef === "function") {
+    try {
+      return structuredCloneRef(value)
+    } catch {
+      // Fall through to JSON clone.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
+  }
+}
+
+function normalizeDomIndex(value: string | null): number | null {
+  if (value == null || value.trim().length === 0) {
+    return null
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null
+}
+
+function escapeCssValue(value: string): string {
+  const cssEscape = (globalThis as typeof globalThis & {
+    CSS?: { escape?: (input: string) => string }
+  }).CSS?.escape
+  if (typeof cssEscape === "function") {
+    return cssEscape(value)
+  }
+  return value.replace(/["\\]/g, "\\$&")
 }
 
 interface DataGridSelectionChangedEvent {
@@ -221,6 +285,161 @@ export default defineComponent({
       }
     })
 
+    const findActiveGridCell = (): HTMLElement | null => {
+      if (typeof document === "undefined") {
+        return null
+      }
+      const rootElement = rootElementRef.value
+      const activeElement = document.activeElement
+      if (!rootElement || !(activeElement instanceof HTMLElement) || !rootElement.contains(activeElement)) {
+        return null
+      }
+      return activeElement.closest<HTMLElement>(".grid-cell[data-row-index], .grid-cell[data-row-id]")
+    }
+
+    const resolveColumnKeyByIndex = (columnIndex: number | null): string | null => {
+      if (columnIndex == null) {
+        return null
+      }
+      return runtime.columnSnapshot.value.visibleColumns[columnIndex]?.key ?? null
+    }
+
+    const captureFocusAnchor = (
+      options: DataGridCaptureFocusAnchorOptions = {},
+    ): DataGridFocusAnchor | null => {
+      const selectionSnapshot = runtime.api.selection.getSnapshot() as DataGridSelectionSnapshot<DataGridRowId> | null
+      const activeCell = selectionSnapshot?.activeCell ?? null
+      const activeElement = findActiveGridCell()
+      const elementRowIndex = normalizeDomIndex(activeElement?.getAttribute("data-row-index") ?? null)
+      const elementColumnIndex = normalizeDomIndex(activeElement?.getAttribute("data-column-index") ?? null)
+      const elementColumnKey = activeElement?.getAttribute("data-column-key") ?? null
+      const elementRowId = activeElement?.getAttribute("data-row-id") ?? null
+      const rowIndex = elementRowIndex ?? activeCell?.rowIndex ?? null
+      const activeCellMatchesElement = activeCell != null && (
+        (elementRowIndex == null && elementRowId == null) ||
+        activeCell.rowIndex === elementRowIndex ||
+        (activeCell.rowId != null && String(activeCell.rowId) === elementRowId)
+      )
+      const columnIndex = activeCellMatchesElement ? activeCell?.colIndex ?? elementColumnIndex : elementColumnIndex ?? activeCell?.colIndex ?? null
+      const rawRowId = activeCellMatchesElement
+        ? activeCell?.rowId ?? elementRowId
+        : elementRowId ?? activeCell?.rowId ?? null
+      const rowId = typeof rawRowId === "string" || typeof rawRowId === "number" ? rawRowId : null
+      const columnKey = elementColumnKey ?? resolveColumnKeyByIndex(columnIndex)
+      const hasLogicalAnchor = rowId != null || rowIndex != null || columnKey != null || columnIndex != null
+      const shouldIncludeSelection = options.includeSelection !== false
+      const shouldIncludeRowSelection = options.includeRowSelection !== false
+
+      if (!hasLogicalAnchor && !selectionSnapshot && !runtime.api.rowSelection.getSnapshot()) {
+        return null
+      }
+
+      return {
+        version: 1,
+        rowId,
+        rowIndex,
+        columnKey,
+        columnIndex,
+        selection: shouldIncludeSelection ? cloneSerializable(selectionSnapshot) : null,
+        rowSelection: shouldIncludeRowSelection ? cloneSerializable(runtime.api.rowSelection.getSnapshot()) : null,
+      }
+    }
+
+    const focusCellElement = (anchor: DataGridFocusAnchor, options: DataGridRestoreFocusAnchorOptions): boolean => {
+      const rootElement = rootElementRef.value
+      if (!rootElement) {
+        return false
+      }
+      const selectors: string[] = []
+      if (anchor.rowIndex != null && anchor.columnKey) {
+        selectors.push(
+          `.grid-cell[data-row-index="${anchor.rowIndex}"][data-column-key="${escapeCssValue(anchor.columnKey)}"]`,
+        )
+      }
+      if (anchor.rowIndex != null && anchor.columnIndex != null) {
+        selectors.push(`.grid-cell[data-row-index="${anchor.rowIndex}"][data-column-index="${anchor.columnIndex}"]`)
+      }
+      if (anchor.rowId != null && anchor.columnKey) {
+        selectors.push(
+          `.grid-cell[data-row-id="${escapeCssValue(String(anchor.rowId))}"][data-column-key="${escapeCssValue(anchor.columnKey)}"]`,
+        )
+      }
+      if (selectors.length === 0) {
+        return false
+      }
+      let target: HTMLElement | null = null
+      for (const selector of selectors) {
+        target = rootElement.querySelector<HTMLElement>(selector)
+        if (target) {
+          break
+        }
+      }
+      if (!target) {
+        return false
+      }
+      try {
+        target.focus({ preventScroll: options.preventScroll !== false })
+      } catch {
+        target.focus()
+      }
+      return typeof document === "undefined" || document.activeElement === target
+    }
+
+    const restoreFocusAnchor = async (
+      anchor: DataGridFocusAnchor | null | undefined,
+      options: DataGridRestoreFocusAnchorOptions = {},
+    ): Promise<boolean> => {
+      if (!anchor) {
+        return false
+      }
+      if (options.applySelection !== false && anchor.selection) {
+        runtime.api.selection.setSnapshot(cloneSerializable(anchor.selection))
+      }
+      if (options.applyRowSelection !== false && anchor.rowSelection) {
+        runtime.api.rowSelection.setSnapshot(cloneSerializable(anchor.rowSelection))
+      }
+      if (options.focus === false) {
+        return true
+      }
+
+      const rowId = typeof anchor.rowId === "string" || typeof anchor.rowId === "number" ? anchor.rowId : null
+      const resolvedRowIndex = rowId != null ? bodyRuntime.resolveBodyRowIndexById(rowId) : -1
+      const rowIndex = resolvedRowIndex >= 0 ? resolvedRowIndex : anchor.rowIndex
+      const columnIndex = anchor.columnKey
+        ? runtime.columnSnapshot.value.visibleColumns.findIndex(column => column.key === anchor.columnKey)
+        : -1
+      const nextAnchor: DataGridFocusAnchor = {
+        ...anchor,
+        rowIndex: rowIndex != null && rowIndex >= 0 ? rowIndex : anchor.rowIndex,
+        columnIndex: columnIndex >= 0 ? columnIndex : anchor.columnIndex,
+      }
+      if (nextAnchor.rowIndex == null || (nextAnchor.columnKey == null && nextAnchor.columnIndex == null)) {
+        return false
+      }
+
+      if (options.scrollIntoView !== false) {
+        runtime.scrollToCell({
+          rowId,
+          rowIndex: nextAnchor.rowIndex,
+          columnKey: nextAnchor.columnKey,
+          columnIndex: nextAnchor.columnIndex,
+          align: "nearest",
+        })
+      }
+
+      const attempts = Math.max(0, Math.trunc(options.retries ?? 3))
+      for (let attempt = 0; attempt <= attempts; attempt += 1) {
+        await nextTick()
+        if (focusCellElement(nextAnchor, options)) {
+          return true
+        }
+        if (typeof window !== "undefined") {
+          await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+        }
+      }
+      return false
+    }
+
     const restoreFocus = (): void => {
       const focusViewport = (): boolean => {
         const viewport = rootElementRef.value?.querySelector<HTMLElement>(".grid-body-viewport")
@@ -266,6 +485,8 @@ export default defineComponent({
       getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
       resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
       virtualWindow: runtime.virtualWindow,
+      captureFocusAnchor,
+      restoreFocusAnchor,
       restoreFocus,
       start: runtime.start,
       stop: runtime.stop,

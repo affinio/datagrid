@@ -19,12 +19,15 @@ export type {
   DataGridComponent,
   DataGridComponentFor,
   DataGridCellEditEvent,
+  DataGridCaptureFocusAnchorOptions,
   DataGridExposed,
   DataGridExposedRuntime,
   DataGridFilterCellReader,
   DataGridFilterCellStyleReader,
+  DataGridFocusAnchor,
   DataGridInstance,
   DataGridProps,
+  DataGridRestoreFocusAnchorOptions,
   DataGridSelectionCellReader,
 } from "./DataGrid"
 export type {
