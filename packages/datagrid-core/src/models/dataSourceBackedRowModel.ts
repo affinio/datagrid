@@ -232,11 +232,6 @@ function normalizeTotal(total: number | null | undefined): number | null {
   return Math.max(0, Math.trunc(total as number))
 }
 
-function resolveNowMs(): number {
-  const now = Date.now()
-  return Number.isFinite(now) ? now : 0
-}
-
 function serializePullState(value: unknown): string {
   try {
     return JSON.stringify(value) ?? ""
@@ -393,6 +388,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
   let lastViewportDirection: -1 | 0 | 1 = 0
   let lastViewportOverscanSample: DataGridVelocityOverscanSample | null = null
+  let viewportOverscanSampleTimestampMs = 0
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
@@ -866,9 +862,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function resolveVelocityAwareSourceRange(sourceViewport: DataGridViewportRange): DataGridViewportRange {
+    viewportOverscanSampleTimestampMs += DATA_SOURCE_VELOCITY_OVERSCAN_MIN_SAMPLE_MS
     const sample = {
       range: sourceViewport,
-      timestampMs: resolveNowMs(),
+      timestampMs: viewportOverscanSampleTimestampMs,
     }
     const result = resolveDataGridVelocityOverscanRange(sample, lastViewportOverscanSample, {
       expectedLoadMs: DATA_SOURCE_VELOCITY_OVERSCAN_EXPECTED_LOAD_MS,
@@ -2121,7 +2118,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
           : lastViewportDirection
       viewportRange = nextViewport
       const sourceViewport = toSourceRange(nextViewport)
-      const sourceLoadRange = resolveVelocityAwareSourceRange(sourceViewport)
 
       if (resolvedEmptyTotal && rowCount <= 0) {
         updateCachedCoverageDiagnostics(sourceViewport)
@@ -2138,10 +2134,22 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
       }
 
-      if (isRangeFullyCached(sourceViewport) && isRangeFullyCached(sourceLoadRange)) {
+      if (isRangeFullyCached(sourceViewport)) {
         scheduleViewportPrefetch()
         emit()
         return
+      }
+
+      let sourceLoadRange = prefetchOptions.enabled
+        ? resolveVelocityAwareSourceRange(sourceViewport)
+        : sourceViewport
+      if (
+        backgroundInFlight &&
+        !backgroundInFlight.controller.signal.aborted &&
+        rangesOverlap(backgroundInFlight.range, sourceLoadRange) &&
+        !rangesOverlap(backgroundInFlight.range, sourceViewport)
+      ) {
+        sourceLoadRange = sourceViewport
       }
 
       if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {

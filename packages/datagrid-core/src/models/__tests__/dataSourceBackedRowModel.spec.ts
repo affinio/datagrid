@@ -1879,9 +1879,6 @@ describe("createDataSourceBackedRowModel", () => {
   })
 
   it("expands fast backend viewport pulls with velocity-aware forward overscan", async () => {
-    const nowSpy = vi.spyOn(Date, "now")
-    let now = 1_000
-    nowSpy.mockImplementation(() => now)
     const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
 
     const model = createDataSourceBackedRowModel({
@@ -1889,7 +1886,7 @@ describe("createDataSourceBackedRowModel", () => {
       resolveRowId: row => row.id,
       initialTotal: 10_000,
       prefetch: {
-        enabled: false,
+        enabled: true,
       },
     })
 
@@ -1897,7 +1894,6 @@ describe("createDataSourceBackedRowModel", () => {
       model.setViewportRange({ start: 0, end: 19 })
       expect(calls[0]?.request.range).toEqual({ start: 0, end: 19 })
 
-      now = 1_020
       model.setViewportRange({ start: 500, end: 519 })
       await flushMicrotasks()
 
@@ -1909,7 +1905,6 @@ describe("createDataSourceBackedRowModel", () => {
       )
     } finally {
       model.dispose()
-      nowSpy.mockRestore()
     }
   })
 
