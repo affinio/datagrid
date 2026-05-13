@@ -77,6 +77,11 @@ interface EffectiveFilterRow {
   styles?: Record<string, Record<string, string>>
 }
 
+interface PercentFilterRow {
+  rowId: string
+  roi: number
+}
+
 const EffectiveFilterGrid = defineDataGridComponent<EffectiveFilterRow>()
 const EffectiveSelectionGrid = defineDataGridComponent<EffectiveSelectionRow>()
 
@@ -127,6 +132,12 @@ const EFFECTIVE_FILTER_ROWS: readonly EffectiveFilterRow[] = [
   { rowId: "ef3", statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } },
 ]
 
+const PERCENT_FILTER_ROWS: readonly PercentFilterRow[] = [
+  { rowId: "pf1", roi: 0.1 },
+  { rowId: "pf2", roi: 0.25 },
+  { rowId: "pf3", roi: 0.4 },
+]
+
 const COLUMNS = [
   { key: "owner", label: "Owner", width: 180 },
   { key: "region", label: "Region", width: 160 },
@@ -140,6 +151,17 @@ const EFFECTIVE_FILTER_COLUMNS = defineDataGridColumns<EffectiveFilterRow>()([
     label: "Status",
     width: 180,
     valueGetter: (row: EffectiveFilterRow) => row.statusCode === "a" ? "Active" : "Blocked",
+  },
+] as const)
+
+const PERCENT_FILTER_COLUMNS = defineDataGridColumns<PercentFilterRow>()([
+  {
+    key: "roi",
+    label: "ROI",
+    dataType: "number",
+    filter: {
+      normalizeValue: ({ value }) => typeof value === "number" ? value / 100 : value,
+    },
   },
 ] as const)
 
@@ -5277,6 +5299,64 @@ describe("DataGrid app facade contract", () => {
     expect(queryAdvancedFilterRoot()?.textContent).toContain("No filters applied")
     expect(reopenedTrigger.attributes("data-datagrid-advanced-filter-active")).toBe("false")
     expect(reopenedTrigger.find('[data-datagrid-advanced-filter-icon="true"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("does not normalize percent filter values again when sorting", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: PERCENT_FILTER_ROWS,
+        columns: PERCENT_FILTER_COLUMNS,
+        filterModel: {
+          columnFilters: {
+            roi: {
+              kind: "predicate",
+              operator: "gte",
+              value: 25,
+            },
+          },
+          advancedFilters: {},
+          advancedExpression: null,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          rowCount: 2,
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              roi: expect.objectContaining({
+                value: 0.25,
+              }),
+            }),
+          }),
+        }),
+      }),
+    })
+
+    await wrapper.find('.grid-cell--header[data-column-key="roi"]').trigger("click")
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          rowCount: 2,
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              roi: expect.objectContaining({
+                value: 0.25,
+              }),
+            }),
+          }),
+        }),
+      }),
+    })
 
     wrapper.unmount()
   })

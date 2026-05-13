@@ -303,6 +303,14 @@ function cloneFilterModelState(
   return cloneDataGridFilterSnapshot(filterModel ?? createEmptyFilterModel()) ?? createEmptyFilterModel()
 }
 
+function areFilterModelsEqual(
+  left: DataGridFilterSnapshot | null | undefined,
+  right: DataGridFilterSnapshot | null | undefined,
+): boolean {
+  return JSON.stringify(cloneDataGridFilterSnapshot(left ?? null))
+    === JSON.stringify(cloneDataGridFilterSnapshot(right ?? null))
+}
+
 function normalizeColumnMenuToken(token: string): string {
   return token.startsWith("string:")
     ? `string:${token.slice("string:".length).toLowerCase()}`
@@ -796,6 +804,10 @@ export default defineComponent({
       type: Object as PropType<DataGridFilterSnapshot | null | undefined>,
       default: undefined,
     },
+    filterModelNormalized: {
+      type: Boolean,
+      default: false,
+    },
     appColumns: {
       type: Array as PropType<readonly DataGridAppColumnInput[]>,
       default: () => [],
@@ -1011,6 +1023,7 @@ export default defineComponent({
     let pendingColumnMenuSortRequestId = 0
     let quickFilterDebounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null
     const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
+    const filterModelStateNormalized = ref(props.filterModelNormalized)
     const columnFilterTextByKey = computed<Record<string, string>>(() => (
       resolveInitialFilterTexts(filterModelState.value)
     ))
@@ -1055,9 +1068,21 @@ export default defineComponent({
     watch(
       () => props.filterModel,
       nextFilterModel => {
+        const normalizedCurrentFilterModel = normalizeDataGridAppFilterModel(filterModelState.value, props.appColumns)
+        if (!filterModelStateNormalized.value && areFilterModelsEqual(normalizedCurrentFilterModel, nextFilterModel ?? null)) {
+          return
+        }
         filterModelState.value = cloneFilterModelState(nextFilterModel)
+        filterModelStateNormalized.value = props.filterModelNormalized
       },
       { deep: true },
+    )
+
+    watch(
+      () => props.filterModelNormalized,
+      nextNormalized => {
+        filterModelStateNormalized.value = nextNormalized
+      },
     )
 
     watch(
@@ -1067,6 +1092,7 @@ export default defineComponent({
           return
         }
         filterModelState.value = cloneFilterModelState(props.runtime.api.rows.getSnapshot().filterModel ?? null)
+        filterModelStateNormalized.value = true
       },
       { immediate: true },
     )
@@ -1313,7 +1339,10 @@ export default defineComponent({
       return resolveColumnGroupOrder(columnKey) !== null
     }
 
-    const applySortAndFilter = (filterModelInput: DataGridFilterSnapshot = filterModelState.value): {
+    const applySortAndFilter = (
+      filterModelInput: DataGridFilterSnapshot = filterModelState.value,
+      options?: { filterModelNormalized?: boolean },
+    ): {
       setSortModelMs: number
       projectionRebuildMs: number
       projectionSortMs: number
@@ -1337,10 +1366,14 @@ export default defineComponent({
             ...filterModelInput,
             advancedExpression,
           }
-      const normalizedFilterModel = normalizeDataGridAppFilterModel(
-        nextFilterModel,
-        props.appColumns,
-      )
+      const filterModelInputNormalized = options?.filterModelNormalized
+        ?? (filterModelInput === filterModelState.value && filterModelStateNormalized.value)
+      const normalizedFilterModel = filterModelInputNormalized
+        ? cloneDataGridFilterSnapshot(nextFilterModel)
+        : normalizeDataGridAppFilterModel(
+            nextFilterModel,
+            props.appColumns,
+          )
 
       const setSortStartedAt = resolveDataGridPerfNow()
       props.runtime.api.rows.setSortAndFilterModel({
@@ -1425,6 +1458,7 @@ export default defineComponent({
 
     const resetAllFilters = (): void => {
       filterModelState.value = createEmptyFilterModel()
+      filterModelStateNormalized.value = false
       clearAdvancedFilterPanel()
       applySortAndFilter()
     }
@@ -1457,9 +1491,11 @@ export default defineComponent({
     }
 
     const commitQuickFilterQuery = (value: string): void => {
+      const nextFilterModelNormalized = filterModelStateNormalized.value
       const nextFilterModel = buildQuickFilterModel(value)
       filterModelState.value = nextFilterModel
-      applySortAndFilter(nextFilterModel)
+      filterModelStateNormalized.value = nextFilterModelNormalized
+      applySortAndFilter(nextFilterModel, { filterModelNormalized: nextFilterModelNormalized })
     }
 
     const scheduleDebouncedQuickFilterCommit = (): void => {
@@ -1546,6 +1582,7 @@ export default defineComponent({
         advancedExpression,
       }
       filterModelState.value = nextFilterModel
+      filterModelStateNormalized.value = false
       applySortAndFilter(nextFilterModel)
     }
 
@@ -1606,6 +1643,7 @@ export default defineComponent({
         }
       }
       filterModelState.value = nextFilterModel
+      filterModelStateNormalized.value = false
       applySortAndFilter()
     }
 
@@ -1819,6 +1857,7 @@ export default defineComponent({
     }
 
     const applyColumnMenuFilter = (columnKey: string, tokens: readonly string[]): void => {
+      const nextFilterModelNormalized = filterModelStateNormalized.value
       const normalizedTokens = Array.from(new Set(
         tokens
           .map(token => normalizeColumnMenuToken(String(token ?? "")))
@@ -1834,14 +1873,17 @@ export default defineComponent({
         tokens: normalizedTokens,
       }
       filterModelState.value = nextFilterModel
-      applySortAndFilter()
+      filterModelStateNormalized.value = nextFilterModelNormalized
+      applySortAndFilter(nextFilterModel, { filterModelNormalized: nextFilterModelNormalized })
     }
 
     const clearColumnMenuFilter = (columnKey: string): void => {
+      const nextFilterModelNormalized = filterModelStateNormalized.value
       const nextFilterModel = cloneFilterModelState(filterModelState.value)
       delete nextFilterModel.columnFilters[columnKey]
       filterModelState.value = nextFilterModel
-      applySortAndFilter()
+      filterModelStateNormalized.value = nextFilterModelNormalized
+      applySortAndFilter(nextFilterModel, { filterModelNormalized: nextFilterModelNormalized })
     }
 
     const stageHostRef = ref<HTMLElement | null>(null)

@@ -963,7 +963,13 @@ const DataGridRuntimeComponent = defineComponent({
     const resolvedGroupBy = computed(() => {
       return resolveDataGridGroupBy(props.groupBy)
     })
-    const effectiveUnifiedState = computed(() => props.state ?? runtimeUnifiedState.value)
+    const normalizedControlledState = computed(() => (
+      props.state ? normalizeDataGridAppUnifiedStateFilters(props.state, props.columns) : props.state
+    ))
+    const normalizedControlledFilterModel = computed(() => (
+      normalizeDataGridAppFilterModel(props.filterModel ?? null, props.columns)
+    ))
+    const effectiveUnifiedState = computed(() => props.state ? normalizedControlledState.value : runtimeUnifiedState.value)
     const effectiveSortModel = computed<readonly DataGridSortState[] | undefined>(() => {
       if (props.sortModel !== undefined) {
         return props.sortModel
@@ -974,10 +980,7 @@ const DataGridRuntimeComponent = defineComponent({
       if (props.filterModel !== undefined) {
         return normalizedControlledFilterModel.value
       }
-      return normalizeDataGridAppFilterModel(
-        cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null),
-        props.columns,
-      )
+      return cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null)
     })
     const effectiveGroupBy = computed<DataGridGroupBySpec | null>(() => {
       if (props.groupBy !== undefined) {
@@ -1032,12 +1035,6 @@ const DataGridRuntimeComponent = defineComponent({
       })
     })
     const resolvedColumns = computed(() => resolveDataGridColumns(props.columns))
-    const normalizedControlledState = computed(() => (
-      props.state ? normalizeDataGridAppUnifiedStateFilters(props.state, props.columns) : props.state
-    ))
-    const normalizedControlledFilterModel = computed(() => (
-      normalizeDataGridAppFilterModel(props.filterModel ?? null, props.columns)
-    ))
     const controlledProps: UseDataGridAppControlledStateOptions["props"] = {
       get state() {
         return normalizedControlledState.value
@@ -1557,6 +1554,7 @@ const DataGridRuntimeComponent = defineComponent({
         flushRowSelectionSnapshotUpdates,
         sortModel: effectiveSortModel.value,
         filterModel: effectiveFilterModel.value,
+        filterModelNormalized: true,
         appColumns: props.columns,
         groupBy: effectiveGroupBy.value,
         pivotModel: effectivePivotModel.value,
