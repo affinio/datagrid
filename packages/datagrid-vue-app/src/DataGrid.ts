@@ -67,6 +67,10 @@ import {
   type DataGridAppColumnInput,
 } from "./config/dataGridFormulaOptions"
 import {
+  normalizeDataGridAppFilterModel,
+  normalizeDataGridAppUnifiedStateFilters,
+} from "./config/dataGridFilterNormalization"
+import {
   resolveDataGridChrome,
   type DataGridChromeProp,
   type DataGridResolvedChromeOptions,
@@ -968,9 +972,12 @@ const DataGridRuntimeComponent = defineComponent({
     })
     const effectiveFilterModel = computed<DataGridFilterSnapshot | null | undefined>(() => {
       if (props.filterModel !== undefined) {
-        return props.filterModel
+        return normalizedControlledFilterModel.value
       }
-      return cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null)
+      return normalizeDataGridAppFilterModel(
+        cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null),
+        props.columns,
+      )
     })
     const effectiveGroupBy = computed<DataGridGroupBySpec | null>(() => {
       if (props.groupBy !== undefined) {
@@ -1025,9 +1032,15 @@ const DataGridRuntimeComponent = defineComponent({
       })
     })
     const resolvedColumns = computed(() => resolveDataGridColumns(props.columns))
+    const normalizedControlledState = computed(() => (
+      props.state ? normalizeDataGridAppUnifiedStateFilters(props.state, props.columns) : props.state
+    ))
+    const normalizedControlledFilterModel = computed(() => (
+      normalizeDataGridAppFilterModel(props.filterModel ?? null, props.columns)
+    ))
     const controlledProps: UseDataGridAppControlledStateOptions["props"] = {
       get state() {
-        return props.state
+        return normalizedControlledState.value
       },
       get stateOptions() {
         return props.stateOptions
@@ -1051,7 +1064,7 @@ const DataGridRuntimeComponent = defineComponent({
         return props.sortModel
       },
       get filterModel() {
-        return props.filterModel
+        return props.filterModel === undefined ? undefined : normalizedControlledFilterModel.value
       },
       get groupBy() {
         return resolvedGroupBy.value
@@ -1414,7 +1427,10 @@ const DataGridRuntimeComponent = defineComponent({
       options?: DataGridSetStateOptions,
     ): boolean => {
       const sanitized = sanitizeDataGridSavedView(savedView)
-      const applied = controlledState.applyState(sanitized.state, options)
+      const applied = controlledState.applyState(
+        normalizeDataGridAppUnifiedStateFilters(sanitized.state, props.columns),
+        options,
+      )
       if (!applied) {
         return false
       }
@@ -1505,7 +1521,9 @@ const DataGridRuntimeComponent = defineComponent({
       applyColumnState: controlledState.applyColumnState,
       getState: controlledState.getState,
       migrateState: controlledState.migrateState,
-      applyState: controlledState.applyState,
+      applyState: (state: DataGridUnifiedState<Record<string, unknown>> | null, options?: DataGridSetStateOptions) => (
+        state ? controlledState.applyState(normalizeDataGridAppUnifiedStateFilters(state, props.columns), options) : false
+      ),
       exportPivotLayout: controlledState.exportPivotLayout,
       exportPivotInterop: controlledState.exportPivotInterop,
       importPivotLayout: controlledState.importPivotLayout,
@@ -1539,6 +1557,7 @@ const DataGridRuntimeComponent = defineComponent({
         flushRowSelectionSnapshotUpdates,
         sortModel: effectiveSortModel.value,
         filterModel: effectiveFilterModel.value,
+        appColumns: props.columns,
         groupBy: effectiveGroupBy.value,
         pivotModel: effectivePivotModel.value,
         renderMode: resolvedRenderMode.value,

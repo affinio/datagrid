@@ -1,4 +1,4 @@
-### Slice 1: Atomic Saved View + Server Query Reset
+### [x] Slice 1: Atomic Saved View + Server Query Reset
 
   Package prompt
 
@@ -48,7 +48,7 @@
 
   ———
 
-  ### Slice 2: External Row Patch / Upsert For Server Push
+  ### [x] Slice 2: External Row Patch / Upsert For Server Push
 
   Package prompt
 
@@ -98,7 +98,7 @@
 
   ———
 
-  ### Slice 3: Focus / Selection Anchor API
+  ### [x] Slice 3: Focus / Selection Anchor API
 
   Package prompt
 
@@ -149,7 +149,7 @@
 
   ———
 
-  ### Slice 4: Filter Snapshot Normalization Hooks
+  ### [] Slice 4: Filter Snapshot Normalization Hooks
 
   Package prompt
 
@@ -198,7 +198,7 @@
 
   ———
 
-  ### Slice 5: Type Ergonomics For Columns/Menu
+  ### [] Slice 5: Type Ergonomics For Columns/Menu
 
   Package prompt
 

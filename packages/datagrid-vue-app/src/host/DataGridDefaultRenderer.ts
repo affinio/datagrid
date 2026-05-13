@@ -64,6 +64,8 @@ import type { DataGridResolvedQuickFilterOptions } from "../config/dataGridQuick
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
+import { normalizeDataGridAppFilterModel } from "../config/dataGridFilterNormalization"
+import type { DataGridAppColumnInput } from "../config/dataGridFormulaOptions"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
@@ -794,6 +796,10 @@ export default defineComponent({
       type: Object as PropType<DataGridFilterSnapshot | null | undefined>,
       default: undefined,
     },
+    appColumns: {
+      type: Array as PropType<readonly DataGridAppColumnInput[]>,
+      default: () => [],
+    },
     groupBy: {
       type: Object as PropType<DataGridGroupBySpec | null | undefined>,
       default: undefined,
@@ -1331,11 +1337,15 @@ export default defineComponent({
             ...filterModelInput,
             advancedExpression,
           }
+      const normalizedFilterModel = normalizeDataGridAppFilterModel(
+        nextFilterModel,
+        props.appColumns,
+      )
 
       const setSortStartedAt = resolveDataGridPerfNow()
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
-        filterModel: pruneFilterModel(nextFilterModel),
+        filterModel: normalizedFilterModel ? pruneFilterModel(normalizedFilterModel) : null,
       })
       const setSortEndedAt = resolveDataGridPerfNow()
       const snapshot = props.runtime.api.rows.getSnapshot()

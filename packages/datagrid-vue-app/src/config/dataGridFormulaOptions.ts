@@ -13,6 +13,7 @@ import type {
   DataGridRowRenderMeta,
 } from "@affino/datagrid-vue"
 import type { DataGridBivariantCallback } from "../types/bivariance"
+import type { DataGridAppColumnFilterOptions } from "./dataGridFilterNormalization"
 
 export interface DataGridAppCellRendererInteractiveContext {
   enabled: boolean
@@ -78,6 +79,7 @@ export type DataGridAppGroupCellRenderer<TRow = unknown> = (
 
 export interface DataGridAppColumnInput<TRow = unknown> extends DataGridColumnInput<TRow> {
   formula?: string | null
+  filter?: DataGridAppColumnFilterOptions | null
   cellRenderer?: DataGridBivariantCallback<[context: DataGridAppCellRendererContext<TRow>], VNodeChild> | null
   groupCellRenderer?: DataGridBivariantCallback<[context: DataGridAppGroupCellRendererContext<TRow>], VNodeChild> | null
 }
@@ -173,7 +175,7 @@ function cloneColumns(
   if (!columns || columns.length === 0) {
     return []
   }
-  return columns.map(({ formula: _formula, ...column }) => ({ ...column }))
+  return columns.map(({ formula: _formula, filter: _filter, ...column }) => ({ ...column }))
 }
 
 function extractEmbeddedFormulas(

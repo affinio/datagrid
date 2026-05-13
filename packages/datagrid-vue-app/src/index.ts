@@ -48,6 +48,14 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type {
+  DataGridAppColumnFilterOptions,
+  DataGridAppFilterValueNormalizationContext,
+} from "./config/dataGridFilterNormalization"
+export {
+  normalizeDataGridAppFilterModel,
+  normalizeDataGridAppUnifiedStateFilters,
+} from "./config/dataGridFilterNormalization"
+export type {
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
 export type {
