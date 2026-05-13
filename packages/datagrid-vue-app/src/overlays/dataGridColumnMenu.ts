@@ -134,6 +134,44 @@ export type DataGridColumnMenuProp =
     }
   | null
 
+type DataGridColumnMenuItemInput = DataGridColumnMenuItemKey | (string & {})
+type DataGridColumnMenuActionInputKey = DataGridColumnMenuActionKey | (string & {})
+
+export interface DataGridColumnMenuColumnInputOptions {
+  items?: readonly DataGridColumnMenuItemInput[]
+  hide?: readonly DataGridColumnMenuItemInput[]
+  disabled?: readonly DataGridColumnMenuItemInput[]
+  disabledReasons?: Readonly<Partial<Record<DataGridColumnMenuItemInput, string>>>
+  labels?: DataGridColumnMenuItemLabels
+  actions?: Readonly<Partial<Record<DataGridColumnMenuActionInputKey, DataGridColumnMenuActionOption>>>
+  customItems?: readonly DataGridColumnMenuCustomItem[]
+}
+
+export type DataGridColumnMenuInputProp =
+  | boolean
+  | {
+      enabled?: boolean
+      trigger?: DataGridColumnMenuTriggerMode
+      maxFilterValues?: number
+      items?: readonly DataGridColumnMenuItemInput[]
+      disabled?: readonly DataGridColumnMenuItemInput[]
+      disabledReasons?: Readonly<Partial<Record<DataGridColumnMenuItemInput, string>>>
+      labels?: DataGridColumnMenuItemLabels
+      actions?: Readonly<Partial<Record<DataGridColumnMenuActionInputKey, DataGridColumnMenuActionOption>>>
+      customItems?: readonly DataGridColumnMenuCustomItem[]
+      columns?: Readonly<Record<string, DataGridColumnMenuColumnInputOptions>>
+    }
+  | null
+
+export type DataGridDefinedColumnMenu<TInput extends DataGridColumnMenuInputProp> =
+  TInput & DataGridColumnMenuProp
+
+export function defineDataGridColumnMenu<const TInput extends DataGridColumnMenuInputProp>(
+  input: TInput,
+): DataGridDefinedColumnMenu<TInput> {
+  return input as DataGridDefinedColumnMenu<TInput>
+}
+
 const DEFAULT_MAX_FILTER_VALUES = 120
 const DEFAULT_TRIGGER_MODE: DataGridColumnMenuTriggerMode = "button+contextmenu"
 

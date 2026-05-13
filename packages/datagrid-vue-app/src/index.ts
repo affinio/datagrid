@@ -3,6 +3,7 @@ import DataGridComponent from "./DataGrid"
 export const DataGrid = DataGridComponent
 export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
 export { defineDataGridColumns } from "./config/dataGridFormulaOptions"
+export { defineDataGridColumnMenu } from "./overlays/dataGridColumnMenu"
 export {
   defineDataGridCellClassResolver,
   defineDataGridCellStyleResolver,
@@ -45,6 +46,7 @@ export type {
   DataGridAppRowSurfaceContext,
   DataGridAppRowSurfaceKind,
   DataGridAppColumnInput,
+  DataGridDefinedColumns,
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type {
@@ -161,6 +163,7 @@ export type {
   DataGridColumnMenuActionOption,
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuColumnOptions,
+  DataGridColumnMenuColumnInputOptions,
   DataGridColumnMenuCustomLeafItem,
   DataGridColumnMenuCustomItem,
   DataGridColumnMenuCustomItemContext,
@@ -170,9 +173,11 @@ export type {
   DataGridColumnMenuItemKey,
   DataGridColumnMenuItemLabels,
   DataGridColumnMenuLabels,
+  DataGridColumnMenuInputProp,
   DataGridColumnMenuOptions,
   DataGridColumnMenuProp,
   DataGridColumnMenuTriggerMode,
+  DataGridDefinedColumnMenu,
 } from "./overlays/dataGridColumnMenu"
 export type {
   DataGridCellMenuActionKey,

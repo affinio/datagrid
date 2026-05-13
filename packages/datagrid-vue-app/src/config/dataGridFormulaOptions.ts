@@ -84,8 +84,15 @@ export interface DataGridAppColumnInput<TRow = unknown> extends DataGridColumnIn
   groupCellRenderer?: DataGridBivariantCallback<[context: DataGridAppGroupCellRendererContext<TRow>], VNodeChild> | null
 }
 
+export type DataGridDefinedColumns<
+  TRow,
+  TColumns extends readonly DataGridAppColumnInput<TRow>[],
+> = TColumns & readonly DataGridAppColumnInput[]
+
 export function defineDataGridColumns<TRow = unknown>() {
-  return <TColumns extends readonly DataGridAppColumnInput<TRow>[]>(columns: TColumns): TColumns => columns
+  return <const TColumns extends readonly DataGridAppColumnInput<TRow>[]>(
+    columns: TColumns,
+  ): DataGridDefinedColumns<TRow, TColumns> => columns as DataGridDefinedColumns<TRow, TColumns>
 }
 
 export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
