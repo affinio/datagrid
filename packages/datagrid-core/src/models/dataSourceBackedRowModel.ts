@@ -62,6 +62,10 @@ import {
   type DataGridRangeCacheLoadToken,
   type DataGridRangeCacheIndexState,
 } from "./server/rangeCache.js"
+import {
+  resolveDataGridVelocityOverscanRange,
+  type DataGridVelocityOverscanSample,
+} from "./server/velocityOverscan.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -179,6 +183,9 @@ const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
 const DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR = 1
 const DEFAULT_PREFETCH_WINDOW_VIEWPORT_FACTOR = 3
 const DEFAULT_RANGE_CACHE_CHUNK_SIZE = 256
+const DATA_SOURCE_VELOCITY_OVERSCAN_EXPECTED_LOAD_MS = 180
+const DATA_SOURCE_VELOCITY_OVERSCAN_MAX_ROWS = 512
+const DATA_SOURCE_VELOCITY_OVERSCAN_MIN_SAMPLE_MS = 12
 const DATA_SOURCE_LOADING_ROW_ID_PREFIX = "__affino_datagrid_data_source_loading__:"
 const DATA_SOURCE_LOADING_ROW_DATA_FLAG = "__affinoDataGridDataSourceLoadingRow"
 const DATA_SOURCE_LOADING_ROW_STATUS_FIELD = "__affinoDataGridDataSourceRowStatus"
@@ -225,6 +232,10 @@ function normalizeTotal(total: number | null | undefined): number | null {
   return Math.max(0, Math.trunc(total as number))
 }
 
+function resolveNowMs(): number {
+  const now = Date.now()
+  return Number.isFinite(now) ? now : 0
+}
 
 function serializePullState(value: unknown): string {
   try {
@@ -381,6 +392,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
   let lastViewportDirection: -1 | 0 | 1 = 0
+  let lastViewportOverscanSample: DataGridVelocityOverscanSample | null = null
   const rowCacheLimit =
     Number.isFinite(options.rowCacheLimit) && (options.rowCacheLimit as number) > 0
       ? Math.max(1, Math.trunc(options.rowCacheLimit as number))
@@ -851,6 +863,21 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sourceViewport.start - 1,
       0,
     )
+  }
+
+  function resolveVelocityAwareSourceRange(sourceViewport: DataGridViewportRange): DataGridViewportRange {
+    const sample = {
+      range: sourceViewport,
+      timestampMs: resolveNowMs(),
+    }
+    const result = resolveDataGridVelocityOverscanRange(sample, lastViewportOverscanSample, {
+      expectedLoadMs: DATA_SOURCE_VELOCITY_OVERSCAN_EXPECTED_LOAD_MS,
+      maxRows: DATA_SOURCE_VELOCITY_OVERSCAN_MAX_ROWS,
+      minSampleMs: DATA_SOURCE_VELOCITY_OVERSCAN_MIN_SAMPLE_MS,
+      totalRows: rowCount,
+    })
+    lastViewportOverscanSample = sample
+    return result.range
   }
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
@@ -2094,6 +2121,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
           : lastViewportDirection
       viewportRange = nextViewport
       const sourceViewport = toSourceRange(nextViewport)
+      const sourceLoadRange = resolveVelocityAwareSourceRange(sourceViewport)
 
       if (resolvedEmptyTotal && rowCount <= 0) {
         updateCachedCoverageDiagnostics(sourceViewport)
@@ -2110,7 +2138,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
       }
 
-      if (isRangeFullyCached(sourceViewport)) {
+      if (isRangeFullyCached(sourceViewport) && isRangeFullyCached(sourceLoadRange)) {
         scheduleViewportPrefetch()
         emit()
         return
@@ -2120,17 +2148,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
         const requestStateKey = buildRequestStateKey()
         if (
           criticalInFlight.stateKey === requestStateKey &&
-          rangeContains(criticalInFlight.range, sourceViewport)
+          rangeContains(criticalInFlight.range, sourceLoadRange)
         ) {
           diagnostics.pullCoalesced += 1
           emit()
           return
         }
-        scheduleViewportPull(sourceViewport, requestStateKey)
+        scheduleViewportPull(sourceLoadRange, requestStateKey)
         return
       }
 
-      void pullRange(sourceViewport, "viewport-change", "critical")
+      void pullRange(sourceLoadRange, "viewport-change", "critical")
       emit()
     },
     setPagination(nextPagination: DataGridPaginationInput | null) {

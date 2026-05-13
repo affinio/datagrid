@@ -1878,6 +1878,41 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("expands fast backend viewport pulls with velocity-aware forward overscan", async () => {
+    const nowSpy = vi.spyOn(Date, "now")
+    let now = 1_000
+    nowSpy.mockImplementation(() => now)
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 10_000,
+      prefetch: {
+        enabled: false,
+      },
+    })
+
+    try {
+      model.setViewportRange({ start: 0, end: 19 })
+      expect(calls[0]?.request.range).toEqual({ start: 0, end: 19 })
+
+      now = 1_020
+      model.setViewportRange({ start: 500, end: 519 })
+      await flushMicrotasks()
+
+      expect(calls).toHaveLength(2)
+      expect(calls[1]?.request.range.start).toBeLessThan(500)
+      expect(calls[1]?.request.range.end).toBeGreaterThan(519)
+      expect(519 - (calls[1]?.request.range.start ?? 519)).toBeLessThan(
+        (calls[1]?.request.range.end ?? 500) - 500,
+      )
+    } finally {
+      model.dispose()
+      nowSpy.mockRestore()
+    }
+  })
+
   it("schedules background prefetch after initial critical viewport load", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
