@@ -73,6 +73,7 @@ describe("useDataGridAppInlineEditing contract", () => {
       {
         rowId: "r1",
         data: { owner: "Grace" },
+        previousData: { owner: "Ada" },
       },
     ])
     expect(harness.applyCellSelection).toHaveBeenCalledWith({
@@ -168,6 +169,7 @@ describe("useDataGridAppInlineEditing contract", () => {
       {
         rowId: "r1",
         data: { owner: "Grace" },
+        previousData: { owner: "Ada" },
       },
     ])
     expect(applyCellSelection).toHaveBeenCalledWith({
@@ -389,6 +391,7 @@ describe("useDataGridAppInlineEditing contract", () => {
       {
         rowId: "r1",
         data: { owner: "Legacy" },
+        previousData: { owner: "Ada" },
       },
     ])
     expect(harness.applyCellSelection).not.toHaveBeenCalled()
