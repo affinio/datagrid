@@ -136,6 +136,23 @@ describe("createServerDatasourceHttpClient", () => {
     unsubscribe()
   })
 
+  it("keeps datasetVersion monotonic across local mutation updates and empty change feeds", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (resolvedUrl.includes("/changes")) {
+        return createResponse({ datasetVersion: 4, changes: [], hasMore: false })
+      }
+      return createResponse({ rows: [], total: 0, datasetVersion: 1 })
+    })
+    const client = createClient(fetchImpl)
+
+    client.updateDatasetVersion(7)
+    await client.getChangesSinceVersion({ sinceVersion: 7 })
+
+    expect(client.latestDatasetVersion).toBe(7)
+    expect(client.lastSeenVersion).toBe(7)
+  })
+
   it("keeps quick filter inside the serialized filterModel", async () => {
     const bodies: unknown[] = []
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {

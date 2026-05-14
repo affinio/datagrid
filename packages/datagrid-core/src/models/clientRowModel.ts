@@ -195,6 +195,9 @@ export interface DataGridClientRowReorderInput {
 export interface DataGridClientRowPatch<T = unknown> {
   rowId: DataGridRowId
   data: Partial<T>
+  previousData?: Partial<T>
+  revisions?: Readonly<Record<string, string | number | null>>
+  revision?: string | number | null
 }
 
 export interface DataGridClientRowPatchOptions {

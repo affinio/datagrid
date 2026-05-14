@@ -7,6 +7,7 @@ import {
   type DataGridColumnFilterSnapshotEntry,
   type DataGridColumnStyleFilter,
   type DataGridDataSource,
+  type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
   type DataGridFilterSnapshot,
@@ -472,6 +473,8 @@ export interface AffinoDatasourceExtras<TRow> {
   undoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>>
   redoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>>
   getHistoryStatus(): Promise<AffinoHistoryStatusResult>
+  getCachedHistoryStatus(): AffinoHistoryStatusResult
+  subscribeHistoryStatus(listener: (status: AffinoHistoryStatusResult) => void): () => void
 }
 
 export interface AffinoDatasource<TRow> extends DataGridDataSource<TRow>, AffinoDatasourceExtras<TRow> {
@@ -523,6 +526,11 @@ export type AffinoHistoryStatusResult = {
   latestRedoOperationId?: string | null
   datasetVersion?: number | null
 }
+
+type AffinoMutationStatusLike = Pick<
+  AffinoHistoryStatusResult,
+  "canUndo" | "canRedo" | "latestUndoOperationId" | "latestRedoOperationId" | "datasetVersion"
+>
 
 function isRecord(value: unknown): value is RecordLike {
   return Boolean(value && typeof value === "object" && !Array.isArray(value))
@@ -711,6 +719,7 @@ function mapCommitEditsRequestBody(request: AffinoCommitEditsRequest): {
     rowId: string | number
     columnId: string
     value: unknown
+    previousValue?: unknown
     revision?: string | number | null
   }>
 } {
@@ -723,7 +732,13 @@ function mapCommitEditsRequestBody(request: AffinoCommitEditsRequest): {
       user_id: typeof scope.user_id === "string" ? scope.user_id : null,
       session_id: typeof scope.session_id === "string" ? scope.session_id : undefined,
     } : {}),
-    edits: request.edits.flatMap((edit: { rowId: string | number; data: RecordLike | null | undefined }) => {
+    edits: request.edits.flatMap((edit: {
+      rowId: string | number
+      data: RecordLike | null | undefined
+      previousData?: RecordLike | null
+      revisions?: Record<string, string | number | null> | null
+      revision?: string | number | null
+    }) => {
       if (!edit || !isRecord(edit.data)) {
         return []
       }
@@ -735,6 +750,12 @@ function mapCommitEditsRequestBody(request: AffinoCommitEditsRequest): {
           rowId: edit.rowId,
           columnId,
           value,
+          ...(isRecord(edit.previousData) && Object.prototype.hasOwnProperty.call(edit.previousData, columnId)
+            ? { previousValue: edit.previousData[columnId] }
+            : {}),
+          ...(isRecord(edit.revisions) && Object.prototype.hasOwnProperty.call(edit.revisions, columnId)
+            ? { revision: edit.revisions[columnId] }
+            : (typeof edit.revision !== "undefined" ? { revision: edit.revision } : {})),
         }]
       })
     }),
@@ -745,11 +766,15 @@ function normalizeCommitEditsResult(response: unknown): AffinoCommitEditsResult 
   operationId?: string | null
   revision?: string | number | null
   datasetVersion?: number | null
-  rows?: readonly ServerRowSnapshotLike<unknown>[]
+  rows?: readonly DataGridDataSourceRowEntry<unknown>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<unknown>[]
   canUndo?: boolean
   canRedo?: boolean
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
+  affectedRows?: number
+  affectedCells?: number
+  warnings?: readonly string[]
 } {
   if (!isRecord(response)) {
     return {
@@ -795,11 +820,21 @@ function normalizeCommitEditsResult(response: unknown): AffinoCommitEditsResult 
     datasetVersion: typeof response.datasetVersion === "number" && Number.isFinite(response.datasetVersion)
       ? Math.max(0, Math.trunc(response.datasetVersion))
       : null,
-    rows: Array.isArray(response.rows) ? response.rows as readonly ServerRowSnapshotLike<unknown>[] : [],
+    rows: normalizeRowSnapshots(response.rows as readonly ServerRowSnapshotLike<unknown>[]) ?? [],
+    updatedRows: normalizeRowSnapshots(response.updatedRows as readonly ServerRowSnapshotLike<unknown>[]) ?? [],
     canUndo: typeof response.canUndo === "boolean" ? response.canUndo : undefined,
     canRedo: typeof response.canRedo === "boolean" ? response.canRedo : undefined,
     latestUndoOperationId: typeof response.latestUndoOperationId === "string" ? response.latestUndoOperationId : null,
     latestRedoOperationId: typeof response.latestRedoOperationId === "string" ? response.latestRedoOperationId : null,
+    affectedRows: typeof response.affectedRows === "number" && Number.isFinite(response.affectedRows)
+      ? Math.max(0, Math.trunc(response.affectedRows))
+      : undefined,
+    affectedCells: typeof response.affectedCells === "number" && Number.isFinite(response.affectedCells)
+      ? Math.max(0, Math.trunc(response.affectedCells))
+      : undefined,
+    warnings: Array.isArray(response.warnings)
+      ? response.warnings.filter((warning): warning is string => typeof warning === "string")
+      : undefined,
   }
 }
 
@@ -851,7 +886,13 @@ function normalizeFillCommitRequestBody(
 function normalizeFillUndoResult(response: unknown): AffinoFillUndoResult & {
   operationId?: string | null
   revision?: string | number | null
-  rows?: readonly ServerRowSnapshotLike<unknown>[]
+  datasetVersion?: number | null
+  rows?: readonly DataGridDataSourceRowEntry<unknown>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<unknown>[]
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
 } {
   if (!isRecord(response)) {
     return {
@@ -864,11 +905,17 @@ function normalizeFillUndoResult(response: unknown): AffinoFillUndoResult & {
     revision: typeof response.revision === "string" || typeof response.revision === "number"
       ? response.revision
       : null,
+    datasetVersion: normalizeDatasetVersion(response.datasetVersion),
     invalidation: normalizeDatasourceInvalidation(response.invalidation),
     warnings: Array.isArray(response.warnings)
       ? response.warnings.filter((warning): warning is string => typeof warning === "string")
       : [],
-    rows: Array.isArray(response.rows) ? response.rows as readonly ServerRowSnapshotLike<unknown>[] : [],
+    rows: normalizeRowSnapshots(response.rows as readonly ServerRowSnapshotLike<unknown>[]) ?? [],
+    updatedRows: normalizeRowSnapshots(response.updatedRows as readonly ServerRowSnapshotLike<unknown>[]) ?? [],
+    canUndo: typeof response.canUndo === "boolean" ? response.canUndo : undefined,
+    canRedo: typeof response.canRedo === "boolean" ? response.canRedo : undefined,
+    latestUndoOperationId: typeof response.latestUndoOperationId === "string" ? response.latestUndoOperationId : null,
+    latestRedoOperationId: typeof response.latestRedoOperationId === "string" ? response.latestRedoOperationId : null,
   }
 }
 
@@ -985,6 +1032,23 @@ function mapAffinoPullRequest(request: DataGridDataSourcePullRequest, options: A
   return options.mapQuery ? options.mapQuery(query, request) : query
 }
 
+function normalizeAffinoHistoryStatus(response: unknown): AffinoHistoryStatusResult {
+  if (!isRecord(response)) {
+    return {}
+  }
+  return {
+    workspace_id: typeof response.workspace_id === "string" ? response.workspace_id : null,
+    table_id: typeof response.table_id === "string" ? response.table_id : null,
+    user_id: typeof response.user_id === "string" ? response.user_id : null,
+    session_id: typeof response.session_id === "string" ? response.session_id : null,
+    canUndo: typeof response.canUndo === "boolean" ? response.canUndo : undefined,
+    canRedo: typeof response.canRedo === "boolean" ? response.canRedo : undefined,
+    latestUndoOperationId: typeof response.latestUndoOperationId === "string" ? response.latestUndoOperationId : null,
+    latestRedoOperationId: typeof response.latestRedoOperationId === "string" ? response.latestRedoOperationId : null,
+    datasetVersion: normalizeDatasetVersion(response.datasetVersion),
+  }
+}
+
 export function createAffinoDatasource<TRow>(
   options: AffinoDatasourceOptions,
 ): AffinoDatasource<TRow> {
@@ -1002,7 +1066,7 @@ export function createAffinoDatasource<TRow>(
       undoOperation: () => "/api/history/undo",
       redoOperation: () => "/api/history/redo",
       historyStatus: "/api/history/status",
-      changesSinceVersion: sinceVersion => `/api/changes?sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
+      changesSinceVersion: sinceVersion => `/api/changes?tableId=${encodeURIComponent(tableId)}&sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
     },
     mapPullRequest: request => mapAffinoPullRequest(request, options),
     mapHistogramRequest: request => ({
@@ -1014,6 +1078,55 @@ export function createAffinoDatasource<TRow>(
   })
   const resolveWriteEndpoint = (path: string): string => resolveAffinoUrl(options.baseUrl, path)
   const historyScopeBody = resolveAffinoHistoryScopeBody(tableId, options.historyScope)
+  const historyStatusListeners = new Set<(status: AffinoHistoryStatusResult) => void>()
+  let cachedHistoryStatus: AffinoHistoryStatusResult = {
+    ...historyScopeBody,
+    canUndo: false,
+    canRedo: false,
+    datasetVersion: client.latestDatasetVersion,
+  } as AffinoHistoryStatusResult
+
+  const emitHistoryStatus = (): void => {
+    for (const listener of historyStatusListeners) {
+      listener(cachedHistoryStatus)
+    }
+  }
+
+  const updateHistoryStatus = (status: AffinoMutationStatusLike): void => {
+    cachedHistoryStatus = {
+      ...cachedHistoryStatus,
+      ...(typeof status.canUndo === "boolean" ? { canUndo: status.canUndo } : {}),
+      ...(typeof status.canRedo === "boolean" ? { canRedo: status.canRedo } : {}),
+      ...(typeof status.latestUndoOperationId !== "undefined" ? { latestUndoOperationId: status.latestUndoOperationId } : {}),
+      ...(typeof status.latestRedoOperationId !== "undefined" ? { latestRedoOperationId: status.latestRedoOperationId } : {}),
+      ...(typeof status.datasetVersion !== "undefined" ? { datasetVersion: status.datasetVersion } : {}),
+    }
+    if (typeof status.datasetVersion !== "undefined") {
+      client.updateDatasetVersion(status.datasetVersion)
+    }
+    emitHistoryStatus()
+  }
+
+  const applyMutationSideEffects = (result: {
+    rows?: readonly ServerRowSnapshotLike<TRow>[] | readonly DataGridDataSourceRowEntry<TRow>[]
+    updatedRows?: readonly ServerRowSnapshotLike<TRow>[] | readonly DataGridDataSourceRowEntry<TRow>[]
+    invalidation?: DataGridDataSourceInvalidation | null
+    datasetVersion?: number | null
+  }): void => {
+    if (typeof result.datasetVersion !== "undefined") {
+      client.updateDatasetVersion(result.datasetVersion)
+    }
+    const rows = Array.isArray(result.rows) && result.rows.length > 0
+      ? result.rows
+      : (Array.isArray(result.updatedRows) ? result.updatedRows : [])
+    if (rows.length > 0) {
+      client.applyRowSnapshots(rows)
+      return
+    }
+    if (result.invalidation) {
+      client.applyInvalidation(result.invalidation, { datasetVersion: result.datasetVersion })
+    }
+  }
 
   const datasource = {
     ...client,
@@ -1028,10 +1141,23 @@ export function createAffinoDatasource<TRow>(
         request.signal,
       )
       const normalized = normalizeCommitEditsResult(response)
+      updateHistoryStatus(normalized)
       return {
+        operationId: normalized.operationId,
         committed: normalized.committed,
         rejected: normalized.rejected,
         invalidation: normalized.invalidation,
+        revision: normalized.revision,
+        datasetVersion: normalized.datasetVersion,
+        rows: normalizeRowSnapshots(normalized.rows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        updatedRows: normalizeRowSnapshots(normalized.updatedRows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        canUndo: normalized.canUndo,
+        canRedo: normalized.canRedo,
+        latestUndoOperationId: normalized.latestUndoOperationId,
+        latestRedoOperationId: normalized.latestRedoOperationId,
+        affectedRows: normalized.affectedRows,
+        affectedCells: normalized.affectedCells,
+        warnings: normalized.warnings,
       }
     },
     async resolveFillBoundary(
@@ -1061,8 +1187,10 @@ export function createAffinoDatasource<TRow>(
       )
       const normalized = normalizeFillUndoResult(response)
       const result = isRecord(response) ? response as RecordLike : null
-      return {
+      const normalizedResult = {
         operationId: normalized.operationId ?? request.operationId ?? "",
+        revision: normalized.revision,
+        datasetVersion: normalized.datasetVersion,
         affectedRowCount: typeof result?.affectedRowCount === "number" && Number.isFinite(result.affectedRowCount)
           ? Math.max(0, Math.trunc(result.affectedRowCount))
           : 0,
@@ -1071,7 +1199,16 @@ export function createAffinoDatasource<TRow>(
           : 0,
         invalidation: normalized.invalidation,
         warnings: normalized.warnings,
+        rows: normalizeRowSnapshots(normalized.rows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        updatedRows: normalizeRowSnapshots(normalized.updatedRows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        canUndo: normalized.canUndo,
+        canRedo: normalized.canRedo,
+        latestUndoOperationId: normalized.latestUndoOperationId,
+        latestRedoOperationId: normalized.latestRedoOperationId,
       }
+      updateHistoryStatus(normalizedResult)
+      applyMutationSideEffects(normalizedResult)
+      return normalizedResult
     },
     async undoFillOperation(request: AffinoFillUndoRequest): Promise<AffinoFillUndoResult> {
       const response = await postJson<unknown>(
@@ -1081,12 +1218,22 @@ export function createAffinoDatasource<TRow>(
         request.signal,
       )
       const normalized = normalizeFillUndoResult(response)
-      return {
+      const normalizedResult = {
         operationId: normalized.operationId ?? request.operationId,
         revision: normalized.revision,
+        datasetVersion: normalized.datasetVersion,
         invalidation: normalized.invalidation,
         warnings: normalized.warnings,
+        rows: normalizeRowSnapshots(normalized.rows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        updatedRows: normalizeRowSnapshots(normalized.updatedRows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        canUndo: normalized.canUndo,
+        canRedo: normalized.canRedo,
+        latestUndoOperationId: normalized.latestUndoOperationId,
+        latestRedoOperationId: normalized.latestRedoOperationId,
       }
+      updateHistoryStatus(normalizedResult)
+      applyMutationSideEffects(normalizedResult)
+      return normalizedResult
     },
     async redoFillOperation(request: AffinoFillUndoRequest): Promise<AffinoFillRedoResult> {
       const response = await postJson<unknown>(
@@ -1096,12 +1243,22 @@ export function createAffinoDatasource<TRow>(
         request.signal,
       )
       const normalized = normalizeFillUndoResult(response)
-      return {
+      const normalizedResult = {
         operationId: normalized.operationId ?? request.operationId,
         revision: normalized.revision,
+        datasetVersion: normalized.datasetVersion,
         invalidation: normalized.invalidation,
         warnings: normalized.warnings,
+        rows: normalizeRowSnapshots(normalized.rows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        updatedRows: normalizeRowSnapshots(normalized.updatedRows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+        canUndo: normalized.canUndo,
+        canRedo: normalized.canRedo,
+        latestUndoOperationId: normalized.latestUndoOperationId,
+        latestRedoOperationId: normalized.latestRedoOperationId,
       }
+      updateHistoryStatus(normalizedResult)
+      applyMutationSideEffects(normalizedResult)
+      return normalizedResult
     },
     async undoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>> {
       const response = await postJson<unknown>(
@@ -1109,7 +1266,14 @@ export function createAffinoDatasource<TRow>(
         resolveWriteEndpoint("/api/history/undo"),
         historyScopeBody,
       )
-      return normalizeHistoryStackResult<TRow>(response)
+      const normalized = normalizeHistoryStackResult<TRow>(response)
+      updateHistoryStatus(normalized)
+      applyMutationSideEffects({
+        rows: normalized.rows,
+        invalidation: normalizeDatasourceInvalidation(normalized.invalidation),
+        datasetVersion: normalized.datasetVersion,
+      })
+      return normalized
     },
     async redoHistoryStack(): Promise<AffinoHistoryStackResult<TRow>> {
       const response = await postJson<unknown>(
@@ -1117,7 +1281,14 @@ export function createAffinoDatasource<TRow>(
         resolveWriteEndpoint("/api/history/redo"),
         historyScopeBody,
       )
-      return normalizeHistoryStackResult<TRow>(response)
+      const normalized = normalizeHistoryStackResult<TRow>(response)
+      updateHistoryStatus(normalized)
+      applyMutationSideEffects({
+        rows: normalized.rows,
+        invalidation: normalizeDatasourceInvalidation(normalized.invalidation),
+        datasetVersion: normalized.datasetVersion,
+      })
+      return normalized
     },
     async getHistoryStatus(): Promise<AffinoHistoryStatusResult> {
       const response = await postJson<unknown>(
@@ -1125,22 +1296,28 @@ export function createAffinoDatasource<TRow>(
         resolveWriteEndpoint("/api/history/status"),
         historyScopeBody,
       )
-      if (!isRecord(response)) {
-        return {}
+      cachedHistoryStatus = normalizeAffinoHistoryStatus(response)
+      if (typeof cachedHistoryStatus.datasetVersion !== "undefined") {
+        client.updateDatasetVersion(cachedHistoryStatus.datasetVersion)
       }
-      return {
-        workspace_id: typeof response.workspace_id === "string" ? response.workspace_id : null,
-        table_id: typeof response.table_id === "string" ? response.table_id : null,
-        user_id: typeof response.user_id === "string" ? response.user_id : null,
-        session_id: typeof response.session_id === "string" ? response.session_id : null,
-        canUndo: typeof response.canUndo === "boolean" ? response.canUndo : undefined,
-        canRedo: typeof response.canRedo === "boolean" ? response.canRedo : undefined,
-        latestUndoOperationId: typeof response.latestUndoOperationId === "string" ? response.latestUndoOperationId : null,
-        latestRedoOperationId: typeof response.latestRedoOperationId === "string" ? response.latestRedoOperationId : null,
-        datasetVersion: typeof response.datasetVersion === "number" && Number.isFinite(response.datasetVersion)
-          ? Math.max(0, Math.trunc(response.datasetVersion))
-          : undefined,
+      emitHistoryStatus()
+      return cachedHistoryStatus
+    },
+    getCachedHistoryStatus(): AffinoHistoryStatusResult {
+      return cachedHistoryStatus
+    },
+    subscribeHistoryStatus(listener: (status: AffinoHistoryStatusResult) => void): () => void {
+      historyStatusListeners.add(listener)
+      listener(cachedHistoryStatus)
+      return () => {
+        historyStatusListeners.delete(listener)
       }
+    },
+    get latestDatasetVersion() {
+      return client.latestDatasetVersion
+    },
+    get lastSeenVersion() {
+      return client.lastSeenVersion
     },
   } as AffinoDatasource<TRow>
   return datasource

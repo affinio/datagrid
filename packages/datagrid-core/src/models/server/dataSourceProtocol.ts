@@ -142,16 +142,35 @@ export interface DataGridDataSourceCommitEditsRequest<T = unknown> {
   revision?: string | number | null
 }
 
-export interface DataGridDataSourceCommitEditsResult {
+export interface DataGridDataSourceMutationMetadata {
+  operationId?: string | null
+  revision?: string | number | null
+  datasetVersion?: string | number | null
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  affectedRows?: number
+  affectedCells?: number
+  affectedRowCount?: number
+  affectedCellCount?: number
+  warnings?: readonly string[]
+}
+
+export interface DataGridDataSourceCommitEditsResult<T = unknown> extends DataGridDataSourceMutationMetadata {
   committed?: readonly {
     rowId: DataGridRowId
+    columnId?: string | null
     revision?: string | number | null
   }[]
   rejected?: readonly {
     rowId: DataGridRowId
+    columnId?: string | null
     reason?: string
   }[]
   invalidation?: DataGridDataSourceInvalidation | null
+  rows?: readonly DataGridDataSourceRowEntry<T>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
 }
 
 export type DataGridFillMode = "copy" | "series"
@@ -186,15 +205,18 @@ export interface DataGridDataSourceFillOperationRequest {
   } | null
 }
 
-export interface DataGridDataSourceFillOperationResult {
+export interface DataGridDataSourceFillOperationResult<T = unknown> extends DataGridDataSourceMutationMetadata {
   operationId: string
   revision?: string | number | null
+  datasetVersion?: string | number | null
   affectedRowCount: number
   affectedCellCount?: number
   invalidation?: DataGridDataSourceInvalidation | null
   undoToken?: string | null
   redoToken?: string | null
   warnings?: readonly string[]
+  rows?: readonly DataGridDataSourceRowEntry<T>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
 }
 
 export interface DataGridDataSourceFillUndoRequest {
@@ -203,18 +225,24 @@ export interface DataGridDataSourceFillUndoRequest {
   projection: DataGridDataSourceFillProjectionContext
 }
 
-export interface DataGridDataSourceFillUndoResult {
+export interface DataGridDataSourceFillUndoResult<T = unknown> extends DataGridDataSourceMutationMetadata {
   operationId: string
   revision?: string | number | null
+  datasetVersion?: string | number | null
   invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
+  rows?: readonly DataGridDataSourceRowEntry<T>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
 }
 
-export interface DataGridDataSourceFillRedoResult {
+export interface DataGridDataSourceFillRedoResult<T = unknown> extends DataGridDataSourceMutationMetadata {
   operationId: string
   revision?: string | number | null
+  datasetVersion?: string | number | null
   invalidation?: DataGridDataSourceInvalidation | null
   warnings?: readonly string[]
+  rows?: readonly DataGridDataSourceRowEntry<T>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
 }
 
 export interface DataGridDataSourceInvalidationAll {
@@ -273,10 +301,10 @@ export type DataGridDataSourcePushListener<T = unknown> = (
 export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
-  commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult>
-  commitFillOperation?(request: DataGridDataSourceFillOperationRequest): Promise<DataGridDataSourceFillOperationResult>
-  undoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillUndoResult>
-  redoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillRedoResult>
+  commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult<T>>
+  commitFillOperation?(request: DataGridDataSourceFillOperationRequest): Promise<DataGridDataSourceFillOperationResult<T>>
+  undoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillUndoResult<T>>
+  redoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillRedoResult<T>>
   resolveFillBoundary?(
     request: DataGridDataSourceResolveFillBoundaryRequest,
   ): Promise<DataGridDataSourceResolveFillBoundaryResult> | DataGridDataSourceResolveFillBoundaryResult

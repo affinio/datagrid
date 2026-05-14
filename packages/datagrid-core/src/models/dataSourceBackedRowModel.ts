@@ -175,6 +175,8 @@ interface PullRangeOptions {
 interface OptimisticEditTransaction<T> {
   id: number
   updatesByRowId: Map<DataGridRowId, Partial<T>>
+  previousByRowId: Map<DataGridRowId, Partial<T>>
+  revisionsByRowId: Map<DataGridRowId, Readonly<Record<string, string | number | null>>>
   baselinesByRowId: Map<DataGridRowId, DataGridRowNode<T>>
 }
 
@@ -691,7 +693,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
           edits: Array.from(transaction.updatesByRowId.entries()).map(([rowId, data]) => ({
             rowId,
             data,
+            ...(transaction.previousByRowId.has(rowId) ? { previousData: transaction.previousByRowId.get(rowId) } : {}),
+            ...(transaction.revisionsByRowId.has(rowId) ? { revisions: transaction.revisionsByRowId.get(rowId) } : {}),
           })),
+          ...(datasetVersion != null ? { revision: datasetVersion } : {}),
         }),
       )
 
@@ -715,13 +720,19 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
 
-      const needsProjectionRefresh = shouldRefreshAfterOptimisticCommit(transaction)
       removeOptimisticTransaction(transaction.id)
       error = null
+      const changedByMutationResult = applyMutationResult(result)
+      const needsProjectionRefresh = !result.invalidation
+        && readMutationRows(result).length === 0
+        && shouldRefreshAfterOptimisticCommit(transaction)
       if (needsProjectionRefresh) {
         await pullRange(toSourceRange(viewportRange), "refresh", "critical")
       } else {
         updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
+        if (changedByMutationResult) {
+          bumpRevision()
+        }
         emit()
       }
     } catch (commitError) {
@@ -1846,6 +1857,45 @@ export function createDataSourceBackedRowModel<T = unknown>(
     applyPushInvalidation(event.invalidation)
   }
 
+  function updateDatasetVersionFromMutation(version: string | number | null | undefined): boolean {
+    if (typeof version === "undefined" || version === datasetVersion) {
+      return false
+    }
+    if (typeof version === "number" && typeof datasetVersion === "number" && version < datasetVersion) {
+      return false
+    }
+    datasetVersion = version ?? null
+    return true
+  }
+
+  function readMutationRows(result: {
+    rows?: readonly DataGridDataSourceRowEntry<T>[]
+    updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
+  }): readonly DataGridDataSourceRowEntry<T>[] {
+    return Array.isArray(result.rows) && result.rows.length > 0
+      ? result.rows
+      : (Array.isArray(result.updatedRows) ? result.updatedRows : [])
+  }
+
+  function applyMutationResult(result: {
+    rows?: readonly DataGridDataSourceRowEntry<T>[]
+    updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
+    invalidation?: DataGridDataSourceInvalidation | null
+    datasetVersion?: string | number | null
+  }): boolean {
+    let changed = updateDatasetVersionFromMutation(result.datasetVersion)
+    const rows = readMutationRows(result)
+    if (rows.length > 0) {
+      changed = applyRows(rows) || changed
+      return changed
+    }
+    if (result.invalidation) {
+      applyPushInvalidation(result.invalidation)
+      return true
+    }
+    return changed
+  }
+
   function createTreePullContext(
     operation: DataGridDataSourceTreePullContext["operation"],
     groupKeys: readonly string[],
@@ -1925,6 +1975,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
             const transactionId = ++optimisticEditTransactionCounter
             const baselinesByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
             const updatesByRowId = new Map<DataGridRowId, Partial<T>>()
+            const previousByRowId = new Map<DataGridRowId, Partial<T>>()
+            const revisionsByRowId = new Map<DataGridRowId, Readonly<Record<string, string | number | null>>>()
             let changed = false
 
             for (const update of updates) {
@@ -1939,6 +1991,27 @@ export function createDataSourceBackedRowModel<T = unknown>(
                 update.rowId,
                 existingPatch ? mergeRowPatch(existingPatch, update.data) : update.data,
               )
+              if (update.previousData) {
+                const existingPrevious = previousByRowId.get(update.rowId)
+                previousByRowId.set(
+                  update.rowId,
+                  existingPrevious ? mergeRowPatch(existingPrevious, update.previousData) : update.previousData,
+                )
+              }
+              if (update.revisions) {
+                revisionsByRowId.set(update.rowId, {
+                  ...(revisionsByRowId.get(update.rowId) ?? {}),
+                  ...update.revisions,
+                })
+              } else if (typeof update.revision !== "undefined") {
+                const revisionByColumn: Record<string, string | number | null> = {
+                  ...(revisionsByRowId.get(update.rowId) ?? {}),
+                }
+                for (const columnKey of Object.keys(update.data as Record<string, unknown>)) {
+                  revisionByColumn[columnKey] = update.revision
+                }
+                revisionsByRowId.set(update.rowId, revisionByColumn)
+              }
 
               const cached = findCachedRowById(update.rowId)
               if (!cached) {
@@ -1966,6 +2039,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
             const transaction: OptimisticEditTransaction<T> = {
               id: transactionId,
               updatesByRowId,
+              previousByRowId,
+              revisionsByRowId,
               baselinesByRowId,
             }
             optimisticEditTransactions.set(transactionId, transaction)

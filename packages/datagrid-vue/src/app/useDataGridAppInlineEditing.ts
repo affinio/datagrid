@@ -479,6 +479,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         data: {
           [currentEditingCell.columnKey]: parsedValue,
         } as Partial<TRow>,
+        previousData: {
+          [currentEditingCell.columnKey]: oldValue,
+        } as Partial<TRow>,
       },
     ]))
     options.onCellEdit?.({

@@ -930,6 +930,79 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("uses server datasource history for built-in toolbar controls without an app adapter", async () => {
+    let status = { canUndo: true, canRedo: false, latestUndoOperationId: "op-1" as string | null, latestRedoOperationId: null as string | null }
+    const listeners = new Set<(nextStatus: typeof status) => void>()
+    const undoHistoryStack = vi.fn(async () => {
+      status = { canUndo: false, canRedo: true, latestUndoOperationId: null, latestRedoOperationId: "op-1" }
+      for (const listener of listeners) {
+        listener(status)
+      }
+      return { operationId: "op-1", ...status }
+    })
+    const redoHistoryStack = vi.fn(async () => ({ operationId: "op-1", ...status }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: {
+        async pull() {
+          return {
+            rows: BASE_ROWS.map((row, index) => ({ index, row, rowId: row.rowId })),
+            total: BASE_ROWS.length,
+          }
+        },
+        undoHistoryStack,
+        redoHistoryStack,
+        async getHistoryStatus() {
+          return status
+        },
+        getCachedHistoryStatus() {
+          return status
+        },
+        subscribeHistoryStatus(listener: (nextStatus: typeof status) => void) {
+          listeners.add(listener)
+          listener(status)
+          return () => {
+            listeners.delete(listener)
+          }
+        },
+      } as never,
+      resolveRowId: row => row.rowId,
+      initialTotal: BASE_ROWS.length,
+    })
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        history: {
+          controls: true,
+          shortcuts: false,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const undoButton = findToolbarAction(wrapper, "undo")
+    const redoButton = findToolbarAction(wrapper, "redo")
+    expect((undoButton.element as HTMLButtonElement).disabled).toBe(false)
+    expect((redoButton.element as HTMLButtonElement).disabled).toBe(true)
+
+    await undoButton.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(undoHistoryStack).toHaveBeenCalledTimes(1)
+    expect(resolveVm(wrapper).history?.canUndo?.()).toBe(false)
+    expect(resolveVm(wrapper).history?.canRedo?.()).toBe(true)
+    expect((findToolbarAction(wrapper, "undo").element as HTMLButtonElement).disabled).toBe(true)
+
+    await findToolbarAction(wrapper, "undo").trigger("click")
+    await flushRuntimeTasks()
+    expect(undoHistoryStack).toHaveBeenCalledTimes(1)
+
+    rowModel.dispose()
+    wrapper.unmount()
+  })
+
   it("routes window-level history shortcuts through the declarative controller", async () => {
     const runHistoryAction = vi.fn(async (_direction: "undo" | "redo") => "intent-edit-2")
     const historyAdapter: DataGridTableStageHistoryAdapter = {

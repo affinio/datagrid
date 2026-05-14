@@ -82,6 +82,8 @@ export function createServerDatasourceHttpClient<TRow>(
   getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics
   subscribeChangeFeedDiagnostics(listener: (diagnostics: ServerDatasourceChangeFeedDiagnostics) => void): () => void
   applyRowSnapshots(rows: readonly ServerRowSnapshotLike<TRow>[] | readonly DataGridDataSourceRowEntry<TRow>[]): boolean
+  applyInvalidation(invalidation: DataGridDataSourceInvalidation, options?: { datasetVersion?: unknown }): void
+  updateDatasetVersion(version: unknown, options?: { markSeen?: boolean }): void
   getChangesSinceVersion(request: { sinceVersion: number; signal?: AbortSignal }): Promise<unknown>
   readonly latestDatasetVersion: number | null
   readonly lastSeenVersion: number | null
@@ -108,6 +110,13 @@ export function createServerDatasourceHttpClient<TRow>(
   function updateDatasetVersion(version: unknown, markSeen = false): void {
     const normalizedVersion = normalizeDatasetVersion(version)
     if (normalizedVersion === null) {
+      return
+    }
+    if (latestDatasetVersion !== null && normalizedVersion < latestDatasetVersion) {
+      if (markSeen && (lastSeenVersion === null || latestDatasetVersion > lastSeenVersion)) {
+        lastSeenVersion = latestDatasetVersion
+        emitDiagnostics()
+      }
       return
     }
     latestDatasetVersion = normalizedVersion
@@ -232,6 +241,18 @@ export function createServerDatasourceHttpClient<TRow>(
     return true
   }
 
+  function applyInvalidation(
+    invalidation: DataGridDataSourceInvalidation,
+    invalidationOptions: { datasetVersion?: unknown } = {},
+  ): void {
+    updateDatasetVersion(invalidationOptions.datasetVersion)
+    emitPushEvent({
+      type: "invalidate",
+      datasetVersion: latestDatasetVersion,
+      invalidation,
+    })
+  }
+
   function startChangeFeedPolling(startOptions: { intervalMs?: number } = {}): void {
     changeFeedPoller.start({ intervalMs: startOptions.intervalMs })
   }
@@ -315,6 +336,10 @@ export function createServerDatasourceHttpClient<TRow>(
       }
     },
     applyRowSnapshots,
+    applyInvalidation,
+    updateDatasetVersion(version: unknown, updateOptions: { markSeen?: boolean } = {}) {
+      updateDatasetVersion(version, updateOptions.markSeen === true)
+    },
     get latestDatasetVersion() {
       return latestDatasetVersion
     },

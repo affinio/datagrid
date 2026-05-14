@@ -436,6 +436,35 @@ interface DataGridRuntimeHostSlotProps {
   [key: string]: unknown
 }
 
+interface DataGridServerHistoryStatusLike {
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  datasetVersion?: number | null
+}
+
+interface DataGridServerHistoryDataSourceLike {
+  undoHistoryStack?: () => Promise<DataGridServerHistoryStatusLike & { operationId?: string | null }>
+  redoHistoryStack?: () => Promise<DataGridServerHistoryStatusLike & { operationId?: string | null }>
+  getHistoryStatus?: () => Promise<DataGridServerHistoryStatusLike>
+  getCachedHistoryStatus?: () => DataGridServerHistoryStatusLike
+  subscribeHistoryStatus?: (listener: (status: DataGridServerHistoryStatusLike) => void) => () => void
+}
+
+function resolveServerHistoryDataSource(
+  rowModel: DataGridRowModel<Record<string, unknown>> | null | undefined,
+): DataGridServerHistoryDataSourceLike | null {
+  const dataSource = (rowModel as unknown as { dataSource?: unknown } | null | undefined)?.dataSource
+  if (!dataSource || typeof dataSource !== "object") {
+    return null
+  }
+  const candidate = dataSource as DataGridServerHistoryDataSourceLike
+  return typeof candidate.undoHistoryStack === "function" && typeof candidate.redoHistoryStack === "function"
+    ? candidate
+    : null
+}
+
 type DataGridDefaultRendererRuntime = Pick<
   DataGridBodyAwareRuntime,
   "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "setRows" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
@@ -1381,10 +1410,87 @@ const DataGridRuntimeComponent = defineComponent({
       })
     }
 
+    const serverHistoryStatus = ref<DataGridServerHistoryStatusLike>({
+      canUndo: false,
+      canRedo: false,
+    })
+
+    watch(
+      resolvedRowModel,
+      (rowModel, _previous, onCleanup) => {
+        const dataSource = resolveServerHistoryDataSource(rowModel as DataGridRowModel<Record<string, unknown>> | null)
+        serverHistoryStatus.value = dataSource?.getCachedHistoryStatus?.() ?? {
+          canUndo: false,
+          canRedo: false,
+        }
+        if (!dataSource) {
+          return
+        }
+        let active = true
+        const unsubscribe = dataSource.subscribeHistoryStatus?.(status => {
+          serverHistoryStatus.value = status
+        })
+        void dataSource.getHistoryStatus?.()
+          .then(status => {
+            if (active) {
+              serverHistoryStatus.value = status
+            }
+          })
+          .catch(() => undefined)
+        onCleanup(() => {
+          active = false
+          unsubscribe?.()
+        })
+      },
+      { immediate: true },
+    )
+
+    const serverHistoryController = computed<DataGridHistoryController>(() => {
+      const dataSource = resolveServerHistoryDataSource(resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null)
+      if (!resolvedHistory.value.enabled || resolvedHistory.value.adapter || !dataSource) {
+        return disabledHistoryController
+      }
+      return {
+        canUndo: () => {
+          void serverHistoryStatus.value
+          return serverHistoryStatus.value.canUndo === true
+        },
+        canRedo: () => {
+          void serverHistoryStatus.value
+          return serverHistoryStatus.value.canRedo === true
+        },
+        runHistoryAction: async direction => {
+          void serverHistoryStatus.value
+          if (direction === "undo" && serverHistoryStatus.value.canUndo !== true) {
+            return null
+          }
+          if (direction === "redo" && serverHistoryStatus.value.canRedo !== true) {
+            return null
+          }
+          const result = direction === "undo"
+            ? await dataSource.undoHistoryStack?.()
+            : await dataSource.redoHistoryStack?.()
+          if (result) {
+            serverHistoryStatus.value = {
+              ...serverHistoryStatus.value,
+              ...(typeof result.canUndo === "boolean" ? { canUndo: result.canUndo } : {}),
+              ...(typeof result.canRedo === "boolean" ? { canRedo: result.canRedo } : {}),
+              ...(typeof result.latestUndoOperationId !== "undefined" ? { latestUndoOperationId: result.latestUndoOperationId } : {}),
+              ...(typeof result.latestRedoOperationId !== "undefined" ? { latestRedoOperationId: result.latestRedoOperationId } : {}),
+              ...(typeof result.datasetVersion !== "undefined" ? { datasetVersion: result.datasetVersion } : {}),
+            }
+          }
+          return typeof result?.operationId === "string" && result.operationId.length > 0
+            ? result.operationId
+            : (direction === "undo" ? result?.latestRedoOperationId ?? null : result?.latestUndoOperationId ?? null)
+        },
+      }
+    })
+
     const adapterHistoryController = computed<DataGridHistoryController>(() => {
       const adapter = resolvedHistory.value.adapter
       if (!resolvedHistory.value.enabled || !adapter) {
-        return disabledHistoryController
+        return serverHistoryController.value
       }
       return {
         canUndo: () => adapter.canUndo(),

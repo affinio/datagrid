@@ -108,6 +108,7 @@ import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
+import type { DataGridTableStageHistoryAdapter } from "../stage/useDataGridTableStageHistory"
 import { isDataGridPlaceholderSurfaceRow } from "../stage/useDataGridTableStagePlaceholderRows"
 import { resolveAdvancedFilterDraftClausesFromFilterModel } from "../advancedFilterDraftClauses"
 import {
@@ -714,6 +715,22 @@ type RendererContextMenuEntry = {
 type RendererRowIndexKeyboardAction = RendererContextMenuActionId | "open-row-menu"
 
 type RendererContextMenuZone = "cell" | "range" | "header" | "row-index"
+
+interface RendererServerHistoryStatusLike {
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  datasetVersion?: number | null
+}
+
+interface RendererServerHistoryDataSourceLike {
+  undoHistoryStack?: () => Promise<RendererServerHistoryStatusLike & { operationId?: string | null }>
+  redoHistoryStack?: () => Promise<RendererServerHistoryStatusLike & { operationId?: string | null }>
+  getHistoryStatus?: () => Promise<RendererServerHistoryStatusLike>
+  getCachedHistoryStatus?: () => RendererServerHistoryStatusLike
+  subscribeHistoryStatus?: (listener: (status: RendererServerHistoryStatusLike) => void) => () => void
+}
 
 export default defineComponent({
   name: "DataGridDefaultRenderer",
@@ -2942,6 +2959,82 @@ export default defineComponent({
       return shortcutHint ? `${label} (${shortcutHint})` : label
     }
 
+    const resolveServerHistoryDataSource = (): RendererServerHistoryDataSourceLike | null => {
+      const dataSource = (props.runtimeRowModel as unknown as { dataSource?: unknown } | null | undefined)?.dataSource
+      if (!dataSource || typeof dataSource !== "object") {
+        return null
+      }
+      const candidate = dataSource as RendererServerHistoryDataSourceLike
+      return typeof candidate.undoHistoryStack === "function" && typeof candidate.redoHistoryStack === "function"
+        ? candidate
+        : null
+    }
+
+    const serverHistoryStatus = ref<RendererServerHistoryStatusLike>({ canUndo: false, canRedo: false })
+
+    watch(
+      () => props.runtimeRowModel,
+      (_rowModel, _previous, onCleanup) => {
+        const dataSource = resolveServerHistoryDataSource()
+        serverHistoryStatus.value = dataSource?.getCachedHistoryStatus?.() ?? { canUndo: false, canRedo: false }
+        if (!dataSource) {
+          return
+        }
+        let active = true
+        const unsubscribe = dataSource.subscribeHistoryStatus?.(status => {
+          serverHistoryStatus.value = status
+        })
+        void dataSource.getHistoryStatus?.()
+          .then(status => {
+            if (active) {
+              serverHistoryStatus.value = status
+            }
+          })
+          .catch(() => undefined)
+        onCleanup(() => {
+          active = false
+          unsubscribe?.()
+        })
+      },
+      { immediate: true },
+    )
+
+    const serverHistoryAdapter: DataGridTableStageHistoryAdapter = {
+      captureSnapshot: () => null,
+      recordIntentTransaction: () => undefined,
+      recordServerFillTransaction: () => undefined,
+      canUndo: () => serverHistoryStatus.value.canUndo === true,
+      canRedo: () => serverHistoryStatus.value.canRedo === true,
+      runHistoryAction: async direction => {
+        const dataSource = resolveServerHistoryDataSource()
+        if (!dataSource) {
+          return null
+        }
+        if (direction === "undo" && serverHistoryStatus.value.canUndo !== true) {
+          return null
+        }
+        if (direction === "redo" && serverHistoryStatus.value.canRedo !== true) {
+          return null
+        }
+        const result = direction === "undo"
+          ? await dataSource.undoHistoryStack?.()
+          : await dataSource.redoHistoryStack?.()
+        if (result) {
+          serverHistoryStatus.value = {
+            ...serverHistoryStatus.value,
+            ...(typeof result.canUndo === "boolean" ? { canUndo: result.canUndo } : {}),
+            ...(typeof result.canRedo === "boolean" ? { canRedo: result.canRedo } : {}),
+            ...(typeof result.latestUndoOperationId !== "undefined" ? { latestUndoOperationId: result.latestUndoOperationId } : {}),
+            ...(typeof result.latestRedoOperationId !== "undefined" ? { latestRedoOperationId: result.latestRedoOperationId } : {}),
+            ...(typeof result.datasetVersion !== "undefined" ? { datasetVersion: result.datasetVersion } : {}),
+          }
+        }
+        return typeof result?.operationId === "string" && result.operationId.length > 0
+          ? result.operationId
+          : (direction === "undo" ? result?.latestRedoOperationId ?? null : result?.latestUndoOperationId ?? null)
+      },
+    }
+
     const {
       tableStageProps,
       tableStageContext,
@@ -3022,7 +3115,7 @@ export default defineComponent({
       historyEnabled: computed(() => props.history.enabled),
       historyMaxDepth: computed(() => props.history.depth),
       historyShortcuts: computed(() => props.history.shortcuts),
-      history: props.history.adapter,
+      history: props.history.adapter ?? (resolveServerHistoryDataSource() ? serverHistoryAdapter : undefined),
       isCellEditable: props.isCellEditable,
       isContextMenuVisible: () => contextMenuVisible(),
       closeContextMenu: () => closeRuntimeContextMenu(),

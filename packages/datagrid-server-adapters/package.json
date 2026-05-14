@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-server-adapters",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Opinionated server datasource adapters for Affino DataGrid",

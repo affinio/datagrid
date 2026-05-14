@@ -905,6 +905,70 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("applies row snapshots returned from datasource commitEdits", async () => {
+    const commitEdits = vi.fn(async () => ({
+      committed: [{ rowId: 1 }],
+      datasetVersion: 2,
+      rows: [{ index: 0, rowId: 1, row: { id: 1, value: "server" } }],
+    }))
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull() {
+        return {
+          rows: [{ index: 0, rowId: 1, row: { id: 1, value: "initial" } }],
+          total: 1,
+          datasetVersion: 1,
+        }
+      },
+      commitEdits,
+    }
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1,
+    })
+
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+    await Promise.resolve(model.patchRows?.([{ rowId: 1, data: { value: "local" } }]))
+
+    expect(model.getRow(0)?.row.value).toBe("server")
+    expect(model.getSnapshot().datasetVersion).toBe(2)
+
+    model.dispose()
+  })
+
+  it("applies invalidation returned from datasource commitEdits when rows are absent", async () => {
+    const pullRequests: DataGridDataSourcePullRequest[] = []
+    const commitEdits = vi.fn(async () => ({
+      committed: [{ rowId: 1 }],
+      invalidation: { kind: "range" as const, range: { start: 0, end: 0 }, reason: "commit" },
+    }))
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull(request) {
+        pullRequests.push(request)
+        return {
+          rows: [{ index: 0, rowId: 1, row: { id: 1, value: request.reason } }],
+          total: 1,
+        }
+      },
+      commitEdits,
+    }
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1,
+    })
+
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+    await Promise.resolve(model.patchRows?.([{ rowId: 1, data: { value: "local" } }]))
+    await flushMicrotasks()
+
+    expect(pullRequests.some(request => request.reason === "push-invalidation")).toBe(true)
+
+    model.dispose()
+  })
+
   it("applies external updates to loaded datasource rows without commitEdits", async () => {
     const rows = [
       { id: 1, value: "row-1", status: "open" },

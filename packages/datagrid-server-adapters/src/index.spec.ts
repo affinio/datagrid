@@ -523,4 +523,80 @@ describe("createAffinoDatasource query mapping", () => {
 
     expect(raw.bodies[0]).toEqual({ rawStart: 4 })
   })
+
+  it("preserves commit metadata and publishes history status", async () => {
+    const fetchImpl: typeof fetch = async () => new Response(JSON.stringify({
+      operationId: "op-1",
+      datasetVersion: 7,
+      revision: "rev-7",
+      rows: [{ rowId: "r1", index: 0, row: { id: "r1", value: 42 } }],
+      updatedRows: [{ rowId: "r2", index: 1, row: { id: "r2", value: 43 } }],
+      committed: [{ rowId: "r1", columnId: "value", revision: "row-rev-1" }],
+      rejected: [],
+      affectedRows: 1,
+      affectedCells: 1,
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "op-1",
+      latestRedoOperationId: null,
+      invalidation: { kind: "range", range: { start: 0, end: 0 }, reason: "commit" },
+      warnings: ["normalized"],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+    const datasource = createAffinoDatasource<{ id: string; value: number }>({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl,
+    })
+    const statuses: unknown[] = []
+    datasource.subscribeHistoryStatus(status => statuses.push(status))
+
+    const result = await datasource.commitEdits!({
+      edits: [{ rowId: "r1", data: { value: 42 } }],
+    })
+
+    expect(result).toMatchObject({
+      operationId: "op-1",
+      datasetVersion: 7,
+      revision: "rev-7",
+      affectedRows: 1,
+      affectedCells: 1,
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "op-1",
+      latestRedoOperationId: null,
+      warnings: ["normalized"],
+    })
+    expect(result.rows).toEqual([{ rowId: "r1", index: 0, row: { id: "r1", value: 42 } }])
+    expect(result.updatedRows).toEqual([{ rowId: "r2", index: 1, row: { id: "r2", value: 43 } }])
+    expect(datasource.latestDatasetVersion).toBe(7)
+    expect(statuses.at(-1)).toMatchObject({
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "op-1",
+      datasetVersion: 7,
+    })
+  })
+
+  it("includes tableId in change-feed requests", async () => {
+    const urls: string[] = []
+    const fetchImpl: typeof fetch = async input => {
+      urls.push(String(input))
+      return new Response(JSON.stringify({ datasetVersion: 1, changes: [], hasMore: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    const datasource = createAffinoDatasource({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl,
+    })
+
+    await datasource.getChangesSinceVersion({ sinceVersion: 0 })
+
+    expect(urls[0]).toBe("https://api.test/api/changes?tableId=orders&sinceVersion=0")
+  })
 })
