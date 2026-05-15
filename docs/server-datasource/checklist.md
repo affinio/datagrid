@@ -30,6 +30,11 @@ Use this as a practical checklist for a new table.
 
 - [ ] frontend packages installed
 - [ ] HTTP datasource adapter implemented
+- [ ] datasource-backed row model created once per table/session
+- [ ] DataGrid is not remounted during refreshes
+- [ ] server sort/filter changes flow through row-model `pull(request)`
+- [ ] external filters do not bypass the row-model refresh path
+- [ ] `refreshing` does not hide or replace the grid body
 - [ ] pull mapping implemented
 - [ ] histogram mapping implemented
 - [ ] edit mapping implemented
@@ -40,6 +45,7 @@ Use this as a practical checklist for a new table.
 - [ ] change feed / polling adapter implemented if needed
 - [ ] datasetVersion stored
 - [ ] invalidation handling implemented
+- [ ] row snapshots from edit/history/change responses are applied before falling back to full refresh
 - [ ] warnings surfaced
 - [ ] backend errors surfaced
 

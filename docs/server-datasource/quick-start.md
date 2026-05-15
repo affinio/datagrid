@@ -4,6 +4,8 @@ This is the golden path for wiring Affino DataGrid to a backend-owned table.
 
 Use `@affino/datagrid-server-adapters` first. It provides the current app-facing datasource factory for the Affino HTTP endpoint shape. Reach for `@affino/datagrid-server-client` only when you need lower-level polling, invalidation, or custom transport helpers.
 
+For sandbox-equivalent behavior, follow the [server datasource UX contract](./ux-contract.md). In short: keep one datasource-backed row model alive, let server sort/filter state flow through `pull(request)`, and do not replace it with app-level reloads for normal filtering.
+
 ## Install
 
 Frontend:
