@@ -181,7 +181,7 @@ Status in this local environment:
 - Threshold enforcement is configured and active in CI.
 
 Runtime perf-by-design contract reference:
-- `docs/datagrid-perf-by-design-runtime.md`
+- `docs/perf/datagrid-perf-by-design-runtime.md`
 
 ## Optional Hardcore Stress Suite (Non-blocking)
 

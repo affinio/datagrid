@@ -93,8 +93,8 @@ Row source
 ## Docs
 
 - Formula engine guide: `docs/datagrid-formula-engine-guide.md`
-- Formula engine roadmap: `docs/datagrid-formula-engine-first-class-pipeline.md`
-- Formula benchmarks: `docs/benchmarks-formula-engine.md`
+- Formula engine roadmap: `docs/internal/pipelines/datagrid-formula-engine-first-class-pipeline.md`
+- Formula benchmarks: `docs/perf/benchmarks-formula-engine.md`
 - Compute/formula diagnostics: `docs/datagrid-state-events-compute-diagnostics.md`
 
 ## Scope

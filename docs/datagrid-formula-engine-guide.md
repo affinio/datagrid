@@ -498,7 +498,7 @@ This makes runtime mode selection observable when validating fused execution ado
 
 ## Related docs
 
-- [benchmarks-formula-engine.md](./benchmarks-formula-engine.md)
-- [datagrid-formula-engine-first-class-pipeline.md](./datagrid-formula-engine-first-class-pipeline.md)
+- [benchmarks-formula-engine.md](./perf/benchmarks-formula-engine.md)
+- [datagrid-formula-engine-first-class-pipeline.md](./internal/pipelines/datagrid-formula-engine-first-class-pipeline.md)
 - [datagrid-state-events-compute-diagnostics.md](./datagrid-state-events-compute-diagnostics.md)
-- [datagrid-delivery-pipeline-2026-03-06.md](./datagrid-delivery-pipeline-2026-03-06.md)
+- [datagrid-delivery-pipeline-2026-03-06.md](./internal/pipelines/datagrid-delivery-pipeline-2026-03-06.md)

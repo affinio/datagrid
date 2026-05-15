@@ -7,6 +7,7 @@ Use it when you want to expose a real backend table through the grid without imp
 ## Start Here
 
 - [Package installation](./package-installation.md)
+- [Integration docs map](./integration-docs-map.md)
 - [Integration playbook](./integration-playbook.md)
 - [Server datasource UX contract](./ux-contract.md)
 - [Backend template](./backend-template.md)

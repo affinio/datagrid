@@ -65,7 +65,7 @@ Always check:
 ## Block 0. Freeze Current State
 
 - [x] Save current benchmark numbers into this doc when starting work.
-- [x] Keep [datagrid-spreadsheet-token-reference-transition-todo.md](/Users/anton/Projects/affinio/datagrid/docs/datagrid-spreadsheet-token-reference-transition-todo.md) as the narrow token-ref rewrite tracker.
+- [x] Keep [datagrid-spreadsheet-token-reference-transition-todo.md](../todos/datagrid-spreadsheet-token-reference-transition-todo.md) as the narrow token-ref rewrite tracker.
 - [x] Treat this file as the broader runtime roadmap.
 
 Block close criteria:

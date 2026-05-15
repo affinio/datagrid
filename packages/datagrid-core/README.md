@@ -239,4 +239,4 @@ Horizontal virtualization now uses a deterministic clamp/update path:
 ## Roadmap
 
 Execution and quality hardening are tracked in:
-[datagrid-ag-architecture-9.5-pipeline-checklist.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-ag-architecture-9.5-pipeline-checklist.md).
+[datagrid-ag-architecture-acceptance-checklist.md](https://github.com/affinio/affinio/blob/main/docs/internal/checklists/datagrid-ag-architecture-acceptance-checklist.md).
