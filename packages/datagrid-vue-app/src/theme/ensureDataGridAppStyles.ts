@@ -1237,6 +1237,50 @@ const DATA_GRID_APP_STYLES = `
   background: transparent;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .grid-stage--canvas-chrome .grid-chrome-canvas {
+    display: none !important;
+  }
+
+  .grid-stage--canvas-chrome .grid-body-pane {
+    background: var(--datagrid-viewport-bg) !important;
+  }
+
+  .grid-stage--canvas-chrome .grid-header-viewport {
+    background: var(--datagrid-header-row-bg) !important;
+  }
+
+  .grid-stage--canvas-chrome .grid-body-shell .grid-cell,
+  .grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+    color: var(--datagrid-row-text-color) !important;
+    background: var(--datagrid-row-background-color) !important;
+    border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
+    border-bottom: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
+  }
+
+  .grid-stage--canvas-chrome .grid-header-shell .grid-cell,
+  .grid-stage--canvas-chrome .grid-header-shell .grid-cell--index {
+    color: var(--datagrid-header-text-color) !important;
+    background: var(--datagrid-header-cell-bg) !important;
+    border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+    border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
+  }
+
+  .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
+  .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index {
+    background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg));
+    background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
+    background-repeat: no-repeat;
+  }
+
+  .grid-stage--canvas-chrome .grid-row--striped .grid-cell,
+  .grid-stage--canvas-chrome .grid-row--striped .grid-cell--index {
+    background-image: linear-gradient(var(--datagrid-row-band-striped-bg), var(--datagrid-row-band-striped-bg));
+    background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
+    background-repeat: no-repeat;
+  }
+}
+
 .grid-cell:focus,
 .grid-cell:focus-visible {
   outline: none;
