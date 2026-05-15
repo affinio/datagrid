@@ -422,6 +422,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   })()
 
   const rowCache = new Map<number, DataGridRowNode<T>>()
+  const staleRetainedRowIndexes = new Set<number>()
   const rangeCache = createDataGridRangeCache<DataGridRowNode<T>>({
     chunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
     maxChunks: Math.max(1, Math.ceil(rowCacheLimit / DEFAULT_RANGE_CACHE_CHUNK_SIZE)),
@@ -502,6 +503,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         break
       }
       if (rowCache.delete(evictIndex)) {
+        staleRetainedRowIndexes.delete(evictIndex)
         rangeCache.deleteRow(evictIndex)
         diagnostics.rowCacheEvicted += 1
       }
@@ -537,6 +539,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCache.has(index)) {
       rowCache.delete(index)
     }
+    staleRetainedRowIndexes.delete(index)
     rowCache.set(index, row)
     rangeCache.setRow(index, row)
     enforceRowCacheLimit()
@@ -751,6 +754,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     for (const index of rowCache.keys()) {
       if (index >= rowCount) {
         rowCache.delete(index)
+        staleRetainedRowIndexes.delete(index)
         rangeCache.deleteRow(index)
       }
     }
@@ -805,7 +809,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function isRangeFullyCached(range: DataGridViewportRange): boolean {
     for (let index = range.start; index <= range.end; index += 1) {
-      if (!rowCache.has(index)) {
+      if (!isIndexCached(index)) {
         return false
       }
     }
@@ -813,7 +817,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function isIndexCached(index: number): boolean {
-    return rowCache.has(index)
+    return rowCache.has(index) && !staleRetainedRowIndexes.has(index)
   }
 
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
@@ -1056,6 +1060,53 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return true
   }
 
+  function hasStaleRowsInRange(range: DataGridViewportRange): boolean {
+    for (let index = range.start; index <= range.end; index += 1) {
+      if (staleRetainedRowIndexes.has(index)) {
+        return true
+      }
+    }
+    return false
+  }
+
+  function replaceCacheWithRows(rows: readonly DataGridDataSourceRowEntry<T>[]): boolean {
+    const normalizedRows = rows.map(entry => normalizeRowEntry(entry))
+    const freshIndexes = new Set(normalizedRows.map(entry => entry.index))
+    const preserveRange = toSourceRange(viewportRange)
+    const preservedRows: { index: number; node: DataGridRowNode<T> }[] = []
+
+    for (const [index, node] of rowCache.entries()) {
+      if (
+        index < rowCount
+        && index >= preserveRange.start
+        && index <= preserveRange.end
+        && !freshIndexes.has(index)
+      ) {
+        preservedRows.push({ index, node })
+      }
+    }
+
+    const previousSize = rowCache.size
+    rowCache.clear()
+    staleRetainedRowIndexes.clear()
+    rangeCache.reset()
+    diagnostics.invalidatedRows += Math.max(0, previousSize - preservedRows.length)
+
+    for (const preserved of preservedRows) {
+      writeRowCache(preserved.index, preserved.node)
+      if (rowCache.has(preserved.index)) {
+        staleRetainedRowIndexes.add(preserved.index)
+      }
+    }
+    for (const normalized of normalizedRows) {
+      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node)
+    }
+    updateTotalFromRows(rows)
+    diagnostics.rowCacheSize = rowCache.size
+    updateLoadingState()
+    return previousSize > 0 || normalizedRows.length > 0
+  }
+
   function clearRange(
     range: DataGridViewportRange,
     options: { preserveRange?: DataGridViewportRange | null } = {},
@@ -1072,6 +1123,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         continue
       }
       if (rowCache.delete(index)) {
+        staleRetainedRowIndexes.delete(index)
         rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
         changed = true
@@ -1120,6 +1172,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         continue
       }
       if (rowCache.delete(index)) {
+        staleRetainedRowIndexes.delete(index)
         rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
         changed = true
@@ -1164,6 +1217,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     diagnostics.invalidatedRows += rowCache.size
     rowCache.clear()
+    staleRetainedRowIndexes.clear()
     rangeCache.reset()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
@@ -1656,9 +1710,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
           viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
         }
         if (options?.replaceCacheOnSuccess) {
-          clearAll()
+          changed = replaceCacheWithRows(result.rows) || changed
+          const currentViewport = toSourceRange(viewportRange)
+          if (hasStaleRowsInRange(currentViewport)) {
+            scheduleViewportPull(currentViewport, buildRequestStateKey())
+          }
+        } else {
+          changed = applyRows(result.rows) || changed
         }
-        changed = applyRows(result.rows) || changed
         if (typeof result.cursor !== "undefined") {
           const normalizedCursor = result.cursor == null ? null : String(result.cursor)
           if (normalizedCursor !== paginationCursor) {
@@ -1832,7 +1891,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
       for (const rawIndex of event.indexes) {
         const index = Number.isFinite(rawIndex) ? Math.max(0, Math.trunc(rawIndex)) : -1
         if (index >= 0) {
-          changed = rowCache.delete(index) || changed
+          const deleted = rowCache.delete(index)
+          if (deleted) {
+            staleRetainedRowIndexes.delete(index)
+          }
+          changed = deleted || changed
           rangeCache.deleteRow(index)
         }
       }
@@ -2660,6 +2723,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       abortLaneInFlight("background", "stale")
       listeners.clear()
       rowCache.clear()
+      staleRetainedRowIndexes.clear()
       rangeCache.clear()
       pendingCriticalPull = null
       pendingBackgroundPull = null

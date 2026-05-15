@@ -635,6 +635,82 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("retains stale visible rows after a partial sort replacement and reloads the current viewport", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 5,
+    })
+
+    model.setViewportRange({ start: 0, end: 4 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: [0, 1, 2, 3, 4].map(index => ({
+        index,
+        row: { id: index + 1, value: `old-${index + 1}` },
+        rowId: index + 1,
+      })),
+      total: 5,
+    })
+    await flushMicrotasks()
+
+    model.setViewportRange({ start: 0, end: 1 })
+    model.setSortModel([{ key: "value", direction: "asc" }])
+    expect(calls).toHaveLength(2)
+
+    model.setViewportRange({ start: 0, end: 4 })
+    expect(model.getRowsInRange({ start: 0, end: 4 })?.map(row => row.row.value)).toEqual([
+      "old-1",
+      "old-2",
+      "old-3",
+      "old-4",
+      "old-5",
+    ])
+
+    calls[1]?.resolve({
+      rows: [
+        { index: 0, row: { id: 5, value: "sorted-1" }, rowId: 5 },
+        { index: 1, row: { id: 4, value: "sorted-2" }, rowId: 4 },
+      ],
+      total: 5,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 4 })?.map(row => row.row.value)).toEqual([
+      "sorted-1",
+      "sorted-2",
+      "old-3",
+      "old-4",
+      "old-5",
+    ])
+    expect(calls).toHaveLength(3)
+    expect(calls[2]?.request.reason).toBe("viewport-change")
+    expect(calls[2]?.request.range).toEqual({ start: 0, end: 4 })
+
+    calls[2]?.resolve({
+      rows: [0, 1, 2, 3, 4].map(index => ({
+        index,
+        row: { id: 5 - index, value: `sorted-full-${index + 1}` },
+        rowId: 5 - index,
+      })),
+      total: 5,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRowsInRange({ start: 0, end: 4 })?.map(row => row.row.value)).toEqual([
+      "sorted-full-1",
+      "sorted-full-2",
+      "sorted-full-3",
+      "sorted-full-4",
+      "sorted-full-5",
+    ])
+
+    model.dispose()
+  })
+
   it("keeps old rows visible during pending filter refresh and swaps cache on success", async () => {
     const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
     const model = createDataSourceBackedRowModel({
