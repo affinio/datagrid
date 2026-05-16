@@ -1339,6 +1339,90 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
+    const handleCellClick = vi.fn()
+    const startInlineEdit = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        visibleColumns: createEditableAffordanceColumns(),
+        handleCellClick,
+        startInlineEdit,
+      }),
+      attachTo: document.body,
+    })
+    const selectCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="0"]').element as HTMLElement
+    selectCell.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 120,
+      bottom: 31,
+      width: 120,
+      height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+    const touchClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 118,
+      clientY: 12,
+    })
+    Object.defineProperty(touchClick, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    selectCell.dispatchEvent(touchClick)
+
+    expect(startInlineEdit).not.toHaveBeenCalled()
+    expect(handleCellClick).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("keeps desktop select affordance clicks opening inline edit", () => {
+    const handleCellClick = vi.fn()
+    const startInlineEdit = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        visibleColumns: createEditableAffordanceColumns(),
+        handleCellClick,
+        startInlineEdit,
+      }),
+      attachTo: document.body,
+    })
+    const selectCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="0"]').element as HTMLElement
+    selectCell.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 120,
+      bottom: 31,
+      width: 120,
+      height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+
+    selectCell.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 118,
+      clientY: 12,
+    }))
+
+    expect(startInlineEdit).toHaveBeenCalledTimes(1)
+    expect(startInlineEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: "r1" }),
+      "stage",
+      { openOnMount: true },
+    )
+    expect(handleCellClick).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it("applies layout mode classes and auto-height body shell sizing", () => {
     const baseProps = createStageProps(() => false, {
       rowCount: 2,

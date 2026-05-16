@@ -18,6 +18,7 @@ Completed in Phase 1:
 - Lazy canceling touch listener: `dataGridTouchPanGuard.ts` installs the non-passive `touchmove` listener only after a handled target starts a gesture, instead of keeping the canceling listener active for the whole root.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
+- Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
@@ -133,12 +134,13 @@ Files/functions:
 Problem:
 - Body cells previously bound `@mousedown.prevent.stop`; this has been reduced so touch-generated mouse events are ignored by the interaction controller before desktop selection/drag logic starts.
 - Selection and range-move paths call `preventDefault()` on primary-button down.
-- On touch devices, this mouse-first interaction model has no explicit coarse-pointer branch, no long-press selection mode, and no guaranteed "scroll wins" rule.
+- On touch devices, this mouse-first interaction model still needs a full long-press selection mode, but single-tap edit affordances no longer bypass the scroll-first/tap-select policy for select/date cells.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
 - Do not start drag selection or range move from touch unless the grid is already in touch selection mode, the user long-pressed, or the down occurred on an explicit handle.
 - Keep existing mouse behavior behind `pointerType === "mouse"` / desktop mode.
+- Keep touch single tap as selection/focus; use double tap, long press mode, or explicit editor controls for editing.
 
 #### 3. Range move can start from the selected cell body, not only an explicit handle
 

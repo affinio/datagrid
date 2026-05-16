@@ -1,5 +1,6 @@
 import { type CSSProperties, type Ref } from "vue"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "./dataGridTableStageBody.types"
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStageRowStateOptions {
   rows: Readonly<Ref<{
@@ -312,7 +313,11 @@ export function useDataGridStageRowState(
       }
       return
     }
-    if (!isEditingCellSafe(row, column.key) && (isSelectCellTriggerClick(event, row, column) || isDateCellTriggerClick(event, row, column))) {
+    if (
+      !isTouchGeneratedMouseEvent(event)
+      && !isEditingCellSafe(row, column.key)
+      && (isSelectCellTriggerClick(event, row, column) || isDateCellTriggerClick(event, row, column))
+    ) {
       options.startInlineEditIfAllowed(row, column, rowOffset)
       return
     }
