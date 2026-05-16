@@ -1021,7 +1021,9 @@ export function createServerBackedRowModel<T>(
       }
       disposed = true
       warmupToken += 1
-      unsubscribeSource?.()
+      if (typeof unsubscribeSource === "function") {
+        unsubscribeSource()
+      }
       inFlightViewportWarmup = null
       warming = false
       listeners.clear()

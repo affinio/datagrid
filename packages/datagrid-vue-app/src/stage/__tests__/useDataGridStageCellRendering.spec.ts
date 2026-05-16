@@ -9,7 +9,11 @@ import type {
 } from "../dataGridTableStage.types"
 import type { DataGridTableStageBodyColumn } from "../dataGridTableStageBody.types"
 
-function createColumn(partial: Partial<DataGridTableStageBodyColumn>): DataGridTableStageBodyColumn {
+function createColumn(
+  partial: Partial<Omit<DataGridTableStageBodyColumn, "column">> & {
+    column?: Partial<DataGridTableStageBodyColumn["column"]>
+  },
+): DataGridTableStageBodyColumn {
   return {
     key: partial.key ?? "value",
     width: partial.width ?? 120,
@@ -20,6 +24,28 @@ function createColumn(partial: Partial<DataGridTableStageBodyColumn>): DataGridT
       ...partial.column,
     },
   } as DataGridTableStageBodyColumn
+}
+
+function createRow(
+  partial: Partial<Omit<DataGridTableRow<Record<string, unknown>>, "state">> & {
+    state?: Partial<DataGridTableRow<Record<string, unknown>>["state"]>
+  } = {},
+): DataGridTableRow<Record<string, unknown>> {
+  const displayIndex = partial.displayIndex ?? 0
+  const rowId = partial.rowId ?? `r${displayIndex + 1}`
+  const data = partial.data ?? {}
+  return {
+    kind: "leaf",
+    data,
+    row: data,
+    rowKey: rowId,
+    rowId,
+    sourceIndex: displayIndex,
+    originalIndex: displayIndex,
+    displayIndex,
+    ...partial,
+    state: { selected: false, group: partial.kind === "group", pinned: "none", expanded: false, ...partial.state },
+  }
 }
 
 describe("useDataGridStageCellRendering", () => {
@@ -87,35 +113,37 @@ describe("useDataGridStageCellRendering", () => {
       cells,
       editing,
       isCellEditableSafe: () => true,
-      isEditingCellSafe: (row, columnKey) => row.kind === "data" && columnKey === "stage",
+      isEditingCellSafe: (row, columnKey) => row.kind === "leaf" && columnKey === "stage",
       columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
     })
 
     const selectColumn = visibleColumns.value[0]!
-    expect(renderApi.resolveCellEditorMode({ kind: "data", data: {}, rowId: 1 } as never, selectColumn)).toBe("select")
-    expect(renderApi.isSelectEditorCell({ kind: "data", data: {}, rowId: 1 } as never, 0, selectColumn, 0)).toBe(true)
-    expect(renderApi.isDateEditorCell({ kind: "data", data: {}, rowId: 1 } as never, 0, visibleColumns.value[1]!, 1)).toBe(false)
-    expect(renderApi.resolveDateEditorInputType({ kind: "data", data: {}, rowId: 1 } as never, visibleColumns.value[2]!)).toBe("datetime-local")
+    const row = createRow({ rowId: 1 })
+    expect(renderApi.resolveCellEditorMode(row, selectColumn)).toBe("select")
+    expect(renderApi.isSelectEditorCell(row, 0, selectColumn, 0)).toBe(true)
+    expect(renderApi.isDateEditorCell(row, 0, visibleColumns.value[1]!, 1)).toBe(false)
+    expect(renderApi.resolveDateEditorInputType(row, visibleColumns.value[2]!)).toBe("datetime-local")
 
-    expect(renderApi.resolveSelectEditorOptions({ kind: "data", data: {}, rowId: 1 } as never, selectColumn)).toEqual([])
-    renderApi.handleSelectEditorOptionsResolved({ kind: "data", data: {}, rowId: 1 } as never, selectColumn, [
+    expect(renderApi.resolveSelectEditorOptions(row, selectColumn)).toEqual([])
+    renderApi.handleSelectEditorOptionsResolved(row, selectColumn, [
       { value: "planned", label: "Planned" },
       { value: "done", label: "Done" },
     ])
-    expect(renderApi.resolveSelectEditorOptions({ kind: "data", data: {}, rowId: 1 } as never, selectColumn)).toEqual([
+    expect(renderApi.resolveSelectEditorOptions(row, selectColumn)).toEqual([
       { value: "planned", label: "Planned" },
       { value: "done", label: "Done" },
     ])
-    expect(renderApi.readResolvedDisplayCell({ kind: "data", data: {}, rowId: 1 } as never, selectColumn)).toBe("Planned")
+    expect(renderApi.readResolvedDisplayCell(row, selectColumn)).toBe("Planned")
 
-    const dataRow = { kind: "data", data: { stage: "planned" }, rowId: 1 } as DataGridTableRow<Record<string, unknown>>
-    const groupRow = {
+    const dataRow = createRow({ data: { stage: "planned" }, row: { stage: "planned" }, rowId: 1 })
+    const groupRow = createRow({
       kind: "group",
       rowId: "g1",
       data: {},
+      row: {},
       state: { expanded: true },
-      groupMeta: { groupKey: "g1", groupField: "group", groupValue: "Group 1", childrenCount: 2 },
-    } as DataGridTableRow<Record<string, unknown>>
+      groupMeta: { groupKey: "g1", groupField: "group", groupValue: "Group 1", level: 0, childrenCount: 2 },
+    })
 
     const renderedCell = renderApi.renderResolvedCellContent(dataRow, 0, {
       ...selectColumn,
@@ -143,6 +171,19 @@ describe("useDataGridStageCellRendering", () => {
     renderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0, inlineEditEvent)
     expect(inlineEditEvent.defaultPrevented).toBe(true)
     expect(editing.value.startInlineEdit).toHaveBeenCalledWith(
+      dataRow,
+      "stage",
+      { openOnMount: true },
+    )
+
+    const touchInlineEditEvent = new MouseEvent("dblclick", { cancelable: true })
+    Object.defineProperty(touchInlineEditEvent, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+    renderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0, touchInlineEditEvent)
+    expect(touchInlineEditEvent.defaultPrevented).toBe(true)
+    expect(editing.value.startInlineEdit).toHaveBeenLastCalledWith(
       dataRow,
       "stage",
       { openOnMount: true },

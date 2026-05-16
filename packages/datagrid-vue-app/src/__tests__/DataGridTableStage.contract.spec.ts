@@ -268,6 +268,7 @@ function createStageProps(
       startInlineEdit: options?.startInlineEdit ?? (() => undefined),
       updateEditingCellValue: () => undefined,
       handleEditorKeydown: () => undefined,
+      handleEditorBlur: () => undefined,
       commitInlineEdit: () => undefined,
       cancelInlineEdit: options?.cancelInlineEdit ?? (() => undefined),
     },
@@ -773,8 +774,8 @@ describe("DataGridTableStage contract", () => {
       ),
     })
     const singleSegment = singleWrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
-    expect(centerSegments[0]?.element.style.left).toBe(singleSegment.element.style.left)
-    expect(centerSegments[0]?.element.style.width).toBe(singleSegment.element.style.width)
+    expect((centerSegments[0]?.element as HTMLElement | undefined)?.style.left).toBe((singleSegment.element as HTMLElement).style.left)
+    expect((centerSegments[0]?.element as HTMLElement | undefined)?.style.width).toBe((singleSegment.element as HTMLElement).style.width)
 
     expect(previousSelectedCell.classes()).toContain("grid-cell--selected")
     expect(previousSelectedCell.classes()).not.toContain("grid-cell--selection-anchor")
@@ -975,7 +976,7 @@ describe("DataGridTableStage contract", () => {
 
     const updatedSegment = wrapper.find(".grid-body-viewport .grid-selection-overlay__segment")
     expect(updatedSegment.exists()).toBe(true)
-    expect(updatedSegment.element.style.width).toBe("121px")
+    expect((updatedSegment.element as HTMLElement).style.width).toBe("121px")
 
     wrapper.unmount()
   })
@@ -1065,7 +1066,7 @@ describe("DataGridTableStage contract", () => {
 
     expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--single-cell-selection")
     expect(overlaySegment.exists()).toBe(true)
-    expect(overlaySegment.element.style.width).toBe("121px")
+    expect((overlaySegment.element as HTMLElement).style.width).toBe("121px")
     expect(selectedCell.classes()).toContain("grid-cell--selection-anchor")
     expect(selectedCell.classes()).not.toContain("grid-cell--selected")
     expect(selectedCell.classes()).not.toContain("grid-cell--selection-edge")

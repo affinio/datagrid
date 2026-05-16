@@ -31,7 +31,7 @@ describe("useDataGridTableStageHistory", () => {
       runHistoryAction,
     }
     const history = useDataGridTableStageHistory<Record<string, unknown>>({
-      runtime: createRuntime(),
+      runtime: createRuntime() as never,
       cloneRowData: row => ({ ...row }),
       syncViewport: vi.fn(),
       history: historyAdapter,

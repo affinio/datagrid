@@ -73,7 +73,10 @@ function createTableProps(options?: {
   return {
     mode: "base",
     rowHeightMode: "fixed",
+    layoutMode: "fill",
     layout: {
+      stageStyle: {},
+      bodyShellStyle: {},
       gridContentStyle: { width: "180px", minWidth: "180px" },
       mainTrackStyle: { width: "180px", minWidth: "180px" },
       indexColumnStyle: { width: "72px", minWidth: "72px", maxWidth: "72px" },
@@ -123,6 +126,8 @@ function createTableProps(options?: {
       selectionAnchorCell: null,
       fillPreviewRange: null,
       rangeMovePreviewRange: null,
+      fillHandleEnabled: false,
+      rangeMoveEnabled: false,
       isFillDragging: false,
       isRangeMoving: false,
       fillActionAnchorCell: null,
@@ -140,6 +145,7 @@ function createTableProps(options?: {
       startInlineEdit: () => undefined,
       updateEditingCellValue: () => undefined,
       handleEditorKeydown: () => undefined,
+      handleEditorBlur: () => undefined,
       commitInlineEdit: () => undefined,
       cancelInlineEdit: () => undefined,
     },

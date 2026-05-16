@@ -1,4 +1,5 @@
 import { effectScope, nextTick, ref } from "vue"
+import { beforeEach, describe, expect, it } from "vitest"
 import {
   DATA_GRID_PERF_STORE_KEY,
   createDataGridPerfStore,
@@ -6,10 +7,11 @@ import {
   resolveDataGridPerfTraceEnabled,
 } from "../../perf/dataGridPerfTrace"
 import { useDataGridPerfTrace } from "../useDataGridPerfTrace"
+import type { DataGridTableRow, DataGridTableStageViewportSection } from "../dataGridTableStage.types"
 
 describe("dataGridPerfTrace", () => {
   beforeEach(() => {
-    delete (window as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
     window.history.replaceState({}, "", "/")
     window.localStorage.clear()
   })
@@ -44,14 +46,33 @@ describe("dataGridPerfTrace", () => {
   })
 
   it("records stage perf samples when enabled", async () => {
-    const viewport = ref({
+    const viewport = ref<DataGridTableStageViewportSection>({
       viewportRowStart: 3,
+      viewportRowEnd: 8,
+      columnWindowStart: 0,
       topSpacerHeight: 12,
       bottomSpacerHeight: 24,
-      viewportRowEnd: 8,
+      leftColumnSpacerWidth: 0,
+      rightColumnSpacerWidth: 0,
+      headerViewportRef: () => undefined,
+      bodyViewportRef: () => undefined,
+      handleHeaderWheel: () => undefined,
+      handleHeaderScroll: () => undefined,
+      handleViewportScroll: () => undefined,
+      handleViewportKeydown: () => undefined,
     })
-    const displayRows = ref([
-      { rowId: "srv-000025", kind: "row", row: { region: "north" } },
+    const displayRows = ref<readonly DataGridTableRow<{ region: string }>[]>([
+      {
+        rowId: "srv-000025",
+        rowKey: "srv-000025",
+        kind: "leaf",
+        row: { region: "north" },
+        data: { region: "north" },
+        sourceIndex: 0,
+        originalIndex: 0,
+        displayIndex: 0,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
+      },
     ])
     const bodyViewportScrollTop = ref(0)
     const scope = effectScope()

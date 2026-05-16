@@ -26,7 +26,9 @@ describe("dataGrid settings adapter filter snapshot cloning", () => {
 
     adapter.setFilterSnapshot("grid-1", snapshot)
 
-    snapshot.columnFilters.status?.push("closed")
+    if (Array.isArray(snapshot.columnFilters.status)) {
+      snapshot.columnFilters.status.push("closed")
+    }
     const originalValue = snapshot.advancedFilters.createdAt?.clauses[0]?.value
     if (originalValue instanceof Date) {
       originalValue.setUTCFullYear(2030)
@@ -50,7 +52,9 @@ describe("dataGrid settings adapter filter snapshot cloning", () => {
     })
 
     const firstRead = adapter.getFilterSnapshot("grid-2")
-    firstRead?.columnFilters.owner?.push("platform")
+    if (Array.isArray(firstRead?.columnFilters.owner)) {
+      firstRead.columnFilters.owner.push("platform")
+    }
 
     const secondRead = adapter.getFilterSnapshot("grid-2")
     expect(secondRead?.columnFilters.owner).toEqual(["noc"])

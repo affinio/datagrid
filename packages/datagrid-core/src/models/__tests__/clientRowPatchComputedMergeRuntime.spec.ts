@@ -18,7 +18,7 @@ function createLeaf(rowId: string, row: RowShape): DataGridRowNode<RowShape> {
     sourceIndex: 0,
     originalIndex: 0,
     displayIndex: 0,
-    state: {},
+    state: { selected: false, group: false, pinned: "none", expanded: false },
   }
 }
 
@@ -47,7 +47,7 @@ describe("clientRowPatchComputedMergeRuntime", () => {
       invalidateSourceColumnValuesByRowIds: rowIds => {
         invalidatedRowIds.push(...rowIds.map(String))
       },
-      isRecord: value => typeof value === "object" && value !== null,
+      isRecord: (value): value is Record<string, unknown> => typeof value === "object" && value !== null,
       applyComputedFieldsToSourceRows: () => {
         throw new Error("computed fields should not run")
       },

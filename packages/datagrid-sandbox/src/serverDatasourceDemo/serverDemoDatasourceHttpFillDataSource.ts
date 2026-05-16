@@ -1,5 +1,5 @@
 import type { DataGridDataSource } from "@affino/datagrid-vue"
-import type { ServerDemoMutationInvalidation, ServerDemoRow } from "./types"
+import type { ServerDemoDataSourceRowEntry, ServerDemoMutationInvalidation, ServerDemoRow } from "./types"
 import type {
   ServerDemoFillOperationRequest,
   ServerDemoFillOperationResult,
@@ -20,7 +20,7 @@ export interface CreateServerDemoDatasourceHttpFillDataSourceOptions {
   fallbackDataSource: DataGridDataSource<ServerDemoRow>
   httpDatasource: ServerDemoHttpFillDatasource | null
   refreshHistoryStatus?: () => Promise<void> | void
-  applyRowSnapshots?: (rows: readonly ServerDemoRow[]) => void | Promise<void>
+  applyRowSnapshots?: (rows: readonly ServerDemoDataSourceRowEntry[]) => void | Promise<void>
   applyInvalidation?: (invalidation: ServerDemoMutationInvalidation | null | undefined) => void | Promise<void>
 }
 

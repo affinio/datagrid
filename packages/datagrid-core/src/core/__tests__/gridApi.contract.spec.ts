@@ -1242,7 +1242,7 @@ describe("data grid api facade contracts", () => {
       { id: 1, owner: "noc" },
       { id: 2, owner: "ops" },
     ]
-    const rowModel = createDataSourceBackedRowModel({
+    const rowModel = createDataSourceBackedRowModel<{ id: number; owner: string }>({
       initialTotal: dataSourceRows.length,
       dataSource: {
         async pull(request) {
@@ -1453,7 +1453,7 @@ describe("data grid api facade contracts", () => {
     const commitEdits = vi.fn(async () => ({ committed: [] }))
     const rowModel = createDataSourceBackedRowModel({
       initialTotal: rows.length,
-      resolveRowId: row => row.id,
+      resolveRowId: (row: { id: number }) => row.id,
       dataSource: {
         async pull(request) {
           return {
@@ -1490,7 +1490,7 @@ describe("data grid api facade contracts", () => {
     ])
 
     expect(commitEdits).not.toHaveBeenCalled()
-    expect(api.rows.get(0)?.row.owner).toBe("secops")
+    expect((api.rows.get(0)?.row as { owner?: string } | undefined)?.owner).toBe("secops")
   })
 
   it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {

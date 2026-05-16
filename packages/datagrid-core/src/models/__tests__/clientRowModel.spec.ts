@@ -7,7 +7,7 @@ import {
   serializeColumnValueToToken,
 } from "../index"
 import type { VisibleRow } from "../../types"
-import type { DataGridRowNodeInput } from "../rowModel"
+import type { DataGridFilterSnapshot, DataGridRowNodeInput } from "../rowModel"
 
 const projectionStageTimer = <TResult>(_stage: string, run: () => TResult) => ({
   result: run(),
@@ -2267,7 +2267,7 @@ describe("createClientRowModel", () => {
   })
 
   it("clears and reapplies style filters without losing row-model determinism", () => {
-    const colorFilter = {
+    const colorFilter: DataGridFilterSnapshot = {
       columnFilters: {},
       columnStyleFilters: {
         status: {
@@ -2277,7 +2277,7 @@ describe("createClientRowModel", () => {
         },
       },
       advancedFilters: {},
-    } as const
+    }
 
     const model = createClientRowModel({
       rows: [

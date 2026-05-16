@@ -31,7 +31,7 @@ function createColumnSnapshot(
   } as unknown as DataGridColumnSnapshot
 }
 
-function createRuntimeRows(data: readonly Array<{ rowId: string; owner: string; region: string }>): DemoRowNode[] {
+function createRuntimeRows(data: ReadonlyArray<{ rowId: string; owner: string; region: string }>): DemoRowNode[] {
   return data.map((row, index) => ({
     rowId: row.rowId,
     rowKey: row.rowId,

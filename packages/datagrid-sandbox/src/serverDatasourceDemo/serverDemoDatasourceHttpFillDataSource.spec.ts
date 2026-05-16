@@ -121,14 +121,17 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
       invalidation: null,
       rows: [
         {
-          id: "srv-000002",
           index: 2,
-          name: "Account 00002",
-          segment: "Growth",
-          status: "Active",
-          region: "EMEA",
-          value: 194,
-          updatedAt: "2025-01-01T00:00:02Z",
+          row: {
+            id: "srv-000002",
+            index: 2,
+            name: "Account 00002",
+            segment: "Growth",
+            status: "Active",
+            region: "EMEA",
+            value: 194,
+            updatedAt: "2025-01-01T00:00:02Z",
+          },
         },
       ],
       warnings: [],
@@ -139,14 +142,17 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
       invalidation: null,
       rows: [
         {
-          id: "srv-000002",
           index: 2,
-          name: "Account 00002",
-          segment: "Growth",
-          status: "Paused",
-          region: "EMEA",
-          value: 194,
-          updatedAt: "2025-01-01T00:00:03Z",
+          row: {
+            id: "srv-000002",
+            index: 2,
+            name: "Account 00002",
+            segment: "Growth",
+            status: "Paused",
+            region: "EMEA",
+            value: 194,
+            updatedAt: "2025-01-01T00:00:03Z",
+          },
         },
       ],
       warnings: [],
@@ -203,26 +209,32 @@ describe("createServerDemoDatasourceHttpFillDataSource", () => {
     expect(applyRowSnapshots).toHaveBeenCalledTimes(2)
     expect(applyRowSnapshots).toHaveBeenNthCalledWith(1, [
       {
-        id: "srv-000002",
         index: 2,
-        name: "Account 00002",
-        segment: "Growth",
-        status: "Active",
-        region: "EMEA",
-        value: 194,
-        updatedAt: "2025-01-01T00:00:02Z",
+        row: {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Active",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:02Z",
+        },
       },
     ])
     expect(applyRowSnapshots).toHaveBeenNthCalledWith(2, [
       {
-        id: "srv-000002",
         index: 2,
-        name: "Account 00002",
-        segment: "Growth",
-        status: "Paused",
-        region: "EMEA",
-        value: 194,
-        updatedAt: "2025-01-01T00:00:03Z",
+        row: {
+          id: "srv-000002",
+          index: 2,
+          name: "Account 00002",
+          segment: "Growth",
+          status: "Paused",
+          region: "EMEA",
+          value: 194,
+          updatedAt: "2025-01-01T00:00:03Z",
+        },
       },
     ])
     expect(applyInvalidation).not.toHaveBeenCalled()

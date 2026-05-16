@@ -13,11 +13,12 @@ function rowNode(row: Row, index: number): DataGridRowNode<Row> {
     data: row,
     rowId: row.id,
     rowKey: row.id,
+    sourceIndex: index,
     originalIndex: index,
     displayIndex: index,
     kind: "leaf",
-    state: { pinned: "none", disabled: false, selected: false },
-  } as DataGridRowNode<Row>
+    state: { pinned: "none", selected: false, group: false, expanded: false },
+  }
 }
 
 describe("resolveDataGridTableStageAutoSizeRows", () => {

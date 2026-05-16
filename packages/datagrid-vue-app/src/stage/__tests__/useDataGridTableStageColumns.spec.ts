@@ -30,7 +30,8 @@ describe("useDataGridTableStageColumns", () => {
       label: "Toggle row selection",
     })
 
-    expect(column?.column.cellInteraction?.checked?.({
+    const checked = column?.column.cellInteraction?.checked
+    expect(typeof checked === "function" && checked({
       column: column.column,
       rowId: "r1",
       value: true,

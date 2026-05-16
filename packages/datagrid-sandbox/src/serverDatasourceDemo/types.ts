@@ -234,26 +234,26 @@ export type ServerDemoPullResult = Awaited<ReturnType<ServerDemoDataSource["pull
 export type ServerDemoHistogramRequest = Parameters<NonNullable<ServerDemoDataSource["getColumnHistogram"]>>[0]
 export type ServerDemoCommitEditsRequest = Parameters<NonNullable<ServerDemoDataSource["commitEdits"]>>[0]
 export type ServerDemoCommitEditsResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitEdits"]>>> & {
-  datasetVersion?: number | null
+  datasetVersion?: string | number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 export type ServerDemoFillOperationRequest = Parameters<NonNullable<ServerDemoDataSource["commitFillOperation"]>>[0]
 export type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["commitFillOperation"]>>> & {
-  datasetVersion?: number | null
+  datasetVersion?: string | number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 export type ServerDemoUndoFillRequest = Parameters<NonNullable<ServerDemoDataSource["undoFillOperation"]>>[0]
 export type ServerDemoUndoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["undoFillOperation"]>>> & {
-  datasetVersion?: number | null
+  datasetVersion?: string | number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 export type ServerDemoRedoFillResult = Awaited<ReturnType<NonNullable<ServerDemoDataSource["redoFillOperation"]>>> & {
-  datasetVersion?: number | null
+  datasetVersion?: string | number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 export interface ServerDemoChangeFeedRequest {
   sinceVersion: number

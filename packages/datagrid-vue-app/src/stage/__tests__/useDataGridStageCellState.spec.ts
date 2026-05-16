@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest"
 import { useDataGridStageCellState } from "../useDataGridStageCellState"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "../dataGridTableStageBody.types"
 
-function createColumn(partial: Partial<DataGridTableStageBodyColumn>): DataGridTableStageBodyColumn {
+function createColumn(
+  partial: Partial<Omit<DataGridTableStageBodyColumn, "column">> & {
+    column?: Partial<DataGridTableStageBodyColumn["column"]>
+  },
+): DataGridTableStageBodyColumn {
   return {
     key: partial.key ?? "value",
     width: partial.width ?? 120,
@@ -14,6 +18,20 @@ function createColumn(partial: Partial<DataGridTableStageBodyColumn>): DataGridT
       ...partial.column,
     },
   } as DataGridTableStageBodyColumn
+}
+
+function createRow(): DataGridTableStageBodyRow {
+  return {
+    kind: "leaf",
+    data: {},
+    row: {},
+    rowId: "r1",
+    rowKey: "r1",
+    sourceIndex: 0,
+    originalIndex: 0,
+    displayIndex: 0,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
 }
 
 describe("useDataGridStageCellState", () => {
@@ -35,6 +53,7 @@ describe("useDataGridStageCellState", () => {
             label: "Open details",
             pressed: true,
             disabled: true,
+            onInvoke: () => undefined,
           },
         },
       }),
@@ -64,7 +83,7 @@ describe("useDataGridStageCellState", () => {
       ),
     })
 
-    const row = { kind: "data", data: {}, rowId: "r1" } as DataGridTableStageBodyRow
+    const row = createRow()
     const checkboxColumn = visibleColumns.value[0]!
     const interactiveColumn = visibleColumns.value[1]!
     const plainColumn = visibleColumns.value[2]!

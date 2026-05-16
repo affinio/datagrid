@@ -127,6 +127,7 @@ export function createServerDatasourceHttpClient<TRow>(
   }
 
   function resetChangeFeedCursor(): void {
+    latestDatasetVersion = 0
     lastSeenVersion = 0
     emitDiagnostics()
   }

@@ -1305,7 +1305,7 @@ export function useDataGridTableStageRuntime<
             const refreshPayload = result?.invalidation ?? operation.affectedRange ?? null
             const invalidationRange = refreshPayload && !("kind" in refreshPayload)
               ? refreshPayload
-              : refreshPayload?.kind === "range"
+              : refreshPayload && "kind" in refreshPayload && refreshPayload.kind === "range"
                 ? refreshPayload.range
                 : operation.affectedRange ?? null
             options.reportFillPlumbingDetail?.("server_fill_affected_range", formatRange(invalidationRange))

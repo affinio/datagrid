@@ -13,16 +13,21 @@ function createColumn(key: string): DataGridTableStageBodyColumn {
       key,
       label: key,
     },
-  } as DataGridTableStageBodyColumn
+  } as unknown as DataGridTableStageBodyColumn
 }
 
-function createRow(rowId: string, pinned: "none" | "left" | "right" = "none"): DataGridTableStageBodyRow {
+function createRow(rowId: string, pinned: "none" | "top" | "bottom" = "none"): DataGridTableStageBodyRow {
   return {
-    kind: "data",
+    kind: "leaf",
     rowId,
+    rowKey: rowId,
     data: {},
-    state: { pinned },
-  } as DataGridTableStageBodyRow
+    row: {},
+    sourceIndex: 0,
+    originalIndex: 0,
+    displayIndex: 0,
+    state: { selected: false, group: false, pinned, expanded: false },
+  }
 }
 
 describe("useDataGridStageRowIndex", () => {
@@ -75,8 +80,10 @@ describe("useDataGridStageRowIndex", () => {
 
     const row0 = createRow("r1")
     const row1 = createRow("r2")
-    const groupRow = { kind: "group", rowId: "g1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
-    const pinnedRow = createRow("r3", "left")
+    const groupRow = createRow("g1")
+    groupRow.kind = "group"
+    groupRow.state.group = true
+    const pinnedRow = createRow("r3", "top")
 
     expect(service.showRowIndex.value).toBe(true)
     expect(service.indexColumnWidthPx.value).toBe(88)
@@ -106,7 +113,7 @@ describe("useDataGridStageRowIndex", () => {
     service.handleRowIndexClickSafe(row0, 0, {
       currentTarget: clickTarget,
       shiftKey: true,
-    } as MouseEvent)
+    } as unknown as MouseEvent)
     expect(rows.value.consumeRecentRowResizeInteraction).toHaveBeenCalled()
     expect(clickTarget).toBeDefined()
     expect(rows.value.handleRowIndexClick).toHaveBeenCalledWith(row0, 0, true)

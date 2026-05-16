@@ -39,7 +39,7 @@ describe("data grid filter normalization", () => {
       advancedFilters: {
         roi: {
           type: "number",
-          clauses: [{ id: "roi-1", operator: "lte", value: 50 }],
+          clauses: [{ operator: "lte", value: 50 }],
         },
       },
       advancedExpression: {
@@ -82,7 +82,7 @@ describe("data grid filter normalization", () => {
               roi: { kind: "predicate", operator: "gte", value: 15 },
             },
             advancedFilters: {
-              status: { type: "set", clauses: [{ id: "status", operator: "in", value: ["open"] }] },
+              status: { type: "set", clauses: [{ operator: "in", value: ["open"] }] },
             },
             advancedExpression: {
               kind: "condition",

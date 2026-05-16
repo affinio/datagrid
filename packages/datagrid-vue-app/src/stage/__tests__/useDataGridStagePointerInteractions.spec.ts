@@ -12,12 +12,26 @@ function createColumn(key: string): DataGridTableStageBodyColumn {
       key,
       label: key,
     },
-  } as DataGridTableStageBodyColumn
+  } as unknown as DataGridTableStageBodyColumn
+}
+
+function createRow(rowId = "r1"): DataGridTableStageBodyRow {
+  return {
+    kind: "leaf",
+    rowId,
+    rowKey: rowId,
+    data: {},
+    row: {},
+    sourceIndex: 0,
+    originalIndex: 0,
+    displayIndex: 0,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
 }
 
 describe("useDataGridStagePointerInteractions", () => {
   it("tracks range-move hover, fill-handle events, and drag cursor state", async () => {
-    const row = { kind: "data", rowId: "r1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
+    const row = createRow()
     const column = createColumn("owner")
     const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(() => {})
     const cell = document.createElement("div")
@@ -64,7 +78,7 @@ describe("useDataGridStagePointerInteractions", () => {
       currentTarget: cell,
       clientX: 2,
       clientY: 2,
-    } as MouseEvent
+    } as unknown as MouseEvent
 
     service.handleCellMouseMove(moveEvent, 0, 0)
     expect(service.isRangeMoveHandleHoverCell(0, 0)).toBe(true)
@@ -75,7 +89,7 @@ describe("useDataGridStagePointerInteractions", () => {
     const downEvent = {
       currentTarget: cell,
       preventDefault: vi.fn(),
-    } as MouseEvent
+    } as unknown as MouseEvent
     service.handleFillHandleMouseDown(downEvent)
     expect(fillActionMenuOpen.value).toBe(false)
     expect(downEvent.preventDefault).toHaveBeenCalled()
@@ -97,7 +111,7 @@ describe("useDataGridStagePointerInteractions", () => {
   })
 
   it("does not track range-move hover when hover interactions are suppressed", () => {
-    const row = { kind: "data", rowId: "r1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
+    const row = createRow()
     const column = createColumn("owner")
     const cell = document.createElement("div")
     cell.className = "grid-cell"
@@ -140,7 +154,7 @@ describe("useDataGridStagePointerInteractions", () => {
       currentTarget: cell,
       clientX: 2,
       clientY: 2,
-    } as MouseEvent, 0, 0)
+    } as unknown as MouseEvent, 0, 0)
 
     expect(service.isRangeMoveHandleHoverCell(0, 0)).toBe(false)
   })

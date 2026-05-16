@@ -254,8 +254,9 @@ export function useDataGridStageCellRendering(
       : null
 
     if (row.kind === "group") {
-      const renderer = column.column.groupCellRenderer ?? column.column.cellRenderer
-      if (typeof renderer !== "function") {
+      const groupRenderer = column.column.groupCellRenderer
+      const cellRenderer = column.column.cellRenderer
+      if (typeof groupRenderer !== "function" && typeof cellRenderer !== "function") {
         return displayValue
       }
       const groupRow = row as DataGridTableRow<Record<string, unknown>> & { kind: "group" }
@@ -263,7 +264,7 @@ export function useDataGridStageCellRendering(
         ? Math.max(0, Math.trunc(row.groupMeta?.childrenCount as number))
         : 0
       const renderMeta = getDataGridRowRenderMeta(groupRow)
-      return renderer({
+      const baseContext = {
         row: undefined,
         rowNode: groupRow,
         surface,
@@ -273,6 +274,12 @@ export function useDataGridStageCellRendering(
         value: options.cells.value.readCell(row, column.key),
         displayValue,
         interactive,
+      }
+      if (typeof groupRenderer !== "function") {
+        return cellRenderer?.(baseContext) ?? displayValue
+      }
+      return groupRenderer({
+        ...baseContext,
         group: {
           key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
           field: String(row.groupMeta?.groupField ?? "group"),

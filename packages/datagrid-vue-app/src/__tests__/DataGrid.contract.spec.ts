@@ -3379,7 +3379,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const api = resolveVm(wrapper).getApi?.() as {
+    const api = resolveVm(wrapper).getApi?.() as unknown as {
       rowSelection: {
         selectRows: (rowIds: readonly string[]) => void
         getSnapshot?: () => unknown
@@ -3795,7 +3795,7 @@ describe("DataGrid app facade contract", () => {
         },
       }),
     }))
-    const request = pull.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined
+    const request = (pull.mock.calls.at(-1) as unknown as [Record<string, unknown>] | undefined)?.[0]
     expect(request).not.toHaveProperty("search")
     expect(request?.filterModel).not.toHaveProperty("search")
 
@@ -7425,16 +7425,24 @@ describe("DataGrid app facade contract", () => {
           snapshot: {
             kind: "client",
             rowCount: 3,
-            rows: [],
             sortModel: [{ key: "amount", direction: "desc" }],
             filterModel: null,
             groupBy: null,
             groupExpansion: null,
-            pagination: { pageSize: 100, currentPage: 0 },
+            pagination: {
+              enabled: false,
+              pageSize: 100,
+              currentPage: 0,
+              pageCount: 1,
+              totalRowCount: 3,
+              startIndex: 0,
+              endIndex: 2,
+            },
             viewportRange: { start: 0, end: 0 },
             loading: false,
             initialLoading: false,
             refreshing: false,
+            error: null,
             revision: 0,
             projection: null,
             pivotModel: null,
@@ -7759,7 +7767,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const rowModel = resolveRowModel(wrapper) as {
+    const rowModel = resolveRowModel(wrapper) as unknown as {
       getRow?: (index: number) => { row?: FormulaRow } | undefined
       getFormulaFields?: () => ReadonlyArray<{ name: string }>
     } | null

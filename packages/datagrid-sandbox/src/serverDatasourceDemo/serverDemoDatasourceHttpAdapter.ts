@@ -137,7 +137,7 @@ type ServerDemoFillHistoryResponse = {
   canRedo?: boolean
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 
 type ServerDemoCommitEditsResponse = {
@@ -191,6 +191,10 @@ type ServerDemoHistoryStackResponse = {
   serverInvalidation?: ServerDemoMutationInvalidation | null
   latestUndoOperationId?: string | null
   latestRedoOperationId?: string | null
+  rows?: readonly ServerDemoDataSourceRowEntry[]
+}
+
+type ServerDemoHistoryStackServerResponse = Omit<ServerDemoHistoryStackResponse, "rows"> & {
   rows?: readonly ServerDemoRow[]
 }
 
@@ -216,7 +220,7 @@ type ServerDemoCommitEditsResultWithOperation = ServerDemoCommitEditsResult & {
   affectedCells?: number
   datasetVersion?: number | null
   serverInvalidation?: ServerDemoMutationInvalidation | null
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 
 type ServerDemoServerOperationResult = ServerDemoCommitEditsResultWithOperation & {
@@ -234,10 +238,10 @@ type ServerDemoFillUndoRequest = Parameters<NonNullable<DataGridDataSource<Serve
 type ServerDemoFillRedoRequest = Parameters<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>[0]
 type ServerDemoFillOperationResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["commitFillOperation"]>>>
 type ServerDemoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["undoFillOperation"]>>> & {
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 type ServerDemoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<ServerDemoRow>["redoFillOperation"]>>> & {
-  rows?: readonly ServerDemoRow[]
+  rows?: readonly ServerDemoDataSourceRowEntry[]
 }
 type ServerDemoCommitEditsRequestWithScope = ServerDemoCommitEditsRequest & { scope?: ServerDemoHistoryScope }
 type ServerDemoFillOperationRequestWithScope = ServerDemoFillOperationRequest & { scope?: ServerDemoHistoryScope }
@@ -734,6 +738,16 @@ function toRejectedRows(response: ServerDemoCommitEditsResponse): ServerDemoComm
   }))
 }
 
+function toServerDemoDataSourceRowEntries(
+  rows: readonly ServerDemoRow[] | null | undefined,
+): readonly ServerDemoDataSourceRowEntry[] {
+  return (rows ?? []).map(row => ({
+    index: row.index,
+    rowId: row.id,
+    row,
+  }))
+}
+
 function toServerDemoHistoryState(response: {
   operationId?: string | null
   canUndo?: boolean
@@ -775,7 +789,7 @@ async function postServerOperation(
     latestRedoOperationId: historyState?.latestRedoOperationId,
     affectedRows: historyState?.affectedRows ?? undefined,
     affectedCells: historyState?.affectedCells ?? undefined,
-    rows: response.rows ?? [],
+    rows: toServerDemoDataSourceRowEntries(response.rows),
   }
 }
 
@@ -799,6 +813,7 @@ async function postServerFillHistoryOperation(
     latestRedoOperationId: historyState?.latestRedoOperationId,
     affectedRows: historyState?.affectedRows ?? undefined,
     affectedCells: historyState?.affectedCells ?? undefined,
+    rows: toServerDemoDataSourceRowEntries(response.rows),
   }
 }
 
@@ -808,7 +823,7 @@ async function postServerHistoryStackOperation(
   body: ServerDemoHistoryStackRequestBody,
   signal?: AbortSignal,
 ): Promise<ServerDemoHistoryStackResponse> {
-  const response = await postJson<ServerDemoHistoryStackResponse>(fetchImpl, url, body, signal)
+  const response = await postJson<ServerDemoHistoryStackServerResponse>(fetchImpl, url, body, signal)
   const serverInvalidation = normalizeServerDemoMutationInvalidation(response.invalidation)
   return {
     operationId: response.operationId ?? null,
@@ -826,7 +841,7 @@ async function postServerHistoryStackOperation(
     serverInvalidation,
     latestUndoOperationId: response.latestUndoOperationId ?? null,
     latestRedoOperationId: response.latestRedoOperationId ?? null,
-    rows: response.rows ?? [],
+    rows: toServerDemoDataSourceRowEntries(response.rows),
   }
 }
 
@@ -1093,7 +1108,7 @@ export function createServerDemoDatasourceHttpAdapter(
         datasetVersion: latestDatasetVersion,
         invalidation: normalizeDatasourceInvalidation(response.invalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(response.invalidation),
-        rows: response.rows ?? [],
+        rows: toServerDemoDataSourceRowEntries(response.rows),
       } as ServerDemoCommitEditsResultWithOperation
     },
 
@@ -1133,7 +1148,7 @@ export function createServerDemoDatasourceHttpAdapter(
         invalidation: normalizeDatasourceInvalidation(rawInvalidation),
         serverInvalidation: normalizeServerDemoMutationInvalidation(rawInvalidation),
         warnings: response.warnings ?? [],
-        rows: response.rows ?? [],
+        rows: toServerDemoDataSourceRowEntries(response.rows),
       } as ServerDemoFillOperationResult & {
         operationId?: string | null
         affectedRows?: number

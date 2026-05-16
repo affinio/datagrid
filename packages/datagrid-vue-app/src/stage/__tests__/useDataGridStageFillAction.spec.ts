@@ -12,7 +12,21 @@ function createColumn(key: string): DataGridTableStageBodyColumn {
       key,
       label: key,
     },
-  } as DataGridTableStageBodyColumn
+  } as unknown as DataGridTableStageBodyColumn
+}
+
+function createRow(rowId = "r1"): DataGridTableStageBodyRow {
+  return {
+    kind: "leaf",
+    rowId,
+    rowKey: rowId,
+    data: {},
+    row: {},
+    sourceIndex: 0,
+    originalIndex: 0,
+    displayIndex: 0,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
 }
 
 function createRect(right: number, bottom: number): DOMRect {
@@ -32,7 +46,7 @@ function createRect(right: number, bottom: number): DOMRect {
 describe("useDataGridStageFillAction", () => {
   it("resolves floating menu position and closes on anchor changes", async () => {
     const column = createColumn("owner")
-    const row = { kind: "data", rowId: "r1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
+    const row = createRow()
     const cell = document.createElement("div")
     const focus = vi.fn()
     Object.defineProperty(cell, "focus", {

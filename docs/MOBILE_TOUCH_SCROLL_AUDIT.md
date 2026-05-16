@@ -138,6 +138,10 @@ Problem:
 - Selection and range-move paths call `preventDefault()` on primary-button down.
 - On touch devices, this mouse-first interaction model still needs a full long-press selection mode, but single-tap edit affordances no longer bypass the scroll-first/tap-select policy for select/date cells.
 
+Current state:
+- Touch-generated single taps are guarded from opening select/date editors.
+- Touch-generated double-click/double-tap events still open inline edit, preserving a deliberate touch editing path while keeping one-finger scroll and single tap selection first.
+
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
 - Do not start drag selection or range move from touch unless the grid is already in touch selection mode, the user long-pressed, or the down occurred on an explicit handle.

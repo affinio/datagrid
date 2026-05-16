@@ -6,7 +6,7 @@ import type {
 } from "@affino/datagrid-vue"
 import { useDataGridTableStagePlaceholderRows } from "../useDataGridTableStagePlaceholderRows"
 
-interface DemoRow {
+type DemoRow = Record<string, unknown> & {
   rowId: string
   owner: string
 }
