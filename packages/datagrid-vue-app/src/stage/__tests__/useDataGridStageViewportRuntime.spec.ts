@@ -225,6 +225,34 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("records stage scroll perf telemetry samples when perf tracing is enabled", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness({ perfTraceEnabled: true })
+    const bodyViewport = createViewportElement({ scrollTop: 96, scrollLeft: 24 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    frameCallbacks.shift()?.(0)
+    frameCallbacks.shift()?.(0)
+    frameCallbacks.shift()?.(0)
+    frameCallbacks.shift()?.(64)
+
+    expect(resolveDataGridPerfStore()?.latest("stageScrollPerf")).toMatchObject({
+      scope: "stageScrollPerf",
+      active: 1,
+      frameCount: 1,
+      droppedFrames: 1,
+      longTaskFrames: 1,
+      avgFrameMs: 64,
+    })
+
+    harness.unmount()
+  })
+
   it("exposes body scroll active and idle state with deferred idle callbacks", () => {
     vi.useFakeTimers()
     const harness = createHarness()

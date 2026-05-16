@@ -1,5 +1,10 @@
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
-import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll, useDataGridScrollIdleGate } from "@affino/datagrid-vue/advanced"
+import {
+  useDataGridLinkedPaneScrollSync,
+  useDataGridManagedWheelScroll,
+  useDataGridScrollIdleGate,
+  useDataGridScrollPerfTelemetry,
+} from "@affino/datagrid-vue/advanced"
 import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
 import {
   recordDataGridPerfSample,
@@ -115,6 +120,25 @@ export function useDataGridStageViewportRuntime(
       return handle
     },
   })
+  const scrollPerfTelemetry = perfTraceEnabled
+    ? useDataGridScrollPerfTelemetry({
+        resolveIdleDelayMs: () => DATA_GRID_SCROLL_IDLE_MS,
+        onSnapshotChange: snapshot => {
+          recordDataGridPerfSample({
+            scope: "stageScrollPerf",
+            ts: Date.now(),
+            totalMs: snapshot.avgFrameMs,
+            active: snapshot.active ? 1 : 0,
+            frameCount: snapshot.frameCount,
+            droppedFrames: snapshot.droppedFrames,
+            longTaskFrames: snapshot.longTaskFrames,
+            avgFrameMs: snapshot.avgFrameMs,
+            fps: snapshot.fps,
+            quality: snapshot.quality,
+          })
+        },
+      })
+    : null
 
   const managedWheelScroll = useDataGridManagedWheelScroll({
     resolveBodyViewport: () => bodyViewportEl.value,
@@ -270,6 +294,7 @@ export function useDataGridStageViewportRuntime(
     if (isBodyViewportScrollIdle.value) {
       isBodyViewportScrollIdle.value = false
     }
+    scrollPerfTelemetry?.markScrollActivity()
     bodyViewportScrollIdleGate.markScrollActivity()
     if (bodyViewportScrollIdleCallbackQueued) {
       return
@@ -357,6 +382,7 @@ export function useDataGridStageViewportRuntime(
   onBeforeUnmount(() => {
     linkedPaneScrollSync.reset()
     managedWheelScroll.reset()
+    scrollPerfTelemetry?.dispose()
     bodyViewportScrollIdleGate.dispose()
     bodyViewportScrollIdleCallbackQueued = false
     cancelBodyViewportScrollFrame()
