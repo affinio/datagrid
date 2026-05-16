@@ -1578,6 +1578,41 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("isolates touch selection handle mousedown from cell-body selection", async () => {
+    mockCoarsePointer(true)
+    const handleCellMouseDown = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+          handleCellMouseDown,
+        },
+      ),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    const handle = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"] .grid-touch-selection-handle')
+    const event = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+    handle.element.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(handleCellMouseDown).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
     const handleCellClick = vi.fn()
     const startInlineEdit = vi.fn()

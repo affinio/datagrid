@@ -3257,8 +3257,12 @@ body.datagrid-fill-drag-cursor * {
   bottom: -14px;
   width: 28px;
   height: 28px;
+  border: 0;
   border-radius: 6px;
-  pointer-events: none;
+  background: transparent;
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
   z-index: 3;
 }
 

@@ -77,6 +77,7 @@ export interface DataGridTableStageBodyRenderApiBase {
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
+  handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isFillHandleCellSafe: (rowOffset: number, columnIndex: number) => boolean
   isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean

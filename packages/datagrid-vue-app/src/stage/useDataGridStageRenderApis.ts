@@ -95,6 +95,7 @@ export interface UseDataGridStageRenderApisOptions {
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
+  handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   isSelectEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
@@ -183,6 +184,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     clearRangeMoveHandleHover: options.clearRangeMoveHandleHover,
     handleCellKeydown: options.handleCellKeydown,
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
+    handleTouchSelectionHandleMouseDown: options.handleTouchSelectionHandleMouseDown,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
@@ -240,6 +242,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     clearRangeMoveHandleHover: options.clearRangeMoveHandleHover,
     handleCellKeydown: options.handleCellKeydown,
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
+    handleTouchSelectionHandleMouseDown: options.handleTouchSelectionHandleMouseDown,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,

@@ -105,10 +105,15 @@
             @mousedown.stop="renderApi.handleFillHandleMouseDown($event)"
             @dblclick.stop="renderApi.handleFillHandleDoubleClick($event)"
           />
-          <span
+          <button
             v-if="renderApi.isTouchSelectionAnchorHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+            type="button"
             class="grid-touch-selection-handle"
-            aria-hidden="true"
+            aria-label="Selection handle"
+            tabindex="-1"
+            @mousedown.stop.prevent="renderApi.handleTouchSelectionHandleMouseDown($event)"
+            @click.stop.prevent
+            @contextmenu.stop.prevent
           />
           <DataGridCellComboboxEditor
             v-if="renderApi.isSelectEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
