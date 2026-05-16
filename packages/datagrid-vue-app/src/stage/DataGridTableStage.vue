@@ -725,6 +725,7 @@ const {
   isCellEditableSafe: isCellEditableSafeBase,
   isEditingCellSafe: isEditingCellSafeBase,
   columnIndexByKey,
+  suppressInlineEditStart: isBodyViewportScrolling,
 })
 
 const rowStateRuntime = useDataGridStageRowState({

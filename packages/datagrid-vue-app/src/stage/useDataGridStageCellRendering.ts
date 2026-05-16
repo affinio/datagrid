@@ -36,6 +36,7 @@ export interface UseDataGridStageCellRenderingOptions {
   isCellEditableSafe: (row: DataGridTableRow<Record<string, unknown>>, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isEditingCellSafe: (row: DataGridTableRow<Record<string, unknown>>, columnKey: string) => boolean
   columnIndexByKey: (columnKey: string) => number
+  suppressInlineEditStart?: Readonly<Ref<boolean>>
 }
 
 export interface UseDataGridStageCellRenderingResult {
@@ -354,7 +355,11 @@ export function useDataGridStageCellRendering(
 
   function startInlineEditIfAllowed(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn, rowOffset: number): void {
     const columnIndex = options.columnIndexByKey(column.key)
-    if (rowOffset < 0 || !options.isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+    if (
+      options.suppressInlineEditStart?.value === true
+      || rowOffset < 0
+      || !options.isCellEditableSafe(row, rowOffset, column, columnIndex)
+    ) {
       return
     }
     options.editing.value.startInlineEdit(

@@ -145,5 +145,22 @@ describe("useDataGridStageCellRendering", () => {
       "stage",
       { openOnMount: true },
     )
+
+    const scrollingRenderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+      suppressInlineEditStart: ref(true),
+    })
+    vi.mocked(editing.value.startInlineEdit).mockClear()
+
+    scrollingRenderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0)
+
+    expect(editing.value.startInlineEdit).not.toHaveBeenCalled()
   })
 })
