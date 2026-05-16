@@ -52,6 +52,13 @@ interface DataGridAppFillProjectionContext {
   pagination: DataGridPaginationSnapshot
 }
 
+function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const sourceCapabilities = (event as MouseEvent & {
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  }).sourceCapabilities
+  return sourceCapabilities?.firesTouchEvents === true
+}
+
 interface DataGridAppResolveFillBoundaryRequest {
   direction: "up" | "down" | "left" | "right"
   baseRange: DataGridCopyRange
@@ -2716,6 +2723,9 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
+    if (isTouchGeneratedMouseEvent(event)) {
+      return
+    }
     const columnKey = options.visibleColumns.value[columnIndex]?.key
     if (!columnKey) {
       return

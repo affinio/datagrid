@@ -596,6 +596,26 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
   })
 
+  it("ignores touch-generated cell mousedown events", () => {
+    const { controller, row, applyCellSelectionByCoord } = createControllerHarness()
+    const cell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 1,
+      clientY: 10,
+    })
+    Object.defineProperty(pointerDown, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+
+    expect(pointerDown.defaultPrevented).toBe(false)
+    expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
+  })
+
   it("starts drag selection only after the pointer crosses the drag threshold", () => {
     const { controller, row, applyCellSelectionByCoord } = createControllerHarness()
     const cell = createCell(0, 0)
