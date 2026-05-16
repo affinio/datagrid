@@ -34,6 +34,10 @@ describe("dataGridMouseEventGuards", () => {
     expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown({ firesTouchEvents: true }), {
       interactionMode: "desktop",
     })).toBe(false)
+    expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown({ firesTouchEvents: true }), {
+      interactionMode: "auto",
+      isCoarsePointer: false,
+    })).toBe(true)
     expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown(), {
       interactionMode: "touch",
     })).toBe(false)

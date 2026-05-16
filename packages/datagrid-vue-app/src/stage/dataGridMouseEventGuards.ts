@@ -38,5 +38,8 @@ export function shouldPrioritizeNativeScrollForMouseEvent(
   if (!isTouchGeneratedMouseEvent(event)) {
     return false
   }
+  if ((input.interactionMode ?? "auto") === "auto") {
+    return true
+  }
   return resolveDataGridInteractionMode(input) === "touch"
 }

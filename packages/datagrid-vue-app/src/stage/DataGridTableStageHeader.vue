@@ -699,6 +699,10 @@ const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
+const interactionModeInput = computed(() => ({
+  interactionMode: "auto" as const,
+  isCoarsePointer: props.isCoarsePointer,
+}))
 const pivotHeaderGroupDepth = computed(() => {
   if (mode.value !== "pivot") {
     return 0
@@ -917,7 +921,7 @@ function sortIndicator(columnKey: string): string {
 }
 
 function startResize(event: MouseEvent, columnKey: string): void {
-  if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+  if (shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)) {
     return
   }
   event.preventDefault()
@@ -925,7 +929,7 @@ function startResize(event: MouseEvent, columnKey: string): void {
 }
 
 function handleResizeDoubleClick(event: MouseEvent, columnKey: string): void {
-  if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+  if (shouldPrioritizeNativeScrollForMouseEvent(event, interactionModeInput.value)) {
     return
   }
   columns.value.handleResizeDoubleClick(event, columnKey)
@@ -991,7 +995,7 @@ function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): voi
   if (
     !isHeaderColumnDraggable(column)
     || isHeaderDragBlockedFromTarget(event)
-    || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })
+    || shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)
   ) {
     clearHeaderColumnDragState()
     return
