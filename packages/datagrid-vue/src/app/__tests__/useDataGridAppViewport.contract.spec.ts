@@ -134,6 +134,7 @@ function mockCoarsePointer(matches: boolean): void {
 describe("useDataGridAppViewport contract", () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       writable: true,
@@ -295,6 +296,46 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 36 })
+  })
+
+  it("expands row overscan during fast scroll bursts", () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(16)
+
+    const raf = createRafHarness()
+    const syncRowsInRange = vi.fn(() => [])
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        rowPartition: ref({ bodyRowCount: 200, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 100,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    element.scrollTop = 500
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 132 })
   })
 
   it("incrementally shifts visible rows when the viewport range overlaps the previous frame", () => {

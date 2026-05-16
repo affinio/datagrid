@@ -20,6 +20,8 @@ const DATA_GRID_HORIZONTAL_SCROLL_IDLE_MS = 120
 const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
+const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
+const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
 
 type DataGridPerfSample = {
   scope: string
@@ -364,6 +366,52 @@ export function useDataGridAppViewport<TRow>(
       Math.ceil(baseOverscan * DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER),
     )
   })
+  let adaptiveRowOverscan = 0
+  let lastAdaptiveOverscanScrollTop = 0
+  let lastAdaptiveOverscanSampleMs = 0
+  let hasAdaptiveRowOverscanSample = false
+
+  const resolveEffectiveRowOverscan = (): number => {
+    const baseOverscan = rowOverscan.value
+    if (baseOverscan <= 0) {
+      return 0
+    }
+    return Math.max(baseOverscan, adaptiveRowOverscan)
+  }
+
+  const updateAdaptiveRowOverscan = (scrollTop: number, clientHeight: number): void => {
+    const now = resolveDataGridPerfNow()
+    if (!hasAdaptiveRowOverscanSample) {
+      lastAdaptiveOverscanScrollTop = scrollTop
+      lastAdaptiveOverscanSampleMs = now
+      hasAdaptiveRowOverscanSample = true
+      adaptiveRowOverscan = 0
+      return
+    }
+    const elapsedMs = Math.max(1, now - lastAdaptiveOverscanSampleMs)
+    const deltaPx = Math.abs(scrollTop - lastAdaptiveOverscanScrollTop)
+    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
+    const minAdaptiveDistancePx = Math.max(Math.max(1, clientHeight), estimatedRowHeight * 4)
+    if (deltaPx < minAdaptiveDistancePx) {
+      adaptiveRowOverscan = 0
+      lastAdaptiveOverscanScrollTop = scrollTop
+      lastAdaptiveOverscanSampleMs = now
+      return
+    }
+    const projectedRows = Math.ceil(
+      (deltaPx / elapsedMs) * DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS / estimatedRowHeight,
+    )
+    adaptiveRowOverscan = Math.min(DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX, Math.max(0, projectedRows))
+    lastAdaptiveOverscanScrollTop = scrollTop
+    lastAdaptiveOverscanSampleMs = now
+  }
+
+  const resetAdaptiveRowOverscan = (): void => {
+    adaptiveRowOverscan = 0
+    lastAdaptiveOverscanScrollTop = pendingViewportScrollTop
+    lastAdaptiveOverscanSampleMs = 0
+    hasAdaptiveRowOverscanSample = false
+  }
   const columnOverscan = computed(() => {
     const value = options.columnOverscan == null ? 2 : resolveMaybeRef(options.columnOverscan)
     return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 2
@@ -826,19 +874,20 @@ export function useDataGridAppViewport<TRow>(
       return { start: 0, end: total - 1 }
     }
 
+    const effectiveRowOverscan = resolveEffectiveRowOverscan()
     if (typeof options.resolveRowIndexAtOffset === "function") {
-      const start = Math.max(0, options.resolveRowIndexAtOffset(snapshot.scrollTop) - rowOverscan.value)
+      const start = Math.max(0, options.resolveRowIndexAtOffset(snapshot.scrollTop) - effectiveRowOverscan)
       const visibleBottomOffset = Math.max(0, snapshot.scrollTop + Math.max(1, snapshot.clientHeight) - 1)
       const end = Math.min(
         total - 1,
-        options.resolveRowIndexAtOffset(visibleBottomOffset) + rowOverscan.value,
+        options.resolveRowIndexAtOffset(visibleBottomOffset) + effectiveRowOverscan,
       )
       return { start, end }
     }
 
     const estimatedRowHeight = options.normalizedBaseRowHeight.value
-    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight) - rowOverscan.value)
-    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight) + rowOverscan.value * 2
+    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight) - effectiveRowOverscan)
+    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight) + effectiveRowOverscan * 2
     const end = Math.min(total - 1, start + visibleCount - 1)
     return { start, end }
   }
@@ -1022,7 +1071,7 @@ export function useDataGridAppViewport<TRow>(
     if (!lastSyncedRange) {
       return false
     }
-    const hysteresis = Math.max(1, Math.floor(rowOverscan.value / 2))
+    const hysteresis = Math.max(1, Math.floor(resolveEffectiveRowOverscan() / 2))
     return visibleRange.start >= lastSyncedRange.start + hysteresis
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }
@@ -1371,6 +1420,7 @@ export function useDataGridAppViewport<TRow>(
       }
       cacheViewportDimensions(element, dimensions)
     }
+    updateAdaptiveRowOverscan(pendingViewportScrollTop, cachedViewportDimensions?.clientHeight ?? 0)
     syncHeaderScrollLeftFromBody(pendingViewportScrollLeft)
     scheduleViewportCommit({
       forceVisibleRows: false,
@@ -1407,6 +1457,7 @@ export function useDataGridAppViewport<TRow>(
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
     clearHorizontalScrollIdleTimer()
+    resetAdaptiveRowOverscan()
     horizontalScrollActive = false
     if (viewportSyncRafHandle == null) {
       return
