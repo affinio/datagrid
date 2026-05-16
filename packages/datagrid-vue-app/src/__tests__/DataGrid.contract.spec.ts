@@ -630,7 +630,10 @@ function createDragDataTransfer() {
 
 function createDragLikeEvent(
   type: string,
-  init: MouseEventInit & { dataTransfer?: ReturnType<typeof createDragDataTransfer> } = {},
+  init: MouseEventInit & {
+    dataTransfer?: ReturnType<typeof createDragDataTransfer>
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  } = {},
 ): DragEvent {
   const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent
   Object.defineProperty(event, "clientX", {
@@ -645,6 +648,12 @@ function createDragLikeEvent(
     configurable: true,
     value: init.dataTransfer ?? createDragDataTransfer(),
   })
+  if (init.sourceCapabilities) {
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: init.sourceCapabilities,
+    })
+  }
   return event
 }
 
@@ -2619,6 +2628,40 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
       order: ["region", "amount", "owner"],
+    })
+
+    wrapper.unmount()
+  })
+
+  it("ignores touch-generated header drag starts", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    const amountHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect(amountHeader.exists()).toBe(true)
+
+    const dataTransfer = createDragDataTransfer()
+    ownerHeader.element.dispatchEvent(createDragLikeEvent("dragstart", {
+      dataTransfer,
+      sourceCapabilities: { firesTouchEvents: true },
+    }))
+    amountHeader.element.dispatchEvent(createDragLikeEvent("dragover", { dataTransfer, clientX: 96 }))
+    amountHeader.element.dispatchEvent(createDragLikeEvent("drop", { dataTransfer, clientX: 96 }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
+      order: ["owner", "region", "amount"],
     })
 
     wrapper.unmount()

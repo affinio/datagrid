@@ -986,7 +986,7 @@ function handleHeaderColumnClick(
 }
 
 function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): void {
-  if (!isHeaderColumnDraggable(column) || isHeaderDragBlockedFromTarget(event)) {
+  if (!isHeaderColumnDraggable(column) || isHeaderDragBlockedFromTarget(event) || isTouchGeneratedMouseEvent(event)) {
     clearHeaderColumnDragState()
     return
   }
