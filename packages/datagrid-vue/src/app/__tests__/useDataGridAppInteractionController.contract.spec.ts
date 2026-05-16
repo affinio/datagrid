@@ -2297,6 +2297,42 @@ describe("useDataGridAppInteractionController contract", () => {
     await expect(controller.applyLastFillBehavior("copy")).resolves.toBe(false)
   })
 
+  it("ignores touch-generated fill-handle double-click events", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+    const event = new MouseEvent("dblclick", {
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    controller.startFillHandleDoubleClick(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+  })
+
   it("falls back to the nearest contiguous reference column on the right when the left side has no extent", async () => {
     const { controller, selectionSnapshot, applyClipboardEdits, buildFillMatrixFromRange } = createControllerHarness({
       rowCount: 5,

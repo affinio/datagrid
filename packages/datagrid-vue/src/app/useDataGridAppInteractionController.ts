@@ -33,7 +33,7 @@ import {
   type DataGridCopyRange,
 } from "../advanced"
 import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
-import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -2537,6 +2537,10 @@ export function useDataGridAppInteractionController<
 
   const startFillHandleDoubleClick = (event: MouseEvent): void => {
     options.reportFillPlumbingState?.("double_click_handler", true)
+    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+      options.reportFillPlumbingState?.("double_click_handler_skipped_touch_scroll", true)
+      return
+    }
     if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
       options.reportFillPlumbingState?.("double_click_handler_skipped", true)
       return

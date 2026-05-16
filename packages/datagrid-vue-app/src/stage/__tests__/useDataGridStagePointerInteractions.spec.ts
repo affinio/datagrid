@@ -83,6 +83,7 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(startFillHandleDrag).toHaveBeenCalledWith(downEvent)
 
     service.handleFillHandleDoubleClick(downEvent)
+    expect(downEvent.preventDefault).toHaveBeenCalledTimes(2)
     expect(startFillHandleDoubleClick).toHaveBeenCalledWith(downEvent)
 
     selection.value.isFillDragging = true
@@ -175,5 +176,38 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(event.defaultPrevented).toBe(false)
     expect(fillActionMenuOpen.value).toBe(true)
     expect(startFillHandleDrag).not.toHaveBeenCalled()
+  })
+
+  it("ignores touch-generated fill-handle double-click events", () => {
+    const startFillHandleDoubleClick = vi.fn()
+    const fillActionMenuOpen = ref(true)
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag: vi.fn(),
+        startFillHandleDoubleClick,
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      displayRows: ref([]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen,
+      isCellSelectedSafe: () => false,
+      isCellEditableSafe: () => false,
+      isCellOnSelectionEdgeSafe: () => false,
+    })
+    const event = new MouseEvent("dblclick", { bubbles: true, cancelable: true })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    service.handleFillHandleDoubleClick(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(fillActionMenuOpen.value).toBe(true)
+    expect(startFillHandleDoubleClick).not.toHaveBeenCalled()
   })
 })

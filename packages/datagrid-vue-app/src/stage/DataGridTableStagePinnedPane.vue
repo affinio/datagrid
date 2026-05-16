@@ -103,7 +103,7 @@
             aria-label="Fill handle"
             tabindex="-1"
             @mousedown.stop="renderApi.handleFillHandleMouseDown($event)"
-            @dblclick.stop.prevent="renderApi.handleFillHandleDoubleClick($event)"
+            @dblclick.stop="renderApi.handleFillHandleDoubleClick($event)"
           />
           <DataGridCellComboboxEditor
             v-if="renderApi.isSelectEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"

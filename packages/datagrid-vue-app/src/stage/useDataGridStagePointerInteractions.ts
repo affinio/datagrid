@@ -7,7 +7,7 @@ import type {
   DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
 } from "./dataGridTableStageBody.types"
-import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStagePointerInteractionsOptions {
   mode: Readonly<Ref<DataGridTableMode>>
@@ -172,6 +172,10 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleDoubleClick(event: MouseEvent): void {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+      return
+    }
+    event.preventDefault()
     options.fillActionMenuOpen.value = false
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     const cell = handle?.closest<HTMLElement>(".grid-cell")
