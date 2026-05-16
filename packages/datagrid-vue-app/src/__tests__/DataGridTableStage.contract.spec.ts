@@ -2020,10 +2020,15 @@ describe("DataGridTableStage contract", () => {
     expect(resizeHandle.exists()).toBe(true)
 
     await resizeHandle.trigger("mousedown", { clientY: 32 })
-    await resizeHandle.trigger("click")
+    const click = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+    })
+    resizeHandle.element.dispatchEvent(click)
 
     expect(startRowResize).toHaveBeenCalledTimes(1)
     expect(handleRowIndexClick).not.toHaveBeenCalled()
+    expect(click.defaultPrevented).toBe(false)
 
     wrapper.unmount()
   })
