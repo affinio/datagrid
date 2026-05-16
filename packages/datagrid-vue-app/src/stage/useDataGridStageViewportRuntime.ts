@@ -172,7 +172,7 @@ export function useDataGridStageViewportRuntime(
     syncBodyViewportScrollState(element)
     options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
-      options.gridChromeSyncers.value.flushGridChromeRedraw("center-scroll")
+      options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
       return
     }
     options.gridChromeSyncers.value.scheduleGridChromeRedraw("full")
@@ -188,7 +188,7 @@ export function useDataGridStageViewportRuntime(
     markBodyViewportScrolling()
     options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
     syncBodyViewportScrollState(bodyViewport)
-    options.gridChromeSyncers.value.flushGridChromeRedraw("center-scroll")
+    options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
   }
 
   function handleLinkedViewportWheel(event: WheelEvent): void {

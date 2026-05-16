@@ -1,0 +1,110 @@
+import { defineComponent, ref, shallowRef } from "vue"
+import { mount } from "@vue/test-utils"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import type { UseDataGridStageViewportRuntimeResult, UseDataGridStageViewportRuntimeSyncers } from "../useDataGridStageViewportRuntime"
+import { useDataGridStageViewportRuntime } from "../useDataGridStageViewportRuntime"
+import type { DataGridTableStageViewportSection } from "../dataGridTableStage.types"
+
+function createViewportElement({ scrollTop = 0, scrollLeft = 0 } = {}): HTMLElement {
+  const element = document.createElement("div")
+  element.scrollTop = scrollTop
+  element.scrollLeft = scrollLeft
+  Object.defineProperty(element, "clientWidth", {
+    configurable: true,
+    value: 320,
+  })
+  Object.defineProperty(element, "clientHeight", {
+    configurable: true,
+    value: 240,
+  })
+  return element
+}
+
+function createHarness() {
+  const viewport: DataGridTableStageViewportSection = {
+    topSpacerHeight: 0,
+    bottomSpacerHeight: 0,
+    viewportRowStart: 0,
+    viewportRowEnd: 0,
+    columnWindowStart: 0,
+    leftColumnSpacerWidth: 0,
+    rightColumnSpacerWidth: 0,
+    headerViewportRef: vi.fn(),
+    bodyViewportRef: vi.fn(),
+    handleHeaderWheel: vi.fn(),
+    handleHeaderScroll: vi.fn(),
+    handleViewportScroll: vi.fn(),
+    handleViewportKeydown: vi.fn(),
+  }
+  const syncers: UseDataGridStageViewportRuntimeSyncers = {
+    syncBodyViewportMetrics: vi.fn(),
+    syncPinnedBottomViewportMetrics: vi.fn(),
+    syncPinnedBottomViewportScrollLeft: vi.fn(),
+    scheduleGridChromeRedraw: vi.fn(),
+    flushGridChromeRedraw: vi.fn(),
+    connectGridChromeResizeObserver: vi.fn(),
+    disconnectGridChromeResizeObserver: vi.fn(),
+  }
+  let runtime: UseDataGridStageViewportRuntimeResult | null = null
+  const wrapper = mount(defineComponent({
+    setup() {
+      runtime = useDataGridStageViewportRuntime({
+        stageRootEl: ref(null),
+        viewport: shallowRef(viewport),
+        gridChromeSyncers: shallowRef(syncers),
+        leftPaneContentRef: ref(null),
+        rightPaneContentRef: ref(null),
+      })
+      return () => null
+    },
+  }))
+  vi.mocked(syncers.scheduleGridChromeRedraw).mockClear()
+  vi.mocked(syncers.flushGridChromeRedraw).mockClear()
+  vi.mocked(syncers.syncPinnedBottomViewportScrollLeft).mockClear()
+  vi.mocked(viewport.handleViewportScroll).mockClear()
+  return {
+    runtime: runtime as UseDataGridStageViewportRuntimeResult,
+    syncers,
+    viewport,
+    unmount: () => wrapper.unmount(),
+  }
+}
+
+describe("useDataGridStageViewportRuntime", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("schedules center chrome redraw for horizontal body scroll instead of flushing synchronously", () => {
+    const harness = createHarness()
+    const bodyViewport = createViewportElement({ scrollLeft: 48 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalled()
+    expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("schedules center chrome redraw when pinned bottom scroll syncs the body viewport", () => {
+    const harness = createHarness()
+    const bodyViewport = createViewportElement()
+    const pinnedBottomViewport = createViewportElement({ scrollLeft: 64 })
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    vi.mocked(harness.syncers.scheduleGridChromeRedraw).mockClear()
+    vi.mocked(harness.syncers.flushGridChromeRedraw).mockClear()
+    vi.mocked(harness.viewport.handleViewportScroll).mockClear()
+
+    harness.runtime.handlePinnedBottomViewportScroll({ target: pinnedBottomViewport } as unknown as Event)
+
+    expect(bodyViewport.scrollLeft).toBe(64)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+    expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+})
