@@ -1,6 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
 import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll } from "@affino/datagrid-vue/advanced"
-import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
 
 export interface UseDataGridStageViewportRuntimeSyncers {
@@ -68,7 +67,6 @@ export function useDataGridStageViewportRuntime(
   const bodyViewportClientHeight = ref(0)
   const pinnedBottomViewportClientHeight = ref(0)
   const bodyViewportTopOffset = ref(0)
-  let teardownTouchPanGuard: (() => void) | null = null
 
   const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
     resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -102,22 +100,6 @@ export function useDataGridStageViewportRuntime(
       options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
     },
   })
-
-  function resolveHeaderShellElement(): HTMLElement | null {
-    return options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null
-  }
-
-  function resolveHeaderViewportElement(): HTMLElement | null {
-    return resolveHeaderShellElement()?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
-  }
-
-  function resolveScrollContainers(): HTMLElement[] {
-    return [
-      bodyViewportEl.value,
-      bottomViewportEl.value,
-      resolveHeaderViewportElement(),
-    ].filter((value): value is HTMLElement => value instanceof HTMLElement)
-  }
 
   function syncBodyViewportScrollState(viewport: HTMLElement): void {
     bodyViewportScrollTop.value = viewport.scrollTop
@@ -184,12 +166,6 @@ export function useDataGridStageViewportRuntime(
     options.gridChromeSyncers.value.syncBodyViewportMetrics()
     options.gridChromeSyncers.value.connectGridChromeResizeObserver()
     options.gridChromeSyncers.value.scheduleGridChromeRedraw()
-    if (options.stageRootEl.value) {
-      teardownTouchPanGuard = installDataGridTouchPanGuard({
-        root: options.stageRootEl.value,
-        resolveScrollContainers,
-      })
-    }
     if (typeof window !== "undefined") {
       window.addEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)
     }
@@ -198,8 +174,6 @@ export function useDataGridStageViewportRuntime(
   onBeforeUnmount(() => {
     linkedPaneScrollSync.reset()
     managedWheelScroll.reset()
-    teardownTouchPanGuard?.()
-    teardownTouchPanGuard = null
     options.gridChromeSyncers.value.disconnectGridChromeResizeObserver()
     if (typeof window !== "undefined") {
       window.removeEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)

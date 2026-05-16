@@ -1062,7 +1062,7 @@ const DATA_GRID_APP_STYLES = `
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
   overscroll-behavior-x: contain;
-  touch-action: none;
+  touch-action: pan-x pan-y;
 }
 
 .grid-body-viewport {
@@ -1072,7 +1072,7 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   background: var(--datagrid-viewport-bg);
   overscroll-behavior-x: contain;
-  touch-action: none;
+  touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -3225,6 +3225,7 @@ body.datagrid-fill-drag-cursor * {
   padding: 0;
   cursor: crosshair;
   z-index: 3;
+  touch-action: none;
 }
 
 .grid-fill-action {
@@ -3330,6 +3331,7 @@ body.datagrid-fill-drag-cursor * {
   cursor: row-resize;
   padding: 0;
   z-index: 4;
+  touch-action: none;
 }
 
 .col-resize {
@@ -3344,6 +3346,7 @@ body.datagrid-fill-drag-cursor * {
   cursor: col-resize;
   padding: 0;
   z-index: 4;
+  touch-action: none;
 }
 
 @media (max-width: 960px) {
