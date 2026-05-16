@@ -149,6 +149,12 @@ function createStageProps(
       column: DataGridColumnSnapshot,
       columnIndex: number,
     ) => void
+    handleCellMouseDown?: (
+      event: MouseEvent,
+      row: DataGridTableRow<DemoRow>,
+      rowOffset: number,
+      columnIndex: number,
+    ) => void
     isEditingCell?: (row: DataGridTableRow<DemoRow>, columnKey: string) => boolean
     startInlineEdit?: (
       row: DataGridTableRow<DemoRow>,
@@ -296,7 +302,7 @@ function createStageProps(
       readDisplayCell: (row, columnKey) => String((row.data as Record<string, unknown>)[columnKey] ?? ""),
     },
     interaction: {
-      handleCellMouseDown: () => undefined,
+      handleCellMouseDown: options?.handleCellMouseDown ?? (() => undefined),
       handleCellClick: options?.handleCellClick ?? (() => undefined),
       handleCellKeydown: () => undefined,
     },
@@ -1336,6 +1342,59 @@ describe("DataGridTableStage contract", () => {
     expect(bodyDateCell.classes()).not.toContain("grid-cell--date")
     expect(pinnedSelectCell.classes()).not.toContain("grid-cell--select")
     expect(pinnedDateCell.classes()).not.toContain("grid-cell--date")
+
+    wrapper.unmount()
+  })
+
+  it("lets desktop cell mousedown start selection interactions", () => {
+    const handleCellMouseDown = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellMouseDown,
+      }),
+      attachTo: document.body,
+    })
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+
+    cell.dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    }))
+
+    expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
+    expect(handleCellMouseDown).toHaveBeenCalledWith(
+      expect.any(MouseEvent),
+      expect.objectContaining({ rowId: "r1" }),
+      0,
+      1,
+    )
+
+    wrapper.unmount()
+  })
+
+  it("does not start cell selection interactions from touch-generated mousedown", () => {
+    const handleCellMouseDown = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellMouseDown,
+      }),
+      attachTo: document.body,
+    })
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+    const touchMouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+    })
+    Object.defineProperty(touchMouseDown, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    cell.dispatchEvent(touchMouseDown)
+
+    expect(handleCellMouseDown).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

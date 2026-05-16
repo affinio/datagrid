@@ -200,7 +200,10 @@ import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
-import { resolveDataGridInteractionMode } from "./dataGridMouseEventGuards"
+import {
+  resolveDataGridInteractionMode,
+  shouldPrioritizeNativeScrollForMouseDown,
+} from "./dataGridMouseEventGuards"
 
 ensureDataGridAppStyles()
 
@@ -322,6 +325,9 @@ function resolveColumnWidth(column: TableColumn): number {
 }
 
 function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  if (shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)) {
+    return
+  }
   interaction.value.handleCellMouseDown(event, row, rowOffset, columnIndex)
 }
 
