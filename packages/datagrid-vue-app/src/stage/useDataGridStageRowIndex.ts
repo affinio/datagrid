@@ -9,6 +9,13 @@ import type {
   DataGridTableStageRowsSection,
 } from "./dataGridTableStage.types"
 
+function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const sourceCapabilities = (event as MouseEvent & {
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  }).sourceCapabilities
+  return sourceCapabilities?.firesTouchEvents === true
+}
+
 export interface UseDataGridStageRowIndexOptions {
   rows: Readonly<Ref<DataGridTableStageRowsSection<Record<string, unknown>>>>
   layout: Readonly<Ref<DataGridTableStageLayoutSection>>
@@ -174,7 +181,7 @@ export function useDataGridStageRowIndex(
   }
 
   function handleRowIndexDragStart(event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
-    if (!isRowIndexDraggable(row)) {
+    if (!isRowIndexDraggable(row) || isTouchGeneratedMouseEvent(event)) {
       clearRowIndexDragState()
       return
     }

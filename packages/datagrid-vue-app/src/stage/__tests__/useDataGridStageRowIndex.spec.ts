@@ -153,4 +153,43 @@ describe("useDataGridStageRowIndex", () => {
       "grid-cell--index-drop-after": false,
     })
   })
+
+  it("ignores touch-generated row index drag starts", () => {
+    const rows = ref({
+      showRowIndex: true,
+      indexColumnStyle: {},
+      reorderRowsByIndex: vi.fn(),
+      consumeRecentRowResizeInteraction: vi.fn(() => false),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+
+    const service = useDataGridStageRowIndex({
+      rows,
+      layout: ref({ indexColumnStyle: {} } as unknown as DataGridTableStageLayoutSection),
+      viewportRowStart: ref(0),
+      selectionRange: ref(null),
+      visibleColumns: ref([createColumn("a")]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+    const row = createRow("r1")
+    const setData = vi.fn()
+    const dragEvent = {
+      sourceCapabilities: { firesTouchEvents: true },
+      dataTransfer: {
+        effectAllowed: "",
+        dropEffect: "",
+        setData,
+      },
+    } as unknown as DragEvent
+
+    service.handleRowIndexDragStart(dragEvent, row, 0)
+
+    expect(setData).not.toHaveBeenCalled()
+    expect(service.rowIndexCellClasses(row, 0)).toMatchObject({
+      "grid-cell--index-reorder-source": false,
+    })
+  })
 })
