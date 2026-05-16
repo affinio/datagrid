@@ -35,6 +35,23 @@ You are a senior engineering partner, not a passive code generator.
 - Preserve separation between core, Vue wrapper, app layer, and sandbox.
 - Prefer production-shaped examples over toy demos.
 
+## Codex reference preflight
+- Before broad DataGrid changes, read `docs/README.md` and the relevant references below; do not invent a parallel architecture when a local contract already exists.
+- For architecture or package-boundary work, read `docs/datagrid-architecture.md` and keep core, Vue adapter, app layer, orchestration, and sandbox ownership separate.
+- For code-review or bug-fix work, use `docs/datagrid-troubleshooting-runbook.md` and `docs/datagrid-strict-contract-testing.md` to identify invariants and focused contract coverage.
+- For quality-gate changes, use `docs/perf/datagrid-performance-gates.md` and prefer the smallest package-level validation before wider quality locks.
+- For server datasource work, read `docs/server-datasource/integration-docs-map.md` first, then follow the linked protocol, UX contract, consistency, adapter, backend, and checklist docs.
+- Keep documentation claims grounded in current code or explicitly mark them as planned work, known gaps, or validation expectations.
+
+Before making interaction, scroll, or virtualization changes:
+- read `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
+- read `docs/datagrid-viewport-controller-decomposition.md`
+- read `docs/datagrid-viewport-math-engine.md`
+- preserve existing desktop behavior
+- prefer minimal focused diffs
+- add or update focused tests
+- run focused checks
+
 ## Validation
 - Run the smallest relevant validation first.
 - Prefer package-level type-check/build over full monorepo runs.

@@ -4,6 +4,7 @@ This folder separates user-facing documentation from internal planning material.
 
 ## User-Facing Entry Points
 
+- [Codex reference map](./codex-reference-map.md) - focused reading path for code-review, quality, interaction, virtualization, and server datasource changes.
 - [Server datasource](./server-datasource/README.md) - production integration path for backend-owned tables.
 - [Server datasource integration map](./server-datasource/integration-docs-map.md) - ordered reading path for package users and Codex agents.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
