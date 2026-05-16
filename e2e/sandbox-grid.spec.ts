@@ -172,6 +172,36 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
+
+  test("touch column resize drag starts from the explicit resize handle", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const header = page.locator('.grid-cell--header[data-column-key="name"]').first()
+    const resizeHandle = header.locator(".col-resize")
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(resizeHandle).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const before = await boundingBox(header)
+    const touchDrag = await dispatchTouchDragStartAndMove(resizeHandle, {
+      x: Math.round(before.x + before.width + 80),
+      y: Math.round(before.y + before.height / 2),
+    })
+    await dispatchMouseUpAtPoint(page, {
+      x: Math.round(before.x + before.width + 80),
+      y: Math.round(before.y + before.height / 2),
+    })
+
+    const after = await boundingBox(header)
+    expect(touchDrag.startPrevented).toBe(true)
+    expect(touchDrag.movePrevented).toBe(true)
+    expect(after.width).toBeGreaterThan(before.width + 30)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -315,11 +345,12 @@ async function dispatchTouchGeneratedDoubleClick(target: Locator): Promise<void>
 
 async function dispatchTouchDragStartAndMove(
   target: Locator,
-  moveTo: Locator,
+  moveTo: Locator | { x: number; y: number },
 ): Promise<{ startPrevented: boolean; movePrevented: boolean }> {
   await target.scrollIntoViewIfNeeded()
-  await moveTo.scrollIntoViewIfNeeded()
-  const point = await elementCenter(moveTo)
+  const point = "scrollIntoViewIfNeeded" in moveTo
+    ? await elementCenter(moveTo)
+    : moveTo
   return await target.evaluate((element, nextPoint) => {
     const rect = element.getBoundingClientRect()
     const startTouch = new Touch({
@@ -366,7 +397,11 @@ async function dispatchTouchDragStartAndMove(
 async function dispatchMouseUpAt(endAt: Locator): Promise<void> {
   await endAt.scrollIntoViewIfNeeded()
   const point = await elementCenter(endAt)
-  await endAt.evaluate((element, nextPoint) => {
+  await dispatchMouseUpAtPoint(endAt.page(), point)
+}
+
+async function dispatchMouseUpAtPoint(page: Page, point: { x: number; y: number }): Promise<void> {
+  await page.evaluate(nextPoint => {
     window.dispatchEvent(new MouseEvent("mouseup", {
       bubbles: true,
       cancelable: true,
@@ -375,6 +410,14 @@ async function dispatchMouseUpAt(endAt: Locator): Promise<void> {
       clientY: nextPoint.y,
     }))
   }, point)
+}
+
+async function boundingBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await locator.boundingBox()
+  if (!box) {
+    throw new Error("Expected element to be visible with bounding box")
+  }
+  return box
 }
 
 async function elementCenter(target: Locator): Promise<{ x: number; y: number }> {

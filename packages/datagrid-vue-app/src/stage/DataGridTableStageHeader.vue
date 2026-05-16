@@ -152,6 +152,10 @@
                     class="col-resize"
                     aria-label="Resize column"
                     @mousedown.stop="startResize($event, column.key)"
+                    @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                    @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                    @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                    @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                     @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                     @click.stop
                   />
@@ -214,6 +218,10 @@
                   class="col-resize"
                   aria-label="Resize column"
                   @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -375,6 +383,10 @@
                   class="col-resize"
                   aria-label="Resize column"
                   @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -412,6 +424,10 @@
                 class="col-resize"
                 aria-label="Resize column"
                 @mousedown.stop="startResize($event, column.key)"
+                @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -558,6 +574,10 @@
                   class="col-resize"
                   aria-label="Resize column"
                   @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -588,6 +608,10 @@
                 class="col-resize"
                 aria-label="Resize column"
                 @mousedown.stop="startResize($event, column.key)"
+                @touchstart.stop.prevent="startTouchResize($event, column.key)"
+                @touchmove.stop.prevent="handleTouchResizeMove($event)"
+                @touchend.stop.prevent="handleTouchResizeEnd($event)"
+                @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -734,6 +758,7 @@ const draggedHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
 let suppressHeaderClick = false
+let activeTouchResizeId: number | null = null
 
 function hasColumnMenu(): boolean {
   if (columns.value.columnMenuEnabled === true) {
@@ -926,6 +951,69 @@ function startResize(event: MouseEvent, columnKey: string): void {
   }
   event.preventDefault()
   columns.value.startResize(event, columnKey)
+}
+
+function readTouchAt(touches: TouchList, identifier: number): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = typeof touches.item === "function" ? touches.item(index) : indexedTouches[index]
+    if (touch?.identifier === identifier) {
+      return touch
+    }
+  }
+  return null
+}
+
+function readFirstTouch(touches: TouchList): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  return (typeof touches.item === "function" ? touches.item(0) : indexedTouches[0]) ?? null
+}
+
+function createTouchResizeMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  })
+}
+
+function startTouchResize(event: TouchEvent, columnKey: string): void {
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchResizeId = null
+    return
+  }
+  event.preventDefault()
+  activeTouchResizeId = touch.identifier
+  columns.value.startResize(createTouchResizeMouseEvent("mousedown", touch), columnKey)
+}
+
+function handleTouchResizeMove(event: TouchEvent): void {
+  if (activeTouchResizeId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchResizeId)
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchResizeMouseEvent("mousemove", touch))
+}
+
+function handleTouchResizeEnd(event: TouchEvent): void {
+  if (activeTouchResizeId == null || typeof window === "undefined") {
+    activeTouchResizeId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchResizeId)
+  activeTouchResizeId = null
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchResizeMouseEvent("mouseup", touch))
 }
 
 function handleResizeDoubleClick(event: MouseEvent, columnKey: string): void {
