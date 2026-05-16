@@ -115,6 +115,35 @@ test.describe("sandbox touch scroll contracts", () => {
     await dispatchTouchGeneratedDoubleClick(firstEditableAmountCell(page))
     await expect(firstEditableAmountCell(page).locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })
   })
+
+  test("touch fill drag starts only from the explicit fill handle", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const anchorCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await dispatchLongPress(page, anchorCell, 650)
+    await expect(anchorCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const fillHandle = anchorCell.locator(".cell-fill-handle")
+    const startPrevented = await dispatchTouchDragStart(fillHandle)
+
+    expect(startPrevented).toBe(true)
+    await expect(stage).toHaveClass(/grid-stage--fill-dragging/)
+
+    expect(await dispatchTouchDragMove(fillHandle, targetCell)).toBe(true)
+    await expect(page.locator(".grid-selection-overlay__segment--fill-preview").first()).toBeVisible()
+
+    expect(await dispatchTouchDragEnd(fillHandle, targetCell)).toBe(true)
+    await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -156,6 +185,10 @@ async function viewportScrollTop(viewport: Locator): Promise<number> {
 
 function firstEditableAmountCell(page: Page): Locator {
   return page.locator('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]').first()
+}
+
+function amountCellByViewportRow(page: Page, rowIndex: number): Locator {
+  return page.locator(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-key="amount"]`).first()
 }
 
 async function markViewportScrolling(viewport: Locator): Promise<void> {
@@ -249,6 +282,91 @@ async function dispatchTouchGeneratedDoubleClick(target: Locator): Promise<void>
       value: { firesTouchEvents: true },
     })
     element.dispatchEvent(event)
+  })
+}
+
+async function dispatchTouchDragStart(target: Locator): Promise<boolean> {
+  await target.scrollIntoViewIfNeeded()
+  return await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    const touch = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    const event = new TouchEvent("touchstart", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touch],
+      targetTouches: [touch],
+      changedTouches: [touch],
+    })
+    element.dispatchEvent(event)
+    return event.defaultPrevented
+  })
+}
+
+async function dispatchTouchDragMove(target: Locator, moveTo: Locator): Promise<boolean> {
+  await moveTo.scrollIntoViewIfNeeded()
+  const point = await elementCenter(moveTo)
+  return await target.evaluate((element, nextPoint) => {
+    const touch = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    const event = new TouchEvent("touchmove", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touch],
+      targetTouches: [touch],
+      changedTouches: [touch],
+    })
+    element.dispatchEvent(event)
+    return event.defaultPrevented
+  }, point)
+}
+
+async function dispatchTouchDragEnd(target: Locator, endAt: Locator): Promise<boolean> {
+  await endAt.scrollIntoViewIfNeeded()
+  const point = await elementCenter(endAt)
+  return await target.evaluate((element, nextPoint) => {
+    const touch = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    const event = new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      targetTouches: [],
+      changedTouches: [touch],
+    })
+    element.dispatchEvent(event)
+    return event.defaultPrevented
+  }, point)
+}
+
+async function elementCenter(target: Locator): Promise<{ x: number; y: number }> {
+  return await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    }
   })
 }
 
