@@ -3433,6 +3433,45 @@ body.datagrid-fill-drag-cursor * {
   touch-action: none;
 }
 
+.grid-stage--coarse-pointer .cell-fill-handle {
+  right: -14px;
+  bottom: -14px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.grid-stage--coarse-pointer .cell-fill-handle::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--datagrid-selection-handle-border);
+  border-radius: 2px;
+  background: var(--datagrid-selection-handle-bg);
+  box-sizing: border-box;
+}
+
+.grid-stage--coarse-pointer .grid-fill-action__trigger {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.grid-stage--coarse-pointer .row-resize-handle {
+  height: 28px;
+}
+
+.grid-stage--coarse-pointer .col-resize {
+  width: 28px;
+  min-width: 28px;
+}
+
 @media (hover: none) and (pointer: coarse) {
   .cell-fill-handle {
     right: -14px;

@@ -30,7 +30,6 @@ Completed in Phase 1:
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
 Still open:
-- Larger resize/fill hit targets on touch.
 - Server-backed blank/loading viewport detection and prefetch tuning from real touch velocity.
 - Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
 
@@ -43,6 +42,7 @@ Phase 2 started:
 - Explicit touch fill handle: fill handles now accept real touchstart/move/end on the handle itself and bridge those events into the existing fill drag mouse lifecycle, while touch-generated cell-body mousedown remains scroll-first.
 - Explicit touch selection handle drag bridge: touchstart on the selection anchor handle starts the existing selection-extension lifecycle with scroll-safe handle isolation; touchmove/touchend are forwarded through the existing global mouse lifecycle.
 - Explicit touch range-move handle drag bridge: touch mode now exposes a move-selection handle on the selected anchor cell and routes its touchstart/move/end through the existing range-move lifecycle instead of using cell-body touch drag.
+- Touch hit targets: coarse-pointer mode expands fill, fill action, row resize, and column resize targets while preserving desktop marker visuals.
 
 Phase 3 started:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
@@ -313,7 +313,8 @@ Problem:
 - Those desktop-sized targets do not meet tablet ergonomics when reused unchanged.
 
 Current state:
-- Coarse-pointer CSS expands fill, row resize, and column resize hit targets to 28px.
+- Coarse-pointer CSS expands fill, fill action, row resize, and column resize hit targets to 28px.
+- The same sizing is available through the runtime `.grid-stage--coarse-pointer` class and the `(hover: none) and (pointer: coarse)` media query.
 - Fill handle keeps the small visual marker through `::after` while exposing a larger invisible touch target.
 - Resize handles remain transparent and keep `touch-action: none` because they explicitly own drag gestures.
 
@@ -423,7 +424,7 @@ Gap:
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
 - In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, and touch-only anchor affordances are visible where they do not conflict with fill handles.
 - Done for the current stage path: touch drag selection, fill, and range move start only from explicit handles.
-- Expand resize/fill hit targets for touch while preserving desktop visuals.
+- Done: expand resize/fill hit targets for touch while preserving desktop visuals.
 - Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.
 
 ### Phase 3 - Scroll Performance Architecture
