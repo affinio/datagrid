@@ -138,6 +138,7 @@ const panelId = `datagrid-filterable-combobox-${Math.random().toString(36).slice
 const inputIdFallback = `${panelId}-input`
 const inputNameFallback = `${panelId}-field`
 let requestId = 0
+let panelPositionFrame: number | null = null
 
 const inputAttrs = computed(() => {
   const {
@@ -302,6 +303,31 @@ function updatePanelPosition(): void {
   }
 }
 
+function cancelScheduledPanelPositionUpdate(): void {
+  if (panelPositionFrame == null || typeof window === "undefined") {
+    panelPositionFrame = null
+    return
+  }
+  window.cancelAnimationFrame(panelPositionFrame)
+  panelPositionFrame = null
+}
+
+function schedulePanelPositionUpdate(): void {
+  if (typeof window === "undefined") {
+    updatePanelPosition()
+    return
+  }
+  if (panelPositionFrame != null) {
+    return
+  }
+  panelPositionFrame = window.requestAnimationFrame(() => {
+    panelPositionFrame = null
+    if (isOpen.value) {
+      updatePanelPosition()
+    }
+  })
+}
+
 function scrollActiveOptionIntoView(): void {
   if (!panelEl.value || activeIndex.value < 0) {
     return
@@ -336,6 +362,7 @@ function openCombobox(): void {
 }
 
 function closeCombobox(): void {
+  cancelScheduledPanelPositionUpdate()
   state.value = setDataGridCellComboboxOpen(state.value, false)
 }
 
@@ -466,7 +493,7 @@ function handleViewportChange(): void {
   if (!isOpen.value) {
     return
   }
-  updatePanelPosition()
+  schedulePanelPositionUpdate()
 }
 
 watch(() => props.options, () => {
@@ -523,6 +550,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cancelScheduledPanelPositionUpdate()
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", handleViewportChange)
     window.removeEventListener("scroll", handleViewportChange, { capture: true })
