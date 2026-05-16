@@ -982,6 +982,7 @@ const {
   headerShellHeight,
   headerViewportClientWidth,
   isBodyViewportScrolling: runtimeBodyViewportScrolling,
+  runWhenBodyViewportScrollIdle,
   captureBodyViewportRef,
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll,
@@ -1286,6 +1287,8 @@ const focusRuntime = useDataGridStageFocusRuntime({
   resolveAbsoluteRowIndex,
   isSelectionAnchorCellSafe,
   isCellEditableSafe: isCellEditableSafeBase,
+  isBodyViewportScrolling,
+  runWhenBodyViewportScrollIdle,
 })
 
 const {

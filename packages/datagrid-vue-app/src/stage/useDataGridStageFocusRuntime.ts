@@ -14,6 +14,8 @@ export interface UseDataGridStageFocusRuntimeOptions {
   resolveAbsoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
   isSelectionAnchorCellSafe: (rowOffset: number, columnIndex: number) => boolean
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  isBodyViewportScrolling?: Readonly<Ref<boolean>>
+  runWhenBodyViewportScrollIdle?: (callback: () => void) => void
 }
 
 export interface UseDataGridStageFocusRuntimeResult {
@@ -53,6 +55,8 @@ function resolveVisibleAnchorCellPosition(
 export function useDataGridStageFocusRuntime(
   options: UseDataGridStageFocusRuntimeOptions,
 ): UseDataGridStageFocusRuntimeResult {
+  let pendingAnchorFocusRestore = false
+
   function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLElement | null {
     const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
     for (const root of [
@@ -140,6 +144,17 @@ export function useDataGridStageFocusRuntime(
   }
 
   function restoreAnchorCellFocus(): void {
+    if (options.isBodyViewportScrolling?.value && options.runWhenBodyViewportScrollIdle) {
+      if (pendingAnchorFocusRestore) {
+        return
+      }
+      pendingAnchorFocusRestore = true
+      options.runWhenBodyViewportScrollIdle(() => {
+        pendingAnchorFocusRestore = false
+        focusVisibleAnchorCell()
+      })
+      return
+    }
     focusVisibleAnchorCell()
   }
 

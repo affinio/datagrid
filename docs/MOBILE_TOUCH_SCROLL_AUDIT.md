@@ -25,7 +25,7 @@ Completed in Phase 1:
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
-- Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility.
+- Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
 - Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for linked pane sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
@@ -296,12 +296,13 @@ Problem:
 
 Current state:
 - `DataGridTableStage.vue` already consumes body scroll-active state.
-- `useDataGridStageViewportRuntime.ts` now exposes both body scroll-active and body scroll-idle refs, plus `runWhenBodyViewportScrollIdle()` for future non-critical work that should be delayed until scrolling settles.
+- `useDataGridStageViewportRuntime.ts` now exposes both body scroll-active and body scroll-idle refs, plus `runWhenBodyViewportScrollIdle()` for non-critical work that should be delayed until scrolling settles.
+- `useDataGridStageFocusRuntime.ts` defers anchor focus restoration through that idle hook while body scrolling is active and coalesces duplicate restore requests.
 - Touch/coarse scroll now uses that state to bypass authored cell/group renderer functions and render resolved display values while momentum scroll is active.
 - Desktop scrolling still uses authored renderer functions to avoid changing mouse/trackpad behavior.
 
 Recommended fix:
-- Use the explicit idle callback hook to defer future focus restoration attempts, expensive overlay recalculation, and other optional renderer work.
+- Continue using the explicit idle callback hook for future expensive overlay recalculation and other optional renderer work.
 
 #### 9. Fill, resize, and row resize hit targets are too small for touch
 
@@ -397,7 +398,7 @@ Gap:
 5. Measure and tune touch/adaptive overscan in the Vue app-stage path.
 6. Continue batching remaining header, pinned, and chrome sync into rAF scroll frames.
 7. Require explicit touch handles or long-press mode for selection drag, fill, range move, and resize.
-8. Add `isScrolling` / `scrollIdle` to the app viewport runtime and use it to defer non-critical decoration work.
+8. Continue moving non-critical decoration work onto the existing `isScrolling` / `scrollIdle` stage runtime hook.
 9. Add adaptive vertical overscan in `useDataGridAppViewport`.
 10. Add Playwright touch tests and performance gates before deeper architectural changes.
 
@@ -433,6 +434,7 @@ Gap:
 
 - Done: add adaptive vertical overscan based on velocity in the app-stage path.
 - Done: add `isScrolling` and `scrollIdle` state to the stage viewport runtime, with a deferred idle callback hook.
+- Done: defer anchor focus restoration until body scroll idle and coalesce duplicate restore requests.
 - Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers.
 - In progress: minimize reactive writes during scroll events.
 - In progress: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator.
@@ -455,6 +457,7 @@ Gap:
   - coarse pointer disables hover and range-edge hover updates.
   - adaptive overscan increases with scroll velocity and decays after idle.
   - stage viewport runtime exposes scroll-active/idle state and runs deferred callbacks only after idle.
+  - stage focus runtime defers anchor focus restoration until body scroll idle.
 - Component tests:
   - body viewport CSS exposes native touch panning.
   - touch hit targets expand in coarse-pointer media mode.
