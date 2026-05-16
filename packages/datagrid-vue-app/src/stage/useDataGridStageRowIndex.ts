@@ -175,7 +175,7 @@ export function useDataGridStageRowIndex(
   }
 
   function handleRowIndexDragStart(event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
-    if (!isRowIndexDraggable(row) || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+    if (!isRowIndexDraggable(row) || shouldPrioritizeNativeScrollForMouseDown(event)) {
       clearRowIndexDragState()
       return
     }

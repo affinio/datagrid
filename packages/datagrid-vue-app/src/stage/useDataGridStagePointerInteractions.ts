@@ -160,7 +160,7 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleMouseDown(event: MouseEvent): void {
-    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event)) {
       return
     }
     event.preventDefault()
@@ -172,7 +172,7 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleDoubleClick(event: MouseEvent): void {
-    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     event.preventDefault()
