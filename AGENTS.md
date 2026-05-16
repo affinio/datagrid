@@ -40,6 +40,13 @@ You are a senior engineering partner, not a passive code generator.
 - Prefer package-level type-check/build over full monorepo runs.
 - If a full test suite has unrelated failures, report them clearly.
 
+## Documentation
+- Treat documentation as part of the slice, not as optional cleanup.
+- For architecture, UX, performance, interaction, public behavior, or migration-impacting changes, check whether docs need to be created or updated in the same slice.
+- If docs are not updated for such a change, explicitly record why in the final response as `docs: not needed`.
+- Keep audit and roadmap docs aligned with implemented slices; when closing a planned item, update the relevant status, risks, and remaining work.
+- Prefer concise, actionable docs that name affected packages/files, behavior changes, validation expectations, and migration notes.
+
 ## Console verbosity
 - Minimize console narration.
 - Avoid exploratory chatter.
