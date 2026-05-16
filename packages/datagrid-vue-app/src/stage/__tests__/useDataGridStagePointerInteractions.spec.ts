@@ -29,6 +29,31 @@ function createRow(rowId = "r1"): DataGridTableStageBodyRow {
   }
 }
 
+function createTouch(identifier: number, clientX: number, clientY: number): Touch {
+  return { identifier, clientX, clientY } as Touch
+}
+
+function createTouchList(touches: readonly Touch[]): TouchList {
+  return {
+    length: touches.length,
+    item: (index: number) => touches[index] ?? null,
+    ...touches,
+  } as unknown as TouchList
+}
+
+function createTouchEvent(type: string, touch: Touch, currentTarget: HTMLElement): TouchEvent {
+  return {
+    type,
+    currentTarget,
+    touches: type === "touchend" || type === "touchcancel"
+      ? createTouchList([])
+      : createTouchList([touch]),
+    changedTouches: createTouchList([touch]),
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  } as unknown as TouchEvent
+}
+
 describe("useDataGridStagePointerInteractions", () => {
   it("tracks range-move hover, fill-handle events, and drag cursor state", async () => {
     const row = createRow()
@@ -297,5 +322,76 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(event.defaultPrevented).toBe(false)
     expect(fillActionMenuOpen.value).toBe(true)
     expect(startFillHandleDoubleClick).not.toHaveBeenCalled()
+  })
+
+  it("bridges explicit fill-handle touch gestures into the mouse fill lifecycle", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(() => {})
+    const cell = document.createElement("div")
+    cell.className = "grid-cell"
+    const handle = document.createElement("button")
+    cell.appendChild(handle)
+    const startFillHandleDrag = vi.fn()
+    const fillActionMenuOpen = ref(true)
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag,
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      displayRows: ref([]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen,
+      interactionModeInput: ref({
+        interactionMode: "auto",
+        isCoarsePointer: true,
+      }),
+      isCellSelectedSafe: () => false,
+      isCellEditableSafe: () => false,
+      isCellOnSelectionEdgeSafe: () => false,
+    })
+    const mouseMove = vi.fn()
+    const mouseUp = vi.fn()
+    window.addEventListener("mousemove", mouseMove)
+    window.addEventListener("mouseup", mouseUp)
+
+    const touchStart = createTouchEvent("touchstart", createTouch(7, 20, 30), handle)
+    service.handleFillHandleTouchStart(touchStart)
+
+    expect(touchStart.preventDefault).toHaveBeenCalled()
+    expect(fillActionMenuOpen.value).toBe(false)
+    expect(focus).toHaveBeenCalled()
+    expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
+    expect(startFillHandleDrag.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 20,
+      clientY: 30,
+      button: 0,
+    })
+
+    const touchMove = createTouchEvent("touchmove", createTouch(7, 25, 35), handle)
+    service.handleFillHandleTouchMove(touchMove)
+    expect(touchMove.preventDefault).toHaveBeenCalled()
+    expect(mouseMove).toHaveBeenCalledTimes(1)
+    expect(mouseMove.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 25,
+      clientY: 35,
+      button: 0,
+    })
+
+    const touchEnd = createTouchEvent("touchend", createTouch(7, 28, 38), handle)
+    service.handleFillHandleTouchEnd(touchEnd)
+    expect(touchEnd.preventDefault).toHaveBeenCalled()
+    expect(mouseUp).toHaveBeenCalledTimes(1)
+    expect(mouseUp.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 28,
+      clientY: 38,
+      button: 0,
+    })
+
+    window.removeEventListener("mousemove", mouseMove)
+    window.removeEventListener("mouseup", mouseUp)
   })
 })

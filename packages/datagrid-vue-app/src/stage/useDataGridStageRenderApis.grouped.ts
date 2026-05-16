@@ -74,6 +74,9 @@ type CellRuntime = Readonly<Ref<{
   handleTouchSelectionHandleTouchStart: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
+  handleFillHandleTouchStart: (event: TouchEvent) => void
+  handleFillHandleTouchMove: (event: TouchEvent) => void
+  handleFillHandleTouchEnd: (event: TouchEvent) => void
   shouldRenderCheckboxCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => boolean
   checkboxIndicatorClass: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
   checkboxIndicatorMarkClass: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
@@ -205,6 +208,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,
+    handleFillHandleTouchStart: options.cellRuntime.value.handleFillHandleTouchStart,
+    handleFillHandleTouchMove: options.cellRuntime.value.handleFillHandleTouchMove,
+    handleFillHandleTouchEnd: options.cellRuntime.value.handleFillHandleTouchEnd,
     isSelectEditorCell: options.editorRuntime.value.isSelectEditorCell,
     resolveSelectEditorValue: options.editorRuntime.value.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.editorRuntime.value.resolveSelectEditorOptions,
@@ -264,6 +270,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,
+    handleFillHandleTouchStart: options.cellRuntime.value.handleFillHandleTouchStart,
+    handleFillHandleTouchMove: options.cellRuntime.value.handleFillHandleTouchMove,
+    handleFillHandleTouchEnd: options.cellRuntime.value.handleFillHandleTouchEnd,
     isSelectEditorCell: options.editorRuntime.value.isSelectEditorCell,
     resolveSelectEditorValue: options.editorRuntime.value.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.editorRuntime.value.resolveSelectEditorOptions,

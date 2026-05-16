@@ -39,6 +39,9 @@ export interface UseDataGridStagePointerInteractionsResult {
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
+  handleFillHandleTouchStart: (event: TouchEvent) => void
+  handleFillHandleTouchMove: (event: TouchEvent) => void
+  handleFillHandleTouchEnd: (event: TouchEvent) => void
   resetGlobalFillDragCursor: () => void
 }
 
@@ -51,6 +54,7 @@ export function useDataGridStagePointerInteractions(
   const hoveredRangeMoveHandleCell = ref<{ rowIndex: number; columnIndex: number } | null>(null)
   const restoreBodyCursor = ref<string | null>(null)
   const restoreDocumentCursor = ref<string | null>(null)
+  let activeFillHandleTouchId: number | null = null
 
   function syncGlobalFillDragCursor(active: boolean): void {
     if (typeof document === "undefined") {
@@ -188,6 +192,73 @@ export function useDataGridStagePointerInteractions(
     options.selection.value?.startFillHandleDoubleClick(event)
   }
 
+  function readTouch(touches: TouchList, identifier: number): Touch | null {
+    const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+    for (let index = 0; index < touches.length; index += 1) {
+      const touch = typeof touches.item === "function" ? touches.item(index) : indexedTouches[index]
+      if (touch?.identifier === identifier) {
+        return touch
+      }
+    }
+    return null
+  }
+
+  function readFirstTouch(touches: TouchList): Touch | null {
+    const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+    return (typeof touches.item === "function" ? touches.item(0) : indexedTouches[0]) ?? null
+  }
+
+  function createFillHandleMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+    return new MouseEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    })
+  }
+
+  function handleFillHandleTouchStart(event: TouchEvent): void {
+    const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+    if (!touch) {
+      activeFillHandleTouchId = null
+      return
+    }
+    event.preventDefault()
+    options.fillActionMenuOpen.value = false
+    activeFillHandleTouchId = touch.identifier
+    const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    const cell = handle?.closest<HTMLElement>(".grid-cell")
+    cell?.focus({ preventScroll: true })
+    options.selection.value?.startFillHandleDrag(createFillHandleMouseEvent("mousedown", touch))
+  }
+
+  function handleFillHandleTouchMove(event: TouchEvent): void {
+    if (activeFillHandleTouchId == null || typeof window === "undefined") {
+      return
+    }
+    const touch = readTouch(event.touches, activeFillHandleTouchId)
+    if (!touch) {
+      return
+    }
+    event.preventDefault()
+    window.dispatchEvent(createFillHandleMouseEvent("mousemove", touch))
+  }
+
+  function handleFillHandleTouchEnd(event: TouchEvent): void {
+    if (activeFillHandleTouchId == null || typeof window === "undefined") {
+      activeFillHandleTouchId = null
+      return
+    }
+    const touch = readTouch(event.changedTouches, activeFillHandleTouchId)
+    activeFillHandleTouchId = null
+    if (!touch) {
+      return
+    }
+    event.preventDefault()
+    window.dispatchEvent(createFillHandleMouseEvent("mouseup", touch))
+  }
+
   function isRangeMoveHandleHoverCell(rowOffset: number, columnIndex: number): boolean {
     return (
       hoveredRangeMoveHandleCell.value?.rowIndex === rowOffset + options.viewportRowStart.value
@@ -220,6 +291,9 @@ export function useDataGridStagePointerInteractions(
     handleCellMouseMove,
     handleFillHandleMouseDown,
     handleFillHandleDoubleClick,
+    handleFillHandleTouchStart,
+    handleFillHandleTouchMove,
+    handleFillHandleTouchEnd,
     resetGlobalFillDragCursor,
   }
 }

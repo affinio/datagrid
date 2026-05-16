@@ -85,6 +85,9 @@ export interface DataGridTableStageBodyRenderApiBase {
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
+  handleFillHandleTouchStart: (event: TouchEvent) => void
+  handleFillHandleTouchMove: (event: TouchEvent) => void
+  handleFillHandleTouchEnd: (event: TouchEvent) => void
   isSelectEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   resolveSelectEditorValue: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
   resolveSelectEditorOptions: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]

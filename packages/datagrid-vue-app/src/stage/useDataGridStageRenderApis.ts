@@ -99,6 +99,9 @@ export interface UseDataGridStageRenderApisOptions {
   handleTouchSelectionHandleTouchStart: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
+  handleFillHandleTouchStart: (event: TouchEvent) => void
+  handleFillHandleTouchMove: (event: TouchEvent) => void
+  handleFillHandleTouchEnd: (event: TouchEvent) => void
   isSelectEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   resolveSelectEditorValue: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
   resolveSelectEditorOptions: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]
@@ -193,6 +196,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,
+    handleFillHandleTouchStart: options.handleFillHandleTouchStart,
+    handleFillHandleTouchMove: options.handleFillHandleTouchMove,
+    handleFillHandleTouchEnd: options.handleFillHandleTouchEnd,
     isSelectEditorCell: options.isSelectEditorCell,
     resolveSelectEditorValue: options.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.resolveSelectEditorOptions,
@@ -252,6 +258,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,
+    handleFillHandleTouchStart: options.handleFillHandleTouchStart,
+    handleFillHandleTouchMove: options.handleFillHandleTouchMove,
+    handleFillHandleTouchEnd: options.handleFillHandleTouchEnd,
     isSelectEditorCell: options.isSelectEditorCell,
     resolveSelectEditorValue: options.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.resolveSelectEditorOptions,

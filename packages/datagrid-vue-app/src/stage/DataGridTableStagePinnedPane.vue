@@ -104,6 +104,10 @@
             tabindex="-1"
             @mousedown.stop="renderApi.handleFillHandleMouseDown($event)"
             @dblclick.stop="renderApi.handleFillHandleDoubleClick($event)"
+            @touchstart.stop.prevent="renderApi.handleFillHandleTouchStart($event)"
+            @touchmove.stop.prevent="renderApi.handleFillHandleTouchMove($event)"
+            @touchend.stop.prevent="renderApi.handleFillHandleTouchEnd($event)"
+            @touchcancel.stop.prevent="renderApi.handleFillHandleTouchEnd($event)"
           />
           <button
             v-if="renderApi.isTouchSelectionAnchorHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
