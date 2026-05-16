@@ -1445,7 +1445,6 @@ export function useDataGridAppViewport<TRow>(
     }
     updateAdaptiveRowOverscan(pendingViewportScrollTop, cachedViewportDimensions?.clientHeight ?? 0)
     scheduleVerticalScrollIdleReset()
-    syncHeaderScrollLeftFromBody(pendingViewportScrollLeft)
     scheduleViewportCommit({
       forceVisibleRows: false,
       measureVisibleRowHeights: false,

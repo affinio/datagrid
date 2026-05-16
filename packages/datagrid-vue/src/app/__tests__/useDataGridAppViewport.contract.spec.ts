@@ -679,6 +679,46 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.renderedColumns.value).toBe(firstRenderedColumns)
   })
 
+  it("syncs header scrollLeft from the viewport RAF commit", () => {
+    const raf = createRafHarness()
+    const viewport = makeViewport({
+      visibleColumns: ref(makeColumns(20, 100)),
+      columnVirtualizationEnabled: computed(() => true),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    let headerScrollLeft = 0
+    const headerViewport = {} as HTMLElement
+    const headerScrollWrites: number[] = []
+    Object.defineProperty(headerViewport, "scrollLeft", {
+      configurable: true,
+      get() {
+        return headerScrollLeft
+      },
+      set(value: number) {
+        headerScrollLeft = value
+        headerScrollWrites.push(value)
+      },
+    })
+    const bodyViewport = makeBodyViewport(0, 800)
+    viewport.headerViewportRef.value = headerViewport
+    viewport.bodyViewportRef.value = bodyViewport
+    viewport.syncViewportFromDom()
+    headerScrollWrites.length = 0
+
+    bodyViewport.scrollLeft = 320
+    viewport.handleViewportScroll(createScrollEvent(bodyViewport))
+
+    expect(headerScrollLeft).toBe(0)
+    expect(headerScrollWrites).toEqual([])
+
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(headerScrollLeft).toBe(320)
+    expect(headerScrollWrites).toEqual([320])
+  })
+
   it("applies column overscan symmetrically around the visible range", () => {
     const raf = createRafHarness()
     const COLS = makeColumns(60, 100)

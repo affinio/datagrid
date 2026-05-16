@@ -196,6 +196,7 @@ Problem:
 Current state:
 - `useDataGridStageViewportRuntime.ts` now batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
+- `useDataGridAppViewport.ts` now syncs header `scrollLeft` from the viewport rAF commit instead of writing it directly inside the body scroll event.
 
 Recommended fix:
 - Keep making scroll event handlers sampling-only where possible.
@@ -365,6 +366,7 @@ Gap:
 - Done: disable hover and range-edge hover on coarse pointers and while scrolling.
 - Done: add touch-specific and velocity-adaptive row overscan in `useDataGridAppViewport`.
 - Done: expand fill, row resize, and column resize hit targets for coarse pointers.
+- Done: move app viewport header `scrollLeft` synchronization out of the raw body scroll event and into the rAF viewport commit.
 - In progress: move remaining synchronous canvas/header/pinned scroll work behind rAF where safe.
 
 ### Phase 2 - Touch Interaction Model
