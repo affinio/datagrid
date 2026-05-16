@@ -129,10 +129,18 @@ export function useDataGridStageViewportRuntime(
   }
 
   function syncBodyViewportScrollState(viewport: HTMLElement): void {
-    bodyViewportScrollTop.value = viewport.scrollTop
-    bodyViewportScrollLeft.value = viewport.scrollLeft
-    bodyViewportClientWidth.value = viewport.clientWidth
-    bodyViewportClientHeight.value = viewport.clientHeight
+    if (bodyViewportScrollTop.value !== viewport.scrollTop) {
+      bodyViewportScrollTop.value = viewport.scrollTop
+    }
+    if (bodyViewportScrollLeft.value !== viewport.scrollLeft) {
+      bodyViewportScrollLeft.value = viewport.scrollLeft
+    }
+    if (bodyViewportClientWidth.value !== viewport.clientWidth) {
+      bodyViewportClientWidth.value = viewport.clientWidth
+    }
+    if (bodyViewportClientHeight.value !== viewport.clientHeight) {
+      bodyViewportClientHeight.value = viewport.clientHeight
+    }
   }
 
   function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
