@@ -215,7 +215,10 @@ Files/functions:
 Problem:
 - Data-source rows use placeholder loading row nodes when a requested row is not cached.
 - There is velocity-aware prefetch, cache diagnostics, and critical/background pull separation, which is good.
-- The behavior is not yet validated against a "no visible blanking/loading during fast momentum scroll" target.
+- The behavior is not yet validated by browser/device gates against a "no visible blanking/loading during fast momentum scroll" target.
+
+Current state:
+- Core model coverage now asserts that scrolling into a resolved prefetch buffer returns real rows with no loading placeholders and schedules the next background prefetch before the edge.
 
 Recommended fix:
 - Add a blank/loading viewport budget and measure it in Playwright.

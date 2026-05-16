@@ -2137,6 +2137,12 @@ describe("createDataSourceBackedRowModel", () => {
     model.setViewportRange({ start: 30, end: 59 })
     await flushMicrotasks()
 
+    const visibleRows = model.getRowsInRange({ start: 30, end: 59 })
+    expect(visibleRows).toHaveLength(30)
+    expect(visibleRows.every(row => (row as { __placeholder?: boolean }).__placeholder !== true)).toBe(true)
+    expect(visibleRows.map(row => row.row.value)).toEqual(
+      Array.from({ length: 30 }, (_unused, offset) => `row-${30 + offset}`),
+    )
     expect(calls.length).toBe(callCountBeforeScroll + 1)
     expect(calls[calls.length - 1]?.request.reason).toBe("prefetch")
     expect(calls[calls.length - 1]?.request.priority).toBe("background")
