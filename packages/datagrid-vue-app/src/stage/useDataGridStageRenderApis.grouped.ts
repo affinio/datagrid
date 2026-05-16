@@ -71,7 +71,9 @@ type CellRuntime = Readonly<Ref<{
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
-  handleTouchSelectionHandleTouchStart: (event: TouchEvent) => void
+  handleTouchSelectionHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchSelectionHandleTouchMove: (event: TouchEvent) => void
+  handleTouchSelectionHandleTouchEnd: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   handleFillHandleTouchStart: (event: TouchEvent) => void
@@ -202,6 +204,8 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.cellRuntime.value.handleTouchSelectionHandleMouseDown,
     handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
+    handleTouchSelectionHandleTouchMove: options.cellRuntime.value.handleTouchSelectionHandleTouchMove,
+    handleTouchSelectionHandleTouchEnd: options.cellRuntime.value.handleTouchSelectionHandleTouchEnd,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
@@ -264,6 +268,8 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.cellRuntime.value.handleTouchSelectionHandleMouseDown,
     handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
+    handleTouchSelectionHandleTouchMove: options.cellRuntime.value.handleTouchSelectionHandleTouchMove,
+    handleTouchSelectionHandleTouchEnd: options.cellRuntime.value.handleTouchSelectionHandleTouchEnd,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,

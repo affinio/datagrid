@@ -96,7 +96,9 @@ export interface UseDataGridStageRenderApisOptions {
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
-  handleTouchSelectionHandleTouchStart: (event: TouchEvent) => void
+  handleTouchSelectionHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchSelectionHandleTouchMove: (event: TouchEvent) => void
+  handleTouchSelectionHandleTouchEnd: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   handleFillHandleTouchStart: (event: TouchEvent) => void
@@ -190,6 +192,8 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.handleTouchSelectionHandleMouseDown,
     handleTouchSelectionHandleTouchStart: options.handleTouchSelectionHandleTouchStart,
+    handleTouchSelectionHandleTouchMove: options.handleTouchSelectionHandleTouchMove,
+    handleTouchSelectionHandleTouchEnd: options.handleTouchSelectionHandleTouchEnd,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
@@ -252,6 +256,8 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.handleTouchSelectionHandleMouseDown,
     handleTouchSelectionHandleTouchStart: options.handleTouchSelectionHandleTouchStart,
+    handleTouchSelectionHandleTouchMove: options.handleTouchSelectionHandleTouchMove,
+    handleTouchSelectionHandleTouchEnd: options.handleTouchSelectionHandleTouchEnd,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,

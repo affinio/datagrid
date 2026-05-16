@@ -103,13 +103,18 @@ function createTouchEvent(type: string, touch: { identifier?: number; clientX: n
     bubbles: true,
     cancelable: true,
   }) as TouchEvent
+  const touchRecord = {
+    identifier: touch.identifier ?? 1,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  }
   Object.defineProperty(event, "touches", {
     configurable: true,
-    value: [{
-      identifier: touch.identifier ?? 1,
-      clientX: touch.clientX,
-      clientY: touch.clientY,
-    }],
+    value: type === "touchend" || type === "touchcancel" ? [] : [touchRecord],
+  })
+  Object.defineProperty(event, "changedTouches", {
+    configurable: true,
+    value: [touchRecord],
   })
   return event
 }
@@ -1617,6 +1622,7 @@ describe("DataGridTableStage contract", () => {
     vi.useFakeTimers()
     mockCoarsePointer(true)
     const handleCellClick = vi.fn()
+    const handleCellMouseDown = vi.fn()
     const wrapper = mount(DataGridTableStage, {
       props: createStageProps(
         (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
@@ -1624,6 +1630,7 @@ describe("DataGridTableStage contract", () => {
           selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
           selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
           handleCellClick,
+          handleCellMouseDown,
         },
       ),
       attachTo: document.body,
@@ -1633,12 +1640,37 @@ describe("DataGridTableStage contract", () => {
 
     const handle = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"] .grid-touch-selection-handle')
     const touchStart = createTouchEvent("touchstart", { clientX: 100, clientY: 100 })
+    const mouseMove = vi.fn()
+    const mouseUp = vi.fn()
+    window.addEventListener("mousemove", mouseMove)
+    window.addEventListener("mouseup", mouseUp)
+
     handle.element.dispatchEvent(touchStart)
     vi.advanceTimersByTime(530)
+    handle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 116, clientY: 104 }))
+    handle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 120, clientY: 108 }))
 
     expect(touchStart.defaultPrevented).toBe(true)
     expect(handleCellClick).not.toHaveBeenCalled()
+    expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
+    expect(handleCellMouseDown.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 100,
+      clientY: 100,
+      shiftKey: true,
+    })
+    expect(mouseMove).toHaveBeenCalledTimes(1)
+    expect(mouseMove.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 116,
+      clientY: 104,
+    })
+    expect(mouseUp).toHaveBeenCalledTimes(1)
+    expect(mouseUp.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 120,
+      clientY: 108,
+    })
 
+    window.removeEventListener("mousemove", mouseMove)
+    window.removeEventListener("mouseup", mouseUp)
     wrapper.unmount()
   })
 

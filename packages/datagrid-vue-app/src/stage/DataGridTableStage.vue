@@ -644,13 +644,64 @@ function handleTouchSelectionHandleMouseDown(event: MouseEvent): void {
   cell?.focus({ preventScroll: true })
 }
 
-function handleTouchSelectionHandleTouchStart(event: TouchEvent): void {
+function createTouchSelectionMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    shiftKey: type === "mousedown",
+  })
+}
+
+function handleTouchSelectionHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   event.preventDefault()
   clearPendingTouchLongPress()
   bodyTouchStart = null
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchSelectionHandleTouchId = null
+    return
+  }
+  activeTouchSelectionHandleTouchId = touch.identifier
   const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   const cell = handle?.closest<HTMLElement>(".grid-cell")
   cell?.focus({ preventScroll: true })
+  const mouseDown = createTouchSelectionMouseEvent("mousedown", touch)
+  if (cell) {
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: cell,
+    })
+  }
+  interaction.value.handleCellMouseDown(mouseDown, row, rowOffset, columnIndex)
+}
+
+function handleTouchSelectionHandleTouchMove(event: TouchEvent): void {
+  if (activeTouchSelectionHandleTouchId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchSelectionHandleTouchId)
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchSelectionMouseEvent("mousemove", touch))
+}
+
+function handleTouchSelectionHandleTouchEnd(event: TouchEvent): void {
+  if (activeTouchSelectionHandleTouchId == null || typeof window === "undefined") {
+    activeTouchSelectionHandleTouchId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchSelectionHandleTouchId)
+  activeTouchSelectionHandleTouchId = null
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchSelectionMouseEvent("mouseup", touch))
 }
 
 function isEditingCellSafeBase(row: TableRow, columnKey: string): boolean {
@@ -773,6 +824,7 @@ let pendingTouchLongPress: {
   cell: HTMLElement
 } | null = null
 let touchLongPressTimer: number | null = null
+let activeTouchSelectionHandleTouchId: number | null = null
 let suppressNextTouchClick = false
 let suppressNextTouchContextMenu = false
 let suppressTouchClickTimer: number | null = null
@@ -1239,6 +1291,7 @@ onBeforeUnmount(() => {
   clearTouchClickSuppressionTimer()
   clearPendingTouchLongPress()
   bodyTouchStart = null
+  activeTouchSelectionHandleTouchId = null
   suppressNextTouchClick = false
   suppressNextTouchContextMenu = false
   if (!coarsePointerQuery || !coarsePointerQueryListener) {
@@ -1326,6 +1379,8 @@ const cellRuntime = computed(() => ({
   startInlineEditIfAllowed,
   handleTouchSelectionHandleMouseDown,
   handleTouchSelectionHandleTouchStart,
+  handleTouchSelectionHandleTouchMove,
+  handleTouchSelectionHandleTouchEnd,
   handleFillHandleMouseDown,
   handleFillHandleDoubleClick,
   handleFillHandleTouchStart,

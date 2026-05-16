@@ -42,6 +42,7 @@ Phase 2 started:
 - Touch long-press selection prep: in touch mode, a stationary long press on a body cell selects/focuses that cell and suppresses the follow-up synthetic click/context menu; movement beyond the pan threshold cancels the long press.
 - Touch selection anchor affordance: selected anchor cells now render a touch-only handle when no fill handle is present; the handle isolates touchstart/move/end, down, click, and context-menu events from cell-body selection and reserves the UI affordance for explicit touch selection drag.
 - Explicit touch fill handle: fill handles now accept real touchstart/move/end on the handle itself and bridge those events into the existing fill drag mouse lifecycle, while touch-generated cell-body mousedown remains scroll-first.
+- Explicit touch selection handle drag bridge: touchstart on the selection anchor handle starts the existing selection-extension lifecycle with scroll-safe handle isolation; touchmove/touchend are forwarded through the existing global mouse lifecycle.
 
 ## Current Architecture Summary
 
@@ -158,6 +159,7 @@ Current state:
 - Touch long press now establishes a cell selection without starting drag/range move; this is the foundation for explicit touch selection mode and handles.
 - Touch mode now exposes an event-isolated anchor handle affordance on selected cells that do not already show a fill handle; real touch events on the handle do not enter body long-press or cell-body selection paths, and drag semantics remain disabled until explicit touch handle behavior is implemented.
 - Fill drag can now start from the explicit fill handle with real touch events; touchmove/touchend are isolated to the handle and forwarded to the existing fill preview/finalization pipeline.
+- Touch selection drag now starts only from the explicit selection anchor handle; body-cell touch gestures still prioritize native scroll.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
@@ -409,7 +411,7 @@ Gap:
 - In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
 - In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, and touch-only anchor affordances are visible where they do not conflict with fill handles.
-- In progress: start drag selection, fill, and range move only from explicit handles in touch mode; touch fill drag now starts from the explicit fill handle, while touch selection/range-move drag semantics are still pending.
+- In progress: start drag selection, fill, and range move only from explicit handles in touch mode; touch fill and selection drag now start from explicit handles, while touch range-move semantics are still pending.
 - Expand resize/fill hit targets for touch while preserving desktop visuals.
 - Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.
 
