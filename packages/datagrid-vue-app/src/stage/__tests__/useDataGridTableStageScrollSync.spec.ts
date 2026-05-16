@@ -44,4 +44,24 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(bodyViewport.scrollLeft).toBe(96)
     expect(syncViewport).toHaveBeenCalledTimes(1)
   })
+
+  it("samples header scrollLeft once when syncing the body viewport", () => {
+    const bodyViewport = createViewport(12)
+    const headerViewport = createViewport(0)
+    let headerScrollLeftReads = 0
+    Object.defineProperty(headerViewport, "scrollLeft", {
+      configurable: true,
+      get() {
+        headerScrollLeftReads += 1
+        return 96
+      },
+    })
+    const { service, syncViewport } = createService(bodyViewport)
+
+    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
+
+    expect(bodyViewport.scrollLeft).toBe(96)
+    expect(syncViewport).toHaveBeenCalledTimes(1)
+    expect(headerScrollLeftReads).toBe(1)
+  })
 })

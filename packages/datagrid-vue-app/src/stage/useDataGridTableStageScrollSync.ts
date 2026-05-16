@@ -60,10 +60,11 @@ export function useDataGridTableStageScrollSync(
     if (!headerViewport || !bodyViewport) {
       return
     }
-    if (bodyViewport.scrollLeft === headerViewport.scrollLeft) {
+    const nextScrollLeft = headerViewport.scrollLeft
+    if (bodyViewport.scrollLeft === nextScrollLeft) {
       return
     }
-    bodyViewport.scrollLeft = headerViewport.scrollLeft
+    bodyViewport.scrollLeft = nextScrollLeft
     options.syncViewport(createSyntheticScrollEvent(bodyViewport))
   }
 
