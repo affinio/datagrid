@@ -103,6 +103,23 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("body scroll keeps header and pinned panes synchronized", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const headerViewport = page.locator(".grid-header-viewport").first()
+    const leftPaneContent = page.locator(".grid-body-pane--left .grid-pane-content").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(headerViewport).toBeVisible({ timeout: 20_000 })
+    await expect(leftPaneContent).toBeVisible({ timeout: 20_000 })
+
+    const scrollState = await setViewportScroll(viewport, { top: 180, left: 260 })
+
+    await expect.poll(async () => viewportScrollLeft(headerViewport)).toBe(scrollState.left)
+    await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
+  })
+
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
@@ -268,6 +285,30 @@ async function forceCoarsePointer(page: Page): Promise<void> {
 
 async function viewportScrollTop(viewport: Locator): Promise<number> {
   return await viewport.evaluate(element => element.scrollTop)
+}
+
+async function viewportScrollLeft(viewport: Locator): Promise<number> {
+  return await viewport.evaluate(element => element.scrollLeft)
+}
+
+async function setViewportScroll(viewport: Locator, scroll: { top: number; left: number }): Promise<{ top: number; left: number }> {
+  return await viewport.evaluate((element, nextScroll) => {
+    element.scrollTop = nextScroll.top
+    element.scrollLeft = nextScroll.left
+    element.dispatchEvent(new Event("scroll", { bubbles: true }))
+    return {
+      top: element.scrollTop,
+      left: element.scrollLeft,
+    }
+  }, scroll)
+}
+
+async function inlineTransformY(locator: Locator): Promise<number | null> {
+  return await locator.evaluate(element => {
+    const transform = (element as HTMLElement).style.transform
+    const match = /translate3d\([^,]+,\s*(-?\d+(?:\.\d+)?)px,/.exec(transform)
+    return match ? Number(match[1]) : null
+  })
 }
 
 function firstEditableAmountCell(page: Page): Locator {
