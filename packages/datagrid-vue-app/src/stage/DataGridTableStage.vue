@@ -940,7 +940,7 @@ function syncCoarsePointerState(): void {
   isCoarsePointer.value = coarsePointerQuery?.matches === true
 }
 
-function shouldRoutePinnedTouchPan(target: EventTarget | null): boolean {
+function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   const root = stageRootEl.value
   if (!root || !(target instanceof Element) || !root.contains(target)) {
     return false
@@ -948,8 +948,8 @@ function shouldRoutePinnedTouchPan(target: EventTarget | null): boolean {
   if (bodyViewportEl.value?.contains(target)) {
     return false
   }
-  const pinnedPane = target.closest(".grid-body-pane")
-  return pinnedPane instanceof HTMLElement && root.contains(pinnedPane)
+  const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
+  return linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)
 }
 
 onMounted(() => {
@@ -957,7 +957,7 @@ onMounted(() => {
     teardownTouchPanGuard = installDataGridTouchPanGuard({
       root: stageRootEl.value,
       resolveScrollContainers: () => [bodyViewportEl.value],
-      shouldHandleTarget: shouldRoutePinnedTouchPan,
+      shouldHandleTarget: shouldRouteTableTouchPan,
     })
   }
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {

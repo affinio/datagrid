@@ -72,6 +72,46 @@ function createRows(count = 1, startIndex = 0): readonly DataGridTableRow<DemoRo
   })) as unknown as readonly DataGridTableRow<DemoRow>[]
 }
 
+function defineScrollMetrics(element: HTMLElement, metrics: {
+  scrollHeight: number
+  clientHeight: number
+  scrollWidth?: number
+  clientWidth?: number
+}): void {
+  Object.defineProperty(element, "scrollHeight", {
+    configurable: true,
+    value: metrics.scrollHeight,
+  })
+  Object.defineProperty(element, "clientHeight", {
+    configurable: true,
+    value: metrics.clientHeight,
+  })
+  Object.defineProperty(element, "scrollWidth", {
+    configurable: true,
+    value: metrics.scrollWidth ?? 0,
+  })
+  Object.defineProperty(element, "clientWidth", {
+    configurable: true,
+    value: metrics.clientWidth ?? 0,
+  })
+}
+
+function createTouchEvent(type: string, touch: { identifier?: number; clientX: number; clientY: number }): TouchEvent {
+  const event = new Event(type, {
+    bubbles: true,
+    cancelable: true,
+  }) as TouchEvent
+  Object.defineProperty(event, "touches", {
+    configurable: true,
+    value: [{
+      identifier: touch.identifier ?? 1,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    }],
+  })
+  return event
+}
+
 function createStageProps(
   isCellSelected: (rowOffset: number, columnIndex: number) => boolean,
   options?: {
@@ -1472,6 +1512,35 @@ describe("DataGridTableStage contract", () => {
     expect(canvasContextSpy).toHaveBeenCalled()
 
     canvasContextSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it("routes touch panning from the header into the body viewport", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 20,
+      }),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    defineScrollMetrics(viewport, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+      scrollWidth: 250,
+      clientWidth: 250,
+    })
+    viewport.scrollTop = 100
+
+    const headerCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]').element
+    headerCell.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+
+    const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
+    headerCell.dispatchEvent(moveEvent)
+
+    expect(moveEvent.defaultPrevented).toBe(true)
+    expect(viewport.scrollTop).toBe(150)
+
     wrapper.unmount()
   })
 
