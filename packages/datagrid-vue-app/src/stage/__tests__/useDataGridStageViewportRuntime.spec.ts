@@ -84,15 +84,25 @@ describe("useDataGridStageViewportRuntime", () => {
   })
 
   it("schedules center chrome redraw for horizontal body scroll instead of flushing synchronously", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
     const harness = createHarness()
     const bodyViewport = createViewportElement({ scrollLeft: 48 })
 
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
-    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalled()
+    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
     expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
     expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
 
     harness.unmount()
   })
@@ -117,10 +127,10 @@ describe("useDataGridStageViewportRuntime", () => {
   })
 
   it("batches linked pinned pane transforms through requestAnimationFrame during body scroll", () => {
-    let frameCallback: FrameRequestCallback | null = null
+    const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      frameCallback = callback
-      return 1
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
     })
     globalThis.cancelAnimationFrame = vi.fn()
     const leftPane = document.createElement("div")
@@ -133,11 +143,11 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
-    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(2)
     expect(leftPane.style.transform).toBe("")
     expect(rightPane.style.transform).toBe("")
 
-    frameCallback?.(performance.now())
+    frameCallbacks[0]?.(performance.now())
 
     expect(leftPane.style.transform).toBe("translate3d(0, -120px, 0)")
     expect(rightPane.style.transform).toBe("translate3d(0, -120px, 0)")
