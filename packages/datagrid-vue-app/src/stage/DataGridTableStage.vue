@@ -54,6 +54,7 @@
       @touchmove.passive="handleBodyTouchMove"
       @touchend.passive="handleBodyTouchEnd"
       @touchcancel.passive="handleBodyTouchEnd"
+      @contextmenu.capture="handleBodyContextMenuCapture"
     >
       <canvas
         ref="centerChromeCanvasEl"
@@ -219,6 +220,7 @@ ensureDataGridAppStyles()
 
 const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
+const TOUCH_LONG_PRESS_DELAY_MS = 520
 
 const props = defineProps({
   mode: {
@@ -477,8 +479,95 @@ function scheduleTouchClickSuppressionClear(): void {
   clearTouchClickSuppressionTimer()
   suppressTouchClickTimer = window.setTimeout(() => {
     suppressNextTouchClick = false
+    suppressNextTouchContextMenu = false
     suppressTouchClickTimer = null
   }, TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS)
+}
+
+function clearTouchLongPressTimer(): void {
+  if (touchLongPressTimer == null || typeof window === "undefined") {
+    touchLongPressTimer = null
+    return
+  }
+  window.clearTimeout(touchLongPressTimer)
+  touchLongPressTimer = null
+}
+
+function clearPendingTouchLongPress(): void {
+  clearTouchLongPressTimer()
+  pendingTouchLongPress = null
+}
+
+function resolveTouchLongPressCell(target: EventTarget | null): Omit<NonNullable<typeof pendingTouchLongPress>, "identifier" | "clientX" | "clientY"> | null {
+  if (!(target instanceof Element)) {
+    return null
+  }
+  if (target.closest(".cell-fill-handle, .row-resize-handle, .cell-editor-control, input, button, textarea, select, [contenteditable='true']")) {
+    return null
+  }
+  const cell = target.closest<HTMLElement>(".grid-cell[data-row-id][data-row-index][data-column-index]")
+  if (!cell || !bodyShellRef.value?.contains(cell)) {
+    return null
+  }
+  const columnIndex = Number(cell.dataset.columnIndex)
+  const absoluteRowIndex = Number(cell.dataset.rowIndex)
+  const rowId = cell.dataset.rowId
+  if (!Number.isFinite(columnIndex) || !Number.isFinite(absoluteRowIndex) || rowId == null) {
+    return null
+  }
+  const column = visibleColumns.value[columnIndex]
+  const row = [...displayRows.value, ...pinnedBottomRows.value].find(candidate => String(candidate.rowId) === rowId)
+  if (!row || !column || row.kind === "group" || column.column.meta?.rowSelection === true) {
+    return null
+  }
+  return {
+    row,
+    rowOffset: Math.trunc(absoluteRowIndex) - viewport.value.viewportRowStart,
+    column,
+    columnIndex: Math.trunc(columnIndex),
+    cell,
+  }
+}
+
+function startTouchLongPress(event: TouchEvent, touch: Touch): void {
+  clearPendingTouchLongPress()
+  if (interactionMode.value !== "touch") {
+    return
+  }
+  const target = resolveTouchLongPressCell(event.target)
+  if (!target || typeof window === "undefined") {
+    return
+  }
+  pendingTouchLongPress = {
+    identifier: touch.identifier,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    ...target,
+  }
+  touchLongPressTimer = window.setTimeout(() => {
+    const pending = pendingTouchLongPress
+    touchLongPressTimer = null
+    pendingTouchLongPress = null
+    if (!pending) {
+      return
+    }
+    suppressNextTouchClick = true
+    suppressNextTouchContextMenu = true
+    scheduleTouchClickSuppressionClear()
+    pending.cell.focus({ preventScroll: true })
+    interaction.value.handleCellClick(pending.row, pending.rowOffset, pending.column, pending.columnIndex)
+  }, TOUCH_LONG_PRESS_DELAY_MS)
+}
+
+function cancelTouchLongPressIfMoved(touch: Touch): void {
+  if (!pendingTouchLongPress || touch.identifier !== pendingTouchLongPress.identifier) {
+    return
+  }
+  const deltaX = Math.abs(touch.clientX - pendingTouchLongPress.clientX)
+  const deltaY = Math.abs(touch.clientY - pendingTouchLongPress.clientY)
+  if (Math.max(deltaX, deltaY) >= TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX) {
+    clearPendingTouchLongPress()
+  }
 }
 
 function handleBodyTouchStart(event: TouchEvent): void {
@@ -486,6 +575,11 @@ function handleBodyTouchStart(event: TouchEvent): void {
   bodyTouchStart = touch
     ? { identifier: touch.identifier, clientX: touch.clientX, clientY: touch.clientY }
     : null
+  if (touch) {
+    startTouchLongPress(event, touch)
+  } else {
+    clearPendingTouchLongPress()
+  }
 }
 
 function handleBodyTouchMove(event: TouchEvent): void {
@@ -495,8 +589,10 @@ function handleBodyTouchMove(event: TouchEvent): void {
   const touch = readTouchAt(event.touches, bodyTouchStart.identifier)
   if (!touch) {
     bodyTouchStart = null
+    clearPendingTouchLongPress()
     return
   }
+  cancelTouchLongPressIfMoved(touch)
   const deltaX = Math.abs(touch.clientX - bodyTouchStart.clientX)
   const deltaY = Math.abs(touch.clientY - bodyTouchStart.clientY)
   if (Math.max(deltaX, deltaY) < TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX) {
@@ -508,6 +604,7 @@ function handleBodyTouchMove(event: TouchEvent): void {
 
 function handleBodyTouchEnd(): void {
   bodyTouchStart = null
+  clearPendingTouchLongPress()
 }
 
 function consumeTouchPanClickSuppression(event: MouseEvent): boolean {
@@ -515,8 +612,16 @@ function consumeTouchPanClickSuppression(event: MouseEvent): boolean {
     return false
   }
   suppressNextTouchClick = false
-  clearTouchClickSuppressionTimer()
   return true
+}
+
+function handleBodyContextMenuCapture(event: MouseEvent): void {
+  if (!suppressNextTouchContextMenu) {
+    return
+  }
+  suppressNextTouchContextMenu = false
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function handleBodyCellClick(
@@ -641,7 +746,19 @@ let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 let teardownTouchPanGuard: (() => void) | null = null
 let bodyTouchStart: { identifier: number; clientX: number; clientY: number } | null = null
+let pendingTouchLongPress: {
+  identifier: number
+  clientX: number
+  clientY: number
+  row: TableRow
+  rowOffset: number
+  column: TableColumn
+  columnIndex: number
+  cell: HTMLElement
+} | null = null
+let touchLongPressTimer: number | null = null
 let suppressNextTouchClick = false
+let suppressNextTouchContextMenu = false
 let suppressTouchClickTimer: number | null = null
 const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
   syncBodyViewportMetrics: () => {},
@@ -1087,8 +1204,10 @@ onBeforeUnmount(() => {
   teardownTouchPanGuard?.()
   teardownTouchPanGuard = null
   clearTouchClickSuppressionTimer()
+  clearPendingTouchLongPress()
   bodyTouchStart = null
   suppressNextTouchClick = false
+  suppressNextTouchContextMenu = false
   if (!coarsePointerQuery || !coarsePointerQueryListener) {
     return
   }

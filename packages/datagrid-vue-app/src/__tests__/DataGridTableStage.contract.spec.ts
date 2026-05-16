@@ -8,6 +8,8 @@ import DataGridTableStage from "../DataGridTableStage.vue"
 
 type DemoRow = Record<string, unknown>
 
+const originalMatchMedia = window.matchMedia
+
 function createColumns(): readonly DataGridColumnSnapshot[] {
   return [
     { key: "left", pin: "left", width: 80, column: { key: "left", label: "Left" } },
@@ -415,8 +417,31 @@ async function applyViewportLayoutMetrics(
 }
 
 afterEach(() => {
+  vi.useRealTimers()
   document.body.innerHTML = ""
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: originalMatchMedia,
+  })
 })
+
+function mockCoarsePointer(matches: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: query === "(hover: none) and (pointer: coarse)" ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
 
 describe("DataGridTableStage contract", () => {
   it("renders custom Vue cell content when a column cellRenderer is provided", async () => {
@@ -1453,6 +1478,62 @@ describe("DataGridTableStage contract", () => {
     cell.dispatchEvent(touchClick)
 
     expect(handleCellClick).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("selects a body cell on touch long press and suppresses the follow-up synthetic click", () => {
+    vi.useFakeTimers()
+    mockCoarsePointer(true)
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellClick,
+      }),
+      attachTo: document.body,
+    })
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+    const touchClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(touchClick, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    cell.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 100 }))
+    vi.advanceTimersByTime(530)
+    cell.dispatchEvent(touchClick)
+
+    expect(handleCellClick).toHaveBeenCalledTimes(1)
+    expect(handleCellClick).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: "r1" }),
+      0,
+      expect.objectContaining({ key: "centerA" }),
+      1,
+    )
+
+    wrapper.unmount()
+  })
+
+  it("cancels touch long press selection when the finger pans first", () => {
+    vi.useFakeTimers()
+    mockCoarsePointer(true)
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellClick,
+      }),
+      attachTo: document.body,
+    })
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+
+    cell.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 100 }))
+    cell.dispatchEvent(createTouchEvent("touchmove", { clientX: 100, clientY: 116 }))
+    vi.advanceTimersByTime(530)
+
+    expect(handleCellClick).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

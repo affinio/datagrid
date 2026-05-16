@@ -39,6 +39,7 @@ Phase 2 started:
 - Internal interaction mode seam: `DataGridTableStage.vue` now derives `interactionMode: desktop | touch` from internal `auto` mode plus coarse-pointer state, and stage pointer/fill-handle interactions receive that mode input without exposing a public API.
 - Cell-body touch guard: `DataGridTableStage.vue` now checks the internal interaction mode before delegating cell mousedown into selection/range-move interaction state, so touch-generated mousedown keeps scroll priority while desktop mousedown still starts the existing selection path.
 - Touch pan click suppression: the body shell passively tracks touch movement and suppresses the next synthetic touch click after a pan, preventing accidental cell selection after one-finger scroll without canceling native scrolling.
+- Touch long-press selection prep: in touch mode, a stationary long press on a body cell selects/focuses that cell and suppresses the follow-up synthetic click/context menu; movement beyond the pan threshold cancels the long press.
 
 ## Current Architecture Summary
 
@@ -152,6 +153,7 @@ Current state:
 - Touch-generated double-click/double-tap events still open inline edit, preserving a deliberate touch editing path while keeping one-finger scroll and single tap selection first.
 - Touch-generated cell-body mousedown is now filtered at the stage boundary before it reaches desktop selection/range-move logic; mouse/trackpad desktop mousedown still follows the existing path.
 - Touch movement beyond the pan threshold suppresses the next touch-generated cell click, while stationary taps still select/focus cells.
+- Touch long press now establishes a cell selection without starting drag/range move; this is the foundation for explicit touch selection mode and handles.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
@@ -175,7 +177,7 @@ Problem:
 Recommended fix:
 - Require an explicit range-move handle for touch.
 - On desktop, keep edge-drag if desired, but put it behind `interactionMode: desktop | auto` and disable it for coarse pointers.
-- Add a long-press-to-selection-mode design before allowing touch drag selection or range move.
+- Build on the current long-press cell selection by adding visible touch selection handles before allowing touch drag selection or range move.
 
 #### 4. Vue app vertical overscan needed touch and velocity adaptation
 
@@ -402,7 +404,7 @@ Gap:
 
 - In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
-- Add long-press selection mode.
+- In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, while visible touch handles are still pending.
 - Start drag selection, fill, and range move only from explicit handles in touch mode.
 - Expand resize/fill hit targets for touch while preserving desktop visuals.
 - Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.
