@@ -440,7 +440,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, and explicit column-resize handle drag now has a width-change/no-body-scroll gate.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, and explicit column-resize handle drag now has a width-change/no-body-scroll gate.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
@@ -459,13 +459,13 @@ Gap:
   - header, pinned panes, and overlays remain aligned after vertical and horizontal scroll.
 - Playwright tests:
   - Done for `/vue/base-grid`: one-finger touch pan keeps the body viewport scroll-first and does not change selection.
+  - Done for `/vue/base-grid`: body-cell touch drag does not start selection drag, fill, range move, resize, or preview overlays.
   - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
   - Done for `/vue/base-grid`: touch-generated double tap opens inline editing only when the viewport is idle, not while scroll-active.
   - Done for `/vue/base-grid`: touch fill drag starts from the explicit fill handle, renders fill preview, and does not scroll the body viewport.
   - Done for `/vue/base-grid`: touch range move drag starts from the explicit range-move handle, renders move preview, and does not scroll the body viewport.
   - Done for `/vue/base-grid`: touch column resize drag starts from the explicit resize handle, changes header width, and does not scroll the body viewport.
   - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
-  - body drag scrolls outside explicit handles.
 - Manual device checks:
   - iPad Safari and Chrome.
   - Android Chrome.

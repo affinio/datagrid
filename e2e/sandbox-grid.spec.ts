@@ -74,6 +74,35 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("body cell touch drag does not start selection fill range move or resize", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const cell = firstEditableAmountCell(page)
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(cell).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const dragResult = await dispatchTouchDragStartAndMove(cell, amountCellByViewportRow(page, 3))
+
+    expect(dragResult.startPrevented).toBe(false)
+    expect(dragResult.movePrevented).toBe(false)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--fill-preview")).toHaveCount(0)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview")).toHaveCount(0)
+
+    await viewport.evaluate(element => {
+      element.scrollTop += 160
+    })
+    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+  })
+
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
