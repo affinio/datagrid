@@ -90,6 +90,31 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(expectedSignature)
     expect(await dispatchContextMenuAndReadPrevented(cell)).toBe(true)
   })
+
+  test("touch double tap opens editing only when the viewport is idle", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    await dispatchTouchGeneratedDoubleClick(firstEditableAmountCell(page))
+    await expect(firstEditableAmountCell(page).locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })
+    await page.keyboard.press("Escape")
+    await expect(page.locator(".grid-body-viewport input.cell-editor-input")).toHaveCount(0)
+
+    await markViewportScrolling(viewport)
+    await expect(stage).toHaveClass(/grid-stage--scrolling/)
+
+    await dispatchTouchGeneratedDoubleClick(firstEditableAmountCell(page))
+    await expect(page.locator(".grid-body-viewport input.cell-editor-input")).toHaveCount(0)
+
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+    await dispatchTouchGeneratedDoubleClick(firstEditableAmountCell(page))
+    await expect(firstEditableAmountCell(page).locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -127,6 +152,17 @@ async function forceCoarsePointer(page: Page): Promise<void> {
 
 async function viewportScrollTop(viewport: Locator): Promise<number> {
   return await viewport.evaluate(element => element.scrollTop)
+}
+
+function firstEditableAmountCell(page: Page): Locator {
+  return page.locator('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]').first()
+}
+
+async function markViewportScrolling(viewport: Locator): Promise<void> {
+  await viewport.evaluate(element => {
+    element.scrollTop += 80
+    element.dispatchEvent(new Event("scroll", { bubbles: true }))
+  })
 }
 
 async function runLongVerticalSession(viewport: Locator): Promise<void> {
@@ -196,6 +232,24 @@ async function dispatchLongPress(page: Page, target: Locator, durationMs: number
     }))
   }, durationMs)
   await page.waitForTimeout(0)
+}
+
+async function dispatchTouchGeneratedDoubleClick(target: Locator): Promise<void> {
+  await target.scrollIntoViewIfNeeded()
+  await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    const event = new MouseEvent("dblclick", {
+      bubbles: true,
+      cancelable: true,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+    })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+    element.dispatchEvent(event)
+  })
 }
 
 async function selectionAnchorSignature(page: Page): Promise<string> {

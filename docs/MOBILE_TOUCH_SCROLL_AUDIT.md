@@ -440,7 +440,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, and stationary long press now has a gate for cell selection plus context-menu suppression.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, stationary long press now has a gate for cell selection plus context-menu suppression, and touch double tap now has an idle-vs-scroll-active edit gate.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
@@ -460,8 +460,8 @@ Gap:
 - Playwright tests:
   - Done for `/vue/base-grid`: one-finger touch pan keeps the body viewport scroll-first and does not change selection.
   - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
+  - Done for `/vue/base-grid`: touch-generated double tap opens inline editing only when the viewport is idle, not while scroll-active.
   - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
-  - double tap edits only when not scrolling.
   - fill/range/resize drag from handles works and body drag scrolls.
 - Manual device checks:
   - iPad Safari and Chrome.
