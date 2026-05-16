@@ -1982,6 +1982,44 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("ignores touch-generated fill-handle drag starts", () => {
+    const { controller, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+    const event = new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    controller.startFillHandleDrag(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+  })
+
   it("promotes the full dragged range into selection after a fully materialized local fill", async () => {
     const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
     const commitFillOperation = vi.fn(async () => ({

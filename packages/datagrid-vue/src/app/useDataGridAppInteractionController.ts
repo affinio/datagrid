@@ -2205,6 +2205,9 @@ export function useDataGridAppInteractionController<
   })
 
   const startFillHandleDrag = (event: MouseEvent): void => {
+    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+      return
+    }
     if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
       return
     }
