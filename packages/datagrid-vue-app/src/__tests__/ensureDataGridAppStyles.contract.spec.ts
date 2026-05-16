@@ -34,5 +34,7 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain("min-width: 18px")
     expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--select")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .grid-cell--date")
+    expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--clipboard-pending::after")
+    expect(style?.textContent).toContain("animation-play-state: paused")
   })
 })

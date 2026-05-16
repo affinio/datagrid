@@ -1405,6 +1405,10 @@ body.datagrid-fill-drag-cursor * {
   --clipboard-pending-left: var(--datagrid-selection-copied-border);
 }
 
+.grid-stage--scrolling .grid-cell--clipboard-pending::after {
+  animation-play-state: paused;
+}
+
 @keyframes grid-clipboard-ants {
   from {
     background-position:
@@ -3064,6 +3068,11 @@ body.datagrid-fill-drag-cursor * {
 .grid-stage--coarse-pointer .grid-cell--select:not(.grid-cell--editing):hover::before,
 .grid-stage--coarse-pointer .grid-cell--date:not(.grid-cell--editing):hover::before {
   opacity: 0;
+}
+
+.grid-stage--scrolling .grid-cell--select:not(.grid-cell--editing)::before,
+.grid-stage--scrolling .grid-cell--date:not(.grid-cell--editing)::before {
+  transition: none;
 }
 
 @media (hover: none) and (pointer: coarse) {
