@@ -2,13 +2,7 @@ import { nextTick, ref, watch, type Ref } from "vue"
 import type { DataGridRowNode } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowHeightMode } from "./useDataGridAppControls"
-
-function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
-  const sourceCapabilities = (event as MouseEvent & {
-    sourceCapabilities?: { firesTouchEvents?: boolean }
-  }).sourceCapabilities
-  return sourceCapabilities?.firesTouchEvents === true
-}
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridAppRowSizingOptions<TRow> {
   mode: Ref<DataGridAppMode>

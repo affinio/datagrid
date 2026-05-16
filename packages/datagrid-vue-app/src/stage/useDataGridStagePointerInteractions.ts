@@ -7,6 +7,7 @@ import type {
   DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
 } from "./dataGridTableStageBody.types"
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStagePointerInteractionsOptions {
   mode: Readonly<Ref<DataGridTableMode>>
@@ -38,13 +39,6 @@ export interface UseDataGridStagePointerInteractionsResult {
 
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
-
-function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
-  const sourceCapabilities = (event as MouseEvent & {
-    sourceCapabilities?: { firesTouchEvents?: boolean }
-  }).sourceCapabilities
-  return sourceCapabilities?.firesTouchEvents === true
-}
 
 export function useDataGridStagePointerInteractions(
   options: UseDataGridStagePointerInteractionsOptions,

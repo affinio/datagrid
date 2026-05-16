@@ -33,6 +33,7 @@ import {
   type DataGridCopyRange,
 } from "../advanced"
 import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -50,13 +51,6 @@ interface DataGridAppFillProjectionContext {
   treeData: null
   pivot: null
   pagination: DataGridPaginationSnapshot
-}
-
-function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
-  const sourceCapabilities = (event as MouseEvent & {
-    sourceCapabilities?: { firesTouchEvents?: boolean }
-  }).sourceCapabilities
-  return sourceCapabilities?.firesTouchEvents === true
 }
 
 interface DataGridAppResolveFillBoundaryRequest {

@@ -633,6 +633,7 @@ import {
   useDataGridTableStageSelectionSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
@@ -908,13 +909,6 @@ function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
 
 function sortIndicator(columnKey: string): string {
   return columns.value.sortIndicator(columnKey)
-}
-
-function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
-  const sourceCapabilities = (event as MouseEvent & {
-    sourceCapabilities?: { firesTouchEvents?: boolean }
-  }).sourceCapabilities
-  return sourceCapabilities?.firesTouchEvents === true
 }
 
 function startResize(event: MouseEvent, columnKey: string): void {

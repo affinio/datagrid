@@ -8,13 +8,7 @@ import type {
   DataGridTableStageLayoutSection,
   DataGridTableStageRowsSection,
 } from "./dataGridTableStage.types"
-
-function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
-  const sourceCapabilities = (event as MouseEvent & {
-    sourceCapabilities?: { firesTouchEvents?: boolean }
-  }).sourceCapabilities
-  return sourceCapabilities?.firesTouchEvents === true
-}
+import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStageRowIndexOptions {
   rows: Readonly<Ref<DataGridTableStageRowsSection<Record<string, unknown>>>>
