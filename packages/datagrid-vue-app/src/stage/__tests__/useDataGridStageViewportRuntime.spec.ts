@@ -83,7 +83,7 @@ describe("useDataGridStageViewportRuntime", () => {
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   })
 
-  it("schedules center chrome redraw for horizontal body scroll instead of flushing synchronously", () => {
+  it("flushes center chrome redraw in the scroll frame for horizontal body scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
@@ -97,17 +97,24 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
-    expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.scheduleGridChromeRedraw).not.toHaveBeenCalled()
     expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
 
     frameCallbacks.forEach(callback => callback(performance.now()))
 
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
 
     harness.unmount()
   })
 
-  it("schedules center chrome redraw when pinned bottom scroll syncs the body viewport", () => {
+  it("flushes center chrome redraw in the scroll frame when pinned bottom scroll syncs the body viewport", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
     const harness = createHarness()
     const bodyViewport = createViewportElement()
     const pinnedBottomViewport = createViewportElement({ scrollLeft: 64 })
@@ -120,8 +127,12 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(bodyViewport.scrollLeft).toBe(64)
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
-    expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.scheduleGridChromeRedraw).not.toHaveBeenCalled()
     expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
 
     harness.unmount()
   })
@@ -177,6 +188,7 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(32)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full")
 
     harness.unmount()
   })
@@ -198,6 +210,7 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(0)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full")
 
     harness.unmount()
   })

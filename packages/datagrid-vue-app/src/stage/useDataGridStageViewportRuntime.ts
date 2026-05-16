@@ -3,13 +3,14 @@ import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll } from "
 import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
 
 const DATA_GRID_SCROLL_IDLE_MS = 120
+type GridChromeRedrawMode = "full" | "center-scroll"
 
 export interface UseDataGridStageViewportRuntimeSyncers {
   syncBodyViewportMetrics: () => void
   syncPinnedBottomViewportMetrics: () => void
   syncPinnedBottomViewportScrollLeft: () => void
-  scheduleGridChromeRedraw: (mode?: "full" | "center-scroll") => void
-  flushGridChromeRedraw: (mode?: "full" | "center-scroll") => void
+  scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
+  flushGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
   connectGridChromeResizeObserver: () => void
   disconnectGridChromeResizeObserver: () => void
 }
@@ -47,6 +48,10 @@ interface BodyViewportScrollState {
   scrollLeft: number
 }
 
+function mergeGridChromeRedrawMode(current: GridChromeRedrawMode, next: GridChromeRedrawMode): GridChromeRedrawMode {
+  return current === "full" || next === "full" ? "full" : "center-scroll"
+}
+
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
     return value
@@ -80,6 +85,7 @@ export function useDataGridStageViewportRuntime(
   let bodyViewportScrollFrame: number | null = null
   let pendingBodyViewportScrollState: BodyViewportScrollState | null = null
   let pendingPinnedBottomViewportScrollLeftSync = false
+  let pendingGridChromeRedrawMode: GridChromeRedrawMode | null = null
   let observedBodyViewportScrollTop = 0
   let observedBodyViewportScrollLeft = 0
 
@@ -168,13 +174,18 @@ export function useDataGridStageViewportRuntime(
       bodyViewportScrollFrame = null
       const scrollState = pendingBodyViewportScrollState
       const shouldSyncPinnedBottomScrollLeft = pendingPinnedBottomViewportScrollLeftSync
+      const chromeRedrawMode = pendingGridChromeRedrawMode
       pendingBodyViewportScrollState = null
       pendingPinnedBottomViewportScrollLeftSync = false
+      pendingGridChromeRedrawMode = null
       if (scrollState) {
         commitBodyViewportScrollState(scrollState)
       }
       if (shouldSyncPinnedBottomScrollLeft) {
         options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
+      }
+      if (chromeRedrawMode) {
+        options.gridChromeSyncers.value.flushGridChromeRedraw(chromeRedrawMode)
       }
     })
   }
@@ -191,6 +202,13 @@ export function useDataGridStageViewportRuntime(
     scheduleBodyViewportScrollFrame()
   }
 
+  function scheduleScrollGridChromeRedraw(mode: GridChromeRedrawMode): void {
+    pendingGridChromeRedrawMode = pendingGridChromeRedrawMode
+      ? mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
+      : mode
+    scheduleBodyViewportScrollFrame()
+  }
+
   function cancelBodyViewportScrollFrame(): void {
     if (bodyViewportScrollFrame === null) {
       return
@@ -199,6 +217,7 @@ export function useDataGridStageViewportRuntime(
     bodyViewportScrollFrame = null
     pendingBodyViewportScrollState = null
     pendingPinnedBottomViewportScrollLeftSync = false
+    pendingGridChromeRedrawMode = null
   }
 
   function markBodyViewportScrolling(): void {
@@ -245,10 +264,10 @@ export function useDataGridStageViewportRuntime(
       schedulePinnedBottomViewportScrollLeftSync()
     }
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
-      options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
+      scheduleScrollGridChromeRedraw("center-scroll")
       return
     }
-    options.gridChromeSyncers.value.scheduleGridChromeRedraw("full")
+    scheduleScrollGridChromeRedraw("full")
   }
 
   function handlePinnedBottomViewportScroll(event: Event): void {
@@ -261,7 +280,7 @@ export function useDataGridStageViewportRuntime(
     markBodyViewportScrolling()
     options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
     scheduleBodyViewportScrollStateSync(bodyViewport)
-    options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
+    scheduleScrollGridChromeRedraw("center-scroll")
   }
 
   function handleLinkedViewportWheel(event: WheelEvent): void {

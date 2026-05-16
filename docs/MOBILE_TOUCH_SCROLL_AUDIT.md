@@ -24,6 +24,7 @@ Completed in Phase 1:
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
+- Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
 
 Still open:
 - Long-press selection mode and explicit touch selection handles.
@@ -35,7 +36,7 @@ Still open:
 
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, and schedules canvas chrome redraws.
+- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
 - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts` is a lower-level viewport controller path with rAF scroll sync, drift correction, heavy-update thresholds, and resize observer integration.
 - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts` plus `packages/datagrid-core/src/virtualization/dynamicOverscan.ts` provide adaptive vertical overscan in the core viewport path.
@@ -201,13 +202,14 @@ Current state:
 - `useDataGridStageViewportRuntime.ts` now batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-bottom `scrollLeft` sync is now only scheduled when the body `scrollLeft` actually changes, so vertical-only scroll frames avoid that extra sync call.
 - Stage body-scroll sampling now captures only `scrollTop` / `scrollLeft`; viewport dimensions stay on the resize/metrics path instead of being read during every scroll event.
+- Grid chrome redraw mode is now queued by the body and pinned-bottom scroll handlers and flushed inside the stage scroll frame, so canvas draw work no longer starts from the raw scroll event.
 - Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
 - `useDataGridAppViewport.ts` now syncs header `scrollLeft` from the viewport rAF commit instead of writing it directly inside the body scroll event.
 
 Recommended fix:
 - Keep making scroll event handlers sampling-only where possible.
 - Continue moving any remaining header/pinned/canvas work to latest-value rAF passes.
-- Avoid `flushGridChromeRedraw()` from inside scroll handlers except for verified correctness cases.
+- Avoid `flushGridChromeRedraw()` from raw scroll handlers; keep scroll-triggered flushes inside the stage scroll frame.
 
 #### 6. Server/data-source row models can display loading rows in the viewport during fast scroll
 
@@ -378,7 +380,8 @@ Gap:
 - Done: move app viewport header `scrollLeft` synchronization out of the raw body scroll event and into the rAF viewport commit.
 - Done: skip pinned-bottom `scrollLeft` sync work for vertical-only body scroll frames.
 - Done: remove body viewport dimension reads from the stage raw scroll sampling path.
-- In progress: move remaining synchronous canvas/header/pinned scroll work behind rAF where safe.
+- Done: move body and pinned-bottom scroll-triggered grid chrome redraw into the stage scroll frame.
+- In progress: audit remaining header/resize metric paths for unnecessary scroll-time layout reads.
 
 ### Phase 2 - Touch Interaction Model
 
