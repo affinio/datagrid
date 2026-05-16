@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest"
-import { resolveDataGridTouchPanAxis } from "../gestures/dataGridTouchPanGuard"
+import { describe, expect, it, vi } from "vitest"
+import { installDataGridTouchPanGuard, resolveDataGridTouchPanAxis } from "../gestures/dataGridTouchPanGuard"
 
 describe("dataGridTouchPanGuard", () => {
   it("locks vertical gestures to the y axis", () => {
@@ -63,5 +63,22 @@ describe("dataGridTouchPanGuard", () => {
       maxScrollLeft: 0,
       maxScrollTop: 0,
     })).toBeNull()
+  })
+
+  it("uses passive listeners for non-canceling touch lifecycle events", () => {
+    const root = document.createElement("div")
+    const addEventListener = vi.spyOn(root, "addEventListener")
+
+    const teardown = installDataGridTouchPanGuard({
+      root,
+      resolveScrollContainers: () => [],
+    })
+
+    expect(addEventListener).toHaveBeenCalledWith("touchstart", expect.any(Function), { capture: true, passive: true })
+    expect(addEventListener).toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
+    expect(addEventListener).toHaveBeenCalledWith("touchend", expect.any(Function), { capture: true, passive: true })
+    expect(addEventListener).toHaveBeenCalledWith("touchcancel", expect.any(Function), { capture: true, passive: true })
+
+    teardown()
   })
 })

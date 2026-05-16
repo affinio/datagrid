@@ -149,8 +149,8 @@ export function installDataGridTouchPanGuard(
 
   options.root.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true })
   options.root.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false })
-  options.root.addEventListener("touchend", resetGesture, true)
-  options.root.addEventListener("touchcancel", resetGesture, true)
+  options.root.addEventListener("touchend", resetGesture, { capture: true, passive: true })
+  options.root.addEventListener("touchcancel", resetGesture, { capture: true, passive: true })
 
   return () => {
     options.root.removeEventListener("touchstart", handleTouchStart, true)
