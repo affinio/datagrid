@@ -29,5 +29,8 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain(".cell-fill-handle")
     expect(style?.textContent).toContain(".col-resize")
     expect(style?.textContent).toContain("touch-action: none")
+    expect(style?.textContent).toContain("width: 18px")
+    expect(style?.textContent).toContain("height: 18px")
+    expect(style?.textContent).toContain("min-width: 18px")
   })
 })

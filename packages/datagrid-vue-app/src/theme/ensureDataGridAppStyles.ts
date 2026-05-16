@@ -3349,6 +3349,25 @@ body.datagrid-fill-drag-cursor * {
   touch-action: none;
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .cell-fill-handle {
+    right: -8px;
+    bottom: -8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+  }
+
+  .row-resize-handle {
+    height: 18px;
+  }
+
+  .col-resize {
+    width: 18px;
+    min-width: 18px;
+  }
+}
+
 @media (max-width: 960px) {
   .datagrid-app-workspace {
     flex-direction: column;
