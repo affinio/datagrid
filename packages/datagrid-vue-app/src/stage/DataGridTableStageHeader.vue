@@ -677,6 +677,10 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  isCoarsePointer: {
+    type: Boolean,
+    default: false,
+  },
   onLinkedViewportWheel: {
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
@@ -771,6 +775,7 @@ function clearHeaderColumnDragState(resetClickSuppression = false): void {
 function isHeaderColumnDraggable(column: TableColumn): boolean {
   return typeof columns.value.reorderColumnsByHeader === "function"
     && mode.value !== "pivot"
+    && !props.isCoarsePointer
     && !isRowSelectionColumn(column)
 }
 

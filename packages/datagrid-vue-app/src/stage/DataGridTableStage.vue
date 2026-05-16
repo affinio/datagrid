@@ -24,6 +24,7 @@
       :right-track-style="rightTrackStyle"
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
+      :is-coarse-pointer="isCoarsePointer"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #center-chrome>
@@ -984,7 +985,7 @@ const rowRuntime = computed(() => ({
   rowIndexCellClasses,
   rowIndexCellStyle,
   rowIndexTabIndex,
-  isRowIndexDraggable,
+  isRowIndexDraggable: (row: TableRow) => !isCoarsePointer.value && isRowIndexDraggable(row),
   handleRowIndexClickSafe,
   handleRowIndexKeydownSafe,
   handleRowIndexDragStart,

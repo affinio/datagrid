@@ -730,6 +730,7 @@ function queryPinnedBottomCell(wrapper: ReturnType<typeof mount>, rowIndex: numb
 
 const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+const originalMatchMedia = window.matchMedia
 
 beforeAll(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn()
@@ -748,7 +749,29 @@ afterAll(() => {
 
 afterEach(() => {
   document.body.innerHTML = ""
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: originalMatchMedia,
+  })
 })
+
+function mockCoarsePointer(matches: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: query === "(hover: none) and (pointer: coarse)" ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
 
 function setElementClientWidth(element: HTMLElement, width: number): void {
   Object.defineProperty(element, "clientWidth", {
@@ -2629,6 +2652,32 @@ describe("DataGrid app facade contract", () => {
     expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
       order: ["region", "amount", "owner"],
     })
+
+    wrapper.unmount()
+  })
+
+  it("disables native row and header dragging on coarse pointers", async () => {
+    mockCoarsePointer(true)
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowReorder: true,
+        columnMenu: false,
+        columnReorder: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    expect(firstRowIndexCell.exists()).toBe(true)
+    expect(ownerHeader.exists()).toBe(true)
+    expect((firstRowIndexCell.element as HTMLElement).draggable).toBe(false)
+    expect((ownerHeader.element as HTMLElement).draggable).toBe(false)
 
     wrapper.unmount()
   })
