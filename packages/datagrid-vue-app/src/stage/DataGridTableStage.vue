@@ -11,6 +11,8 @@
       'grid-stage--range-moving': isRangeMoving,
       'grid-stage--scrolling': isBodyViewportScrolling,
       'grid-stage--coarse-pointer': isCoarsePointer,
+      'grid-stage--interaction-touch': interactionMode === 'touch',
+      'grid-stage--interaction-desktop': interactionMode === 'desktop',
       'grid-stage--single-cell-selection': isSingleSelectedCell,
       'grid-stage--additive-selection': isAdditiveSelection,
     }"
@@ -198,6 +200,7 @@ import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
+import { resolveDataGridInteractionMode } from "./dataGridMouseEventGuards"
 
 ensureDataGridAppStyles()
 
@@ -532,6 +535,11 @@ const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const isCoarsePointer = ref(false)
 const isBodyViewportScrolling = ref(false)
+const interactionModeInput = computed(() => ({
+  interactionMode: "auto" as const,
+  isCoarsePointer: isCoarsePointer.value,
+}))
+const interactionMode = computed(() => resolveDataGridInteractionMode(interactionModeInput.value))
 const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
@@ -928,6 +936,7 @@ const {
   displayRows,
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   fillActionMenuOpen,
+  interactionModeInput,
   suppressHoverInteractions,
   isCellSelectedSafe,
   isCellEditableSafe,

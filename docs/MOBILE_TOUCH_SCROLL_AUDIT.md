@@ -35,6 +35,9 @@ Still open:
 - Server-backed blank/loading viewport detection and prefetch tuning from real touch velocity.
 - Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
 
+Phase 2 started:
+- Internal interaction mode seam: `DataGridTableStage.vue` now derives `interactionMode: desktop | touch` from internal `auto` mode plus coarse-pointer state, and stage pointer/fill-handle interactions receive that mode input without exposing a public API.
+
 ## Current Architecture Summary
 
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
@@ -393,7 +396,7 @@ Gap:
 
 ### Phase 2 - Touch Interaction Model
 
-- Introduce internal `interactionMode: desktop | touch | auto`.
+- In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
 - Add long-press selection mode.
 - Start drag selection, fill, and range move only from explicit handles in touch mode.

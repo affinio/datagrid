@@ -192,6 +192,80 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(startFillHandleDrag).not.toHaveBeenCalled()
   })
 
+  it("allows touch-generated fill-handle mousedown events when internal interaction mode is desktop", () => {
+    const startFillHandleDrag = vi.fn()
+    const fillActionMenuOpen = ref(true)
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag,
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      displayRows: ref([]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen,
+      interactionModeInput: ref({
+        interactionMode: "desktop",
+        isCoarsePointer: false,
+      }),
+      isCellSelectedSafe: () => false,
+      isCellEditableSafe: () => false,
+      isCellOnSelectionEdgeSafe: () => false,
+    })
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    service.handleFillHandleMouseDown(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fillActionMenuOpen.value).toBe(false)
+    expect(startFillHandleDrag).toHaveBeenCalledWith(event)
+  })
+
+  it("ignores touch-generated fill-handle mousedown events in auto touch mode", () => {
+    const startFillHandleDrag = vi.fn()
+    const fillActionMenuOpen = ref(true)
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag,
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      displayRows: ref([]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen,
+      interactionModeInput: ref({
+        interactionMode: "auto",
+        isCoarsePointer: true,
+      }),
+      isCellSelectedSafe: () => false,
+      isCellEditableSafe: () => false,
+      isCellOnSelectionEdgeSafe: () => false,
+    })
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    service.handleFillHandleMouseDown(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(fillActionMenuOpen.value).toBe(true)
+    expect(startFillHandleDrag).not.toHaveBeenCalled()
+  })
+
   it("ignores touch-generated fill-handle double-click events", () => {
     const startFillHandleDoubleClick = vi.fn()
     const fillActionMenuOpen = ref(true)

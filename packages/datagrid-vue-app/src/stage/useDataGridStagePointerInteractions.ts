@@ -7,7 +7,11 @@ import type {
   DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
 } from "./dataGridTableStageBody.types"
-import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
+import {
+  shouldPrioritizeNativeScrollForMouseDown,
+  shouldPrioritizeNativeScrollForMouseEvent,
+  type DataGridInteractionModeInput,
+} from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStagePointerInteractionsOptions {
   mode: Readonly<Ref<DataGridTableMode>>
@@ -22,6 +26,7 @@ export interface UseDataGridStagePointerInteractionsOptions {
   displayRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
   viewportRowStart: Readonly<Ref<number>>
   fillActionMenuOpen: Ref<boolean>
+  interactionModeInput?: Readonly<Ref<DataGridInteractionModeInput>>
   suppressHoverInteractions?: Readonly<Ref<boolean>>
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
@@ -160,7 +165,7 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleMouseDown(event: MouseEvent): void {
-    if (shouldPrioritizeNativeScrollForMouseDown(event)) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event, options.interactionModeInput?.value)) {
       return
     }
     event.preventDefault()
@@ -172,7 +177,7 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleDoubleClick(event: MouseEvent): void {
-    if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event, options.interactionModeInput?.value)) {
       return
     }
     event.preventDefault()
