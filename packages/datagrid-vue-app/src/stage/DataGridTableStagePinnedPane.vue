@@ -112,6 +112,10 @@
             aria-label="Selection handle"
             tabindex="-1"
             @mousedown.stop.prevent="renderApi.handleTouchSelectionHandleMouseDown($event)"
+            @touchstart.stop.prevent="renderApi.handleTouchSelectionHandleTouchStart($event)"
+            @touchmove.stop.prevent
+            @touchend.stop.prevent
+            @touchcancel.stop.prevent
             @click.stop.prevent
             @contextmenu.stop.prevent
           />

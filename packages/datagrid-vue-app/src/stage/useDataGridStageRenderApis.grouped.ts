@@ -71,6 +71,7 @@ type CellRuntime = Readonly<Ref<{
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
+  handleTouchSelectionHandleTouchStart: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   shouldRenderCheckboxCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => boolean
@@ -197,6 +198,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleCellKeydown: options.cellRuntime.value.handleCellKeydown,
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.cellRuntime.value.handleTouchSelectionHandleMouseDown,
+    handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
@@ -255,6 +257,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleCellKeydown: options.cellRuntime.value.handleCellKeydown,
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     handleTouchSelectionHandleMouseDown: options.cellRuntime.value.handleTouchSelectionHandleMouseDown,
+    handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,

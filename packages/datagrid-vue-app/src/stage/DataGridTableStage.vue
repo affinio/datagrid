@@ -644,6 +644,15 @@ function handleTouchSelectionHandleMouseDown(event: MouseEvent): void {
   cell?.focus({ preventScroll: true })
 }
 
+function handleTouchSelectionHandleTouchStart(event: TouchEvent): void {
+  event.preventDefault()
+  clearPendingTouchLongPress()
+  bodyTouchStart = null
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+}
+
 function isEditingCellSafeBase(row: TableRow, columnKey: string): boolean {
   const evaluate = editing.value.isEditingCell
   return typeof evaluate === "function"
@@ -1313,6 +1322,7 @@ const cellRuntime = computed(() => ({
   handleCellKeydown,
   startInlineEditIfAllowed,
   handleTouchSelectionHandleMouseDown,
+  handleTouchSelectionHandleTouchStart,
   handleFillHandleMouseDown,
   handleFillHandleDoubleClick,
   shouldRenderCheckboxCell,

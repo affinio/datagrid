@@ -1613,6 +1613,35 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("isolates touch selection handle touchstart from body long press selection", async () => {
+    vi.useFakeTimers()
+    mockCoarsePointer(true)
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+          handleCellClick,
+        },
+      ),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    const handle = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"] .grid-touch-selection-handle')
+    const touchStart = createTouchEvent("touchstart", { clientX: 100, clientY: 100 })
+    handle.element.dispatchEvent(touchStart)
+    vi.advanceTimersByTime(530)
+
+    expect(touchStart.defaultPrevented).toBe(true)
+    expect(handleCellClick).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
     const handleCellClick = vi.fn()
     const startInlineEdit = vi.fn()
