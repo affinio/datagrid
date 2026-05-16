@@ -37,7 +37,7 @@ function createEditableAffordanceColumns(): readonly DataGridColumnSnapshot[] {
       column: {
         key: "createdAt",
         label: "Created",
-        dataType: "date",
+        cellType: "date",
         capabilities: { editable: true },
       },
     },
@@ -1417,6 +1417,90 @@ describe("DataGridTableStage contract", () => {
       expect.objectContaining({ rowId: "r1" }),
       "stage",
       { openOnMount: true },
+    )
+    expect(handleCellClick).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it("routes touch-generated date affordance clicks to cell selection instead of inline edit", () => {
+    const handleCellClick = vi.fn()
+    const startInlineEdit = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        visibleColumns: createEditableAffordanceColumns(),
+        handleCellClick,
+        startInlineEdit,
+      }),
+      attachTo: document.body,
+    })
+    const dateCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="1"]').element as HTMLElement
+    dateCell.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 140,
+      bottom: 31,
+      width: 140,
+      height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+    const touchClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 138,
+      clientY: 12,
+    })
+    Object.defineProperty(touchClick, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    dateCell.dispatchEvent(touchClick)
+
+    expect(startInlineEdit).not.toHaveBeenCalled()
+    expect(handleCellClick).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("keeps desktop date affordance clicks opening inline edit", () => {
+    const handleCellClick = vi.fn()
+    const startInlineEdit = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        visibleColumns: createEditableAffordanceColumns(),
+        handleCellClick,
+        startInlineEdit,
+      }),
+      attachTo: document.body,
+    })
+    const dateCell = wrapper.find('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-index="1"]').element as HTMLElement
+    dateCell.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 140,
+      bottom: 31,
+      width: 140,
+      height: 31,
+      toJSON: () => ({}),
+    }) as DOMRect
+
+    dateCell.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 138,
+      clientY: 12,
+    }))
+
+    expect(startInlineEdit).toHaveBeenCalledTimes(1)
+    expect(startInlineEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ rowId: "r1" }),
+      "createdAt",
+      undefined,
     )
     expect(handleCellClick).not.toHaveBeenCalled()
 
