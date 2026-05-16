@@ -120,6 +120,23 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
   })
 
+  test("touch scroll records stage scroll frame telemetry", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const scrollState = await setViewportScroll(viewport, { top: 220, left: 180 })
+
+    await expect.poll(async () => latestStageScrollFrameSample(page)).toMatchObject({
+      scope: "stageScrollFrame",
+      scrollTop: scrollState.top,
+      scrollLeft: scrollState.left,
+      hasScrollState: 1,
+    })
+  })
+
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
@@ -308,6 +325,22 @@ async function inlineTransformY(locator: Locator): Promise<number | null> {
     const transform = (element as HTMLElement).style.transform
     const match = /translate3d\([^,]+,\s*(-?\d+(?:\.\d+)?)px,/.exec(transform)
     return match ? Number(match[1]) : null
+  })
+}
+
+async function latestStageScrollFrameSample(page: Page): Promise<Record<string, unknown> | null> {
+  return await page.evaluate(() => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { samples?: Array<Record<string, unknown>> }
+    }).__AFFINO_DATAGRID_PERF__
+    const samples = store?.samples ?? []
+    for (let index = samples.length - 1; index >= 0; index -= 1) {
+      const sample = samples[index]
+      if (sample?.scope === "stageScrollFrame") {
+        return sample
+      }
+    }
+    return null
   })
 }
 
