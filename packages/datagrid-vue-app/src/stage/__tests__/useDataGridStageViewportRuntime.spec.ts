@@ -180,4 +180,25 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.unmount()
   })
+
+  it("does not sync pinned bottom scrollLeft for vertical-only body scroll", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness()
+    const bodyViewport = createViewportElement({ scrollTop: 144, scrollLeft: 0 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
+    expect(harness.runtime.bodyViewportScrollLeft.value).toBe(0)
+    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
 })

@@ -251,7 +251,9 @@ export function useDataGridStageViewportRuntime(
     const previousScrollLeft = observedBodyViewportScrollLeft
     linkedPaneScrollSync.onSourceScroll(element.scrollTop)
     scheduleBodyViewportScrollStateSync(element)
-    schedulePinnedBottomViewportScrollLeftSync()
+    if (element.scrollLeft !== previousScrollLeft) {
+      schedulePinnedBottomViewportScrollLeftSync()
+    }
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
       options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
       return
