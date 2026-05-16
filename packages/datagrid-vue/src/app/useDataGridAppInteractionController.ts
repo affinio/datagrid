@@ -33,7 +33,7 @@ import {
   type DataGridCopyRange,
 } from "../advanced"
 import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
-import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -2717,7 +2717,7 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
-    if (isTouchGeneratedMouseEvent(event)) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
       return
     }
     const columnKey = options.visibleColumns.value[columnIndex]?.key
