@@ -3,7 +3,7 @@
     :ref="viewportRef ?? undefined"
     :class="resolvedViewportClass"
     tabindex="0"
-    @scroll="handleScroll"
+    @scroll.passive="handleScroll"
     @wheel="handleWheel"
     @contextmenu="handleContextMenu"
     @keydown.stop="handleKeydown"

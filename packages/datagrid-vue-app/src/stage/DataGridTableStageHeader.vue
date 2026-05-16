@@ -239,7 +239,7 @@
     <div
       :ref="headerViewportRef"
       class="grid-header-viewport"
-      @scroll="handleHeaderScroll"
+      @scroll.passive="handleHeaderScroll"
       @wheel="onLinkedViewportWheel"
     >
       <div
