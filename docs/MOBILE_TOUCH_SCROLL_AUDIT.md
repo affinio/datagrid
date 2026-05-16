@@ -252,9 +252,9 @@ Problem:
 Current state:
 - Core model coverage now asserts that scrolling into a resolved prefetch buffer returns real rows with no loading placeholders and schedules the next background prefetch before the edge.
 - `DataSourceBackedRowModel.getSparseRowModelDiagnostics()` now reports current viewport row count, loaded row count, loading placeholder count, and loading placeholder ratio so fast-scroll blanking can be measured without DOM heuristics.
+- The server datasource sandbox exposes that loading ratio through a stable DOM diagnostic, and Playwright now asserts the deterministic fake datasource route settles below a 5% viewport loading budget after a fast scroll session.
 
 Recommended fix:
-- Add a Playwright blank/loading viewport budget using the sparse diagnostics loading ratio.
 - Tune velocity prefetch and cache windows using real tablet scroll traces.
 - Keep placeholders for correctness, but make the normal fast-scroll path prefetch enough rows that placeholders are rare.
 
@@ -441,7 +441,7 @@ Gap:
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
 - Add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles.
-- Add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
+- Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
 
@@ -459,7 +459,7 @@ Gap:
   - header, pinned panes, and overlays remain aligned after vertical and horizontal scroll.
 - Playwright tests:
   - one-finger touch scroll changes `scrollTop` without selection changes.
-  - fast fling does not show blank content or excessive loading placeholders.
+  - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
   - double tap edits only when not scrolling.
   - long press enters selection mode.
   - fill/range/resize drag from handles works and body drag scrolls.

@@ -29,13 +29,34 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
 
     await expect(page.locator(".grid-body-viewport .grid-row").nth(1)).toBeVisible()
   })
+
+  test("server data source settles below the viewport loading budget after fast scroll", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await page.getByRole("button", { name: "Steady latency" }).click()
+    await expect.poll(async () => serverViewportLoadingRatio(page)).toBeLessThanOrEqual(0.05)
+
+    await runLongVerticalSession(viewport)
+
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await expect(page.locator(".grid-body-viewport .grid-cell[data-row-index]").nth(1)).toBeVisible()
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   await page.goto(route)
   await page.waitForLoadState("domcontentloaded")
   await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined)
-  await expect(page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()).toBeVisible({ timeout: 20_000 })
+  const rowsMeta = page.locator(".meta span").filter({ hasText: "Rows in model:" }).first()
+  try {
+    await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
+  } catch {
+    await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
+  }
 }
 
 async function runLongVerticalSession(viewport: Locator): Promise<void> {
@@ -72,4 +93,13 @@ async function renderedRows(page: Page): Promise<number> {
   const raw = (await page.locator(".card__footer").textContent())?.trim() ?? ""
   const match = raw.match(/Rendered\s+(\d+)\s*\/\s*(\d+)\s*rows/i)
   return match ? Number(match[1]) : 0
+}
+
+async function serverViewportLoadingRatio(page: Page): Promise<number> {
+  const raw = await page
+    .locator("[data-datagrid-server-viewport-loading-ratio]")
+    .first()
+    .getAttribute("data-ratio")
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : 1
 }

@@ -155,6 +155,15 @@
               <dt>Cache</dt>
               <dd>{{ rowCacheLabel }}</dd>
             </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Viewport loading</dt>
+              <dd
+                data-datagrid-server-viewport-loading-ratio
+                :data-ratio="viewportLoadingRatioData"
+              >
+                {{ viewportLoadingLabel }}
+              </dd>
+            </div>
           </dl>
         </div>
 
@@ -606,6 +615,7 @@ import {
   type DataGridViewportRange,
   type DataGridSortState,
 } from "@affino/datagrid-vue"
+import type { DataGridSparseRowModelDiagnostics } from "@affino/datagrid-core"
 import { type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import { DataGrid } from "@affino/datagrid-vue-app"
 import {
@@ -792,6 +802,7 @@ const lastAggregationRequestText = ref("none")
 const aggregateResponseRowsText = ref("0")
 const aggregatePreviewRowsText = ref("none")
 let rowModel: any = null
+const sparseDiagnostics = ref<DataGridSparseRowModelDiagnostics | null>(null)
 
 const segments = ["Core", "Growth", "Enterprise", "SMB"] as const
 const statuses = ["Active", "Paused", "Closed"] as const
@@ -2146,7 +2157,9 @@ const legacyDataSource: DataGridDataSource<ServerDemoRow> = {
   },
 }
 
-const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true"
+const forceFakeDatasource = typeof window !== "undefined"
+  && new URLSearchParams(window.location.search).get("datasource") === "fake"
+const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true" && !forceFakeDatasource
 const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim()
 const serverDemoHttpDatasource: ServerDemoHttpDatasource | null = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasourceBaseUrl
   ? createAffinoDatasource<ServerDemoRow>({
@@ -2339,9 +2352,11 @@ rowModel = createDataSourceBackedRowModel<ServerDemoRow>({
   },
   resolveRowId: row => row.id,
 })
+sparseDiagnostics.value = rowModel.getSparseRowModelDiagnostics()
 
 const unsubscribeSampleDiagnostics = rowModel.subscribe(() => {
   diagnostics.value = rowModel.getBackpressureDiagnostics()
+  sparseDiagnostics.value = rowModel.getSparseRowModelDiagnostics()
   scheduleRenderedSampleDiagnostics()
 })
 
@@ -2566,6 +2581,18 @@ const renderedViewportLabel = computed(() => {
 })
 const loadedRowsLabel = computed(() => loadedRows.value.toLocaleString())
 const pendingRequestsLabel = computed(() => String(pendingRequests.value))
+const viewportLoadingRatioData = computed(() => String(sparseDiagnostics.value?.viewportLoadingRowRatio ?? 0))
+const viewportLoadingLabel = computed(() => {
+  const diagnosticsState = sparseDiagnostics.value
+  if (!diagnosticsState) {
+    return "none"
+  }
+  const viewportRows = diagnosticsState.viewportRowCount ?? 0
+  const loadedViewportRows = diagnosticsState.viewportLoadedRowCount ?? 0
+  const loadingViewportRows = diagnosticsState.viewportLoadingRowCount ?? 0
+  const loadingPercent = Math.round((diagnosticsState.viewportLoadingRowRatio ?? 0) * 100)
+  return `${loadingViewportRows} loading / ${loadedViewportRows} loaded / ${viewportRows} rows (${loadingPercent}%)`
+})
 const datasetVersionLabel = computed(() => {
   const value = changeFeedDiagnostics.value.currentDatasetVersion
   return value === null ? "none" : String(value)
