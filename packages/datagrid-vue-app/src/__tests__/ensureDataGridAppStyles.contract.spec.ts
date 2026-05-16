@@ -32,5 +32,7 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain("width: 18px")
     expect(style?.textContent).toContain("height: 18px")
     expect(style?.textContent).toContain("min-width: 18px")
+    expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--select")
+    expect(style?.textContent).toContain(".grid-stage--coarse-pointer .grid-cell--date")
   })
 })

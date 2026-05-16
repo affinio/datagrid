@@ -3059,6 +3059,20 @@ body.datagrid-fill-drag-cursor * {
   opacity: 0.85;
 }
 
+.grid-stage--scrolling .grid-cell--select:not(.grid-cell--editing):hover::before,
+.grid-stage--scrolling .grid-cell--date:not(.grid-cell--editing):hover::before,
+.grid-stage--coarse-pointer .grid-cell--select:not(.grid-cell--editing):hover::before,
+.grid-stage--coarse-pointer .grid-cell--date:not(.grid-cell--editing):hover::before {
+  opacity: 0;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .grid-cell--select:not(.grid-cell--editing):hover::before,
+  .grid-cell--date:not(.grid-cell--editing):hover::before {
+    opacity: 0;
+  }
+}
+
 .datagrid-cell-combobox__panel {
   display: flex;
   flex-direction: column;
