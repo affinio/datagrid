@@ -116,7 +116,9 @@ export function useDataGridStageViewportRuntime(
   }
 
   function markBodyViewportScrolling(): void {
-    isBodyViewportScrolling.value = true
+    if (!isBodyViewportScrolling.value) {
+      isBodyViewportScrolling.value = true
+    }
     clearBodyViewportScrollIdleTimer()
     bodyViewportScrollIdleTimer = globalThis.setTimeout(() => {
       bodyViewportScrollIdleTimer = null
