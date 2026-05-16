@@ -5,6 +5,9 @@ import type { UseDataGridStageViewportRuntimeResult, UseDataGridStageViewportRun
 import { useDataGridStageViewportRuntime } from "../useDataGridStageViewportRuntime"
 import type { DataGridTableStageViewportSection } from "../dataGridTableStage.types"
 
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+
 function createViewportElement({ scrollTop = 0, scrollLeft = 0 } = {}): HTMLElement {
   const element = document.createElement("div")
   element.scrollTop = scrollTop
@@ -20,7 +23,10 @@ function createViewportElement({ scrollTop = 0, scrollLeft = 0 } = {}): HTMLElem
   return element
 }
 
-function createHarness() {
+function createHarness(options: {
+  leftPaneContent?: HTMLElement | null
+  rightPaneContent?: HTMLElement | null
+} = {}) {
   const viewport: DataGridTableStageViewportSection = {
     topSpacerHeight: 0,
     bottomSpacerHeight: 0,
@@ -52,8 +58,8 @@ function createHarness() {
         stageRootEl: ref(null),
         viewport: shallowRef(viewport),
         gridChromeSyncers: shallowRef(syncers),
-        leftPaneContentRef: ref(null),
-        rightPaneContentRef: ref(null),
+        leftPaneContentRef: ref(options.leftPaneContent ?? null),
+        rightPaneContentRef: ref(options.rightPaneContent ?? null),
       })
       return () => null
     },
@@ -73,6 +79,8 @@ function createHarness() {
 describe("useDataGridStageViewportRuntime", () => {
   afterEach(() => {
     vi.useRealTimers()
+    globalThis.requestAnimationFrame = originalRequestAnimationFrame
+    globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   })
 
   it("schedules center chrome redraw for horizontal body scroll instead of flushing synchronously", () => {
@@ -104,6 +112,35 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
     expect(harness.syncers.scheduleGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
     expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("batches linked pinned pane transforms through requestAnimationFrame during body scroll", () => {
+    let frameCallback: FrameRequestCallback | null = null
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallback = callback
+      return 1
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const leftPane = document.createElement("div")
+    const rightPane = document.createElement("div")
+    const harness = createHarness({
+      leftPaneContent: leftPane,
+      rightPaneContent: rightPane,
+    })
+    const bodyViewport = createViewportElement({ scrollTop: 120 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(leftPane.style.transform).toBe("")
+    expect(rightPane.style.transform).toBe("")
+
+    frameCallback?.(performance.now())
+
+    expect(leftPane.style.transform).toBe("translate3d(0, -120px, 0)")
+    expect(rightPane.style.transform).toBe("translate3d(0, -120px, 0)")
 
     harness.unmount()
   })

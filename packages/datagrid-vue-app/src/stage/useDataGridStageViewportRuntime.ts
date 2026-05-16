@@ -92,9 +92,7 @@ export function useDataGridStageViewportRuntime(
         bodyViewportEl.value.scrollLeft = value
       }
     },
-    syncLinkedScroll: (scrollTop: number) => {
-      linkedPaneScrollSync.syncNow(scrollTop)
-    },
+    syncLinkedScroll: linkedPaneScrollSync.onSourceScroll,
     scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,
     isLinkedScrollSyncLoopScheduled: linkedPaneScrollSync.isSyncLoopScheduled,
     onWheelConsumed: () => {
@@ -168,7 +166,7 @@ export function useDataGridStageViewportRuntime(
     markBodyViewportScrolling()
     const previousScrollTop = bodyViewportScrollTop.value
     const previousScrollLeft = bodyViewportScrollLeft.value
-    linkedPaneScrollSync.syncNow(element.scrollTop)
+    linkedPaneScrollSync.onSourceScroll(element.scrollTop)
     syncBodyViewportScrollState(element)
     options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
