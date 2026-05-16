@@ -24,6 +24,7 @@ describe("ensureDataGridAppStyles", () => {
 
     const style = document.getElementById(STYLE_ID)
     expect(style?.textContent).toContain(".grid-body-viewport")
+    expect(style?.textContent).toContain("overscroll-behavior: contain")
     expect(style?.textContent).toContain("touch-action: pan-x pan-y")
     expect(style?.textContent).toContain("-webkit-overflow-scrolling: touch")
     expect(style?.textContent).toContain(".cell-fill-handle")

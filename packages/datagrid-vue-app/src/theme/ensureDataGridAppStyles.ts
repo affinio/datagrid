@@ -1071,7 +1071,7 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
   min-height: 0;
   background: var(--datagrid-viewport-bg);
-  overscroll-behavior-x: contain;
+  overscroll-behavior: contain;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
 }
