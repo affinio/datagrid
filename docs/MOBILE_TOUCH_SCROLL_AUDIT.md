@@ -459,7 +459,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Done as a documented plan, execution pending: add mobile/tablet test matrix for iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, and mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, linked-surface routing, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, accidental selection prevention, and non-prevented body touchmove ownership, body-cell touch drag has an accidental-drag prevention gate, left/right pinned-pane and header-shell touch pan have body-viewport routing gates, horizontal header-shell touch pan has an X-scroll routing gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has header/pinned-left plus dynamically pinned-right sync gates, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry smoke gates.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, linked-surface routing, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, accidental selection prevention, and non-prevented body touchmove ownership, body-cell touch drag has an accidental-drag prevention gate, left/right pinned-pane and header-shell touch pan have body-viewport routing gates, horizontal header-shell touch pan has an X-scroll routing gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has header/pinned-left plus dynamically pinned-right sync gates, and `dgPerfTrace=1` now has stage scroll-frame latest/p95/max plus scroll-quality telemetry smoke gates.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
 - Next: convert scroll rAF budget, visible placeholder ratio, and accidental touch-drag coverage into CI regression gates with device-tuned thresholds.
@@ -488,7 +488,7 @@ Gap:
   - Done for `/vue/base-grid`: after pinning a column right, touch pan that starts on the pinned-right pane routes into the body viewport without changing selection.
   - Done for `/vue/base-grid`: touch pan that starts on the header shell routes into the body viewport without changing selection.
   - Done for `/vue/base-grid`: horizontal touch pan that starts on the header shell routes into body horizontal scroll.
-  - Done for `/vue/base-grid?dgPerfTrace=1`: touch scroll records `stageScrollFrame` and `stageScrollPerf` telemetry samples and enforces non-device-specific smoke thresholds.
+  - Done for `/vue/base-grid?dgPerfTrace=1`: touch scroll records `stageScrollFrame` and `stageScrollPerf` telemetry samples and enforces non-device-specific latest/p95/max smoke thresholds for stage scroll-frame work.
   - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
   - Done for `/vue/base-grid`: touch-generated double tap opens inline editing only when the viewport is idle, not while scroll-active.
   - Done for `/vue/base-grid`: touch fill drag starts from the explicit fill handle, renders fill preview, and does not scroll the body viewport.
@@ -519,7 +519,7 @@ For each matrix run, collect:
 ## Benchmarks / Performance Checks To Add
 
 - `scrollFrameBudget`: record per-scroll rAF total time, p95, max, dropped frame ratio.
-- `stageScrollFrame`: available behind `dgPerfTrace`; a Chromium smoke gate now enforces finite total time and should be tightened after device calibration.
+- `stageScrollFrame`: available behind `dgPerfTrace`; a Chromium smoke gate now enforces finite latest/p95/max total time and should be tightened after device calibration.
 - `stageScrollPerf`: available behind `dgPerfTrace`; a Chromium smoke gate now enforces sane frame/drop/long-task counters and should be tightened after device calibration.
 - `visibleRowsSync`: record visible row sync time, changed row count, retained-range hits, and runtime sync time.
 - `blankViewport`: during fast scroll, assert visible row count covers viewport height and loading-placeholder ratio stays below a threshold.

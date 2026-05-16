@@ -245,6 +245,10 @@ test.describe("sandbox touch scroll contracts", () => {
     const frameSample = await latestPerfSample(page, "stageScrollFrame")
     expect(readNumericPerfField(frameSample, "totalMs")).toBeGreaterThanOrEqual(0)
     expect(readNumericPerfField(frameSample, "totalMs")).toBeLessThanOrEqual(50)
+    const frameSummary = await perfSummary(page, "stageScrollFrame")
+    expect(readNumericPerfField(frameSummary, "count")).toBeGreaterThanOrEqual(1)
+    expect(readNumericPerfField(frameSummary, "p95Ms")).toBeLessThanOrEqual(50)
+    expect(readNumericPerfField(frameSummary, "maxMs")).toBeLessThanOrEqual(50)
 
     await expect.poll(async () => latestPerfSample(page, "stageScrollPerf")).toMatchObject({
       scope: "stageScrollPerf",
@@ -467,6 +471,15 @@ async function latestPerfSample(page: Page, scope: string): Promise<Record<strin
       }
     }
     return null
+  }, scope)
+}
+
+async function perfSummary(page: Page, scope: string): Promise<Record<string, unknown> | null> {
+  return await page.evaluate(sampleScope => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { summary?: () => Array<Record<string, unknown>> }
+    }).__AFFINO_DATAGRID_PERF__
+    return store?.summary?.().find(summary => summary.scope === sampleScope) ?? null
   }, scope)
 }
 
