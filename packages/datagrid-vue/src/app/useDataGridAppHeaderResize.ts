@@ -71,14 +71,14 @@ export function useDataGridAppHeaderResize<TRow>(
   })
 
   const startResize = (event: MouseEvent, key: string): void => {
-    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     headerResize.onHeaderResizeHandleMouseDown(key, event)
   }
 
   const handleResizeDoubleClick = (event: MouseEvent, key: string): void => {
-    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     headerResize.onHeaderResizeHandleDoubleClick(key, event)

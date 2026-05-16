@@ -2205,7 +2205,7 @@ export function useDataGridAppInteractionController<
   })
 
   const startFillHandleDrag = (event: MouseEvent): void => {
-    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event)) {
       return
     }
     if (options.mode.value !== "base" || !isFillHandleEnabled.value) {
@@ -2540,7 +2540,7 @@ export function useDataGridAppInteractionController<
 
   const startFillHandleDoubleClick = (event: MouseEvent): void => {
     options.reportFillPlumbingState?.("double_click_handler", true)
-    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
       options.reportFillPlumbingState?.("double_click_handler_skipped_touch_scroll", true)
       return
     }
@@ -2724,7 +2724,7 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
-    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event)) {
       return
     }
     const columnKey = options.visibleColumns.value[columnIndex]?.key

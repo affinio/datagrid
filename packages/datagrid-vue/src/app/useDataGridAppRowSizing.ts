@@ -214,7 +214,7 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const startRowResize = (event: MouseEvent, _row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     event.preventDefault()
@@ -233,7 +233,7 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const autosizeRow = (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     event.preventDefault()
