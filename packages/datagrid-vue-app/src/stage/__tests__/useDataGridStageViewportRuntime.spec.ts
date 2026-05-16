@@ -296,4 +296,27 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.unmount()
   })
+
+  it("batches window resize metric sync through requestAnimationFrame", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness()
+    vi.mocked(harness.syncers.syncBodyViewportMetrics).mockClear()
+
+    window.dispatchEvent(new Event("resize"))
+    window.dispatchEvent(new Event("resize"))
+
+    expect(harness.syncers.syncBodyViewportMetrics).not.toHaveBeenCalled()
+    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
+
+    frameCallbacks[0]?.(performance.now())
+
+    expect(harness.syncers.syncBodyViewportMetrics).toHaveBeenCalledTimes(1)
+
+    harness.unmount()
+  })
 })

@@ -1,0 +1,340 @@
+# DataGrid Interaction Orchestration Audit
+
+## Executive summary
+
+DataGrid has a serious interaction orchestration foundation: scroll ownership is mostly isolated, selection/fill/range-move/resize have explicit composables, pointer previews and auto-scroll are separated from mutation commits, and recent touch work has moved the primary body viewport back toward native scroll. Desktop behavior is broadly production-grade.
+
+The system is not yet enterprise-grade for all interaction modes. The main gap is not a missing feature; it is ownership fragmentation. There are strong orchestration utilities in `@affino/datagrid-orchestration`, but the main app-stage path still coordinates several active interactions through `useDataGridAppInteractionController.ts`, `useDataGridTableStageScrollSync.ts`, and window-level mouse listeners. Touch policy is improved but not complete: touch selection, touch range move, and touch fill need explicit owner/state-machine rules before the grid can claim spreadsheet-class mobile behavior.
+
+Current enterprise readiness score: **7/10**.
+
+Target score: **9/10** after one-interaction-one-owner invariants, pointer lifecycle unification, touch-specific interaction policy, cancellation semantics, and e2e/performance gates are hardened.
+
+## Current architecture summary
+
+- Core viewport ownership stays in `@affino/datagrid-core`: viewport math, scroll IO, render sync, virtualization, and coordinate/selection primitives.
+- Vue app-level ownership lives in `@affino/datagrid-vue`: `useDataGridAppViewport.ts`, `useDataGridAppInteractionController.ts`, `useDataGridAppHeaderResize.ts`, and cell/selection composables.
+- Stage rendering and DOM event binding live in `@affino/datagrid-vue-app`: `DataGridTableStage.vue`, `DataGridTableStageCenterPane.vue`, pinned/header panes, row index, focus, overlays, and chrome canvas.
+- Shared orchestration utilities live in `@affino/datagrid-orchestration`: pointer routers, fill/range move lifecycle, header resize, managed wheel/touch scroll, linked pane sync, keyboard command routing, viewport blur handling, and auto-scroll.
+
+The primary app-stage path is mouse-first with touch guards. Cells bind `mousedown`, `click`, `mousemove`, `keydown`, and `dblclick`. The body viewport owns native scroll and passive scroll events. Header and pinned surfaces route scroll/wheel back to the body viewport. Global `mousemove`/`mouseup` complete resize, selection drag, fill, and range move.
+
+## Files reviewed
+
+Docs:
+
+- `AGENTS.md`
+- `docs/README.md`
+- `docs/datagrid-architecture.md`
+- `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
+- `docs/datagrid-viewport-controller-decomposition.md`
+- `docs/datagrid-viewport-math-engine.md`
+- `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
+- `docs/VIRTUALIZATION_ENTERPRISE_PLAN.md`
+- `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+
+Interaction and stage:
+
+- `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
+- `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
+- `packages/datagrid-vue/src/app/useDataGridAppViewportLifecycle.ts`
+- `packages/datagrid-vue/src/app/useDataGridAppHeaderResize.ts`
+- `packages/datagrid-vue/src/app/useDataGridAppSelection.ts`
+- `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts`
+- `packages/datagrid-vue/src/app/dataGridMouseEventGuards.ts`
+- `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`
+- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
+- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridTableStageScrollSync.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStageRowIndex.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStageFillAction.ts`
+- `packages/datagrid-vue-app/src/gestures/dataGridTouchPanGuard.ts`
+
+Orchestration package:
+
+- `packages/datagrid-orchestration/src/pointer/useDataGridCellPointerDownRouter.ts`
+- `packages/datagrid-orchestration/src/pointer/useDataGridDragPointerSelection.ts`
+- `packages/datagrid-orchestration/src/pointer/useDataGridGlobalPointerLifecycle.ts`
+- `packages/datagrid-orchestration/src/pointer/useDataGridPointerAutoScroll.ts`
+- `packages/datagrid-orchestration/src/pointer/useDataGridPointerModifierPolicy.ts`
+- `packages/datagrid-orchestration/src/fill/useDataGridFillHandleStart.ts`
+- `packages/datagrid-orchestration/src/fill/useDataGridFillSelectionLifecycle.ts`
+- `packages/datagrid-orchestration/src/selection/useDataGridRangeMoveStart.ts`
+- `packages/datagrid-orchestration/src/selection/useDataGridRangeMoveLifecycle.ts`
+- `packages/datagrid-orchestration/src/headers/useDataGridHeaderResizeOrchestration.ts`
+- `packages/datagrid-orchestration/src/headers/useDataGridHeaderInteractionRouter.ts`
+- `packages/datagrid-orchestration/src/headers/useDataGridResizeClickGuard.ts`
+- `packages/datagrid-orchestration/src/navigation/useDataGridKeyboardCommandRouter.ts`
+- `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts`
+- `packages/datagrid-orchestration/src/viewport/useDataGridViewportBlurHandler.ts`
+- `packages/datagrid-orchestration/src/viewport/useDataGridViewportScrollLifecycle.ts`
+- `packages/datagrid-orchestration/src/contextMenu/useDataGridViewportContextMenuRouter.ts`
+- `packages/datagrid-orchestration/src/scrolling/useDataGridManagedWheelScroll.ts`
+- `packages/datagrid-orchestration/src/scrolling/useDataGridManagedTouchScroll.ts`
+- `packages/datagrid-orchestration/src/scrolling/useDataGridLinkedPaneScrollSync.ts`
+- `packages/datagrid-orchestration/src/scrolling/useDataGridScrollIdleGate.ts`
+- `packages/datagrid-orchestration/src/scrolling/useDataGridScrollPerfTelemetry.ts`
+
+Tests:
+
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts`
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppHeaderResize.contract.spec.ts`
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridGlobalPointerLifecycle.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridCellPointerDownRouter.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridFillHandleStart.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridDragPointerSelection.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridPointerAutoScroll.contract.spec.ts`
+- `packages/datagrid-vue/src/composables/__tests__/useDataGridViewportBlurHandler.contract.spec.ts`
+- `packages/datagrid-orchestration/src/__tests__/useDataGridManagedTouchScroll.contract.spec.ts`
+- `packages/datagrid-orchestration/src/__tests__/useDataGridManagedWheelScroll.contract.spec.ts`
+- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStagePointerInteractions.spec.ts`
+- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+
+## Strengths
+
+- Scroll has a clear primary owner in the body viewport. `DataGridTableStageCenterPane.vue` uses passive scroll, and `useDataGridStageViewportRuntime.ts` routes center, pinned-bottom, and linked wheel behavior back through the body viewport.
+- Pinned panes are synchronized through `useDataGridLinkedPaneScrollSync`, which rAF-batches transforms and avoids repeated writes when scroll position has not changed.
+- Viewport math and IO are split in core docs and implementation. `dataGridViewportMath.ts` is pure, and `dataGridViewportScrollIo.ts` owns DOM scroll IO.
+- Selection, fill, range move, resize, keyboard, context menu, and blur behavior have dedicated orchestration utilities with contract tests.
+- Fill handle and range move starts explicitly stop competing interactions. `useDataGridFillHandleStart` stops range move and drag selection; `useDataGridRangeMoveStart` stops drag selection and fill.
+- Header resize stops fill and drag selection before taking ownership, and `useDataGridResizeClickGuard` blocks the synthetic post-resize click.
+- Keyboard commands are centralized in `useDataGridKeyboardCommandRouter` for undo/redo, copy/paste/cut, select all, clear, context menu, and range-move cancellation.
+- Touch scroll has a safer policy than before. The main body viewport remains native, while `installDataGridTouchPanGuard` only handles linked non-scroll surfaces and lazily installs the non-passive `touchmove` listener.
+- Touch-generated mouse events are guarded in app interaction, fill handle, header resize, row/column drag, and context-menu paths.
+
+## Findings by severity
+
+### Blocker
+
+None found for current desktop production behavior.
+
+Enterprise blocker for mobile claims: the architecture still lacks a complete touch interaction state machine. Current code is scroll-first on touch, which is correct, but touch selection, touch fill, and touch range move are mostly guarded off rather than implemented as explicit long-press/handle flows.
+
+### High
+
+1. **Main app-stage pointer lifecycle does not use the shared global pointer lifecycle.**
+   - Evidence: `useDataGridGlobalPointerLifecycle.ts` supports mouseup, pointerup, pointercancel, contextmenu capture, window blur, and rAF preview modes. The main stage path uses `useDataGridAppViewportLifecycle.ts` window `mousemove`/`mouseup` listeners and `useDataGridTableStageScrollSync.ts`.
+   - Impact: pointer cancellation, lost pointer capture, touch/stylus pointerup, and window blur semantics are not uniformly owned in the primary grid path.
+   - Required: wire the main stage path through one lifecycle owner or explicitly document why the global lifecycle remains a lower-level utility.
+
+2. **Interaction ownership is explicit locally but fragmented globally.**
+   - Evidence: active states live across `isPointerSelectingCells`, `isFillDragging`, `isRangeMoving`, `isColumnResizing`, pending drag/range-move refs, header resize state, and viewport scroll state.
+   - Impact: each feature has guards, but there is no single interaction arbiter that can answer "what owns the gesture now?" for every subsystem.
+   - Required: introduce an invariant layer or diagnostic snapshot for active interaction owner, without replacing existing composables.
+
+3. **Range move can still be armed from the selected cell body.**
+   - Evidence: `useDataGridAppInteractionController.ts` sets `pendingRangeMove` when a primary-button mousedown starts inside the current selection range; edge hover is visual-only in `useDataGridStagePointerInteractions.ts`.
+   - Impact: desktop behavior may be intentional, but touch and pen users need explicit handles or long-press mode to avoid scroll/selection ambiguity.
+   - Required: keep desktop behavior, but make touch range move handle-only and add tests for touch-generated events.
+
+4. **Touch selection is not enterprise-complete.**
+   - Evidence: `dataGridMouseEventGuards.ts` prioritizes native scroll for touch-generated mouse events, and the mobile audit keeps long-press selection as open work.
+   - Impact: this avoids accidental drag, but it does not provide spreadsheet-class mobile selection handles, long-press arbitration, or touch range extension.
+   - Required: define touch selection mode, handles, long-press timeout, cancellation on scroll, and interaction with editors/context menus.
+
+5. **Window-level mouse listeners are broad.**
+   - Evidence: `useDataGridAppViewportLifecycle.ts` always adds `mousemove` and `mouseup` handlers while mounted.
+   - Impact: handlers are light when idle, but enterprise interaction systems usually attach global move/up listeners only while an interaction is active or use pointer capture.
+   - Required: consider active-only listeners or route through `useDataGridGlobalPointerLifecycle`.
+
+### Medium
+
+1. **Scroll ownership has two parallel implementations.**
+   - Evidence: core has `dataGridViewportScrollIo.ts` and app stage uses `useDataGridAppViewport.ts` plus `useDataGridStageViewportRuntime.ts`.
+   - Impact: current separation is understandable because the app stage renders a richer layout, but hidden drift can emerge between core viewport controller and app-stage policy.
+   - Required: document app-stage versus core viewport responsibilities and keep tests aligned.
+
+2. **PreventDefault policy is mostly intentional but not centrally documented.**
+   - Evidence: cell pointer down, fill handle, range move, header resize, managed wheel/touch scroll, context menu, and keyboard commands all call `preventDefault()` in feature-specific code.
+   - Impact: this is correct in many cases, but broad enterprise behavior needs a shared policy for native scroll, text editing, context menu, and assistive tech.
+   - Required: add a prevent-default matrix by event type and owner.
+
+3. **Managed touch scroll exists but is not the main body path.**
+   - Evidence: `useDataGridManagedTouchScroll.ts` has pointer/touch handlers and tests; stage uses native body scroll plus `dataGridTouchPanGuard.ts` for linked surfaces.
+   - Impact: this is a good current policy, but duplicate touch scroll code can confuse future changes.
+   - Required: document that managed touch scroll is for linked/custom surfaces, while body viewport remains native.
+
+4. **Cancellation semantics are incomplete in the main stage path.**
+   - Evidence: `useDataGridGlobalPointerLifecycle.ts` supports pointer cancel and blur, while app-stage lifecycle handles mouseup but not pointercancel/window blur for active grid interactions.
+   - Impact: active drag/fill/range/resize can rely on mouseup fallback and blur handlers elsewhere, but cancellation is not single-owner.
+   - Required: add pointercancel/window blur contracts for the actual mounted grid path.
+
+5. **Resize ownership is split between column and row paths.**
+   - Evidence: column resize uses `useDataGridHeaderResizeOrchestration`; row resize uses `useDataGridAppRowSizing.ts` with its own window listeners.
+   - Impact: both may be correct independently, but resize as a domain does not have one shared owner or active interaction diagnostics.
+   - Required: include row resize in the interaction owner snapshot and shared cancellation policy.
+
+6. **Focus ownership spans multiple layers.**
+   - Evidence: app interaction focuses the viewport/cell with `preventScroll`; stage focus runtime resolves visible cells; inline editor focus has a separate helper; blur handling commits/cancels through another utility.
+   - Impact: current behavior is pragmatic, but focus restoration across virtualization, context menus, editors, and range interactions is a high-risk enterprise edge.
+   - Required: keep one active-cell owner and add focus transition tests across scroll/remount/edit/menu.
+
+7. **Pointer preview rAF batching is available but not consistently used.**
+   - Evidence: `useDataGridGlobalPointerLifecycle` supports `pointerPreviewApplyMode: "raf"`, while `useDataGridAppInteractionController.ts` applies previews directly from window mousemove.
+   - Impact: direct preview updates can be acceptable, but large selection/fill previews need frame-budget validation.
+   - Required: either enable rAF preview in the main stage path or add perf gates proving direct updates are within budget.
+
+### Low
+
+1. **`docs/INTERACTION_MODEL.md` is referenced by prior planning but does not exist in this checkout.**
+   - Impact: Codex/maintainer preflight has no canonical interaction model doc.
+   - Required: either create the model doc or keep this audit as the current interaction reference.
+
+2. **The orchestration package and Vue composable re-exports can obscure source ownership.**
+   - Evidence: many `packages/datagrid-vue/src/composables/*` files re-export orchestration utilities.
+   - Impact: harmless for package ergonomics, but audits should review `packages/datagrid-orchestration/src/*` as canonical implementation.
+
+## Focus-area evaluation
+
+| Area | Assessment |
+| --- | --- |
+| Scroll ownership | Strong for body viewport and pinned sync; parallel app/core implementations need documented boundaries. |
+| Selection ownership | Functional and tested, but cell selection, drag selection, range move, and row selection share app-controller state. |
+| Resize ownership | Column resize is well isolated; row resize is separate and should join active-owner diagnostics. |
+| Drag ownership | Header/row drag guards exist; drag selection is mouse-first and depends on window mousemove/up. |
+| Fill ownership | Good explicit fill lifecycle, server-aware fill paths, and cancellation guards; touch fill requires handle policy. |
+| Keyboard ownership | Strong command router for global grid commands; cell navigation/editing remains app-controller heavy. |
+| Focus ownership | Good use of `preventScroll`; needs stronger virtualization/remount contracts. |
+| Gesture arbitration | Local arbitration is good; global owner snapshot is missing. |
+| Pointer lifecycle | Shared lifecycle utility is strong but not the primary stage owner. |
+| Touch vs desktop policy | Improved scroll-first touch policy; touch selection/range/fill not complete. |
+| Event routing | Clear template-to-composable routing, but mouse-first paths dominate. |
+| Passive listeners | Body scroll is passive; touch pan guard uses lazy non-passive move only after handled touch start. |
+| PreventDefault usage | Mostly scoped and intentional; needs central policy documentation. |
+| Scroll synchronization | rAF-backed for linked panes and stage scroll refs; header/pinned sync tests exist. |
+| State machines | Feature-level state machines exist; no single active-interaction state machine. |
+| Cancellation semantics | Good in utilities; incomplete in mounted main path for pointercancel/window blur. |
+
+## Correctness risks
+
+- A pending range move can revert to selection on mouseup, while actual range move commits through a separate lifecycle. This is correct today but should be covered by owner-state tests.
+- Drag selection, fill, range move, and column resize all share one global `mousemove` path; the precedence order in `useDataGridTableStageScrollSync.ts` and `useDataGridAppInteractionController.ts` is an implicit contract.
+- Touch-generated mouse guards prevent accidental starts, but future pointer-event additions could bypass those guards unless pointer type is part of the shared router contract.
+- Context menu routing can change selection before opening the menu, which is standard spreadsheet behavior but must not fire during active drag/fill/range interactions.
+- Focus restoration queries visible DOM; virtualization remount can fall back to viewport focus when the anchor cell is not mounted.
+
+## Performance risks
+
+- Mousemove-driven drag/fill/range previews can update selection/overlay state synchronously.
+- Pointer auto-scroll reads `getBoundingClientRect()` each frame while an interaction is active. This is reasonable but should be budgeted.
+- Hover/range edge detection calls `getBoundingClientRect()` on mousemove. Coarse pointer and scroll suppression reduce risk.
+- Global mousemove listeners are always installed while the grid is mounted.
+- Canvas chrome redraw and pinned sync have been rAF-batched, but scroll-time budgets still need browser traces.
+
+## Touch/mobile risks
+
+- Native one-finger body scroll is the right default, but touch selection handles and long-press mode are not implemented.
+- Range move and fill should be handle-only on touch.
+- Touch context menu is suppressed for long-press reservation, but the replacement touch menu/selection workflow is not defined.
+- Managed touch scroll and native body scroll coexist; future changes must not route native body pan through non-passive handlers.
+- Device-level momentum scroll tests and accidental-drag tests are still needed.
+
+## Enterprise readiness score
+
+Current score: **7/10**.
+
+Target score: **9/10**.
+
+What blocks target score:
+
+- No single active interaction owner diagnostic/invariant.
+- Main stage path does not use the shared global pointer lifecycle.
+- Touch selection/range/fill are guarded but not designed as complete workflows.
+- Cancellation semantics are not unified across mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
+- Prevent-default and passive-listener policies are distributed across features.
+- Missing e2e/device gates for interaction races and mobile readiness.
+
+## Recommended tests
+
+Unit/contract tests:
+
+- Active owner invariant: only one of drag selection, fill, range move, column resize, row resize, or scroll-managed gesture can be active.
+- Main stage cancellation: mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount all clean up active interaction state.
+- Touch-generated mouse events do not start cell drag selection, range move, fill, row resize, column resize, header drag, or row reorder.
+- Range move is desktop cell-body/edge behavior only; touch requires explicit handle once implemented.
+- `preventDefault()` expectations by owner and event type.
+- Focus restoration after selection, fill, range move, inline edit commit/cancel, context menu close, and virtualization remount.
+
+Component tests:
+
+- Header resize cancels active fill/drag and blocks post-resize click.
+- Fill start cancels range move and drag selection.
+- Range move start cancels fill and drag selection.
+- Context menu does not open during active interactions.
+- Pinned panes, center viewport, header viewport, and pinned-bottom viewport remain scroll-synchronized.
+
+Playwright/e2e tests:
+
+- Desktop drag selection across virtualized rows and pinned columns.
+- Desktop fill drag with auto-scroll and mouseup outside viewport.
+- Range move with auto-scroll and Escape cancel.
+- Column and row resize while hovering/clicking nearby header/row-index controls.
+- Touch one-finger scroll over body cells does not start selection/fill/range/resize.
+- Touch long-press selection workflow when implemented.
+- Browser zoom/high-DPI pointer thresholds for range move, fill handle, and resize handles.
+
+Performance tests:
+
+- Mousemove preview budget for drag selection, fill, and range move.
+- Pointer auto-scroll frame budget and layout-read count.
+- Scroll frame budget with pinned panes, header, overlays, and canvas chrome enabled.
+- Hover/range-edge detection overhead with large rendered windows.
+
+## Recommended telemetry
+
+- Active interaction owner and transition history.
+- Interaction start/cancel/commit reason.
+- Pointer preview apply time and mode.
+- Auto-scroll frame time and delta.
+- Prevent-default count by event type and owner.
+- Global listener active/idle state.
+- Scroll synchronization drift between body, header, pinned panes, and pinned-bottom viewport.
+- Focus restoration target and fallback reason.
+- Touch gesture classification: native scroll, linked-surface pan, long press, handle drag, canceled.
+
+## Prioritized roadmap
+
+### Phase 1: owner invariants
+
+- Add an active interaction owner snapshot in the app-stage path.
+- Assert one-interaction-one-owner for drag selection, fill, range move, column resize, row resize, and touch pan.
+- Document app-stage versus core viewport ownership.
+
+### Phase 2: pointer lifecycle unification
+
+- Route the main mounted path through `useDataGridGlobalPointerLifecycle` or adapt its cancellation semantics into `useDataGridAppViewportLifecycle`.
+- Add pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup tests.
+- Keep desktop mouse behavior unchanged.
+
+### Phase 3: prevent-default and listener policy
+
+- Create an interaction event policy table covering scroll, selection, fill, range move, resize, keyboard, context menu, and editors.
+- Keep body scroll passive/native.
+- Attach global move/up listeners only while needed if validation shows idle overhead or lifecycle risk.
+
+### Phase 4: touch interaction model
+
+- Define touch selection mode, long press, explicit handles, scroll cancellation, and editor/context-menu interaction.
+- Keep range move and fill handle-only on touch.
+- Add device/e2e coverage before enabling touch drag selection.
+
+### Phase 5: enterprise validation
+
+- Add Playwright interaction-race tests.
+- Add performance gates for pointer preview and scroll sync.
+- Add telemetry for active owner, cancellation reason, drift, and frame budget.
+
+## Migration notes
+
+- Do not replace the current orchestration package. Extend existing utilities and wire them more consistently into the main stage path.
+- Preserve desktop behavior while adding touch-specific policies.
+- Avoid public API changes unless a new touch interaction mode or public interaction diagnostics API is explicitly approved.
+- Keep scroll-time code rAF-batched and sampling-only where possible.

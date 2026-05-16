@@ -83,6 +83,7 @@ export function useDataGridStageViewportRuntime(
   const isBodyViewportScrolling = ref(false)
   let bodyViewportScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   let bodyViewportScrollFrame: number | null = null
+  let bodyViewportMetricsFrame: number | null = null
   let pendingBodyViewportScrollState: BodyViewportScrollState | null = null
   let pendingPinnedBottomViewportScrollLeftSync = false
   let pendingGridChromeRedrawMode: GridChromeRedrawMode | null = null
@@ -219,6 +220,24 @@ export function useDataGridStageViewportRuntime(
     pendingGridChromeRedrawMode = null
   }
 
+  function scheduleBodyViewportMetricsSync(): void {
+    if (bodyViewportMetricsFrame !== null) {
+      return
+    }
+    bodyViewportMetricsFrame = requestScrollFrame(() => {
+      bodyViewportMetricsFrame = null
+      options.gridChromeSyncers.value.syncBodyViewportMetrics()
+    })
+  }
+
+  function cancelBodyViewportMetricsFrame(): void {
+    if (bodyViewportMetricsFrame === null) {
+      return
+    }
+    cancelScrollFrame(bodyViewportMetricsFrame)
+    bodyViewportMetricsFrame = null
+  }
+
   function markBodyViewportScrolling(): void {
     if (!isBodyViewportScrolling.value) {
       isBodyViewportScrolling.value = true
@@ -296,7 +315,7 @@ export function useDataGridStageViewportRuntime(
     options.gridChromeSyncers.value.connectGridChromeResizeObserver()
     options.gridChromeSyncers.value.scheduleGridChromeRedraw()
     if (typeof window !== "undefined") {
-      window.addEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)
+      window.addEventListener("resize", scheduleBodyViewportMetricsSync)
     }
   })
 
@@ -305,10 +324,11 @@ export function useDataGridStageViewportRuntime(
     managedWheelScroll.reset()
     clearBodyViewportScrollIdleTimer()
     cancelBodyViewportScrollFrame()
+    cancelBodyViewportMetricsFrame()
     isBodyViewportScrolling.value = false
     options.gridChromeSyncers.value.disconnectGridChromeResizeObserver()
     if (typeof window !== "undefined") {
-      window.removeEventListener("resize", options.gridChromeSyncers.value.syncBodyViewportMetrics)
+      window.removeEventListener("resize", scheduleBodyViewportMetricsSync)
     }
   })
 

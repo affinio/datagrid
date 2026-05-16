@@ -26,6 +26,7 @@ Completed in Phase 1:
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
 - Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for linked pane sync, pinned-bottom sync, and chrome redraw mode selection.
+- Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
 
 Still open:
 - Long-press selection mode and explicit touch selection handles.
@@ -205,6 +206,7 @@ Current state:
 - Stage body-scroll sampling now captures only `scrollTop` / `scrollLeft`; viewport dimensions stay on the resize/metrics path instead of being read during every scroll event.
 - The raw body scroll handler now reads `scrollTop` and `scrollLeft` once per event and reuses the captured state for all stage scroll-frame decisions.
 - Grid chrome redraw mode is now queued by the body and pinned-bottom scroll handlers and flushed inside the stage scroll frame, so canvas draw work no longer starts from the raw scroll event.
+- Window resize metric sync is now batched through `requestAnimationFrame`; resize events no longer call `syncBodyViewportMetrics()` directly.
 - Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
 - `useDataGridAppViewport.ts` now syncs header `scrollLeft` from the viewport rAF commit instead of writing it directly inside the body scroll event.
 
@@ -384,7 +386,8 @@ Gap:
 - Done: remove body viewport dimension reads from the stage raw scroll sampling path.
 - Done: reuse a single captured body `scrollTop` / `scrollLeft` sample across stage scroll-frame scheduling decisions.
 - Done: move body and pinned-bottom scroll-triggered grid chrome redraw into the stage scroll frame.
-- In progress: audit remaining header/resize metric paths for unnecessary scroll-time layout reads.
+- Done: batch window resize metric sync through rAF.
+- In progress: final residual review for header scroll sync before Phase 2.
 
 ### Phase 2 - Touch Interaction Model
 
