@@ -255,4 +255,45 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.unmount()
   })
+
+  it("samples body scroll offsets once during raw body scroll handling", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const scrollReads = {
+      scrollTop: 0,
+      scrollLeft: 0,
+    }
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness()
+    const bodyViewport = createViewportElement()
+    Object.defineProperty(bodyViewport, "scrollTop", {
+      configurable: true,
+      get() {
+        scrollReads.scrollTop += 1
+        return 72
+      },
+    })
+    Object.defineProperty(bodyViewport, "scrollLeft", {
+      configurable: true,
+      get() {
+        scrollReads.scrollLeft += 1
+        return 16
+      },
+    })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(harness.runtime.bodyViewportScrollTop.value).toBe(72)
+    expect(harness.runtime.bodyViewportScrollLeft.value).toBe(16)
+    expect(scrollReads).toEqual({
+      scrollTop: 1,
+      scrollLeft: 1,
+    })
+
+    harness.unmount()
+  })
 })
