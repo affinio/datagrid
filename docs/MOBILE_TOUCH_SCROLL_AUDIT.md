@@ -160,7 +160,7 @@ Current state:
 - Touch-generated double-click/double-tap events still open inline edit, preserving a deliberate touch editing path while keeping one-finger scroll and single tap selection first.
 - Touch-generated cell-body mousedown is now filtered at the stage boundary before it reaches desktop selection/range-move logic; mouse/trackpad desktop mousedown still follows the existing path.
 - Touch movement beyond the pan threshold suppresses the next touch-generated cell click, while stationary taps still select/focus cells.
-- Touch long press now establishes a cell selection without starting drag/range move; this is the foundation for explicit touch selection mode and handles.
+- Touch long press now routes into the app selection path, focuses the cell with `preventScroll`, and suppresses the follow-up synthetic click/context menu; it no longer invokes the normal cell click action.
 - Touch mode now exposes an event-isolated anchor handle affordance on selected cells that do not already show a fill handle; real touch events on the handle do not enter body long-press or cell-body selection paths, and drag semantics remain disabled until explicit touch handle behavior is implemented.
 - Fill drag can now start from the explicit fill handle with real touch events; touchmove/touchend are isolated to the handle and forwarded to the existing fill preview/finalization pipeline.
 - Touch selection drag now starts only from the explicit selection anchor handle; body-cell touch gestures still prioritize native scroll.
@@ -440,7 +440,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, and stationary long press now has a gate for cell selection plus context-menu suppression.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
@@ -459,9 +459,9 @@ Gap:
   - header, pinned panes, and overlays remain aligned after vertical and horizontal scroll.
 - Playwright tests:
   - Done for `/vue/base-grid`: one-finger touch pan keeps the body viewport scroll-first and does not change selection.
+  - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
   - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
   - double tap edits only when not scrolling.
-  - long press enters selection mode.
   - fill/range/resize drag from handles works and body drag scrolls.
 - Manual device checks:
   - iPad Safari and Chrome.

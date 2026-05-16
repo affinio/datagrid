@@ -555,7 +555,18 @@ function startTouchLongPress(event: TouchEvent, touch: Touch): void {
     suppressNextTouchContextMenu = true
     scheduleTouchClickSuppressionClear()
     pending.cell.focus({ preventScroll: true })
-    interaction.value.handleCellClick(pending.row, pending.rowOffset, pending.column, pending.columnIndex)
+    const mouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: pending.clientX,
+      clientY: pending.clientY,
+    })
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: pending.cell,
+    })
+    interaction.value.handleCellMouseDown(mouseDown, pending.row, pending.rowOffset, pending.columnIndex)
   }, TOUCH_LONG_PRESS_DELAY_MS)
 }
 

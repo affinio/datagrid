@@ -1487,13 +1487,15 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("selects a body cell on touch long press and suppresses the follow-up synthetic click", () => {
+  it("starts cell selection on touch long press and suppresses the follow-up synthetic click", () => {
     vi.useFakeTimers()
     mockCoarsePointer(true)
     const handleCellClick = vi.fn()
+    const handleCellMouseDown = vi.fn()
     const wrapper = mount(DataGridTableStage, {
       props: createStageProps(() => false, {
         handleCellClick,
+        handleCellMouseDown,
       }),
       attachTo: document.body,
     })
@@ -1511,11 +1513,16 @@ describe("DataGridTableStage contract", () => {
     vi.advanceTimersByTime(530)
     cell.dispatchEvent(touchClick)
 
-    expect(handleCellClick).toHaveBeenCalledTimes(1)
-    expect(handleCellClick).toHaveBeenCalledWith(
+    expect(handleCellClick).not.toHaveBeenCalled()
+    expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
+    expect(handleCellMouseDown).toHaveBeenCalledWith(
+      expect.objectContaining({
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+      }),
       expect.objectContaining({ rowId: "r1" }),
       0,
-      expect.objectContaining({ key: "centerA" }),
       1,
     )
 

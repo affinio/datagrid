@@ -55,6 +55,7 @@ test.describe("sandbox touch scroll contracts", () => {
   })
 
   test("one-finger touch pan keeps the body viewport scroll-first", async ({ page }) => {
+    await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
@@ -72,6 +73,23 @@ test.describe("sandbox touch scroll contracts", () => {
     })
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
+
+  test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    await expect(page.locator(".grid-stage").first()).toHaveClass(/grid-stage--interaction-touch/)
+    const cell = page
+      .locator(".grid-body-viewport .grid-cell[data-row-id][data-row-index][data-column-index]:not(.grid-cell--row-selection)")
+      .first()
+    await expect(cell).toBeVisible({ timeout: 20_000 })
+
+    const expectedSignature = await cellSignature(cell)
+    await dispatchLongPress(page, cell, 650)
+
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(expectedSignature)
+    expect(await dispatchContextMenuAndReadPrevented(cell)).toBe(true)
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -84,6 +102,27 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   } catch {
     await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
   }
+}
+
+async function forceCoarsePointer(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const originalMatchMedia = window.matchMedia.bind(window)
+    window.matchMedia = (query: string): MediaQueryList => {
+      if (query !== "(hover: none) and (pointer: coarse)") {
+        return originalMatchMedia(query)
+      }
+      return {
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => true,
+      } as MediaQueryList
+    }
+  })
 }
 
 async function viewportScrollTop(viewport: Locator): Promise<number> {
@@ -127,6 +166,38 @@ async function dispatchTouchPan(page: Page, viewport: Locator, distanceY: number
   }
 }
 
+async function dispatchLongPress(page: Page, target: Locator, durationMs: number): Promise<void> {
+  await target.scrollIntoViewIfNeeded()
+  await target.evaluate(async (element, pressDurationMs) => {
+    const rect = element.getBoundingClientRect()
+    const touch = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    element.dispatchEvent(new TouchEvent("touchstart", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touch],
+      targetTouches: [touch],
+      changedTouches: [touch],
+    }))
+    await new Promise(resolve => window.setTimeout(resolve, pressDurationMs))
+    element.dispatchEvent(new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      targetTouches: [],
+      changedTouches: [touch],
+    }))
+  }, durationMs)
+  await page.waitForTimeout(0)
+}
+
 async function selectionAnchorSignature(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const anchor = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
@@ -138,6 +209,21 @@ async function selectionAnchorSignature(page: Page): Promise<string> {
       anchor.getAttribute("data-column-index") ?? "",
       anchor.getAttribute("data-column-key") ?? "",
     ].join(":")
+  })
+}
+
+async function cellSignature(cell: Locator): Promise<string> {
+  return await cell.evaluate(element => [
+    element.getAttribute("data-row-index") ?? "",
+    element.getAttribute("data-column-index") ?? "",
+    element.getAttribute("data-column-key") ?? "",
+  ].join(":"))
+}
+
+async function dispatchContextMenuAndReadPrevented(target: Locator): Promise<boolean> {
+  return await target.evaluate(element => {
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true })
+    return !element.dispatchEvent(event) || event.defaultPrevented
   })
 }
 
