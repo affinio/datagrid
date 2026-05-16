@@ -74,6 +74,21 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("body viewport touchmove is not prevented by linked-surface routing", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(viewport, { deltaY: 180 })
+
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(false)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+  })
+
   test("body cell touch drag does not start selection fill range move or resize", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
