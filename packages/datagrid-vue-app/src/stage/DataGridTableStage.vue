@@ -544,6 +544,9 @@ const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
 })
 
 function clearHoveredRow(): void {
+  if (hoveredRowIndex.value == null) {
+    return
+  }
   hoveredRowIndex.value = null
 }
 

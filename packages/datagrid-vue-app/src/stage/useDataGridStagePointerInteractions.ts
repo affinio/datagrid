@@ -91,6 +91,9 @@ export function useDataGridStagePointerInteractions(
   }
 
   function clearRangeMoveHandleHover(): void {
+    if (hoveredRangeMoveHandleCell.value == null) {
+      return
+    }
     hoveredRangeMoveHandleCell.value = null
   }
 
