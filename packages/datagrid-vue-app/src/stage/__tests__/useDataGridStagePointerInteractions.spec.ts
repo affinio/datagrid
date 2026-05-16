@@ -74,9 +74,11 @@ describe("useDataGridStagePointerInteractions", () => {
 
     const downEvent = {
       currentTarget: cell,
+      preventDefault: vi.fn(),
     } as MouseEvent
     service.handleFillHandleMouseDown(downEvent)
     expect(fillActionMenuOpen.value).toBe(false)
+    expect(downEvent.preventDefault).toHaveBeenCalled()
     expect(focus).toHaveBeenCalled()
     expect(startFillHandleDrag).toHaveBeenCalledWith(downEvent)
 
@@ -140,5 +142,38 @@ describe("useDataGridStagePointerInteractions", () => {
     } as MouseEvent, 0, 0)
 
     expect(service.isRangeMoveHandleHoverCell(0, 0)).toBe(false)
+  })
+
+  it("ignores touch-generated fill-handle mousedown events", () => {
+    const startFillHandleDrag = vi.fn()
+    const fillActionMenuOpen = ref(true)
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag,
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      displayRows: ref([]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen,
+      isCellSelectedSafe: () => false,
+      isCellEditableSafe: () => false,
+      isCellOnSelectionEdgeSafe: () => false,
+    })
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    service.handleFillHandleMouseDown(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(fillActionMenuOpen.value).toBe(true)
+    expect(startFillHandleDrag).not.toHaveBeenCalled()
   })
 })

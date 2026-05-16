@@ -64,7 +64,7 @@
             class="cell-fill-handle"
             aria-label="Fill handle"
             tabindex="-1"
-            @mousedown.stop.prevent="renderApi.handleFillHandleMouseDown($event)"
+            @mousedown.stop="renderApi.handleFillHandleMouseDown($event)"
             @dblclick.stop.prevent="renderApi.handleFillHandleDoubleClick($event)"
           />
           <DataGridCellComboboxEditor

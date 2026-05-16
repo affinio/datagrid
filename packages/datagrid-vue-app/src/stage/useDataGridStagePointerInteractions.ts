@@ -39,6 +39,13 @@ export interface UseDataGridStagePointerInteractionsResult {
 const RANGE_MOVE_HANDLE_HOVER_EDGE_PX = 6
 const GLOBAL_FILL_DRAG_CURSOR_CLASS = "datagrid-fill-drag-cursor"
 
+function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const sourceCapabilities = (event as MouseEvent & {
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  }).sourceCapabilities
+  return sourceCapabilities?.firesTouchEvents === true
+}
+
 export function useDataGridStagePointerInteractions(
   options: UseDataGridStagePointerInteractionsOptions,
 ): UseDataGridStagePointerInteractionsResult {
@@ -159,6 +166,10 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleMouseDown(event: MouseEvent): void {
+    if (isTouchGeneratedMouseEvent(event)) {
+      return
+    }
+    event.preventDefault()
     options.fillActionMenuOpen.value = false
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     const cell = handle?.closest<HTMLElement>(".grid-cell")
