@@ -45,8 +45,8 @@
           @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
           @keydown.stop="renderApi.handleRowIndexKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset))"
           @dragstart.stop="renderApi.handleRowIndexDragStart($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-          @dragover.stop.prevent="renderApi.handleRowIndexDragOver($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-          @drop.stop.prevent="renderApi.handleRowIndexDrop($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @dragover.stop="renderApi.handleRowIndexDragOver($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @drop.stop="renderApi.handleRowIndexDrop($event, row, renderApi.viewportRowOffset(row, rowOffset))"
           @dragend.stop="renderApi.handleRowIndexDragEnd()"
         >
           {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}

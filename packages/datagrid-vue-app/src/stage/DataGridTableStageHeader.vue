@@ -109,8 +109,8 @@
                 :draggable="isHeaderColumnDraggable(column)"
                 @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
                 @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-                @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-                @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+                @dragover.stop="handleHeaderColumnDragOver($event, column)"
+                @drop.stop="handleHeaderColumnDrop($event, column)"
                 @dragend.stop="handleHeaderColumnDragEnd"
               >
                 <div class="col-head">
@@ -195,8 +195,8 @@
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragover.stop="handleHeaderColumnDragOver($event, column)"
+              @drop.stop="handleHeaderColumnDrop($event, column)"
               @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
@@ -325,8 +325,8 @@
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragover.stop="handleHeaderColumnDragOver($event, column)"
+              @drop.stop="handleHeaderColumnDrop($event, column)"
               @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
@@ -393,8 +393,8 @@
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-            @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-            @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+            @dragover.stop="handleHeaderColumnDragOver($event, column)"
+            @drop.stop="handleHeaderColumnDrop($event, column)"
             @dragend.stop="handleHeaderColumnDragEnd"
           >
             <div class="col-head">
@@ -508,8 +508,8 @@
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-              @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-              @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+              @dragover.stop="handleHeaderColumnDragOver($event, column)"
+              @drop.stop="handleHeaderColumnDrop($event, column)"
               @dragend.stop="handleHeaderColumnDragEnd"
             >
               <div class="col-head">
@@ -576,8 +576,8 @@
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-            @dragover.stop.prevent="handleHeaderColumnDragOver($event, column)"
-            @drop.stop.prevent="handleHeaderColumnDrop($event, column)"
+            @dragover.stop="handleHeaderColumnDragOver($event, column)"
+            @drop.stop="handleHeaderColumnDrop($event, column)"
             @dragend.stop="handleHeaderColumnDragEnd"
           >
             <div class="col-head">
