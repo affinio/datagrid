@@ -299,9 +299,11 @@ describe("useDataGridAppViewport contract", () => {
   })
 
   it("expands row overscan during fast scroll bursts", () => {
+    vi.useFakeTimers()
     vi.spyOn(performance, "now")
       .mockReturnValueOnce(0)
       .mockReturnValueOnce(16)
+      .mockReturnValue(200)
 
     const raf = createRafHarness()
     const syncRowsInRange = vi.fn(() => [])
@@ -336,6 +338,14 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 132 })
+
+    vi.advanceTimersByTime(121)
+    syncRowsInRange.mockClear()
+    element.scrollTop = 3000
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 149, end: 155 })
   })
 
   it("incrementally shifts visible rows when the viewport range overlaps the previous frame", () => {

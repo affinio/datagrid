@@ -17,6 +17,7 @@ const DATA_GRID_PERF_TRACE_STORAGE_KEY = "affino-datagrid-perf-trace"
 const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
 const DATA_GRID_PERF_SAMPLE_LIMIT = 400
 const DATA_GRID_HORIZONTAL_SCROLL_IDLE_MS = 120
+const DATA_GRID_VERTICAL_SCROLL_IDLE_MS = 120
 const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
@@ -448,6 +449,7 @@ export function useDataGridAppViewport<TRow>(
   let pendingViewportScrollTop = 0
   let pendingViewportScrollLeft = 0
   let horizontalScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+  let verticalScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   let horizontalScrollActive = false
   let forceNextColumnWindowSync = false
   let isApplyingRuntimeViewportPosition = false
@@ -506,6 +508,24 @@ export function useDataGridAppViewport<TRow>(
     }
     globalThis.clearTimeout(horizontalScrollIdleTimer)
     horizontalScrollIdleTimer = null
+  }
+
+  const clearVerticalScrollIdleTimer = (): void => {
+    if (verticalScrollIdleTimer == null) {
+      return
+    }
+    globalThis.clearTimeout(verticalScrollIdleTimer)
+    verticalScrollIdleTimer = null
+  }
+
+  const scheduleVerticalScrollIdleReset = (): void => {
+    clearVerticalScrollIdleTimer()
+    verticalScrollIdleTimer = globalThis.setTimeout(() => {
+      verticalScrollIdleTimer = null
+      resetAdaptiveRowOverscan()
+    }, DATA_GRID_VERTICAL_SCROLL_IDLE_MS)
+    const maybeNodeTimer = verticalScrollIdleTimer as { unref?: () => void }
+    maybeNodeTimer.unref?.()
   }
 
   const forcePreciseHorizontalColumnWindow = (): void => {
@@ -1421,6 +1441,7 @@ export function useDataGridAppViewport<TRow>(
       cacheViewportDimensions(element, dimensions)
     }
     updateAdaptiveRowOverscan(pendingViewportScrollTop, cachedViewportDimensions?.clientHeight ?? 0)
+    scheduleVerticalScrollIdleReset()
     syncHeaderScrollLeftFromBody(pendingViewportScrollLeft)
     scheduleViewportCommit({
       forceVisibleRows: false,
@@ -1457,6 +1478,7 @@ export function useDataGridAppViewport<TRow>(
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
     clearHorizontalScrollIdleTimer()
+    clearVerticalScrollIdleTimer()
     resetAdaptiveRowOverscan()
     horizontalScrollActive = false
     if (viewportSyncRafHandle == null) {
@@ -1543,6 +1565,8 @@ export function useDataGridAppViewport<TRow>(
       cachedViewportElement = null
       cachedViewportDimensions = null
       clearHorizontalScrollIdleTimer()
+      clearVerticalScrollIdleTimer()
+      resetAdaptiveRowOverscan()
       horizontalScrollActive = false
       if (coarsePointerQuery && coarsePointerQueryListener) {
         if (typeof coarsePointerQuery.removeEventListener === "function") {
