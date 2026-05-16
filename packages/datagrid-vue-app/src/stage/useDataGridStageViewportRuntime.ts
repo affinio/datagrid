@@ -42,6 +42,13 @@ export interface UseDataGridStageViewportRuntimeResult {
   handleBodyViewportWheel: (event: WheelEvent) => void
 }
 
+interface BodyViewportScrollState {
+  scrollTop: number
+  scrollLeft: number
+  clientWidth: number
+  clientHeight: number
+}
+
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
   if (value instanceof HTMLElement) {
     return value
@@ -72,7 +79,11 @@ export function useDataGridStageViewportRuntime(
   const bodyViewportTopOffset = ref(0)
   const isBodyViewportScrolling = ref(false)
   let bodyViewportScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
-  let pinnedBottomScrollSyncFrame: number | null = null
+  let bodyViewportScrollFrame: number | null = null
+  let pendingBodyViewportScrollState: BodyViewportScrollState | null = null
+  let pendingPinnedBottomViewportScrollLeftSync = false
+  let observedBodyViewportScrollTop = 0
+  let observedBodyViewportScrollLeft = 0
 
   const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
     resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -129,22 +140,75 @@ export function useDataGridStageViewportRuntime(
     globalThis.clearTimeout(handle)
   }
 
-  function schedulePinnedBottomViewportScrollLeftSync(): void {
-    if (pinnedBottomScrollSyncFrame !== null) {
+  function readBodyViewportScrollState(viewport: HTMLElement): BodyViewportScrollState {
+    return {
+      scrollTop: viewport.scrollTop,
+      scrollLeft: viewport.scrollLeft,
+      clientWidth: viewport.clientWidth,
+      clientHeight: viewport.clientHeight,
+    }
+  }
+
+  function trackObservedBodyViewportScrollState(state: Pick<BodyViewportScrollState, "scrollTop" | "scrollLeft">): void {
+    observedBodyViewportScrollTop = state.scrollTop
+    observedBodyViewportScrollLeft = state.scrollLeft
+  }
+
+  function commitBodyViewportScrollState(state: BodyViewportScrollState): void {
+    trackObservedBodyViewportScrollState(state)
+    if (bodyViewportScrollTop.value !== state.scrollTop) {
+      bodyViewportScrollTop.value = state.scrollTop
+    }
+    if (bodyViewportScrollLeft.value !== state.scrollLeft) {
+      bodyViewportScrollLeft.value = state.scrollLeft
+    }
+    if (bodyViewportClientWidth.value !== state.clientWidth) {
+      bodyViewportClientWidth.value = state.clientWidth
+    }
+    if (bodyViewportClientHeight.value !== state.clientHeight) {
+      bodyViewportClientHeight.value = state.clientHeight
+    }
+  }
+
+  function scheduleBodyViewportScrollFrame(): void {
+    if (bodyViewportScrollFrame !== null) {
       return
     }
-    pinnedBottomScrollSyncFrame = requestScrollFrame(() => {
-      pinnedBottomScrollSyncFrame = null
-      options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
+    bodyViewportScrollFrame = requestScrollFrame(() => {
+      bodyViewportScrollFrame = null
+      const scrollState = pendingBodyViewportScrollState
+      const shouldSyncPinnedBottomScrollLeft = pendingPinnedBottomViewportScrollLeftSync
+      pendingBodyViewportScrollState = null
+      pendingPinnedBottomViewportScrollLeftSync = false
+      if (scrollState) {
+        commitBodyViewportScrollState(scrollState)
+      }
+      if (shouldSyncPinnedBottomScrollLeft) {
+        options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
+      }
     })
   }
 
-  function cancelPinnedBottomViewportScrollLeftSync(): void {
-    if (pinnedBottomScrollSyncFrame === null) {
+  function scheduleBodyViewportScrollStateSync(viewport: HTMLElement): void {
+    const state = readBodyViewportScrollState(viewport)
+    trackObservedBodyViewportScrollState(state)
+    pendingBodyViewportScrollState = state
+    scheduleBodyViewportScrollFrame()
+  }
+
+  function schedulePinnedBottomViewportScrollLeftSync(): void {
+    pendingPinnedBottomViewportScrollLeftSync = true
+    scheduleBodyViewportScrollFrame()
+  }
+
+  function cancelBodyViewportScrollFrame(): void {
+    if (bodyViewportScrollFrame === null) {
       return
     }
-    cancelScrollFrame(pinnedBottomScrollSyncFrame)
-    pinnedBottomScrollSyncFrame = null
+    cancelScrollFrame(bodyViewportScrollFrame)
+    bodyViewportScrollFrame = null
+    pendingBodyViewportScrollState = null
+    pendingPinnedBottomViewportScrollLeftSync = false
   }
 
   function markBodyViewportScrolling(): void {
@@ -158,21 +222,6 @@ export function useDataGridStageViewportRuntime(
     }, DATA_GRID_SCROLL_IDLE_MS)
     const maybeNodeTimer = bodyViewportScrollIdleTimer as { unref?: () => void }
     maybeNodeTimer.unref?.()
-  }
-
-  function syncBodyViewportScrollState(viewport: HTMLElement): void {
-    if (bodyViewportScrollTop.value !== viewport.scrollTop) {
-      bodyViewportScrollTop.value = viewport.scrollTop
-    }
-    if (bodyViewportScrollLeft.value !== viewport.scrollLeft) {
-      bodyViewportScrollLeft.value = viewport.scrollLeft
-    }
-    if (bodyViewportClientWidth.value !== viewport.clientWidth) {
-      bodyViewportClientWidth.value = viewport.clientWidth
-    }
-    if (bodyViewportClientHeight.value !== viewport.clientHeight) {
-      bodyViewportClientHeight.value = viewport.clientHeight
-    }
   }
 
   function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
@@ -198,10 +247,10 @@ export function useDataGridStageViewportRuntime(
       return
     }
     markBodyViewportScrolling()
-    const previousScrollTop = bodyViewportScrollTop.value
-    const previousScrollLeft = bodyViewportScrollLeft.value
+    const previousScrollTop = observedBodyViewportScrollTop
+    const previousScrollLeft = observedBodyViewportScrollLeft
     linkedPaneScrollSync.onSourceScroll(element.scrollTop)
-    syncBodyViewportScrollState(element)
+    scheduleBodyViewportScrollStateSync(element)
     schedulePinnedBottomViewportScrollLeftSync()
     if (element.scrollLeft !== previousScrollLeft && element.scrollTop === previousScrollTop) {
       options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
@@ -219,7 +268,7 @@ export function useDataGridStageViewportRuntime(
     bodyViewport.scrollLeft = element.scrollLeft
     markBodyViewportScrolling()
     options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
-    syncBodyViewportScrollState(bodyViewport)
+    scheduleBodyViewportScrollStateSync(bodyViewport)
     options.gridChromeSyncers.value.scheduleGridChromeRedraw("center-scroll")
   }
 
@@ -244,7 +293,7 @@ export function useDataGridStageViewportRuntime(
     linkedPaneScrollSync.reset()
     managedWheelScroll.reset()
     clearBodyViewportScrollIdleTimer()
-    cancelPinnedBottomViewportScrollLeftSync()
+    cancelBodyViewportScrollFrame()
     isBodyViewportScrolling.value = false
     options.gridChromeSyncers.value.disconnectGridChromeResizeObserver()
     if (typeof window !== "undefined") {
