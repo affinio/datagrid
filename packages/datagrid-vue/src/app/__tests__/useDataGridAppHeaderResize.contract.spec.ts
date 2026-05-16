@@ -28,6 +28,30 @@ function createHeaderResize() {
 }
 
 describe("useDataGridAppHeaderResize contract", () => {
+  it("ignores touch-generated column resize mousedown events", () => {
+    const { headerResize } = createHeaderResize()
+    const event = new MouseEvent("mousedown", { cancelable: true, button: 0, clientX: 120 })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    headerResize.startResize(event, "service")
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(headerResize.isColumnResizing.value).toBe(false)
+  })
+
+  it("keeps desktop column resize mousedown behavior", () => {
+    const { headerResize } = createHeaderResize()
+    const event = new MouseEvent("mousedown", { cancelable: true, button: 0, clientX: 120 })
+
+    headerResize.startResize(event, "service")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(headerResize.isColumnResizing.value).toBe(true)
+  })
+
   it("ignores touch-generated column autosize double-click events", () => {
     const { headerResize, persistColumnWidth } = createHeaderResize()
     const event = new MouseEvent("dblclick", { cancelable: true })

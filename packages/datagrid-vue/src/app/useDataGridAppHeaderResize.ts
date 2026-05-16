@@ -71,6 +71,9 @@ export function useDataGridAppHeaderResize<TRow>(
   })
 
   const startResize = (event: MouseEvent, key: string): void => {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+      return
+    }
     headerResize.onHeaderResizeHandleMouseDown(key, event)
   }
 
