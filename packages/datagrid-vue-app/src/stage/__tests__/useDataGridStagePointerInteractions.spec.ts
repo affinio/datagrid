@@ -93,7 +93,7 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
   })
 
-  it("does not track range-move hover on coarse pointers", () => {
+  it("does not track range-move hover when hover interactions are suppressed", () => {
     const row = { kind: "data", rowId: "r1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
     const column = createColumn("owner")
     const cell = document.createElement("div")
@@ -127,7 +127,7 @@ describe("useDataGridStagePointerInteractions", () => {
       displayRows: ref([row]),
       viewportRowStart: ref(0),
       fillActionMenuOpen: ref(false),
-      isCoarsePointer: ref(true),
+      suppressHoverInteractions: ref(true),
       isCellSelectedSafe: () => true,
       isCellEditableSafe: () => true,
       isCellOnSelectionEdgeSafe: () => true,

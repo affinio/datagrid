@@ -9,6 +9,7 @@
       'grid-stage--layout-auto-height': layoutMode === 'auto-height',
       'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
+      'grid-stage--scrolling': isBodyViewportScrolling,
       'grid-stage--coarse-pointer': isCoarsePointer,
       'grid-stage--single-cell-selection': isSingleSelectedCell,
       'grid-stage--additive-selection': isAdditiveSelection,
@@ -528,6 +529,8 @@ const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
 const isCoarsePointer = ref(false)
+const isBodyViewportScrolling = ref(false)
+const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
@@ -555,14 +558,14 @@ function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
 }
 
 function setHoveredRow(row: TableRow, rowOffset: number): void {
-  if (!rows.value.rowHover || isCoarsePointer.value) {
+  if (!rows.value.rowHover || suppressHoverInteractions.value) {
     return
   }
   hoveredRowIndex.value = resolveAbsoluteRowIndex(row, rowOffset)
 }
 
 function isHoveredRow(row: TableRow, rowOffset: number): boolean {
-  return !isCoarsePointer.value && rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
+  return !suppressHoverInteractions.value && rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
 }
 
 function isStripedRow(row: TableRow, rowOffset: number): boolean {
@@ -601,6 +604,7 @@ const {
   bodyViewportTopOffset,
   headerShellHeight,
   headerViewportClientWidth,
+  isBodyViewportScrolling: runtimeBodyViewportScrolling,
   captureBodyViewportRef,
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll,
@@ -614,6 +618,10 @@ const {
   rightPaneContentRef,
   gridChromeSyncers,
 })
+
+watch(runtimeBodyViewportScrolling, value => {
+  isBodyViewportScrolling.value = value
+}, { immediate: true })
 
 useDataGridPerfTrace({
   viewport,
@@ -913,7 +921,7 @@ const {
   displayRows,
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   fillActionMenuOpen,
-  isCoarsePointer,
+  suppressHoverInteractions,
   isCellSelectedSafe,
   isCellEditableSafe,
   isCellOnSelectionEdgeSafe,
@@ -954,8 +962,8 @@ onBeforeUnmount(() => {
   coarsePointerQueryListener = null
 })
 
-watch(isCoarsePointer, coarse => {
-  if (coarse) {
+watch(suppressHoverInteractions, suppressed => {
+  if (suppressed) {
     clearHoveredRow()
     clearRangeMoveHandleHover()
   }
