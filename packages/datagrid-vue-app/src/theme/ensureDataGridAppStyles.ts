@@ -3279,6 +3279,39 @@ body.datagrid-fill-drag-cursor * {
   box-sizing: border-box;
 }
 
+.grid-touch-range-move-handle {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
+  z-index: 3;
+}
+
+.grid-touch-range-move-handle::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--datagrid-selection-handle-border);
+  border-radius: 999px;
+  background: var(--datagrid-selection-handle-bg);
+  box-sizing: border-box;
+  box-shadow:
+    -4px 0 0 -2px var(--datagrid-selection-handle-border),
+    4px 0 0 -2px var(--datagrid-selection-handle-border),
+    0 -4px 0 -2px var(--datagrid-selection-handle-border),
+    0 4px 0 -2px var(--datagrid-selection-handle-border);
+}
+
 .grid-fill-action {
   --datagrid-fill-action-border: var(--datagrid-column-menu-border, var(--datagrid-copy-menu-border));
   --datagrid-fill-action-bg: color-mix(

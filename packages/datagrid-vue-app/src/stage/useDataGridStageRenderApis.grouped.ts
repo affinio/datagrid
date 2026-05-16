@@ -43,6 +43,7 @@ type CellRuntime = Readonly<Ref<{
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
+  isTouchRangeMoveHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
   isSelectionAnchorCellSafe: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCellVisual: (rowOffset: number, columnIndex: number) => boolean
   isCellInFillPreviewSafe: (rowOffset: number, columnIndex: number) => boolean
@@ -74,6 +75,10 @@ type CellRuntime = Readonly<Ref<{
   handleTouchSelectionHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   handleTouchSelectionHandleTouchMove: (event: TouchEvent) => void
   handleTouchSelectionHandleTouchEnd: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleMouseDown: (event: MouseEvent) => void
+  handleTouchRangeMoveHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchRangeMoveHandleTouchMove: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleTouchEnd: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   handleFillHandleTouchStart: (event: TouchEvent) => void
@@ -206,9 +211,14 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
     handleTouchSelectionHandleTouchMove: options.cellRuntime.value.handleTouchSelectionHandleTouchMove,
     handleTouchSelectionHandleTouchEnd: options.cellRuntime.value.handleTouchSelectionHandleTouchEnd,
+    handleTouchRangeMoveHandleMouseDown: options.cellRuntime.value.handleTouchRangeMoveHandleMouseDown,
+    handleTouchRangeMoveHandleTouchStart: options.cellRuntime.value.handleTouchRangeMoveHandleTouchStart,
+    handleTouchRangeMoveHandleTouchMove: options.cellRuntime.value.handleTouchRangeMoveHandleTouchMove,
+    handleTouchRangeMoveHandleTouchEnd: options.cellRuntime.value.handleTouchRangeMoveHandleTouchEnd,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
+    isTouchRangeMoveHandleCell: options.cellRuntime.value.isTouchRangeMoveHandleCell,
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,
@@ -270,9 +280,14 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleTouchSelectionHandleTouchStart: options.cellRuntime.value.handleTouchSelectionHandleTouchStart,
     handleTouchSelectionHandleTouchMove: options.cellRuntime.value.handleTouchSelectionHandleTouchMove,
     handleTouchSelectionHandleTouchEnd: options.cellRuntime.value.handleTouchSelectionHandleTouchEnd,
+    handleTouchRangeMoveHandleMouseDown: options.cellRuntime.value.handleTouchRangeMoveHandleMouseDown,
+    handleTouchRangeMoveHandleTouchStart: options.cellRuntime.value.handleTouchRangeMoveHandleTouchStart,
+    handleTouchRangeMoveHandleTouchMove: options.cellRuntime.value.handleTouchRangeMoveHandleTouchMove,
+    handleTouchRangeMoveHandleTouchEnd: options.cellRuntime.value.handleTouchRangeMoveHandleTouchEnd,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
+    isTouchRangeMoveHandleCell: options.cellRuntime.value.isTouchRangeMoveHandleCell,
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,

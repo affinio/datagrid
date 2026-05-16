@@ -1674,6 +1674,57 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("bridges touch range-move handle gestures into the mouse range-move lifecycle", async () => {
+    mockCoarsePointer(true)
+    const handleCellMouseDown = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+          handleCellMouseDown,
+        },
+      ),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    const handle = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"] .grid-touch-range-move-handle')
+    const mouseMove = vi.fn()
+    const mouseUp = vi.fn()
+    window.addEventListener("mousemove", mouseMove)
+    window.addEventListener("mouseup", mouseUp)
+
+    const touchStart = createTouchEvent("touchstart", { clientX: 100, clientY: 100 })
+    handle.element.dispatchEvent(touchStart)
+    handle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 116, clientY: 104 }))
+    handle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 120, clientY: 108 }))
+
+    expect(touchStart.defaultPrevented).toBe(true)
+    expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
+    expect(handleCellMouseDown.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 100,
+      clientY: 100,
+      shiftKey: false,
+    })
+    expect(mouseMove).toHaveBeenCalledTimes(1)
+    expect(mouseMove.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 116,
+      clientY: 104,
+    })
+    expect(mouseUp).toHaveBeenCalledTimes(1)
+    expect(mouseUp.mock.calls[0]?.[0]).toMatchObject({
+      clientX: 120,
+      clientY: 108,
+    })
+
+    window.removeEventListener("mousemove", mouseMove)
+    window.removeEventListener("mouseup", mouseUp)
+    wrapper.unmount()
+  })
+
   it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
     const handleCellClick = vi.fn()
     const startInlineEdit = vi.fn()

@@ -85,6 +85,20 @@
             @click.stop.prevent
             @contextmenu.stop.prevent
           />
+          <button
+            v-if="renderApi.isTouchRangeMoveHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
+            type="button"
+            class="grid-touch-range-move-handle"
+            aria-label="Move selection"
+            tabindex="-1"
+            @mousedown.stop.prevent="renderApi.handleTouchRangeMoveHandleMouseDown($event)"
+            @touchstart.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
+            @touchmove.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchMove($event)"
+            @touchend.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
+            @touchcancel.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
+            @click.stop.prevent
+            @contextmenu.stop.prevent
+          />
           <DataGridCellComboboxEditor
             v-if="renderApi.isSelectEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
             :value="renderApi.resolveSelectEditorValue(row, column)"

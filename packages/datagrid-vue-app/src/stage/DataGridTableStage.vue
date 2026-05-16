@@ -655,6 +655,16 @@ function createTouchSelectionMouseEvent(type: "mousedown" | "mousemove" | "mouse
   })
 }
 
+function createTouchRangeMoveMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  })
+}
+
 function handleTouchSelectionHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   event.preventDefault()
   clearPendingTouchLongPress()
@@ -702,6 +712,62 @@ function handleTouchSelectionHandleTouchEnd(event: TouchEvent): void {
   }
   event.preventDefault()
   window.dispatchEvent(createTouchSelectionMouseEvent("mouseup", touch))
+}
+
+function handleTouchRangeMoveHandleMouseDown(event: MouseEvent): void {
+  event.preventDefault()
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+}
+
+function handleTouchRangeMoveHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  event.preventDefault()
+  clearPendingTouchLongPress()
+  bodyTouchStart = null
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchRangeMoveHandleTouchId = null
+    return
+  }
+  activeTouchRangeMoveHandleTouchId = touch.identifier
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+  const mouseDown = createTouchRangeMoveMouseEvent("mousedown", touch)
+  if (cell) {
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: cell,
+    })
+  }
+  interaction.value.handleCellMouseDown(mouseDown, row, rowOffset, columnIndex)
+}
+
+function handleTouchRangeMoveHandleTouchMove(event: TouchEvent): void {
+  if (activeTouchRangeMoveHandleTouchId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchRangeMoveHandleTouchId)
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchRangeMoveMouseEvent("mousemove", touch))
+}
+
+function handleTouchRangeMoveHandleTouchEnd(event: TouchEvent): void {
+  if (activeTouchRangeMoveHandleTouchId == null || typeof window === "undefined") {
+    activeTouchRangeMoveHandleTouchId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchRangeMoveHandleTouchId)
+  activeTouchRangeMoveHandleTouchId = null
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchRangeMoveMouseEvent("mouseup", touch))
 }
 
 function isEditingCellSafeBase(row: TableRow, columnKey: string): boolean {
@@ -809,6 +875,7 @@ const interactionModeInput = computed(() => ({
 }))
 const interactionMode = computed(() => resolveDataGridInteractionMode(interactionModeInput.value))
 const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
+const preferLightweightCellRendering = computed(() => interactionMode.value === "touch" && isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 let teardownTouchPanGuard: (() => void) | null = null
@@ -825,6 +892,7 @@ let pendingTouchLongPress: {
 } | null = null
 let touchLongPressTimer: number | null = null
 let activeTouchSelectionHandleTouchId: number | null = null
+let activeTouchRangeMoveHandleTouchId: number | null = null
 let suppressNextTouchClick = false
 let suppressNextTouchContextMenu = false
 let suppressTouchClickTimer: number | null = null
@@ -1020,6 +1088,7 @@ const {
   isEditingCellSafe: isEditingCellSafeBase,
   columnIndexByKey,
   suppressInlineEditStart: isBodyViewportScrolling,
+  preferLightweightCellRendering,
 })
 
 const rowStateRuntime = useDataGridStageRowState({
@@ -1066,6 +1135,25 @@ function isTouchSelectionAnchorHandleCell(row: TableRow, rowOffset: number, colu
     return false
   }
   return isVisualSelectionAnchorCell(rowOffset, columnIndex)
+}
+
+function isTouchRangeMoveHandleCell(row: TableRow, rowOffset: number, columnIndex: number): boolean {
+  if (
+    interactionMode.value !== "touch"
+    || isBodyViewportScrolling.value
+    || mode.value !== "base"
+    || row.kind === "group"
+    || selection.value?.rangeMoveEnabled !== true
+    || selection.value?.isFillDragging === true
+  ) {
+    return false
+  }
+  const column = visibleColumns.value[columnIndex]
+  if (!column || isEditingCellSafeBase(row, column.key)) {
+    return false
+  }
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
+    && isCellEditableSafeBase(row, rowOffset, column, columnIndex)
 }
 
 const {
@@ -1292,6 +1380,7 @@ onBeforeUnmount(() => {
   clearPendingTouchLongPress()
   bodyTouchStart = null
   activeTouchSelectionHandleTouchId = null
+  activeTouchRangeMoveHandleTouchId = null
   suppressNextTouchClick = false
   suppressNextTouchContextMenu = false
   if (!coarsePointerQuery || !coarsePointerQueryListener) {
@@ -1350,6 +1439,7 @@ const cellRuntime = computed(() => ({
   isEditingCellSafe: isEditingCellSafeBase,
   isCellSelectedSafe,
   isTouchSelectionAnchorHandleCell,
+  isTouchRangeMoveHandleCell,
   isSelectionAnchorCellSafe,
   shouldHighlightSelectedCellVisual,
   isCellInFillPreviewSafe,
@@ -1381,6 +1471,10 @@ const cellRuntime = computed(() => ({
   handleTouchSelectionHandleTouchStart,
   handleTouchSelectionHandleTouchMove,
   handleTouchSelectionHandleTouchEnd,
+  handleTouchRangeMoveHandleMouseDown,
+  handleTouchRangeMoveHandleTouchStart,
+  handleTouchRangeMoveHandleTouchMove,
+  handleTouchRangeMoveHandleTouchEnd,
   handleFillHandleMouseDown,
   handleFillHandleDoubleClick,
   handleFillHandleTouchStart,

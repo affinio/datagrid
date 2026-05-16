@@ -8,7 +8,7 @@ Affino DataGrid already has strong desktop scroll foundations: scroll work is mo
 
 The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
-The remaining mobile/touch gap is now primarily interaction-model and validation work: touch selection needs a deliberate long-press/handle model, touch hit targets need expansion, server-backed fast-scroll blanking needs measurement, and Playwright/device performance gates are still missing.
+The remaining mobile/touch gap is now primarily validation and performance-hardening work: touch hit targets need expansion, server-backed fast-scroll blanking needs measurement, and Playwright/device performance gates are still missing.
 
 ## Implementation Status
 
@@ -30,8 +30,7 @@ Completed in Phase 1:
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
 Still open:
-- Long-press selection mode and explicit touch selection handles.
-- Lightweight cell rendering while scrolling for expensive custom renderers.
+- Larger resize/fill hit targets on touch.
 - Server-backed blank/loading viewport detection and prefetch tuning from real touch velocity.
 - Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
 
@@ -43,12 +42,17 @@ Phase 2 started:
 - Touch selection anchor affordance: selected anchor cells now render a touch-only handle when no fill handle is present; the handle isolates touchstart/move/end, down, click, and context-menu events from cell-body selection and reserves the UI affordance for explicit touch selection drag.
 - Explicit touch fill handle: fill handles now accept real touchstart/move/end on the handle itself and bridge those events into the existing fill drag mouse lifecycle, while touch-generated cell-body mousedown remains scroll-first.
 - Explicit touch selection handle drag bridge: touchstart on the selection anchor handle starts the existing selection-extension lifecycle with scroll-safe handle isolation; touchmove/touchend are forwarded through the existing global mouse lifecycle.
+- Explicit touch range-move handle drag bridge: touch mode now exposes a move-selection handle on the selected anchor cell and routes its touchstart/move/end through the existing range-move lifecycle instead of using cell-body touch drag.
+
+Phase 3 started:
+- Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
 
 ## Current Architecture Summary
 
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
+- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; the stage can request lightweight display-value rendering during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
 - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts` is a lower-level viewport controller path with rAF scroll sync, drift correction, heavy-update thresholds, and resize observer integration.
 - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts` plus `packages/datagrid-core/src/virtualization/dynamicOverscan.ts` provide adaptive vertical overscan in the core viewport path.
@@ -160,6 +164,7 @@ Current state:
 - Touch mode now exposes an event-isolated anchor handle affordance on selected cells that do not already show a fill handle; real touch events on the handle do not enter body long-press or cell-body selection paths, and drag semantics remain disabled until explicit touch handle behavior is implemented.
 - Fill drag can now start from the explicit fill handle with real touch events; touchmove/touchend are isolated to the handle and forwarded to the existing fill preview/finalization pipeline.
 - Touch selection drag now starts only from the explicit selection anchor handle; body-cell touch gestures still prioritize native scroll.
+- Touch range move now starts only from the explicit move-selection handle; the previous cell-body touch path remains disabled.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
@@ -280,15 +285,21 @@ Files/functions:
 - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollIdleGate.ts`
 - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollPerfTelemetry.ts`
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
+- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
 
 Problem:
 - The repo already has a scroll idle gate and scroll perf telemetry helper.
 - Search found no production integration of `useDataGridScrollIdleGate` in the app-stage scroll/render path.
 - This leaves non-critical effects with no central "defer until scroll idle" policy.
 
+Current state:
+- `DataGridTableStage.vue` already exposes body scroll-active state.
+- Touch/coarse scroll now uses that state to bypass authored cell/group renderer functions and render resolved display values while momentum scroll is active.
+- Desktop scrolling still uses authored renderer functions to avoid changing mouse/trackpad behavior.
+
 Recommended fix:
 - Add `isScrolling` and `scrollIdle` to the viewport runtime.
-- Use it to defer hover, focus restoration attempts, expensive overlay recalculation, and optional cell renderer work.
+- Use it to defer hover, focus restoration attempts, expensive overlay recalculation, and any future optional renderer work.
 
 #### 9. Fill, resize, and row resize hit targets are too small for touch
 
@@ -411,17 +422,17 @@ Gap:
 - In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
 - In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, and touch-only anchor affordances are visible where they do not conflict with fill handles.
-- In progress: start drag selection, fill, and range move only from explicit handles in touch mode; touch fill and selection drag now start from explicit handles, while touch range-move semantics are still pending.
+- Done for the current stage path: touch drag selection, fill, and range move start only from explicit handles.
 - Expand resize/fill hit targets for touch while preserving desktop visuals.
 - Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.
 
 ### Phase 3 - Scroll Performance Architecture
 
-- Add adaptive vertical overscan based on velocity in the app-stage path.
-- Add `isScrolling` and `scrollIdle` state to the stage viewport runtime.
-- Add lightweight cell rendering while scrolling for expensive custom renderers.
-- Minimize reactive writes during scroll events.
-- Consolidate header/body/pinned/canvas sync into one scroll-frame coordinator.
+- Done: add adaptive vertical overscan based on velocity in the app-stage path.
+- In progress: add `isScrolling` and `scrollIdle` state to the stage viewport runtime.
+- Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers.
+- In progress: minimize reactive writes during scroll events.
+- In progress: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator.
 - Improve server/data-source prefetch windows using real velocity and latency metrics.
 
 ### Phase 4 - Enterprise Validation

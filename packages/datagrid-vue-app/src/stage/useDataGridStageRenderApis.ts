@@ -50,6 +50,7 @@ export interface UseDataGridStageRenderApisOptions {
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
+  isTouchRangeMoveHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
   isSelectionAnchorCellSafe: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCellVisual: (rowOffset: number, columnIndex: number) => boolean
   isCellInFillPreviewSafe: (rowOffset: number, columnIndex: number) => boolean
@@ -99,6 +100,10 @@ export interface UseDataGridStageRenderApisOptions {
   handleTouchSelectionHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
   handleTouchSelectionHandleTouchMove: (event: TouchEvent) => void
   handleTouchSelectionHandleTouchEnd: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleMouseDown: (event: MouseEvent) => void
+  handleTouchRangeMoveHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchRangeMoveHandleTouchMove: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleTouchEnd: (event: TouchEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   handleFillHandleTouchStart: (event: TouchEvent) => void
@@ -194,9 +199,14 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleTouchSelectionHandleTouchStart: options.handleTouchSelectionHandleTouchStart,
     handleTouchSelectionHandleTouchMove: options.handleTouchSelectionHandleTouchMove,
     handleTouchSelectionHandleTouchEnd: options.handleTouchSelectionHandleTouchEnd,
+    handleTouchRangeMoveHandleMouseDown: options.handleTouchRangeMoveHandleMouseDown,
+    handleTouchRangeMoveHandleTouchStart: options.handleTouchRangeMoveHandleTouchStart,
+    handleTouchRangeMoveHandleTouchMove: options.handleTouchRangeMoveHandleTouchMove,
+    handleTouchRangeMoveHandleTouchEnd: options.handleTouchRangeMoveHandleTouchEnd,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
+    isTouchRangeMoveHandleCell: options.isTouchRangeMoveHandleCell,
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,
@@ -258,9 +268,14 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleTouchSelectionHandleTouchStart: options.handleTouchSelectionHandleTouchStart,
     handleTouchSelectionHandleTouchMove: options.handleTouchSelectionHandleTouchMove,
     handleTouchSelectionHandleTouchEnd: options.handleTouchSelectionHandleTouchEnd,
+    handleTouchRangeMoveHandleMouseDown: options.handleTouchRangeMoveHandleMouseDown,
+    handleTouchRangeMoveHandleTouchStart: options.handleTouchRangeMoveHandleTouchStart,
+    handleTouchRangeMoveHandleTouchMove: options.handleTouchRangeMoveHandleTouchMove,
+    handleTouchRangeMoveHandleTouchEnd: options.handleTouchRangeMoveHandleTouchEnd,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
     isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
+    isTouchRangeMoveHandleCell: options.isTouchRangeMoveHandleCell,
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,

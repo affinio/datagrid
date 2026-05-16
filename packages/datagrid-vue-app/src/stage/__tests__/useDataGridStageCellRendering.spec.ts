@@ -156,6 +156,28 @@ describe("useDataGridStageCellRendering", () => {
     expect(String(renderedCell)).toBe("cell:Planned")
     expect(cellRenderer).toHaveBeenCalled()
 
+    const lightweightRenderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+      preferLightweightCellRendering: ref(true),
+    })
+    cellRenderer.mockClear()
+    const lightweightRenderedCell = lightweightRenderApi.renderResolvedCellContent(dataRow, 0, {
+      ...selectColumn,
+      column: {
+        ...selectColumn.column,
+        cellRenderer,
+      },
+    }, 0)
+    expect(String(lightweightRenderedCell)).toBe("Planned")
+    expect(cellRenderer).not.toHaveBeenCalled()
+
     const renderedGroupCell = renderApi.renderResolvedCellContent(groupRow, 0, {
       ...selectColumn,
       column: {
