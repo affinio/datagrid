@@ -135,6 +135,10 @@ test.describe("sandbox touch scroll contracts", () => {
       scrollLeft: scrollState.left,
       hasScrollState: 1,
     })
+    const frameSample = await latestPerfSample(page, "stageScrollFrame")
+    expect(readNumericPerfField(frameSample, "totalMs")).toBeGreaterThanOrEqual(0)
+    expect(readNumericPerfField(frameSample, "totalMs")).toBeLessThanOrEqual(50)
+
     await expect.poll(async () => latestPerfSample(page, "stageScrollPerf")).toMatchObject({
       scope: "stageScrollPerf",
       frameCount: expect.any(Number),
@@ -143,6 +147,13 @@ test.describe("sandbox touch scroll contracts", () => {
       fps: expect.any(Number),
       quality: expect.any(String),
     })
+    const perfSample = await latestPerfSample(page, "stageScrollPerf")
+    const frameCount = readNumericPerfField(perfSample, "frameCount")
+    expect(frameCount).toBeGreaterThanOrEqual(0)
+    expect(readNumericPerfField(perfSample, "droppedFrames")).toBeLessThanOrEqual(frameCount)
+    expect(readNumericPerfField(perfSample, "longTaskFrames")).toBeLessThanOrEqual(frameCount)
+    expect(readNumericPerfField(perfSample, "fps")).toBeGreaterThanOrEqual(0)
+    expect(["unknown", "good", "degraded"]).toContain(perfSample?.quality)
   })
 
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
@@ -350,6 +361,13 @@ async function latestPerfSample(page: Page, scope: string): Promise<Record<strin
     }
     return null
   }, scope)
+}
+
+function readNumericPerfField(sample: Record<string, unknown> | null, field: string): number {
+  const value = sample?.[field]
+  expect(typeof value).toBe("number")
+  expect(Number.isFinite(value)).toBe(true)
+  return value as number
 }
 
 function firstEditableAmountCell(page: Page): Locator {

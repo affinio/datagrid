@@ -458,7 +458,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has a header/pinned sync gate, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry gates.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has a header/pinned sync gate, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry smoke gates.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
 - Next: convert scroll rAF budget, visible placeholder ratio, and accidental touch-drag coverage into CI regression gates with device-tuned thresholds.
@@ -481,7 +481,7 @@ Gap:
   - Done for `/vue/base-grid`: one-finger touch pan keeps the body viewport scroll-first and does not change selection.
   - Done for `/vue/base-grid`: body-cell touch drag does not start selection drag, fill, range move, resize, or preview overlays.
   - Done for `/vue/base-grid`: body scroll keeps header `scrollLeft` and pinned pane vertical transform synchronized.
-  - Done for `/vue/base-grid?dgPerfTrace=1`: touch scroll records `stageScrollFrame` and `stageScrollPerf` telemetry samples.
+  - Done for `/vue/base-grid?dgPerfTrace=1`: touch scroll records `stageScrollFrame` and `stageScrollPerf` telemetry samples and enforces non-device-specific smoke thresholds.
   - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
   - Done for `/vue/base-grid`: touch-generated double tap opens inline editing only when the viewport is idle, not while scroll-active.
   - Done for `/vue/base-grid`: touch fill drag starts from the explicit fill handle, renders fill preview, and does not scroll the body viewport.
@@ -497,8 +497,8 @@ Gap:
 ## Benchmarks / Performance Checks To Add
 
 - `scrollFrameBudget`: record per-scroll rAF total time, p95, max, dropped frame ratio.
-- `stageScrollFrame`: available behind `dgPerfTrace`; use it to gate stage rAF total time, pinned-bottom sync frequency, and chrome redraw mode mix.
-- `stageScrollPerf`: available behind `dgPerfTrace`; use it to gate FPS, dropped frames, and long-task frames during scroll-active windows.
+- `stageScrollFrame`: available behind `dgPerfTrace`; a Chromium smoke gate now enforces finite total time and should be tightened after device calibration.
+- `stageScrollPerf`: available behind `dgPerfTrace`; a Chromium smoke gate now enforces sane frame/drop/long-task counters and should be tightened after device calibration.
 - `visibleRowsSync`: record visible row sync time, changed row count, retained-range hits, and runtime sync time.
 - `blankViewport`: during fast scroll, assert visible row count covers viewport height and loading-placeholder ratio stays below a threshold.
 - `serverPrefetch`: measure time from viewport range request to data availability and placeholder exposure duration.
