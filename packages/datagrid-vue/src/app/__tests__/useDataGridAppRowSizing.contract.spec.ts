@@ -78,6 +78,28 @@ describe("useDataGridAppRowSizing contract", () => {
     expect(runtime.api.view.setRowHeightOverride).toHaveBeenCalledWith(0, 61)
   })
 
+  it("ignores touch-generated row resize mousedown events", () => {
+    const runtime = createRuntime()
+    const sizing = useDataGridAppRowSizing<DemoRow>({
+      mode: ref("base"),
+      rowHeightMode: ref("auto"),
+      normalizedBaseRowHeight: ref(31),
+      viewportRowStart: ref(0),
+      runtime: runtime as never,
+    })
+    const event = new MouseEvent("mousedown", { cancelable: true, clientY: 40 })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    sizing.startRowResize(event, createRow(), 0)
+    window.dispatchEvent(new MouseEvent("mousemove", { clientY: 70 }))
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(runtime.api.view.setRowHeightOverride).not.toHaveBeenCalled()
+  })
+
   it("measures the maximum visible height for a row across rendered lanes in auto mode", () => {
     const runtime = createRuntime()
     const viewport = document.createElement("div")

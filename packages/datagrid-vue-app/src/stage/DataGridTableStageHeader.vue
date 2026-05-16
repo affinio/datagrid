@@ -151,7 +151,7 @@
                     type="button"
                     class="col-resize"
                     aria-label="Resize column"
-                    @mousedown.stop.prevent="startResize($event, column.key)"
+                    @mousedown.stop="startResize($event, column.key)"
                     @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                     @click.stop
                   />
@@ -213,7 +213,7 @@
                   type="button"
                   class="col-resize"
                   aria-label="Resize column"
-                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @mousedown.stop="startResize($event, column.key)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -374,7 +374,7 @@
                   type="button"
                   class="col-resize"
                   aria-label="Resize column"
-                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @mousedown.stop="startResize($event, column.key)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -411,7 +411,7 @@
                 type="button"
                 class="col-resize"
                 aria-label="Resize column"
-                @mousedown.stop.prevent="startResize($event, column.key)"
+                @mousedown.stop="startResize($event, column.key)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -557,7 +557,7 @@
                   type="button"
                   class="col-resize"
                   aria-label="Resize column"
-                  @mousedown.stop.prevent="startResize($event, column.key)"
+                  @mousedown.stop="startResize($event, column.key)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -587,7 +587,7 @@
                 type="button"
                 class="col-resize"
                 aria-label="Resize column"
-                @mousedown.stop.prevent="startResize($event, column.key)"
+                @mousedown.stop="startResize($event, column.key)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -910,7 +910,18 @@ function sortIndicator(columnKey: string): string {
   return columns.value.sortIndicator(columnKey)
 }
 
+function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const sourceCapabilities = (event as MouseEvent & {
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  }).sourceCapabilities
+  return sourceCapabilities?.firesTouchEvents === true
+}
+
 function startResize(event: MouseEvent, columnKey: string): void {
+  if (isTouchGeneratedMouseEvent(event)) {
+    return
+  }
+  event.preventDefault()
   columns.value.startResize(event, columnKey)
 }
 

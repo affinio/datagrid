@@ -3,6 +3,13 @@ import type { DataGridRowNode } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowHeightMode } from "./useDataGridAppControls"
 
+function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const sourceCapabilities = (event as MouseEvent & {
+    sourceCapabilities?: { firesTouchEvents?: boolean }
+  }).sourceCapabilities
+  return sourceCapabilities?.firesTouchEvents === true
+}
+
 export interface UseDataGridAppRowSizingOptions<TRow> {
   mode: Ref<DataGridAppMode>
   rowHeightMode: Ref<DataGridAppRowHeightMode>
@@ -213,9 +220,10 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const startRowResize = (event: MouseEvent, _row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base") {
+    if (options.mode.value !== "base" || isTouchGeneratedMouseEvent(event)) {
       return
     }
+    event.preventDefault()
     suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
     const rowKey = String(rowIndex)
