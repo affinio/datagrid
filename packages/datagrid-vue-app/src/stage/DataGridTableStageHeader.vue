@@ -633,7 +633,7 @@ import {
   useDataGridTableStageSelectionSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
-import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
@@ -925,6 +925,9 @@ function startResize(event: MouseEvent, columnKey: string): void {
 }
 
 function handleResizeDoubleClick(event: MouseEvent, columnKey: string): void {
+  if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+    return
+  }
   columns.value.handleResizeDoubleClick(event, columnKey)
 }
 

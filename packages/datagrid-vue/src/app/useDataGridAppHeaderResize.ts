@@ -1,6 +1,7 @@
 import { type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridHeaderResizeOrchestration } from "../advanced"
+import { shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridAppHeaderResizeOptions<TRow> {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -74,6 +75,9 @@ export function useDataGridAppHeaderResize<TRow>(
   }
 
   const handleResizeDoubleClick = (event: MouseEvent, key: string): void => {
+    if (shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
+      return
+    }
     headerResize.onHeaderResizeHandleDoubleClick(key, event)
   }
 

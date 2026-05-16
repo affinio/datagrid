@@ -28,6 +28,13 @@ export function shouldPrioritizeNativeScrollForMouseDown(
   event: MouseEvent,
   input: DataGridInteractionModeInput = {},
 ): boolean {
+  return shouldPrioritizeNativeScrollForMouseEvent(event, input)
+}
+
+export function shouldPrioritizeNativeScrollForMouseEvent(
+  event: MouseEvent,
+  input: DataGridInteractionModeInput = {},
+): boolean {
   if (!isTouchGeneratedMouseEvent(event)) {
     return false
   }
