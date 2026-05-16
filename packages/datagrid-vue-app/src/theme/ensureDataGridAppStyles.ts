@@ -1263,7 +1263,6 @@ const DATA_GRID_APP_STYLES = `
     color: var(--datagrid-header-text-color) !important;
     background: var(--datagrid-header-cell-bg) !important;
     border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
-    border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   }
 
   .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,

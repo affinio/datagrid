@@ -17,6 +17,16 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain("display: none !important")
     expect(style?.textContent).toContain("border-right: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color)")
     expect(style?.textContent).toContain("background: var(--datagrid-row-background-color) !important")
+    const mediaStart = style?.textContent?.indexOf("@media (hover: none) and (pointer: coarse)") ?? -1
+    const coarseFallbackStart = style?.textContent?.indexOf(
+      ".grid-stage--canvas-chrome .grid-header-shell .grid-cell,",
+      mediaStart,
+    ) ?? -1
+    const coarseFallbackEnd = style?.textContent?.indexOf(".grid-stage--canvas-chrome .grid-row--hoverable", coarseFallbackStart) ?? -1
+    const headerFallbackRule = coarseFallbackStart >= 0 && coarseFallbackEnd > coarseFallbackStart
+      ? style?.textContent?.slice(coarseFallbackStart, coarseFallbackEnd)
+      : ""
+    expect(headerFallbackRule).not.toContain("border-bottom:")
   })
 
   it("keeps the grid viewport on native touch panning by default", () => {
