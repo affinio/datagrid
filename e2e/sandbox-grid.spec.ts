@@ -135,6 +135,21 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
   })
 
+  test("body scroll keeps dynamically pinned right pane synchronized", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const rightPaneContent = page.locator(".grid-stage:visible .grid-body-pane--right .grid-pane-content").first()
+    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    await expect(rightPaneContent).toBeVisible({ timeout: 20_000 })
+
+    const scrollState = await setViewportScroll(viewport, { top: 180, left: 120 })
+
+    await expect.poll(async () => inlineTransformY(rightPaneContent)).toBe(-scrollState.top)
+  })
+
   test("touch pan on pinned pane routes into the body viewport", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
