@@ -8,7 +8,7 @@ import type {
   DataGridTableStageLayoutSection,
   DataGridTableStageRowsSection,
 } from "./dataGridTableStage.types"
-import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStageRowIndexOptions {
   rows: Readonly<Ref<DataGridTableStageRowsSection<Record<string, unknown>>>>
@@ -175,7 +175,7 @@ export function useDataGridStageRowIndex(
   }
 
   function handleRowIndexDragStart(event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
-    if (!isRowIndexDraggable(row) || isTouchGeneratedMouseEvent(event)) {
+    if (!isRowIndexDraggable(row) || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
       clearRowIndexDragState()
       return
     }

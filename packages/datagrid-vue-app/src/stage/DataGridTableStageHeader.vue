@@ -633,7 +633,7 @@ import {
   useDataGridTableStageSelectionSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
-import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
@@ -917,7 +917,7 @@ function sortIndicator(columnKey: string): string {
 }
 
 function startResize(event: MouseEvent, columnKey: string): void {
-  if (isTouchGeneratedMouseEvent(event)) {
+  if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
     return
   }
   event.preventDefault()
@@ -985,7 +985,11 @@ function handleHeaderColumnClick(
 }
 
 function handleHeaderColumnDragStart(event: DragEvent, column: TableColumn): void {
-  if (!isHeaderColumnDraggable(column) || isHeaderDragBlockedFromTarget(event) || isTouchGeneratedMouseEvent(event)) {
+  if (
+    !isHeaderColumnDraggable(column)
+    || isHeaderDragBlockedFromTarget(event)
+    || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })
+  ) {
     clearHeaderColumnDragState()
     return
   }

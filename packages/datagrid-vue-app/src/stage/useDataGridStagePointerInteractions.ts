@@ -7,7 +7,7 @@ import type {
   DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
 } from "./dataGridTableStageBody.types"
-import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridStagePointerInteractionsOptions {
   mode: Readonly<Ref<DataGridTableMode>>
@@ -160,7 +160,7 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleFillHandleMouseDown(event: MouseEvent): void {
-    if (isTouchGeneratedMouseEvent(event)) {
+    if (shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
       return
     }
     event.preventDefault()
