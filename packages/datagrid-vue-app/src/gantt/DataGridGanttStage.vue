@@ -19,7 +19,7 @@
           ref="timelineHeaderViewportRef"
           class="datagrid-gantt-timeline__viewport datagrid-gantt-timeline__viewport--header"
           :style="timelineHeaderViewportStyle"
-          @scroll="handleTimelineHeaderScroll"
+          @scroll.passive="handleTimelineHeaderScroll"
           @wheel="handleTimelineWheel"
         >
           <div class="datagrid-gantt-timeline__track-spacer" :style="headerTrackStyle" />
@@ -40,7 +40,7 @@
           v-else
           ref="timelineBodyViewportRef"
           class="datagrid-gantt-timeline__viewport datagrid-gantt-timeline__viewport--body"
-          @scroll="handleTimelineBodyScroll"
+          @scroll.passive="handleTimelineBodyScroll"
           @wheel="handleTimelineWheel"
         >
           <div class="datagrid-gantt-timeline__track-spacer" :style="bodyTrackStyle" />

@@ -518,14 +518,14 @@ onMounted(() => {
   }
   if (typeof window !== "undefined") {
     window.addEventListener("resize", handleViewportChange)
-    window.addEventListener("scroll", handleViewportChange, true)
+    window.addEventListener("scroll", handleViewportChange, { capture: true, passive: true })
   }
 })
 
 onBeforeUnmount(() => {
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", handleViewportChange)
-    window.removeEventListener("scroll", handleViewportChange, true)
+    window.removeEventListener("scroll", handleViewportChange, { capture: true })
   }
 })
 </script>
