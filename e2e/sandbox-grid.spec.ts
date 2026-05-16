@@ -278,6 +278,25 @@ test.describe("sandbox touch scroll contracts", () => {
     expect(readNumericPerfField(idlePerfSample, "longTaskFrames")).toBeLessThanOrEqual(idleFrameCount)
   })
 
+  test("server data source stays below loading budget in touch mode after fast scroll", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await page.getByRole("button", { name: "Steady latency" }).click()
+    await expect.poll(async () => serverViewportLoadingRatio(page)).toBeLessThanOrEqual(0.05)
+
+    await runLongVerticalSession(viewport)
+
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await expect(page.locator(".grid-body-viewport .grid-cell[data-row-index]").nth(1)).toBeVisible()
+  })
+
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
