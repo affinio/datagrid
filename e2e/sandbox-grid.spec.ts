@@ -120,6 +120,25 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
   })
 
+  test("touch pan on pinned pane routes into the body viewport", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const pinnedPane = page.locator(".grid-body-pane--left").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaY: 180 })
+
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(true)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+  })
+
   test("touch scroll records stage scroll telemetry", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
@@ -420,6 +439,60 @@ async function dispatchTouchPan(page: Page, viewport: Locator, distanceY: number
   } finally {
     await session.detach()
   }
+}
+
+async function dispatchRoutedTouchPan(
+  target: Locator,
+  delta: { deltaX?: number; deltaY?: number },
+): Promise<{ startPrevented: boolean; movePrevented: boolean }> {
+  await target.scrollIntoViewIfNeeded()
+  return await target.evaluate((element, touchDelta) => {
+    const rect = element.getBoundingClientRect()
+    const startX = Math.round(rect.left + rect.width / 2)
+    const startY = Math.round(rect.top + Math.min(rect.height - 2, Math.max(2, rect.height / 2)))
+    const touchStart = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: startX,
+      clientY: startY,
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    const startEvent = new TouchEvent("touchstart", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touchStart],
+      targetTouches: [touchStart],
+      changedTouches: [touchStart],
+    })
+    const startPrevented = !element.dispatchEvent(startEvent)
+    const touchMove = new Touch({
+      identifier: 1,
+      target: element,
+      clientX: startX - (touchDelta.deltaX ?? 0),
+      clientY: startY - (touchDelta.deltaY ?? 0),
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    const moveEvent = new TouchEvent("touchmove", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touchMove],
+      targetTouches: [touchMove],
+      changedTouches: [touchMove],
+    })
+    const movePrevented = !element.dispatchEvent(moveEvent)
+    element.dispatchEvent(new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      targetTouches: [],
+      changedTouches: [touchMove],
+    }))
+    return { startPrevented, movePrevented }
+  }, delta)
 }
 
 async function dispatchLongPress(page: Page, target: Locator, durationMs: number): Promise<void> {
