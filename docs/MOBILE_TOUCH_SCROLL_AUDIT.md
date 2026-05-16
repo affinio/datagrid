@@ -32,7 +32,7 @@ Completed in Phase 1:
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
 Still open:
-- Real-device validation matrix: iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
+- Real-device validation execution: the matrix is documented below, but still needs runs on iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
 - Device-tuned CI thresholds for `stageScrollFrame`, `stageScrollPerf`, and server viewport loading ratio.
 - Server/data-source prefetch tuning from real touch velocity and backend latency traces.
 
@@ -59,7 +59,7 @@ Phase 3 status:
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
 - During active touch scroll, custom cell/group renderers are bypassed in favor of resolved display values to reduce render cost.
-- Remaining limits: no public `interactionMode` API yet, no committed real-device matrix yet, and CI thresholds for scroll-frame/scroll-quality telemetry still need device-calibrated budgets.
+- Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and CI thresholds for scroll-frame/scroll-quality telemetry still need device-calibrated budgets.
 
 ## Current Architecture Summary
 
@@ -458,7 +458,7 @@ Gap:
 
 ### Phase 4 - Enterprise Validation
 
-- Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
+- Done as a documented plan, execution pending: add mobile/tablet test matrix for iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, and mouse wheel.
 - In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, linked-surface routing, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, accidental selection prevention, and non-prevented body touchmove ownership, body-cell touch drag has an accidental-drag prevention gate, left/right pinned-pane and header-shell touch pan have body-viewport routing gates, horizontal header-shell touch pan has an X-scroll routing gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has header/pinned-left plus dynamically pinned-right sync gates, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry smoke gates.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
@@ -496,10 +496,25 @@ Gap:
   - Done for `/vue/base-grid`: touch column resize drag starts from the explicit resize handle, changes header width, and does not scroll the body viewport.
   - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
 - Manual device checks:
-  - iPad Safari and Chrome.
-  - Android Chrome.
-  - Windows tablet / Surface Edge.
-  - macOS precision trackpad.
+  - Execute the matrix below before claiming enterprise mobile readiness.
+  - Capture device/browser/OS, grid route, visible row count, renderer mix, network profile, and whether `dgPerfTrace=1` was enabled.
+  - Record failures with a short reproduction path and whether the issue is scroll ownership, blank/loading exposure, pinned/header sync, gesture affordance, or render latency.
+
+### Manual Mobile / Touch Device Matrix
+
+| Device / browser | Primary input | Routes | Required checks | Pass criteria |
+| --- | --- | --- | --- | --- |
+| iPadOS Safari | direct touch | `/vue/base-grid`, `/vue/server-data-source-grid` | one-finger vertical/horizontal body scroll, pinned-left/right pan routing, header pan routing, long press, double tap edit, fill/range/resize handles, fast server-backed scroll | Native momentum is preserved; body gestures are not stolen; no sustained blank/loading viewport; pinned/header layers stay aligned. |
+| iPadOS Chrome | direct touch | `/vue/base-grid`, `/vue/server-data-source-grid` | same as iPadOS Safari, with focus on browser-specific click/contextmenu synthesis | Same behavior as Safari, with no accidental selection/edit after scroll. |
+| Android Chrome tablet | direct touch | `/vue/base-grid`, `/vue/server-data-source-grid` | body scroll, linked-surface routing, explicit handles, fast fling, overscroll/chaining behavior | Smooth fling, no visible desync, no unexpected page scroll while interacting with the grid. |
+| Surface / Windows Edge | touch + pen + precision touchpad | `/vue/base-grid` | touch scroll, touchpad scroll over body/header/pinned surfaces, resize hit targets, double tap/click edit separation | Touch and touchpad both work over linked zones; resize remains reachable without stealing scroll. |
+| macOS Chrome/Safari | precision trackpad + mouse | `/vue/base-grid`, `/vue/server-data-source-grid` | regression pass for desktop wheel/trackpad scroll, header/body sync, pinned sync, editing and selection | Desktop behavior remains unchanged; trackpad momentum does not regress. |
+
+For each matrix run, collect:
+- `stageScrollFrame` p95/max total time from `dgPerfTrace=1`.
+- `stageScrollPerf` FPS, dropped-frame count, and long-task count.
+- Server-backed viewport loading/placeholder ratio during repeated fast flings.
+- A short screen recording when a failure is visual or gesture-related.
 
 ## Benchmarks / Performance Checks To Add
 
