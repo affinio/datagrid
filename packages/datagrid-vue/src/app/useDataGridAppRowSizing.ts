@@ -2,7 +2,7 @@ import { nextTick, ref, watch, type Ref } from "vue"
 import type { DataGridRowNode } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowHeightMode } from "./useDataGridAppControls"
-import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridAppRowSizingOptions<TRow> {
   mode: Ref<DataGridAppMode>
@@ -214,7 +214,7 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const startRowResize = (event: MouseEvent, _row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
+    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
       return
     }
     event.preventDefault()
@@ -233,9 +233,10 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const autosizeRow = (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base") {
+    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event, { interactionMode: "touch" })) {
       return
     }
+    event.preventDefault()
     suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (options.rowHeightMode.value === "auto") {
