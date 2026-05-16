@@ -120,7 +120,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
   })
 
-  test("touch scroll records stage scroll frame telemetry", async ({ page }) => {
+  test("touch scroll records stage scroll telemetry", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
 
@@ -129,11 +129,19 @@ test.describe("sandbox touch scroll contracts", () => {
 
     const scrollState = await setViewportScroll(viewport, { top: 220, left: 180 })
 
-    await expect.poll(async () => latestStageScrollFrameSample(page)).toMatchObject({
+    await expect.poll(async () => latestPerfSample(page, "stageScrollFrame")).toMatchObject({
       scope: "stageScrollFrame",
       scrollTop: scrollState.top,
       scrollLeft: scrollState.left,
       hasScrollState: 1,
+    })
+    await expect.poll(async () => latestPerfSample(page, "stageScrollPerf")).toMatchObject({
+      scope: "stageScrollPerf",
+      frameCount: expect.any(Number),
+      droppedFrames: expect.any(Number),
+      longTaskFrames: expect.any(Number),
+      fps: expect.any(Number),
+      quality: expect.any(String),
     })
   })
 
@@ -328,20 +336,20 @@ async function inlineTransformY(locator: Locator): Promise<number | null> {
   })
 }
 
-async function latestStageScrollFrameSample(page: Page): Promise<Record<string, unknown> | null> {
-  return await page.evaluate(() => {
+async function latestPerfSample(page: Page, scope: string): Promise<Record<string, unknown> | null> {
+  return await page.evaluate(sampleScope => {
     const store = (window as typeof window & {
       __AFFINO_DATAGRID_PERF__?: { samples?: Array<Record<string, unknown>> }
     }).__AFFINO_DATAGRID_PERF__
     const samples = store?.samples ?? []
     for (let index = samples.length - 1; index >= 0; index -= 1) {
       const sample = samples[index]
-      if (sample?.scope === "stageScrollFrame") {
+      if (sample?.scope === sampleScope) {
         return sample
       }
     }
     return null
-  })
+  }, scope)
 }
 
 function firstEditableAmountCell(page: Page): Locator {
