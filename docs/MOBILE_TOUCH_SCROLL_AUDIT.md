@@ -440,7 +440,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- Add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
@@ -458,7 +458,7 @@ Gap:
   - touch hit targets expand in coarse-pointer media mode.
   - header, pinned panes, and overlays remain aligned after vertical and horizontal scroll.
 - Playwright tests:
-  - one-finger touch scroll changes `scrollTop` without selection changes.
+  - Done for `/vue/base-grid`: one-finger touch pan keeps the body viewport scroll-first and does not change selection.
   - Done for `/vue/server-data-source-grid`: fast scroll settles below the viewport loading placeholder budget.
   - double tap edits only when not scrolling.
   - long press enters selection mode.

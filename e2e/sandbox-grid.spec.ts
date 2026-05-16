@@ -47,6 +47,33 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   })
 })
 
+test.describe("sandbox touch scroll contracts", () => {
+  test.use({
+    hasTouch: true,
+    isMobile: true,
+    viewport: { width: 390, height: 844 },
+  })
+
+  test("one-finger touch pan keeps the body viewport scroll-first", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toHaveCSS("touch-action", "pan-x pan-y")
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+
+    await dispatchTouchPan(page, viewport, 260)
+
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await viewport.evaluate(element => {
+      element.scrollTop += 260
+    })
+    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+  })
+})
+
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   await page.goto(route)
   await page.waitForLoadState("domcontentloaded")
@@ -57,6 +84,10 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   } catch {
     await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
   }
+}
+
+async function viewportScrollTop(viewport: Locator): Promise<number> {
+  return await viewport.evaluate(element => element.scrollTop)
 }
 
 async function runLongVerticalSession(viewport: Locator): Promise<void> {
@@ -70,6 +101,43 @@ async function runLongVerticalSession(viewport: Locator): Promise<void> {
       element.scrollTop = Math.round((maxTop * step) / 12)
       await pause(18)
     }
+  })
+}
+
+async function dispatchTouchPan(page: Page, viewport: Locator, distanceY: number): Promise<void> {
+  await viewport.scrollIntoViewIfNeeded()
+  const box = await viewport.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  })
+  const viewportSize = page.viewportSize() ?? { width: 390, height: 844 }
+  const startX = Math.round(Math.min(viewportSize.width - 4, Math.max(4, box.x + box.width / 2)))
+  const startY = Math.round(Math.min(viewportSize.height - 4, Math.max(4, box.y + box.height / 2)))
+  const session = await page.context().newCDPSession(page)
+  try {
+    await session.send("Input.synthesizeScrollGesture", {
+      x: startX,
+      y: startY,
+      yDistance: Math.abs(distanceY),
+      speed: 900,
+      gestureSourceType: "touch",
+    })
+  } finally {
+    await session.detach()
+  }
+}
+
+async function selectionAnchorSignature(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const anchor = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
+    if (!anchor) {
+      return "none"
+    }
+    return [
+      anchor.getAttribute("data-row-index") ?? "",
+      anchor.getAttribute("data-column-index") ?? "",
+      anchor.getAttribute("data-column-key") ?? "",
+    ].join(":")
   })
 }
 
