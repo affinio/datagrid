@@ -132,16 +132,44 @@ test.describe("sandbox touch scroll contracts", () => {
 
     const beforeTop = await viewportScrollTop(viewport)
     const fillHandle = anchorCell.locator(".cell-fill-handle")
-    const startPrevented = await dispatchTouchDragStart(fillHandle)
+    const touchDrag = await dispatchTouchDragStartAndMove(fillHandle, targetCell)
 
-    expect(startPrevented).toBe(true)
+    expect(touchDrag.startPrevented).toBe(true)
+    expect(touchDrag.movePrevented).toBe(true)
     await expect(stage).toHaveClass(/grid-stage--fill-dragging/)
-
-    expect(await dispatchTouchDragMove(fillHandle, targetCell)).toBe(true)
     await expect(page.locator(".grid-selection-overlay__segment--fill-preview").first()).toBeVisible()
 
-    expect(await dispatchTouchDragEnd(fillHandle, targetCell)).toBe(true)
+    await dispatchMouseUpAt(targetCell)
     await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
+  })
+
+  test("touch range move drag starts only from the explicit range move handle", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const anchorCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await dispatchLongPress(page, anchorCell, 650)
+
+    const rangeMoveHandle = anchorCell.locator(".grid-touch-range-move-handle")
+    await expect(rangeMoveHandle).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const touchDrag = await dispatchTouchDragStartAndMove(rangeMoveHandle, targetCell)
+
+    expect(touchDrag.startPrevented).toBe(true)
+    expect(touchDrag.movePrevented).toBe(true)
+    await expect(stage).toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview").first()).toBeVisible()
+
+    await dispatchMouseUpAt(targetCell)
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 })
@@ -285,11 +313,16 @@ async function dispatchTouchGeneratedDoubleClick(target: Locator): Promise<void>
   })
 }
 
-async function dispatchTouchDragStart(target: Locator): Promise<boolean> {
+async function dispatchTouchDragStartAndMove(
+  target: Locator,
+  moveTo: Locator,
+): Promise<{ startPrevented: boolean; movePrevented: boolean }> {
   await target.scrollIntoViewIfNeeded()
-  return await target.evaluate(element => {
+  await moveTo.scrollIntoViewIfNeeded()
+  const point = await elementCenter(moveTo)
+  return await target.evaluate((element, nextPoint) => {
     const rect = element.getBoundingClientRect()
-    const touch = new Touch({
+    const startTouch = new Touch({
       identifier: 1,
       target: element,
       clientX: Math.round(rect.left + rect.width / 2),
@@ -298,23 +331,15 @@ async function dispatchTouchDragStart(target: Locator): Promise<boolean> {
       radiusY: 6,
       force: 0.7,
     })
-    const event = new TouchEvent("touchstart", {
+    const startEvent = new TouchEvent("touchstart", {
       bubbles: true,
       cancelable: true,
-      touches: [touch],
-      targetTouches: [touch],
-      changedTouches: [touch],
+      touches: [startTouch],
+      targetTouches: [startTouch],
+      changedTouches: [startTouch],
     })
-    element.dispatchEvent(event)
-    return event.defaultPrevented
-  })
-}
-
-async function dispatchTouchDragMove(target: Locator, moveTo: Locator): Promise<boolean> {
-  await moveTo.scrollIntoViewIfNeeded()
-  const point = await elementCenter(moveTo)
-  return await target.evaluate((element, nextPoint) => {
-    const touch = new Touch({
+    element.dispatchEvent(startEvent)
+    const moveTouch = new Touch({
       identifier: 1,
       target: element,
       clientX: nextPoint.x,
@@ -323,40 +348,32 @@ async function dispatchTouchDragMove(target: Locator, moveTo: Locator): Promise<
       radiusY: 6,
       force: 0.7,
     })
-    const event = new TouchEvent("touchmove", {
+    const moveEvent = new TouchEvent("touchmove", {
       bubbles: true,
       cancelable: true,
-      touches: [touch],
-      targetTouches: [touch],
-      changedTouches: [touch],
+      touches: [moveTouch],
+      targetTouches: [moveTouch],
+      changedTouches: [moveTouch],
     })
-    element.dispatchEvent(event)
-    return event.defaultPrevented
+    element.dispatchEvent(moveEvent)
+    return {
+      startPrevented: startEvent.defaultPrevented,
+      movePrevented: moveEvent.defaultPrevented,
+    }
   }, point)
 }
 
-async function dispatchTouchDragEnd(target: Locator, endAt: Locator): Promise<boolean> {
+async function dispatchMouseUpAt(endAt: Locator): Promise<void> {
   await endAt.scrollIntoViewIfNeeded()
   const point = await elementCenter(endAt)
-  return await target.evaluate((element, nextPoint) => {
-    const touch = new Touch({
-      identifier: 1,
-      target: element,
-      clientX: nextPoint.x,
-      clientY: nextPoint.y,
-      radiusX: 6,
-      radiusY: 6,
-      force: 0.7,
-    })
-    const event = new TouchEvent("touchend", {
+  await endAt.evaluate((element, nextPoint) => {
+    window.dispatchEvent(new MouseEvent("mouseup", {
       bubbles: true,
       cancelable: true,
-      touches: [],
-      targetTouches: [],
-      changedTouches: [touch],
-    })
-    element.dispatchEvent(event)
-    return event.defaultPrevented
+      button: 0,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+    }))
   }, point)
 }
 
