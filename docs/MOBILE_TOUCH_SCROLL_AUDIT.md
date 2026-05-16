@@ -196,6 +196,7 @@ Problem:
 Current state:
 - `useDataGridStageViewportRuntime.ts` now batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-bottom `scrollLeft` sync is now only scheduled when the body `scrollLeft` actually changes, so vertical-only scroll frames avoid that extra sync call.
+- Stage body-scroll sampling now captures only `scrollTop` / `scrollLeft`; viewport dimensions stay on the resize/metrics path instead of being read during every scroll event.
 - Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
 - `useDataGridAppViewport.ts` now syncs header `scrollLeft` from the viewport rAF commit instead of writing it directly inside the body scroll event.
 
@@ -369,6 +370,7 @@ Gap:
 - Done: expand fill, row resize, and column resize hit targets for coarse pointers.
 - Done: move app viewport header `scrollLeft` synchronization out of the raw body scroll event and into the rAF viewport commit.
 - Done: skip pinned-bottom `scrollLeft` sync work for vertical-only body scroll frames.
+- Done: remove body viewport dimension reads from the stage raw scroll sampling path.
 - In progress: move remaining synchronous canvas/header/pinned scroll work behind rAF where safe.
 
 ### Phase 2 - Touch Interaction Model

@@ -201,4 +201,45 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.unmount()
   })
+
+  it("does not read body viewport dimensions during body scroll sampling", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const dimensionReads = {
+      clientWidth: 0,
+      clientHeight: 0,
+    }
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness()
+    const bodyViewport = createViewportElement({ scrollTop: 72, scrollLeft: 16 })
+    Object.defineProperty(bodyViewport, "clientWidth", {
+      configurable: true,
+      get() {
+        dimensionReads.clientWidth += 1
+        return 320
+      },
+    })
+    Object.defineProperty(bodyViewport, "clientHeight", {
+      configurable: true,
+      get() {
+        dimensionReads.clientHeight += 1
+        return 240
+      },
+    })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(harness.runtime.bodyViewportScrollTop.value).toBe(72)
+    expect(harness.runtime.bodyViewportScrollLeft.value).toBe(16)
+    expect(dimensionReads).toEqual({
+      clientWidth: 0,
+      clientHeight: 0,
+    })
+
+    harness.unmount()
+  })
 })

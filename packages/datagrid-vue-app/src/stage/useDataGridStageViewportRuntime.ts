@@ -45,8 +45,6 @@ export interface UseDataGridStageViewportRuntimeResult {
 interface BodyViewportScrollState {
   scrollTop: number
   scrollLeft: number
-  clientWidth: number
-  clientHeight: number
 }
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
@@ -144,8 +142,6 @@ export function useDataGridStageViewportRuntime(
     return {
       scrollTop: viewport.scrollTop,
       scrollLeft: viewport.scrollLeft,
-      clientWidth: viewport.clientWidth,
-      clientHeight: viewport.clientHeight,
     }
   }
 
@@ -161,12 +157,6 @@ export function useDataGridStageViewportRuntime(
     }
     if (bodyViewportScrollLeft.value !== state.scrollLeft) {
       bodyViewportScrollLeft.value = state.scrollLeft
-    }
-    if (bodyViewportClientWidth.value !== state.clientWidth) {
-      bodyViewportClientWidth.value = state.clientWidth
-    }
-    if (bodyViewportClientHeight.value !== state.clientHeight) {
-      bodyViewportClientHeight.value = state.clientHeight
     }
   }
 
