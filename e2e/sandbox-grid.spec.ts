@@ -154,6 +154,26 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("touch pan on right pinned pane routes into the body viewport", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const pinnedPane = page.locator(".grid-stage:visible .grid-body-pane--right").first()
+    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaY: 180 })
+
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(true)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+  })
+
   test("touch pan on header shell routes into the body viewport", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
@@ -366,7 +386,7 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   try {
     await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
   } catch {
-    await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-body-viewport.table-wrap:visible, .table-wrap:visible").first()).toBeVisible({ timeout: 20_000 })
   }
 }
 
@@ -433,6 +453,15 @@ async function latestPerfSample(page: Page, scope: string): Promise<Record<strin
     }
     return null
   }, scope)
+}
+
+async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
+  const menuButton = page.locator(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]:visible`).first()
+  await expect(menuButton).toBeVisible({ timeout: 20_000 })
+  await menuButton.click()
+  await page.locator('[data-datagrid-column-menu-action="pin-submenu"]').click()
+  await page.locator('[data-datagrid-column-menu-action="pin-right"]').click()
+  await expect(page.locator(`.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).first()).toBeVisible({ timeout: 20_000 })
 }
 
 function readNumericPerfField(sample: Record<string, unknown> | null, field: string): number {
