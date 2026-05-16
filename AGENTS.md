@@ -98,3 +98,26 @@ After implementation, return only:
 - Never mention files read, plan steps, or implementation details in commentary.
 - Do not provide status updates unless blocked or explicitly asked.
 - Use final response only for results.
+
+## Complexity control
+- Prefer extending existing systems over introducing parallel abstractions.
+- Avoid new managers/controllers/services unless existing ownership is clearly insufficient.
+- Prefer composition over orchestration sprawl.
+- Avoid speculative abstractions.
+
+## Performance discipline
+- Avoid reactive writes in hot scroll/pointer paths.
+- Avoid layout thrashing in scroll handlers.
+- Prefer requestAnimationFrame batching for viewport synchronization.
+- Preserve virtualization invariants.
+- Treat scroll-time work as latency-sensitive.
+
+## Interaction consistency
+- One interaction should have one owner.
+- Do not let scroll, selection, resize, fill, and drag compete for the same gesture.
+- Preserve desktop behavior unless touch/mobile behavior is explicitly targeted.
+
+## Predictability
+- Prefer explicit state transitions over implicit side effects.
+- Avoid hidden synchronization between subsystems.
+- Prefer observable data flow over convenience abstractions.

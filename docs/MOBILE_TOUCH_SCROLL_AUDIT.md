@@ -24,7 +24,6 @@ Completed in Phase 1:
 
 Still open:
 - Long-press selection mode and explicit touch selection handles.
-- Larger coarse-pointer hit targets for fill, row resize, and column resize.
 - Lightweight cell rendering while scrolling for expensive custom renderers.
 - Server-backed blank/loading viewport detection and prefetch tuning from real touch velocity.
 - Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
@@ -261,14 +260,17 @@ Files/functions:
 - `packages/datagrid-orchestration/src/fill/useDataGridFillHandleStart.ts`
 
 Problem:
-- Fill handle is 9px square.
-- Column resize target is 10px wide.
-- Row resize target is 10px high.
-- These are desktop-sized targets and do not meet tablet ergonomics.
+- Desktop fill handle is 9px square, column resize target is 10px wide, and row resize target is 10px high.
+- Those desktop-sized targets do not meet tablet ergonomics when reused unchanged.
+
+Current state:
+- Coarse-pointer CSS expands fill, row resize, and column resize hit targets to 28px.
+- Fill handle keeps the small visual marker through `::after` while exposing a larger invisible touch target.
+- Resize handles remain transparent and keep `touch-action: none` because they explicitly own drag gestures.
 
 Recommended fix:
-- Add coarse-pointer CSS to expand invisible hit targets to roughly 24px-32px while preserving visual size.
-- Keep `touch-action: none` only on these handles so drag gestures are explicit.
+- Verify hit target sizing on iPad/Android/Surface devices.
+- Keep `touch-action: none` limited to these explicit handles.
 
 #### 10. Managed wheel behavior is desktop-oriented and intentionally prevents default
 
@@ -357,6 +359,7 @@ Gap:
 - Done: add coarse-pointer detection.
 - Done: disable hover and range-edge hover on coarse pointers and while scrolling.
 - Done: add touch-specific and velocity-adaptive row overscan in `useDataGridAppViewport`.
+- Done: expand fill, row resize, and column resize hit targets for coarse pointers.
 - In progress: move remaining synchronous canvas/header/pinned scroll work behind rAF where safe.
 
 ### Phase 2 - Touch Interaction Model
@@ -432,13 +435,11 @@ Gap:
 1. Touch interaction model:
    - Add internal `interactionMode`.
    - Add long-press selection mode and explicit handle-only touch drag/fill/range/resize.
-2. Touch hit targets:
-   - Expand fill, row resize, and column resize hit areas for coarse pointers while preserving desktop visuals.
-3. Scroll-frame coordinator completion:
+2. Scroll-frame coordinator completion:
    - Move remaining header/pinned/canvas scroll sync into rAF batches where safe.
    - Keep the scroll event itself sampling-only.
-4. Enterprise validation:
+3. Enterprise validation:
    - Add Playwright touch tests, blank viewport detection, and scroll performance telemetry gates.
-5. Server-backed fast-scroll tuning:
+4. Server-backed fast-scroll tuning:
    - Measure placeholder exposure during fast touch scroll.
    - Tune velocity prefetch/cache windows from real device traces.

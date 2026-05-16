@@ -3374,20 +3374,35 @@ body.datagrid-fill-drag-cursor * {
 
 @media (hover: none) and (pointer: coarse) {
   .cell-fill-handle {
-    right: -8px;
-    bottom: -8px;
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
+    right: -14px;
+    bottom: -14px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+  }
+
+  .cell-fill-handle::after {
+    content: "";
+    position: absolute;
+    right: 9px;
+    bottom: 9px;
+    width: 9px;
+    height: 9px;
+    border: 1px solid var(--datagrid-selection-handle-border);
+    border-radius: 2px;
+    background: var(--datagrid-selection-handle-bg);
+    box-sizing: border-box;
   }
 
   .row-resize-handle {
-    height: 18px;
+    height: 28px;
   }
 
   .col-resize {
-    width: 18px;
-    min-width: 18px;
+    width: 28px;
+    min-width: 28px;
   }
 }
 
