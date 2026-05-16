@@ -93,7 +93,7 @@ export interface UseDataGridStageRenderApisOptions {
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
-  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number) => void
+  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   isSelectEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean

@@ -68,7 +68,7 @@ type CellRuntime = Readonly<Ref<{
   handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
   clearRangeMoveHandleHover: () => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
-  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number) => void
+  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   handleFillHandleMouseDown: (event: MouseEvent) => void
   handleFillHandleDoubleClick: (event: MouseEvent) => void
   shouldRenderCheckboxCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => boolean
@@ -99,7 +99,7 @@ type EditorRuntime = Readonly<Ref<{
     readDisplayCell: (row: DataGridTableStageBodyRow, columnKey: string) => string
   }>>
   editing: Readonly<Ref<DataGridTableStageEditingSection<Record<string, unknown>>>>
-  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number) => void
+  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   resolveCellEditorMode: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "none" | "text" | "select" | "date" | "datetime"
   resolveSelectEditorOptions: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]
   resolveSelectEditorOptionsLoader: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => DataGridTableStageSelectEditorOptionsLoader | undefined

@@ -40,7 +40,7 @@ export interface UseDataGridStageCellRenderingOptions {
 }
 
 export interface UseDataGridStageCellRenderingResult {
-  startInlineEditIfAllowed: (row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn, rowOffset: number) => void
+  startInlineEditIfAllowed: (row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
   resolveCellEditorMode: (row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn) => "none" | "text" | "select" | "date" | "datetime"
   resolveSelectEditorOptions: (row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]
   resolveSelectEditorOptionsLoader: (row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn) => DataGridTableStageSelectEditorOptionsLoader | undefined
@@ -353,7 +353,12 @@ export function useDataGridStageCellRendering(
       && resolveCellEditorMode(row, column) === "text"
   }
 
-  function startInlineEditIfAllowed(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn, rowOffset: number): void {
+  function startInlineEditIfAllowed(
+    row: DataGridTableRow<Record<string, unknown>>,
+    column: DataGridTableStageBodyColumn,
+    rowOffset: number,
+    event?: MouseEvent,
+  ): void {
     const columnIndex = options.columnIndexByKey(column.key)
     if (
       options.suppressInlineEditStart?.value === true
@@ -362,6 +367,7 @@ export function useDataGridStageCellRendering(
     ) {
       return
     }
+    event?.preventDefault()
     options.editing.value.startInlineEdit(
       row,
       column.key,

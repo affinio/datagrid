@@ -56,7 +56,7 @@
           @mousemove="renderApi.handleCellMouseMove($event, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
           @mouseleave="renderApi.clearRangeMoveHandleHover"
           @keydown.stop="renderApi.handleCellKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
-          @dblclick.stop.prevent="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset))"
+          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset), $event)"
         >
           <button
             v-if="mode === 'base' && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex) && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), columnIndex) && !renderApi.isEditingCellSafe(row, column.key)"

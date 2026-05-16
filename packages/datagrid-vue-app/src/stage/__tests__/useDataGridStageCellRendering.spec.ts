@@ -139,7 +139,9 @@ describe("useDataGridStageCellRendering", () => {
     expect(String(renderedGroupCell)).toBe("group:Planned")
     expect(groupRenderer).toHaveBeenCalled()
 
-    renderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0)
+    const inlineEditEvent = new MouseEvent("dblclick", { cancelable: true })
+    renderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0, inlineEditEvent)
+    expect(inlineEditEvent.defaultPrevented).toBe(true)
     expect(editing.value.startInlineEdit).toHaveBeenCalledWith(
       dataRow,
       "stage",
@@ -159,8 +161,10 @@ describe("useDataGridStageCellRendering", () => {
     })
     vi.mocked(editing.value.startInlineEdit).mockClear()
 
-    scrollingRenderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0)
+    const suppressedInlineEditEvent = new MouseEvent("dblclick", { cancelable: true })
+    scrollingRenderApi.startInlineEditIfAllowed(dataRow, selectColumn, 0, suppressedInlineEditEvent)
 
+    expect(suppressedInlineEditEvent.defaultPrevented).toBe(false)
     expect(editing.value.startInlineEdit).not.toHaveBeenCalled()
   })
 })
