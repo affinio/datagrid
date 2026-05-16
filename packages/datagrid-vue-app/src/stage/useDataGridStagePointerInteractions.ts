@@ -21,6 +21,7 @@ export interface UseDataGridStagePointerInteractionsOptions {
   displayRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
   viewportRowStart: Readonly<Ref<number>>
   fillActionMenuOpen: Ref<boolean>
+  isCoarsePointer?: Readonly<Ref<boolean>>
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isCellOnSelectionEdgeSafe: (rowOffset: number, columnIndex: number, edge: "top" | "right" | "bottom" | "left") => boolean
@@ -136,7 +137,11 @@ export function useDataGridStagePointerInteractions(
   }
 
   function handleCellMouseMove(event: MouseEvent, rowOffset: number, columnIndex: number): void {
-    if (options.selection.value?.isFillDragging || options.selection.value?.rangeMoveEnabled !== true) {
+    if (
+      options.isCoarsePointer?.value === true
+      || options.selection.value?.isFillDragging
+      || options.selection.value?.rangeMoveEnabled !== true
+    ) {
       clearRangeMoveHandleHover()
       return
     }

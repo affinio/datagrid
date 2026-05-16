@@ -1,4 +1,4 @@
-import { computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, type Ref } from "vue"
+import { computed, getCurrentInstance, onBeforeUnmount, onMounted, ref, shallowRef, type Ref } from "vue"
 import type {
   DataGridColumnSnapshot,
   DataGridRowId,
@@ -18,6 +18,8 @@ const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
 const DATA_GRID_PERF_SAMPLE_LIMIT = 400
 const DATA_GRID_HORIZONTAL_SCROLL_IDLE_MS = 120
 const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
+const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
+const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
 
 type DataGridPerfSample = {
   scope: string
@@ -339,9 +341,28 @@ export function useDataGridAppViewport<TRow>(
     }
     return effectiveColumnWidths.value[column.key] ?? resolveBaseColumnWidth(column)
   }
+  let coarsePointerQuery: MediaQueryList | null = null
+  let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
+
+  const resolveCoarsePointerMediaMatch = (): boolean => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false
+    }
+    return window.matchMedia("(hover: none) and (pointer: coarse)").matches
+  }
+  const isCoarsePointer = ref(resolveCoarsePointerMediaMatch())
+
   const rowOverscan = computed(() => {
     const value = options.rowOverscan == null ? 8 : resolveMaybeRef(options.rowOverscan)
-    return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 8
+    const baseOverscan = Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 8
+    if (!isCoarsePointer.value) {
+      return baseOverscan
+    }
+    return Math.max(
+      baseOverscan,
+      DATA_GRID_TOUCH_ROW_OVERSCAN_MIN,
+      Math.ceil(baseOverscan * DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER),
+    )
   })
   const columnOverscan = computed(() => {
     const value = options.columnOverscan == null ? 2 : resolveMaybeRef(options.columnOverscan)
@@ -1447,6 +1468,22 @@ export function useDataGridAppViewport<TRow>(
   // When this composable is used outside a component context (e.g. unit tests) the
   // cleanup is handled by the caller via cancelScheduledViewportSync().
   if (getCurrentInstance()) {
+    onMounted(() => {
+      if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+        return
+      }
+      coarsePointerQuery = window.matchMedia("(hover: none) and (pointer: coarse)")
+      isCoarsePointer.value = coarsePointerQuery.matches
+      coarsePointerQueryListener = event => {
+        isCoarsePointer.value = event.matches
+      }
+      if (typeof coarsePointerQuery.addEventListener === "function") {
+        coarsePointerQuery.addEventListener("change", coarsePointerQueryListener)
+      } else {
+        coarsePointerQuery.addListener(coarsePointerQueryListener)
+      }
+    })
+
     onBeforeUnmount(() => {
       if (viewportSyncRafHandle !== null) {
         cancelViewportAnimationFrame(viewportSyncRafHandle)
@@ -1456,6 +1493,15 @@ export function useDataGridAppViewport<TRow>(
       cachedViewportDimensions = null
       clearHorizontalScrollIdleTimer()
       horizontalScrollActive = false
+      if (coarsePointerQuery && coarsePointerQueryListener) {
+        if (typeof coarsePointerQuery.removeEventListener === "function") {
+          coarsePointerQuery.removeEventListener("change", coarsePointerQueryListener)
+        } else {
+          coarsePointerQuery.removeListener(coarsePointerQueryListener)
+        }
+      }
+      coarsePointerQuery = null
+      coarsePointerQueryListener = null
       unsubscribeStateImportViewportRestore?.()
     })
   }

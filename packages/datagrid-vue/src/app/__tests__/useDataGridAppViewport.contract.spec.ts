@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridViewportPositionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppViewport } from "../useDataGridAppViewport"
 
+const originalMatchMedia = window.matchMedia
+
 function createScrollEvent(target: HTMLElement): Event {
   return { target } as unknown as Event
 }
@@ -108,6 +110,23 @@ function createEventHarness() {
   }
 }
 
+function mockCoarsePointer(matches: boolean): void {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: query === "(hover: none) and (pointer: coarse)" ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Contract tests
 // ---------------------------------------------------------------------------
@@ -115,6 +134,11 @@ function createEventHarness() {
 describe("useDataGridAppViewport contract", () => {
   afterEach(() => {
     vi.useRealTimers()
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    })
   })
 
   it("falls back to snapshot widths when column overrides are empty", () => {
@@ -235,6 +259,42 @@ describe("useDataGridAppViewport contract", () => {
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
     expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 3, end: 7 })
+  })
+
+  it("uses larger row overscan on coarse pointers", () => {
+    mockCoarsePointer(true)
+
+    const raf = createRafHarness()
+    const syncRowsInRange = vi.fn(() => [])
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 200,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 36 })
   })
 
   it("incrementally shifts visible rows when the viewport range overlaps the previous frame", () => {

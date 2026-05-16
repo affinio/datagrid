@@ -92,4 +92,53 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(document.documentElement.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
     expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
   })
+
+  it("does not track range-move hover on coarse pointers", () => {
+    const row = { kind: "data", rowId: "r1", data: {}, state: { pinned: "none" } } as DataGridTableStageBodyRow
+    const column = createColumn("owner")
+    const cell = document.createElement("div")
+    cell.className = "grid-cell"
+    Object.defineProperty(cell, "getBoundingClientRect", {
+      value: () => ({
+        top: 0,
+        left: 0,
+        right: 100,
+        bottom: 100,
+        width: 100,
+        height: 100,
+      }),
+    })
+
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag: vi.fn(),
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref({
+        startRow: 0,
+        endRow: 0,
+        startColumn: 0,
+        endColumn: 0,
+      }),
+      visibleColumns: ref([column]),
+      displayRows: ref([row]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen: ref(false),
+      isCoarsePointer: ref(true),
+      isCellSelectedSafe: () => true,
+      isCellEditableSafe: () => true,
+      isCellOnSelectionEdgeSafe: () => true,
+    })
+
+    service.handleCellMouseMove({
+      currentTarget: cell,
+      clientX: 2,
+      clientY: 2,
+    } as MouseEvent, 0, 0)
+
+    expect(service.isRangeMoveHandleHoverCell(0, 0)).toBe(false)
+  })
 })

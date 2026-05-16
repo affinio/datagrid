@@ -9,6 +9,7 @@
       'grid-stage--layout-auto-height': layoutMode === 'auto-height',
       'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
+      'grid-stage--coarse-pointer': isCoarsePointer,
       'grid-stage--single-cell-selection': isSingleSelectedCell,
       'grid-stage--additive-selection': isAdditiveSelection,
     }"
@@ -149,7 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -526,6 +527,9 @@ const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const hoveredRowIndex = ref<number | null>(null)
+const isCoarsePointer = ref(false)
+let coarsePointerQuery: MediaQueryList | null = null
+let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
   syncBodyViewportMetrics: () => {},
   syncPinnedBottomViewportMetrics: () => {},
@@ -551,14 +555,14 @@ function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
 }
 
 function setHoveredRow(row: TableRow, rowOffset: number): void {
-  if (!rows.value.rowHover) {
+  if (!rows.value.rowHover || isCoarsePointer.value) {
     return
   }
   hoveredRowIndex.value = resolveAbsoluteRowIndex(row, rowOffset)
 }
 
 function isHoveredRow(row: TableRow, rowOffset: number): boolean {
-  return rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
+  return !isCoarsePointer.value && rows.value.rowHover === true && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
 }
 
 function isStripedRow(row: TableRow, rowOffset: number): boolean {
@@ -909,12 +913,53 @@ const {
   displayRows,
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   fillActionMenuOpen,
+  isCoarsePointer,
   isCellSelectedSafe,
   isCellEditableSafe,
   isCellOnSelectionEdgeSafe,
 })
 
 isRangeMoveHandleHoverCellBridge.value = isRangeMoveHandleHoverCellFromPointer
+
+function syncCoarsePointerState(): void {
+  isCoarsePointer.value = coarsePointerQuery?.matches === true
+}
+
+onMounted(() => {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return
+  }
+  coarsePointerQuery = window.matchMedia("(hover: none) and (pointer: coarse)")
+  coarsePointerQueryListener = event => {
+    isCoarsePointer.value = event.matches
+  }
+  syncCoarsePointerState()
+  if (typeof coarsePointerQuery.addEventListener === "function") {
+    coarsePointerQuery.addEventListener("change", coarsePointerQueryListener)
+  } else {
+    coarsePointerQuery.addListener(coarsePointerQueryListener)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (!coarsePointerQuery || !coarsePointerQueryListener) {
+    return
+  }
+  if (typeof coarsePointerQuery.removeEventListener === "function") {
+    coarsePointerQuery.removeEventListener("change", coarsePointerQueryListener)
+  } else {
+    coarsePointerQuery.removeListener(coarsePointerQueryListener)
+  }
+  coarsePointerQuery = null
+  coarsePointerQueryListener = null
+})
+
+watch(isCoarsePointer, coarse => {
+  if (coarse) {
+    clearHoveredRow()
+    clearRangeMoveHandleHover()
+  }
+})
 
 const rowRuntime = computed(() => ({
   rows,
