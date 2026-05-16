@@ -126,6 +126,7 @@ import type {
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
 } from "../stage/dataGridTableStage.types"
+import { isTouchGeneratedMouseEvent } from "../stage/dataGridMouseEventGuards"
 import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
@@ -3893,6 +3894,9 @@ export default defineComponent({
     })
 
     const handleViewportContextMenu = (event: MouseEvent): void => {
+      if (isTouchGeneratedMouseEvent(event)) {
+        return
+      }
       viewportContextRouter.dispatchViewportContextMenu(event)
     }
 

@@ -19,6 +19,7 @@ Completed in Phase 1:
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
 - Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
+- Touch long-press prep: touch-generated `contextmenu` events no longer open the desktop grid context menu, leaving long press available for the future touch selection model.
 - Prevent-default cleanup: row resize handle clicks stop row-index selection without unconditionally preventing the click default.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
@@ -142,6 +143,7 @@ Recommended fix:
 - Do not start drag selection or range move from touch unless the grid is already in touch selection mode, the user long-pressed, or the down occurred on an explicit handle.
 - Keep existing mouse behavior behind `pointerType === "mouse"` / desktop mode.
 - Keep touch single tap as selection/focus; use double tap, long press mode, or explicit editor controls for editing.
+- Do not route touch long press through the desktop context menu; reserve it for the future touch selection model.
 
 #### 3. Range move can start from the selected cell body, not only an explicit handle
 

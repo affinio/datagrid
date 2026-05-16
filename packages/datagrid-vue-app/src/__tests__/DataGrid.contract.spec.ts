@@ -2161,6 +2161,43 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("does not open the desktop context menu for touch-generated cell contextmenu events", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        cellMenu: {
+          items: ["clipboard", "edit"],
+        },
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r1"][data-column-key="owner"]')
+    expect(ownerCell.exists()).toBe(true)
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 120,
+      clientY: 48,
+    })
+    Object.defineProperty(event, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    ownerCell.element.dispatchEvent(event)
+    await flushRuntimeTasks()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(queryContextMenuRoot()).toBeNull()
+
+    wrapper.unmount()
+  })
+
   it("clears the targeted cell from declarative cellMenu", async () => {
     const wrapper = mount(DataGrid, {
       props: {
