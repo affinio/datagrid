@@ -197,6 +197,7 @@ import { useDataGridStageRenderApis } from "./useDataGridStageRenderApis.grouped
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
+import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 
 ensureDataGridAppStyles()
 
@@ -534,6 +535,7 @@ const isBodyViewportScrolling = ref(false)
 const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
+let teardownTouchPanGuard: (() => void) | null = null
 const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
   syncBodyViewportMetrics: () => {},
   syncPinnedBottomViewportMetrics: () => {},
@@ -938,7 +940,26 @@ function syncCoarsePointerState(): void {
   isCoarsePointer.value = coarsePointerQuery?.matches === true
 }
 
+function shouldRoutePinnedTouchPan(target: EventTarget | null): boolean {
+  const root = stageRootEl.value
+  if (!root || !(target instanceof Element) || !root.contains(target)) {
+    return false
+  }
+  if (bodyViewportEl.value?.contains(target)) {
+    return false
+  }
+  const pinnedPane = target.closest(".grid-body-pane")
+  return pinnedPane instanceof HTMLElement && root.contains(pinnedPane)
+}
+
 onMounted(() => {
+  if (stageRootEl.value) {
+    teardownTouchPanGuard = installDataGridTouchPanGuard({
+      root: stageRootEl.value,
+      resolveScrollContainers: () => [bodyViewportEl.value],
+      shouldHandleTarget: shouldRoutePinnedTouchPan,
+    })
+  }
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return
   }
@@ -955,6 +976,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  teardownTouchPanGuard?.()
+  teardownTouchPanGuard = null
   if (!coarsePointerQuery || !coarsePointerQueryListener) {
     return
   }

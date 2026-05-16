@@ -23,6 +23,7 @@ export interface ResolveDataGridTouchPanAxisInput {
 export interface InstallDataGridTouchPanGuardOptions {
   root: HTMLElement
   resolveScrollContainers: () => readonly (HTMLElement | null | undefined)[]
+  shouldHandleTarget?: (target: EventTarget | null) => boolean
 }
 
 function clampScroll(value: number, maxScroll: number): number {
@@ -57,6 +58,7 @@ export function installDataGridTouchPanGuard(
   options: InstallDataGridTouchPanGuardOptions,
 ): () => void {
   let activeGesture: ActiveTouchGesture | null = null
+  let touchMoveListening = false
 
   const resolveContainers = (): HTMLElement[] => {
     return options.resolveScrollContainers().filter((value): value is HTMLElement => value instanceof HTMLElement)
@@ -74,11 +76,32 @@ export function installDataGridTouchPanGuard(
     return resolveContainers()[0] ?? null
   }
 
+  const addTouchMoveListener = (): void => {
+    if (touchMoveListening) {
+      return
+    }
+    options.root.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false })
+    touchMoveListening = true
+  }
+
+  const removeTouchMoveListener = (): void => {
+    if (!touchMoveListening) {
+      return
+    }
+    options.root.removeEventListener("touchmove", handleTouchMove, true)
+    touchMoveListening = false
+  }
+
   const resetGesture = (): void => {
     activeGesture = null
+    removeTouchMoveListener()
   }
 
   const handleTouchStart = (event: TouchEvent): void => {
+    if (options.shouldHandleTarget && !options.shouldHandleTarget(event.target)) {
+      resetGesture()
+      return
+    }
     if (event.touches.length !== 1) {
       resetGesture()
       return
@@ -100,6 +123,7 @@ export function installDataGridTouchPanGuard(
     if (activeGesture.container) {
       activeGesture.startScrollLeft = activeGesture.container.scrollLeft
       activeGesture.startScrollTop = activeGesture.container.scrollTop
+      addTouchMoveListener()
     }
   }
 
@@ -148,13 +172,12 @@ export function installDataGridTouchPanGuard(
   }
 
   options.root.addEventListener("touchstart", handleTouchStart, { capture: true, passive: true })
-  options.root.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false })
   options.root.addEventListener("touchend", resetGesture, { capture: true, passive: true })
   options.root.addEventListener("touchcancel", resetGesture, { capture: true, passive: true })
 
   return () => {
+    removeTouchMoveListener()
     options.root.removeEventListener("touchstart", handleTouchStart, true)
-    options.root.removeEventListener("touchmove", handleTouchMove, true)
     options.root.removeEventListener("touchend", resetGesture, true)
     options.root.removeEventListener("touchcancel", resetGesture, true)
   }
