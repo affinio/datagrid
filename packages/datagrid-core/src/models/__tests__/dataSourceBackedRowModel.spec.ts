@@ -318,6 +318,12 @@ describe("createDataSourceBackedRowModel", () => {
       "loading",
       "loading",
     ])
+    expect(model.getSparseRowModelDiagnostics()).toMatchObject({
+      viewportRowCount: 5,
+      viewportLoadedRowCount: 2,
+      viewportLoadingRowCount: 3,
+      viewportLoadingRowRatio: 0.6,
+    })
 
     model.dispose()
   })

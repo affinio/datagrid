@@ -225,6 +225,10 @@ export interface DataGridSparseRowModelDiagnostics {
   viewportRange: DataGridViewportRange
   cachedRowCount?: number
   cacheLimit?: number
+  viewportRowCount?: number
+  viewportLoadedRowCount?: number
+  viewportLoadingRowCount?: number
+  viewportLoadingRowRatio?: number
 }
 
 export type DataGridRowModelRefreshReason =

@@ -30,7 +30,7 @@ Completed in Phase 1:
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
 Still open:
-- Server-backed blank/loading viewport detection and prefetch tuning from real touch velocity.
+- Server-backed Playwright blank/loading viewport gates and prefetch tuning from real touch velocity.
 - Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
 
 Phase 2 started:
@@ -251,9 +251,10 @@ Problem:
 
 Current state:
 - Core model coverage now asserts that scrolling into a resolved prefetch buffer returns real rows with no loading placeholders and schedules the next background prefetch before the edge.
+- `DataSourceBackedRowModel.getSparseRowModelDiagnostics()` now reports current viewport row count, loaded row count, loading placeholder count, and loading placeholder ratio so fast-scroll blanking can be measured without DOM heuristics.
 
 Recommended fix:
-- Add a blank/loading viewport budget and measure it in Playwright.
+- Add a Playwright blank/loading viewport budget using the sparse diagnostics loading ratio.
 - Tune velocity prefetch and cache windows using real tablet scroll traces.
 - Keep placeholders for correctness, but make the normal fast-scroll path prefetch enough rows that placeholders are rare.
 
@@ -434,13 +435,13 @@ Gap:
 - Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers.
 - In progress: minimize reactive writes during scroll events.
 - In progress: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator.
-- Improve server/data-source prefetch windows using real velocity and latency metrics.
+- In progress: improve server/data-source prefetch windows using real velocity and latency metrics; core sparse diagnostics now expose viewport loading ratio for measurement.
 
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
 - Add Playwright touch tests for native scroll, drag prevention, long press, fill handle, range move handle, and resize handles.
-- Add blank/loading viewport detection during fast scroll.
+- Add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Add scroll FPS and long-task monitoring.
 - Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
 
