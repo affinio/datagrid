@@ -25,6 +25,7 @@ Completed in Phase 1:
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
+- Scroll-frame telemetry: when `dgPerfTrace` is enabled, the stage records `stageScrollFrame` samples with total rAF work, scroll offsets, pinned-bottom sync, and chrome redraw mode.
 - Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
 - Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for linked pane sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
@@ -53,6 +54,7 @@ Phase 3 started:
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, exposes body scroll active/idle state, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
+- `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; the stage can request lightweight display-value rendering during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
 - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts` is a lower-level viewport controller path with rAF scroll sync, drift correction, heavy-update thresholds, and resize observer integration.
@@ -228,6 +230,7 @@ Current state:
 - Stage body-scroll sampling now captures only `scrollTop` / `scrollLeft`; viewport dimensions stay on the resize/metrics path instead of being read during every scroll event.
 - The raw body scroll handler now reads `scrollTop` and `scrollLeft` once per event and reuses the captured state for all stage scroll-frame decisions.
 - Grid chrome redraw mode is now queued by the body and pinned-bottom scroll handlers and flushed inside the stage scroll frame, so canvas draw work no longer starts from the raw scroll event.
+- Stage scroll-frame rAF work now emits `stageScrollFrame` perf samples when tracing is enabled, giving future CI/device gates a direct budget signal.
 - Window resize metric sync is now batched through `requestAnimationFrame`; resize events no longer call `syncBodyViewportMetrics()` directly.
 - Header scroll sync now captures header `scrollLeft` once per event and delegates body viewport commit into the existing stage scroll-frame path.
 - Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
@@ -481,6 +484,7 @@ Gap:
 ## Benchmarks / Performance Checks To Add
 
 - `scrollFrameBudget`: record per-scroll rAF total time, p95, max, dropped frame ratio.
+- `stageScrollFrame`: available behind `dgPerfTrace`; use it to gate stage rAF total time, pinned-bottom sync frequency, and chrome redraw mode mix.
 - `visibleRowsSync`: record visible row sync time, changed row count, retained-range hits, and runtime sync time.
 - `blankViewport`: during fast scroll, assert visible row count covers viewport height and loading-placeholder ratio stays below a threshold.
 - `serverPrefetch`: measure time from viewport range request to data availability and placeholder exposure duration.

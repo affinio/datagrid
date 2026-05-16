@@ -1,6 +1,11 @@
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
 import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll, useDataGridScrollIdleGate } from "@affino/datagrid-vue/advanced"
 import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
+import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+  resolveDataGridPerfTraceEnabled,
+} from "../perf/dataGridPerfTrace"
 
 const DATA_GRID_SCROLL_IDLE_MS = 120
 type GridChromeRedrawMode = "full" | "center-scroll"
@@ -21,6 +26,7 @@ export interface UseDataGridStageViewportRuntimeOptions {
   gridChromeSyncers: Readonly<Ref<UseDataGridStageViewportRuntimeSyncers>>
   leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
   rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
+  perfTraceEnabled?: boolean
 }
 
 export interface UseDataGridStageViewportRuntimeResult {
@@ -92,6 +98,7 @@ export function useDataGridStageViewportRuntime(
   let pendingGridChromeRedrawMode: GridChromeRedrawMode | null = null
   let observedBodyViewportScrollTop = 0
   let observedBodyViewportScrollLeft = 0
+  const perfTraceEnabled = options.perfTraceEnabled ?? resolveDataGridPerfTraceEnabled()
 
   const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
     resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
@@ -177,6 +184,7 @@ export function useDataGridStageViewportRuntime(
       return
     }
     bodyViewportScrollFrame = requestScrollFrame(() => {
+      const frameStartedAt = perfTraceEnabled ? resolveDataGridPerfNow() : 0
       bodyViewportScrollFrame = null
       const scrollState = pendingBodyViewportScrollState
       const shouldSyncPinnedBottomScrollLeft = pendingPinnedBottomViewportScrollLeftSync
@@ -192,6 +200,18 @@ export function useDataGridStageViewportRuntime(
       }
       if (chromeRedrawMode) {
         options.gridChromeSyncers.value.flushGridChromeRedraw(chromeRedrawMode)
+      }
+      if (perfTraceEnabled) {
+        recordDataGridPerfSample({
+          scope: "stageScrollFrame",
+          ts: Date.now(),
+          totalMs: resolveDataGridPerfNow() - frameStartedAt,
+          scrollTop: scrollState?.scrollTop ?? observedBodyViewportScrollTop,
+          scrollLeft: scrollState?.scrollLeft ?? observedBodyViewportScrollLeft,
+          hasScrollState: scrollState ? 1 : 0,
+          syncedPinnedBottomScrollLeft: shouldSyncPinnedBottomScrollLeft ? 1 : 0,
+          chromeRedrawMode: chromeRedrawMode ?? "none",
+        })
       }
     })
   }

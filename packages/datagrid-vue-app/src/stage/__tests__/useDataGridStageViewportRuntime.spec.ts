@@ -1,9 +1,10 @@
 import { defineComponent, ref, shallowRef } from "vue"
 import { mount } from "@vue/test-utils"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { UseDataGridStageViewportRuntimeResult, UseDataGridStageViewportRuntimeSyncers } from "../useDataGridStageViewportRuntime"
 import { useDataGridStageViewportRuntime } from "../useDataGridStageViewportRuntime"
 import type { DataGridTableStageViewportSection } from "../dataGridTableStage.types"
+import { DATA_GRID_PERF_STORE_KEY, resolveDataGridPerfStore } from "../../perf/dataGridPerfTrace"
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -26,6 +27,7 @@ function createViewportElement({ scrollTop = 0, scrollLeft = 0 } = {}): HTMLElem
 function createHarness(options: {
   leftPaneContent?: HTMLElement | null
   rightPaneContent?: HTMLElement | null
+  perfTraceEnabled?: boolean
 } = {}) {
   const viewport: DataGridTableStageViewportSection = {
     topSpacerHeight: 0,
@@ -60,6 +62,7 @@ function createHarness(options: {
         gridChromeSyncers: shallowRef(syncers),
         leftPaneContentRef: ref(options.leftPaneContent ?? null),
         rightPaneContentRef: ref(options.rightPaneContent ?? null),
+        perfTraceEnabled: options.perfTraceEnabled,
       })
       return () => null
     },
@@ -77,6 +80,10 @@ function createHarness(options: {
 }
 
 describe("useDataGridStageViewportRuntime", () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     globalThis.requestAnimationFrame = originalRequestAnimationFrame
@@ -189,6 +196,31 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(32)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
     expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full")
+
+    harness.unmount()
+  })
+
+  it("records stage scroll frame budget samples when perf tracing is enabled", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness({ perfTraceEnabled: true })
+    const bodyViewport = createViewportElement({ scrollTop: 96, scrollLeft: 24 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
+    expect(resolveDataGridPerfStore()?.latest("stageScrollFrame")).toMatchObject({
+      scope: "stageScrollFrame",
+      scrollTop: 96,
+      scrollLeft: 24,
+      hasScrollState: 1,
+      syncedPinnedBottomScrollLeft: 1,
+      chromeRedrawMode: "full",
+    })
 
     harness.unmount()
   })
