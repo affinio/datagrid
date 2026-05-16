@@ -4,12 +4,18 @@ import {
   shouldPrioritizeNativeScrollForMouseDown,
 } from "../dataGridMouseEventGuards"
 
-function createMouseDown({ firesTouchEvents = false } = {}): MouseEvent {
+function createMouseDown({ firesTouchEvents = false, pointerType }: { firesTouchEvents?: boolean; pointerType?: string } = {}): MouseEvent {
   const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true })
   Object.defineProperty(event, "sourceCapabilities", {
     configurable: true,
     value: { firesTouchEvents },
   })
+  if (pointerType) {
+    Object.defineProperty(event, "pointerType", {
+      configurable: true,
+      value: pointerType,
+    })
+  }
   return event
 }
 
@@ -31,5 +37,8 @@ describe("stage dataGridMouseEventGuards", () => {
     expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown(), {
       interactionMode: "touch",
     })).toBe(false)
+    expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown({ pointerType: "touch" }), {
+      interactionMode: "touch",
+    })).toBe(true)
   })
 })

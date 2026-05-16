@@ -6,6 +6,10 @@ export interface DataGridInteractionModeInput {
 }
 
 export function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
+  const pointerType = (event as MouseEvent & { pointerType?: string }).pointerType
+  if (pointerType === "touch") {
+    return true
+  }
   const sourceCapabilities = (event as MouseEvent & {
     sourceCapabilities?: { firesTouchEvents?: boolean }
   }).sourceCapabilities
