@@ -1643,7 +1643,12 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("redraws center chrome immediately during horizontal-only body scroll", () => {
+  it("schedules center chrome redraw during horizontal-only body scroll", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
     const canvasContextSpy = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
 
     const wrapper = mount(DataGridTableStage, {
@@ -1677,8 +1682,13 @@ describe("DataGridTableStage contract", () => {
 
     viewport.dispatchEvent(new Event("scroll"))
 
+    expect(canvasContextSpy).not.toHaveBeenCalled()
+
+    frameCallbacks.forEach(callback => callback(performance.now()))
+
     expect(canvasContextSpy).toHaveBeenCalled()
 
+    rafSpy.mockRestore()
     canvasContextSpy.mockRestore()
     wrapper.unmount()
   })
