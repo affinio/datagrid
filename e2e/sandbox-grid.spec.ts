@@ -265,6 +265,17 @@ test.describe("sandbox touch scroll contracts", () => {
     expect(readNumericPerfField(perfSample, "longTaskFrames")).toBeLessThanOrEqual(frameCount)
     expect(readNumericPerfField(perfSample, "fps")).toBeGreaterThanOrEqual(0)
     expect(["unknown", "good", "degraded"]).toContain(perfSample?.quality)
+
+    await expect.poll(async () => latestPerfSample(page, "stageScrollPerf"), {
+      timeout: 5_000,
+    }).toMatchObject({
+      scope: "stageScrollPerf",
+      active: 0,
+    })
+    const idlePerfSample = await latestPerfSample(page, "stageScrollPerf")
+    const idleFrameCount = readNumericPerfField(idlePerfSample, "frameCount")
+    expect(readNumericPerfField(idlePerfSample, "droppedFrames")).toBeLessThanOrEqual(idleFrameCount)
+    expect(readNumericPerfField(idlePerfSample, "longTaskFrames")).toBeLessThanOrEqual(idleFrameCount)
   })
 
   test("stationary long press selects a body cell without opening the context menu", async ({ page }) => {
