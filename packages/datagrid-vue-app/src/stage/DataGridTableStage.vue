@@ -45,7 +45,16 @@
       </template>
     </DataGridTableStageHeader>
 
-    <div ref="bodyShellRef" class="grid-body-shell" :style="[paneLayoutStyle, layout.bodyShellStyle]" @mouseleave="clearHoveredRow">
+    <div
+      ref="bodyShellRef"
+      class="grid-body-shell"
+      :style="[paneLayoutStyle, layout.bodyShellStyle]"
+      @mouseleave="clearHoveredRow"
+      @touchstart.passive="handleBodyTouchStart"
+      @touchmove.passive="handleBodyTouchMove"
+      @touchend.passive="handleBodyTouchEnd"
+      @touchcancel.passive="handleBodyTouchEnd"
+    >
       <canvas
         ref="centerChromeCanvasEl"
         class="grid-chrome-canvas grid-chrome-canvas--center-shell"
@@ -201,11 +210,15 @@ import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
 import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import {
+  isTouchGeneratedMouseEvent,
   resolveDataGridInteractionMode,
   shouldPrioritizeNativeScrollForMouseDown,
 } from "./dataGridMouseEventGuards"
 
 ensureDataGridAppStyles()
+
+const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
+const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 
 const props = defineProps({
   mode: {
@@ -432,6 +445,80 @@ function bodyCellSelectionStyle(
   return rowStateRuntime?.bodyCellSelectionStyle(row, column, rowOffset, columnIndex) ?? {}
 }
 
+function readTouchAt(touches: TouchList, identifier: number): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = typeof touches.item === "function" ? touches.item(index) : indexedTouches[index]
+    if (touch?.identifier === identifier) {
+      return touch
+    }
+  }
+  return null
+}
+
+function readFirstTouch(touches: TouchList): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  return (typeof touches.item === "function" ? touches.item(0) : indexedTouches[0]) ?? null
+}
+
+function clearTouchClickSuppressionTimer(): void {
+  if (suppressTouchClickTimer == null || typeof window === "undefined") {
+    suppressTouchClickTimer = null
+    return
+  }
+  window.clearTimeout(suppressTouchClickTimer)
+  suppressTouchClickTimer = null
+}
+
+function scheduleTouchClickSuppressionClear(): void {
+  if (typeof window === "undefined") {
+    return
+  }
+  clearTouchClickSuppressionTimer()
+  suppressTouchClickTimer = window.setTimeout(() => {
+    suppressNextTouchClick = false
+    suppressTouchClickTimer = null
+  }, TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS)
+}
+
+function handleBodyTouchStart(event: TouchEvent): void {
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  bodyTouchStart = touch
+    ? { identifier: touch.identifier, clientX: touch.clientX, clientY: touch.clientY }
+    : null
+}
+
+function handleBodyTouchMove(event: TouchEvent): void {
+  if (!bodyTouchStart) {
+    return
+  }
+  const touch = readTouchAt(event.touches, bodyTouchStart.identifier)
+  if (!touch) {
+    bodyTouchStart = null
+    return
+  }
+  const deltaX = Math.abs(touch.clientX - bodyTouchStart.clientX)
+  const deltaY = Math.abs(touch.clientY - bodyTouchStart.clientY)
+  if (Math.max(deltaX, deltaY) < TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX) {
+    return
+  }
+  suppressNextTouchClick = true
+  scheduleTouchClickSuppressionClear()
+}
+
+function handleBodyTouchEnd(): void {
+  bodyTouchStart = null
+}
+
+function consumeTouchPanClickSuppression(event: MouseEvent): boolean {
+  if (!suppressNextTouchClick || !isTouchGeneratedMouseEvent(event)) {
+    return false
+  }
+  suppressNextTouchClick = false
+  clearTouchClickSuppressionTimer()
+  return true
+}
+
 function handleBodyCellClick(
   event: MouseEvent,
   row: TableRow,
@@ -439,6 +526,9 @@ function handleBodyCellClick(
   column: TableColumn,
   columnIndex: number,
 ): void {
+  if (consumeTouchPanClickSuppression(event)) {
+    return
+  }
   rowStateRuntime?.handleBodyCellClick(event, row, rowOffset, column, columnIndex)
 }
 
@@ -550,6 +640,9 @@ const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBody
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 let teardownTouchPanGuard: (() => void) | null = null
+let bodyTouchStart: { identifier: number; clientX: number; clientY: number } | null = null
+let suppressNextTouchClick = false
+let suppressTouchClickTimer: number | null = null
 const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
   syncBodyViewportMetrics: () => {},
   syncPinnedBottomViewportMetrics: () => {},
@@ -993,6 +1086,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   teardownTouchPanGuard?.()
   teardownTouchPanGuard = null
+  clearTouchClickSuppressionTimer()
+  bodyTouchStart = null
+  suppressNextTouchClick = false
   if (!coarsePointerQuery || !coarsePointerQueryListener) {
     return
   }

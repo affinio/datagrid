@@ -1399,6 +1399,64 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("suppresses the next touch-generated cell click after body touch pan", () => {
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellClick,
+      }),
+      attachTo: document.body,
+    })
+    const shell = wrapper.find(".grid-body-shell").element as HTMLElement
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+    const touchClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(touchClick, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    shell.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 100 }))
+    shell.dispatchEvent(createTouchEvent("touchmove", { clientX: 100, clientY: 116 }))
+    shell.dispatchEvent(createTouchEvent("touchend", { clientX: 100, clientY: 116 }))
+    cell.dispatchEvent(touchClick)
+
+    expect(handleCellClick).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it("keeps stationary touch-generated cell clicks selectable", () => {
+    const handleCellClick = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        handleCellClick,
+      }),
+      attachTo: document.body,
+    })
+    const shell = wrapper.find(".grid-body-shell").element as HTMLElement
+    const cell = wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').element as HTMLElement
+    const touchClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperty(touchClick, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    shell.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 100 }))
+    shell.dispatchEvent(createTouchEvent("touchmove", { clientX: 103, clientY: 104 }))
+    shell.dispatchEvent(createTouchEvent("touchend", { clientX: 103, clientY: 104 }))
+    cell.dispatchEvent(touchClick)
+
+    expect(handleCellClick).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
   it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
     const handleCellClick = vi.fn()
     const startInlineEdit = vi.fn()

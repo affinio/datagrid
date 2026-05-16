@@ -38,6 +38,7 @@ Still open:
 Phase 2 started:
 - Internal interaction mode seam: `DataGridTableStage.vue` now derives `interactionMode: desktop | touch` from internal `auto` mode plus coarse-pointer state, and stage pointer/fill-handle interactions receive that mode input without exposing a public API.
 - Cell-body touch guard: `DataGridTableStage.vue` now checks the internal interaction mode before delegating cell mousedown into selection/range-move interaction state, so touch-generated mousedown keeps scroll priority while desktop mousedown still starts the existing selection path.
+- Touch pan click suppression: the body shell passively tracks touch movement and suppresses the next synthetic touch click after a pan, preventing accidental cell selection after one-finger scroll without canceling native scrolling.
 
 ## Current Architecture Summary
 
@@ -150,6 +151,7 @@ Current state:
 - Touch-generated single taps are guarded from opening select/date editors.
 - Touch-generated double-click/double-tap events still open inline edit, preserving a deliberate touch editing path while keeping one-finger scroll and single tap selection first.
 - Touch-generated cell-body mousedown is now filtered at the stage boundary before it reaches desktop selection/range-move logic; mouse/trackpad desktop mousedown still follows the existing path.
+- Touch movement beyond the pan threshold suppresses the next touch-generated cell click, while stationary taps still select/focus cells.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
