@@ -2,7 +2,7 @@ import { nextTick, ref, watch, type Ref } from "vue"
 import type { DataGridRowNode } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowHeightMode } from "./useDataGridAppControls"
-import { isTouchGeneratedMouseEvent } from "./dataGridMouseEventGuards"
+import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 
 export interface UseDataGridAppRowSizingOptions<TRow> {
   mode: Ref<DataGridAppMode>
@@ -214,7 +214,7 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   const startRowResize = (event: MouseEvent, _row: DataGridRowNode<TRow>, rowOffset: number): void => {
-    if (options.mode.value !== "base" || isTouchGeneratedMouseEvent(event)) {
+    if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseDown(event, { interactionMode: "touch" })) {
       return
     }
     event.preventDefault()
