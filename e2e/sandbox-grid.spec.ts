@@ -158,6 +158,25 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("horizontal touch pan on header shell routes into the body viewport", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const headerShell = page.locator(".grid-header-shell").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(headerShell).toBeVisible({ timeout: 20_000 })
+
+    const beforeLeft = await viewportScrollLeft(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(headerShell, { deltaX: 180 })
+
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(true)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(beforeLeft)
+  })
+
   test("touch scroll records stage scroll telemetry", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
