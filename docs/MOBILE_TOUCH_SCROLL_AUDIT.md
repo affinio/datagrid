@@ -8,7 +8,7 @@ Affino DataGrid already has strong desktop scroll foundations: scroll work is mo
 
 The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
-The remaining mobile/touch gap is now primarily validation and performance-hardening work: touch hit targets need expansion, server-backed fast-scroll blanking needs measurement, and Playwright/device performance gates are still missing.
+The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing, device-tuned CI thresholds, and server/data-source prefetch tuning from real velocity and latency traces.
 
 ## Implementation Status
 
@@ -32,10 +32,11 @@ Completed in Phase 1:
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
 Still open:
-- Server-backed Playwright blank/loading viewport gates and prefetch tuning from real touch velocity.
-- Playwright/device validation gates for touch scroll, blanking, FPS, and accidental drag prevention.
+- Real-device validation matrix: iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
+- Device-tuned CI thresholds for `stageScrollFrame`, `stageScrollPerf`, and server viewport loading ratio.
+- Server/data-source prefetch tuning from real touch velocity and backend latency traces.
 
-Phase 2 started:
+Phase 2 status:
 - Internal interaction mode seam: `DataGridTableStage.vue` now derives `interactionMode: desktop | touch` from internal `auto` mode plus coarse-pointer state, and stage pointer/fill-handle interactions receive that mode input without exposing a public API.
 - Cell-body touch guard: `DataGridTableStage.vue` now checks the internal interaction mode before delegating cell mousedown into selection/range-move interaction state, so touch-generated mousedown keeps scroll priority while desktop mousedown still starts the existing selection path.
 - Touch pan click suppression: the body shell passively tracks touch movement and suppresses the next synthetic touch click after a pan, preventing accidental cell selection after one-finger scroll without canceling native scrolling.
@@ -46,8 +47,18 @@ Phase 2 started:
 - Explicit touch range-move handle drag bridge: touch mode now exposes a move-selection handle on the selected anchor cell and routes its touchstart/move/end through the existing range-move lifecycle instead of using cell-body touch drag.
 - Touch hit targets: coarse-pointer mode expands fill, fill action, row resize, and column resize targets while preserving desktop marker visuals.
 
-Phase 3 started:
+Phase 3 status:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
+
+## Current Mobile Capability
+
+- One-finger body scrolling is native-first on the center viewport; linked pinned/header surfaces route scroll into the body viewport without claiming gestures that start inside the native scroll surface.
+- Single tap selects/focuses cells; stationary long press selects/focuses a body cell and suppresses the desktop context menu; movement before long press cancels selection intent.
+- Double tap can open inline editing when the viewport is idle; scroll-active double tap is suppressed.
+- Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
+- Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
+- During active touch scroll, custom cell/group renderers are bypassed in favor of resolved display values to reduce render cost.
+- Remaining limits: no public `interactionMode` API yet, no committed real-device matrix yet, and CI thresholds for scroll-frame/scroll-quality telemetry still need device-calibrated budgets.
 
 ## Current Architecture Summary
 
@@ -122,7 +133,7 @@ Phase 3 started:
 
 ### Blocker
 
-None found that makes desktop scrolling unusable or prevents incremental mobile improvements. The previous blocker-level mobile risk, non-native one-finger body scrolling, has been reduced by restoring native panning on the body viewport. The remaining blocker-level risk is validation: tablet/mobile fast-scroll behavior is not yet protected by Playwright or device performance gates.
+None found that makes desktop scrolling unusable or prevents incremental mobile improvements. The previous blocker-level mobile risk, non-native one-finger body scrolling, has been reduced by restoring native panning on the body viewport. The remaining blocker-level risk is release validation: Playwright coverage now protects the main touch contracts, but real tablet/mobile devices and CI performance thresholds are not finalized.
 
 ### High
 
@@ -144,7 +155,7 @@ Current state:
 Recommended fix:
 - Keep the current policy and verify on real devices.
 - Do not broaden the fallback touch guard to native body viewport gestures.
-- Add Playwright/device tests that assert body gestures are not prevented and pinned/header gestures scroll the body viewport.
+- Keep the current Playwright gates and verify the same behavior on real devices, especially pinned/header touch routing.
 
 #### 2. Touch gestures compete with cell selection and range move
 
@@ -252,7 +263,7 @@ Files/functions:
 Problem:
 - Data-source rows use placeholder loading row nodes when a requested row is not cached.
 - There is velocity-aware prefetch, cache diagnostics, and critical/background pull separation, which is good.
-- The behavior is not yet validated by browser/device gates against a "no visible blanking/loading during fast momentum scroll" target.
+- Deterministic fake-datasource Playwright coverage now protects the loading-placeholder budget, but real-device and real-latency traces are still needed before claiming a strict "no visible blanking/loading during fast momentum scroll" target.
 
 Current state:
 - Core model coverage now asserts that scrolling into a resolved prefetch buffer returns real rows with no loading placeholders and schedules the next background prefetch before the edge.
@@ -391,7 +402,7 @@ What is good:
 - There are existing virtualization, scroll, interaction, resize, wheel, and touch-pan unit/contract tests.
 
 Gap:
-- There is no enterprise-grade touch test matrix for native momentum, accidental drag prevention, blank viewport detection, and scroll FPS / long-task monitoring.
+- The repo now has focused Chromium Playwright gates for native scroll priority, accidental drag prevention, blank/loading viewport detection, and scroll telemetry. The remaining gap is broad device coverage and CI thresholds calibrated from real devices.
 
 ## Recommended Fixes
 
@@ -399,12 +410,12 @@ Gap:
 2. Keep JavaScript touch pan limited to linked non-scroll surfaces that need routing into the body viewport.
 3. Complete the internal interaction mode policy before exposing public API.
 4. Keep hover and range-edge hover suppressed while coarse pointer or scroll-active.
-5. Measure and tune touch/adaptive overscan in the Vue app-stage path.
+5. Tune touch/adaptive overscan using real device traces.
 6. Continue batching remaining header, pinned, and chrome sync into rAF scroll frames.
 7. Require explicit touch handles or long-press mode for selection drag, fill, range move, and resize.
 8. Continue moving non-critical decoration work onto the existing `isScrolling` / `scrollIdle` stage runtime hook.
-9. Add adaptive vertical overscan in `useDataGridAppViewport`.
-10. Add Playwright touch tests and performance gates before deeper architectural changes.
+9. Convert the current Playwright/perf telemetry coverage into CI regression gates with device-tuned budgets.
+10. Keep deeper architectural changes behind measured evidence from `stageScrollFrame`, `stageScrollPerf`, and loading-ratio traces.
 
 ## Phased Enterprise Roadmap
 
@@ -427,12 +438,12 @@ Gap:
 
 ### Phase 2 - Touch Interaction Model
 
-- In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
-- Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
-- In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, and touch-only anchor affordances are visible where they do not conflict with fill handles.
+- Done internally: introduce `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards without exposing a public API.
+- Done: make one-finger scroll highest priority in `touch` and coarse `auto` modes.
+- Done for the current stage path: add long-press selection prep; stationary long press now selects/focuses a cell without starting drag, movement cancels it, and touch-only anchor affordances are visible where they do not conflict with fill handles.
 - Done for the current stage path: touch drag selection, fill, and range move start only from explicit handles.
 - Done: expand resize/fill hit targets for touch while preserving desktop visuals.
-- Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.
+- Done for the current stage path: gesture cancellation rules prevent selection or drag when movement is dominantly scroll before long press.
 
 ### Phase 3 - Scroll Performance Architecture
 
@@ -440,8 +451,8 @@ Gap:
 - Done: add `isScrolling` and `scrollIdle` state to the stage viewport runtime, with a deferred idle callback hook.
 - Done: defer anchor focus restoration until body scroll idle and coalesce duplicate restore requests.
 - Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers.
-- In progress: minimize reactive writes during scroll events.
-- In progress: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator.
+- Mostly done for the stage path: minimize reactive writes during scroll events; keep final residual audits focused on newly added scroll work.
+- Mostly done for the stage path: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator; keep future work behind `stageScrollFrame` evidence.
 - In progress: improve server/data-source prefetch windows using real velocity and latency metrics; core sparse diagnostics now expose viewport loading ratio for measurement.
 
 ### Phase 4 - Enterprise Validation
@@ -450,7 +461,7 @@ Gap:
 - In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has a header/pinned sync gate, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry gates.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
-- Add regression gates for scroll rAF budget, visible placeholder rows during fast scroll, and accidental touch drag.
+- Next: convert scroll rAF budget, visible placeholder ratio, and accidental touch-drag coverage into CI regression gates with device-tuned thresholds.
 
 ## Test Plan
 
@@ -506,13 +517,13 @@ Gap:
 ## Prioritized Implementation Plan
 
 1. Touch interaction model:
-   - Add internal `interactionMode`.
-   - Add long-press selection mode and explicit handle-only touch drag/fill/range/resize.
+   - Keep `interactionMode` internal until naming and behavior are validated on real devices.
+   - Validate long-press selection and explicit handle-only touch drag/fill/range/resize on device matrix.
 2. Scroll-frame coordinator completion:
-   - Move remaining header/pinned/canvas scroll sync into rAF batches where safe.
-   - Keep the scroll event itself sampling-only.
+   - Audit newly added scroll work against the sampling-only rule.
+   - Use `stageScrollFrame` to justify any additional coordinator changes.
 3. Enterprise validation:
-   - Add Playwright touch tests, blank viewport detection, and scroll performance telemetry gates.
+   - Convert Playwright touch tests, blank viewport detection, and scroll performance telemetry into CI gates.
 4. Server-backed fast-scroll tuning:
-   - Measure placeholder exposure during fast touch scroll.
+   - Measure placeholder exposure during fast touch scroll on real devices and realistic latency.
    - Tune velocity prefetch/cache windows from real device traces.
