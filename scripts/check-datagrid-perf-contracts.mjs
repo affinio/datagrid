@@ -146,12 +146,12 @@ registerFileCheck(
 )
 registerFileCheck(
   "perf-gates-doc",
-  "docs/datagrid-performance-gates.md",
+  "docs/perf/datagrid-performance-gates.md",
   "Performance gates documentation",
 )
 registerFileCheck(
   "perf-runtime-doc",
-  "docs/datagrid-perf-by-design-runtime.md",
+  "docs/perf/datagrid-perf-by-design-runtime.md",
   "Perf-by-design runtime contracts documentation",
 )
 registerFileCheck(

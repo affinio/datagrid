@@ -11,7 +11,7 @@ const targetScore = Number.parseFloat(process.env.DATAGRID_ARCH_ACCEPTANCE_TARGE
 const checks = []
 const DOC_PATH_FALLBACKS = {
   "docs/datagrid-ag-architecture-acceptance-checklist.md":
-    "docs/archive/datagrid/checklists/datagrid-ag-architecture-acceptance-checklist.md",
+    "docs/internal/checklists/datagrid-ag-architecture-acceptance-checklist.md",
 }
 
 function registerFileCheck(id, file, description) {
