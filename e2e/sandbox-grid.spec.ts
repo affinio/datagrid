@@ -208,6 +208,26 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
   })
 
+  test("horizontal touch pan on right pinned pane routes into the body viewport", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const pinnedPane = page.locator(".grid-stage:visible .grid-body-pane--right").first()
+    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
+
+    const beforeLeft = await viewportScrollLeft(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaX: 180 })
+
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(true)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(beforeLeft)
+  })
+
   test("touch pan on header shell routes into the body viewport", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
