@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
-import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll } from "@affino/datagrid-vue/advanced"
+import { useDataGridLinkedPaneScrollSync, useDataGridManagedWheelScroll, useDataGridScrollIdleGate } from "@affino/datagrid-vue/advanced"
 import type { DataGridTableStageViewportSection } from "./dataGridTableStage.types"
 
 const DATA_GRID_SCROLL_IDLE_MS = 120
@@ -35,6 +35,8 @@ export interface UseDataGridStageViewportRuntimeResult {
   headerShellHeight: Ref<number>
   headerViewportClientWidth: Ref<number>
   isBodyViewportScrolling: Ref<boolean>
+  isBodyViewportScrollIdle: Ref<boolean>
+  runWhenBodyViewportScrollIdle: (callback: () => void) => void
   captureBodyViewportRef: (value: Element | ComponentPublicInstance | null) => void
   capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
   handleCenterViewportScroll: (event: Event) => void
@@ -81,7 +83,8 @@ export function useDataGridStageViewportRuntime(
   const pinnedBottomViewportClientHeight = ref(0)
   const bodyViewportTopOffset = ref(0)
   const isBodyViewportScrolling = ref(false)
-  let bodyViewportScrollIdleTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+  const isBodyViewportScrollIdle = ref(true)
+  let bodyViewportScrollIdleCallbackQueued = false
   let bodyViewportScrollFrame: number | null = null
   let bodyViewportMetricsFrame: number | null = null
   let pendingBodyViewportScrollState: BodyViewportScrollState | null = null
@@ -94,6 +97,16 @@ export function useDataGridStageViewportRuntime(
     resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
     mode: "direct-transform",
     resolvePaneElements: () => [options.leftPaneContentRef.value, options.rightPaneContentRef.value],
+  })
+
+  const bodyViewportScrollIdleGate = useDataGridScrollIdleGate({
+    resolveIdleDelayMs: () => DATA_GRID_SCROLL_IDLE_MS,
+    setTimeout: (callback, delay) => {
+      const handle = globalThis.setTimeout(callback, delay)
+      const maybeNodeTimer = handle as { unref?: () => void }
+      maybeNodeTimer.unref?.()
+      return handle
+    },
   })
 
   const managedWheelScroll = useDataGridManagedWheelScroll({
@@ -121,14 +134,6 @@ export function useDataGridStageViewportRuntime(
       options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
     },
   })
-
-  function clearBodyViewportScrollIdleTimer(): void {
-    if (bodyViewportScrollIdleTimer == null) {
-      return
-    }
-    globalThis.clearTimeout(bodyViewportScrollIdleTimer)
-    bodyViewportScrollIdleTimer = null
-  }
 
   function requestScrollFrame(callback: FrameRequestCallback): number {
     if (typeof globalThis.requestAnimationFrame === "function") {
@@ -242,13 +247,23 @@ export function useDataGridStageViewportRuntime(
     if (!isBodyViewportScrolling.value) {
       isBodyViewportScrolling.value = true
     }
-    clearBodyViewportScrollIdleTimer()
-    bodyViewportScrollIdleTimer = globalThis.setTimeout(() => {
-      bodyViewportScrollIdleTimer = null
+    if (isBodyViewportScrollIdle.value) {
+      isBodyViewportScrollIdle.value = false
+    }
+    bodyViewportScrollIdleGate.markScrollActivity()
+    if (bodyViewportScrollIdleCallbackQueued) {
+      return
+    }
+    bodyViewportScrollIdleCallbackQueued = true
+    bodyViewportScrollIdleGate.runWhenScrollIdle(() => {
+      bodyViewportScrollIdleCallbackQueued = false
       isBodyViewportScrolling.value = false
-    }, DATA_GRID_SCROLL_IDLE_MS)
-    const maybeNodeTimer = bodyViewportScrollIdleTimer as { unref?: () => void }
-    maybeNodeTimer.unref?.()
+      isBodyViewportScrollIdle.value = true
+    })
+  }
+
+  function runWhenBodyViewportScrollIdle(callback: () => void): void {
+    bodyViewportScrollIdleGate.runWhenScrollIdle(callback)
   }
 
   function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
@@ -322,10 +337,12 @@ export function useDataGridStageViewportRuntime(
   onBeforeUnmount(() => {
     linkedPaneScrollSync.reset()
     managedWheelScroll.reset()
-    clearBodyViewportScrollIdleTimer()
+    bodyViewportScrollIdleGate.dispose()
+    bodyViewportScrollIdleCallbackQueued = false
     cancelBodyViewportScrollFrame()
     cancelBodyViewportMetricsFrame()
     isBodyViewportScrolling.value = false
+    isBodyViewportScrollIdle.value = true
     options.gridChromeSyncers.value.disconnectGridChromeResizeObserver()
     if (typeof window !== "undefined") {
       window.removeEventListener("resize", scheduleBodyViewportMetricsSync)
@@ -344,6 +361,8 @@ export function useDataGridStageViewportRuntime(
     headerShellHeight,
     headerViewportClientWidth,
     isBodyViewportScrolling,
+    isBodyViewportScrollIdle,
+    runWhenBodyViewportScrollIdle,
     captureBodyViewportRef,
     capturePinnedBottomViewportRef,
     handleCenterViewportScroll,

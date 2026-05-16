@@ -193,6 +193,37 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("exposes body scroll active and idle state with deferred idle callbacks", () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    const bodyViewport = createViewportElement({ scrollTop: 72 })
+    const onIdle = vi.fn()
+
+    expect(harness.runtime.isBodyViewportScrolling.value).toBe(false)
+    expect(harness.runtime.isBodyViewportScrollIdle.value).toBe(true)
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    harness.runtime.runWhenBodyViewportScrollIdle(onIdle)
+
+    expect(harness.runtime.isBodyViewportScrolling.value).toBe(true)
+    expect(harness.runtime.isBodyViewportScrollIdle.value).toBe(false)
+    expect(onIdle).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(119)
+
+    expect(harness.runtime.isBodyViewportScrolling.value).toBe(true)
+    expect(harness.runtime.isBodyViewportScrollIdle.value).toBe(false)
+    expect(onIdle).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+
+    expect(harness.runtime.isBodyViewportScrolling.value).toBe(false)
+    expect(harness.runtime.isBodyViewportScrollIdle.value).toBe(true)
+    expect(onIdle).toHaveBeenCalledTimes(1)
+
+    harness.unmount()
+  })
+
   it("does not sync pinned bottom scrollLeft for vertical-only body scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
