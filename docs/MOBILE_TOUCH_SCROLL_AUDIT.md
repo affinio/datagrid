@@ -53,7 +53,7 @@ Phase 3 status:
 ## Current Mobile Capability
 
 - One-finger body scrolling is native-first on the center viewport; linked pinned/header surfaces route scroll into the body viewport without claiming gestures that start inside the native scroll surface.
-- Pinned-pane touch pan is covered by Playwright and routes into the body viewport, matching the touchpad behavior users expect on pinned zones.
+- Pinned-pane and header-shell touch pan are covered by Playwright and route into the body viewport, matching the touchpad behavior users expect on linked zones.
 - Single tap selects/focuses cells; stationary long press selects/focuses a body cell and suppresses the desktop context menu; movement before long press cancels selection intent.
 - Double tap can open inline editing when the viewport is idle; scroll-active double tap is suppressed.
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
@@ -156,7 +156,7 @@ Current state:
 Recommended fix:
 - Keep the current policy and verify on real devices.
 - Do not broaden the fallback touch guard to native body viewport gestures.
-- Keep the current Playwright gates and verify the same behavior on real devices, especially header touch routing and pinned-pane momentum feel.
+- Keep the current Playwright gates and verify the same behavior on real devices, especially header/pinned momentum feel.
 
 #### 2. Touch gestures compete with cell selection and range move
 
@@ -459,7 +459,7 @@ Gap:
 ### Phase 4 - Enterprise Validation
 
 - Add mobile/tablet test matrix: iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, mouse wheel.
-- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, pinned-pane routing, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, pinned-pane touch pan has a body-viewport routing gate, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has a header/pinned sync gate, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry smoke gates.
+- In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, linked-surface routing, and perf telemetry; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, and accidental selection prevention, body-cell touch drag has an accidental-drag prevention gate, pinned-pane and header-shell touch pan have body-viewport routing gates, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, body scroll now has a header/pinned sync gate, and `dgPerfTrace=1` now has stage scroll-frame plus scroll-quality telemetry smoke gates.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
 - Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
 - Next: convert scroll rAF budget, visible placeholder ratio, and accidental touch-drag coverage into CI regression gates with device-tuned thresholds.
@@ -483,6 +483,7 @@ Gap:
   - Done for `/vue/base-grid`: body-cell touch drag does not start selection drag, fill, range move, resize, or preview overlays.
   - Done for `/vue/base-grid`: body scroll keeps header `scrollLeft` and pinned pane vertical transform synchronized.
   - Done for `/vue/base-grid`: touch pan that starts on the pinned-left pane routes into the body viewport without changing selection.
+  - Done for `/vue/base-grid`: touch pan that starts on the header shell routes into the body viewport without changing selection.
   - Done for `/vue/base-grid?dgPerfTrace=1`: touch scroll records `stageScrollFrame` and `stageScrollPerf` telemetry samples and enforces non-device-specific smoke thresholds.
   - Done for `/vue/base-grid`: stationary long press selects/focuses a body cell and suppresses the desktop context menu.
   - Done for `/vue/base-grid`: touch-generated double tap opens inline editing only when the viewport is idle, not while scroll-active.
