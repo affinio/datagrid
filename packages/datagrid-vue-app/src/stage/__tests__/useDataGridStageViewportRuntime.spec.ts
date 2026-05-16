@@ -144,7 +144,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("batches linked pinned pane transforms through requestAnimationFrame during body scroll", () => {
+  it("syncs linked pinned pane transforms during raw body scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
@@ -161,12 +161,7 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
-    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(2)
-    expect(leftPane.style.transform).toBe("")
-    expect(rightPane.style.transform).toBe("")
-
-    frameCallbacks[0]?.(performance.now())
-
+    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
     expect(leftPane.style.transform).toBe("translate3d(0, -120px, 0)")
     expect(rightPane.style.transform).toBe("translate3d(0, -120px, 0)")
 
@@ -185,12 +180,12 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
-    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(2)
+    expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(0)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(0)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
 
-    frameCallbacks[1]?.(performance.now())
+    frameCallbacks[0]?.(performance.now())
 
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(32)
@@ -244,10 +239,10 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(resolveDataGridPerfStore()?.latest("stageScrollPerf")).toMatchObject({
       scope: "stageScrollPerf",
       active: 1,
-      frameCount: 1,
+      frameCount: 2,
       droppedFrames: 1,
       longTaskFrames: 1,
-      avgFrameMs: 64,
+      avgFrameMs: 32,
     })
 
     harness.unmount()

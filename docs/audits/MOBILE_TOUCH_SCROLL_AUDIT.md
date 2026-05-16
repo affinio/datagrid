@@ -24,6 +24,7 @@ Completed in Phase 1:
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
+- Pinned-pane vertical sync: left/right pinned pane content now applies the latest body `scrollTop` transform from the raw body scroll sample, while reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched. This avoids a visible one-frame pinned-column lag on real touch devices.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
 - Scroll-frame telemetry: when `dgPerfTrace` is enabled, the stage records `stageScrollFrame` samples with total rAF work, scroll offsets, pinned-bottom sync, and chrome redraw mode, plus `stageScrollPerf` samples with FPS, dropped-frame, and long-task counters.
 - Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
@@ -433,6 +434,7 @@ Gap:
 - Done: skip pinned-bottom `scrollLeft` sync work for vertical-only body scroll frames.
 - Done: remove body viewport dimension reads from the stage raw scroll sampling path.
 - Done: reuse a single captured body `scrollTop` / `scrollLeft` sample across stage scroll-frame scheduling decisions.
+- Done: apply pinned left/right vertical transforms from the raw body scroll sample so real-device pinned columns do not trail native center scrolling by a frame.
 - Done: move body and pinned-bottom scroll-triggered grid chrome redraw into the stage scroll frame.
 - Done: batch window resize metric sync through rAF.
 - Done: final residual review for header scroll sync before Phase 2.

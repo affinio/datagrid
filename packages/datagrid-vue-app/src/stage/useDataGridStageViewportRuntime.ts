@@ -337,7 +337,7 @@ export function useDataGridStageViewportRuntime(
     const previousScrollTop = observedBodyViewportScrollTop
     const previousScrollLeft = observedBodyViewportScrollLeft
     const scrollState = readBodyViewportScrollState(element)
-    linkedPaneScrollSync.onSourceScroll(scrollState.scrollTop)
+    linkedPaneScrollSync.syncNow(scrollState.scrollTop)
     scheduleBodyViewportScrollStateSync(scrollState)
     if (scrollState.scrollLeft !== previousScrollLeft) {
       schedulePinnedBottomViewportScrollLeftSync()
