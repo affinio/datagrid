@@ -40,6 +40,7 @@ Phase 2 started:
 - Cell-body touch guard: `DataGridTableStage.vue` now checks the internal interaction mode before delegating cell mousedown into selection/range-move interaction state, so touch-generated mousedown keeps scroll priority while desktop mousedown still starts the existing selection path.
 - Touch pan click suppression: the body shell passively tracks touch movement and suppresses the next synthetic touch click after a pan, preventing accidental cell selection after one-finger scroll without canceling native scrolling.
 - Touch long-press selection prep: in touch mode, a stationary long press on a body cell selects/focuses that cell and suppresses the follow-up synthetic click/context menu; movement beyond the pan threshold cancels the long press.
+- Touch selection anchor affordance: selected anchor cells now render a touch-only visual handle when no fill handle is present; it is non-interactive for this slice and reserves the UI affordance for explicit touch selection handles.
 
 ## Current Architecture Summary
 
@@ -154,6 +155,7 @@ Current state:
 - Touch-generated cell-body mousedown is now filtered at the stage boundary before it reaches desktop selection/range-move logic; mouse/trackpad desktop mousedown still follows the existing path.
 - Touch movement beyond the pan threshold suppresses the next touch-generated cell click, while stationary taps still select/focus cells.
 - Touch long press now establishes a cell selection without starting drag/range move; this is the foundation for explicit touch selection mode and handles.
+- Touch mode now exposes a visible anchor handle affordance on selected cells that do not already show a fill handle; drag semantics remain disabled until explicit touch handle behavior is implemented.
 
 Recommended fix:
 - Continue moving cell gesture initiation toward pointer-aware routing and treat `pointerType === "touch"` as scroll-first.
@@ -404,7 +406,7 @@ Gap:
 
 - In progress: introduce internal `interactionMode: desktop | touch | auto`; the stage now derives effective mode from coarse-pointer state and passes it into pointer/fill-handle guards.
 - Make one-finger scroll highest priority in `touch` and coarse `auto` modes.
-- In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, while visible touch handles are still pending.
+- In progress: add long-press selection mode; stationary long press now selects/focuses a cell without starting drag, and touch-only anchor affordances are visible where they do not conflict with fill handles.
 - Start drag selection, fill, and range move only from explicit handles in touch mode.
 - Expand resize/fill hit targets for touch while preserving desktop visuals.
 - Add gesture cancellation rules: if movement is dominantly scroll before long press, do not start selection or drag.

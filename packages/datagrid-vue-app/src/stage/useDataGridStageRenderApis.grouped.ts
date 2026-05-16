@@ -42,6 +42,7 @@ type CellRuntime = Readonly<Ref<{
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
+  isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
   isSelectionAnchorCellSafe: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCellVisual: (rowOffset: number, columnIndex: number) => boolean
   isCellInFillPreviewSafe: (rowOffset: number, columnIndex: number) => boolean
@@ -196,6 +197,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
+    isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,
@@ -252,6 +254,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.cellRuntime.value.startInlineEditIfAllowed,
     isCellEditableSafe: options.cellRuntime.value.isCellEditableSafe,
     isFillHandleCellSafe: options.cellRuntime.value.isFillHandleCellSafe,
+    isTouchSelectionAnchorHandleCell: options.cellRuntime.value.isTouchSelectionAnchorHandleCell,
     isEditingCellSafe: options.cellRuntime.value.isEditingCellSafe,
     handleFillHandleMouseDown: options.cellRuntime.value.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.cellRuntime.value.handleFillHandleDoubleClick,

@@ -986,6 +986,20 @@ function isRangeMoveHandleHoverCellSafe(rowOffset: number, columnIndex: number):
   return isRangeMoveHandleHoverCellBridge.value(rowOffset, columnIndex)
 }
 
+function isTouchSelectionAnchorHandleCell(row: TableRow, rowOffset: number, columnIndex: number): boolean {
+  if (interactionMode.value !== "touch" || isBodyViewportScrolling.value || row.kind === "group") {
+    return false
+  }
+  const column = visibleColumns.value[columnIndex]
+  if (!column || isEditingCellSafeBase(row, column.key)) {
+    return false
+  }
+  if (isCellEditableSafeBase(row, rowOffset, column, columnIndex) && isFillHandleCellSafe(rowOffset, columnIndex)) {
+    return false
+  }
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
+}
+
 const {
   builtInCellClasses,
   cellStateClasses,
@@ -1263,6 +1277,7 @@ const cellRuntime = computed(() => ({
   isCellEditableSafe: isCellEditableSafeBase,
   isEditingCellSafe: isEditingCellSafeBase,
   isCellSelectedSafe,
+  isTouchSelectionAnchorHandleCell,
   isSelectionAnchorCellSafe,
   shouldHighlightSelectedCellVisual,
   isCellInFillPreviewSafe,

@@ -1538,6 +1538,46 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders a touch-only selection anchor handle for selected cells", async () => {
+    mockCoarsePointer(true)
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        },
+      ),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    expect(wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"] .grid-touch-selection-handle').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("does not render the touch selection anchor handle in desktop interaction mode", async () => {
+    mockCoarsePointer(false)
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        },
+      ),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    expect(wrapper.find(".grid-touch-selection-handle").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it("routes touch-generated select affordance clicks to cell selection instead of inline edit", () => {
     const handleCellClick = vi.fn()
     const startInlineEdit = vi.fn()

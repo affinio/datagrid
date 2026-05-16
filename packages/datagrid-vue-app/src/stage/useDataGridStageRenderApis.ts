@@ -49,6 +49,7 @@ export interface UseDataGridStageRenderApisOptions {
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
+  isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
   isSelectionAnchorCellSafe: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCellVisual: (rowOffset: number, columnIndex: number) => boolean
   isCellInFillPreviewSafe: (rowOffset: number, columnIndex: number) => boolean
@@ -184,6 +185,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
+    isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,
@@ -240,6 +242,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     startInlineEditIfAllowed: options.startInlineEditIfAllowed,
     isCellEditableSafe: options.isCellEditableSafe,
     isFillHandleCellSafe: options.isFillHandleCellSafe,
+    isTouchSelectionAnchorHandleCell: options.isTouchSelectionAnchorHandleCell,
     isEditingCellSafe: options.isEditingCellSafe,
     handleFillHandleMouseDown: options.handleFillHandleMouseDown,
     handleFillHandleDoubleClick: options.handleFillHandleDoubleClick,
