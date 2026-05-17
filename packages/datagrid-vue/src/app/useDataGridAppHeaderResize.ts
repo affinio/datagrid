@@ -1,7 +1,11 @@
-import { type Ref } from "vue"
+import { computed, type ComputedRef, type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridHeaderResizeOrchestration } from "../advanced"
 import { shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
+import {
+  resolveDataGridAppInteractionOwnerSnapshot,
+  type DataGridAppInteractionOwnerSnapshot,
+} from "./dataGridInteractionOwner"
 
 export interface UseDataGridAppHeaderResizeOptions<TRow> {
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -22,6 +26,7 @@ export interface UseDataGridAppHeaderResizeOptions<TRow> {
 
 export interface UseDataGridAppHeaderResizeResult {
   isColumnResizing: Ref<boolean>
+  interactionOwnerSnapshot: ComputedRef<DataGridAppInteractionOwnerSnapshot>
   startResize: (event: MouseEvent, key: string) => void
   handleResizeDoubleClick: (event: MouseEvent, key: string) => void
   applyColumnResizeFromPointer: (clientX: number) => void
@@ -88,8 +93,13 @@ export function useDataGridAppHeaderResize<TRow>(
     return options.visibleColumns.value.find(column => column.key === columnKey)?.width ?? defaultColumnWidth
   }
 
+  const interactionOwnerSnapshot = computed(() => resolveDataGridAppInteractionOwnerSnapshot({
+    columnResize: headerResize.isColumnResizing.value,
+  }))
+
   return {
     isColumnResizing: headerResize.isColumnResizing,
+    interactionOwnerSnapshot,
     startResize,
     handleResizeDoubleClick,
     applyColumnResizeFromPointer: headerResize.applyColumnResizeFromPointer,

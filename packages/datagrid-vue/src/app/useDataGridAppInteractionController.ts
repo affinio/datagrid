@@ -34,6 +34,10 @@ import {
 } from "../advanced"
 import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
 import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
+import {
+  resolveDataGridAppInteractionOwnerSnapshot,
+  type DataGridAppInteractionOwnerSnapshot,
+} from "./dataGridInteractionOwner"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -334,6 +338,7 @@ export interface UseDataGridAppInteractionControllerOptions<
 export interface UseDataGridAppInteractionControllerResult<TRow> {
   isPointerSelectingCells: Ref<boolean>
   isFillDragging: Ref<boolean>
+  interactionOwnerSnapshot: ComputedRef<DataGridAppInteractionOwnerSnapshot>
   fillPreviewRange: Ref<DataGridCopyRange | null>
   lastAppliedFill: Ref<DataGridAppAppliedFillSession | null>
   isRangeMoving: Ref<boolean>
@@ -551,6 +556,11 @@ export function useDataGridAppInteractionController<
   const serverFillBoundaryConsistencyMetadata = ref<DataGridAppFillConsistencyMetadata | null>(null)
   let fillPreviewCancelVersion = 0
   let lastServerFillMaterializationWarning: string | null = null
+  const interactionOwnerSnapshot = computed(() => resolveDataGridAppInteractionOwnerSnapshot({
+    dragSelection: isPointerSelectingCells.value,
+    fill: isFillDragging.value,
+    rangeMove: isRangeMoving.value,
+  }))
 
   const hasActiveFillPreviewState = (): boolean => {
     return isFillDragging.value || fillBaseRange.value != null || fillPreviewRange.value != null
@@ -3075,6 +3085,7 @@ export function useDataGridAppInteractionController<
   return {
     isPointerSelectingCells,
     isFillDragging,
+    interactionOwnerSnapshot,
     fillPreviewRange,
     lastAppliedFill,
     isRangeMoving,

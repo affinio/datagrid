@@ -3,8 +3,15 @@ import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppHeaderResize } from "../useDataGridAppHeaderResize"
 
-function createHeaderResize() {
+function createHeaderResize(options: {
+  isFillDragging?: () => boolean
+  stopFillSelection?: () => void
+  isDragSelecting?: () => boolean
+  stopDragSelection?: () => void
+} = {}) {
   const persistColumnWidth = vi.fn()
+  const stopFillSelection = options.stopFillSelection ?? vi.fn()
+  const stopDragSelection = options.stopDragSelection ?? vi.fn()
   const headerResize = useDataGridAppHeaderResize({
     visibleColumns: ref([
       {
@@ -18,13 +25,13 @@ function createHeaderResize() {
     ]),
     rows: ref<Array<Record<string, string>>>([{ service: "API" }, { service: "Longer service name" }]),
     persistColumnWidth,
-    isFillDragging: () => false,
-    stopFillSelection: vi.fn(),
-    isDragSelecting: () => false,
-    stopDragSelection: vi.fn(),
+    isFillDragging: options.isFillDragging ?? (() => false),
+    stopFillSelection,
+    isDragSelecting: options.isDragSelecting ?? (() => false),
+    stopDragSelection,
     readCellText: (row, columnKey) => String(row[columnKey] ?? ""),
   })
-  return { headerResize, persistColumnWidth }
+  return { headerResize, persistColumnWidth, stopFillSelection, stopDragSelection }
 }
 
 describe("useDataGridAppHeaderResize contract", () => {
@@ -50,6 +57,31 @@ describe("useDataGridAppHeaderResize contract", () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(headerResize.isColumnResizing.value).toBe(true)
+    expect(headerResize.interactionOwnerSnapshot.value).toEqual({
+      owner: "column-resize",
+      activeOwners: ["column-resize"],
+      hasConflict: false,
+    })
+  })
+
+  it("lets column resize take owner after stopping active fill and drag selection", () => {
+    const { headerResize, stopFillSelection, stopDragSelection } = createHeaderResize({
+      isFillDragging: () => true,
+      isDragSelecting: () => true,
+    })
+    const event = new MouseEvent("mousedown", { cancelable: true, button: 0, clientX: 120 })
+
+    headerResize.startResize(event, "service")
+
+    expect(stopFillSelection).toHaveBeenCalledTimes(1)
+    expect(stopDragSelection).toHaveBeenCalledTimes(1)
+    expect(headerResize.interactionOwnerSnapshot.value).toEqual({
+      owner: "column-resize",
+      activeOwners: ["column-resize"],
+      hasConflict: false,
+    })
+    headerResize.stopColumnResize()
+    expect(headerResize.interactionOwnerSnapshot.value.activeOwners).toEqual([])
   })
 
   it("ignores touch-generated column autosize double-click events", () => {

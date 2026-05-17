@@ -1,8 +1,12 @@
-import { nextTick, ref, watch, type Ref } from "vue"
+import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from "vue"
 import type { DataGridRowNode } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowHeightMode } from "./useDataGridAppControls"
 import { shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
+import {
+  resolveDataGridAppInteractionOwnerSnapshot,
+  type DataGridAppInteractionOwnerSnapshot,
+} from "./dataGridInteractionOwner"
 
 export interface UseDataGridAppRowSizingOptions<TRow> {
   mode: Ref<DataGridAppMode>
@@ -16,6 +20,8 @@ export interface UseDataGridAppRowSizingOptions<TRow> {
 }
 
 export interface UseDataGridAppRowSizingResult<TRow> {
+  isRowResizing: ComputedRef<boolean>
+  interactionOwnerSnapshot: ComputedRef<DataGridAppInteractionOwnerSnapshot>
   rowStyle: (row: DataGridRowNode<TRow>, rowOffset: number) => Record<string, string>
   isRowAutosizeProbe: (row: DataGridRowNode<TRow>, rowOffset: number) => boolean
   measureVisibleRowHeights: () => void
@@ -32,6 +38,10 @@ export function useDataGridAppRowSizing<TRow>(
   const rowHeightRenderRevision = ref(0)
   const measuringRowKey = ref<string | null>(null)
   const rowResizeState = ref<{ rowKey: string; startY: number; startBase: number } | null>(null)
+  const isRowResizing = computed(() => rowResizeState.value !== null)
+  const interactionOwnerSnapshot = computed(() => resolveDataGridAppInteractionOwnerSnapshot({
+    rowResize: isRowResizing.value,
+  }))
   const suppressNextRowIndexClick = ref(false)
   const autoMeasuredRowIndexes = new Set<number>()
   const manualAutoRowHeightFloors = new Map<number, number>()
@@ -268,6 +278,8 @@ export function useDataGridAppRowSizing<TRow>(
   }
 
   return {
+    isRowResizing,
+    interactionOwnerSnapshot,
     rowStyle,
     isRowAutosizeProbe,
     measureVisibleRowHeights,

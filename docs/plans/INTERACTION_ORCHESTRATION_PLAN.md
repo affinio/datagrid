@@ -4,6 +4,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 1: Active Interaction Owner Invariants
 
+- Status: Completed on 2026-05-17. Added the owner snapshot contract for drag selection, fill, range move, column resize, and row resize, with focused contract coverage for owner exclusivity and start-order transitions.
 - Objective: add a diagnostic contract that can answer which interaction owns the current gesture without changing existing desktop behavior.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
@@ -18,7 +19,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Contract tests asserting only one owner is active at a time.
   - Start-order tests for fill, range move, drag selection, column resize, row resize, and linked-surface touch pan.
   - Tests that rejected starts leave the previous owner unchanged.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand interaction rowSizing`
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- src/app/__tests__/dataGridInteractionOwner.spec.ts src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts src/app/__tests__/useDataGridAppHeaderResize.contract.spec.ts src/app/__tests__/useDataGridAppRowSizing.contract.spec.ts && pnpm --filter @affino/datagrid-vue type-check`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): lock interaction owner invariants`
 

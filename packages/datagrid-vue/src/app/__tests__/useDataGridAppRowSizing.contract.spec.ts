@@ -71,10 +71,18 @@ describe("useDataGridAppRowSizing contract", () => {
     })
 
     sizing.startRowResize(new MouseEvent("mousedown", { clientY: 40 }), createRow(), 0)
+    expect(sizing.isRowResizing.value).toBe(true)
+    expect(sizing.interactionOwnerSnapshot.value).toEqual({
+      owner: "row-resize",
+      activeOwners: ["row-resize"],
+      hasConflict: false,
+    })
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 70 }))
     window.dispatchEvent(new MouseEvent("mouseup", { clientY: 70 }))
 
     expect(rowHeightMode.value).toBe("auto")
+    expect(sizing.isRowResizing.value).toBe(false)
+    expect(sizing.interactionOwnerSnapshot.value.activeOwners).toEqual([])
     expect(runtime.api.view.setRowHeightOverride).toHaveBeenCalledWith(0, 61)
   })
 
@@ -97,6 +105,7 @@ describe("useDataGridAppRowSizing contract", () => {
     window.dispatchEvent(new MouseEvent("mousemove", { clientY: 70 }))
 
     expect(event.defaultPrevented).toBe(false)
+    expect(sizing.interactionOwnerSnapshot.value.activeOwners).toEqual([])
     expect(runtime.api.view.setRowHeightOverride).not.toHaveBeenCalled()
   })
 

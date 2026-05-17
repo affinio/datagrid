@@ -584,6 +584,11 @@ describe("useDataGridAppInteractionController contract", () => {
     controller.handleCellMouseDown(pointerDown, row, 0, 0)
 
     expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(controller.interactionOwnerSnapshot.value).toEqual({
+      owner: null,
+      activeOwners: [],
+      hasConflict: false,
+    })
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
 
     controller.handleWindowMouseMove(new MouseEvent("mousemove", {
@@ -593,6 +598,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
   })
 
@@ -633,6 +639,11 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isPointerSelectingCells.value).toBe(true)
+    expect(controller.interactionOwnerSnapshot.value).toEqual({
+      owner: "drag-selection",
+      activeOwners: ["drag-selection"],
+      hasConflict: false,
+    })
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(2)
     expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
       expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
@@ -719,6 +730,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isPointerSelectingCells.value).toBe(true)
+    expect(controller.interactionOwnerSnapshot.value.owner).toBe("drag-selection")
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(2)
     expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
       expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
@@ -1731,6 +1743,11 @@ describe("useDataGridAppInteractionController contract", () => {
       clientX: 120,
       clientY: 82,
     }))
+    expect(controller.interactionOwnerSnapshot.value).toEqual({
+      owner: "range-move",
+      activeOwners: ["range-move"],
+      hasConflict: false,
+    })
     controller.handleWindowMouseUp()
 
     expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
@@ -1974,11 +1991,53 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isFillDragging.value).toBe(true)
+    expect(controller.interactionOwnerSnapshot.value).toEqual({
+      owner: "fill",
+      activeOwners: ["fill"],
+      hasConflict: false,
+    })
     expect(controller.fillPreviewRange.value).toEqual({
       startRow: 0,
       endRow: 0,
       startColumn: 0,
       endColumn: 0,
+    })
+  })
+
+  it("lets fill drag take owner from an active drag selection", () => {
+    const { controller, row } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    const cell = createCell(0, 0)
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 1,
+      clientY: 10,
+    }), row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 6,
+      clientY: 10,
+    }))
+
+    expect(controller.interactionOwnerSnapshot.value.owner).toBe("drag-selection")
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(controller.isFillDragging.value).toBe(true)
+    expect(controller.interactionOwnerSnapshot.value).toEqual({
+      owner: "fill",
+      activeOwners: ["fill"],
+      hasConflict: false,
     })
   })
 
@@ -2017,6 +2076,7 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(event.defaultPrevented).toBe(false)
     expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
     expect(controller.fillPreviewRange.value).toBeNull()
   })
 
