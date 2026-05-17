@@ -863,6 +863,29 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(ensureKeyboardActiveCellVisible).not.toHaveBeenCalled()
   })
 
+  it("cancels active drag selection on pointercancel", () => {
+    const { controller, row } = createControllerHarness()
+    const cell = createCell(0, 0)
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 1,
+      clientY: 10,
+    }), row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 6,
+      clientY: 10,
+    }))
+
+    expect(controller.interactionOwnerSnapshot.value.owner).toBe("drag-selection")
+
+    controller.handleWindowPointerCancel()
+
+    expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+  })
+
   it("maps ctrl+a to select all filtered rows and visible columns", () => {
     const { controller, row, applySelectionRange } = createControllerHarness({
       rowCount: 3,
@@ -1762,6 +1785,58 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
+  it("blocks contextmenu and clears active range move", async () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+    const anchorCell = createCell(0, 0)
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    }), row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 82,
+    }))
+
+    expect(controller.isRangeMoving.value).toBe(true)
+
+    const contextMenu = new MouseEvent("contextmenu", { cancelable: true, clientX: 120, clientY: 82 })
+    expect(controller.handleWindowContextMenuCapture(contextMenu)).toBe(true)
+
+    expect(contextMenu.defaultPrevented).toBe(true)
+    await flushAsync()
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+  })
+
   it("does not start range move from a non-editable selected cell", () => {
     const {
       controller,
@@ -2002,6 +2077,44 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 0,
     })
+  })
+
+  it("cancels active fill drag on window blur without committing", () => {
+    const { controller, selectionSnapshot, applyClipboardEdits } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.interactionOwnerSnapshot.value.owner).toBe("fill")
+
+    controller.handleWindowBlur()
+
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
   })
 
   it("lets fill drag take owner from an active drag selection", () => {

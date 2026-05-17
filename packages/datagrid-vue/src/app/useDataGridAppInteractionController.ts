@@ -354,6 +354,10 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
   handleWindowMouseMove: (event: MouseEvent) => void
   handleWindowMouseUp: () => void
+  handleWindowPointerUp: () => void
+  handleWindowPointerCancel: () => void
+  handleWindowBlur: () => void
+  handleWindowContextMenuCapture: (event: MouseEvent) => boolean
   isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
   isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
   clearSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
@@ -598,6 +602,16 @@ export function useDataGridAppInteractionController<
     }
     fillPreviewCancelVersion += 1
     return clearFillPreviewState()
+  }
+
+  const hasActivePointerInteractionState = (includePending = true): boolean => {
+    return (
+      (includePending && (pendingRangeMove.value || pendingDragSelection.value))
+      || isRangeMoving.value
+      || isFillDragging.value
+      || isPointerSelectingCells.value
+      || hasActiveFillPreviewState()
+    )
   }
 
   const focusViewport = (): void => {
@@ -3082,6 +3096,36 @@ export function useDataGridAppInteractionController<
     pointerAutoScroll.stopAutoScrollFrameIfIdle()
   }
 
+  const cancelPointerInteractions = (commit: boolean): void => {
+    clearPendingRangeMove()
+    clearPendingDragSelection()
+    if (isRangeMoving.value) {
+      rangeMoveLifecycle.stopRangeMove(commit)
+    }
+    if (isFillDragging.value || hasActiveFillPreviewState()) {
+      if (isFillDragging.value) {
+        fillSelectionLifecycle.stopFillSelection(commit)
+      } else {
+        cancelFillPreviewState()
+      }
+      activeRestartFillSession.value = null
+      fillOriginFocusCoord.value = null
+    }
+    if (isPointerSelectingCells.value) {
+      stopPointerSelection()
+    }
+    pointerAutoScroll.stopAutoScrollFrameIfIdle()
+  }
+
+  const handleWindowContextMenuCapture = (event: MouseEvent): boolean => {
+    if (!hasActivePointerInteractionState(false)) {
+      return false
+    }
+    event.preventDefault()
+    cancelPointerInteractions(true)
+    return true
+  }
+
   return {
     isPointerSelectingCells,
     isFillDragging,
@@ -3104,6 +3148,14 @@ export function useDataGridAppInteractionController<
     handleRowIndexKeydown,
     handleWindowMouseMove,
     handleWindowMouseUp,
+    handleWindowPointerUp: handleWindowMouseUp,
+    handleWindowPointerCancel: () => {
+      cancelPointerInteractions(false)
+    },
+    handleWindowBlur: () => {
+      cancelPointerInteractions(false)
+    },
+    handleWindowContextMenuCapture,
     isCellInFillPreview,
     isFillHandleCell: (rowOffset: number, columnIndex: number) => {
       if (!isFillHandleEnabled.value) {
@@ -3113,6 +3165,7 @@ export function useDataGridAppInteractionController<
     },
     clearSelectedCells,
     dispose: () => {
+      cancelPointerInteractions(false)
       pointerAutoScroll.dispose()
     },
   }

@@ -10,16 +10,22 @@ function createViewport(scrollLeft: number): HTMLElement {
 
 function createService(bodyViewport: HTMLElement | null) {
   const syncViewport = vi.fn()
+  const stopColumnResize = vi.fn()
+  const handleInteractionWindowContextMenuCapture = vi.fn(() => false)
   const service = useDataGridTableStageScrollSync({
     bodyViewportRef: ref(bodyViewport),
     isColumnResizing: ref(false),
     applyColumnResizeFromPointer: vi.fn(),
-    stopColumnResize: vi.fn(),
+    stopColumnResize,
     handleInteractionWindowMouseMove: vi.fn(),
     handleInteractionWindowMouseUp: vi.fn(),
+    handleInteractionWindowPointerUp: vi.fn(),
+    handleInteractionWindowPointerCancel: vi.fn(),
+    handleInteractionWindowBlur: vi.fn(),
+    handleInteractionWindowContextMenuCapture,
     syncViewport,
   })
-  return { service, syncViewport }
+  return { service, syncViewport, stopColumnResize, handleInteractionWindowContextMenuCapture }
 }
 
 describe("useDataGridTableStageScrollSync", () => {
@@ -63,5 +69,56 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(bodyViewport.scrollLeft).toBe(96)
     expect(syncViewport).toHaveBeenCalledTimes(1)
     expect(headerScrollLeftReads).toBe(1)
+  })
+
+  it("stops column resize before delegating pointer lifecycle cleanup", () => {
+    const bodyViewport = createViewport(0)
+    const stopColumnResize = vi.fn()
+    const handleInteractionWindowPointerCancel = vi.fn()
+    const isColumnResizing = ref(true)
+    const service = useDataGridTableStageScrollSync({
+      bodyViewportRef: ref(bodyViewport),
+      isColumnResizing,
+      applyColumnResizeFromPointer: vi.fn(),
+      stopColumnResize,
+      handleInteractionWindowMouseMove: vi.fn(),
+      handleInteractionWindowMouseUp: vi.fn(),
+      handleInteractionWindowPointerUp: vi.fn(),
+      handleInteractionWindowPointerCancel,
+      handleInteractionWindowBlur: vi.fn(),
+      handleInteractionWindowContextMenuCapture: vi.fn(() => false),
+      syncViewport: vi.fn(),
+    })
+
+    service.handleWindowPointerCancel(new Event("pointercancel") as PointerEvent)
+
+    expect(stopColumnResize).toHaveBeenCalledTimes(1)
+    expect(handleInteractionWindowPointerCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it("prevents context menu while column resize owns the gesture", () => {
+    const bodyViewport = createViewport(0)
+    const stopColumnResize = vi.fn()
+    const handleInteractionWindowContextMenuCapture = vi.fn(() => false)
+    const service = useDataGridTableStageScrollSync({
+      bodyViewportRef: ref(bodyViewport),
+      isColumnResizing: ref(true),
+      applyColumnResizeFromPointer: vi.fn(),
+      stopColumnResize,
+      handleInteractionWindowMouseMove: vi.fn(),
+      handleInteractionWindowMouseUp: vi.fn(),
+      handleInteractionWindowPointerUp: vi.fn(),
+      handleInteractionWindowPointerCancel: vi.fn(),
+      handleInteractionWindowBlur: vi.fn(),
+      handleInteractionWindowContextMenuCapture,
+      syncViewport: vi.fn(),
+    })
+    const event = new MouseEvent("contextmenu", { cancelable: true })
+
+    expect(service.handleWindowContextMenuCapture(event)).toBe(true)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(stopColumnResize).toHaveBeenCalledTimes(1)
+    expect(handleInteractionWindowContextMenuCapture).toHaveBeenCalledTimes(1)
   })
 })

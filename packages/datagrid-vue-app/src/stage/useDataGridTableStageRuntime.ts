@@ -1577,6 +1577,10 @@ export function useDataGridTableStageRuntime<
     handleRowIndexKeydown,
     handleWindowMouseMove: handleInteractionWindowMouseMove,
     handleWindowMouseUp: handleInteractionWindowMouseUp,
+    handleWindowPointerUp: handleInteractionWindowPointerUp,
+    handleWindowPointerCancel: handleInteractionWindowPointerCancel,
+    handleWindowBlur: handleInteractionWindowBlur,
+    handleWindowContextMenuCapture: handleInteractionWindowContextMenuCapture,
     isCellInFillPreview,
     isFillHandleCell,
     clearSelectedCells,
@@ -1669,6 +1673,10 @@ export function useDataGridTableStageRuntime<
     stopColumnResize,
     handleInteractionWindowMouseMove,
     handleInteractionWindowMouseUp,
+    handleInteractionWindowPointerUp,
+    handleInteractionWindowPointerCancel,
+    handleInteractionWindowBlur,
+    handleInteractionWindowContextMenuCapture,
     syncViewport: handleViewportScroll,
   })
 
@@ -1857,6 +1865,10 @@ export function useDataGridTableStageRuntime<
     syncViewport: syncViewportFromDom,
     handleWindowMouseMove: stageServices.scrollSync.handleWindowMouseMove,
     handleWindowMouseUp: stageServices.scrollSync.handleWindowMouseUp,
+    handleWindowPointerUp: stageServices.scrollSync.handleWindowPointerUp,
+    handleWindowPointerCancel: stageServices.scrollSync.handleWindowPointerCancel,
+    handleWindowBlur: stageServices.scrollSync.handleWindowBlur,
+    handleWindowContextMenuCapture: stageServices.scrollSync.handleWindowContextMenuCapture,
     cancelScheduledViewportSync,
     onAfterMount: () => {
       options.syncSelectionSnapshotFromRuntime()

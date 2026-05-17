@@ -42,6 +42,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 3: Main Pointer Lifecycle Cancellation Contract
 
+- Status: Completed on 2026-05-17. The mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction/resize cancellation.
 - Objective: make the mounted app-stage path clean up active interactions on mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewportLifecycle.ts`
@@ -55,7 +56,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Cancellation tests for each active owner.
   - Window blur and unmount cleanup tests.
   - Contextmenu capture tests that block active drag/fill/range continuation.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand lifecycle interaction && pnpm --filter @affino/datagrid-vue-app test -- --runInBand DataGridTableStage`
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- src/app/__tests__/useDataGridAppViewportLifecycle.contract.spec.ts src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts src/composables/__tests__/useDataGridGlobalPointerLifecycle.contract.spec.ts && pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/useDataGridTableStageScrollSync.spec.ts && pnpm --filter @affino/datagrid-vue type-check && pnpm --filter @affino/datagrid-vue-app type-check`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): cancel active interactions consistently`
 

@@ -23,7 +23,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 
 - Slice 1 completed on 2026-05-17: `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` now provides an internal owner snapshot for drag selection, fill, range move, column resize, and row resize. Focused contracts cover single-owner state and start-order transitions.
 - Slice 2 completed on 2026-05-17: `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
-- Remaining high-risk work: main mounted pointer lifecycle cancellation, active-only listener wiring, prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
+- Slice 3 completed on 2026-05-17: the mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction and resize cancellation.
+- Remaining high-risk work: active-only listener wiring, prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
 
 ## Files reviewed
 
@@ -173,7 +174,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 4. **Cancellation semantics are incomplete in the main stage path.**
    - Evidence: `useDataGridGlobalPointerLifecycle.ts` supports pointer cancel and blur, while app-stage lifecycle handles mouseup but not pointercancel/window blur for active grid interactions.
    - Impact: active drag/fill/range/resize can rely on mouseup fallback and blur handlers elsewhere, but cancellation is not single-owner.
-   - Required: add pointercancel/window blur contracts for the actual mounted grid path.
+   - Status: mounted app-stage lifecycle now covers pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup.
+   - Required: continue with active-only listener wiring and broader e2e race coverage.
 
 5. **Resize ownership is split between column and row paths.**
    - Evidence: column resize uses `useDataGridHeaderResizeOrchestration`; row resize uses `useDataGridAppRowSizing.ts` with its own window listeners.
@@ -221,7 +223,7 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 | PreventDefault usage | Mostly scoped and intentional; needs central policy documentation. |
 | Scroll synchronization | rAF-backed for linked panes and stage scroll refs; header/pinned sync tests exist. |
 | State machines | Feature-level state machines exist; owner snapshot now covers active app owners, but cancellation is not yet unified. |
-| Cancellation semantics | Good in utilities; incomplete in mounted main path for pointercancel/window blur. |
+| Cancellation semantics | Mounted main path now covers pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup; active-only listener wiring remains open. |
 
 ## Correctness risks
 
@@ -258,7 +260,7 @@ What blocks target score:
 - No single active interaction owner diagnostic/invariant.
 - Main stage path does not use the shared global pointer lifecycle.
 - Touch selection/range/fill are guarded but not designed as complete workflows.
-- Cancellation semantics are not unified across mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
+- Active-only listener wiring is still open after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
 - Prevent-default and passive-listener policies are distributed across features.
 - Missing e2e/device gates for interaction races and mobile readiness.
 
