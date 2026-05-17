@@ -88,7 +88,8 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Global pointer lifecycle must keep both explicit modes covered: `pointerPreviewApplyMode: "sync"` applies immediately and `"raf"` coalesces preview work to one callback per frame.
 - Pointer auto-scroll may read each viewport layout/scroll metric at most once per animation frame before applying scroll deltas and active preview.
 - App-stage pointer listeners should stay active only while a pending or active pointer owner exists.
-- With `dgPerfTrace=1`, interaction diagnostics expose `interactionOwner`, `interactionCancel`, `interactionPreview`, `interactionAutoScroll`, `interactionPreventDefault`, and `stageFocusRestore` samples. Slice 13 performance gates should consume these scopes before introducing hard fail thresholds.
+- With `dgPerfTrace=1`, interaction diagnostics expose `interactionOwner`, `interactionCancel`, `interactionPreview`, `interactionAutoScroll`, `interactionPreventDefault`, and `stageFocusRestore` samples. `scripts/bench-datagrid-enterprise-browser-frames.mjs` consumes these scopes in warning-first interaction scenarios for drag selection, fill auto-scroll, range-move auto-scroll, resize drag, and context menu open/cleanup.
+- Warning-first interaction budgets default to `PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS=8`, `PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS=12`, `PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS=4`, and `PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX=2`. Set `BENCH_INTERACTION_FAIL_ON_WARNINGS=true` only after device/browser baselines are calibrated.
 - Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`

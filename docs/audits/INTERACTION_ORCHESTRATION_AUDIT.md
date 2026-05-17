@@ -33,7 +33,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 10 completed on 2026-05-17: pointer preview work now has explicit sync/rAF lifecycle contracts, pointer auto-scroll layout reads are budgeted to one sample per metric per frame, and the performance gate doc records the direct-preview budget.
 - Slice 11 completed on 2026-05-17: sandbox Playwright coverage now gates desktop interaction races for virtualized drag selection with pinned columns, fill auto-scroll cleanup, range-move auto-scroll Escape cancellation, contextmenu interruption/reopen, and adjacent resize controls.
 - Slice 12 completed on 2026-05-17: optional `dgPerfTrace` diagnostics now emit interaction owner transitions, cancellation reasons, pointer preview timing, pointer auto-scroll frame timing, prevent-default samples, and focus restoration fallback reasons.
-- Remaining high-risk work: browser performance gates and device-calibrated thresholds.
+- Slice 13 completed on 2026-05-17: `scripts/bench-datagrid-enterprise-browser-frames.mjs` now runs warning-first interaction frame scenarios for drag selection, fill auto-scroll, range-move auto-scroll, resize drag, and context menu open/cleanup.
+- Remaining high-risk work: device-calibrated thresholds and final audit closure.
 
 ## Files reviewed
 
@@ -311,9 +312,9 @@ Playwright/e2e tests:
 Performance tests:
 
 - Mousemove preview budget for drag selection, fill, and range move.
-- Pointer auto-scroll frame budget and layout-read count.
+- Pointer auto-scroll frame budget and layout-read count are covered by contract tests and warning-first browser interaction scenarios.
 - Scroll frame budget with pinned panes, header, overlays, and canvas chrome enabled.
-- Hover/range-edge detection overhead with large rendered windows.
+- Hover/range-edge detection overhead with large rendered windows remains benchmark-only until device thresholds are calibrated.
 
 ## Recommended telemetry
 
@@ -356,8 +357,8 @@ Performance tests:
 ### Phase 5: enterprise validation
 
 - Keep Playwright interaction-race tests aligned with owner/lifecycle changes.
-- Add performance gates for pointer preview and scroll sync.
-- Use the new `dgPerfTrace` interaction diagnostics as inputs for active owner, cancellation reason, drift, and frame-budget gates.
+- Keep warning-first browser performance gates for pointer preview, auto-scroll, focus restore, and scroll sync drift aligned with `dgPerfTrace` diagnostics.
+- Calibrate hard-fail thresholds after collecting device/browser baselines.
 
 ## Migration notes
 

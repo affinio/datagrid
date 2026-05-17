@@ -201,9 +201,11 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     const targetCell = amountCellByViewportRow(page, 1)
     await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await expect(targetCell).toBeVisible({ timeout: 20_000 })
 
@@ -227,15 +229,19 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
 
     const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     const targetCell = amountCellByViewportRow(page, 1)
     await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await expect(targetCell).toBeVisible({ timeout: 20_000 })
 
     await sourceCell.click()
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
     await dragCellBodyStartAndMove(page, sourceCell, targetCell)
+    const viewportBox = await boundingBox(viewport)
+    await page.mouse.move(viewportBox.x + viewportBox.width / 2, viewportBox.y + viewportBox.height - 6)
 
     await expect.poll(async () => latestPerfSample(page, "interactionOwner")).toMatchObject({
       scope: "interactionOwner",
@@ -246,6 +252,12 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
       scope: "interactionPreview",
       owner: "range-move",
     })
+    await expect.poll(async () => latestPerfSample(page, "interactionAutoScroll")).toMatchObject({
+      scope: "interactionAutoScroll",
+      owner: "range-move",
+    })
+    expect(readNumericPerfField(await latestPerfSample(page, "interactionPreview"), "totalMs")).toBeLessThanOrEqual(50)
+    expect(readNumericPerfField(await latestPerfSample(page, "interactionAutoScroll"), "totalMs")).toBeLessThanOrEqual(50)
 
     await page.keyboard.press("Escape")
     await page.mouse.up()
@@ -384,6 +396,13 @@ async function latestPerfSample(page: Page, scope: string): Promise<Record<strin
     }
     return null
   }, scope)
+}
+
+function readNumericPerfField(sample: Record<string, unknown> | null, field: string): number {
+  const value = sample?.[field]
+  expect(typeof value).toBe("number")
+  expect(Number.isFinite(value)).toBe(true)
+  return value as number
 }
 
 async function dragCellBodyStartAndMove(page: Page, source: Locator, target: Locator): Promise<void> {

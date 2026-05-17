@@ -246,6 +246,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 13: Interaction Performance Gate
 
+- Status: Completed on 2026-05-17. Enterprise browser frame benchmark now includes warning-first interaction scenarios for drag selection, fill auto-scroll, range move auto-scroll, resize drag, and context menu open/cleanup using `dgPerfTrace` scopes and scroll-sync drift samples.
 - Objective: convert interaction telemetry and e2e traces into warning-first enterprise performance gates.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`

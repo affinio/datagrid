@@ -22,6 +22,9 @@ const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_D
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
+const BENCH_INTERACTION_FAIL_ON_WARNINGS = (
+  process.env.BENCH_INTERACTION_FAIL_ON_WARNINGS ?? "false"
+).trim().toLowerCase() === "true"
 const BENCH_ENABLE_FILTER = (process.env.BENCH_BROWSER_ENABLE_FILTER ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_SORT = (process.env.BENCH_BROWSER_ENABLE_SORT ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_CELL_UPDATES = (
@@ -31,6 +34,10 @@ const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-enterprise-browser-frames.json")
+const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS", 8)
+const PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS", 12)
+const PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS", 4)
+const PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX = floatEnv("PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX", 2)
 
 const SCENARIOS = [
   {
@@ -92,6 +99,36 @@ const SCENARIOS = [
     sort: true,
     cellUpdates: true,
   },
+  {
+    id: "interaction-drag-selection",
+    route: "/vue/base-grid",
+    interaction: "drag-selection",
+    interactionDiagnostics: true,
+  },
+  {
+    id: "interaction-fill-autoscroll",
+    route: "/vue/base-grid",
+    interaction: "fill-autoscroll",
+    interactionDiagnostics: true,
+  },
+  {
+    id: "interaction-range-autoscroll",
+    route: "/vue/base-grid",
+    interaction: "range-autoscroll",
+    interactionDiagnostics: true,
+  },
+  {
+    id: "interaction-resize-drag",
+    route: "/vue/base-grid",
+    interaction: "resize-drag",
+    interactionDiagnostics: true,
+  },
+  {
+    id: "interaction-context-menu",
+    route: "/vue/base-grid",
+    interaction: "context-menu",
+    interactionDiagnostics: true,
+  },
 ]
 
 assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
@@ -104,11 +141,29 @@ assertPositiveInteger(BENCH_BROWSER_HORIZONTAL_STEPS, "BENCH_BROWSER_HORIZONTAL_
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS, "BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS")
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
 assertNonNegativeInteger(BENCH_BROWSER_CELL_UPDATE_BURST, "BENCH_BROWSER_CELL_UPDATE_BURST")
+for (const [value, label] of [
+  [PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS, "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS"],
+  [PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS, "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS"],
+  [PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS, "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS"],
+  [PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX, "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX"],
+]) {
+  if (value < 0) {
+    throw new Error(`${label} must be non-negative`)
+  }
+}
 
 function intEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] ?? String(fallback), 10)
   if (!Number.isFinite(value) || !Number.isInteger(value)) {
     throw new Error(`${name} must be an integer`)
+  }
+  return value
+}
+
+function floatEnv(name, fallback) {
+  const value = Number.parseFloat(process.env[name] ?? String(fallback))
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be a finite number`)
   }
   return value
 }
@@ -182,8 +237,8 @@ function normalizeFrameDeltas(frameDeltas) {
 }
 
 function buildScenarioUrl(scenario) {
-  const url = new URL(BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
-  if (scenario.verticalDiagnostics || scenario.sortDiagnostics) {
+  const url = new URL(scenario.route ?? BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
+  if (scenario.verticalDiagnostics || scenario.sortDiagnostics || scenario.interactionDiagnostics) {
     url.searchParams.set("dgPerfTrace", "1")
   }
   return url.toString()
@@ -266,6 +321,7 @@ async function runScenario(page, sessionIndex, scenario) {
     const telemetrySamples = []
     const isVerticalDiagnosticsScenario = Boolean(input.scenario.verticalDiagnostics)
     const isSortDiagnosticsScenario = Boolean(input.scenario.sortDiagnostics)
+    const isInteractionDiagnosticsScenario = Boolean(input.scenario.interactionDiagnostics)
     const createMutationSummary = () => ({
       callbackCount: 0,
       childListMutations: 0,
@@ -322,11 +378,31 @@ async function runScenario(page, sessionIndex, scenario) {
           appPerf: null,
           sortAction: null,
           visibleRowsRefresh: null,
+      }
+      : null
+    const interactionDiagnostics = isInteractionDiagnosticsScenario
+      ? {
+          enabled: true,
+          kind: input.scenario.interaction,
+          skipped: [],
+          scrollSyncDrift: null,
+          traceSummary: {},
+          appPerf: null,
         }
       : null
 
     const pause = (ms) => new Promise(resolvePause => setTimeout(resolvePause, ms))
     const waitForFrame = () => new Promise(resolveFrame => requestAnimationFrame(resolveFrame))
+    const waitForCondition = async (predicate, timeoutMs = 2000) => {
+      const started = performance.now()
+      while (performance.now() - started < timeoutMs) {
+        if (predicate()) {
+          return true
+        }
+        await waitForFrame()
+      }
+      return predicate()
+    }
     const waitForSmoothScrollFrame = async () => {
       await waitForFrame()
       const extraDelayMs = Math.max(0, input.smoothFrameDelayMs - 16)
@@ -360,6 +436,31 @@ async function runScenario(page, sessionIndex, scenario) {
         min: sorted[0] ?? 0,
         max: sorted[sorted.length - 1] ?? 0,
       }
+    }
+    const summarizePerfSamplesByScope = (samples) => {
+      const grouped = {}
+      for (const sample of samples) {
+        if (!sample || typeof sample.scope !== "string") {
+          continue
+        }
+        const bucket = grouped[sample.scope] ?? { count: 0, totalMs: [], samples: [] }
+        bucket.count += 1
+        if (typeof sample.totalMs === "number" && Number.isFinite(sample.totalMs)) {
+          bucket.totalMs.push(sample.totalMs)
+        }
+        if (bucket.samples.length < 12) {
+          bucket.samples.push(sample)
+        }
+        grouped[sample.scope] = bucket
+      }
+      return Object.fromEntries(Object.entries(grouped).map(([scope, bucket]) => [
+        scope,
+        {
+          count: bucket.count,
+          totalMs: summarizeNumbers(bucket.totalMs),
+          samples: bucket.samples,
+        },
+      ]))
     }
     const resolveElementDescriptor = (element) => {
       if (!(element instanceof HTMLElement)) {
@@ -540,11 +641,11 @@ async function runScenario(page, sessionIndex, scenario) {
       return counts
     }
     const perfWindow = window
-    const traceDiagnosticsEnabled = isVerticalDiagnosticsScenario || isSortDiagnosticsScenario
-    const dataGridPerfStore = traceDiagnosticsEnabled && perfWindow.__AFFINO_DATAGRID_PERF__
+    const traceDiagnosticsEnabled = isVerticalDiagnosticsScenario || isSortDiagnosticsScenario || isInteractionDiagnosticsScenario
+    const resolveDataGridPerfStore = () => traceDiagnosticsEnabled && perfWindow.__AFFINO_DATAGRID_PERF__
       ? perfWindow.__AFFINO_DATAGRID_PERF__
       : null
-    dataGridPerfStore?.clear?.()
+    resolveDataGridPerfStore()?.clear?.()
 
     const recordMutationSummary = (summary, mutations) => {
       summary.callbackCount += 1
@@ -1010,6 +1111,227 @@ async function runScenario(page, sessionIndex, scenario) {
       interactions.skipped.push("cell-update:empty-burst")
     }
 
+    if (interactionDiagnostics) {
+      const elementCenter = (element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+        }
+      }
+      const dispatchElementMouse = (element, type, point, init = {}) => {
+        element.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: init.button ?? 0,
+          buttons: init.buttons ?? (type === "mouseup" ? 0 : 1),
+          clientX: point.x,
+          clientY: point.y,
+          view: window,
+        }))
+      }
+      const dispatchWindowMouse = (type, point, init = {}) => {
+        window.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: init.button ?? 0,
+          buttons: init.buttons ?? (type === "mouseup" ? 0 : 1),
+          clientX: point.x,
+          clientY: point.y,
+          view: window,
+        }))
+      }
+      const firstAmountCell = () => document.querySelector('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]')
+      const amountCellByViewportRow = (rowIndex) => {
+        const cells = Array.from(
+          document.querySelectorAll('.grid-body-viewport .grid-row:not(.row--group) .grid-cell[data-column-key="amount"]'),
+        ).filter(candidate => candidate instanceof HTMLElement)
+        return cells[rowIndex] ?? cells[0] ?? null
+      }
+      const viewportEdgePoint = () => {
+        const rect = viewport.getBoundingClientRect()
+        return {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.bottom - 6),
+        }
+      }
+      const outsidePoint = () => ({ x: 8, y: 8 })
+      const readScrollSyncDrift = () => {
+        const headerViewport = document.querySelector(".grid-header-viewport")
+        const leftPaneContent = document.querySelector(".grid-body-pane--left .grid-pane-content")
+        const parseTransformY = (element) => {
+          if (!(element instanceof HTMLElement)) {
+            return null
+          }
+          const transform = element.style.transform || window.getComputedStyle(element).transform
+          if (!transform || transform === "none") {
+            return 0
+          }
+          const matrixMatch = transform.match(/matrix\(([^)]+)\)/)
+          if (matrixMatch) {
+            const parts = matrixMatch[1].split(",").map(part => Number.parseFloat(part.trim()))
+            return Number.isFinite(parts[5]) ? parts[5] : null
+          }
+          const translateMatch = transform.match(/translate3?d?\([^,]+,\s*(-?\d+(?:\.\d+)?)px/)
+          return translateMatch ? Number.parseFloat(translateMatch[1]) : null
+        }
+        const headerDrift = headerViewport instanceof HTMLElement
+          ? Math.abs(headerViewport.scrollLeft - viewport.scrollLeft)
+          : 0
+        const leftPaneTransformY = parseTransformY(leftPaneContent)
+        const pinnedVerticalDrift = leftPaneTransformY == null
+          ? 0
+          : Math.abs(leftPaneTransformY + viewport.scrollTop)
+        return {
+          headerDriftPx: headerDrift,
+          pinnedVerticalDriftPx: pinnedVerticalDrift,
+          maxAbsPx: Math.max(headerDrift, pinnedVerticalDrift),
+        }
+      }
+      const selectSourceCell = async () => {
+        const sourceCell = firstAmountCell()
+        if (!(sourceCell instanceof HTMLElement)) {
+          interactionDiagnostics.skipped.push("interaction:no-amount-cell")
+          return null
+        }
+        const point = elementCenter(sourceCell)
+        dispatchElementMouse(sourceCell, "mousedown", point)
+        dispatchWindowMouse("mouseup", point)
+        sourceCell.click()
+        await waitForPaint()
+        return sourceCell
+      }
+      const startRangeMove = async () => {
+        const sourceCell = await selectSourceCell()
+        const targetCell = amountCellByViewportRow(1)
+        if (!(sourceCell instanceof HTMLElement) || !(targetCell instanceof HTMLElement)) {
+          interactionDiagnostics.skipped.push("range-move:no-target-cell")
+          return null
+        }
+        dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))
+        dispatchWindowMouse("mousemove", elementCenter(targetCell), { buttons: 1 })
+        await waitForPaint()
+        return sourceCell
+      }
+      const runInteraction = async () => {
+        switch (input.scenario.interaction) {
+          case "drag-selection": {
+            const sourceCell = document.querySelector('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]')
+              ?? firstAmountCell()
+            if (!(sourceCell instanceof HTMLElement)) {
+              interactionDiagnostics.skipped.push("drag-selection:no-source-cell")
+              return
+            }
+            dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))
+            dispatchWindowMouse("mousemove", viewportEdgePoint(), { buttons: 1 })
+            await waitForPaint()
+            dispatchWindowMouse("mouseup", viewportEdgePoint())
+            break
+          }
+          case "fill-autoscroll": {
+            const sourceCell = await selectSourceCell()
+            await waitForCondition(() => document.querySelector(".cell-fill-handle") != null, 1500)
+            const fillHandle = sourceCell?.querySelector(".cell-fill-handle")
+              ?? document.querySelector(".cell-fill-handle")
+            if (!(fillHandle instanceof HTMLElement)) {
+              interactionDiagnostics.skipped.push("fill:no-fill-handle")
+              return
+            }
+            dispatchElementMouse(fillHandle, "mousedown", elementCenter(fillHandle))
+            dispatchWindowMouse("mousemove", viewportEdgePoint(), { buttons: 1 })
+            await waitForPaint()
+            dispatchWindowMouse("mouseup", outsidePoint())
+            break
+          }
+          case "range-autoscroll": {
+            const sourceCell = await startRangeMove()
+            dispatchWindowMouse("mousemove", viewportEdgePoint(), { buttons: 1 })
+            await waitForPaint()
+            if (sourceCell instanceof HTMLElement) {
+              sourceCell.dispatchEvent(new KeyboardEvent("keydown", {
+                bubbles: true,
+                cancelable: true,
+                key: "Escape",
+              }))
+            }
+            dispatchWindowMouse("mouseup", viewportEdgePoint())
+            break
+          }
+          case "resize-drag": {
+            const headerResize = document.querySelector('.grid-cell--header[data-column-key="name"] .col-resize')
+              ?? document.querySelector(".grid-cell--header .col-resize")
+            if (headerResize instanceof HTMLElement) {
+              const start = elementCenter(headerResize)
+              dispatchElementMouse(headerResize, "mousedown", start)
+              dispatchWindowMouse("mousemove", { x: start.x + 80, y: start.y }, { buttons: 1 })
+              dispatchWindowMouse("mouseup", { x: start.x + 80, y: start.y })
+            } else {
+              interactionDiagnostics.skipped.push("resize:no-column-handle")
+            }
+            const rowResize = document.querySelector('.grid-body-pane--left .grid-row[data-row-index="0"] .row-resize-handle')
+            if (rowResize instanceof HTMLElement) {
+              const start = elementCenter(rowResize)
+              dispatchElementMouse(rowResize, "mousedown", start)
+              dispatchWindowMouse("mousemove", { x: start.x, y: start.y + 32 }, { buttons: 1 })
+              dispatchWindowMouse("mouseup", { x: start.x, y: start.y + 32 })
+            } else {
+              interactionDiagnostics.skipped.push("resize:no-row-handle")
+            }
+            break
+          }
+          case "context-menu": {
+            const targetCell = await startRangeMove()
+            if (targetCell instanceof HTMLElement) {
+              const point = elementCenter(targetCell)
+              window.dispatchEvent(new MouseEvent("contextmenu", {
+                bubbles: true,
+                cancelable: true,
+                button: 2,
+                clientX: point.x,
+                clientY: point.y,
+                view: window,
+              }))
+            }
+            await waitForPaint()
+            const header = document.querySelector('.grid-cell--header[data-column-key="amount"]')
+              ?? document.querySelector(".grid-cell--header")
+            if (header instanceof HTMLElement) {
+              const point = elementCenter(header)
+              header.dispatchEvent(new MouseEvent("contextmenu", {
+                bubbles: true,
+                cancelable: true,
+                button: 2,
+                clientX: point.x,
+                clientY: point.y,
+                view: window,
+              }))
+              await waitForCondition(() => document.querySelector("[data-datagrid-column-menu-action]") != null, 1500)
+              document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }))
+            } else {
+              interactionDiagnostics.skipped.push("context-menu:no-header")
+            }
+            dispatchWindowMouse("mouseup", outsidePoint())
+            break
+          }
+          default:
+            interactionDiagnostics.skipped.push(`interaction:unknown-${input.scenario.interaction}`)
+        }
+      }
+      await runInteraction()
+      await waitForPaint()
+      const dataGridPerfStore = resolveDataGridPerfStore()
+      const samples = Array.isArray(dataGridPerfStore?.samples) ? dataGridPerfStore.samples.slice() : []
+      interactionDiagnostics.appPerf = dataGridPerfStore
+        ? {
+            samples,
+            summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
+          }
+        : null
+      interactionDiagnostics.traceSummary = summarizePerfSamplesByScope(samples)
+      interactionDiagnostics.scrollSyncDrift = readScrollSyncDrift()
+      interactions.skipped.push(...interactionDiagnostics.skipped)
+    }
+
     await pause(Math.max(32, input.stepDelayMs * 2))
     captureTelemetry("settled")
     captureRenderedSnapshot("settled")
@@ -1067,6 +1389,7 @@ async function runScenario(page, sessionIndex, scenario) {
           : 0,
         rangeSampleCount: verticalDiagnostics.rangeSampleCount,
       }
+      const dataGridPerfStore = resolveDataGridPerfStore()
       verticalDiagnostics.appPerf = dataGridPerfStore
         ? {
             samples: Array.isArray(dataGridPerfStore.samples) ? dataGridPerfStore.samples.slice() : [],
@@ -1097,6 +1420,7 @@ async function runScenario(page, sessionIndex, scenario) {
             attribution: entry.attribution,
           }))
       }
+      const dataGridPerfStore = resolveDataGridPerfStore()
       sortDiagnostics.appPerf = dataGridPerfStore
         ? {
             samples: Array.isArray(dataGridPerfStore.samples) ? dataGridPerfStore.samples.slice() : [],
@@ -1198,6 +1522,7 @@ async function runScenario(page, sessionIndex, scenario) {
       finalLeft: viewport.scrollLeft,
       verticalDiagnostics,
       sortDiagnostics,
+      interactionDiagnostics,
     }
   }, {
     scenario,
@@ -1239,11 +1564,16 @@ async function runScenario(page, sessionIndex, scenario) {
     finalLeft: result.finalLeft,
     verticalDiagnostics: result.verticalDiagnostics,
     sortDiagnostics: result.sortDiagnostics,
+    interactionDiagnostics: result.interactionDiagnostics,
   }
 }
 
 function aggregateRuns(runs) {
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
+  const interactionDiagnosticsRuns = runs.map(run => run.interactionDiagnostics).filter(Boolean)
+  const interactionScopeStats = (scope) => stats(
+    interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.[scope]?.totalMs?.p95),
+  )
   return {
     measuredElapsedMs: stats(runs.map(run => run.measuredElapsedMs)),
     interactionDurationMs: stats(runs.map(run => run.measuredElapsedMs)),
@@ -1294,6 +1624,14 @@ function aggregateRuns(runs) {
       visibleRowsMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.visibleRowsMs)),
       firstPaintAfterSortMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.firstPaintAfterSortMs)),
     },
+    interactionDiagnostics: {
+      previewP95Ms: interactionScopeStats("interactionPreview"),
+      autoScrollP95Ms: interactionScopeStats("interactionAutoScroll"),
+      focusRestoreMaxMs: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.stageFocusRestore?.totalMs?.max)),
+      preventDefaultCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionPreventDefault?.count ?? 0)),
+      cancelCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionCancel?.count ?? 0)),
+      scrollSyncDriftPx: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.scrollSyncDrift?.maxAbsPx)),
+    },
   }
 }
 
@@ -1321,6 +1659,52 @@ function resolveWorstScenario(scenarios) {
     }
   }
   return worst
+}
+
+function addWarningIfAbove(warnings, label, actual, budget) {
+  if (!Number.isFinite(actual) || actual <= budget) {
+    return
+  }
+  warnings.push(`${label} ${actual.toFixed(3)} exceeds warning budget ${budget}`)
+}
+
+function buildInteractionBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    if (!scenarioId.startsWith("interaction-")) {
+      continue
+    }
+    const diagnostics = report.aggregate.interactionDiagnostics
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} interactionPreview p95`,
+      diagnostics.previewP95Ms.p95,
+      PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} interactionAutoScroll p95`,
+      diagnostics.autoScrollP95Ms.p95,
+      PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} stageFocusRestore max`,
+      diagnostics.focusRestoreMaxMs.max,
+      PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} scroll sync drift`,
+      diagnostics.scrollSyncDriftPx.max,
+      PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
+    )
+    const skipped = report.sessions.flatMap(session => session.interactionDiagnostics?.skipped ?? [])
+    for (const reason of skipped) {
+      warnings.push(`${scenarioId} skipped ${reason}`)
+    }
+  }
+  return warnings
 }
 
 const startedAt = performance.now()
@@ -1372,6 +1756,8 @@ try {
 
 const elapsedMs = performance.now() - startedAt
 const scenarioReports = buildScenarioSummary(sessions)
+const budgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
+const budgetErrors = BENCH_INTERACTION_FAIL_ON_WARNINGS ? [...budgetWarnings] : []
 const aggregate = {
   elapsedMs,
   ...aggregateRuns(sessions),
@@ -1398,6 +1784,13 @@ const summary = {
     enableFilter: BENCH_ENABLE_FILTER,
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
+    interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
+    interactionBudgets: {
+      previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
+      autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
+      focusRestoreMaxMs: PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
+      scrollSyncDriftPx: PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
+    },
     headless: BENCH_BROWSER_HEADLESS,
     scenarios: SCENARIOS.map(scenario => scenario.id),
   },
@@ -1405,8 +1798,9 @@ const summary = {
   aggregate,
   scenarios: scenarioReports,
   sessions,
-  budgetErrors: [],
-  ok: true,
+  budgetWarnings,
+  budgetErrors,
+  ok: budgetErrors.length === 0,
 }
 
 mkdirSync(dirname(BENCH_OUTPUT_JSON), { recursive: true })
@@ -1421,4 +1815,13 @@ for (const scenario of SCENARIOS) {
   console.log(
     `${scenario.id}: frame p50=${report.aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${report.aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${report.aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${report.aggregate.fps.p50.toFixed(2)} dropped p95=${report.aggregate.droppedFramePct.p95.toFixed(2)}%`,
   )
+}
+if (budgetWarnings.length > 0) {
+  console.warn("\nInteraction performance warnings:")
+  for (const warning of budgetWarnings) {
+    console.warn(`- ${warning}`)
+  }
+}
+if (budgetErrors.length > 0) {
+  process.exitCode = 1
 }
