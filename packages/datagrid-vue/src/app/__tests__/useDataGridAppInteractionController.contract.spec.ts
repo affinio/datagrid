@@ -134,6 +134,8 @@ function createControllerHarness(options: {
   firstRowGroupKey?: string
   runtimeRowModelDataSource?: Record<string, unknown>
   runtimeRowModelFallbackDataSource?: Record<string, unknown>
+  rowModelSnapshot?: () => unknown
+  rowModelSubscribe?: (listener: () => void) => () => void
   materializeRowsOnRefresh?: boolean
   recordServerFillTransaction?: (descriptor: {
     intent: "fill"
@@ -457,6 +459,8 @@ function createControllerHarness(options: {
       },
       setViewportRange,
       rowModel: {
+        getSnapshot: options.rowModelSnapshot,
+        subscribe: options.rowModelSubscribe,
         invalidateRange,
         invalidateRows,
         refresh: refreshRows,
@@ -4820,6 +4824,148 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(vi.mocked(bodyViewport.focus).mock.calls.length).toBe(focusCallsBeforeMouseUp)
 
     rafSpy.mockRestore()
+  })
+
+  it("clears transient fill and clipboard state when projection changes", () => {
+    let sortDirection: "asc" | "desc" = "asc"
+    const rowModelListenerRef: { current: (() => void) | null } = { current: null }
+    const { controller, selectionSnapshot, clearPendingClipboardOperation } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+      rowModelSnapshot: () => ({
+        kind: "server",
+        revision: 1,
+        rowCount: 3,
+        loading: false,
+        error: null,
+        viewportRange: { start: 0, end: 2 },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 0,
+          totalRowCount: 3,
+          startIndex: 0,
+          endIndex: 2,
+        },
+        sortModel: [{ key: "name", direction: sortDirection }],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+      }),
+      rowModelSubscribe: listener => {
+        rowModelListenerRef.current = listener
+        return () => {
+          if (rowModelListenerRef.current === listener) {
+            rowModelListenerRef.current = null
+          }
+        }
+      },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isFillDragging.value).toBe(true)
+    expect(controller.fillPreviewRange.value).toEqual({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    })
+
+    sortDirection = "desc"
+    rowModelListenerRef.current?.()
+
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(controller.globalPointerListenersActive.value).toBe(false)
+    expect(clearPendingClipboardOperation).toHaveBeenCalledWith(false)
+  })
+
+  it("clears pending selected-cell range move when projection changes before movement threshold", () => {
+    let sortDirection: "asc" | "desc" = "asc"
+    const rowModelListenerRef: { current: (() => void) | null } = { current: null }
+    const { controller, row, selectionSnapshot } = createControllerHarness({
+      rowCount: 3,
+      columnWidths: [100, 100],
+      rowModelSnapshot: () => ({
+        kind: "server",
+        revision: 1,
+        rowCount: 3,
+        loading: false,
+        error: null,
+        viewportRange: { start: 0, end: 2 },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 0,
+          totalRowCount: 3,
+          startIndex: 0,
+          endIndex: 2,
+        },
+        sortModel: [{ key: "name", direction: sortDirection }],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+      }),
+      rowModelSubscribe: listener => {
+        rowModelListenerRef.current = listener
+        return () => undefined
+      },
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    const cell = createCell(0, 0)
+    controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    }), row, 0, 0)
+
+    expect(controller.globalPointerListenersActive.value).toBe(true)
+
+    sortDirection = "desc"
+    rowModelListenerRef.current?.()
+
+    expect(controller.globalPointerListenersActive.value).toBe(false)
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.rangeMovePreviewRange.value).toBeNull()
   })
 
   it("restores the active cell to the fill origin anchor after fill-handle apply", async () => {

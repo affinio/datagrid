@@ -35,6 +35,7 @@ export type DataGridInteractionCancelReason =
   | "dispose"
   | "escape"
   | "pointercancel"
+  | "projection-change"
 
 export type DataGridInteractionPreviewOwner = "drag-selection" | "fill" | "range-move"
 

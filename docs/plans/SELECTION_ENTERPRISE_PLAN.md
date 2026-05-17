@@ -47,6 +47,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 3: Projection Invalidation Policy
 
+- Status: Completed on 2026-05-17. Virtual selections are already stale-marked on projection identity changes, and the app interaction controller now clears transient drag selection, fill preview, range-move preview, restartable fill state, and pending clipboard state when the row-model projection key changes.
 - Objective: make selection invalidation deterministic after sort, filter, group, pivot, tree expansion, datasource cache replacement, and placeholder replacement.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/selectionState.ts`

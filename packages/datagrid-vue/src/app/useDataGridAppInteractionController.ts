@@ -5,6 +5,7 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
+  buildDataGridSelectionProjectionIdentity,
   invokeDataGridCellInteraction,
   resolveDataGridCellKeyboardAction,
   toggleDataGridCellValue,
@@ -232,6 +233,11 @@ type DataGridAppPinnedOrigin = "left" | "right" | "center"
 type DataGridRowIndexKeyboardAction = "insert-row-above" | "copy-row" | "cut-row" | "paste-row" | "delete-selected-rows" | "open-row-menu"
 
 const DRAG_SELECTION_POINTER_THRESHOLD_PX = 4
+
+interface DataGridAppProjectionObservableRowModel {
+  getSnapshot?: () => unknown
+  subscribe?: (listener: () => void) => () => void
+}
 
 export interface UseDataGridAppInteractionControllerOptions<
   TRow extends Record<string, unknown>,
@@ -3214,6 +3220,34 @@ export function useDataGridAppInteractionController<
     }
   }
 
+  const resolveInteractionProjectionKey = (
+    rowModel: DataGridAppProjectionObservableRowModel | null,
+  ): string | null => {
+    if (!rowModel || typeof rowModel.getSnapshot !== "function") {
+      return null
+    }
+    return buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot() as never)?.projectionKey ?? null
+  }
+
+  const rowModelForProjectionInvalidation = options.runtime.rowModel as DataGridAppProjectionObservableRowModel | null
+  let lastInteractionProjectionKey = resolveInteractionProjectionKey(rowModelForProjectionInvalidation)
+  const unsubscribeProjectionInvalidation = typeof rowModelForProjectionInvalidation?.subscribe === "function"
+    ? rowModelForProjectionInvalidation.subscribe(() => {
+        const nextProjectionKey = resolveInteractionProjectionKey(rowModelForProjectionInvalidation)
+        if (
+          lastInteractionProjectionKey != null
+          && nextProjectionKey != null
+          && nextProjectionKey !== lastInteractionProjectionKey
+        ) {
+          cancelPointerInteractions(false, "projection-change")
+          options.clearPendingClipboardOperation(false)
+          lastAppliedFill.value = null
+          activeRestartFillSession.value = null
+        }
+        lastInteractionProjectionKey = nextProjectionKey
+      })
+    : null
+
   const handleWindowContextMenuCapture = (event: MouseEvent): boolean => {
     if (!hasActivePointerInteractionState(false)) {
       return false
@@ -3266,6 +3300,7 @@ export function useDataGridAppInteractionController<
     dispose: () => {
       cancelPointerInteractions(false, "dispose")
       recordInteractionOwnerTransitionIfEnabled()
+      unsubscribeProjectionInvalidation?.()
       pointerAutoScroll.dispose()
     },
   }
