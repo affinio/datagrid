@@ -154,6 +154,10 @@ type DataGridTableStageBodyRuntime<TRow extends Record<string, unknown>> = {
   resolveBodyRowIndexById: (rowId: string | number) => number
 }
 
+type DataGridLoadedRowIntervalProvider = {
+  getLoadedRowIntervals?: (range: { start: number; end: number }) => readonly { start: number; end: number }[]
+}
+
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
   mode: Ref<"base" | "tree" | "pivot" | "worker">
   layoutMode: Ref<DataGridLayoutMode>
@@ -171,6 +175,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
     getRow?: DataGridRowModel<TRow>["getRow"]
     getRowCount?: DataGridRowModel<TRow>["getRowCount"]
     getRowsInRange?: DataGridRowModel<TRow>["getRowsInRange"]
+    getLoadedRowIntervals?: DataGridRowModel<TRow>["getLoadedRowIntervals"]
     dataSource?: {
       resolveFillBoundary?: (
         request: DataGridAppResolveFillBoundaryRequest,
@@ -576,6 +581,14 @@ export function useDataGridTableStageRuntime<
     return options.runtime.rowPartition.value.pinnedBottomRows[pinnedBottomIndex] ?? null
   }
 
+  function resolveLoadedRowIntervals(range: DataGridCopyRange): readonly { start: number; end: number }[] {
+    const rowModel = (options.runtimeRowModel ?? options.runtime.rowModel) as DataGridLoadedRowIntervalProvider | null | undefined
+    return rowModel?.getLoadedRowIntervals?.({
+      start: range.startRow,
+      end: range.endRow,
+    }) ?? []
+  }
+
   const {
     rowStyle,
     isRowAutosizeProbe,
@@ -622,6 +635,7 @@ export function useDataGridTableStageRuntime<
       const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
       return !!row && !placeholderRows.isPlaceholderRow(row)
     },
+    resolveLoadedRowIntervals,
     resolveProjectionIdentity: () => {
       const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? selectableRuntime.api.rows.getSnapshot()
       return buildDataGridSelectionProjectionIdentity(snapshot)
@@ -660,6 +674,12 @@ export function useDataGridTableStageRuntime<
       }
       const coverage = collectDataGridSelectionLoadedCoverage(range, {
         maxScanRows: DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS,
+        loadedIntervals: resolveLoadedRowIntervals({
+          startRow: range.startRow,
+          endRow: range.endRow,
+          startColumn: range.startCol,
+          endColumn: range.endCol,
+        }),
         isRowLoaded: rowIndex => {
           const row = selectableRuntime.getBodyRowAtIndex(rowIndex)
           return !!row && !placeholderRows.isPlaceholderRow(row)

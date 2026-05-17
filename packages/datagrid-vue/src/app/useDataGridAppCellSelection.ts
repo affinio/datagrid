@@ -38,6 +38,7 @@ export interface UseDataGridAppCellSelectionOptions<TRow> {
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
   isVirtualSelectionMode?: () => boolean
   isRowLoadedAtIndex?: (rowIndex: number) => boolean
+  resolveLoadedRowIntervals?: (range: DataGridCopyRange) => readonly { start: number; end: number }[]
   resolveProjectionIdentity?: () => DataGridSelectionProjectionIdentity | null
 }
 
@@ -181,6 +182,12 @@ export function useDataGridAppCellSelection<TRow>(
       endColumn: range.endCol,
     }, {
       isRowLoaded,
+      loadedIntervals: options.resolveLoadedRowIntervals?.({
+        startRow: range.startRow,
+        endRow: range.endRow,
+        startColumn: range.startCol,
+        endColumn: range.endCol,
+      }),
       getRowIdAtIndex: rowIndex => options.runtime.getBodyRowAtIndex(rowIndex)?.rowId ?? null,
     })
     return {

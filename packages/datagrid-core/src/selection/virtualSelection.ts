@@ -23,6 +23,18 @@ export interface DataGridSelectionMissingRowInterval {
   endRow: number
 }
 
+export interface DataGridSelectionLoadedRowInterval {
+  startRow: number
+  endRow: number
+}
+
+export interface DataGridSelectionLoadedRowIntervalLike {
+  startRow?: number
+  endRow?: number
+  start?: number
+  end?: number
+}
+
 export interface DataGridSelectionLoadedRowId<TRowKey = DataGridRowId> {
   rowIndex: number
   rowId: TRowKey
@@ -90,6 +102,7 @@ export interface DataGridVirtualSelectionOperationDecision {
 export interface CollectDataGridSelectionLoadedCoverageOptions<TRowKey = DataGridRowId> {
   isRowLoaded: (rowIndex: number) => boolean
   getRowIdAtIndex?: (rowIndex: number) => TRowKey | null | undefined
+  loadedIntervals?: readonly DataGridSelectionLoadedRowIntervalLike[]
   maxScanRows?: number
 }
 
@@ -104,6 +117,61 @@ export interface CreateDataGridVirtualSelectionMetadataOptions<TRowKey = DataGri
 }
 
 export const DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS = 4_096
+
+function normalizeDataGridSelectionLoadedRowInterval(
+  interval: DataGridSelectionLoadedRowIntervalLike,
+  range: DataGridNormalizedSelectionRange,
+): DataGridSelectionLoadedRowInterval | null {
+  const rawStart = typeof interval.startRow === "number" ? interval.startRow : interval.start
+  const rawEnd = typeof interval.endRow === "number" ? interval.endRow : interval.end
+  if (!Number.isFinite(rawStart) || !Number.isFinite(rawEnd)) {
+    return null
+  }
+  const start = Math.max(range.startRow, Math.min(Math.trunc(rawStart as number), Math.trunc(rawEnd as number)))
+  const end = Math.min(range.endRow, Math.max(Math.trunc(rawStart as number), Math.trunc(rawEnd as number)))
+  if (start > end) {
+    return null
+  }
+  return { startRow: start, endRow: end }
+}
+
+function mergeDataGridSelectionLoadedRowIntervals(
+  intervals: readonly DataGridSelectionLoadedRowInterval[],
+): readonly DataGridSelectionLoadedRowInterval[] {
+  const sorted = [...intervals].sort((left, right) => (
+    left.startRow === right.startRow
+      ? left.endRow - right.endRow
+      : left.startRow - right.startRow
+  ))
+  const merged: DataGridSelectionLoadedRowInterval[] = []
+  for (const interval of sorted) {
+    const previous = merged[merged.length - 1]
+    if (previous && previous.endRow + 1 >= interval.startRow) {
+      previous.endRow = Math.max(previous.endRow, interval.endRow)
+      continue
+    }
+    merged.push({ ...interval })
+  }
+  return merged
+}
+
+function invertDataGridSelectionLoadedRowIntervals(
+  range: DataGridNormalizedSelectionRange,
+  intervals: readonly DataGridSelectionLoadedRowInterval[],
+): readonly DataGridSelectionMissingRowInterval[] {
+  const missing: DataGridSelectionMissingRowInterval[] = []
+  let cursor = range.startRow
+  for (const interval of intervals) {
+    if (cursor < interval.startRow) {
+      missing.push({ startRow: cursor, endRow: interval.startRow - 1 })
+    }
+    cursor = Math.max(cursor, interval.endRow + 1)
+  }
+  if (cursor <= range.endRow) {
+    missing.push({ startRow: cursor, endRow: range.endRow })
+  }
+  return missing
+}
 
 export function normalizeDataGridSelectionRangeLike(
   range: DataGridSelectionRangeLike,
@@ -203,6 +271,35 @@ export function collectDataGridSelectionLoadedCoverage<TRowKey = DataGridRowId>(
       totalRowCount: 0,
       missingIntervals: [],
       rowIds: [],
+      scanLimited: false,
+    }
+  }
+  if (options.loadedIntervals) {
+    const intervals = mergeDataGridSelectionLoadedRowIntervals(
+      options.loadedIntervals
+        .map(interval => normalizeDataGridSelectionLoadedRowInterval(interval, normalized))
+        .filter((interval): interval is DataGridSelectionLoadedRowInterval => interval != null),
+    )
+    const rowIds: DataGridSelectionLoadedRowId<TRowKey>[] = []
+    let loadedRowCount = 0
+    for (const interval of intervals) {
+      loadedRowCount += interval.endRow - interval.startRow + 1
+      if (options.getRowIdAtIndex) {
+        for (let rowIndex = interval.startRow; rowIndex <= interval.endRow; rowIndex += 1) {
+          const rowId = options.getRowIdAtIndex(rowIndex)
+          if (rowId != null) {
+            rowIds.push({ rowIndex, rowId })
+          }
+        }
+      }
+    }
+    const missingIntervals = invertDataGridSelectionLoadedRowIntervals(normalized, intervals)
+    return {
+      isFullyLoaded: missingIntervals.length === 0,
+      loadedRowCount,
+      totalRowCount: normalized.endRow - normalized.startRow + 1,
+      missingIntervals,
+      rowIds,
       scanLimited: false,
     }
   }

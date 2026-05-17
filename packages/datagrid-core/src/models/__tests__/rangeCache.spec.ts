@@ -48,6 +48,30 @@ describe("createDataGridRangeCache", () => {
     ])
   })
 
+  it("returns loaded intervals from sparse cached rows without walking missing indexes", () => {
+    const cache = createDataGridRangeCache<string>({
+      chunkSize: 4,
+      maxChunks: 4,
+    })
+
+    cache.setRow(1, "row-1")
+    cache.setRow(2, "row-2")
+    cache.setRow(5, "row-5")
+    cache.setRow(8, "row-8")
+    cache.setRow(9, "row-9")
+
+    expect(cache.getLoadedIntervals({ start: 0, end: 9 })).toEqual([
+      { start: 1, end: 2 },
+      { start: 5, end: 5 },
+      { start: 8, end: 9 },
+    ])
+    expect(cache.getLoadedIntervals({ start: 2, end: 8 })).toEqual([
+      { start: 2, end: 2 },
+      { start: 5, end: 5 },
+      { start: 8, end: 8 },
+    ])
+  })
+
   it("keeps error state local to failed chunks", () => {
     const cache = createDataGridRangeCache<string>({
       chunkSize: 4,

@@ -169,6 +169,42 @@ describe("virtual selection helpers", () => {
     })
   })
 
+  it("uses loaded intervals for huge virtual coverage without scanning selected rows", () => {
+    const coverage = collectDataGridSelectionLoadedCoverage({
+      startRow: 0,
+      endRow: 100_000,
+      startColumn: 0,
+      endColumn: 0,
+    }, {
+      loadedIntervals: [
+        { start: 0, end: 10 },
+        { start: 20, end: 25 },
+        { start: 25, end: 30 },
+        { start: 99_990, end: 100_000 },
+      ],
+      isRowLoaded: () => {
+        throw new Error("interval coverage should not scan row-by-row")
+      },
+      getRowIdAtIndex: rowIndex => `r${rowIndex}`,
+    })
+
+    expect(coverage).toEqual({
+      isFullyLoaded: false,
+      loadedRowCount: 33,
+      totalRowCount: 100_001,
+      missingIntervals: [
+        { startRow: 11, endRow: 19 },
+        { startRow: 31, endRow: 99_989 },
+      ],
+      rowIds: [
+        ...Array.from({ length: 11 }, (_, index) => ({ rowIndex: index, rowId: `r${index}` })),
+        ...Array.from({ length: 11 }, (_, index) => ({ rowIndex: index + 20, rowId: `r${index + 20}` })),
+        ...Array.from({ length: 11 }, (_, index) => ({ rowIndex: index + 99_990, rowId: `r${index + 99_990}` })),
+      ],
+      scanLimited: false,
+    })
+  })
+
   it("separates materialized, server-delegated, and blocked operation decisions", () => {
     const unloadedCoverage = {
       isFullyLoaded: false,

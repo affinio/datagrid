@@ -232,4 +232,63 @@ describe("useDataGridAppCellSelection contract", () => {
       endColumn: 1,
     })
   })
+
+  it("uses loaded row intervals for virtual selection coverage when provided", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("base"),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+          },
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: (snapshot: DataGridSelectionSnapshot) => {
+              selectionSnapshot.value = snapshot
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => (
+          rowIndex <= 1 || rowIndex >= 5
+            ? { rowId: `r${rowIndex + 1}` }
+            : null
+        ),
+      } as never,
+      totalRows: ref(10),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+      isVirtualSelectionMode: () => true,
+      isRowLoadedAtIndex: () => {
+        throw new Error("loaded interval coverage should not scan rows")
+      },
+      resolveLoadedRowIntervals: () => [
+        { start: 0, end: 1 },
+        { start: 5, end: 5 },
+      ],
+    })
+
+    api.applySelectionRange({
+      startRow: 0,
+      endRow: 5,
+      startColumn: 0,
+      endColumn: 1,
+    })
+
+    expect(selectionSnapshot.value?.ranges[0]?.virtual?.coverage).toMatchObject({
+      isFullyLoaded: false,
+      loadedRowCount: 3,
+      totalRowCount: 6,
+      missingIntervals: [{ startRow: 2, endRow: 4 }],
+      scanLimited: false,
+    })
+  })
 })

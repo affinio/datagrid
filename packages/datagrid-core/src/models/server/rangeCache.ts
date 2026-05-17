@@ -39,6 +39,7 @@ export interface DataGridRangeCache<T> {
   deleteRow(index: number): boolean
   readIndex(index: number): DataGridRangeCacheReadEntry<T>
   readRange(range: DataGridViewportRange): DataGridRangeCacheReadEntry<T>[]
+  getLoadedIntervals(range: DataGridViewportRange): DataGridViewportRange[]
   getDiagnostics(): DataGridRangeCacheDiagnostics
 }
 
@@ -295,6 +296,32 @@ export function createDataGridRangeCache<T>(
         entries.push(readIndex(index))
       }
       return entries
+    },
+    getLoadedIntervals(range) {
+      const normalized = normalizeRange(range)
+      const loadedIndexes: number[] = []
+      for (const chunkIndex of getChunkIndexes(normalized)) {
+        const chunk = readChunk(chunkIndex)
+        if (!chunk) {
+          continue
+        }
+        for (const rowIndex of chunk.rows.keys()) {
+          if (rowIndex >= normalized.start && rowIndex <= normalized.end) {
+            loadedIndexes.push(rowIndex)
+          }
+        }
+      }
+      loadedIndexes.sort((left, right) => left - right)
+      const intervals: DataGridViewportRange[] = []
+      for (const rowIndex of loadedIndexes) {
+        const previous = intervals[intervals.length - 1]
+        if (previous && previous.end + 1 === rowIndex) {
+          previous.end = rowIndex
+          continue
+        }
+        intervals.push({ start: rowIndex, end: rowIndex })
+      }
+      return intervals
     },
     getDiagnostics() {
       let rows = 0

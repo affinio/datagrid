@@ -110,6 +110,7 @@ export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<
     options?: DataGridExternalRowUpdateOptions,
   ) => void | Promise<void>
   getSparseRowModelDiagnostics(): DataGridSparseRowModelDiagnostics
+  getLoadedRowIntervals(range: DataGridViewportRange): DataGridViewportRange[]
   invalidateRange(range: DataGridViewportRange): void
   invalidateRows(rowIds: readonly DataGridRowId[]): void
   invalidateAll(): void
@@ -801,6 +802,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
       start: toSourceIndex(normalized.start),
       end: toSourceIndex(normalized.end),
     }
+  }
+
+  function toVisibleLoadedIntervals(
+    visibleRange: DataGridViewportRange,
+    sourceRange: DataGridViewportRange,
+  ): DataGridViewportRange[] {
+    return rangeCache.getLoadedIntervals(sourceRange).map(interval => ({
+      start: interval.start - sourceRange.start + visibleRange.start,
+      end: interval.end - sourceRange.start + visibleRange.start,
+    }))
   }
 
   function getViewportSize(range: DataGridViewportRange): number {
@@ -2240,6 +2251,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
         cacheLimit: rowCacheLimit,
         ...resolveViewportLoadingDiagnostics(),
       }
+    },
+    getLoadedRowIntervals(range) {
+      const visibleCount = getVisibleRowCount()
+      if (visibleCount <= 0) {
+        return []
+      }
+      const visibleRange = normalizeViewportRange(range, visibleCount)
+      return toVisibleLoadedIntervals(visibleRange, toSourceRange(visibleRange))
     },
     getSnapshot,
     getRowCount() {

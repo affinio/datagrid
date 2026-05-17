@@ -224,6 +224,8 @@ export type {
   DataGridSelectionAggregationKind,
   DataGridSelectionLoadedCoverage,
   DataGridSelectionMissingRowInterval,
+  DataGridSelectionLoadedRowInterval,
+  DataGridSelectionLoadedRowIntervalLike,
   DataGridSelectionProjectionIdentity,
   DataGridSelectionSnapshot,
   DataGridSelectionSnapshotRange,

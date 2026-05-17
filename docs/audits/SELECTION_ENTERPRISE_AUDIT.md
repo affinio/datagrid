@@ -4,7 +4,7 @@
 
 The DataGrid selection architecture is strong, but not yet enterprise-grade. It has a clear core snapshot shape, deterministic range helpers, multi-range support, virtual-selection metadata, row-selection APIs, keyboard routing, clipboard/fill/range-move plumbing, pinned-pane overlay support, and broad unit/contract coverage.
 
-The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; large virtual selections still rely on row-by-row loaded-row scans; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection has no deliberate long-press/handle model; server-backed selection semantics are partial; and e2e coverage does not yet prove selection continuity across virtualization remounts, pinned panes, grouped/tree changes, and unloaded rows.
+The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans, but server operation semantics still need broadening; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection has no deliberate long-press/handle model; server-backed selection semantics are partial; and e2e coverage does not yet prove selection continuity across virtualization remounts, pinned panes, grouped/tree changes, and unloaded rows.
 
 Current enterprise readiness: **7/10**.
 Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, touch UX, virtualization continuity, and performance gates.
@@ -107,8 +107,8 @@ Tests and benchmarks sampled:
 
 ### Blocker
 
-1. **Large virtual selection is not enterprise-grade yet.**
-   `virtualSelection.ts` explicitly documents that loaded coverage helpers scan row-by-row and should accept loaded intervals before use with very large virtual ranges. The helper caps scans at `DATA_GRID_VIRTUAL_SELECTION_MAX_SCAN_ROWS = 4096`, which is safe but means huge unloaded ranges are partial by design.
+1. **Large virtual selection coverage now has an interval path, but server operation semantics remain incomplete.**
+   `virtualSelection.ts` can compute loaded coverage from row-model intervals, and `createDataSourceBackedRowModel` exposes `getLoadedRowIntervals(range)` from its range cache. The fallback row-by-row helper still has a scan cap for row models that do not provide interval metadata.
 
 2. **Server-backed selection semantics are incomplete for enterprise operations.**
    Virtual metadata can decide whether copy/cut/delete/fill/range-move is materialized, server-delegated, or blocked, but the app path mainly blocks unloaded clipboard copy and has server fill-specific plumbing. There is no complete audited contract for server-delegated copy, cut, clear/delete, range move, aggregate summary, or selection export over unloaded rows.
@@ -174,7 +174,7 @@ Tests and benchmarks sampled:
 | Active cell ownership | Functional but split across snapshot, anchor, focus runtime, and editing | Document one state machine and add remount/edit/server tests |
 | Range selection | Strong core/app support | Need broader e2e around virtualization and grouped rows |
 | Multi-range support | Supported for cell selection and clipboard ranges | Clarify visual overlay behavior and test pinned/header cases |
-| Virtual selection over unloaded rows | Metadata and blocked/server decisions exist | Replace row-by-row huge scans with loaded intervals and server contracts |
+| Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
 | Virtualization remount continuity | Logical model is suitable | Needs browser tests for focus/classes/overlays/editors after remount |
 | Keyboard navigation | Strong coverage through command and navigation routers | Need server/unloaded and pinned-pane e2e |
 | Shift selection | Implemented for keyboard and pointer | Need grouped/tree, placeholder, and remount coverage |
@@ -244,12 +244,11 @@ Blocks to target:
 
 ## Recommended Next Work
 
-1. Replace huge virtual-selection row scans with loaded interval metadata from row models.
-2. Define server-backed operation contracts for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
-3. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
-4. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
-5. Add a touch selection design with long press and explicit handles.
-6. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
+1. Define server-backed operation contracts for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
+2. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
+3. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
+4. Add a touch selection design with long press and explicit handles.
+5. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
 
 ## Validation Expectations
 

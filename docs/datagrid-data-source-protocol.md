@@ -58,6 +58,7 @@ Histogram `options.search` is scoped only to value-list search. It is independen
 
 - range-driven demand via `setViewportRange`
 - sparse/server-backed row-model diagnostics via `getSparseRowModelDiagnostics()`
+- loaded cache interval metadata via `getLoadedRowIntervals(range)` for virtual selection coverage without scanning unloaded row-by-row ranges
 - abort-first cancellation for overlapping pulls
 - optional histogram capability backed by `DataGridDataSource.getColumnHistogram`
 - cache invalidation APIs (`invalidateRange`, `invalidateAll`)

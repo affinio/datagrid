@@ -157,6 +157,8 @@ export {
   type DataGridNormalizedSelectionRange,
   type DataGridSelectionLoadedCoverage,
   type DataGridSelectionLoadedRowId,
+  type DataGridSelectionLoadedRowInterval,
+  type DataGridSelectionLoadedRowIntervalLike,
   type DataGridSelectionMissingRowInterval,
   type DataGridSelectionProjectionIdentity,
   type DataGridSelectionRangeLike,

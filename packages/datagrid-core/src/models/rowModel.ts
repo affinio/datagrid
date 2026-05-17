@@ -431,6 +431,7 @@ export interface DataGridRowModel<T = unknown> {
   getRowCount(): number
   getRow(index: number): DataGridRowNode<T> | undefined
   getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<T>[]
+  getLoadedRowIntervals?(range: DataGridViewportRange): readonly DataGridViewportRange[]
   setViewportRange(range: DataGridViewportRange): void
   setPagination(pagination: DataGridPaginationInput | null): void
   setPageSize(pageSize: number | null): void

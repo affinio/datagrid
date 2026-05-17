@@ -70,6 +70,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 4: Virtual Selection Loaded Intervals
 
+- Status: Completed on 2026-05-17. `collectDataGridSelectionLoadedCoverage` now accepts loaded row intervals, range cache exposes loaded intervals from cached rows, datasource row models expose `getLoadedRowIntervals(range)`, and app/stage virtual-selection coverage uses the interval path when available.
 - Objective: replace huge virtual-selection row-by-row coverage scans with loaded interval metadata from row models or datasource cache state.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
