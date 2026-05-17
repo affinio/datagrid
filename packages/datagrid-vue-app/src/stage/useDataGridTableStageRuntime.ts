@@ -1562,6 +1562,7 @@ export function useDataGridTableStageRuntime<
   const {
     isPointerSelectingCells,
     isFillDragging,
+    globalPointerListenersActive: interactionGlobalPointerListenersActive,
     fillPreviewRange,
     lastAppliedFill,
     isRangeMoving,
@@ -1643,6 +1644,10 @@ export function useDataGridTableStageRuntime<
     },
   })
 
+  const globalPointerListenersActive = computed(() => (
+    interactionGlobalPointerListenersActive.value
+    || isColumnResizing.value
+  ))
 
   const visualSelectionService = useDataGridTableStageVisualSelection({
     mode: options.mode,
@@ -1862,6 +1867,7 @@ export function useDataGridTableStageRuntime<
 
   useDataGridAppViewportLifecycle({
     bodyViewportRef,
+    globalPointerListenersActive,
     syncViewport: syncViewportFromDom,
     handleWindowMouseMove: stageServices.scrollSync.handleWindowMouseMove,
     handleWindowMouseUp: stageServices.scrollSync.handleWindowMouseUp,

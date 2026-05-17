@@ -589,6 +589,7 @@ describe("useDataGridAppInteractionController contract", () => {
       activeOwners: [],
       hasConflict: false,
     })
+    expect(controller.globalPointerListenersActive.value).toBe(true)
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
 
     controller.handleWindowMouseMove(new MouseEvent("mousemove", {
@@ -599,7 +600,11 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(controller.isPointerSelectingCells.value).toBe(false)
     expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+    expect(controller.globalPointerListenersActive.value).toBe(true)
     expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
+
+    controller.handleWindowMouseUp()
+    expect(controller.globalPointerListenersActive.value).toBe(false)
   })
 
   it("ignores touch-generated cell mousedown events", () => {
@@ -619,6 +624,7 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(pointerDown.defaultPrevented).toBe(false)
     expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(controller.globalPointerListenersActive.value).toBe(false)
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
@@ -639,6 +645,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isPointerSelectingCells.value).toBe(true)
+    expect(controller.globalPointerListenersActive.value).toBe(true)
     expect(controller.interactionOwnerSnapshot.value).toEqual({
       owner: "drag-selection",
       activeOwners: ["drag-selection"],
@@ -884,6 +891,7 @@ describe("useDataGridAppInteractionController contract", () => {
 
     expect(controller.isPointerSelectingCells.value).toBe(false)
     expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+    expect(controller.globalPointerListenersActive.value).toBe(false)
   })
 
   it("maps ctrl+a to select all filtered rows and visible columns", () => {
@@ -1827,6 +1835,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isRangeMoving.value).toBe(true)
+    expect(controller.globalPointerListenersActive.value).toBe(true)
 
     const contextMenu = new MouseEvent("contextmenu", { cancelable: true, clientX: 120, clientY: 82 })
     expect(controller.handleWindowContextMenuCapture(contextMenu)).toBe(true)
@@ -1835,6 +1844,7 @@ describe("useDataGridAppInteractionController contract", () => {
     await flushAsync()
     expect(controller.isRangeMoving.value).toBe(false)
     expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+    expect(controller.globalPointerListenersActive.value).toBe(false)
   })
 
   it("does not start range move from a non-editable selected cell", () => {
@@ -2066,6 +2076,7 @@ describe("useDataGridAppInteractionController contract", () => {
     }))
 
     expect(controller.isFillDragging.value).toBe(true)
+    expect(controller.globalPointerListenersActive.value).toBe(true)
     expect(controller.interactionOwnerSnapshot.value).toEqual({
       owner: "fill",
       activeOwners: ["fill"],
@@ -2114,6 +2125,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.isFillDragging.value).toBe(false)
     expect(controller.fillPreviewRange.value).toBeNull()
     expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+    expect(controller.globalPointerListenersActive.value).toBe(false)
     expect(applyClipboardEdits).not.toHaveBeenCalled()
   })
 

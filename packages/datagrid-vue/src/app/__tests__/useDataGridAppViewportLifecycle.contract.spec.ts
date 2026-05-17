@@ -63,4 +63,52 @@ describe("useDataGridAppViewportLifecycle contract", () => {
     expect(handleWindowBlur).toHaveBeenCalledTimes(1)
     expect(handleWindowContextMenuCapture).toHaveBeenCalledTimes(1)
   })
+
+  it("attaches global pointer listeners only while active when an active ref is provided", async () => {
+    const globalPointerListenersActive = ref(false)
+    const syncViewport = vi.fn()
+    const handleWindowMouseMove = vi.fn()
+    const handleWindowMouseUp = vi.fn()
+    const handleWindowPointerCancel = vi.fn()
+    const Host = defineComponent({
+      setup() {
+        const bodyViewportRef = ref<HTMLElement | null>(null)
+        useDataGridAppViewportLifecycle({
+          bodyViewportRef,
+          globalPointerListenersActive,
+          syncViewport,
+          handleWindowMouseMove,
+          handleWindowMouseUp,
+          handleWindowPointerCancel,
+        })
+        return () => h("div", {
+          ref: element => {
+            bodyViewportRef.value = element as HTMLElement | null
+          },
+        })
+      },
+    })
+
+    const wrapper = mount(Host, { attachTo: document.body })
+    await wrapper.vm.$nextTick()
+
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 1, clientY: 2 }))
+    window.dispatchEvent(new Event("pointercancel"))
+    expect(handleWindowMouseMove).not.toHaveBeenCalled()
+    expect(handleWindowPointerCancel).not.toHaveBeenCalled()
+
+    globalPointerListenersActive.value = true
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 3, clientY: 4 }))
+    window.dispatchEvent(new Event("pointercancel"))
+    expect(handleWindowMouseMove).toHaveBeenCalledTimes(1)
+    expect(handleWindowPointerCancel).toHaveBeenCalledTimes(1)
+
+    globalPointerListenersActive.value = false
+    window.dispatchEvent(new MouseEvent("mousemove", { clientX: 5, clientY: 6 }))
+    window.dispatchEvent(new Event("pointercancel"))
+    expect(handleWindowMouseMove).toHaveBeenCalledTimes(1)
+    expect(handleWindowPointerCancel).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
 })

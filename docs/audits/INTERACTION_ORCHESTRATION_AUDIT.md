@@ -24,7 +24,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 1 completed on 2026-05-17: `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` now provides an internal owner snapshot for drag selection, fill, range move, column resize, and row resize. Focused contracts cover single-owner state and start-order transitions.
 - Slice 2 completed on 2026-05-17: `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
 - Slice 3 completed on 2026-05-17: the mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction and resize cancellation.
-- Remaining high-risk work: active-only listener wiring, prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
+- Slice 4 completed on 2026-05-17: mounted window pointer/mouse lifecycle listeners now attach only while the app-stage has a pending or active pointer interaction, or while column resize owns the gesture.
+- Remaining high-risk work: prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
 
 ## Files reviewed
 
@@ -151,7 +152,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 5. **Window-level mouse listeners are broad.**
    - Evidence: `useDataGridAppViewportLifecycle.ts` always adds `mousemove` and `mouseup` handlers while mounted.
    - Impact: handlers are light when idle, but enterprise interaction systems usually attach global move/up listeners only while an interaction is active or use pointer capture.
-   - Required: consider active-only listeners or route through `useDataGridGlobalPointerLifecycle`.
+   - Status: addressed for the mounted app-stage path; global pointer/mouse lifecycle listeners attach only while pending/active interaction state is true.
+   - Required: keep e2e race coverage aligned as lifecycle wiring evolves.
 
 ### Medium
 
@@ -223,7 +225,7 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 | PreventDefault usage | Mostly scoped and intentional; needs central policy documentation. |
 | Scroll synchronization | rAF-backed for linked panes and stage scroll refs; header/pinned sync tests exist. |
 | State machines | Feature-level state machines exist; owner snapshot now covers active app owners, but cancellation is not yet unified. |
-| Cancellation semantics | Mounted main path now covers pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup; active-only listener wiring remains open. |
+| Cancellation semantics | Mounted main path now covers pointerup, pointercancel, contextmenu capture, window blur, unmount cleanup, and active-only pointer listener wiring. |
 
 ## Correctness risks
 
@@ -238,7 +240,7 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 - Mousemove-driven drag/fill/range previews can update selection/overlay state synchronously.
 - Pointer auto-scroll reads `getBoundingClientRect()` each frame while an interaction is active. This is reasonable but should be budgeted.
 - Hover/range edge detection calls `getBoundingClientRect()` on mousemove. Coarse pointer and scroll suppression reduce risk.
-- Global mousemove listeners are always installed while the grid is mounted.
+- Global mousemove listeners are now active-only in the mounted app-stage path.
 - Canvas chrome redraw and pinned sync have been rAF-batched, but scroll-time budgets still need browser traces.
 
 ## Touch/mobile risks
@@ -260,7 +262,7 @@ What blocks target score:
 - No single active interaction owner diagnostic/invariant.
 - Main stage path does not use the shared global pointer lifecycle.
 - Touch selection/range/fill are guarded but not designed as complete workflows.
-- Active-only listener wiring is still open after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
+- Active-only listener wiring is covered for the mounted app-stage path after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
 - Prevent-default and passive-listener policies are distributed across features.
 - Missing e2e/device gates for interaction races and mobile readiness.
 

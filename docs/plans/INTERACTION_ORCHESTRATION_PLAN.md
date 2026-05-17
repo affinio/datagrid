@@ -62,6 +62,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 4: Active-Only Global Listener Wiring
 
+- Status: Completed on 2026-05-17. Window pointer/mouse lifecycle listeners now attach only while the mounted app-stage has a pending or active interaction, while resize observation remains mounted.
 - Objective: reduce idle global mouse/pointer listener exposure while preserving the existing interaction semantics.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewportLifecycle.ts`
@@ -73,7 +74,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Listener install/remove tests for idle, drag selection, fill, range move, resize, and unmount.
   - Regression tests for mouseup outside the viewport.
   - Tests that active auto-scroll still receives pointer movement while outside the grid.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand lifecycle interaction`
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- src/app/__tests__/useDataGridAppViewportLifecycle.contract.spec.ts src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts && pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/useDataGridTableStageScrollSync.spec.ts && pnpm --filter @affino/datagrid-vue type-check && pnpm --filter @affino/datagrid-vue-app type-check`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid): scope global interaction listeners`
 

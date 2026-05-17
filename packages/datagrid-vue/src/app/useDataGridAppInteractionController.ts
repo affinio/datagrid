@@ -339,6 +339,7 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   isPointerSelectingCells: Ref<boolean>
   isFillDragging: Ref<boolean>
   interactionOwnerSnapshot: ComputedRef<DataGridAppInteractionOwnerSnapshot>
+  globalPointerListenersActive: ComputedRef<boolean>
   fillPreviewRange: Ref<DataGridCopyRange | null>
   lastAppliedFill: Ref<DataGridAppAppliedFillSession | null>
   isRangeMoving: Ref<boolean>
@@ -613,6 +614,8 @@ export function useDataGridAppInteractionController<
       || hasActiveFillPreviewState()
     )
   }
+
+  const globalPointerListenersActive = computed(() => hasActivePointerInteractionState())
 
   const focusViewport = (): void => {
     options.bodyViewportRef.value?.focus({ preventScroll: true })
@@ -3130,6 +3133,7 @@ export function useDataGridAppInteractionController<
     isPointerSelectingCells,
     isFillDragging,
     interactionOwnerSnapshot,
+    globalPointerListenersActive,
     fillPreviewRange,
     lastAppliedFill,
     isRangeMoving,
