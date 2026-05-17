@@ -107,6 +107,151 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await page.mouse.up()
     await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
   })
+
+  test("desktop drag selection remains stable across virtualized rows and a pinned column", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const sourceBox = await boundingBox(sourceCell)
+    const viewportBox = await boundingBox(viewport)
+    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(viewportBox.x + viewportBox.width - 12, viewportBox.y + viewportBox.height - 10, { steps: 8 })
+
+    await expect.poll(async () => viewportScrollTop(viewport), { timeout: 10_000 }).toBeGreaterThan(beforeTop)
+    await page.mouse.up()
+
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview")).toHaveCount(0)
+    await expect(page.locator(".grid-cell--selected").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="amount"]').first()).toBeVisible()
+  })
+
+  test("fill drag with auto-scroll cleans up on mouseup outside the viewport", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = firstEditableAmountCell(page)
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+
+    const fillHandle = sourceCell.locator(".cell-fill-handle")
+    await expect(fillHandle).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const handleBox = await boundingBox(fillHandle)
+    const viewportBox = await boundingBox(viewport)
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(viewportBox.x + viewportBox.width / 2, viewportBox.y + viewportBox.height - 6, { steps: 8 })
+
+    await expect(stage).toHaveClass(/grid-stage--fill-dragging/)
+    await expect(page.locator(".grid-selection-overlay__segment--fill-preview").first()).toBeVisible()
+    await expect.poll(async () => viewportScrollTop(viewport), { timeout: 10_000 }).toBeGreaterThan(beforeTop)
+
+    await dispatchMouseUpAtPoint(page, { x: 8, y: 8 })
+    await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
+    await expect(page.locator(".grid-selection-overlay__segment--fill-preview")).toHaveCount(0)
+  })
+
+  test("range move with auto-scroll is cancelled by Escape without a stuck preview", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = firstEditableAmountCell(page)
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const sourceBox = await boundingBox(sourceCell)
+    const viewportBox = await boundingBox(viewport)
+    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(viewportBox.x + viewportBox.width / 2, viewportBox.y + viewportBox.height - 6, { steps: 8 })
+
+    await expect(stage).toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview").first()).toBeVisible()
+    await expect.poll(async () => viewportScrollTop(viewport), { timeout: 10_000 }).toBeGreaterThan(beforeTop)
+
+    await page.keyboard.press("Escape")
+    await page.mouse.up()
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview")).toHaveCount(0)
+  })
+
+  test("context menu cancels an active range move and opens after cleanup", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const sourceCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(targetCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+    await dragCellBodyStartAndMove(page, sourceCell, targetCell)
+    await expect(stage).toHaveClass(/grid-stage--range-moving/)
+
+    expect(await dispatchWindowContextMenuAt(page, targetCell)).toBe(true)
+    await page.mouse.up()
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview")).toHaveCount(0)
+
+    const amountHeader = page.locator('.grid-cell--header[data-column-key="amount"]').first()
+    await expect(amountHeader).toBeVisible({ timeout: 20_000 })
+    await openContextMenu(amountHeader)
+    await expect(page.locator("[data-datagrid-column-menu-action]").first()).toBeVisible({ timeout: 20_000 })
+  })
+
+  test("column and row resize near adjacent controls finish without selection drift", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const sourceCell = firstEditableAmountCell(page)
+    const header = page.locator('.grid-cell--header[data-column-key="name"]').first()
+    const row = page.locator('.grid-body-pane--left .grid-row[data-row-index="0"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(header).toBeVisible({ timeout: 20_000 })
+    await expect(row).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    const anchorBefore = await selectionAnchorSignature(page)
+
+    const headerBefore = await boundingBox(header)
+    await dragResizeHandle(page, header.locator(".col-resize"), 72)
+    const headerAfter = await boundingBox(header)
+    expect(headerAfter.width).toBeGreaterThan(headerBefore.width + 24)
+
+    const rowBefore = await boundingBox(row)
+    await dragResizeHandleVertically(page, row.locator(".row-resize-handle"), 34)
+    const rowAfter = await boundingBox(row)
+    expect(rowAfter.height).toBeGreaterThan(rowBefore.height + 14)
+
+    expect(await selectionAnchorSignature(page)).toBe(anchorBefore)
+    await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -157,6 +302,19 @@ function amountCellByViewportRow(page: Page, rowIndex: number): Locator {
   return page.locator(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-key="amount"]`).first()
 }
 
+async function viewportScrollTop(viewport: Locator): Promise<number> {
+  return await viewport.evaluate(element => element.scrollTop)
+}
+
+async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
+  const menuButton = page.locator(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]:visible`).first()
+  await expect(menuButton).toBeVisible({ timeout: 20_000 })
+  await menuButton.click()
+  await page.locator('[data-datagrid-column-menu-action="pin-submenu"]').click()
+  await page.locator('[data-datagrid-column-menu-action="pin-right"]').click()
+  await expect(page.locator(`.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).first()).toBeVisible({ timeout: 20_000 })
+}
+
 async function selectionAnchorSignature(page: Page): Promise<string> {
   return await page.evaluate(() => {
     const anchorCell = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
@@ -197,10 +355,61 @@ async function dragResizeHandle(page: Page, handle: Locator, deltaX: number): Pr
   await page.mouse.up()
 }
 
+async function dragResizeHandleVertically(page: Page, handle: Locator, deltaY: number): Promise<void> {
+  const box = await boundingBox(handle)
+  const startX = box.x + box.width / 2
+  const startY = box.y + box.height / 2
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX, startY + deltaY)
+  await page.mouse.up()
+}
+
+async function dispatchMouseUpAtPoint(page: Page, point: { x: number; y: number }): Promise<void> {
+  await page.evaluate(nextPoint => {
+    window.dispatchEvent(new MouseEvent("mouseup", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+    }))
+  }, point)
+}
+
+async function dispatchWindowContextMenuAt(page: Page, target: Locator): Promise<boolean> {
+  const point = await elementCenter(target)
+  return await page.evaluate(nextPoint => {
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+    })
+    return !window.dispatchEvent(event) || event.defaultPrevented
+  }, point)
+}
+
+async function openContextMenu(target: Locator): Promise<void> {
+  const point = await elementCenter(target)
+  await target.page().mouse.click(point.x, point.y, { button: "right" })
+}
+
 async function boundingBox(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
   const box = await locator.boundingBox()
   if (!box) {
     throw new Error("Expected element to be visible with bounding box")
   }
   return box
+}
+
+async function elementCenter(target: Locator): Promise<{ x: number; y: number }> {
+  return await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    }
+  })
 }

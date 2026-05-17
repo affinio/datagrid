@@ -31,7 +31,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 8 completed on 2026-05-17: focus ownership is now guarded for active editor/fill/range owners, inline editor focus uses `preventScroll`, and deferred viewport blur cleanup is covered when focus returns to the viewport.
 - Slice 9 completed on 2026-05-17: active inline editors now commit deterministically before selected-cell range move and fill-handle drag, while scroll-active edit suppression and cell IO/rendering contracts remain covered.
 - Slice 10 completed on 2026-05-17: pointer preview work now has explicit sync/rAF lifecycle contracts, pointer auto-scroll layout reads are budgeted to one sample per metric per frame, and the performance gate doc records the direct-preview budget.
-- Remaining high-risk work: interaction race e2e expansion.
+- Slice 11 completed on 2026-05-17: sandbox Playwright coverage now gates desktop interaction races for virtualized drag selection with pinned columns, fill auto-scroll cleanup, range-move auto-scroll Escape cancellation, contextmenu interruption/reopen, and adjacent resize controls.
+- Remaining high-risk work: telemetry diagnostics and browser performance gates.
 
 ## Files reviewed
 
@@ -274,7 +275,7 @@ What blocks target score:
 - Touch selection/range/fill are guarded but not designed as complete workflows.
 - Active-only listener wiring is covered for the mounted app-stage path after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
 - Prevent-default and passive-listener policies are documented; keep them synchronized with future touch/focus/edit slices.
-- Missing e2e/device gates for interaction races and mobile readiness.
+- Missing telemetry/performance gates and device-level mobile readiness validation.
 
 ## Recommended tests
 
@@ -297,10 +298,11 @@ Component tests:
 
 Playwright/e2e tests:
 
-- Desktop drag selection across virtualized rows and pinned columns.
-- Desktop fill drag with auto-scroll and mouseup outside viewport.
-- Range move with auto-scroll and Escape cancel.
-- Column and row resize while hovering/clicking nearby header/row-index controls.
+- Desktop drag selection across virtualized rows and pinned columns is covered in `e2e/sandbox-interactions.spec.ts`.
+- Desktop fill drag with auto-scroll and mouseup outside viewport is covered in `e2e/sandbox-interactions.spec.ts`.
+- Range move with auto-scroll and Escape cancel is covered in `e2e/sandbox-interactions.spec.ts`.
+- Column and row resize near adjacent header/row-index controls are covered in `e2e/sandbox-interactions.spec.ts`.
+- Context menu interruption and reopen after active interaction cleanup is covered in `e2e/sandbox-interactions.spec.ts`.
 - Touch one-finger scroll over body cells does not start selection/fill/range/resize.
 - Touch long-press selection plus explicit handle workflows for fill, range move, column resize, and row resize.
 - Browser zoom/high-DPI pointer thresholds for range move, fill handle, and resize handles.
@@ -352,7 +354,7 @@ Performance tests:
 
 ### Phase 5: enterprise validation
 
-- Add Playwright interaction-race tests.
+- Keep Playwright interaction-race tests aligned with owner/lifecycle changes.
 - Add performance gates for pointer preview and scroll sync.
 - Add telemetry for active owner, cancellation reason, drift, and frame budget.
 

@@ -206,6 +206,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 11: Interaction Race E2E Harness
 
+- Status: Completed on 2026-05-17. Sandbox browser coverage now exercises desktop drag selection across virtualization with a pinned column, fill auto-scroll cleanup on outside mouseup, range-move auto-scroll Escape cancellation, contextmenu cancellation/open-after-cleanup, and adjacent column/row resize controls.
 - Objective: add browser-level regressions for the interaction races that unit tests cannot fully model.
 - Affected packages/files:
   - `e2e/sandbox-interactions.spec.ts`
@@ -219,7 +220,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Range move with auto-scroll and Escape cancel.
   - Column and row resize near adjacent header/row-index controls.
   - Context menu during and after active interactions.
-- Validation command: `pnpm e2e -- e2e/sandbox-interactions.spec.ts e2e/sandbox-grid.spec.ts`
+- Validation command: `pnpm run test:e2e -- e2e/sandbox-interactions.spec.ts e2e/sandbox-grid.spec.ts`
 - Risk level: High
 - Suggested commit message: `test(datagrid): cover interaction race flows`
 
