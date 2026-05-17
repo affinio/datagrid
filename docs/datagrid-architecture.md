@@ -15,8 +15,8 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 | --- | --- | --- |
 | `@affino/datagrid-core` | types, settings adapter contract, runtime signals, viewport controllers, virtualization math, selection geometry/contracts | Vue refs/watchers, SFC rendering concerns, Pinia store details |
 | `@affino/datagrid-orchestration` | reusable pointer, fill, range move, header resize, keyboard, context menu, viewport blur, scroll, and telemetry lifecycles | row-model mutation policy, SFC rendering, app-specific history/server fill decisions |
-| `@affino/datagrid-vue` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics | duplicate virtualization math, duplicate coordinate conversion logic, core business invariants |
-| `@affino/datagrid-vue-app` | mounted table stage, DOM event binding, native body viewport, header/pinned pane wiring, overlays, focus surfaces, editors, sandbox-shaped UX composition | core viewport math, model mutation primitives, stable public core API ownership |
+| `@affino/datagrid-vue` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics, adapter materialization from canonical runtime windows | canonical virtualization math, duplicate coordinate conversion logic, core business invariants |
+| `@affino/datagrid-vue-app` | mounted table stage, DOM event binding, native body viewport, viewport materialization, header/pinned pane wiring, overlays, focus surfaces, editors, sandbox-shaped UX composition | core viewport range/clamp math, model mutation primitives, stable public core API ownership |
 
 ## Dependency Direction
 
@@ -36,9 +36,15 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 
 1. Input events enter adapter/composables.
 2. Adapter converts input into core-safe contracts.
-3. Core computes viewport state (scroll, virtualization windows, clamp).
+3. Core owns canonical viewport state (virtualization range, overscan, clamp).
 4. Core emits deterministic geometry for selection/overlay.
-5. Vue layer renders view state, without re-owning geometry/scroll rules.
+5. Vue layer materializes and renders view state, without re-owning canonical virtualization/clamp rules.
+
+Adapter materialization note:
+
+- Core owns canonical viewport virtualization, range math, overscan, and clamp contracts.
+- Vue/app code may sample DOM scroll/size, schedule rAF commits, retain visible rows, derive render spacers, and materialize rows/columns for the mounted table stage.
+- That adapter work is render-window materialization from canonical runtime/model state; it must not become a second authoritative virtualization runtime.
 
 ## Interaction Ownership
 
@@ -47,7 +53,8 @@ The mounted stage has one owner per active gesture. `packages/datagrid-vue/src/a
 | Area | Owner |
 | --- | --- |
 | Native body scroll | `@affino/datagrid-vue-app` stage viewport runtime, backed by `@affino/datagrid-vue` app viewport sync |
-| Viewport math, virtualization, scroll IO | `@affino/datagrid-core` viewport services |
+| Canonical viewport math, virtualization range, overscan, clamp | `@affino/datagrid-core` viewport services |
+| DOM scroll sampling, rAF viewport commits, render-window materialization | `@affino/datagrid-vue` app viewport sync and `@affino/datagrid-vue-app` table stage |
 | Drag selection, fill, range move app state | `@affino/datagrid-vue` app interaction controller |
 | Shared interaction lifecycle helpers | `@affino/datagrid-orchestration` |
 | Column resize lifecycle | `@affino/datagrid-orchestration` with `@affino/datagrid-vue` app wrapper |
@@ -95,7 +102,8 @@ Boundary rules:
                           │  Vue / React Adapter     │
                           │                          │
                           │  DataGrid Component      │
-                          │  Viewport Virtualization │
+                          │  DOM Rendering           │
+                          │  Viewport Materialization│
                           │  Cell Rendering          │
                           └────────────┬─────────────┘
                                        │
