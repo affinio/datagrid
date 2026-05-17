@@ -64,6 +64,31 @@ The canonical Vue UI path is intentionally split across the app package, Vue com
 
 Active interaction diagnostics use `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` as the current owner snapshot contract for drag selection, fill, range move, column resize, and row resize. The snapshot is internal diagnostic state, not a public integrator API.
 
+### Selection state machine
+
+Selection state is a coordinated app-stage contract, not a single object owned by one package. Core owns the pure selection snapshot shape and geometry; the Vue app layer owns state transitions and operation eligibility; the mounted stage owns DOM focus, rendered affordances, overlays, and editor surfaces.
+
+| State area | Canonical owner | Transition rule |
+| --- | --- | --- |
+| Cell ranges and active range index | `packages/datagrid-core/src/selection/snapshot.ts` through app selection wiring | Selection mutations replace, extend, add, or clear ranges through normalized snapshot helpers. The active range is the range used for active borders, fill handle, range move, clipboard target, and keyboard extension unless a specific operation documents otherwise. |
+| Active cell | Core snapshot shape, applied by `packages/datagrid-vue/src/app/useDataGridAppSelection.ts` | Click, keyboard navigation, drag start, paste target, and edit target update active cell with the committed selection snapshot. A missing or stale active cell must not be inferred from DOM focus alone. |
+| Selection anchor | `packages/datagrid-vue/src/app/useDataGridAppSelection.ts` and `useDataGridAppCellSelection.ts` | Shift extension uses the app anchor. Replacing the selection resets the anchor; additive selection commits a separate range and preserves the active range according to the app selection transition. |
+| Row selection | `packages/datagrid-core/src/selection/rowSelection.ts`, `packages/datagrid-vue/src/app/useDataGridAppRowSelection.ts`, and stage row-selection UI | Row selection is separate from cell-range selection. Checkbox and row-index interactions update row-selection state and focused row; they must not silently rewrite cell ranges unless the interaction contract explicitly says it selects a row range. |
+| DOM focus | `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts` and `packages/datagrid-vue/src/app/dataGridFocusRestore.ts` | Focus follows the active cell when a rendered focus target exists. Restoration uses `preventScroll` when viewport position must be preserved and must not steal focus from an active editor, fill gesture, range move, resize, context menu, or native scroll. |
+| Inline editing | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` and stage editor handlers | Editing owns draft, commit, cancel, and editor focus while active. Pointer selection, fill, and range move commit or cancel the previous editor before they claim the next interaction. |
+| Pending clipboard ranges | `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts` | Copy/cut ranges are retained as committed selection metadata for local materialized rows. Unloaded, placeholder, or stale virtual ranges must be blocked or delegated by the server-backed operation contract. |
+| Fill preview | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` with `packages/datagrid-orchestration/src/fill/*` | Fill preview is a transient interaction state owned by the active fill gesture. It is cleared on commit, cancel, projection invalidation, or competing owner start. |
+| Range-move preview | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` with `packages/datagrid-orchestration/src/selection/*` | Range move preview is a transient interaction state owned by the active range-move gesture. It is cleared on commit, cancel, projection invalidation, or competing owner start. |
+
+State transitions follow these rules:
+
+- A committed selection snapshot is the logical source of truth. Rendered classes, overlays, handles, and copied-range outlines are materialized views of that snapshot plus transient interaction previews.
+- DOM focus is never the source of truth for selected ranges. It may lag while the active cell is virtualized out, hidden by horizontal virtualization, or represented by a placeholder.
+- Active editing temporarily owns keyboard/text focus. Selection restoration waits until editing commits or cancels unless the edit transition explicitly hands control back to the grid.
+- Projection changes (`sort`, `filter`, `group`, `pivot`, tree expansion, and datasource cache replacement) must preserve, clear, rebase, or mark selection state stale through an explicit invalidation policy. Stale virtual selections must not run local materialized operations.
+- Cell-range selection and row selection remain separate state machines. Shared keyboard, focus, and context-menu paths must choose a single target state before mutating either one.
+- Touch selection remains scroll-first until a documented mode transition or explicit touch affordance claims selection ownership.
+
 ### Event policy
 
 Mouse, touch-generated mouse, touch, wheel, keyboard, and context-menu events follow an explicit cancellation policy. The default rule is that native body scrolling and editor/input behavior win unless an affordance-owned grid interaction has already claimed the gesture.

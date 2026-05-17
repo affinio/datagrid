@@ -4,7 +4,7 @@
 
 The DataGrid selection architecture is strong, but not yet enterprise-grade. It has a clear core snapshot shape, deterministic range helpers, multi-range support, virtual-selection metadata, row-selection APIs, keyboard routing, clipboard/fill/range-move plumbing, pinned-pane overlay support, and broad unit/contract coverage.
 
-The gaps are mostly at enterprise boundaries: ownership between active cell, selection snapshot, DOM focus, and editing is split across several layers; large virtual selections still rely on row-by-row loaded-row scans; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection has no deliberate long-press/handle model; server-backed selection semantics are partial; and e2e coverage does not yet prove selection continuity across virtualization remounts, pinned panes, grouped/tree changes, and unloaded rows.
+The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract, but invariant tests still need to prove the contract; large virtual selections still rely on row-by-row loaded-row scans; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection has no deliberate long-press/handle model; server-backed selection semantics are partial; and e2e coverage does not yet prove selection continuity across virtualization remounts, pinned panes, grouped/tree changes, and unloaded rows.
 
 Current enterprise readiness: **7/10**.
 Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, touch UX, virtualization continuity, and performance gates.
@@ -16,7 +16,7 @@ Target enterprise readiness: **9/10** after hardening invariants, large-range/se
 - `datagrid-vue-app` owns rendered selection state, row-selection UI, pinned-pane overlays, stage focus lookup, pointer routing, fill handles, and range-move hover affordances.
 - `datagrid-orchestration` owns reusable interaction composables for keyboard commands, drag selection, pointer routing, range move, fill handle start, overlay generation, row selection, and clipboard mutation helpers.
 
-This layering is mostly compatible with the project architecture. The highest-risk ownership issue is that logical selection, active cell, DOM focus, and editing state are related but not controlled by one documented state machine.
+This layering is mostly compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract. The remaining highest-risk issue is proving the contract with focused invariants for remount, edit blur, keyboard move, projection invalidation, and server placeholder replacement.
 
 ## Exact Files Reviewed
 
@@ -119,7 +119,7 @@ Tests and benchmarks sampled:
 ### High
 
 1. **Active cell ownership is split across selection snapshot, anchor ref, DOM focus, and editing state.**
-   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This works in common paths, but it is not documented as one state machine with invariants for remount, edit blur, keyboard move, and server placeholder replacement.
+   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract, but still needs invariant coverage for remount, edit blur, keyboard move, and server placeholder replacement.
 
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
    Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. However, e2e coverage does not yet prove focus, active cell, selected classes, overlay geometry, fill handle, and editor state across scroll-out/scroll-in remounts and server placeholder replacement.
@@ -244,7 +244,7 @@ Blocks to target:
 
 ## Recommended Next Work
 
-1. Write a selection state-machine contract covering active cell, anchor, ranges, DOM focus, editing, pending clipboard, fill preview, and range move.
+1. Add invariant tests for active cell, focus, editing, and selection ownership transitions.
 2. Add invariant tests for selection invalidation after sort/filter/group/pivot/cache replacement.
 3. Replace huge virtual-selection row scans with loaded interval metadata from row models.
 4. Define server-backed operation contracts for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.

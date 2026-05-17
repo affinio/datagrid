@@ -4,6 +4,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 1: Selection State Machine Contract
 
+- Status: Completed on 2026-05-17. Documented the cross-package selection state machine, including ownership for active cell, anchor, row selection, DOM focus, editing, pending clipboard ranges, fill preview, range-move preview, invalidation, and blocked/delegated virtual states.
 - Objective: document one canonical state machine for cell selection, row selection, active cell, anchor, DOM focus, editing, clipboard ranges, fill preview, and range-move preview.
 - Affected packages/files:
   - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`

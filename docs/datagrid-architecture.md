@@ -77,10 +77,35 @@ Boundary rules:
 - Keep touch body-cell gestures scroll-first; touch selection, fill, range move, and resize must start from explicit touch affordances or documented mode transitions.
 - Keep active-owner diagnostics internal unless a public diagnostics API is separately approved.
 
+## Selection Ownership
+
+Selection has one logical state machine with package-specific ownership. Core owns pure range geometry and snapshot contracts; Vue app composables own transition policy and operation eligibility; the mounted stage owns DOM focus, rendered state, overlays, handles, and editor surfaces.
+
+| Selection area | Owner |
+| --- | --- |
+| Normalized cell ranges, active range index, active cell shape | `@affino/datagrid-core` selection helpers and snapshot contracts |
+| App selection snapshot, anchor, virtual-selection metadata, aggregate labels | `@affino/datagrid-vue` app selection composables |
+| Row-selection mode, selected/excluded row ids, focused row | `@affino/datagrid-core` row-selection helpers with `@affino/datagrid-vue` app row-selection wiring |
+| Keyboard selection and navigation transitions | `@affino/datagrid-orchestration` command/navigation utilities wired by `@affino/datagrid-vue` |
+| Drag selection, fill preview, range-move preview, edit handoff | `@affino/datagrid-vue` app interaction controller with orchestration lifecycle helpers |
+| DOM focus restore, selected cell classes, overlays, handles, editor mount points | `@affino/datagrid-vue-app` table stage |
+| Clipboard source ranges and local mutation planning | `@affino/datagrid-vue` app clipboard wiring with orchestration clipboard helpers |
+
+Selection transition rules:
+
+- The committed selection snapshot is the logical source of truth; rendered overlays and classes are derived materialization.
+- DOM focus may follow the active cell, but it must not become the source of truth for selected ranges or active cell identity.
+- Editing, fill, and range move are temporary owners that must either commit/cancel before selection changes or explicitly hand control back to selection.
+- Row selection and cell-range selection are separate state machines. Shared gestures must choose one target before mutating state.
+- Projection and cache changes must use an explicit invalidation policy for active cell, ranges, row selection, virtual metadata, clipboard ranges, fill preview, and range-move preview.
+- Unloaded rows, placeholders, and stale projection identity are operation states, not rendering accidents; local materialized operations must block or delegate instead of guessing.
+
 ## Hard Invariants
 
 - One owner for scroll transform synchronization.
 - One active interaction owner for pointer-driven drag, fill, range move, resize, and touch pan flows.
+- One committed selection snapshot as the source of truth for cell ranges and active cell identity.
+- One explicit invalidation policy for projection/cache changes that affect selection-related state.
 - One canonical pin contract in runtime: `pin = left | right | none`.
 - One coordinate conversion contract for `world`, `viewport`, and `client` spaces.
 - Horizontal virtualization clamp and update path stays pure and deterministic.
