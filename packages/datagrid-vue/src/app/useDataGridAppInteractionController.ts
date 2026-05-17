@@ -420,6 +420,16 @@ export function useDataGridAppInteractionController<
     return runtime.getBodyRowAtIndex?.(rowIndex) ?? options.runtime.api.rows.get(rowIndex) ?? null
   }
 
+  const isFillRangeBlockedByGroupRows = (...ranges: readonly DataGridCopyRange[]): boolean => {
+    for (const range of ranges) {
+      if (resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null) {
+        options.reportFillWarning?.("Fill range includes group rows. Use leaf rows or server operation.")
+        return true
+      }
+    }
+    return false
+  }
+
   const isSemanticNavigationCellNonEmpty = (rowIndex: number, columnIndex: number): boolean | null => {
     const row = getBodyRowAtIndex(rowIndex)
     const columnKey = options.visibleColumns.value[columnIndex]?.key
@@ -1498,6 +1508,9 @@ export function useDataGridAppInteractionController<
     previewRange: DataGridCopyRange,
     behavior?: DataGridFillBehavior,
   ): Promise<boolean> => {
+    if (isFillRangeBlockedByGroupRows(baseRange, previewRange)) {
+      return false
+    }
     const resolveRemovedFillRange = (
       previousRange: DataGridCopyRange,
       nextRange: DataGridCopyRange,
@@ -2358,6 +2371,9 @@ export function useDataGridAppInteractionController<
     const anchorRow = baseRange ? getBodyRowAtIndex(baseRange.endRow) : null
     const anchorColumnKey = baseRange ? options.visibleColumns.value[baseRange.endColumn]?.key : null
     if (!baseRange || !anchorRow || !anchorColumnKey) {
+      return
+    }
+    if (isFillRangeBlockedByGroupRows(baseRange)) {
       return
     }
     if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {

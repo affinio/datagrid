@@ -2471,6 +2471,103 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("blocks fill drag start when the selected source range includes a grouped projection row", () => {
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+      firstRowKind: "group",
+      firstRowExpanded: true,
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "g1",
+        endRowId: "g1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Fill range includes group rows. Use leaf rows or server operation.",
+    )
+  })
+
+  it("blocks fill commit when the dragged target range crosses a grouped projection row", async () => {
+    const elementFromPointSpy = vi.spyOn(document, "elementFromPoint")
+    const { controller, selectionSnapshot, applyClipboardEdits, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 1,
+      firstRowKind: "group",
+      firstRowExpanded: true,
+      rowData: [
+        {},
+        { a: "seed" },
+        { a: "" },
+      ],
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      ranges: [{
+        startRow: 1,
+        endRow: 1,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r2",
+        endRowId: "r2",
+        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 40,
+      bubbles: true,
+      cancelable: true,
+    }))
+    elementFromPointSpy.mockReturnValue(createCell(0, 0))
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 10,
+      clientY: 4,
+      bubbles: true,
+      cancelable: true,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+    elementFromPointSpy.mockRestore()
+
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 1,
+      endRow: 1,
+      startCol: 0,
+      endCol: 0,
+    })
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Fill range includes group rows. Use leaf rows or server operation.",
+    )
+  })
+
   it("commits the active inline editor before starting fill-handle drag", () => {
     const { controller, selectionSnapshot, editingCell, commitInlineEdit } = createControllerHarness({
       rowCount: 3,

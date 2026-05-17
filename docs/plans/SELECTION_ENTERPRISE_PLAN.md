@@ -178,7 +178,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 9: Grouped And Tree Selection Interactions
 
-- Status: Partially completed on 2026-05-17. Clipboard copy/cut, paste targets, and clear/delete now block ranges that include grouped/tree projection rows instead of copying group display values or partially mutating only leaf rows. GroupBy and TreeData docs now state flattened selection semantics and local mutation blocking rules. App contracts now cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, and row-selection reconciliation preserving visible group row ids. Fill, collapsed/expanded continuity, server placeholders, and e2e workflows remain planned.
+- Status: Partially completed on 2026-05-17. Clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block grouped/tree projection rows instead of copying group display values or partially mutating only leaf rows. GroupBy and TreeData docs now state flattened selection semantics and local mutation blocking rules. App contracts now cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, and fill blocking over group rows. Collapsed/expanded continuity, server placeholders, and e2e workflows remain planned.
 - Objective: extend flattened-row selection semantics into app-stage interactions for grouped rows, tree rows, keyboard navigation, clipboard, fill, row selection, and server placeholders.
 - Affected packages/files:
   - `docs/datagrid-groupby-rowmodel-projection.md`
