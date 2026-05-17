@@ -22,9 +22,6 @@ const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_D
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
-const BENCH_INTERACTION_FAIL_ON_WARNINGS = (
-  process.env.BENCH_INTERACTION_FAIL_ON_WARNINGS ?? "false"
-).trim().toLowerCase() === "true"
 const BENCH_ENABLE_FILTER = (process.env.BENCH_BROWSER_ENABLE_FILTER ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_SORT = (process.env.BENCH_BROWSER_ENABLE_SORT ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_CELL_UPDATES = (
@@ -34,10 +31,78 @@ const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-enterprise-browser-frames.json")
-const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS", 8)
-const PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS", 12)
-const PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS = floatEnv("PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS", 4)
-const PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX = floatEnv("PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX", 2)
+const BENCH_INTERACTION_DEVICE_PROFILE = process.env.BENCH_INTERACTION_DEVICE_PROFILE ?? "desktop-ci"
+const INTERACTION_DEVICE_PROFILES = {
+  "desktop-ci": {
+    description: "Chromium desktop CI baseline",
+    failOnWarnings: true,
+    context: {
+      viewport: { width: 1680, height: 1050 },
+      deviceScaleFactor: 1,
+      isMobile: false,
+      hasTouch: false,
+    },
+    budgets: {
+      previewP95Ms: 8,
+      autoScrollP95Ms: 12,
+      focusRestoreMaxMs: 4,
+      scrollSyncDriftPx: 2,
+    },
+  },
+  "touch-tablet-ci": {
+    description: "Chromium tablet/coarse-pointer CI baseline",
+    failOnWarnings: true,
+    context: {
+      viewport: { width: 1024, height: 768 },
+      deviceScaleFactor: 2,
+      isMobile: true,
+      hasTouch: true,
+    },
+    budgets: {
+      previewP95Ms: 12,
+      autoScrollP95Ms: 18,
+      focusRestoreMaxMs: 6,
+      scrollSyncDriftPx: 3,
+    },
+  },
+  "touch-phone-ci": {
+    description: "Chromium phone/coarse-pointer CI baseline",
+    failOnWarnings: true,
+    context: {
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+    },
+    budgets: {
+      previewP95Ms: 14,
+      autoScrollP95Ms: 20,
+      focusRestoreMaxMs: 7,
+      scrollSyncDriftPx: 4,
+    },
+  },
+}
+const interactionDeviceProfile = resolveInteractionDeviceProfile(BENCH_INTERACTION_DEVICE_PROFILE)
+const BENCH_INTERACTION_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_INTERACTION_FAIL_ON_WARNINGS",
+  interactionDeviceProfile.failOnWarnings,
+)
+const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
+  interactionDeviceProfile.budgets.previewP95Ms,
+)
+const PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS",
+  interactionDeviceProfile.budgets.autoScrollP95Ms,
+)
+const PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS = floatEnv(
+  "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS",
+  interactionDeviceProfile.budgets.focusRestoreMaxMs,
+)
+const PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX = floatEnv(
+  "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX",
+  interactionDeviceProfile.budgets.scrollSyncDriftPx,
+)
 
 const SCENARIOS = [
   {
@@ -166,6 +231,31 @@ function floatEnv(name, fallback) {
     throw new Error(`${name} must be a finite number`)
   }
   return value
+}
+
+function boolEnv(name, fallback) {
+  const raw = process.env[name]
+  if (raw == null) {
+    return Boolean(fallback)
+  }
+  const normalized = raw.trim().toLowerCase()
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false
+  }
+  throw new Error(`${name} must be a boolean`)
+}
+
+function resolveInteractionDeviceProfile(name) {
+  const profile = INTERACTION_DEVICE_PROFILES[name]
+  if (profile) {
+    return profile
+  }
+  throw new Error(
+    `BENCH_INTERACTION_DEVICE_PROFILE must be one of: ${Object.keys(INTERACTION_DEVICE_PROFILES).join(", ")}`,
+  )
 }
 
 function assertPositiveInteger(value, label) {
@@ -1711,7 +1801,7 @@ const startedAt = performance.now()
 
 console.log("\nAffino DataGrid Enterprise Browser Frame Benchmark")
 console.log(
-  `baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} rows=${BENCH_BROWSER_ROW_COUNT} columns=${BENCH_BROWSER_COLUMN_COUNT}`,
+  `baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} rows=${BENCH_BROWSER_ROW_COUNT} columns=${BENCH_BROWSER_COLUMN_COUNT} deviceProfile=${BENCH_INTERACTION_DEVICE_PROFILE}`,
 )
 
 const sandboxServer = await ensureSandboxServer(BENCH_BROWSER_BASE_URL, BENCH_BROWSER_ROUTE, "enterprise-browser-frames")
@@ -1721,9 +1811,7 @@ const browser = await chromium.launch({
   args: ["--disable-dev-shm-usage"],
 })
 
-const context = await browser.newContext({
-  viewport: { width: 1680, height: 1050 },
-})
+const context = await browser.newContext(interactionDeviceProfile.context)
 
 const sessions = []
 const setup = []
@@ -1784,6 +1872,9 @@ const summary = {
     enableFilter: BENCH_ENABLE_FILTER,
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
+    interactionDeviceProfile: BENCH_INTERACTION_DEVICE_PROFILE,
+    interactionDeviceProfileDescription: interactionDeviceProfile.description,
+    browserContext: interactionDeviceProfile.context,
     interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,

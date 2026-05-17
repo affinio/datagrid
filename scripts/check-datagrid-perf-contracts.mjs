@@ -165,6 +165,11 @@ registerFileCheck(
   "Interaction benchmark for selection/fill virtualization pressure",
 )
 registerFileCheck(
+  "enterprise-browser-frame-benchmark-script",
+  "scripts/bench-datagrid-enterprise-browser-frames.mjs",
+  "Enterprise browser frame benchmark for scroll and interaction frame budgets",
+)
+registerFileCheck(
   "tree-workload-benchmark-script",
   "scripts/bench-datagrid-tree-workload.mjs",
   "Tree workload benchmark for deep hierarchy expand/filter/sort pressure",
@@ -449,6 +454,23 @@ registerTokenCheck(
 )
 
 registerTokenCheck(
+  "enterprise-browser-frame-device-profile-budgets",
+  "scripts/bench-datagrid-enterprise-browser-frames.mjs",
+  [
+    "BENCH_INTERACTION_DEVICE_PROFILE",
+    "desktop-ci",
+    "touch-tablet-ci",
+    "touch-phone-ci",
+    "BENCH_INTERACTION_FAIL_ON_WARNINGS",
+    "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
+    "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS",
+    "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS",
+    "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX",
+  ],
+  "Enterprise browser frame benchmark exposes calibrated device/profile interaction budgets",
+)
+
+registerTokenCheck(
   "tree-benchmark-p99-budgets",
   "scripts/bench-datagrid-tree-workload.mjs",
   [
@@ -497,6 +519,9 @@ registerTokenCheck(
     "bench:datagrid:pivot:assert",
     "bench:datagrid:dependency-graph",
     "bench:datagrid:dependency-graph:assert",
+    "bench:datagrid:enterprise:browser-frames",
+    "bench:datagrid:enterprise:browser-frames:assert",
+    "bench:datagrid:enterprise:browser-frames:touch:assert",
     "bench:datagrid:tree",
     "bench:datagrid:tree:assert",
     "bench:datagrid:tree:matrix",
@@ -673,6 +698,36 @@ registerTokenCheck(
       ok
         ? "ok"
         : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}`,
+    )
+  }
+}
+
+{
+  const packageJsonPath = resolve("package.json")
+  const enterpriseBrowserAssertBudgetId = "enterprise-browser-frame-assert-hard-budgets"
+  if (!existsSync(packageJsonPath)) {
+    registerConditionCheck(
+      enterpriseBrowserAssertBudgetId,
+      false,
+      "Enterprise browser frame assert scripts hard-fail interaction budget warnings",
+      "package.json missing",
+    )
+  } else {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
+    const desktopAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:browser-frames:assert"] ?? "")
+    const touchAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:browser-frames:touch:assert"] ?? "")
+    const ok =
+      desktopAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=desktop-ci") &&
+      desktopAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
+      touchAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=touch-tablet-ci") &&
+      touchAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true")
+    registerConditionCheck(
+      enterpriseBrowserAssertBudgetId,
+      ok,
+      "Enterprise browser frame assert scripts hard-fail interaction budget warnings",
+      ok
+        ? "ok"
+        : `unexpected enterprise browser assert scripts: desktop='${desktopAssertScript}', touch='${touchAssertScript}'`,
     )
   }
 }

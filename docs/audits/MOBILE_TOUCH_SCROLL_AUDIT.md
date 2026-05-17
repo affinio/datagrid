@@ -8,7 +8,7 @@ Affino DataGrid already has strong desktop scroll foundations: scroll work is mo
 
 The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
-The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing, device-tuned CI thresholds, and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17; remaining mobile risk is tracked as device execution and calibrated thresholds, not additional broad interaction architecture work.
+The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17; automated Chromium desktop and touch-emulated interaction thresholds are hard-fail gates, while hardware-specific mobile risk is tracked as device execution and threshold review from real traces.
 
 ## Implementation Status
 
@@ -34,7 +34,7 @@ Completed in Phase 1:
 
 Still open:
 - Real-device validation execution: the matrix is documented below, but still needs runs on iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
-- Device-tuned CI thresholds for `stageScrollFrame`, `stageScrollPerf`, and server viewport loading ratio.
+- Hardware threshold review for `stageScrollFrame`, `stageScrollPerf`, interaction-frame budgets, and server viewport loading ratio after the real-device matrix is executed.
 - Server/data-source prefetch tuning from real touch velocity and backend latency traces.
 
 Phase 2 status:
@@ -52,7 +52,7 @@ Phase 3 status:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
 
 Interaction audit closure:
-- Interaction orchestration slices 1-14 are complete as of 2026-05-17. Browser e2e coverage and warning-first frame benchmarks now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, and scroll-sync drift. The open mobile work remains real-device execution and device-calibrated thresholds.
+- Interaction orchestration slices 1-14 are complete as of 2026-05-17. Browser e2e coverage and hard-fail Chromium frame profiles now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, and scroll-sync drift. The open mobile work remains real-device execution and hardware threshold review.
 
 ## Current Mobile Capability
 
@@ -63,7 +63,7 @@ Interaction audit closure:
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
 - During active touch scroll, custom cell/group renderers are bypassed in favor of resolved display values to reduce render cost.
-- Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and CI thresholds for scroll-frame, scroll-quality, and interaction-frame telemetry still need device-calibrated budgets.
+- Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and hardware traces may require threshold adjustments for scroll-frame, scroll-quality, and interaction-frame telemetry.
 
 ## Current Architecture Summary
 
@@ -407,7 +407,7 @@ What is good:
 - There are existing virtualization, scroll, interaction, resize, wheel, and touch-pan unit/contract tests.
 
 Gap:
-- The repo now has focused Chromium Playwright gates for native scroll priority, accidental drag prevention, blank/loading viewport detection, and scroll telemetry. The remaining gap is broad device coverage and CI thresholds calibrated from real devices.
+- The repo now has focused Chromium Playwright gates for native scroll priority, accidental drag prevention, blank/loading viewport detection, scroll telemetry, and hard-fail interaction frame profiles. The remaining gap is broad hardware coverage and threshold review from real devices.
 
 ## Recommended Fixes
 
@@ -419,7 +419,7 @@ Gap:
 6. Continue batching remaining header, pinned, and chrome sync into rAF scroll frames.
 7. Require explicit touch handles or long-press mode for selection drag, fill, range move, and resize.
 8. Continue moving non-critical decoration work onto the existing `isScrolling` / `scrollIdle` stage runtime hook.
-9. Convert the current Playwright/perf telemetry coverage into CI regression gates with device-tuned budgets.
+9. Keep the current Playwright/perf telemetry gates running in CI and revise thresholds only with stable hardware evidence.
 10. Keep deeper architectural changes behind measured evidence from `stageScrollFrame`, `stageScrollPerf`, and loading-ratio traces.
 
 ## Phased Enterprise Roadmap
@@ -466,8 +466,9 @@ Gap:
 - Done as a documented plan, execution pending: add mobile/tablet test matrix for iPad Safari, iPad Chrome, Android Chrome, Surface/Windows touch, macOS trackpad, and mouse wheel.
 - In progress: add Playwright touch tests for native scroll, drag prevention, long press, double tap, fill handle, range move handle, resize handles, pinned/header sync, linked-surface routing, perf telemetry, and server-backed loading; one-finger body viewport touch pan now has a Chromium scroll-first gate for touch CSS, scrollability, accidental selection prevention, and non-prevented body touchmove ownership, body-cell touch drag has an accidental-drag prevention gate, left/right pinned-pane and header-shell touch pan have body-viewport routing gates, horizontal pinned-left/right and header-shell touch pan have X-scroll routing gates, stationary long press now has a gate for cell selection plus context-menu suppression, touch double tap now has an idle-vs-scroll-active edit gate, explicit fill-handle touch drag now has a preview/no-body-scroll gate, explicit range-move handle drag now has a preview/no-body-scroll gate, explicit column-resize handle drag now has a width-change/no-body-scroll gate, explicit row-resize handle drag now has a height-change/no-body-scroll gate, body scroll now has header/pinned-left plus dynamically pinned-right sync gates, `dgPerfTrace=1` now has stage scroll-frame latest/p95/max plus active/idle scroll-quality telemetry smoke gates, and the fake server datasource route now has a touch-mode loading-ratio gate.
 - Done for the server datasource sandbox: add blank/loading viewport detection during fast scroll using sparse row-model loading metrics.
-- Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`; CI thresholds still need device-tuned budgets.
-- Next: convert scroll rAF budget, visible placeholder ratio, and accidental touch-drag coverage into CI regression gates with device-tuned thresholds.
+- Done at the stage level behind `dgPerfTrace`: add scroll FPS and long-task monitoring via `stageScrollPerf`.
+- Done for automated Chromium profiles: enterprise browser frame assert scripts hard-fail interaction preview, auto-scroll, focus restore, and scroll-sync drift budgets for desktop and tablet/coarse-pointer profiles.
+- Next: execute the real-device matrix and revise thresholds only if hardware traces show stable variance outside the Chromium profile envelopes.
 
 ## Test Plan
 

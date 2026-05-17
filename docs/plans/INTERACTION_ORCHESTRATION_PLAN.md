@@ -279,6 +279,25 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Risk level: Low
 - Suggested commit message: `docs(datagrid): close interaction audit slices`
 
+## Slice 15: Interaction Device Profile Gates
+
+- Status: Completed on 2026-05-17. Enterprise browser frame benchmark now uses hard-fail Chromium `desktop-ci`, `touch-tablet-ci`, and `touch-phone-ci` interaction profiles, with root assert scripts and perf-contract coverage for desktop and tablet/coarse-pointer gates.
+- Objective: convert calibrated automated interaction budgets from warning-first observation into explicit hard-fail profiles while keeping real-device validation separate.
+- Affected packages/files:
+  - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+  - `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md`
+  - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
+- Expected behavior change: no runtime grid behavior change; benchmark validation now fails when interaction frame budgets exceed the selected profile.
+- Tests to add/update:
+  - Perf-contract check for device-profile budget wiring.
+  - Hard-fail benchmark run for the default desktop profile.
+- Validation command: `pnpm run bench:datagrid:enterprise:browser-frames:assert && pnpm run bench:datagrid:enterprise:browser-frames:touch:assert && pnpm run quality:perf:datagrid && node ./scripts/check-datagrid-docs-framework-track.mjs`
+- Risk level: Low
+- Suggested commit message: `test(datagrid): harden interaction frame profile gates`
+
 ## Execution Notes
 
 - Preserve existing desktop behavior unless a slice explicitly changes it.
