@@ -33,7 +33,10 @@ import {
   useDataGridRangeMutationEngine,
   type DataGridCopyRange,
 } from "../advanced"
-import { resolveMissingRowIndexInRange } from "./useDataGridAppClipboard"
+import {
+  resolveDataGridVirtualSelectionOperationGuard,
+  resolveMissingRowIndexInRange,
+} from "./useDataGridAppClipboard"
 import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 import {
   resolveDataGridAppInteractionOwnerSnapshot,
@@ -975,6 +978,20 @@ export function useDataGridAppInteractionController<
     baseRange: DataGridCopyRange,
     targetRange: DataGridCopyRange,
   ): Promise<boolean> => {
+    const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
+      "range-move",
+      options.selectionSnapshot.value,
+      options.normalizeClipboardRange,
+      {
+        range: baseRange,
+        blockedMessage: "Range move includes unloaded rows. Load the full source and target ranges before moving.",
+        serverUnavailableMessage: "Range move requires a server operation. Server range move delegation is not configured.",
+      },
+    )
+    if (virtualGuard.blocked) {
+      options.reportFillWarning?.(virtualGuard.message ?? "Range move cannot be performed.")
+      return false
+    }
     if (!isRangeFullyMaterialized(baseRange) || !isRangeFullyMaterialized(targetRange)) {
       options.reportFillWarning?.("Range move includes unloaded rows. Load the full source and target ranges before moving.")
       return false
@@ -2179,6 +2196,20 @@ export function useDataGridAppInteractionController<
     const rawRange = options.resolveSelectionRange()
     const range = rawRange ? options.normalizeClipboardRange(rawRange) : null
     if (!range) {
+      return false
+    }
+    const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
+      "clear",
+      options.selectionSnapshot.value,
+      options.normalizeClipboardRange,
+      {
+        range,
+        blockedMessage: "Selected range includes unloaded rows. Load rows or use server operation.",
+        serverUnavailableMessage: "Selected range requires a server operation. Server clear delegation is not configured.",
+      },
+    )
+    if (virtualGuard.blocked) {
+      options.reportFillWarning?.(virtualGuard.message ?? "Selected range cannot be cleared.")
       return false
     }
     const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, range)

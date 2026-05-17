@@ -110,16 +110,19 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 6: Server-Backed Clipboard And Mutation Delegation
 
+- Status: Partially completed on 2026-05-17. Clipboard, clear/delete, and local range-move paths now consult virtual selection metadata before local materialized work; stale virtual selections are blocked with an explicit message, and unloaded virtual ranges remain blocked when no server delegation handler is configured. Full server-delegated copy/export, cut, clear/delete, paste, range move, and summary endpoints remain planned contract work.
 - Objective: implement the approved server operation decisions for clipboard, clear/delete, fill, and range move without making local materialized paths unsafe.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
+  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
   - `packages/datagrid-orchestration/src/clipboard/*`
   - `packages/datagrid-orchestration/src/fill/useDataGridFillHandleStart.ts`
   - `packages/datagrid-orchestration/src/selection/useDataGridRangeMoveLifecycle.ts`
   - `packages/datagrid-sandbox/src/components/VueServerDataSourceGridCard.vue`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
+  - `packages/datagrid-vue/src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts`
 - Expected behavior change: operations over unloaded selections should either delegate to the server according to the approved contract or return a clear blocked state; local copy/cut/delete/fill/range-move must remain limited to materialized safe ranges.
 - Tests to add/update:
   - Clipboard tests for unloaded source rows, unloaded target rows, placeholders, stale selections, and server-delegated copy/export.

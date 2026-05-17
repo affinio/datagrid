@@ -5,6 +5,7 @@ This document defines the server-backed selection operation contract for future 
 Current implemented behavior:
 
 - Local copy/cut blocks selected ranges that include unloaded or placeholder rows.
+- Clipboard, clear/delete, and local range-move paths block stale virtual selections before local materialized work.
 - Local clear/delete/fill/range-move paths are materialized-row oriented unless a dedicated server path already exists.
 - Server fill has boundary and commit plumbing.
 - Row selection supports explicit selected rows and `all` with exclusions.
@@ -69,6 +70,7 @@ Responses should return:
 ## Current Gaps
 
 - Server-delegated copy/export, cut, clear/delete, paste, range move, and summary are contract-level only.
+- Clipboard, clear/delete, and local range move only apply virtual operation decisions as a safety guard; they do not execute delegated server operations yet.
 - Server fill exists, but series fill is not implemented.
 - Selection summaries remain loaded/local unless a server summary operation is added.
 - Group row operation semantics are blocked unless a backend explicitly defines group-to-children or group-summary behavior.

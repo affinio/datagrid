@@ -1255,6 +1255,75 @@ describe("useDataGridAppInteractionController contract", () => {
     expect((getBodyRowAtIndex(1) as { __placeholder?: boolean } | null)?.__placeholder).toBe(true)
   })
 
+  it("blocks Delete when virtual selection metadata is stale", async () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      recordIntentTransaction,
+      reportFillWarning,
+    } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "r2",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        virtual: {
+          anchorCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focusCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: 1,
+          rowIds: [
+            { rowIndex: 0, rowId: "r1" },
+            { rowIndex: 1, rowId: "r2" },
+          ],
+          coverage: {
+            isFullyLoaded: true,
+            loadedRowCount: 2,
+            totalRowCount: 2,
+            missingIntervals: [],
+            rowIds: [
+              { rowIndex: 0, rowId: "r1" },
+              { rowIndex: 1, rowId: "r2" },
+            ],
+            scanLimited: false,
+          },
+          projectionStale: true,
+          staleReason: "projection-change",
+          isVirtualSelection: true,
+        },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(recordIntentTransaction).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Selected range changed after projection update. Refresh or reselect before using this operation.",
+    )
+  })
+
   it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {
     const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
       rowCount: 6,

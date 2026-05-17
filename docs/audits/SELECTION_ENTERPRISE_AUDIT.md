@@ -111,7 +111,7 @@ Tests and benchmarks sampled:
    `virtualSelection.ts` can compute loaded coverage from row-model intervals, and `createDataSourceBackedRowModel` exposes `getLoadedRowIntervals(range)` from its range cache. The fallback row-by-row helper still has a scan cap for row models that do not provide interval metadata.
 
 2. **Server-backed selection semantics are documented but not fully implemented.**
-   `docs/server-datasource/selection-operations.md` defines the operation matrix for materialized, server, blocked, and virtual modes across copy/export, cut, clear/delete, paste, fill, range move, summary, and row selection. The app path still mainly blocks unloaded clipboard copy and has server fill-specific plumbing; implementation remains for the broader delegated operations.
+   `docs/server-datasource/selection-operations.md` defines the operation matrix for materialized, server, blocked, and virtual modes across copy/export, cut, clear/delete, paste, fill, range move, summary, and row selection. Clipboard, clear/delete, and local range-move paths now block stale virtual selections before local materialized work, and unloaded virtual ranges remain blocked without a configured server delegate. Server fill has dedicated plumbing; implementation remains for broader delegated copy/export, cut, clear/delete, paste, range move, and summary operations.
 
 3. **No deliberate touch selection model.**
    `docs/MOBILE_TOUCH_SCROLL_AUDIT.md` states that long-press selection and explicit touch handles remain open. Current touch safeguards protect native scroll and suppress touch-generated desktop gestures, but enterprise tablet behavior needs a designed long-press/handle mode for range selection, fill, and move.
@@ -128,7 +128,7 @@ Tests and benchmarks sampled:
    `selectionSummary.ts` iterates every selected loaded cell and tracks `seenCells`; `useDataGridAppSelection.ts` computes app aggregate labels by iterating selected rows and columns. This is acceptable for moderate ranges, but not enterprise-safe for 100k x wide selections without visible-only, sampled, server-delegated, or budgeted modes.
 
 4. **Clipboard and local mutation paths are materialized-row oriented.**
-   `useDataGridAppClipboard.ts` collects edits row-by-row and blocks copy when rows are missing. That is correct for local safety, but enterprise server-backed grids need explicit server operations for copy/export, clear, delete, paste, and range move over unloaded selections.
+   `useDataGridAppClipboard.ts` collects edits row-by-row and blocks copy when rows are missing. It now also checks virtual selection metadata for stale projections before staging clipboard state. Clear/delete and local range move perform the same stale virtual guard before mutating rows. That is correct for local safety, but enterprise server-backed grids still need explicit server operations for copy/export, clear, delete, paste, and range move over unloaded selections.
 
 5. **Range move can be armed from selected cell body on desktop paths.**
    `useDataGridAppInteractionController.ts` has a pending range-move start when the pointer begins inside the selected editable range. The stage has mouse hover edge affordances, and touch-generated mouse events are guarded, but the enterprise interaction contract should require explicit handles for touch and clearly separate edge-drag from body-drag behavior.
@@ -212,7 +212,7 @@ Tests and benchmarks sampled:
 - `useDataGridTableStageRowSelection.ts` uses all/excluded mode for server row selection, which is the right direction.
 - Cell-range virtual selection has operation decisions, but the app does not yet expose complete server-delegated handlers for all enterprise operations.
 - Local copy blocks unloaded rows and tells the user to load rows or use server export. This is safe, not complete.
-- Server fill has dedicated boundary and commit plumbing in `useDataGridAppInteractionController.ts`, but server copy/cut/clear/delete/range-move equivalents need a consistent contract.
+- Server fill has dedicated boundary and commit plumbing in `useDataGridAppInteractionController.ts`; stale virtual guards now protect clipboard, clear/delete, and local range move, but server copy/cut/clear/delete/range-move equivalents still need runtime handlers.
 
 ## Touch And Mobile Risks
 
@@ -236,7 +236,7 @@ Tests and benchmarks sampled:
 Blocks to target:
 
 - Huge virtual selection uses bounded row-by-row scans instead of loaded intervals/server range descriptors.
-- Server-backed operation semantics are incomplete for copy/export, cut, clear/delete, range move, and summary.
+- Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
 - Active cell/focus/edit ownership is not specified as one state machine.
 - Touch selection lacks a long-press/handle model.
 - Large-range performance lacks enforced budgets for summary, aggregates, clipboard, overlays, and multi-range rendering.
@@ -244,7 +244,7 @@ Blocks to target:
 
 ## Recommended Next Work
 
-1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary delegation according to the documented operation matrix.
+1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
 2. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
 3. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
 4. Add a touch selection design with long press and explicit handles.

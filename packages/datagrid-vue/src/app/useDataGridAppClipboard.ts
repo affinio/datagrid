@@ -1,6 +1,16 @@
 import { ref, type Ref } from "vue"
-import type { DataGridClientRowPatch, DataGridColumnSnapshot, DataGridRowNode } from "@affino/datagrid-core"
-import { getDataGridSelectionMissingRowIntervals } from "@affino/datagrid-core"
+import type {
+  DataGridClientRowPatch,
+  DataGridColumnSnapshot,
+  DataGridRowNode,
+  DataGridSelectionSnapshot,
+  DataGridVirtualSelectionOperation,
+  DataGridVirtualSelectionServerCapabilities,
+} from "@affino/datagrid-core"
+import {
+  evaluateDataGridVirtualSelectionOperation,
+  getDataGridSelectionMissingRowIntervals,
+} from "@affino/datagrid-core"
 import type { DataGridCopyRange } from "../advanced"
 import { useDataGridClipboardBridge, useDataGridCopyRangeHelpers } from "../advanced"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
@@ -23,6 +33,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   viewportRowStart: Ref<number>
   resolveSelectionRange: () => DataGridCopyRange | null
   resolveSelectionRanges?: () => readonly DataGridCopyRange[]
+  resolveSelectionSnapshot?: () => DataGridSelectionSnapshot | null
   resolveCurrentCellCoord: () => { rowIndex: number; columnIndex: number } | null
   applySelectionRange: (range: DataGridCopyRange) => void
   clearCellSelection: () => void
@@ -98,6 +109,98 @@ export function resolveMissingRowIndexInRange<TRow>(
   return getDataGridSelectionMissingRowIntervals(range, rowIndex => (
     !isDataGridRowMissingOrPlaceholder(getBodyRowAtIndex(rowIndex))
   ))[0]?.startRow ?? null
+}
+
+export interface DataGridVirtualSelectionOperationGuardResult {
+  blocked: boolean
+  message: string | null
+}
+
+export interface ResolveDataGridVirtualSelectionOperationGuardOptions {
+  range?: DataGridCopyRange | null
+  capabilities?: DataGridVirtualSelectionServerCapabilities
+  blockedMessage?: string
+  serverUnavailableMessage?: string
+  staleMessage?: string
+}
+
+function dataGridCopyRangesEqual(left: DataGridCopyRange, right: DataGridCopyRange): boolean {
+  return (
+    left.startRow === right.startRow
+    && left.endRow === right.endRow
+    && left.startColumn === right.startColumn
+    && left.endColumn === right.endColumn
+  )
+}
+
+function selectionSnapshotRangeToClipboardRange(
+  range: DataGridSelectionSnapshot["ranges"][number],
+): DataGridCopyRange {
+  return {
+    startRow: range.startRow,
+    endRow: range.endRow,
+    startColumn: range.startCol,
+    endColumn: range.endCol,
+  }
+}
+
+export function resolveDataGridVirtualSelectionOperationGuard(
+  operation: DataGridVirtualSelectionOperation,
+  snapshot: DataGridSelectionSnapshot | null | undefined,
+  normalizeRange: (range: DataGridCopyRange) => DataGridCopyRange | null,
+  options: ResolveDataGridVirtualSelectionOperationGuardOptions = {},
+): DataGridVirtualSelectionOperationGuardResult {
+  const ranges = snapshot?.ranges ?? []
+  if (ranges.length === 0) {
+    return { blocked: false, message: null }
+  }
+  const expectedRange = options.range ? normalizeRange(options.range) : null
+  const activeRangeIndex = Math.max(0, Math.min(ranges.length - 1, snapshot?.activeRangeIndex ?? 0))
+  const activeRange = ranges[activeRangeIndex]
+  const candidates = activeRange
+    ? [activeRange, ...ranges.filter((_, index) => index !== activeRangeIndex)]
+    : ranges
+
+  for (const candidate of candidates) {
+    const virtual = candidate.virtual
+    if (!virtual?.isVirtualSelection) {
+      continue
+    }
+    const candidateRange = normalizeRange(selectionSnapshotRangeToClipboardRange(candidate))
+    if (!candidateRange) {
+      continue
+    }
+    if (expectedRange && !dataGridCopyRangesEqual(candidateRange, expectedRange)) {
+      continue
+    }
+    if (virtual.projectionStale) {
+      return {
+        blocked: true,
+        message: options.staleMessage
+          ?? "Selected range changed after projection update. Refresh or reselect before using this operation.",
+      }
+    }
+    const decision = evaluateDataGridVirtualSelectionOperation(
+      operation,
+      virtual.coverage,
+      options.capabilities,
+    )
+    if (!decision.allowed) {
+      return {
+        blocked: true,
+        message: options.blockedMessage ?? decision.reason,
+      }
+    }
+    if (decision.mode === "server") {
+      return {
+        blocked: true,
+        message: options.serverUnavailableMessage ?? "Selected range requires a server operation.",
+      }
+    }
+    return { blocked: false, message: null }
+  }
+
+  return { blocked: false, message: null }
 }
 
 export function useDataGridAppClipboard<TRow, TSnapshot>(
@@ -482,6 +585,20 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     const preflightRange = copyRangeHelpers.resolveCopyRange()
     if (preflightRange) {
+      const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
+        operation,
+        options.resolveSelectionSnapshot?.() ?? null,
+        normalizeClipboardRange,
+        {
+          range: preflightRange,
+          blockedMessage: "Selected range includes unloaded rows. Load rows or use server export.",
+          serverUnavailableMessage: "Selected range requires server export. Server clipboard delegation is not configured.",
+        },
+      )
+      if (virtualGuard.blocked) {
+        options.setLastAction?.(virtualGuard.message ?? "Selected range cannot be copied.")
+        return false
+      }
       const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, preflightRange)
       if (missingRowIndex != null) {
         options.setLastAction?.(

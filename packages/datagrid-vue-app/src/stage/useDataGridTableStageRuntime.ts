@@ -972,6 +972,7 @@ export function useDataGridTableStageRuntime<
     viewportRowStart,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
     resolveSelectionRanges,
+    resolveSelectionSnapshot: () => options.selectionSnapshot.value,
     resolveCurrentCellCoord: resolveCurrentCellCoordForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
     clearCellSelection,

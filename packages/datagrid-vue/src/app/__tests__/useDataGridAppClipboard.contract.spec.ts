@@ -1,5 +1,6 @@
 import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
+import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
 import { useDataGridAppClipboard } from "../useDataGridAppClipboard"
 
@@ -29,6 +30,7 @@ function createClipboardHarness(options: {
     startColumn: number
     endColumn: number
   }>
+  selectionSnapshot?: DataGridSelectionSnapshot | null
   rowNodes?: readonly (DemoRowNode | null)[]
 } = {}) {
   const rows = ref<DemoRow[]>([
@@ -80,6 +82,7 @@ function createClipboardHarness(options: {
     viewportRowStart: ref(0),
     resolveSelectionRange: () => selectionRange.value,
     resolveSelectionRanges: options.resolveSelectionRanges,
+    resolveSelectionSnapshot: () => options.selectionSnapshot ?? null,
     resolveCurrentCellCoord: () => currentCell.value,
     applySelectionRange,
     clearCellSelection,
@@ -696,6 +699,107 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(copied).toBe(false)
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
+  })
+
+  it("blocks clipboard operations when virtual selection metadata is stale", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      selectionSnapshot: {
+        activeRangeIndex: 0,
+        activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        ranges: [{
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 1,
+          startRowId: "r1",
+          endRowId: "r2",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          virtual: {
+            anchorCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+            focusCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+            startRowIndex: 0,
+            endRowIndex: 1,
+            startColumnIndex: 0,
+            endColumnIndex: 1,
+            rowIds: [
+              { rowIndex: 0, rowId: "r1" },
+              { rowIndex: 1, rowId: "r2" },
+            ],
+            coverage: {
+              isFullyLoaded: true,
+              loadedRowCount: 2,
+              totalRowCount: 2,
+              missingIntervals: [],
+              rowIds: [
+                { rowIndex: 0, rowId: "r1" },
+                { rowIndex: 1, rowId: "r2" },
+              ],
+              scanLimited: false,
+            },
+            projectionStale: true,
+            staleReason: "projection-change",
+            isVirtualSelection: true,
+          },
+        }],
+      },
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(false)
+    expect(lastAction.value).toBe(
+      "Selected range changed after projection update. Refresh or reselect before using this operation.",
+    )
+  })
+
+  it("allows clipboard operations when virtual selection coverage is fully materialized", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      selectionSnapshot: {
+        activeRangeIndex: 0,
+        activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        ranges: [{
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 1,
+          startRowId: "r1",
+          endRowId: "r2",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          virtual: {
+            anchorCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+            focusCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+            startRowIndex: 0,
+            endRowIndex: 1,
+            startColumnIndex: 0,
+            endColumnIndex: 1,
+            rowIds: [
+              { rowIndex: 0, rowId: "r1" },
+              { rowIndex: 1, rowId: "r2" },
+            ],
+            coverage: {
+              isFullyLoaded: true,
+              loadedRowCount: 2,
+              totalRowCount: 2,
+              missingIntervals: [],
+              rowIds: [
+                { rowIndex: 0, rowId: "r1" },
+                { rowIndex: 1, rowId: "r2" },
+              ],
+              scanLimited: false,
+            },
+            projectionStale: false,
+            isVirtualSelection: true,
+          },
+        }],
+      },
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(true)
+    expect(lastAction.value).toBe("Copied 2x2 cells (keyboard)")
   })
 
   it("blocks copy when the selected range includes detectable placeholder rows", async () => {
