@@ -4,9 +4,9 @@
 
 The DataGrid selection architecture is strong, but not yet enterprise-grade. It has a clear core snapshot shape, deterministic range helpers, multi-range support, virtual-selection metadata, row-selection APIs, keyboard routing, clipboard/fill/range-move plumbing, pinned-pane overlay support, and broad unit/contract coverage.
 
-The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans; server-backed selection operation semantics now have a documented operation matrix, but only fill has implementation plumbing today; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection now has a scroll-first long-press/explicit-handle model with browser coverage, but still needs real-device matrix validation; and e2e coverage does not yet prove selection continuity across pinned panes, horizontal remounts, editor remount state, and unloaded rows.
+The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans; server-backed selection operation semantics now have a documented operation matrix, but only fill has implementation plumbing today; summary/aggregate paths are locally budgeted while clipboard still can do cell-by-cell work over very large ranges; touch selection now has a scroll-first long-press/explicit-handle model with browser coverage, but still needs real-device matrix validation; and e2e coverage does not yet prove selection continuity across pinned panes, horizontal remounts, editor remount state, and unloaded rows.
 
-Current enterprise readiness: **7.5/10**.
+Current enterprise readiness: **7.6/10**.
 Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, real-device touch validation, virtualization continuity, and performance gates.
 
 ## Current Architecture Summary
@@ -124,8 +124,8 @@ Tests and benchmarks sampled:
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
    Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. `DataGridTableStage.vue` now preserves grid focus ownership through virtualized cell unmount/remount and restores the visible selection anchor after scroll idle. E2E coverage proves vertical scroll-out/scroll-in preserves the anchor class, overlay segment, fill handle, and keyboard focus. Pinned/horizontal remount, editor state, and server placeholder replacement coverage remain open.
 
-3. **Large-range summaries and aggregate labels can do cell-by-cell work.**
-   `selectionSummary.ts` iterates every selected loaded cell and tracks `seenCells`; `useDataGridAppSelection.ts` computes app aggregate labels by iterating selected rows and columns. This is acceptable for moderate ranges, but not enterprise-safe for 100k x wide selections without visible-only, sampled, server-delegated, or budgeted modes.
+3. **Large-range summaries and aggregate labels are locally budgeted, but server summary delegation remains open.**
+   `selectionSummary.ts` and `useDataGridAppSelection.ts` now cap local selected-cell summary work at 50,000 processed cells and use virtual missing-interval metadata to avoid probing unloaded rows. This protects app-local labels and summaries, but server-global summary over unloaded selections still needs datasource delegation.
 
 4. **Clipboard and local mutation paths are materialized-row oriented.**
    `useDataGridAppClipboard.ts` collects edits row-by-row and blocks copy when rows are missing. It now also checks virtual selection metadata for stale projections before staging clipboard state. Clear/delete and local range move perform the same stale virtual guard before mutating rows. That is correct for local safety, but enterprise server-backed grids still need explicit server operations for copy/export, clear, delete, paste, and range move over unloaded selections.
@@ -158,8 +158,8 @@ Tests and benchmarks sampled:
 
 ### Low
 
-1. **Selection summary supports only loaded/visible local semantics.**
-   This is fine if documented. It should not be presented as a server-global aggregate over unloaded rows.
+1. **Selection summary supports only loaded/local semantics.**
+   This is documented and locally budgeted. It should not be presented as a server-global aggregate over unloaded rows until datasource summary delegation is implemented.
 
 2. **`selectionSnapshotSignature` uses `JSON.stringify`.**
    This is acceptable for tests/simple equality but should not become a hot-path enterprise diff primitive for large multi-range snapshots.
@@ -200,7 +200,7 @@ Tests and benchmarks sampled:
 
 ## Performance Risks
 
-- `selectionSummary.ts` and app aggregate labels do selected-cell iteration. This can be expensive for wide, tall, or multi-range selections.
+- `selectionSummary.ts` and app aggregate labels now cap local selected-cell iteration at 50,000 processed cells and use virtual missing-interval metadata when present. Server-global summaries over unloaded rows still need delegated backend operations.
 - `useDataGridAppClipboard.ts` builds local edit updates row-by-row. It is appropriate for materialized ranges but not for 100k-row server selections.
 - Per-cell selection rendering checks every selected range against every rendered cell. Rendered windows keep this bounded, but many additive ranges can make it `renderedCells * ranges`.
 - Overlay geometry is generally efficient because it works from visible metrics, but large additive range lists still need budgets and tests.
@@ -230,16 +230,16 @@ Tests and benchmarks sampled:
 
 ## Enterprise Readiness Score
 
-- Current score: **7.5/10**
+- Current score: **7.6/10**
 - Target score: **9/10**
 
 Blocks to target:
 
-- Huge virtual selection uses bounded row-by-row scans instead of loaded intervals/server range descriptors.
+- Huge virtual selection coverage has an interval path for summary/aggregate labels, but other large-range operations still need interval/server range descriptors.
 - Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
 - Active cell/focus/edit ownership is not specified as one state machine.
 - Touch selection has browser-covered long-press and explicit-handle behavior, but still needs real-device validation.
-- Large-range performance lacks enforced budgets for summary, aggregates, clipboard, overlays, and multi-range rendering.
+- Large-range performance lacks enforced budgets for clipboard, overlays, and multi-range rendering.
 - Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
 
 ## Recommended Next Work
@@ -247,7 +247,7 @@ Blocks to target:
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
 2. Add e2e tests for pinned/horizontal selection remount, server placeholders, and editor remount state.
 3. Execute the real-device touch selection matrix and tune hardware thresholds if the Chromium budgets do not match device traces.
-4. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
+4. Add large-range performance gates for clipboard mutation planning, multi-range rendering, overlays, and selection drag.
 
 ## Validation Expectations
 

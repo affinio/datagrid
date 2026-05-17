@@ -224,6 +224,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 11: Selection Summary And Aggregate Budgets
 
+- Status: Completed on 2026-05-17. Core selection summaries now skip unloaded virtual rows via missing-interval metadata and cap local selected-cell summary work at 50,000 processed cells. App aggregate labels apply the same local cap, keep the full selected count visible, report the loaded/local cells included in the aggregate, and append `budgeted` when the cap is reached. Docs now state that summaries are local/materialized and server-global summaries over unloaded rows require datasource delegation.
 - Objective: make selected-cell summaries and app aggregate labels budgeted for large selections and explicit about loaded/local versus server-global semantics.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/selectionSummary.ts`

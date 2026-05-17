@@ -44,6 +44,7 @@ export interface UseDataGridAppSelectionResult<TRow> {
 }
 
 const aggregateNumberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 })
+const SELECTION_AGGREGATE_CELL_BUDGET = 50_000
 
 function normalizeRowId(value: unknown): DataGridRowId | null {
   return typeof value === "string" || typeof value === "number" ? value : null
@@ -210,6 +211,7 @@ export function useDataGridAppSelection<TRow>(
     max: number | null
     average: number | null
     isPartial: boolean
+    isBudgeted: boolean
   } | null>(() => {
     void rowVersion.value
     if (resolveMaybeRef(options.mode) !== "base") {
@@ -239,20 +241,84 @@ export function useDataGridAppSelection<TRow>(
     let numericSum = 0
     let numericMin = Number.POSITIVE_INFINITY
     let numericMax = Number.NEGATIVE_INFINITY
+    let processedCellCount = 0
+    let budgetExceeded = false
     const seenCells = new Set<string>()
+    const seenSelectedCells = new Set<string>()
 
     for (const range of snapshot.ranges) {
       const startRow = Math.max(0, Math.min(rowCount - 1, Math.min(range.startRow, range.endRow)))
       const endRow = Math.max(0, Math.min(rowCount - 1, Math.max(range.startRow, range.endRow)))
       const startColumn = Math.max(0, Math.min(columnCount - 1, Math.min(range.startCol, range.endCol)))
       const endColumn = Math.max(0, Math.min(columnCount - 1, Math.max(range.startCol, range.endCol)))
+      const selectedColumnIndexes: number[] = []
+
+      for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
+        const column = resolveSelectionColumnAtIndex(
+          options.visibleColumns.value,
+          columnIndex,
+          hasRowSelectionColumn,
+        )
+        if (column?.key) {
+          selectedColumnIndexes.push(columnIndex)
+        }
+      }
+      if (selectedColumnIndexes.length === 0) {
+        continue
+      }
+
+      const rangeCellCount = (endRow - startRow + 1) * selectedColumnIndexes.length
+      const countSelectedCellsExactly = selectedCellCount + rangeCellCount <= SELECTION_AGGREGATE_CELL_BUDGET
+      if (!countSelectedCellsExactly) {
+        selectedCellCount += rangeCellCount
+      }
+      if (budgetExceeded) {
+        continue
+      }
+
+      const missingIntervals = range.virtual?.coverage?.isFullyLoaded === false
+        ? range.virtual.coverage.missingIntervals
+        : []
+      let missingIntervalIndex = 0
 
       for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+        if (budgetExceeded) {
+          break
+        }
+        const missingInterval = missingIntervals[missingIntervalIndex]
+        if (missingInterval && rowIndex > missingInterval.endRow) {
+          missingIntervalIndex += 1
+        }
+        const currentMissingInterval = missingIntervals[missingIntervalIndex]
+        if (currentMissingInterval && rowIndex >= currentMissingInterval.startRow && rowIndex <= currentMissingInterval.endRow) {
+          const missingEnd = Math.min(endRow, currentMissingInterval.endRow)
+          if (countSelectedCellsExactly) {
+            for (let missingRowIndex = rowIndex; missingRowIndex <= missingEnd; missingRowIndex += 1) {
+              for (const columnIndex of selectedColumnIndexes) {
+                const cellKey = `${missingRowIndex}:${columnIndex}`
+                if (!seenSelectedCells.has(cellKey)) {
+                  seenSelectedCells.add(cellKey)
+                  selectedCellCount += 1
+                }
+              }
+            }
+          }
+          rowIndex = missingEnd
+          continue
+        }
         const rowNode = options.resolveSelectionRowAtIndex?.(rowIndex) ?? runtime.api.rows.get(rowIndex)
-        for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
+        for (const columnIndex of selectedColumnIndexes) {
           const cellKey = `${rowIndex}:${columnIndex}`
+          if (countSelectedCellsExactly && !seenSelectedCells.has(cellKey)) {
+            seenSelectedCells.add(cellKey)
+            selectedCellCount += 1
+          }
           if (seenCells.has(cellKey)) {
             continue
+          }
+          if (processedCellCount >= SELECTION_AGGREGATE_CELL_BUDGET) {
+            budgetExceeded = true
+            break
           }
 
           const column = resolveSelectionColumnAtIndex(
@@ -265,7 +331,7 @@ export function useDataGridAppSelection<TRow>(
           }
 
           seenCells.add(cellKey)
-          selectedCellCount += 1
+          processedCellCount += 1
           if (!rowNode || rowNode.kind === "group") {
             continue
           }
@@ -295,7 +361,8 @@ export function useDataGridAppSelection<TRow>(
       min: numericCount > 0 ? numericMin : null,
       max: numericCount > 0 ? numericMax : null,
       average: numericCount > 0 ? numericSum / numericCount : null,
-      isPartial: loadedSelectedCellCount < selectedCellCount,
+      isPartial: loadedSelectedCellCount < selectedCellCount || budgetExceeded,
+      isBudgeted: budgetExceeded,
     }
   })
 
@@ -307,7 +374,8 @@ export function useDataGridAppSelection<TRow>(
     const loadedLabel = summary.isPartial
       ? ` · loaded ${aggregateNumberFormatter.format(summary.loadedCount)}`
       : ""
-    return `Selection: count ${aggregateNumberFormatter.format(summary.count)}${loadedLabel} · sum ${formatAggregateNumber(summary.sum)} · min ${formatAggregateNumber(summary.min)} · max ${formatAggregateNumber(summary.max)} · avg ${formatAggregateNumber(summary.average)}`
+    const budgetLabel = summary.isBudgeted ? " · budgeted" : ""
+    return `Selection: count ${aggregateNumberFormatter.format(summary.count)}${loadedLabel}${budgetLabel} · sum ${formatAggregateNumber(summary.sum)} · min ${formatAggregateNumber(summary.min)} · max ${formatAggregateNumber(summary.max)} · avg ${formatAggregateNumber(summary.average)}`
   })
 
   return {

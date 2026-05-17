@@ -431,6 +431,61 @@ describe("useDataGridAppSelection contract", () => {
     )
   })
 
+  it("budgets selected-cell aggregate labels for large materialized selections", () => {
+    const runtimeSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 59_999,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: "r60000",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 59_999, colIndex: 0, rowId: "r60000" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 59_999, colIndex: 0, rowId: "r60000" },
+    } as never
+    let scannedRows = 0
+
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      visibleColumns: ref([
+        {
+          key: "amount",
+          column: {
+            key: "amount",
+            label: "Amount",
+          },
+        },
+      ] as never),
+      totalRows: ref(60_000),
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            get: (rowIndex: number) => {
+              scannedRows += 1
+              return { kind: "leaf", rowId: `r${rowIndex + 1}`, data: { amount: 1 } }
+            },
+          },
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+
+    expect(scannedRows).toBeLessThanOrEqual(50_001)
+    expect(selection.selectionAggregatesLabel.value).toBe(
+      "Selection: count 60,000 · loaded 50,000 · budgeted · sum 50,000 · min 1 · max 1 · avg 1",
+    )
+  })
+
   it("marks virtual selections projection-stale when row indexes are invalidated by sort changes", async () => {
     let sortDirection: "asc" | "desc" = "asc"
     let runtimeSnapshot = {

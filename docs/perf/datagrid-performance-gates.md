@@ -80,6 +80,11 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P95_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P99_MS=14`
+- Selection summary and aggregate labels:
+  - Local selected-cell summary work is capped at `50,000` processed cells per summary.
+  - Virtual selections must use loaded/missing interval metadata when present instead of probing every unloaded row.
+  - App aggregate labels must distinguish full selected count from loaded/local cells included in the aggregate and append `budgeted` when the local cap is reached.
+  - Server-global summary over unloaded rows remains a datasource operation, not a local fallback.
 
 ## Pointer Preview Frame Budget
 

@@ -66,6 +66,7 @@ const DEFAULT_AGGREGATIONS: readonly DataGridSelectionAggregationKind[] = [
   "min",
   "max",
 ]
+const SELECTION_SUMMARY_CELL_BUDGET = 50_000
 
 interface ColumnAccumulator {
   key: string
@@ -281,14 +282,37 @@ export function createDataGridSelectionSummary<TRow = unknown>(
   const seenRows = new Set<number>()
   const accumulators = new Map<string, ColumnAccumulator>()
   let missingRowCount = 0
+  let processedCellCount = 0
+  let budgetExceeded = false
 
   for (const range of selection.ranges) {
+    if (budgetExceeded) {
+      break
+    }
     const startRow = Math.max(0, Math.min(rowCount - 1, Math.trunc(Math.min(range.startRow, range.endRow))))
     const endRow = Math.max(0, Math.min(rowCount - 1, Math.trunc(Math.max(range.startRow, range.endRow))))
     const startCol = Math.max(0, Math.trunc(Math.min(range.startCol, range.endCol)))
     const endCol = Math.max(0, Math.trunc(Math.max(range.startCol, range.endCol)))
+    const missingIntervals = range.virtual?.coverage?.isFullyLoaded === false
+      ? range.virtual.coverage.missingIntervals
+      : []
+    let missingIntervalIndex = 0
 
     for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+      if (budgetExceeded) {
+        break
+      }
+      const missingInterval = missingIntervals[missingIntervalIndex]
+      if (missingInterval && rowIndex > missingInterval.endRow) {
+        missingIntervalIndex += 1
+      }
+      const currentMissingInterval = missingIntervals[missingIntervalIndex]
+      if (currentMissingInterval && rowIndex >= currentMissingInterval.startRow && rowIndex <= currentMissingInterval.endRow) {
+        const missingEnd = Math.min(endRow, currentMissingInterval.endRow)
+        missingRowCount += missingEnd - rowIndex + 1
+        rowIndex = missingEnd
+        continue
+      }
       if (typeof options.includeRowIndex === "function" && !options.includeRowIndex(rowIndex)) {
         continue
       }
@@ -307,9 +331,14 @@ export function createDataGridSelectionSummary<TRow = unknown>(
         if (typeof columnKey !== "string" || columnKey.length === 0) {
           continue
         }
+        if (processedCellCount >= SELECTION_SUMMARY_CELL_BUDGET) {
+          budgetExceeded = true
+          break
+        }
 
         seenCells.add(cellKey)
         seenRows.add(rowIndex)
+        processedCellCount += 1
 
         const columnConfig = columnConfigMap.get(columnKey)
         const aggregations = normalizeAggregations(columnConfig?.aggregations, defaultAggregations)
@@ -351,7 +380,7 @@ export function createDataGridSelectionSummary<TRow = unknown>(
 
   return {
     scope,
-    isPartial: missingRowCount > 0,
+    isPartial: missingRowCount > 0 || budgetExceeded,
     missingRowCount,
     selectedCells: seenCells.size,
     selectedRows: seenRows.size,

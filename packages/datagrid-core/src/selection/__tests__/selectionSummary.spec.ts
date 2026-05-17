@@ -177,4 +177,101 @@ describe("selection summary", () => {
     expect(summary.columns.latencyMs.metrics.max).toBe(30)
     expect(summary.columns.latencyMs.metrics.avg).toBe(25)
   })
+
+  it("uses virtual missing intervals instead of scanning unloaded summary rows", () => {
+    const rows = [
+      makeRowNode({ id: 1, owner: "noc", latencyMs: 100 }, 0),
+      makeRowNode({ id: 2, owner: "ops", latencyMs: 150 }, 1),
+    ]
+    const selection: DataGridSelectionSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 99_999,
+          startCol: 0,
+          endCol: 0,
+          startRowId: 1,
+          endRowId: null,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 99_999, colIndex: 0, rowId: null },
+          virtual: {
+            anchorCell: { rowIndex: 0, colIndex: 0, rowId: 1 },
+            focusCell: { rowIndex: 99_999, colIndex: 0, rowId: null },
+            startRowIndex: 0,
+            endRowIndex: 99_999,
+            startColumnIndex: 0,
+            endColumnIndex: 0,
+            rowIds: [],
+            coverage: {
+              isFullyLoaded: false,
+              loadedRowCount: 2,
+              totalRowCount: 100_000,
+              missingIntervals: [{ startRow: 2, endRow: 99_999 }],
+              rowIds: [],
+              scanLimited: false,
+            },
+            isVirtualSelection: true,
+          },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 99_999, colIndex: 0, rowId: null },
+    }
+    const scannedRows: number[] = []
+
+    const summary = createDataGridSelectionSummary<Row>({
+      selection,
+      rowCount: 100_000,
+      getRow: index => {
+        scannedRows.push(index)
+        return rows[index]
+      },
+      getColumnKeyByIndex: () => "latencyMs",
+      columns: [{ key: "latencyMs", aggregations: ["count", "sum"] }],
+    })
+
+    expect(scannedRows).toEqual([0, 1])
+    expect(summary.isPartial).toBe(true)
+    expect(summary.missingRowCount).toBe(99_998)
+    expect(summary.selectedCells).toBe(2)
+    expect(summary.columns.latencyMs.metrics.count).toBe(2)
+    expect(summary.columns.latencyMs.metrics.sum).toBe(250)
+  })
+
+  it("caps local summary work for large materialized selections", () => {
+    const selection: DataGridSelectionSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 59_999,
+          startCol: 0,
+          endCol: 0,
+          startRowId: 1,
+          endRowId: 60_000,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: 1 },
+          focus: { rowIndex: 59_999, colIndex: 0, rowId: 60_000 },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 59_999, colIndex: 0, rowId: 60_000 },
+    }
+    let scannedRows = 0
+
+    const summary = createDataGridSelectionSummary<Row>({
+      selection,
+      rowCount: 60_000,
+      getRow: index => {
+        scannedRows += 1
+        return makeRowNode({ id: index + 1, owner: "noc", latencyMs: 1 }, index)
+      },
+      getColumnKeyByIndex: () => "latencyMs",
+      columns: [{ key: "latencyMs", aggregations: ["count", "sum"] }],
+    })
+
+    expect(scannedRows).toBeLessThanOrEqual(50_001)
+    expect(summary.isPartial).toBe(true)
+    expect(summary.selectedCells).toBe(50_000)
+    expect(summary.columns.latencyMs.metrics.count).toBe(50_000)
+    expect(summary.columns.latencyMs.metrics.sum).toBe(50_000)
+  })
 })

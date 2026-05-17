@@ -211,6 +211,8 @@ Notes:
 - The built-in UI supports drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply.
 - Pass `readFilterCell` when filter menus or histograms must reflect effective formula/display values instead of raw row fields.
 - Pass `readSelectionCell` when aggregate labels or `api.selection.summarize(...)` should use effective values.
+- Selection aggregate labels and `api.selection.summarize(...)` are local/materialized summaries. Virtual selections report loaded/local coverage only; unloaded rows require a server summary operation from the datasource contract.
+- Large local summaries are budgeted to avoid cell-by-cell work over unbounded selections. When the app label reaches the local budget, it reports the full selected count plus the loaded cells included in the local aggregate and adds `budgeted`.
 
 ### Custom Vue renderer path
 
