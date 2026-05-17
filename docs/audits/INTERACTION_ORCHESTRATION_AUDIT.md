@@ -2,13 +2,13 @@
 
 ## Executive summary
 
-DataGrid has a serious interaction orchestration foundation: scroll ownership is mostly isolated, selection/fill/range-move/resize have explicit composables, pointer previews and auto-scroll are separated from mutation commits, and recent touch work has moved the primary body viewport back toward native scroll. Desktop behavior is broadly production-grade.
+DataGrid has a serious interaction orchestration foundation: scroll ownership is isolated, selection/fill/range-move/resize have explicit composables, pointer previews and auto-scroll are separated from mutation commits, active interaction ownership is observable, cancellation semantics are covered in the mounted app-stage path, and touch work has moved the primary body viewport back toward native scroll. Desktop behavior is broadly production-grade.
 
-The system is not yet enterprise-grade for all interaction modes. The main gap is not a missing feature; it is ownership fragmentation. There are strong orchestration utilities in `@affino/datagrid-orchestration`, but the main app-stage path still coordinates several active interactions through `useDataGridAppInteractionController.ts`, `useDataGridTableStageScrollSync.ts`, and window-level mouse listeners. Touch policy is improved but not complete: touch selection, touch range move, and touch fill need explicit owner/state-machine rules before the grid can claim spreadsheet-class mobile behavior.
+The system is not yet enterprise-grade for all interaction modes. The remaining gap is release confidence, not broad architectural unknowns: warning-first interaction gates are in place, but hard CI thresholds still need device calibration and real-device mobile validation. Touch policy is improved and handle-based for current selection/fill/range-move flows, but spreadsheet-class mobile claims still depend on validated device behavior and a product decision for any public touch interaction API.
 
-Current enterprise readiness score: **7/10**.
+Current enterprise readiness score: **8.5/10**.
 
-Target score: **9/10** after one-interaction-one-owner invariants, pointer lifecycle unification, touch-specific interaction policy, cancellation semantics, and e2e/performance gates are hardened.
+Target score: **9/10** after device-calibrated performance thresholds, real-device mobile validation, and any public touch interaction model decision are complete.
 
 ## Current architecture summary
 
@@ -34,7 +34,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 11 completed on 2026-05-17: sandbox Playwright coverage now gates desktop interaction races for virtualized drag selection with pinned columns, fill auto-scroll cleanup, range-move auto-scroll Escape cancellation, contextmenu interruption/reopen, and adjacent resize controls.
 - Slice 12 completed on 2026-05-17: optional `dgPerfTrace` diagnostics now emit interaction owner transitions, cancellation reasons, pointer preview timing, pointer auto-scroll frame timing, prevent-default samples, and focus restoration fallback reasons.
 - Slice 13 completed on 2026-05-17: `scripts/bench-datagrid-enterprise-browser-frames.mjs` now runs warning-first interaction frame scenarios for drag selection, fill auto-scroll, range-move auto-scroll, resize drag, and context menu open/cleanup.
-- Remaining high-risk work: device-calibrated thresholds and final audit closure.
+- Slice 14 completed on 2026-05-17: interaction audit status, mobile touch audit status, TODO ordering, and this implementation plan now separate closed implementation slices from remaining device calibration and follow-on audit work.
+- Remaining high-risk work: device-calibrated thresholds and real-device mobile validation.
 
 ## Files reviewed
 
@@ -137,16 +138,34 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 
 ### High
 
+1. **Device-calibrated thresholds are still pending.**
+   - Evidence: warning-first interaction scenarios now run through `scripts/bench-datagrid-enterprise-browser-frames.mjs`, and `dgPerfTrace` emits pointer preview, pointer auto-scroll, focus restoration, and scroll-sync drift samples.
+   - Impact: the benchmark can detect regressions, but hard CI failure thresholds should not be enabled until controlled device/profile variance is known.
+   - Required: calibrate desktop and mobile budgets before converting warning-first interaction budgets into hard quality gates.
+
+2. **Real-device mobile validation is still pending.**
+   - Evidence: Playwright gates cover scroll-first touch behavior and explicit touch handles, but the mobile audit still requires iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad runs.
+   - Impact: browser automation reduces regression risk, but it does not prove momentum feel, high-DPI handle targeting, and platform-specific gesture arbitration.
+   - Required: execute and record the device matrix before claiming full mobile enterprise readiness.
+
+3. **Public touch interaction model is intentionally unexposed.**
+   - Evidence: the current `interactionMode` remains internal, touch cell-body drag remains scroll-first, and handle-based touch flows are not exposed as a public API contract.
+   - Impact: this is the right API-stability choice for now, but product/integrator expectations for mobile spreadsheet behavior need an explicit decision before documentation can present it as public behavior.
+   - Required: propose and approve a public touch interaction API only if integrators need to control this behavior.
+
+### Closed high-risk findings
+
 1. **Main app-stage pointer lifecycle does not use the shared global pointer lifecycle.**
    - Evidence: `useDataGridGlobalPointerLifecycle.ts` supports mouseup, pointerup, pointercancel, contextmenu capture, window blur, and rAF preview modes. The main stage path uses `useDataGridAppViewportLifecycle.ts` window `mousemove`/`mouseup` listeners and `useDataGridTableStageScrollSync.ts`.
    - Impact: pointer cancellation, lost pointer capture, touch/stylus pointerup, and window blur semantics are not uniformly owned in the primary grid path.
-   - Required: wire the main stage path through one lifecycle owner or explicitly document why the global lifecycle remains a lower-level utility.
+   - Status: addressed for the mounted app-stage path. The path now covers mouseup, pointerup, pointercancel, contextmenu capture, window blur, unmount cleanup, active-only listener wiring, and warning-first interaction diagnostics.
+   - Required: keep the lifecycle contracts aligned as pointer-event support evolves.
 
 2. **Interaction ownership is explicit locally but fragmented globally.**
    - Evidence: active states live across `isPointerSelectingCells`, `isFillDragging`, `isRangeMoving`, `isColumnResizing`, pending drag/range-move refs, header resize state, and viewport scroll state.
    - Impact: each feature has guards, but there is no single interaction arbiter that can answer "what owns the gesture now?" for every subsystem.
-   - Status: partially addressed by the internal owner snapshot for drag selection, fill, range move, column resize, and row resize.
-   - Required: extend the mounted app-stage path to include touch pan and cancellation reasons without replacing existing composables.
+   - Status: addressed for the implemented interaction owners. Internal owner snapshots, diagnostics, and cancellation samples cover drag selection, fill, range move, column resize, row resize, and app-stage cancellation reasons.
+   - Required: extend diagnostics only when new interaction owners are added.
 
 3. **Range move can still be armed from the selected cell body.**
    - Evidence: `useDataGridAppInteractionController.ts` sets `pendingRangeMove` when a primary-button mousedown starts inside the current selection range; edge hover is visual-only in `useDataGridStagePointerInteractions.ts`.
@@ -154,10 +173,11 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
    - Status: addressed for the current app-stage path. Desktop selected-cell body drag remains threshold-gated; touch-generated cell-body mousedown does not arm range move; touch range move starts only from the explicit handle path.
    - Required: keep these gates current if the range-move handle model changes.
 
-4. **Touch selection is not enterprise-complete.**
-   - Evidence: `dataGridMouseEventGuards.ts` prioritizes native scroll for touch-generated mouse events, and the mobile audit keeps long-press selection as open work.
+4. **Touch selection is not enterprise-complete until device validation is recorded.**
+   - Evidence: `dataGridMouseEventGuards.ts` prioritizes native scroll for touch-generated mouse events, long-press selection prep is implemented, and the mobile audit keeps real-device execution and public touch API decisions open.
    - Impact: this avoids accidental drag, but it does not provide spreadsheet-class mobile selection handles, long-press arbitration, or touch range extension.
-   - Required: define touch selection mode, handles, long-press timeout, cancellation on scroll, and interaction with editors/context menus.
+   - Status: partially addressed by scroll-first cell-body touch policy, stationary long press selection prep, explicit selection/fill/range handles, and touch handle e2e gates.
+   - Required: validate on real devices and decide whether to expose a public touch interaction model.
 
 5. **Window-level mouse listeners are broad.**
    - Evidence: `useDataGridAppViewportLifecycle.ts` always adds `mousemove` and `mouseup` handlers while mounted.
@@ -266,18 +286,15 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 
 ## Enterprise readiness score
 
-Current score: **7/10**.
+Current score: **8.5/10**.
 
 Target score: **9/10**.
 
 What blocks target score:
 
-- No single active interaction owner diagnostic/invariant.
-- Main stage path does not use the shared global pointer lifecycle.
-- Touch selection/range/fill are guarded but not designed as complete workflows.
-- Active-only listener wiring is covered for the mounted app-stage path after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
-- Prevent-default and passive-listener policies are documented; keep them synchronized with future touch/focus/edit slices.
-- Missing performance gates, device-calibrated thresholds, and device-level mobile readiness validation.
+- Device-calibrated thresholds are still needed before warning-first interaction budgets become hard CI gates.
+- Real-device mobile validation is still needed for iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
+- Public touch interaction/API behavior remains intentionally unexposed until a product decision requires it.
 
 ## Recommended tests
 
@@ -358,6 +375,8 @@ Performance tests:
 
 - Keep Playwright interaction-race tests aligned with owner/lifecycle changes.
 - Keep warning-first browser performance gates for pointer preview, auto-scroll, focus restore, and scroll sync drift aligned with `dgPerfTrace` diagnostics.
+- Calibrate device/profile thresholds before making interaction frame budgets hard CI failures.
+- Record the real-device mobile matrix before claiming full mobile enterprise readiness.
 - Calibrate hard-fail thresholds after collecting device/browser baselines.
 
 ## Migration notes

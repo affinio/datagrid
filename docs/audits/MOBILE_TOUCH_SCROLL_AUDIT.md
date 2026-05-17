@@ -8,7 +8,7 @@ Affino DataGrid already has strong desktop scroll foundations: scroll work is mo
 
 The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
-The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing, device-tuned CI thresholds, and server/data-source prefetch tuning from real velocity and latency traces.
+The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing, device-tuned CI thresholds, and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17; remaining mobile risk is tracked as device execution and calibrated thresholds, not additional broad interaction architecture work.
 
 ## Implementation Status
 
@@ -51,6 +51,9 @@ Phase 2 status:
 Phase 3 status:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
 
+Interaction audit closure:
+- Interaction orchestration slices 1-14 are complete as of 2026-05-17. Browser e2e coverage and warning-first frame benchmarks now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, and scroll-sync drift. The open mobile work remains real-device execution and device-calibrated thresholds.
+
 ## Current Mobile Capability
 
 - One-finger body scrolling is native-first on the center viewport; linked pinned/header surfaces route scroll into the body viewport without claiming or preventing gestures that start inside the native scroll surface.
@@ -60,7 +63,7 @@ Phase 3 status:
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
 - During active touch scroll, custom cell/group renderers are bypassed in favor of resolved display values to reduce render cost.
-- Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and CI thresholds for scroll-frame/scroll-quality telemetry still need device-calibrated budgets.
+- Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and CI thresholds for scroll-frame, scroll-quality, and interaction-frame telemetry still need device-calibrated budgets.
 
 ## Current Architecture Summary
 
