@@ -80,6 +80,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 5: Prevent-Default And Passive Listener Policy
 
+- Status: Completed on 2026-05-17. Added an explicit mouse-event policy helper, focused guard coverage, touch pan listener cleanup coverage, and documented the prevent-default/passive listener matrix.
 - Objective: centralize the event policy for when the grid may call `preventDefault()` or install non-passive listeners.
 - Affected packages/files:
   - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
@@ -94,7 +95,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Unit tests for touch-generated mouse guard coverage.
   - Tests that body viewport scroll remains native/passive.
   - Tests that linked-surface touch pan installs non-passive move only after a routed touch start.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand mouseEventGuards && pnpm --filter @affino/datagrid-vue-app test -- --runInBand touchPanGuard`
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- src/app/__tests__/dataGridMouseEventGuards.spec.ts && pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/dataGridMouseEventGuards.spec.ts src/__tests__/dataGridTouchPanGuard.spec.ts && pnpm --filter @affino/datagrid-vue type-check && pnpm --filter @affino/datagrid-vue-app type-check && node ./scripts/check-datagrid-docs-framework-track.mjs`
 - Risk level: Medium
 - Suggested commit message: `docs(datagrid): define interaction event policy`
 

@@ -5,6 +5,13 @@ export interface DataGridInteractionModeInput {
   isCoarsePointer?: boolean
 }
 
+export interface DataGridMouseEventPolicy {
+  interactionMode: Exclude<DataGridInteractionMode, "auto">
+  touchGenerated: boolean
+  nativeScrollPriority: boolean
+  preventDefaultAllowed: boolean
+}
+
 export function isTouchGeneratedMouseEvent(event: MouseEvent): boolean {
   const pointerType = (event as MouseEvent & { pointerType?: string }).pointerType
   if (pointerType === "touch") {
@@ -28,18 +35,38 @@ export function shouldPrioritizeNativeScrollForMouseDown(
   event: MouseEvent,
   input: DataGridInteractionModeInput = {},
 ): boolean {
-  return shouldPrioritizeNativeScrollForMouseEvent(event, input)
+  return resolveDataGridMouseEventPolicy(event, input).nativeScrollPriority
 }
 
 export function shouldPrioritizeNativeScrollForMouseEvent(
   event: MouseEvent,
   input: DataGridInteractionModeInput = {},
 ): boolean {
-  if (!isTouchGeneratedMouseEvent(event)) {
-    return false
+  return resolveDataGridMouseEventPolicy(event, input).nativeScrollPriority
+}
+
+export function resolveDataGridMouseEventPolicy(
+  event: MouseEvent,
+  input: DataGridInteractionModeInput = {},
+): DataGridMouseEventPolicy {
+  const touchGenerated = isTouchGeneratedMouseEvent(event)
+  const interactionMode = resolveDataGridInteractionMode(input)
+  const autoMode = (input.interactionMode ?? "auto") === "auto"
+  const nativeScrollPriority = touchGenerated && (autoMode || interactionMode === "touch")
+  return {
+    interactionMode,
+    touchGenerated,
+    nativeScrollPriority,
+    preventDefaultAllowed: !nativeScrollPriority,
   }
-  if ((input.interactionMode ?? "auto") === "auto") {
+}
+
+export function shouldAllowGridPreventDefaultForMouseEvent(
+  event: MouseEvent,
+  input: DataGridInteractionModeInput = {},
+): boolean {
+  if (!isTouchGeneratedMouseEvent(event)) {
     return true
   }
-  return resolveDataGridInteractionMode(input) === "touch"
+  return resolveDataGridMouseEventPolicy(event, input).preventDefaultAllowed
 }

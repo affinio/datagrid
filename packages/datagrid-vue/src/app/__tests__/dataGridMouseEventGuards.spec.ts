@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import {
+  resolveDataGridMouseEventPolicy,
   resolveDataGridInteractionMode,
+  shouldAllowGridPreventDefaultForMouseEvent,
   shouldPrioritizeNativeScrollForMouseDown,
 } from "../dataGridMouseEventGuards"
 
@@ -42,6 +44,27 @@ describe("dataGridMouseEventGuards", () => {
       interactionMode: "touch",
     })).toBe(false)
     expect(shouldPrioritizeNativeScrollForMouseDown(createMouseDown({ pointerType: "touch" }), {
+      interactionMode: "touch",
+    })).toBe(true)
+  })
+
+  it("exposes a prevent-default policy for grid mouse handlers", () => {
+    const touchEvent = createMouseDown({ firesTouchEvents: true })
+    expect(resolveDataGridMouseEventPolicy(touchEvent, {
+      interactionMode: "touch",
+    })).toEqual({
+      interactionMode: "touch",
+      touchGenerated: true,
+      nativeScrollPriority: true,
+      preventDefaultAllowed: false,
+    })
+    expect(shouldAllowGridPreventDefaultForMouseEvent(touchEvent, {
+      interactionMode: "touch",
+    })).toBe(false)
+    expect(shouldAllowGridPreventDefaultForMouseEvent(touchEvent, {
+      interactionMode: "desktop",
+    })).toBe(true)
+    expect(shouldAllowGridPreventDefaultForMouseEvent(createMouseDown(), {
       interactionMode: "touch",
     })).toBe(true)
   })

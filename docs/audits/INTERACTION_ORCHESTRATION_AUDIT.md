@@ -25,7 +25,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 2 completed on 2026-05-17: `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
 - Slice 3 completed on 2026-05-17: the mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction and resize cancellation.
 - Slice 4 completed on 2026-05-17: mounted window pointer/mouse lifecycle listeners now attach only while the app-stage has a pending or active pointer interaction, or while column resize owns the gesture.
-- Remaining high-risk work: prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
+- Slice 5 completed on 2026-05-17: mouse-event prevent-default policy is explicit, linked-surface touch pan listener behavior is covered, and the user interaction doc now includes the prevent-default/passive listener matrix.
+- Remaining high-risk work: touch workflow gates, focus/edit continuity, and interaction performance gates.
 
 ## Files reviewed
 
@@ -166,7 +167,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 2. **PreventDefault policy is mostly intentional but not centrally documented.**
    - Evidence: cell pointer down, fill handle, range move, header resize, managed wheel/touch scroll, context menu, and keyboard commands all call `preventDefault()` in feature-specific code.
    - Impact: this is correct in many cases, but broad enterprise behavior needs a shared policy for native scroll, text editing, context menu, and assistive tech.
-   - Required: add a prevent-default matrix by event type and owner.
+   - Status: addressed in `docs/datagrid-sheets-user-interactions-and-integrator-api.md`, with focused mouse/touch guard coverage.
+   - Required: keep the matrix current as touch workflow gates and editor/focus behavior evolve.
 
 3. **Managed touch scroll exists but is not the main body path.**
    - Evidence: `useDataGridManagedTouchScroll.ts` has pointer/touch handlers and tests; stage uses native body scroll plus `dataGridTouchPanGuard.ts` for linked surfaces.
@@ -222,7 +224,7 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 | Touch vs desktop policy | Improved scroll-first touch policy; touch selection/range/fill not complete. |
 | Event routing | Clear template-to-composable routing, but mouse-first paths dominate. |
 | Passive listeners | Body scroll is passive; touch pan guard uses lazy non-passive move only after handled touch start. |
-| PreventDefault usage | Mostly scoped and intentional; needs central policy documentation. |
+| PreventDefault usage | Scoped policy is documented and covered for mouse/touch-generated mouse guards plus linked-surface touch pan. |
 | Scroll synchronization | rAF-backed for linked panes and stage scroll refs; header/pinned sync tests exist. |
 | State machines | Feature-level state machines exist; owner snapshot now covers active app owners, but cancellation is not yet unified. |
 | Cancellation semantics | Mounted main path now covers pointerup, pointercancel, contextmenu capture, window blur, unmount cleanup, and active-only pointer listener wiring. |
@@ -263,7 +265,7 @@ What blocks target score:
 - Main stage path does not use the shared global pointer lifecycle.
 - Touch selection/range/fill are guarded but not designed as complete workflows.
 - Active-only listener wiring is covered for the mounted app-stage path after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
-- Prevent-default and passive-listener policies are distributed across features.
+- Prevent-default and passive-listener policies are documented; keep them synchronized with future touch/focus/edit slices.
 - Missing e2e/device gates for interaction races and mobile readiness.
 
 ## Recommended tests

@@ -63,6 +63,24 @@ The canonical Vue UI path is intentionally split across the app package, Vue com
 
 Active interaction diagnostics use `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` as the current owner snapshot contract for drag selection, fill, range move, column resize, and row resize. The snapshot is internal diagnostic state, not a public integrator API.
 
+### Event policy
+
+Mouse, touch-generated mouse, touch, wheel, keyboard, and context-menu events follow an explicit cancellation policy. The default rule is that native body scrolling and editor/input behavior win unless an affordance-owned grid interaction has already claimed the gesture.
+
+| Event path | Owner | `preventDefault()` / passive rule |
+| --- | --- | --- |
+| Body viewport `scroll` | Stage viewport runtime | Passive/native. Handlers sample offsets and schedule viewport sync; they do not cancel native scroll. |
+| Body cell touch-generated `mousedown` / `click` | Stage guards and app mouse guards | Touch-generated body-cell mouse events in touch/auto mode prioritize native scroll and do not start desktop drag/fill/range/resize paths. |
+| Desktop cell `mousedown` | App interaction controller | May prevent default after the grid claims selection/range-move ownership. |
+| Fill handle mouse/touch start | Stage pointer interactions and fill lifecycle | Desktop mouse may prevent default on the explicit handle. Touch fill is allowed only from the explicit handle and isolates/cancels that handle gesture. |
+| Range move | App interaction controller and range-move lifecycle | Desktop range move may prevent default after start. Touch range move must use explicit touch affordances, not body-cell drag. |
+| Column/row resize handles | Header resize orchestration and row sizing | Resize handles may prevent default after ownership is accepted; touch-generated desktop mouse fallback is ignored unless routed by an explicit touch affordance. |
+| Linked header/pinned touch pan | `installDataGridTouchPanGuard()` | `touchstart`, `touchend`, and `touchcancel` stay passive. The non-passive `touchmove` listener is installed only after a handled linked-surface touch start and removed when the gesture ends. |
+| Header wheel / linked wheel | Stage scroll sync | May prevent default only when translating the linked wheel gesture into body viewport scroll. |
+| Keyboard commands | Keyboard command router | Prevents default for handled grid commands such as copy/paste/cut, clear, undo/redo, select all, context menu, and navigation. |
+| Context menu | Context-menu router and mounted lifecycle cleanup | Opens grid context menu only when no active drag/fill/range/resize owner is running. Active interactions block the menu and finalize/cancel through lifecycle cleanup. |
+| Inline editor input | Editor components and app editing | Editor-owned inputs keep native text-editing behavior; pointer selection commits/cancels editor state before the grid claims a new cell interaction. |
+
 ## 3) Integrator API Usage (Core)
 
 Use stable core API from package root and advanced transaction service from advanced entrypoint.

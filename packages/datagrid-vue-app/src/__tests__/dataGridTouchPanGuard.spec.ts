@@ -133,6 +133,7 @@ describe("dataGridTouchPanGuard", () => {
     })
     scrollContainer.scrollTop = 100
     const addEventListener = vi.spyOn(root, "addEventListener")
+    const removeEventListener = vi.spyOn(root, "removeEventListener")
 
     const teardown = installDataGridTouchPanGuard({
       root,
@@ -148,6 +149,40 @@ describe("dataGridTouchPanGuard", () => {
 
     expect(moveEvent.defaultPrevented).toBe(true)
     expect(scrollContainer.scrollTop).toBe(150)
+
+    pinnedPane.dispatchEvent(createTouchEvent("touchend", { clientX: 20, clientY: 50 }))
+    expect(removeEventListener).toHaveBeenCalledWith("touchmove", expect.any(Function), true)
+
+    teardown()
+  })
+
+  it("does not cancel non-cancelable routed touchmove events", () => {
+    const root = document.createElement("div")
+    const pinnedPane = document.createElement("div")
+    const scrollContainer = document.createElement("div")
+    root.append(pinnedPane)
+    defineScrollMetrics(scrollContainer, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+    })
+    scrollContainer.scrollTop = 100
+
+    const teardown = installDataGridTouchPanGuard({
+      root,
+      resolveScrollContainers: () => [scrollContainer],
+      shouldHandleTarget: target => target === pinnedPane,
+    })
+
+    pinnedPane.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+    const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
+    Object.defineProperty(moveEvent, "cancelable", {
+      configurable: true,
+      value: false,
+    })
+    pinnedPane.dispatchEvent(moveEvent)
+
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(scrollContainer.scrollTop).toBe(100)
 
     teardown()
   })
