@@ -19,6 +19,12 @@ Target score: **9/10** after one-interaction-one-owner invariants, pointer lifec
 
 The primary app-stage path is mouse-first with touch guards. Cells bind `mousedown`, `click`, `mousemove`, `keydown`, and `dblclick`. The body viewport owns native scroll and passive scroll events. Header and pinned surfaces route scroll/wheel back to the body viewport. Global `mousemove`/`mouseup` complete resize, selection drag, fill, and range move.
 
+## Implementation status
+
+- Slice 1 completed on 2026-05-17: `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` now provides an internal owner snapshot for drag selection, fill, range move, column resize, and row resize. Focused contracts cover single-owner state and start-order transitions.
+- Slice 2 completed on 2026-05-17: `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
+- Remaining high-risk work: main mounted pointer lifecycle cancellation, active-only listener wiring, prevent-default policy, touch workflow gates, focus/edit continuity, and interaction performance gates.
+
 ## Files reviewed
 
 Docs:
@@ -128,7 +134,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 2. **Interaction ownership is explicit locally but fragmented globally.**
    - Evidence: active states live across `isPointerSelectingCells`, `isFillDragging`, `isRangeMoving`, `isColumnResizing`, pending drag/range-move refs, header resize state, and viewport scroll state.
    - Impact: each feature has guards, but there is no single interaction arbiter that can answer "what owns the gesture now?" for every subsystem.
-   - Required: introduce an invariant layer or diagnostic snapshot for active interaction owner, without replacing existing composables.
+   - Status: partially addressed by the internal owner snapshot for drag selection, fill, range move, column resize, and row resize.
+   - Required: extend the mounted app-stage path to include touch pan and cancellation reasons without replacing existing composables.
 
 3. **Range move can still be armed from the selected cell body.**
    - Evidence: `useDataGridAppInteractionController.ts` sets `pendingRangeMove` when a primary-button mousedown starts inside the current selection range; edge hover is visual-only in `useDataGridStagePointerInteractions.ts`.
@@ -150,7 +157,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 1. **Scroll ownership has two parallel implementations.**
    - Evidence: core has `dataGridViewportScrollIo.ts` and app stage uses `useDataGridAppViewport.ts` plus `useDataGridStageViewportRuntime.ts`.
    - Impact: current separation is understandable because the app stage renders a richer layout, but hidden drift can emerge between core viewport controller and app-stage policy.
-   - Required: document app-stage versus core viewport responsibilities and keep tests aligned.
+   - Status: ownership boundaries are now documented in `docs/datagrid-architecture.md` and `docs/datagrid-sheets-user-interactions-and-integrator-api.md`.
+   - Required: keep tests aligned as pointer lifecycle and listener wiring are changed.
 
 2. **PreventDefault policy is mostly intentional but not centrally documented.**
    - Evidence: cell pointer down, fill handle, range move, header resize, managed wheel/touch scroll, context menu, and keyboard commands all call `preventDefault()` in feature-specific code.
@@ -170,7 +178,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 5. **Resize ownership is split between column and row paths.**
    - Evidence: column resize uses `useDataGridHeaderResizeOrchestration`; row resize uses `useDataGridAppRowSizing.ts` with its own window listeners.
    - Impact: both may be correct independently, but resize as a domain does not have one shared owner or active interaction diagnostics.
-   - Required: include row resize in the interaction owner snapshot and shared cancellation policy.
+   - Status: row resize is now included in the interaction owner snapshot.
+   - Required: add shared cancellation policy in the main mounted path.
 
 6. **Focus ownership spans multiple layers.**
    - Evidence: app interaction focuses the viewport/cell with `preventScroll`; stage focus runtime resolves visible cells; inline editor focus has a separate helper; blur handling commits/cancels through another utility.
@@ -186,7 +195,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 
 1. **`docs/INTERACTION_MODEL.md` is referenced by prior planning but does not exist in this checkout.**
    - Impact: Codex/maintainer preflight has no canonical interaction model doc.
-   - Required: either create the model doc or keep this audit as the current interaction reference.
+   - Status: the interaction ownership model is now documented in `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md`.
+   - Required: create a dedicated model doc only if the interaction surface grows beyond those references.
 
 2. **The orchestration package and Vue composable re-exports can obscure source ownership.**
    - Evidence: many `packages/datagrid-vue/src/composables/*` files re-export orchestration utilities.
@@ -203,14 +213,14 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 | Fill ownership | Good explicit fill lifecycle, server-aware fill paths, and cancellation guards; touch fill requires handle policy. |
 | Keyboard ownership | Strong command router for global grid commands; cell navigation/editing remains app-controller heavy. |
 | Focus ownership | Good use of `preventScroll`; needs stronger virtualization/remount contracts. |
-| Gesture arbitration | Local arbitration is good; global owner snapshot is missing. |
+| Gesture arbitration | Local arbitration is good; internal owner snapshot exists for the main pointer-driven owners; mounted cancellation remains open. |
 | Pointer lifecycle | Shared lifecycle utility is strong but not the primary stage owner. |
 | Touch vs desktop policy | Improved scroll-first touch policy; touch selection/range/fill not complete. |
 | Event routing | Clear template-to-composable routing, but mouse-first paths dominate. |
 | Passive listeners | Body scroll is passive; touch pan guard uses lazy non-passive move only after handled touch start. |
 | PreventDefault usage | Mostly scoped and intentional; needs central policy documentation. |
 | Scroll synchronization | rAF-backed for linked panes and stage scroll refs; header/pinned sync tests exist. |
-| State machines | Feature-level state machines exist; no single active-interaction state machine. |
+| State machines | Feature-level state machines exist; owner snapshot now covers active app owners, but cancellation is not yet unified. |
 | Cancellation semantics | Good in utilities; incomplete in mounted main path for pointercancel/window blur. |
 
 ## Correctness risks

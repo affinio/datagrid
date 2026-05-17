@@ -1,6 +1,6 @@
 # DataGrid Sheets Baseline: User Interactions + Integrator API
 
-Updated: `2026-04-13`
+Updated: `2026-05-17`
 Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contract.
 
 ## 1) End-User Interactions (Behavior Contract)
@@ -43,7 +43,27 @@ Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contrac
 - Toolbar controls `Undo` / `Redo` map to the same transaction history.
 - History entries are intent-level (`edit`, `paste`, `cut`, `clear`, `fill`, `move`) with affected range metadata.
 
-## 2) Integrator API Usage (Core)
+## 2) Interaction Ownership Boundary
+
+The canonical Vue UI path is intentionally split across the app package, Vue composables, shared orchestration utilities, and core services. Keep new interaction behavior inside the existing owner unless a public API proposal explicitly changes the boundary.
+
+| Interaction area | Primary owner | Boundary rule |
+| --- | --- | --- |
+| Body scroll and viewport sampling | `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` and `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` | Body viewport remains the native scroll surface; linked panes/header route into the body viewport and must not become competing scroll owners. |
+| Core viewport math and IO | `packages/datagrid-core/src/viewport/*` | Core owns deterministic viewport math, scroll IO services, virtualization ranges, and sync contracts; Vue code consumes these contracts instead of duplicating math. |
+| Cell selection and drag selection | `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts` and `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` | The app interaction controller starts and previews pointer selection; selection snapshots are applied through the app selection adapter/runtime API. |
+| Fill handle and fill lifecycle | `packages/datagrid-orchestration/src/fill/*` with app wiring in `useDataGridAppInteractionController.ts` | Orchestration owns start/stop lifecycle semantics; the app controller owns row/materialization checks, fill commit, history, and server fill handoff. |
+| Range move | `packages/datagrid-orchestration/src/selection/*` with app wiring in `useDataGridAppInteractionController.ts` | Orchestration owns preview lifecycle; the app controller owns eligibility, commit behavior, selection restoration, and server-backed blocking. |
+| Column resize | `packages/datagrid-orchestration/src/headers/useDataGridHeaderResizeOrchestration.ts` and `packages/datagrid-vue/src/app/useDataGridAppHeaderResize.ts` | Header resize stops competing fill/drag selection before taking owner; stage scroll sync only forwards pointer movement while resize is active. |
+| Row resize | `packages/datagrid-vue/src/app/useDataGridAppRowSizing.ts` | Row sizing owns row-resize state, row-height overrides, and resize listeners; it must remain visible in active-owner diagnostics. |
+| Keyboard commands | `packages/datagrid-orchestration/src/navigation/useDataGridKeyboardCommandRouter.ts` | The command router owns copy/paste/cut/clear, undo/redo, select all, context menu, and range-move cancel routing; cell navigation/edit starts remain app-controller responsibilities. |
+| Focus restoration | `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`, `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`, and orchestration focus helpers | Focus changes should use `preventScroll` when preserving viewport position matters and must not steal focus during active scroll or editor ownership. |
+| Context menu | `packages/datagrid-orchestration/src/contextMenu/useDataGridViewportContextMenuRouter.ts` and stage context-menu handlers | Context menu routing may adjust selection before opening, but it must not open or mutate selection during active drag/fill/range/resize interactions. |
+| Inline editing | `packages/datagrid-vue-app/src/stage/useDataGridTableStageCellIo.ts`, `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`, and `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts` | Editing owns draft/commit/cancel while active; pointer selection commits the previous editor before selecting a new cell. |
+
+Active interaction diagnostics use `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` as the current owner snapshot contract for drag selection, fill, range move, column resize, and row resize. The snapshot is internal diagnostic state, not a public integrator API.
+
+## 3) Integrator API Usage (Core)
 
 Use stable core API from package root and advanced transaction service from advanced entrypoint.
 
@@ -169,10 +189,11 @@ Do not use the removed `useAffinoDataGrid*` wrappers.
 - Selection summary:
   - `api.selection.summarize({ columns, defaultAggregations, readSelectionCell })`
 
-## 3) Related References
+## 4) Related References
 
 - `docs/datagrid-grid-api.md`
 - `docs/datagrid-model-contracts.md`
 - `docs/datagrid-groupby-rowmodel-projection.md`
-- `docs/datagrid-vue-demo-canonical-behavior-contract.md`
-- `tests/e2e/datagrid.regression.spec.ts`
+- `docs/datagrid-architecture.md`
+- `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md`
+- `e2e/sandbox-interactions.spec.ts`

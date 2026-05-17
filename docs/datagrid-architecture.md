@@ -1,7 +1,7 @@
 # DataGrid Architecture and Package Boundaries
 
-Baseline date: `2026-02-07`
-Scope: `@affino/datagrid-core`, `@affino/datagrid-vue`
+Baseline date: `2026-05-17`
+Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datagrid-vue`, `@affino/datagrid-vue-app`
 
 ## Goals
 
@@ -14,12 +14,16 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-vue`
 | Package | Owns | Must not own |
 | --- | --- | --- |
 | `@affino/datagrid-core` | types, settings adapter contract, runtime signals, viewport controllers, virtualization math, selection geometry/contracts | Vue refs/watchers, SFC rendering concerns, Pinia store details |
-| `@affino/datagrid-vue` | Vue composables, SFC composition, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge | duplicate virtualization math, duplicate coordinate conversion logic, core business invariants |
+| `@affino/datagrid-orchestration` | reusable pointer, fill, range move, header resize, keyboard, context menu, viewport blur, scroll, and telemetry lifecycles | row-model mutation policy, SFC rendering, app-specific history/server fill decisions |
+| `@affino/datagrid-vue` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics | duplicate virtualization math, duplicate coordinate conversion logic, core business invariants |
+| `@affino/datagrid-vue-app` | mounted table stage, DOM event binding, native body viewport, header/pinned pane wiring, overlays, focus surfaces, editors, sandbox-shaped UX composition | core viewport math, model mutation primitives, stable public core API ownership |
 
 ## Dependency Direction
 
 - `datagrid-core` has no dependency on Vue.
+- `datagrid-orchestration` is framework-light shared interaction infrastructure.
 - `datagrid-vue` depends on `datagrid-core` and consumes core contracts.
+- `datagrid-vue-app` composes `datagrid-vue` app hooks and orchestration-backed behavior into the mounted stage.
 - Adapter boundary normalizes legacy input before runtime (example: pinning legacy fields to canonical `pin`).
 
 ## Stable Public API
@@ -36,9 +40,33 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-vue`
 4. Core emits deterministic geometry for selection/overlay.
 5. Vue layer renders view state, without re-owning geometry/scroll rules.
 
+## Interaction Ownership
+
+The mounted stage has one owner per active gesture. `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` is the current internal diagnostic contract for active owner snapshots. It is used to keep drag selection, fill, range move, column resize, and row resize mutually exclusive in the app path.
+
+| Area | Owner |
+| --- | --- |
+| Native body scroll | `@affino/datagrid-vue-app` stage viewport runtime, backed by `@affino/datagrid-vue` app viewport sync |
+| Viewport math, virtualization, scroll IO | `@affino/datagrid-core` viewport services |
+| Drag selection, fill, range move app state | `@affino/datagrid-vue` app interaction controller |
+| Shared interaction lifecycle helpers | `@affino/datagrid-orchestration` |
+| Column resize lifecycle | `@affino/datagrid-orchestration` with `@affino/datagrid-vue` app wrapper |
+| Row resize lifecycle | `@affino/datagrid-vue` app row sizing |
+| DOM binding, panes, overlays, editor/focus surfaces | `@affino/datagrid-vue-app` table stage |
+| Keyboard command routing | `@affino/datagrid-orchestration` command router, wired by `@affino/datagrid-vue` |
+| Context menu routing | `@affino/datagrid-orchestration` router and `@affino/datagrid-vue-app` stage handlers |
+
+Boundary rules:
+
+- Do not make header, pinned panes, or overlays independent scroll owners; they route through the body viewport.
+- Do not add a second app-level interaction manager when an orchestration utility already owns the lifecycle shape.
+- Keep touch body-cell gestures scroll-first; touch selection, fill, range move, and resize must start from explicit touch affordances or documented mode transitions.
+- Keep active-owner diagnostics internal unless a public diagnostics API is separately approved.
+
 ## Hard Invariants
 
 - One owner for scroll transform synchronization.
+- One active interaction owner for pointer-driven drag, fill, range move, resize, and touch pan flows.
 - One canonical pin contract in runtime: `pin = left | right | none`.
 - One coordinate conversion contract for `world`, `viewport`, and `client` spaces.
 - Horizontal virtualization clamp and update path stays pure and deterministic.

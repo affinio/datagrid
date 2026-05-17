@@ -25,6 +25,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 2: App-Stage Interaction Boundary Documentation
 
+- Status: Completed on 2026-05-17. Documented package and interaction ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
 - Objective: document the app-stage, Vue adapter, orchestration, and core viewport ownership boundaries before moving lifecycle code.
 - Affected packages/files:
   - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
