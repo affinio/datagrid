@@ -298,6 +298,23 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Risk level: Low
 - Suggested commit message: `test(datagrid): harden interaction frame profile gates`
 
+## Slice 16: Adaptive Overscan Stress Cap
+
+- Status: Completed on 2026-05-17. App-stage velocity-adaptive row overscan now caps the lookahead by viewport size with a bounded floor/ceiling, reducing programmatic jump-scroll DOM bursts while preserving smooth native scroll behavior.
+- Objective: reduce `vertical-scroll-only` and combined stress frame inflation without weakening smooth-scroll or touch/coarse-pointer blanking protection.
+- Affected packages/files:
+  - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
+  - `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`
+  - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
+  - `docs/plans/INTERACTION_ORCHESTRATION_PLAN.md`
+- Expected behavior change: no public API change; fast scroll bursts render a smaller adaptive row window on smaller viewports while still keeping at least a bounded lookahead.
+- Tests to add/update:
+  - Update the fast-scroll overscan contract to assert the capped adaptive row window.
+  - Re-run browser frame benchmarks for desktop and touch profiles.
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- src/app/__tests__/useDataGridAppViewport.contract.spec.ts --testNamePattern "overscan|fast scroll" && pnpm run bench:datagrid:enterprise:browser-frames:assert && pnpm run bench:datagrid:enterprise:browser-frames:touch:assert`
+- Risk level: Medium
+- Suggested commit message: `perf(datagrid): cap adaptive overscan bursts`
+
 ## Execution Notes
 
 - Preserve existing desktop behavior unless a slice explicitly changes it.

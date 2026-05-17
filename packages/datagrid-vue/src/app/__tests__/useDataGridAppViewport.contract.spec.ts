@@ -337,7 +337,7 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(element))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 132 })
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 9, end: 45 })
 
     vi.advanceTimersByTime(121)
     syncRowsInRange.mockClear()

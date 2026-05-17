@@ -22,6 +22,7 @@ const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
+const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
 
 type DataGridPerfSample = {
@@ -380,6 +381,14 @@ export function useDataGridAppViewport<TRow>(
     return Math.max(baseOverscan, adaptiveRowOverscan)
   }
 
+  const resolveAdaptiveRowOverscanMax = (clientHeight: number, estimatedRowHeight: number): number => {
+    const viewportRows = Math.ceil(Math.max(1, clientHeight) / Math.max(1, estimatedRowHeight))
+    return Math.min(
+      DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX,
+      Math.max(DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN, viewportRows),
+    )
+  }
+
   const updateAdaptiveRowOverscan = (scrollTop: number, clientHeight: number): void => {
     const now = resolveDataGridPerfNow()
     if (!hasAdaptiveRowOverscanSample) {
@@ -402,7 +411,7 @@ export function useDataGridAppViewport<TRow>(
     const projectedRows = Math.ceil(
       (deltaPx / elapsedMs) * DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS / estimatedRowHeight,
     )
-    adaptiveRowOverscan = Math.min(DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX, Math.max(0, projectedRows))
+    adaptiveRowOverscan = Math.min(resolveAdaptiveRowOverscanMax(clientHeight, estimatedRowHeight), Math.max(0, projectedRows))
     lastAdaptiveOverscanScrollTop = scrollTop
     lastAdaptiveOverscanSampleMs = now
   }
