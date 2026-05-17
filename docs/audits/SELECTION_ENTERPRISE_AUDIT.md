@@ -4,10 +4,10 @@
 
 The DataGrid selection architecture is strong, but not yet enterprise-grade. It has a clear core snapshot shape, deterministic range helpers, multi-range support, virtual-selection metadata, row-selection APIs, keyboard routing, clipboard/fill/range-move plumbing, pinned-pane overlay support, and broad unit/contract coverage.
 
-The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans; server-backed selection operation semantics now have a documented operation matrix, but only fill has implementation plumbing today; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection has no deliberate long-press/handle model; and e2e coverage does not yet prove selection continuity across virtualization remounts, pinned panes, grouped/tree changes, and unloaded rows.
+The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans; server-backed selection operation semantics now have a documented operation matrix, but only fill has implementation plumbing today; summary/aggregate/clipboard paths can do cell-by-cell work over very large ranges; touch selection now has a scroll-first long-press/explicit-handle model with browser coverage, but still needs real-device matrix validation; and e2e coverage does not yet prove selection continuity across pinned panes, horizontal remounts, editor remount state, and unloaded rows.
 
-Current enterprise readiness: **7/10**.
-Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, touch UX, virtualization continuity, and performance gates.
+Current enterprise readiness: **7.5/10**.
+Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, real-device touch validation, virtualization continuity, and performance gates.
 
 ## Current Architecture Summary
 
@@ -25,7 +25,7 @@ Documentation:
 - `AGENTS.md`
 - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
 - `docs/datagrid-groupby-rowmodel-projection.md`
-- `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
+- `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - `docs/datagrid-headless-a11y-contract.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 
@@ -113,8 +113,8 @@ Tests and benchmarks sampled:
 2. **Server-backed selection semantics are documented but not fully implemented.**
    `docs/server-datasource/selection-operations.md` defines the operation matrix for materialized, server, blocked, and virtual modes across copy/export, cut, clear/delete, paste, fill, range move, summary, and row selection. Clipboard, clear/delete, and local range-move paths now block stale virtual selections before local materialized work, and unloaded virtual ranges remain blocked without a configured server delegate. Server fill has dedicated plumbing; implementation remains for broader delegated copy/export, cut, clear/delete, paste, range move, and summary operations.
 
-3. **No deliberate touch selection model.**
-   `docs/MOBILE_TOUCH_SCROLL_AUDIT.md` states that long-press selection and explicit touch handles remain open. Current touch safeguards protect native scroll and suppress touch-generated desktop gestures, but enterprise tablet behavior needs a designed long-press/handle mode for range selection, fill, and move.
+3. **Touch selection has browser coverage, but real-device validation remains open.**
+   `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` now documents the scroll-first touch model: stationary long press selects/focuses, body-cell touch drag remains native-scroll-first, and explicit touch handles own selection extension, fill, range move, and resize starts. Playwright covers these contracts, but the enterprise tablet matrix and hardware thresholds still need real-device validation.
 
 ### High
 
@@ -182,8 +182,8 @@ Tests and benchmarks sampled:
 | Pinned panes | Strong overlay geometry support with active-range-only multi-range overlay coverage | Need active-cell e2e across panes |
 | Grouped/tree rows | Flattened-row semantics documented and tested in core; clipboard/paste/clear/fill block group rows; app contracts and e2e cover keyboard shift, additive cell ranges, row-selection reconciliation, fill blocking, collapse/expand invalidation/reconcile paths, and server-backed grouped placeholders for group row ids | Watch future server-defined group-row operation semantics |
 | Clipboard | Good local safety; blocks unloaded copy | Needs server-delegated copy/export/cut/clear/delete contract |
-| Fill/range move conflicts | Dedicated lifecycles stop conflicting interactions | Need touch explicit-handle policy and server virtual range semantics |
-| Touch selection | Scroll-first safeguards exist | Long-press/handle selection model is missing |
+| Fill/range move conflicts | Dedicated lifecycles stop conflicting interactions, and touch paths are explicit-handle only | Need server virtual range semantics |
+| Touch selection | Scroll-first long-press and explicit-handle model is implemented with browser e2e coverage | Need real-device matrix and hardware-threshold validation |
 | Focus synchronization | Pragmatic focus restore exists | Needs invariant tests around remount and editing |
 | Selection rendering performance | Good for rendered-window size | Needs multi-range lookup budget and large-range overlay benchmarks |
 | Selection invalidation | Virtual stale marking and row selection reconcile exist | Need unified invalidation policy across all selection-related state |
@@ -216,9 +216,9 @@ Tests and benchmarks sampled:
 
 ## Touch And Mobile Risks
 
-- Current behavior prioritizes native scroll and suppresses touch-generated desktop drag/fill/resize starts, matching `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`.
-- There is no long-press selection mode, touch selection handles, or touch-specific fill/range-move affordance contract.
-- Touch selection should not reuse desktop hover or edge-drag assumptions.
+- Current behavior prioritizes native scroll and suppresses touch-generated desktop drag/fill/resize starts, matching `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`.
+- Stationary long press selects/focuses; explicit touch handles own selection extension, fill, range move, column resize, and row resize starts.
+- Touch selection does not reuse desktop hover or edge-drag assumptions.
 - Enterprise mobile validation should include accidental drag prevention, long-press selection, handle drag, native scroll continuity, and server placeholder behavior.
 
 ## Accessibility Risks
@@ -230,7 +230,7 @@ Tests and benchmarks sampled:
 
 ## Enterprise Readiness Score
 
-- Current score: **7/10**
+- Current score: **7.5/10**
 - Target score: **9/10**
 
 Blocks to target:
@@ -238,7 +238,7 @@ Blocks to target:
 - Huge virtual selection uses bounded row-by-row scans instead of loaded intervals/server range descriptors.
 - Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
 - Active cell/focus/edit ownership is not specified as one state machine.
-- Touch selection lacks a long-press/handle model.
+- Touch selection has browser-covered long-press and explicit-handle behavior, but still needs real-device validation.
 - Large-range performance lacks enforced budgets for summary, aggregates, clipboard, overlays, and multi-range rendering.
 - Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
 
@@ -246,7 +246,7 @@ Blocks to target:
 
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
 2. Add e2e tests for pinned/horizontal selection remount, server placeholders, and editor remount state.
-3. Add a touch selection design with long press and explicit handles.
+3. Execute the real-device touch selection matrix and tune hardware thresholds if the Chromium budgets do not match device traces.
 4. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
 
 ## Validation Expectations

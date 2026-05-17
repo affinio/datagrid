@@ -406,6 +406,41 @@ test.describe("sandbox touch scroll contracts", () => {
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
+  test("touch selection drag starts only from the explicit selection handle", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const anchorCell = firstEditableAmountCell(page)
+    const rangeEndCell = amountCellByViewportRow(page, 1)
+    const targetCell = amountCellByViewportRow(page, 3)
+    await dispatchLongPress(page, anchorCell, 650)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(anchorCell))
+
+    await page.keyboard.down("Shift")
+    await page.keyboard.press("ArrowDown")
+    await page.keyboard.up("Shift")
+    await expect(rangeEndCell).toHaveClass(/grid-cell--selected/)
+
+    const selectionHandle = anchorCell.locator(".grid-touch-selection-handle")
+    await expect(selectionHandle).toBeVisible({ timeout: 20_000 })
+    await expect(rangeEndCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const touchDrag = await dispatchTouchDragStartAndMove(selectionHandle, targetCell)
+
+    expect(touchDrag.startPrevented).toBe(true)
+    expect(touchDrag.movePrevented).toBe(true)
+    await expect(targetCell).toHaveClass(/grid-cell--selected/)
+
+    await dispatchMouseUpAt(targetCell)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
+  })
+
   test("touch range move drag starts only from the explicit range move handle", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")

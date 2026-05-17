@@ -201,6 +201,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 10: Touch Selection Mode
 
+- Status: Completed on 2026-05-17. Touch body-cell gestures remain scroll-first; stationary long press selects/focuses without opening the desktop context menu; explicit touch handles own selection extension, fill, range move, and resize starts. E2E coverage now proves one-finger touch scroll, touch pan routing over body/header/pinned panes, accidental body-cell drag prevention, long-press selection, idle-only double-tap edit, explicit fill handle drag, explicit selection handle drag, explicit range-move handle drag, and explicit resize handles. Real-device matrix execution remains tracked in `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`.
 - Objective: design and implement a deliberate touch selection model with long press and explicit handles while preserving native one-finger body scroll.
 - Affected packages/files:
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`

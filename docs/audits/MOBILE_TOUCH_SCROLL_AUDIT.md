@@ -181,7 +181,7 @@ Current state:
 - Touch-generated cell-body mousedown is now filtered at the stage boundary before it reaches desktop selection/range-move logic; mouse/trackpad desktop mousedown still follows the existing path.
 - Touch movement beyond the pan threshold suppresses the next touch-generated cell click, while stationary taps still select/focus cells.
 - Touch long press now routes into the app selection path, focuses the cell with `preventScroll`, and suppresses the follow-up synthetic click/context menu; it no longer invokes the normal cell click action.
-- Touch mode now exposes an event-isolated anchor handle affordance on selected cells that do not already show a fill handle; real touch events on the handle do not enter body long-press or cell-body selection paths, and drag semantics remain disabled until explicit touch handle behavior is implemented.
+- Touch mode now exposes an event-isolated anchor handle affordance on selected cells that do not already show a fill handle; real touch events on the handle do not enter body long-press or cell-body selection paths, and explicit handle drag forwards through the existing selection-extension lifecycle.
 - Fill drag can now start from the explicit fill handle with real touch events; touchmove/touchend are isolated to the handle and forwarded to the existing fill preview/finalization pipeline.
 - Touch selection drag now starts only from the explicit selection anchor handle; body-cell touch gestures still prioritize native scroll.
 - Touch range move now starts only from the explicit move-selection handle; the previous cell-body touch path remains disabled.
