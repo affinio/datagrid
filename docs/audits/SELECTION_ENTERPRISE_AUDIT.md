@@ -119,10 +119,10 @@ Tests and benchmarks sampled:
 ### High
 
 1. **Active cell ownership is split across selection snapshot, anchor ref, DOM focus, and editing state.**
-   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, and edit-handoff coverage. It still needs remount, broader keyboard move, and server placeholder replacement coverage.
+   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, edit-handoff coverage, and vertical remount focus restoration. It still needs broader keyboard move and server placeholder replacement coverage.
 
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
-   Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. However, e2e coverage does not yet prove focus, active cell, selected classes, overlay geometry, fill handle, and editor state across scroll-out/scroll-in remounts and server placeholder replacement.
+   Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. `DataGridTableStage.vue` now preserves grid focus ownership through virtualized cell unmount/remount and restores the visible selection anchor after scroll idle. E2E coverage proves vertical scroll-out/scroll-in preserves the anchor class, overlay segment, fill handle, and keyboard focus. Pinned/horizontal remount, editor state, and server placeholder replacement coverage remain open.
 
 3. **Large-range summaries and aggregate labels can do cell-by-cell work.**
    `selectionSummary.ts` iterates every selected loaded cell and tracks `seenCells`; `useDataGridAppSelection.ts` computes app aggregate labels by iterating selected rows and columns. This is acceptable for moderate ranges, but not enterprise-safe for 100k x wide selections without visible-only, sampled, server-delegated, or budgeted modes.
@@ -240,12 +240,12 @@ Blocks to target:
 - Active cell/focus/edit ownership is not specified as one state machine.
 - Touch selection lacks a long-press/handle model.
 - Large-range performance lacks enforced budgets for summary, aggregates, clipboard, overlays, and multi-range rendering.
-- Browser/e2e coverage does not fully prove virtualization remount, pinned panes, grouped/tree changes, placeholders, and focus continuity.
+- Browser/e2e coverage now proves vertical selection remount focus continuity, but not yet pinned/horizontal remount, grouped/tree changes, placeholders, or editor remount state.
 
 ## Recommended Next Work
 
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
-2. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
+2. Add e2e tests for pinned/horizontal selection remount, grouped/tree changes, server placeholders, and editor remount state.
 3. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
 4. Add a touch selection design with long press and explicit handles.
 5. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.

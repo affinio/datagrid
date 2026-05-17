@@ -134,9 +134,11 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 7: Virtualization Remount Continuity
 
+- Status: Partially completed on 2026-05-17. The stage now tracks grid focus ownership across virtualized cell unmount/remount and restores the visible selection anchor after scroll idle, so keyboard navigation resumes from the remounted active selection. E2E coverage now proves vertical scroll-out/scroll-in remount preserves anchor class, overlay segment, fill handle, and keyboard focus. Pinned/horizontal remount and server placeholder replacement coverage remain planned.
 - Objective: prove selection continuity across scroll-out/scroll-in remounts, pinned panes, horizontal virtualization, and server placeholder replacement.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
   - `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`

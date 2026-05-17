@@ -877,6 +877,7 @@ const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
 const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const gridFocusOwned = ref(false)
 const hoveredRowIndex = ref<number | null>(null)
 const isCoarsePointer = ref(false)
 const isBodyViewportScrolling = ref(false)
@@ -1298,6 +1299,35 @@ const focusRuntime = useDataGridStageFocusRuntime({
   shouldRestoreAnchorFocus: () => !hasVisibleInlineEditor() && !isFillDragging.value && !isRangeMoving.value,
 })
 
+const remountFocusSignature = computed(() => {
+  const firstRow = displayRows.value[0]
+  const lastRow = displayRows.value[displayRows.value.length - 1]
+  const firstColumn = visibleColumns.value[0]
+  const lastColumn = visibleColumns.value[visibleColumns.value.length - 1]
+  return [
+    gridFocusOwned.value ? "focused" : "unfocused",
+    viewport.value.viewportRowStart,
+    displayRows.value.length,
+    firstRow ? String(firstRow.rowId) : "",
+    lastRow ? String(lastRow.rowId) : "",
+    visibleColumns.value.length,
+    firstColumn?.key ?? "",
+    lastColumn?.key ?? "",
+  ].join("|")
+})
+
+watch(
+  remountFocusSignature,
+  async () => {
+    if (!gridFocusOwned.value) {
+      return
+    }
+    await nextTick()
+    focusRuntime.restoreAnchorCellFocus()
+  },
+  { flush: "post" },
+)
+
 const {
   fillActionMenuOpen,
   floatingFillActionStyle,
@@ -1371,8 +1401,40 @@ function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   return linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)
 }
 
+function isBodyGridFocusTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) {
+    return false
+  }
+  return (
+    target === bodyViewportEl.value
+    || bodyShellRef.value?.contains(target) === true
+    || leftPaneContentRef.value?.contains(target) === true
+    || rightPaneContentRef.value?.contains(target) === true
+    || leftBottomPaneContentRef.value?.contains(target) === true
+    || rightBottomPaneContentRef.value?.contains(target) === true
+  )
+}
+
+function handleStageFocusIn(event: FocusEvent): void {
+  if (isBodyGridFocusTarget(event.target)) {
+    gridFocusOwned.value = true
+  }
+}
+
+function handleStageFocusOut(event: FocusEvent): void {
+  const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
+  if (!nextTarget) {
+    return
+  }
+  if (!isBodyGridFocusTarget(nextTarget)) {
+    gridFocusOwned.value = false
+  }
+}
+
 onMounted(() => {
   if (stageRootEl.value) {
+    stageRootEl.value.addEventListener("focusin", handleStageFocusIn)
+    stageRootEl.value.addEventListener("focusout", handleStageFocusOut)
     teardownTouchPanGuard = installDataGridTouchPanGuard({
       root: stageRootEl.value,
       resolveScrollContainers: () => [bodyViewportEl.value],
@@ -1395,6 +1457,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stageRootEl.value?.removeEventListener("focusin", handleStageFocusIn)
+  stageRootEl.value?.removeEventListener("focusout", handleStageFocusOut)
   teardownTouchPanGuard?.()
   teardownTouchPanGuard = null
   clearTouchClickSuppressionTimer()
