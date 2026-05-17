@@ -46,6 +46,12 @@ Adapter materialization note:
 - Vue/app code may sample DOM scroll/size, schedule rAF commits, retain visible rows, derive render spacers, and materialize rows/columns for the mounted table stage.
 - That adapter work is render-window materialization from canonical runtime/model state; it must not become a second authoritative virtualization runtime.
 
+Terminology:
+
+- Projection = logical dataset transformation (`filter`, `sort`, `group`, `pivot`, `tree`, `aggregation`).
+- Materialization = render-oriented realization of projected/runtime state into rows, columns, overlays, spacers, and mounted DOM.
+- Runtime state = canonical state owned by core services. View materialization may cache or derive from runtime state, but must not fork runtime authority.
+
 ## Interaction Ownership
 
 The mounted stage has one owner per active gesture. `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` is the current internal diagnostic contract for active owner snapshots. It is used to keep drag selection, fill, range move, column resize, and row resize mutually exclusive in the app path.
@@ -67,6 +73,7 @@ Boundary rules:
 
 - Do not make header, pinned panes, or overlays independent scroll owners; they route through the body viewport.
 - Do not add a second app-level interaction manager when an orchestration utility already owns the lifecycle shape.
+- Only core may own canonical runtime state. Vue/app layers may cache, project, or materialize state, but must not become a second runtime authority.
 - Keep touch body-cell gestures scroll-first; touch selection, fill, range move, and resize must start from explicit touch affordances or documented mode transitions.
 - Keep active-owner diagnostics internal unless a public diagnostics API is separately approved.
 
@@ -109,7 +116,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │        View State        │
+                          │      Runtime State       │
                           │                          │
                           │  Selection               │
                           │  Editing                 │
