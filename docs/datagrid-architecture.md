@@ -109,7 +109,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │        View State         │
+                          │        View State        │
                           │                          │
                           │  Selection               │
                           │  Editing                 │
@@ -122,15 +122,15 @@ Boundary rules:
                           ┌────────────▼─────────────┐
                           │      Materialization     │
                           │                          │
-                          │  Computed Overlay       │
-                          │  Row Assembly           │
-                          │  Snapshot Restore       │
-                          │  Undo / Redo            │
+                          │  Computed Overlay        │
+                          │  Row Assembly            │
+                          │  Snapshot Restore        │
+                          │  Undo / Redo             │
                           └────────────┬─────────────┘
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │      Projection Engine    │
+                          │      Projection Engine   │
                           │                          │
                           │  Filter                  │
                           │  Sort                    │
@@ -142,7 +142,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │       Compute Engine      │
+                          │       Compute Engine     │
                           │                          │
                           │  Compute Runtime         │
                           │  Compute Modules         │
@@ -155,7 +155,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │     Dependency Graph      │
+                          │     Dependency Graph     │
                           │                          │
                           │  Field Dependencies      │
                           │  Computed Dependencies   │
@@ -166,7 +166,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │      Formula Engine       │
+                          │      Formula Engine      │
                           │                          │
                           │  Parser                  │
                           │  AST                     │
@@ -178,7 +178,7 @@ Boundary rules:
                                        │
                                        │
                           ┌────────────▼─────────────┐
-                          │        Row Source         │
+                          │        Row Source        │
                           │                          │
                           │  Client Rows             │
                           │  Server DataSource       │
