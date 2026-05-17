@@ -1423,6 +1423,55 @@ describe("useDataGridAppInteractionController contract", () => {
     })
   })
 
+  it("extends keyboard selection from a group row through visible flattened rows", () => {
+    const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
+      rowCount: 4,
+      columnCount: 2,
+      firstRowKind: "group",
+      firstRowExpanded: true,
+    })
+
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "g1",
+        endRowId: "g1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      shiftKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(selectionSnapshot.value?.activeCell).toMatchObject({
+      rowIndex: 1,
+      colIndex: 0,
+      rowId: "r2",
+    })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 1,
+      startCol: 0,
+      endCol: 0,
+      startRowId: "g1",
+      endRowId: "r2",
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+    })
+  })
+
   it("extends selection with Shift+Cmd/Ctrl+Arrow to the first blank gap like Excel", () => {
     const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
       rowCount: 1,

@@ -107,6 +107,114 @@ describe("useDataGridAppCellSelection contract", () => {
     expect(api.isSelectionAnchorCell(2, 1)).toBe(true)
   })
 
+  it("extends tree-mode ranges through grouped rows by flattened row order", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+    const rows = [
+      { rowId: "group:team=platform", kind: "group" },
+      { rowId: "r1", kind: "data" },
+      { rowId: "r2", kind: "data" },
+      { rowId: "group:team=ops", kind: "group" },
+      { rowId: "r3", kind: "data" },
+    ]
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("tree"),
+      runtime: {
+        api: {
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: (snapshot: DataGridSelectionSnapshot) => {
+              selectionSnapshot.value = snapshot
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] ?? null,
+      } as never,
+      totalRows: ref(rows.length),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+    })
+
+    api.applyCellSelectionByCoord({ rowIndex: 0, columnIndex: 0, rowId: "group:team=platform" }, false)
+    api.applyCellSelectionByCoord({ rowIndex: 2, columnIndex: 1, rowId: "r2" }, true)
+
+    expect(selectionSnapshot.value?.activeCell).toEqual({ rowIndex: 2, colIndex: 1, rowId: "r2" })
+    expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+      startRow: 0,
+      endRow: 2,
+      startCol: 0,
+      endCol: 1,
+      startRowId: "group:team=platform",
+      endRowId: "r2",
+      anchor: { rowIndex: 0, colIndex: 0, rowId: "group:team=platform" },
+      focus: { rowIndex: 2, colIndex: 1, rowId: "r2" },
+    })
+    expect(api.resolveSelectionRange()).toEqual({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 1,
+    })
+    expect(api.isCellSelected(0, 0)).toBe(true)
+    expect(api.isCellSelected(1, 1)).toBe(true)
+    expect(api.isCellSelected(2, 1)).toBe(true)
+  })
+
+  it("keeps additive tree-mode selections queryable when one range targets a group row", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+    const rows = [
+      { rowId: "group:team=platform", kind: "group" },
+      { rowId: "r1", kind: "data" },
+      { rowId: "r2", kind: "data" },
+    ]
+
+    const api = useDataGridAppCellSelection({
+      mode: ref("tree"),
+      runtime: {
+        api: {
+          selection: {
+            hasSupport: () => true,
+            setSnapshot: (snapshot: DataGridSelectionSnapshot) => {
+              selectionSnapshot.value = snapshot
+            },
+          },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] ?? null,
+      } as never,
+      totalRows: ref(rows.length),
+      visibleColumns: ref([
+        { key: "a" },
+        { key: "b" },
+      ] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+    })
+
+    api.applyCellSelectionByCoord({ rowIndex: 0, columnIndex: 0, rowId: "group:team=platform" }, false)
+    api.applyCellSelectionByCoord({ rowIndex: 2, columnIndex: 1, rowId: "r2" }, false, undefined, true)
+
+    expect(selectionSnapshot.value?.ranges).toHaveLength(2)
+    expect(selectionSnapshot.value?.activeRangeIndex).toBe(1)
+    expect(api.resolveSelectionRanges()).toEqual([
+      { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      { startRow: 2, endRow: 2, startColumn: 1, endColumn: 1 },
+    ])
+    expect(api.isCellSelected(0, 0)).toBe(true)
+    expect(api.isCellSelected(2, 1)).toBe(true)
+    expect(api.isSelectionAnchorCell(2, 1)).toBe(true)
+    expect(api.shouldHighlightSelectedCell(0, 0)).toBe(true)
+  })
+
   it("appends additive ctrl/cmd selections and keeps all ranges queryable", () => {
     const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
     const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)

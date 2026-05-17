@@ -132,6 +132,8 @@ RowModel baseline contract:
 
 - selecting group row selects only the group row
 - shift range uses flattened row order
+- keyboard shift-extension and additive cell ranges keep group rows as visible flattened rows in app selection state
+- row selection may focus/select visible group row ids and reconciles against the current flattened projection
 - no implicit child selection by default
 - optional policy flag may enable group-to-children behavior
 - app clipboard copy/cut, paste targets, and clear/delete over group rows are blocked unless a future server operation explicitly defines group-row export or mutation semantics

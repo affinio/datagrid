@@ -53,4 +53,37 @@ describe("useDataGridAppRowSelection contract", () => {
       selectedRows: ["r2", "r3"],
     })
   })
+
+  it("treats grouped projection row ids as visible row-selection targets", () => {
+    const rows = [
+      { rowId: "group:team=platform", kind: "group" },
+      { rowId: "r2", kind: "data" },
+    ]
+
+    const selection = useDataGridAppRowSelection({
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            getCount: () => rows.length,
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+          },
+          rowSelection: {
+            hasSupport: () => true,
+            getSnapshot: () => selection.rowSelectionSnapshot.value,
+          },
+        },
+      } as never),
+    })
+
+    selection.selectionService.setFocusedRow!("group:team=platform")
+    selection.selectionService.selectRows!(["group:team=platform", "r1", "r2"])
+    selection.reconcileRowSelectionFromRuntime()
+
+    expect(selection.focusedRow.value).toBe("group:team=platform")
+    expect(selection.selectionService.isRowSelected!("group:team=platform")).toBe(true)
+    expect(selection.rowSelectionSnapshot.value).toEqual({
+      focusedRow: "group:team=platform",
+      selectedRows: ["group:team=platform", "r2"],
+    })
+  })
 })

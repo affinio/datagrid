@@ -96,6 +96,8 @@ Expansion snapshot roundtrip is deterministic for equal source/config.
 - Selection operates on the current flattened projection.
 - Selecting a tree group row selects that visible group row only; it does not implicitly select descendants.
 - Shift selection spans visible flattened rows, including group rows when they are inside the visible range.
+- Keyboard shift-extension and additive cell ranges preserve group rows as visible flattened rows in app selection state.
+- Row selection may focus/select visible tree group row ids and reconciles against the current flattened projection.
 - App clipboard copy/cut, paste targets, and clear/delete over group rows are blocked unless a future server operation explicitly defines group-row export or mutation semantics.
 - Local cell mutations never silently apply to only the leaf subset of a selected range that includes tree group rows.
 
