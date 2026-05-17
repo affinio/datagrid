@@ -27,6 +27,7 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 4 completed on 2026-05-17: mounted window pointer/mouse lifecycle listeners now attach only while the app-stage has a pending or active pointer interaction, or while column resize owns the gesture.
 - Slice 5 completed on 2026-05-17: mouse-event prevent-default policy is explicit, linked-surface touch pan listener behavior is covered, and the user interaction doc now includes the prevent-default/passive listener matrix.
 - Slice 6 completed on 2026-05-17: touch-mode regression gates now cover scroll-first body gestures and explicit fill, range-move, column-resize, and row-resize handles.
+- Slice 7 completed on 2026-05-17: range-move start policy is regression-locked for desktop selected-cell body drag thresholds, touch-generated cell-body suppression, explicit touch handle coverage, and sandbox desktop body-drag e2e.
 - Remaining high-risk work: focus/edit continuity and interaction performance gates.
 
 ## Files reviewed
@@ -144,7 +145,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 3. **Range move can still be armed from the selected cell body.**
    - Evidence: `useDataGridAppInteractionController.ts` sets `pendingRangeMove` when a primary-button mousedown starts inside the current selection range; edge hover is visual-only in `useDataGridStagePointerInteractions.ts`.
    - Impact: desktop behavior may be intentional, but touch and pen users need explicit handles or long-press mode to avoid scroll/selection ambiguity.
-   - Required: keep desktop behavior, but make touch range move handle-only and add tests for touch-generated events.
+   - Status: addressed for the current app-stage path. Desktop selected-cell body drag remains threshold-gated; touch-generated cell-body mousedown does not arm range move; touch range move starts only from the explicit handle path.
+   - Required: keep these gates current if the range-move handle model changes.
 
 4. **Touch selection is not enterprise-complete.**
    - Evidence: `dataGridMouseEventGuards.ts` prioritizes native scroll for touch-generated mouse events, and the mobile audit keeps long-press selection as open work.

@@ -85,6 +85,28 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
       focusOwnedByGrid: true,
     })
   })
+
+  test("desktop selected-cell body drag starts range move after movement threshold", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const sourceCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(targetCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+
+    await dragCellBodyStartAndMove(page, sourceCell, targetCell)
+
+    await expect(stage).toHaveClass(/grid-stage--range-moving/)
+    await expect(page.locator(".grid-selection-overlay__segment--move-preview").first()).toBeVisible()
+
+    await page.mouse.up()
+    await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
+  })
 })
 
 async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
@@ -125,6 +147,44 @@ async function selectionAnchorMeta(page: Page): Promise<{
       focusOwnedByGrid: document.activeElement?.classList.contains("grid-body-viewport") === true,
     }
   })
+}
+
+function firstEditableAmountCell(page: Page): Locator {
+  return page.locator('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]').first()
+}
+
+function amountCellByViewportRow(page: Page, rowIndex: number): Locator {
+  return page.locator(`.grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-column-key="amount"]`).first()
+}
+
+async function selectionAnchorSignature(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const anchorCell = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
+    if (!anchorCell) {
+      return "none"
+    }
+    return [
+      anchorCell.getAttribute("data-row-index") ?? "",
+      anchorCell.getAttribute("data-column-index") ?? "",
+      anchorCell.getAttribute("data-column-key") ?? "",
+    ].join(":")
+  })
+}
+
+async function cellSignature(cell: Locator): Promise<string> {
+  return await cell.evaluate(element => [
+    element.getAttribute("data-row-index") ?? "",
+    element.getAttribute("data-column-index") ?? "",
+    element.getAttribute("data-column-key") ?? "",
+  ].join(":"))
+}
+
+async function dragCellBodyStartAndMove(page: Page, source: Locator, target: Locator): Promise<void> {
+  const sourceBox = await boundingBox(source)
+  const targetBox = await boundingBox(target)
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2)
 }
 
 async function dragResizeHandle(page: Page, handle: Locator, deltaX: number): Promise<void> {

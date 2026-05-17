@@ -1793,6 +1793,120 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
+  it("does not start desktop cell-body range move before the pointer crosses the threshold", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      applyCellSelectionByCoord,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    const anchorCell = createCell(0, 0)
+    controller.handleCellMouseDown(createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    }), row, 0, 0)
+
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.globalPointerListenersActive.value).toBe(true)
+
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 123,
+      clientY: 10,
+    }))
+
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.rangeMovePreviewRange.value).toBeNull()
+    expect(controller.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+
+    controller.handleWindowMouseUp()
+
+    expect(controller.globalPointerListenersActive.value).toBe(false)
+    expect(applyCellSelectionByCoord).toHaveBeenCalledWith(
+      expect.objectContaining({ rowIndex: 0, columnIndex: 0 }),
+      false,
+    )
+  })
+
+  it("does not arm touch-generated cell-body range move inside the selected range", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      applyCellSelectionByCoord,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    const anchorCell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", anchorCell, {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    })
+    Object.defineProperty(pointerDown, "sourceCapabilities", {
+      configurable: true,
+      value: { firesTouchEvents: true },
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 120,
+      clientY: 82,
+    }))
+
+    expect(pointerDown.defaultPrevented).toBe(false)
+    expect(controller.isRangeMoving.value).toBe(false)
+    expect(controller.rangeMovePreviewRange.value).toBeNull()
+    expect(controller.globalPointerListenersActive.value).toBe(false)
+    expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
+  })
+
   it("blocks contextmenu and clears active range move", async () => {
     const {
       controller,

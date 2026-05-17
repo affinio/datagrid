@@ -73,7 +73,7 @@ Mouse, touch-generated mouse, touch, wheel, keyboard, and context-menu events fo
 | Body cell touch-generated `mousedown` / `click` | Stage guards and app mouse guards | Touch-generated body-cell mouse events in touch/auto mode prioritize native scroll and do not start desktop drag/fill/range/resize paths. |
 | Desktop cell `mousedown` | App interaction controller | May prevent default after the grid claims selection/range-move ownership. |
 | Fill handle mouse/touch start | Stage pointer interactions and fill lifecycle | Desktop mouse may prevent default on the explicit handle. Touch fill is allowed only from the explicit handle and isolates/cancels that handle gesture. |
-| Range move | App interaction controller and range-move lifecycle | Desktop range move may prevent default after start. Touch range move must use explicit touch affordances, not body-cell drag. |
+| Range move | App interaction controller and range-move lifecycle | Desktop selected-cell body range move is movement-threshold gated. Touch range move must use explicit touch affordances, not body-cell drag. |
 | Column/row resize handles | Header resize orchestration and row sizing | Resize handles may prevent default after ownership is accepted; touch-generated desktop mouse fallback is ignored unless routed by an explicit touch affordance. |
 | Linked header/pinned touch pan | `installDataGridTouchPanGuard()` | `touchstart`, `touchend`, and `touchcancel` stay passive. The non-passive `touchmove` listener is installed only after a handled linked-surface touch start and removed when the gesture ends. |
 | Header wheel / linked wheel | Stage scroll sync | May prevent default only when translating the linked wheel gesture into body viewport scroll. |

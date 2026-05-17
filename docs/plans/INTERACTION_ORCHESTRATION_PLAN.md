@@ -137,7 +137,8 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Mouse edge hover/start tests where supported.
   - Touch-generated cell-body events must not arm range move.
   - Touch handle starts and cancellation paths.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand rangeMove && pnpm e2e -- e2e/sandbox-interactions.spec.ts`
+- Status: Completed on 2026-05-17. Desktop selected-cell body range move remains movement-threshold gated, touch-generated cell-body mousedown does not arm range move, explicit touch handle coverage remains in the stage/e2e touch gates, and sandbox e2e now covers desktop body drag range-move start.
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- useDataGridAppInteractionController.contract.spec.ts --testNamePattern "range move|touch-generated cell-body range move|movement threshold" && pnpm run test:e2e -- e2e/sandbox-interactions.spec.ts --grep "range move"`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): lock range move start policy`
 
