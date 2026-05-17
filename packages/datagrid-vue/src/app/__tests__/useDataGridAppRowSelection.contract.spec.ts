@@ -86,4 +86,38 @@ describe("useDataGridAppRowSelection contract", () => {
       selectedRows: ["group:team=platform", "r2"],
     })
   })
+
+  it("reconciles selected descendants after a grouped projection collapses", () => {
+    let rows = [
+      { rowId: "group:team=platform", kind: "group" },
+      { rowId: "r2", kind: "data" },
+      { rowId: "r3", kind: "data" },
+    ]
+
+    const selection = useDataGridAppRowSelection({
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            getCount: () => rows.length,
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+          },
+          rowSelection: {
+            hasSupport: () => true,
+            getSnapshot: () => selection.rowSelectionSnapshot.value,
+          },
+        },
+      } as never),
+    })
+
+    selection.selectionService.setFocusedRow!("group:team=platform")
+    selection.selectionService.selectRows!(["group:team=platform", "r2", "r3"])
+    rows = [{ rowId: "group:team=platform", kind: "group" }]
+    selection.reconcileRowSelectionFromRuntime()
+
+    expect(selection.focusedRow.value).toBe("group:team=platform")
+    expect(selection.rowSelectionSnapshot.value).toEqual({
+      focusedRow: "group:team=platform",
+      selectedRows: ["group:team=platform"],
+    })
+  })
 })

@@ -529,4 +529,103 @@ describe("useDataGridAppSelection contract", () => {
       staleReason: "projection-changed",
     })
   })
+
+  it("marks virtual selections projection-stale when group expansion changes", async () => {
+    let toggledGroupKeys: string[] = []
+    let runtimeSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 4,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "group:team=platform",
+          endRowId: null,
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "group:team=platform" },
+          focus: { rowIndex: 4, colIndex: 0, rowId: null },
+          virtual: {
+            anchorCell: { rowIndex: 0, colIndex: 0, rowId: "group:team=platform" },
+            focusCell: { rowIndex: 4, colIndex: 0, rowId: null },
+            startRowIndex: 0,
+            endRowIndex: 4,
+            startColumnIndex: 0,
+            endColumnIndex: 0,
+            rowIds: [{ rowIndex: 0, rowId: "group:team=platform" }],
+            coverage: {
+              isFullyLoaded: false,
+              loadedRowCount: 1,
+              totalRowCount: 5,
+              missingIntervals: [{ startRow: 1, endRow: 4 }],
+              rowIds: [{ rowIndex: 0, rowId: "group:team=platform" }],
+            },
+            projectionIdentity: { rowModelKind: "server", projectionKey: "expanded" },
+            projectionStale: false,
+            staleReason: null,
+            isVirtualSelection: true,
+          },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 4, colIndex: 0, rowId: null },
+    }
+    const rowModelListenerRef: { current: (() => void) | null } = { current: null }
+    const setSnapshot = (snapshot: typeof runtimeSnapshot): void => {
+      runtimeSnapshot = snapshot
+    }
+
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      resolveRuntime: () => ({
+        api: {
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+            setSnapshot,
+          },
+        },
+        rowModel: {
+          getSnapshot: () => ({
+            kind: "server",
+            revision: 1,
+            rowCount: 5,
+            loading: false,
+            error: null,
+            viewportRange: { start: 0, end: 4 },
+            pagination: {
+              enabled: false,
+              pageSize: 0,
+              currentPage: 0,
+              pageCount: 0,
+              totalRowCount: 5,
+              startIndex: 0,
+              endIndex: 4,
+            },
+            sortModel: [],
+            filterModel: null,
+            groupBy: { fields: ["team"], expandedByDefault: true },
+            groupExpansion: { expandedByDefault: true, toggledGroupKeys },
+          }),
+          subscribe: (listener: () => void) => {
+            rowModelListenerRef.current = listener
+            return () => undefined
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+    await nextTick()
+
+    toggledGroupKeys = ["team:platform"]
+    rowModelListenerRef.current?.()
+
+    expect(selection.selectionSnapshot.value?.ranges[0]?.virtual).toMatchObject({
+      projectionStale: true,
+      staleReason: "projection-changed",
+    })
+    expect(runtimeSnapshot.ranges[0]?.virtual).toMatchObject({
+      projectionStale: true,
+      staleReason: "projection-changed",
+    })
+  })
 })
