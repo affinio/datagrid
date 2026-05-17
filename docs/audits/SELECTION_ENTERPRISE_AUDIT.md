@@ -141,8 +141,8 @@ Tests and benchmarks sampled:
 1. **Row selection and cell range selection are separate systems.**
    Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is good, but focus/selection precedence between checkbox row selection, row-index range selection, and cell selection needs a documented enterprise contract.
 
-2. **Grouped/tree selection is implemented for flattened rows but not fully covered as an app interaction surface.**
-   `docs/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill.
+2. **Grouped/tree selection is covered as a flattened-row app interaction surface.**
+   `docs/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
 
 3. **Selection invalidation now covers virtual stale marking and transient interaction cleanup, but still needs remount/server proof.**
    `useDataGridAppSelection.ts` marks virtual selections stale on projection key changes, row selection can reconcile against current rows, and `useDataGridAppInteractionController.ts` clears transient fill, range-move, drag-selection, and pending clipboard state when projection identity changes. The remaining gap is proving active cell, multi-ranges, row selection, and server placeholder replacement across browser remount flows.
@@ -180,7 +180,7 @@ Tests and benchmarks sampled:
 | Shift selection | Implemented for keyboard and pointer; grouped/tree app contract covers flattened group rows | Need placeholder and remount coverage |
 | Ctrl/Cmd selection | Implemented for additive cell ranges | Need header/row parity and visual-overlay contract |
 | Pinned panes | Strong overlay geometry support with active-range-only multi-range overlay coverage | Need active-cell e2e across panes |
-| Grouped/tree rows | Flattened-row semantics documented and tested in core; clipboard/paste/clear/fill block group rows; app contracts cover keyboard shift, additive cell ranges, row-selection reconciliation, fill blocking, collapse/expand invalidation/reconcile paths, and server-backed grouped placeholders for group row ids | Need e2e workflows |
+| Grouped/tree rows | Flattened-row semantics documented and tested in core; clipboard/paste/clear/fill block group rows; app contracts and e2e cover keyboard shift, additive cell ranges, row-selection reconciliation, fill blocking, collapse/expand invalidation/reconcile paths, and server-backed grouped placeholders for group row ids | Watch future server-defined group-row operation semantics |
 | Clipboard | Good local safety; blocks unloaded copy | Needs server-delegated copy/export/cut/clear/delete contract |
 | Fill/range move conflicts | Dedicated lifecycles stop conflicting interactions | Need touch explicit-handle policy and server virtual range semantics |
 | Touch selection | Scroll-first safeguards exist | Long-press/handle selection model is missing |
@@ -240,15 +240,14 @@ Blocks to target:
 - Active cell/focus/edit ownership is not specified as one state machine.
 - Touch selection lacks a long-press/handle model.
 - Large-range performance lacks enforced budgets for summary, aggregates, clipboard, overlays, and multi-range rendering.
-- Browser/e2e coverage now proves vertical selection remount focus continuity, but not yet pinned/horizontal remount, grouped/tree changes, placeholders, or editor remount state.
+- Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
 
 ## Recommended Next Work
 
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
-2. Add e2e tests for pinned/horizontal selection remount, grouped/tree changes, server placeholders, and editor remount state.
-3. Add grouped/tree browser workflows.
-4. Add a touch selection design with long press and explicit handles.
-5. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
+2. Add e2e tests for pinned/horizontal selection remount, server placeholders, and editor remount state.
+3. Add a touch selection design with long press and explicit handles.
+4. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
 
 ## Validation Expectations
 

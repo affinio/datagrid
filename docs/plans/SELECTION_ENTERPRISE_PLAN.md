@@ -178,7 +178,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 9: Grouped And Tree Selection Interactions
 
-- Status: Partially completed on 2026-05-17. Clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block grouped/tree projection rows instead of copying group display values or partially mutating only leaf rows. GroupBy and TreeData docs now state flattened selection semantics and local mutation blocking rules. App contracts now cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E workflows remain planned.
+- Status: Completed on 2026-05-17. Clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block grouped/tree projection rows instead of copying group display values or partially mutating only leaf rows. GroupBy and TreeData docs now state flattened selection semantics and local mutation blocking rules. App contracts now cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage now proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
 - Objective: extend flattened-row selection semantics into app-stage interactions for grouped rows, tree rows, keyboard navigation, clipboard, fill, row selection, and server placeholders.
 - Affected packages/files:
   - `docs/datagrid-groupby-rowmodel-projection.md`
@@ -189,13 +189,13 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-orchestration/src/navigation/useDataGridCellNavigation.ts`
   - `packages/datagrid-vue/src/app/__tests__/*Selection*.spec.ts`
-  - `e2e/sandbox-interactions.spec.ts`
+  - `e2e/sandbox-tree-pivot.spec.ts`
 - Expected behavior change: grouped/tree selection should preserve current flattened-row semantics, and operations over non-editable group rows should be blocked or delegated explicitly.
 - Tests to add/update:
   - App interaction tests for shift selection, Ctrl/Cmd additive selection, keyboard navigation, row selection, clipboard, and fill over grouped/tree rows.
   - Tests for collapsed/expanded state changes after selection.
   - Server-backed grouped placeholder tests where rows are unloaded or stale.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand selection && pnpm --filter @affino/datagrid-vue test:unit -- selection clipboard && pnpm run test:e2e -- e2e/sandbox-interactions.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand selection && pnpm --filter @affino/datagrid-vue test:unit -- selection clipboard && pnpm run test:e2e -- e2e/sandbox-tree-pivot.spec.ts`
 - Risk level: High
 - Suggested commit message: `test(datagrid): cover grouped selection workflows`
 

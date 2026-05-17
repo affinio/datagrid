@@ -17,6 +17,29 @@ test.describe("sandbox tree + pivot flows (adapted from affinio tree/pivot e2e)"
     await expect.poll(async () => rowsInModel(page)).toBe(collapsed)
   })
 
+  test("tree group anchor survives collapse and expand roundtrip", async ({ page }) => {
+    await page.goto("/vue/tree-grid")
+
+    await page.getByRole("button", { name: "Expand all" }).click()
+
+    const groupCell = firstTreeGroupBodyCell(page)
+    await expect(groupCell).toBeVisible({ timeout: 20_000 })
+    await dispatchMouseDownOnly(page, groupCell)
+
+    const groupSignature = await cellSignature(groupCell)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(groupSignature)
+
+    await page.getByRole("button", { name: "Collapse all" }).click()
+    const collapsed = await stableRowsInModel(page)
+    expect(collapsed).toBeGreaterThan(0)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(groupSignature)
+
+    await page.getByRole("button", { name: "Expand all" }).click()
+    await expect.poll(async () => rowsInModel(page)).toBeGreaterThan(collapsed)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(groupSignature)
+    await expect(groupCell).toHaveClass(/grid-cell--selection-anchor/)
+  })
+
   test("pivot layout switch rewires grouped view and keeps pivot rows styled", async ({ page }) => {
     await page.goto("/vue/pivot-grid")
 
@@ -63,3 +86,51 @@ async function pivotColumnsCount(page: Page): Promise<number> {
   return match ? Number(match[1]) : 0
 }
 
+function firstTreeGroupBodyCell(page: Page): Locator {
+  return page.locator(".grid-stage:visible .grid-row.row--group .grid-cell:not(.grid-cell--index)").first()
+}
+
+async function dispatchMouseDownOnly(page: Page, target: Locator): Promise<void> {
+  const point = await elementCenter(target)
+  await target.dispatchEvent("mousedown", {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    buttons: 1,
+    clientX: point.x,
+    clientY: point.y,
+  })
+  await page.mouse.up()
+}
+
+async function selectionAnchorSignature(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const anchorCell = document.querySelector<HTMLElement>(".grid-cell--selection-anchor")
+    if (!anchorCell) {
+      return "none"
+    }
+    return [
+      anchorCell.getAttribute("data-row-index") ?? "",
+      anchorCell.getAttribute("data-column-index") ?? "",
+      anchorCell.getAttribute("data-column-key") ?? "",
+    ].join(":")
+  })
+}
+
+async function cellSignature(cell: Locator): Promise<string> {
+  return await cell.evaluate(element => [
+    element.getAttribute("data-row-index") ?? "",
+    element.getAttribute("data-column-index") ?? "",
+    element.getAttribute("data-column-key") ?? "",
+  ].join(":"))
+}
+
+async function elementCenter(target: Locator): Promise<{ x: number; y: number }> {
+  return await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return {
+      x: Math.round(rect.left + rect.width / 2),
+      y: Math.round(rect.top + rect.height / 2),
+    }
+  })
+}
