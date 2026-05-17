@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, type ComputedRef, type Ref } from "vue"
+import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridColumnSnapshot,
   DataGridRowNode,
@@ -38,6 +38,17 @@ import {
   resolveDataGridAppInteractionOwnerSnapshot,
   type DataGridAppInteractionOwnerSnapshot,
 } from "./dataGridInteractionOwner"
+import {
+  recordDataGridInteractionAutoScrollTiming,
+  recordDataGridInteractionCancel,
+  recordDataGridInteractionOwnerTransition,
+  recordDataGridInteractionPreventDefault,
+  recordDataGridInteractionPreviewTiming,
+  resolveDataGridInteractionDiagnosticsEnabled,
+  resolveDataGridInteractionDiagnosticsNow,
+  type DataGridInteractionCancelReason,
+  type DataGridInteractionPreviewOwner,
+} from "./dataGridInteractionDiagnostics"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type {
   DataGridFilterSnapshot,
@@ -573,6 +584,52 @@ export function useDataGridAppInteractionController<
     fill: isFillDragging.value,
     rangeMove: isRangeMoving.value,
   }))
+
+  const recordInteractionOwnerTransitionIfEnabled = watch(
+    () => interactionOwnerSnapshot.value,
+    (snapshot, previousSnapshot) => {
+      if (!resolveDataGridInteractionDiagnosticsEnabled()) {
+        return
+      }
+      if (
+        previousSnapshot
+        && previousSnapshot.owner === snapshot.owner
+        && previousSnapshot.hasConflict === snapshot.hasConflict
+        && previousSnapshot.activeOwners.join(",") === snapshot.activeOwners.join(",")
+      ) {
+        return
+      }
+      recordDataGridInteractionOwnerTransition(previousSnapshot, snapshot)
+    },
+    { flush: "sync" },
+  )
+
+  const recordPreventDefault = (eventType: string, reason: string, owner: string): void => {
+    recordDataGridInteractionPreventDefault({ eventType, reason, owner })
+  }
+
+  const recordPointerPreviewTiming = (owner: DataGridInteractionPreviewOwner, applyPreview: () => void): void => {
+    if (!resolveDataGridInteractionDiagnosticsEnabled()) {
+      applyPreview()
+      return
+    }
+    const startedAt = resolveDataGridInteractionDiagnosticsNow()
+    applyPreview()
+    recordDataGridInteractionPreviewTiming(owner, Math.max(0, resolveDataGridInteractionDiagnosticsNow() - startedAt))
+  }
+
+  const mapAutoScrollOwner = (activeKind: "drag" | "fill" | "range" | null): DataGridInteractionPreviewOwner | "none" => {
+    switch (activeKind) {
+      case "drag":
+        return "drag-selection"
+      case "fill":
+        return "fill"
+      case "range":
+        return "range-move"
+      default:
+        return "none"
+    }
+  }
 
   const hasActiveFillPreviewState = (): boolean => {
     return isFillDragging.value || fillBaseRange.value != null || fillPreviewRange.value != null
@@ -1801,13 +1858,28 @@ export function useDataGridAppInteractionController<
       syncViewportAfterProgrammaticScroll()
     },
     applyRangeMovePreviewFromPointer: () => {
-      pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+      recordPointerPreviewTiming("range-move", () => {
+        pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+      })
     },
     applyFillPreviewFromPointer: () => {
-      pointerPreviewRouter.applyFillPreviewFromPointer()
+      recordPointerPreviewTiming("fill", () => {
+        pointerPreviewRouter.applyFillPreviewFromPointer()
+      })
     },
     applyDragSelectionFromPointer: () => {
-      dragPointerSelection.applyDragSelectionFromPointer()
+      recordPointerPreviewTiming("drag-selection", () => {
+        dragPointerSelection.applyDragSelectionFromPointer()
+      })
+    },
+    onFrameSample: sample => {
+      recordDataGridInteractionAutoScrollTiming({
+        owner: mapAutoScrollOwner(sample.activeKind),
+        totalMs: sample.totalMs,
+        deltaX: sample.deltaX,
+        deltaY: sample.deltaY,
+        scrolled: sample.scrolled,
+      })
     },
   })
 
@@ -2832,8 +2904,13 @@ export function useDataGridAppInteractionController<
     const rowIndex = resolveRowIndex(row, rowOffset)
     if (hasActiveFillPreviewState() && event.key === "Escape") {
       event.preventDefault()
+      recordPreventDefault("keydown", "fill-preview-escape", "fill")
+      recordDataGridInteractionCancel("escape", false, interactionOwnerSnapshot.value)
       cancelFillPreviewState()
       return
+    }
+    if (isRangeMoving.value && event.key === "Escape") {
+      recordDataGridInteractionCancel("escape", false, interactionOwnerSnapshot.value)
     }
     if (!supportsCellSelectionMode()) {
       return
@@ -2843,6 +2920,7 @@ export function useDataGridAppInteractionController<
       const clearedExternalClipboard = options.clearExternalPendingClipboardOperation?.() === true
       if (clearedCellClipboard || clearedExternalClipboard) {
         event.preventDefault()
+        recordPreventDefault("keydown", "clipboard-clear-escape", "clipboard")
         return
       }
     }
@@ -3052,18 +3130,24 @@ export function useDataGridAppInteractionController<
       }
       if (activatePendingRangeMove(pointer)) {
         rangeMovePointer.value = pointer
-        pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+        recordPointerPreviewTiming("range-move", () => {
+          pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+        })
         return
       }
     }
     if (isRangeMoving.value) {
       rangeMovePointer.value = { clientX: event.clientX, clientY: event.clientY }
-      pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+      recordPointerPreviewTiming("range-move", () => {
+        pointerPreviewRouter.applyRangeMovePreviewFromPointer()
+      })
       return
     }
     if (isFillDragging.value) {
       fillPointer.value = { clientX: event.clientX, clientY: event.clientY }
-      pointerPreviewRouter.applyFillPreviewFromPointer()
+      recordPointerPreviewTiming("fill", () => {
+        pointerPreviewRouter.applyFillPreviewFromPointer()
+      })
       return
     }
     if (pendingDragSelection.value && !isPointerSelectingCells.value) {
@@ -3077,7 +3161,9 @@ export function useDataGridAppInteractionController<
     }
     dragPointer.value = pointer
     pointerAutoScroll.startInteractionAutoScroll()
-    dragPointerSelection.applyDragSelectionFromPointer()
+    recordPointerPreviewTiming("drag-selection", () => {
+      dragPointerSelection.applyDragSelectionFromPointer()
+    })
   }
 
   const handleWindowMouseUp = (): void => {
@@ -3102,7 +3188,9 @@ export function useDataGridAppInteractionController<
     pointerAutoScroll.stopAutoScrollFrameIfIdle()
   }
 
-  const cancelPointerInteractions = (commit: boolean): void => {
+  const cancelPointerInteractions = (commit: boolean, reason: DataGridInteractionCancelReason): void => {
+    const snapshot = interactionOwnerSnapshot.value
+    const hadActiveState = hasActivePointerInteractionState()
     clearPendingRangeMove()
     clearPendingDragSelection()
     if (isRangeMoving.value) {
@@ -3121,6 +3209,9 @@ export function useDataGridAppInteractionController<
       stopPointerSelection()
     }
     pointerAutoScroll.stopAutoScrollFrameIfIdle()
+    if (hadActiveState) {
+      recordDataGridInteractionCancel(reason, commit, snapshot)
+    }
   }
 
   const handleWindowContextMenuCapture = (event: MouseEvent): boolean => {
@@ -3128,7 +3219,8 @@ export function useDataGridAppInteractionController<
       return false
     }
     event.preventDefault()
-    cancelPointerInteractions(true)
+    recordPreventDefault("contextmenu", "active-interaction", interactionOwnerSnapshot.value.owner ?? "none")
+    cancelPointerInteractions(true, "contextmenu")
     return true
   }
 
@@ -3157,10 +3249,10 @@ export function useDataGridAppInteractionController<
     handleWindowMouseUp,
     handleWindowPointerUp: handleWindowMouseUp,
     handleWindowPointerCancel: () => {
-      cancelPointerInteractions(false)
+      cancelPointerInteractions(false, "pointercancel")
     },
     handleWindowBlur: () => {
-      cancelPointerInteractions(false)
+      cancelPointerInteractions(false, "blur")
     },
     handleWindowContextMenuCapture,
     isCellInFillPreview,
@@ -3172,7 +3264,8 @@ export function useDataGridAppInteractionController<
     },
     clearSelectedCells,
     dispose: () => {
-      cancelPointerInteractions(false)
+      cancelPointerInteractions(false, "dispose")
+      recordInteractionOwnerTransitionIfEnabled()
       pointerAutoScroll.dispose()
     },
   }

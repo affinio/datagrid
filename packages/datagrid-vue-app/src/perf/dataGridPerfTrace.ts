@@ -10,6 +10,13 @@ export type DataGridPerfSample = {
   [key: string]: string | number
 }
 
+export type DataGridPerfSampleInput = {
+  scope: string
+  totalMs: number
+  ts?: number
+  [key: string]: string | number | undefined
+}
+
 export type DataGridPerfSummary = {
   scope: string
   count: number
@@ -128,4 +135,17 @@ export function resolveDataGridPerfStore(): DataGridPerfStore | null {
 
 export function recordDataGridPerfSample(sample: DataGridPerfSample): void {
   resolveDataGridPerfStore()?.push(sample)
+}
+
+export function recordDataGridPerfSampleIfEnabled(
+  sample: DataGridPerfSampleInput,
+): void {
+  if (!resolveDataGridPerfTraceEnabled()) {
+    return
+  }
+  const { ts, ...fields } = sample
+  recordDataGridPerfSample({
+    ...fields,
+    ts: ts ?? resolveDataGridPerfNow(),
+  } as DataGridPerfSample)
 }

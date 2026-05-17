@@ -70,6 +70,7 @@ describe("useDataGridPointerAutoScroll contract", () => {
     const applyFillPreviewFromPointer = vi.fn()
     const applyDragSelectionFromPointer = vi.fn()
     const setScrollPosition = vi.fn()
+    const onFrameSample = vi.fn()
     const viewport = {
       scrollTop: 100,
       scrollLeft: 120,
@@ -96,6 +97,7 @@ describe("useDataGridPointerAutoScroll contract", () => {
       applyRangeMovePreviewFromPointer,
       applyFillPreviewFromPointer,
       applyDragSelectionFromPointer,
+      onFrameSample,
       requestAnimationFrame: raf.request,
       cancelAnimationFrame: raf.cancel,
     })
@@ -110,6 +112,13 @@ describe("useDataGridPointerAutoScroll contract", () => {
     expect(applyRangeMovePreviewFromPointer).toHaveBeenCalledTimes(1)
     expect(applyFillPreviewFromPointer).not.toHaveBeenCalled()
     expect(applyDragSelectionFromPointer).not.toHaveBeenCalled()
+    expect(onFrameSample).toHaveBeenCalledWith({
+      activeKind: "range",
+      totalMs: expect.any(Number),
+      deltaX: 10,
+      deltaY: 10,
+      scrolled: true,
+    })
     expect(raf.handles().length).toBe(1)
   })
 

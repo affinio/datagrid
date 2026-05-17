@@ -30,6 +30,13 @@ export interface UseDataGridPointerAutoScrollOptions {
   applyRangeMovePreviewFromPointer: () => void
   applyFillPreviewFromPointer: () => void
   applyDragSelectionFromPointer: () => void
+  onFrameSample?: (sample: {
+    activeKind: "drag" | "fill" | "range" | null
+    totalMs: number
+    deltaX: number
+    deltaY: number
+    scrolled: boolean
+  }) => void
   requestAnimationFrame?: (callback: FrameRequestCallback) => number
   cancelAnimationFrame?: (handle: number) => void
 }
@@ -50,7 +57,15 @@ export function useDataGridPointerAutoScroll(
 
   let frameHandle: number | null = null
 
+  const now = (): number => {
+    if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      return performance.now()
+    }
+    return Date.now()
+  }
+
   const runFrame = () => {
+    const startedAt = options.onFrameSample ? now() : 0
     const interactionState = options.resolveInteractionState()
     if (!isDataGridPointerInteractionActive(interactionState)) {
       frameHandle = null
@@ -59,6 +74,10 @@ export function useDataGridPointerAutoScroll(
 
     const viewport = options.resolveViewportElement()
     const pointer = resolveDataGridActiveInteractionPointer(options, interactionState)
+    let activeKind: "drag" | "fill" | "range" | null = null
+    let frameDeltaX = 0
+    let frameDeltaY = 0
+    let scrolled = false
     if (viewport && pointer) {
       const rect = viewport.getBoundingClientRect()
       const topBoundary = rect.top + options.resolveHeaderHeight()
@@ -67,6 +86,8 @@ export function useDataGridPointerAutoScroll(
       const deltaX = !allowHorizontalAutoScroll || pointer.clientX < rect.left || pointer.clientX > rect.right
         ? 0
         : options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
+      frameDeltaX = deltaX
+      frameDeltaY = deltaY
 
       if (deltaX !== 0 || deltaY !== 0) {
         const currentTop = viewport.scrollTop
@@ -87,9 +108,10 @@ export function useDataGridPointerAutoScroll(
           top: nextTop,
           left: nextLeft,
         })
+        scrolled = nextTop !== currentTop || nextLeft !== currentLeft
       }
 
-      const activeKind = resolveDataGridActiveInteractionKind(interactionState)
+      activeKind = resolveDataGridActiveInteractionKind(interactionState)
       if (activeKind === "range") {
         options.applyRangeMovePreviewFromPointer()
       } else if (activeKind === "fill") {
@@ -98,6 +120,13 @@ export function useDataGridPointerAutoScroll(
         options.applyDragSelectionFromPointer()
       }
     }
+    options.onFrameSample?.({
+      activeKind,
+      totalMs: Math.max(0, now() - startedAt),
+      deltaX: frameDeltaX,
+      deltaY: frameDeltaY,
+      scrolled,
+    })
 
     frameHandle = scheduler.requestFrame(runFrame)
   }

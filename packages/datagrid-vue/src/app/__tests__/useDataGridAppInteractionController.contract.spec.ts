@@ -4,6 +4,7 @@ import type { DataGridColumnSnapshot, DataGridRowId, DataGridRowNode, DataGridSe
 import { useDataGridAppInteractionController } from "../useDataGridAppInteractionController"
 
 type DemoRow = Record<string, unknown>
+const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
 
 interface DemoRowSnapshot {
   kind: "full" | "partial"
@@ -94,6 +95,13 @@ function createDeferred<T>() {
     reject = promiseReject
   })
   return { promise, resolve, reject }
+}
+
+function readPerfSamples(scope: string): Array<Record<string, unknown>> {
+  const samples = ((window as unknown as {
+    [DATA_GRID_PERF_STORE_KEY]?: { samples?: Array<Record<string, unknown>> }
+  })[DATA_GRID_PERF_STORE_KEY]?.samples) ?? []
+  return samples.filter(sample => sample.scope === scope)
 }
 
 async function flushAsync(): Promise<void> {
@@ -569,6 +577,9 @@ function createControllerHarness(options: {
 
 afterEach(() => {
   document.body.innerHTML = ""
+  delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  window.history.replaceState({}, "", "/")
+  window.localStorage.clear()
 })
 
 describe("useDataGridAppInteractionController contract", () => {
@@ -657,6 +668,39 @@ describe("useDataGridAppInteractionController contract", () => {
       true,
       undefined,
     )
+  })
+
+  it("records owner transition preview and cancellation diagnostics when tracing is enabled", () => {
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    const { controller, row } = createControllerHarness()
+    const cell = createCell(0, 0)
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+      button: 0,
+      clientX: 1,
+      clientY: 10,
+    }), row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 12,
+      clientY: 10,
+    }))
+
+    expect(readPerfSamples("interactionOwner")).toContainEqual(expect.objectContaining({
+      owner: "drag-selection",
+      activeOwners: "drag-selection",
+    }))
+    expect(readPerfSamples("interactionPreview")).toContainEqual(expect.objectContaining({
+      owner: "drag-selection",
+    }))
+
+    controller.handleWindowPointerCancel()
+
+    expect(readPerfSamples("interactionCancel")).toContainEqual(expect.objectContaining({
+      reason: "pointercancel",
+      commit: 0,
+      owner: "drag-selection",
+    }))
   })
 
   it("emits a viewport scroll event when drag selection autoscrolls programmatically", () => {

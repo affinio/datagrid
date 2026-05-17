@@ -5,6 +5,7 @@ import {
   createDataGridPerfStore,
   resolveDataGridPerfStore,
   resolveDataGridPerfTraceEnabled,
+  recordDataGridPerfSampleIfEnabled,
 } from "../../perf/dataGridPerfTrace"
 import { useDataGridPerfTrace } from "../useDataGridPerfTrace"
 import type { DataGridTableRow, DataGridTableStageViewportSection } from "../dataGridTableStage.types"
@@ -43,6 +44,27 @@ describe("dataGridPerfTrace", () => {
         maxMs: 400,
       },
     ])
+  })
+
+  it("records opt-in samples only when perf tracing is enabled", () => {
+    recordDataGridPerfSampleIfEnabled({
+      scope: "interactionPreventDefault",
+      totalMs: 0,
+      owner: "fill",
+    })
+    expect(resolveDataGridPerfStore()?.latest("interactionPreventDefault")).toBeNull()
+
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    recordDataGridPerfSampleIfEnabled({
+      scope: "interactionPreventDefault",
+      totalMs: 0,
+      owner: "fill",
+    })
+
+    expect(resolveDataGridPerfStore()?.latest("interactionPreventDefault")).toMatchObject({
+      scope: "interactionPreventDefault",
+      owner: "fill",
+    })
   })
 
   it("records stage perf samples when enabled", async () => {

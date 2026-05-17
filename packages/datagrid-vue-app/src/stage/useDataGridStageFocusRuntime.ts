@@ -1,5 +1,6 @@
 import type { Ref } from "vue"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "./dataGridTableStageBody.types"
+import { recordDataGridPerfSampleIfEnabled } from "../perf/dataGridPerfTrace"
 
 export interface UseDataGridStageFocusRuntimeOptions {
   bodyShellRef: Readonly<Ref<HTMLElement | null>>
@@ -57,6 +58,14 @@ export function useDataGridStageFocusRuntime(
   options: UseDataGridStageFocusRuntimeOptions,
 ): UseDataGridStageFocusRuntimeResult {
   let pendingAnchorFocusRestore = false
+
+  function recordFocusRestore(reason: string): void {
+    recordDataGridPerfSampleIfEnabled({
+      scope: "stageFocusRestore",
+      totalMs: 0,
+      reason,
+    })
+  }
 
   function resolveVisibleCellElement(rowIndex: number, columnIndex: number): HTMLElement | null {
     const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
@@ -127,6 +136,7 @@ export function useDataGridStageFocusRuntime(
 
   function focusVisibleAnchorCell(): void {
     if (options.shouldRestoreAnchorFocus?.() === false) {
+      recordFocusRestore("blocked")
       return
     }
     const anchorCell = resolveVisibleAnchorCellPosition(
@@ -137,25 +147,31 @@ export function useDataGridStageFocusRuntime(
     )
     if (!anchorCell) {
       options.bodyViewportEl.value?.focus({ preventScroll: true })
+      recordFocusRestore("viewport-fallback-no-anchor")
       return
     }
     const cellElement = resolveVisibleCellElement(anchorCell.rowIndex, anchorCell.columnIndex)
     if (cellElement) {
       cellElement.focus({ preventScroll: true })
+      recordFocusRestore("cell")
       return
     }
     options.bodyViewportEl.value?.focus({ preventScroll: true })
+    recordFocusRestore("viewport-fallback-unmounted-anchor")
   }
 
   function restoreAnchorCellFocus(): void {
     if (options.isBodyViewportScrolling?.value && options.runWhenBodyViewportScrollIdle) {
       if (pendingAnchorFocusRestore) {
+        recordFocusRestore("deferred-coalesced")
         return
       }
       pendingAnchorFocusRestore = true
+      recordFocusRestore("deferred-scroll-active")
       options.runWhenBodyViewportScrollIdle(() => {
         pendingAnchorFocusRestore = false
         if (options.shouldRestoreAnchorFocus?.() === false) {
+          recordFocusRestore("deferred-blocked")
           return
         }
         focusVisibleAnchorCell()

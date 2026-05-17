@@ -223,6 +223,39 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(page.locator("[data-datagrid-column-menu-action]").first()).toBeVisible({ timeout: 20_000 })
   })
 
+  test("interaction diagnostics emit only when perf tracing is enabled", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const sourceCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(targetCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+    await dragCellBodyStartAndMove(page, sourceCell, targetCell)
+
+    await expect.poll(async () => latestPerfSample(page, "interactionOwner")).toMatchObject({
+      scope: "interactionOwner",
+      owner: "range-move",
+      activeOwners: "range-move",
+    })
+    await expect.poll(async () => latestPerfSample(page, "interactionPreview")).toMatchObject({
+      scope: "interactionPreview",
+      owner: "range-move",
+    })
+
+    await page.keyboard.press("Escape")
+    await page.mouse.up()
+    await expect.poll(async () => latestPerfSample(page, "interactionCancel")).toMatchObject({
+      scope: "interactionCancel",
+      reason: "escape",
+      owner: "range-move",
+    })
+  })
+
   test("column and row resize near adjacent controls finish without selection drift", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -335,6 +368,22 @@ async function cellSignature(cell: Locator): Promise<string> {
     element.getAttribute("data-column-index") ?? "",
     element.getAttribute("data-column-key") ?? "",
   ].join(":"))
+}
+
+async function latestPerfSample(page: Page, scope: string): Promise<Record<string, unknown> | null> {
+  return await page.evaluate(sampleScope => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { samples?: Array<Record<string, unknown>> }
+    }).__AFFINO_DATAGRID_PERF__
+    const samples = store?.samples ?? []
+    for (let index = samples.length - 1; index >= 0; index -= 1) {
+      const sample = samples[index]
+      if (sample?.scope === sampleScope) {
+        return sample
+      }
+    }
+    return null
+  }, scope)
 }
 
 async function dragCellBodyStartAndMove(page: Page, source: Locator, target: Locator): Promise<void> {

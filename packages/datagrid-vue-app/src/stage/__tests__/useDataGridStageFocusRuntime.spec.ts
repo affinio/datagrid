@@ -1,7 +1,8 @@
 import { ref } from "vue"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useDataGridStageFocusRuntime } from "../useDataGridStageFocusRuntime"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "../dataGridTableStageBody.types"
+import { DATA_GRID_PERF_STORE_KEY, resolveDataGridPerfStore } from "../../perf/dataGridPerfTrace"
 
 function createFocusRuntimeHarness(options: {
   isScrolling?: boolean
@@ -40,6 +41,12 @@ function createFocusRuntimeHarness(options: {
 }
 
 describe("useDataGridStageFocusRuntime", () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+    window.history.replaceState({}, "", "/")
+    window.localStorage.clear()
+  })
+
   it("defers anchor focus restoration until body scroll idle and coalesces duplicate requests", () => {
     const idleCallbacks: Array<() => void> = []
     const runWhenIdle = vi.fn((callback: () => void) => {
@@ -86,5 +93,22 @@ describe("useDataGridStageFocusRuntime", () => {
 
     expect(focusSpy).toHaveBeenCalledTimes(1)
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it("records focus fallback diagnostics only when perf tracing is enabled", () => {
+    const { runtime } = createFocusRuntimeHarness({
+      shouldRestoreAnchorFocus: () => false,
+    })
+
+    runtime.restoreAnchorCellFocus()
+    expect(resolveDataGridPerfStore()?.latest("stageFocusRestore")).toBeNull()
+
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    runtime.restoreAnchorCellFocus()
+
+    expect(resolveDataGridPerfStore()?.latest("stageFocusRestore")).toMatchObject({
+      scope: "stageFocusRestore",
+      reason: "blocked",
+    })
   })
 })

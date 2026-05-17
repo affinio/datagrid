@@ -1,7 +1,8 @@
 import { nextTick, ref } from "vue"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "../dataGridTableStageBody.types"
 import { useDataGridStagePointerInteractions } from "../useDataGridStagePointerInteractions"
+import { DATA_GRID_PERF_STORE_KEY, resolveDataGridPerfStore } from "../../perf/dataGridPerfTrace"
 
 function createColumn(key: string): DataGridTableStageBodyColumn {
   return {
@@ -55,6 +56,12 @@ function createTouchEvent(type: string, touch: Touch, currentTarget: HTMLElement
 }
 
 describe("useDataGridStagePointerInteractions", () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+    window.history.replaceState({}, "", "/")
+    window.localStorage.clear()
+  })
+
   it("tracks range-move hover, fill-handle events, and drag cursor state", async () => {
     const row = createRow()
     const column = createColumn("owner")
@@ -118,6 +125,7 @@ describe("useDataGridStagePointerInteractions", () => {
     service.handleFillHandleMouseDown(downEvent)
     expect(fillActionMenuOpen.value).toBe(false)
     expect(downEvent.preventDefault).toHaveBeenCalled()
+    expect(resolveDataGridPerfStore()?.latest("interactionPreventDefault")).toBeNull()
     expect(focus).toHaveBeenCalled()
     expect(startFillHandleDrag).toHaveBeenCalledWith(downEvent)
 
@@ -133,6 +141,43 @@ describe("useDataGridStagePointerInteractions", () => {
     service.resetGlobalFillDragCursor()
     expect(document.documentElement.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
     expect(document.body.classList.contains("datagrid-fill-drag-cursor")).toBe(false)
+  })
+
+  it("records fill-handle preventDefault diagnostics when perf tracing is enabled", () => {
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    const row = createRow()
+    const column = createColumn("owner")
+    const cell = document.createElement("div")
+    cell.className = "grid-cell"
+    const service = useDataGridStagePointerInteractions({
+      mode: ref("base"),
+      selection: ref({
+        isFillDragging: false,
+        rangeMoveEnabled: true,
+        startFillHandleDrag: vi.fn(),
+        startFillHandleDoubleClick: vi.fn(),
+      }),
+      selectionRange: ref(null),
+      visibleColumns: ref([column]),
+      displayRows: ref([row]),
+      viewportRowStart: ref(0),
+      fillActionMenuOpen: ref(true),
+      isCellSelectedSafe: () => true,
+      isCellEditableSafe: () => true,
+      isCellOnSelectionEdgeSafe: () => true,
+    })
+
+    service.handleFillHandleMouseDown({
+      currentTarget: cell,
+      preventDefault: vi.fn(),
+    } as unknown as MouseEvent)
+
+    expect(resolveDataGridPerfStore()?.latest("interactionPreventDefault")).toMatchObject({
+      scope: "interactionPreventDefault",
+      owner: "fill",
+      eventType: "mousedown",
+      reason: "fill-handle",
+    })
   })
 
   it("does not track range-move hover when hover interactions are suppressed", () => {

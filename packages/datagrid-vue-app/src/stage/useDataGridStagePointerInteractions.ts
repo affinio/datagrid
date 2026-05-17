@@ -12,6 +12,7 @@ import {
   shouldPrioritizeNativeScrollForMouseEvent,
   type DataGridInteractionModeInput,
 } from "./dataGridMouseEventGuards"
+import { recordDataGridPerfSampleIfEnabled } from "../perf/dataGridPerfTrace"
 
 export interface UseDataGridStagePointerInteractionsOptions {
   mode: Readonly<Ref<DataGridTableMode>>
@@ -55,6 +56,16 @@ export function useDataGridStagePointerInteractions(
   const restoreBodyCursor = ref<string | null>(null)
   const restoreDocumentCursor = ref<string | null>(null)
   let activeFillHandleTouchId: number | null = null
+
+  function recordPreventDefault(eventType: string, reason: string): void {
+    recordDataGridPerfSampleIfEnabled({
+      scope: "interactionPreventDefault",
+      totalMs: 0,
+      owner: "fill",
+      eventType,
+      reason,
+    })
+  }
 
   function syncGlobalFillDragCursor(active: boolean): void {
     if (typeof document === "undefined") {
@@ -173,6 +184,7 @@ export function useDataGridStagePointerInteractions(
       return
     }
     event.preventDefault()
+    recordPreventDefault("mousedown", "fill-handle")
     options.fillActionMenuOpen.value = false
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     const cell = handle?.closest<HTMLElement>(".grid-cell")
@@ -185,6 +197,7 @@ export function useDataGridStagePointerInteractions(
       return
     }
     event.preventDefault()
+    recordPreventDefault("dblclick", "fill-handle")
     options.fillActionMenuOpen.value = false
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     const cell = handle?.closest<HTMLElement>(".grid-cell")
@@ -225,6 +238,7 @@ export function useDataGridStagePointerInteractions(
       return
     }
     event.preventDefault()
+    recordPreventDefault("touchstart", "fill-handle")
     options.fillActionMenuOpen.value = false
     activeFillHandleTouchId = touch.identifier
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -242,6 +256,7 @@ export function useDataGridStagePointerInteractions(
       return
     }
     event.preventDefault()
+    recordPreventDefault("touchmove", "fill-handle")
     window.dispatchEvent(createFillHandleMouseEvent("mousemove", touch))
   }
 
@@ -256,6 +271,7 @@ export function useDataGridStagePointerInteractions(
       return
     }
     event.preventDefault()
+    recordPreventDefault("touchend", "fill-handle")
     window.dispatchEvent(createFillHandleMouseEvent("mouseup", touch))
   }
 

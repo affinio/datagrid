@@ -226,6 +226,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 12: Interaction Telemetry Diagnostics
 
+- Status: Completed on 2026-05-17. `dgPerfTrace` now records internal interaction owner transitions, cancellation reasons, pointer preview timing, pointer auto-scroll frame timing, fill-handle prevent-default samples, and stage focus restoration fallback reasons, with unit and sandbox smoke coverage.
 - Objective: add optional diagnostics for active owner transitions, cancellation reasons, preview timing, auto-scroll timing, prevent-default counts, and focus fallback reasons.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
@@ -239,7 +240,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Unit tests for transition/cancel reason emission.
   - Trace opt-in tests that verify no samples are emitted when tracing is disabled.
   - Sandbox smoke assertions for diagnostic presence when enabled.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand interaction && pnpm --filter @affino/datagrid-vue-app test -- --runInBand perfTrace`
+- Validation command: `pnpm --dir packages/datagrid-vue exec vitest run --config vitest.config.ts --passWithNoTests src/app/__tests__/dataGridInteractionDiagnostics.spec.ts src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts src/composables/__tests__/useDataGridPointerAutoScroll.contract.spec.ts && pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/dataGridPerfTrace.spec.ts src/stage/__tests__/useDataGridStageFocusRuntime.spec.ts src/stage/__tests__/useDataGridStagePointerInteractions.spec.ts src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `feat(datagrid): trace interaction lifecycle diagnostics`
 

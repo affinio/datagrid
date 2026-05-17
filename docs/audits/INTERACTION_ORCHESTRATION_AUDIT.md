@@ -32,7 +32,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 9 completed on 2026-05-17: active inline editors now commit deterministically before selected-cell range move and fill-handle drag, while scroll-active edit suppression and cell IO/rendering contracts remain covered.
 - Slice 10 completed on 2026-05-17: pointer preview work now has explicit sync/rAF lifecycle contracts, pointer auto-scroll layout reads are budgeted to one sample per metric per frame, and the performance gate doc records the direct-preview budget.
 - Slice 11 completed on 2026-05-17: sandbox Playwright coverage now gates desktop interaction races for virtualized drag selection with pinned columns, fill auto-scroll cleanup, range-move auto-scroll Escape cancellation, contextmenu interruption/reopen, and adjacent resize controls.
-- Remaining high-risk work: telemetry diagnostics and browser performance gates.
+- Slice 12 completed on 2026-05-17: optional `dgPerfTrace` diagnostics now emit interaction owner transitions, cancellation reasons, pointer preview timing, pointer auto-scroll frame timing, prevent-default samples, and focus restoration fallback reasons.
+- Remaining high-risk work: browser performance gates and device-calibrated thresholds.
 
 ## Files reviewed
 
@@ -275,7 +276,7 @@ What blocks target score:
 - Touch selection/range/fill are guarded but not designed as complete workflows.
 - Active-only listener wiring is covered for the mounted app-stage path after cancellation coverage was added for mouseup, pointerup, pointercancel, contextmenu, blur, and unmount.
 - Prevent-default and passive-listener policies are documented; keep them synchronized with future touch/focus/edit slices.
-- Missing telemetry/performance gates and device-level mobile readiness validation.
+- Missing performance gates, device-calibrated thresholds, and device-level mobile readiness validation.
 
 ## Recommended tests
 
@@ -316,14 +317,14 @@ Performance tests:
 
 ## Recommended telemetry
 
-- Active interaction owner and transition history.
-- Interaction start/cancel/commit reason.
-- Pointer preview apply time and mode.
-- Auto-scroll frame time and delta.
-- Prevent-default count by event type and owner.
+- Active interaction owner and transition history is available as `interactionOwner` samples behind `dgPerfTrace`.
+- Interaction cancel reason is available as `interactionCancel` samples behind `dgPerfTrace`.
+- Pointer preview apply time is available as `interactionPreview` samples behind `dgPerfTrace`.
+- Auto-scroll frame time and delta are available as `interactionAutoScroll` samples behind `dgPerfTrace`.
+- Prevent-default count by event type and owner is available as `interactionPreventDefault` samples behind `dgPerfTrace`.
 - Global listener active/idle state.
 - Scroll synchronization drift between body, header, pinned panes, and pinned-bottom viewport.
-- Focus restoration target and fallback reason.
+- Focus restoration target and fallback reason is available as `stageFocusRestore` samples behind `dgPerfTrace`.
 - Touch gesture classification: native scroll, linked-surface pan, long press, handle drag, canceled.
 
 ## Prioritized roadmap
@@ -356,7 +357,7 @@ Performance tests:
 
 - Keep Playwright interaction-race tests aligned with owner/lifecycle changes.
 - Add performance gates for pointer preview and scroll sync.
-- Add telemetry for active owner, cancellation reason, drift, and frame budget.
+- Use the new `dgPerfTrace` interaction diagnostics as inputs for active owner, cancellation reason, drift, and frame-budget gates.
 
 ## Migration notes
 

@@ -88,6 +88,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Global pointer lifecycle must keep both explicit modes covered: `pointerPreviewApplyMode: "sync"` applies immediately and `"raf"` coalesces preview work to one callback per frame.
 - Pointer auto-scroll may read each viewport layout/scroll metric at most once per animation frame before applying scroll deltas and active preview.
 - App-stage pointer listeners should stay active only while a pending or active pointer owner exists.
+- With `dgPerfTrace=1`, interaction diagnostics expose `interactionOwner`, `interactionCancel`, `interactionPreview`, `interactionAutoScroll`, `interactionPreventDefault`, and `stageFocusRestore` samples. Slice 13 performance gates should consume these scopes before introducing hard fail thresholds.
 - Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
