@@ -26,7 +26,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 3 completed on 2026-05-17: the mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction and resize cancellation.
 - Slice 4 completed on 2026-05-17: mounted window pointer/mouse lifecycle listeners now attach only while the app-stage has a pending or active pointer interaction, or while column resize owns the gesture.
 - Slice 5 completed on 2026-05-17: mouse-event prevent-default policy is explicit, linked-surface touch pan listener behavior is covered, and the user interaction doc now includes the prevent-default/passive listener matrix.
-- Remaining high-risk work: touch workflow gates, focus/edit continuity, and interaction performance gates.
+- Slice 6 completed on 2026-05-17: touch-mode regression gates now cover scroll-first body gestures and explicit fill, range-move, column-resize, and row-resize handles.
+- Remaining high-risk work: focus/edit continuity and interaction performance gates.
 
 ## Files reviewed
 
@@ -294,7 +295,7 @@ Playwright/e2e tests:
 - Range move with auto-scroll and Escape cancel.
 - Column and row resize while hovering/clicking nearby header/row-index controls.
 - Touch one-finger scroll over body cells does not start selection/fill/range/resize.
-- Touch long-press selection workflow when implemented.
+- Touch long-press selection plus explicit handle workflows for fill, range move, column resize, and row resize.
 - Browser zoom/high-DPI pointer thresholds for range move, fill handle, and resize handles.
 
 Performance tests:

@@ -106,16 +106,18 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
   - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
   - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
-  - `e2e/sandbox-interactions.spec.ts`
+  - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: no intentional behavior change; one-finger body scroll remains native, touch cell-body drag stays scroll-first, and selection extension, range move, fill, and resize remain explicit-handle workflows.
 - Tests to add/update:
   - E2E for touch one-finger body scroll over cells without selection/fill/range/resize start.
   - E2E for touch selection handle drag.
   - E2E for touch range-move handle drag.
   - E2E for touch fill handle drag and column/row resize handles.
-- Validation command: `pnpm e2e -- e2e/sandbox-interactions.spec.ts`
+- Status: Completed on 2026-05-17. Existing touch gates cover native body scroll, body-cell drag prevention, long press, fill handle, range-move handle, column resize, linked-surface routing, scroll sync, telemetry, and server loading; this slice added row-resize touch handle bridging plus component/e2e coverage for explicit row-resize handles.
+- Validation command: `pnpm run test:e2e -- e2e/sandbox-grid.spec.ts --grep "touch (row resize drag starts|column resize drag starts|fill drag starts|range move drag starts|body cell touch drag|one-finger touch pan)"`
 - Risk level: High
 - Suggested commit message: `test(datagrid): gate touch interaction mode`
 

@@ -56,6 +56,10 @@
             class="row-resize-handle"
             aria-label="Resize rows"
             @mousedown.stop="rows.startRowResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @touchstart.stop.prevent="startRowTouchResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @touchmove.stop.prevent="handleRowTouchResizeMove($event)"
+            @touchend.stop.prevent="handleRowTouchResizeEnd($event)"
+            @touchcancel.stop.prevent="handleRowTouchResizeEnd($event)"
             @click.stop
             @dblclick.stop="rows.autosizeRow($event, row, renderApi.viewportRowOffset(row, rowOffset))"
           />
@@ -211,6 +215,7 @@ import {
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
 import type {
+  DataGridTableStageBodyRow,
   DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
 } from "./dataGridTableStageBody.types"
@@ -236,4 +241,69 @@ const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
+
+let activeTouchRowResizeId: number | null = null
+
+function readTouchAt(touches: TouchList, identifier: number): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = typeof touches.item === "function" ? touches.item(index) : indexedTouches[index]
+    if (touch?.identifier === identifier) {
+      return touch
+    }
+  }
+  return null
+}
+
+function readFirstTouch(touches: TouchList): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  return (typeof touches.item === "function" ? touches.item(0) : indexedTouches[0]) ?? null
+}
+
+function createTouchRowResizeMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  })
+}
+
+function startRowTouchResize(event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchRowResizeId = null
+    return
+  }
+  event.preventDefault()
+  activeTouchRowResizeId = touch.identifier
+  rows.value.startRowResize(createTouchRowResizeMouseEvent("mousedown", touch), row, rowOffset)
+}
+
+function handleRowTouchResizeMove(event: TouchEvent): void {
+  if (activeTouchRowResizeId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchRowResizeId)
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchRowResizeMouseEvent("mousemove", touch))
+}
+
+function handleRowTouchResizeEnd(event: TouchEvent): void {
+  if (activeTouchRowResizeId == null || typeof window === "undefined") {
+    activeTouchRowResizeId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchRowResizeId)
+  activeTouchRowResizeId = null
+  if (!touch) {
+    return
+  }
+  event.preventDefault()
+  window.dispatchEvent(createTouchRowResizeMouseEvent("mouseup", touch))
+}
 </script>

@@ -2460,4 +2460,48 @@ describe("DataGridTableStage contract", () => {
 
     wrapper.unmount()
   })
+
+  it("bridges touch row resize handle gestures into the mouse row resize lifecycle", async () => {
+    const startRowResize = vi.fn()
+    const baseProps = createStageProps(() => false)
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        rows: {
+          ...baseProps.rows,
+          startRowResize,
+        },
+      },
+    })
+
+    const resizeHandle = wrapper.find(".row-resize-handle")
+    expect(resizeHandle.exists()).toBe(true)
+
+    const mouseMove = vi.fn()
+    const mouseUp = vi.fn()
+    window.addEventListener("mousemove", mouseMove)
+    window.addEventListener("mouseup", mouseUp)
+
+    const touchStart = createTouchEvent("touchstart", { clientX: 20, clientY: 32 })
+    resizeHandle.element.dispatchEvent(touchStart)
+    resizeHandle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 20, clientY: 56 }))
+    resizeHandle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 20, clientY: 60 }))
+
+    expect(touchStart.defaultPrevented).toBe(true)
+    expect(startRowResize).toHaveBeenCalledTimes(1)
+    expect(startRowResize).toHaveBeenCalledWith(
+      expect.objectContaining({ button: 0, clientY: 32 }),
+      expect.objectContaining({ rowId: "r1" }),
+      0,
+    )
+    expect(mouseMove).toHaveBeenCalledTimes(1)
+    expect(mouseMove.mock.calls[0]?.[0]).toMatchObject({ clientY: 56 })
+    expect(mouseUp).toHaveBeenCalledTimes(1)
+    expect(mouseUp.mock.calls[0]?.[0]).toMatchObject({ clientY: 60 })
+
+    window.removeEventListener("mousemove", mouseMove)
+    window.removeEventListener("mouseup", mouseUp)
+    wrapper.unmount()
+  })
 })
