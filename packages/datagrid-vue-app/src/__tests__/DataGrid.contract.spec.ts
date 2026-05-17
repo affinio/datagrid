@@ -2686,9 +2686,47 @@ describe("DataGrid app facade contract", () => {
     })
     await flushRuntimeTasks()
 
-    expect(resolveVm(wrapper).getColumnSnapshot?.()).toMatchObject({
-      order: ["region", "amount", "owner"],
+    const columnSnapshot = resolveVm(wrapper).getColumnSnapshot?.()
+    expect(columnSnapshot?.order).toEqual(["owner", "region", "amount"])
+    expect(columnSnapshot?.zoneOrder.center).toEqual(["region", "amount", "owner"])
+    expect(columnSnapshot?.visibleColumns.map(column => column.key)).toEqual(["region", "amount", "owner"])
+
+    wrapper.unmount()
+  })
+
+  it("reorders pinned-left headers without mutating base column order", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+        columnPins: {
+          owner: "left",
+          region: "left",
+          amount: "none",
+        },
+      },
+      attachTo: document.body,
     })
+
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="owner"]')
+    const regionHeader = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="region"]')
+    expect(ownerHeader.exists()).toBe(true)
+    expect(regionHeader.exists()).toBe(true)
+
+    await dragDropElement(ownerHeader.element as HTMLElement, regionHeader.element as HTMLElement, {
+      targetClientX: 96,
+    })
+    await flushRuntimeTasks()
+
+    const columnSnapshot = resolveVm(wrapper).getColumnSnapshot?.()
+    expect(columnSnapshot?.order).toEqual(["owner", "region", "amount"])
+    expect(columnSnapshot?.zoneOrder.pinnedLeft).toEqual(["region", "owner"])
+    expect(columnSnapshot?.zoneOrder.center).toEqual(["amount"])
+    expect(columnSnapshot?.visibleColumns.map(column => column.key)).toEqual(["region", "owner", "amount"])
 
     wrapper.unmount()
   })

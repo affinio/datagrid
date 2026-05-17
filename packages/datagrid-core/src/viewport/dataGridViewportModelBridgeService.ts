@@ -572,9 +572,9 @@ export function createDataGridViewportModelBridgeService<TRow = unknown>(
     const nextProjectionCache = new Map<string, ColumnProjectionCacheEntry>()
     const nextColumns: DataGridColumn[] = []
 
-    for (let index = 0; index < snapshot.columns.length; index += 1) {
-      const snapshotColumn = snapshot.columns[index]
-      if (!snapshotColumn?.visible) {
+    for (let index = 0; index < snapshot.visibleColumns.length; index += 1) {
+      const snapshotColumn = snapshot.visibleColumns[index]
+      if (!snapshotColumn) {
         continue
       }
 

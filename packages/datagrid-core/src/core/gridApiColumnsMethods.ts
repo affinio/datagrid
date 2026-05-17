@@ -4,6 +4,7 @@ import type {
   DataGridColumnInput,
   DataGridColumnModel,
   DataGridColumnPin,
+  DataGridColumnZone,
 } from "../models/index.js"
 import type { DataGridColumnHistogramCapability } from "./gridApiCapabilities"
 
@@ -15,6 +16,7 @@ export interface DataGridApiColumnsMethods {
   insertColumnsBefore: (columnKey: string, columns: readonly DataGridColumnInput[]) => boolean
   insertColumnsAfter: (columnKey: string, columns: readonly DataGridColumnInput[]) => boolean
   setColumnOrder: (keys: readonly string[]) => void
+  setColumnZoneOrder: (zone: DataGridColumnZone, keys: readonly string[]) => void
   setColumnVisibility: (key: string, visible: boolean) => void
   setColumnWidth: (key: string, width: number | null) => void
   setColumnPin: (key: string, pin: DataGridColumnPin) => void
@@ -90,6 +92,9 @@ export function createDataGridApiColumnsMethods(
     },
     setColumnOrder(keys: readonly string[]) {
       columnModel.setColumnOrder(keys)
+    },
+    setColumnZoneOrder(zone: DataGridColumnZone, keys: readonly string[]) {
+      columnModel.setColumnZoneOrder(zone, keys)
     },
     setColumnVisibility(key: string, visible: boolean) {
       columnModel.setColumnVisibility(key, visible)

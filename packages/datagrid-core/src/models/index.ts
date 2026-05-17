@@ -490,6 +490,7 @@ export type {
   DataGridColumnSnapshot,
   DataGridColumnState,
   DataGridColumnValueAccessors,
+  DataGridColumnZone,
   CreateDataGridColumnModelOptions,
 } from "./columnModel.js"
 export { createDataGridColumnModel } from "./columnModel.js"

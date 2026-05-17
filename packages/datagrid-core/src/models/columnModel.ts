@@ -10,6 +10,8 @@ export type {
 
 export type DataGridColumnPin = "left" | "right" | "none"
 
+export type DataGridColumnZone = "pinnedLeft" | "center" | "pinnedRight"
+
 export type DataGridColumnDataType = DataGridFormatDataType
 
 export type DataGridColumnOptionsResult = readonly unknown[] | Promise<readonly unknown[]>
@@ -139,6 +141,7 @@ export interface DataGridColumnSnapshot {
 export interface DataGridColumnModelSnapshot {
   columns: readonly DataGridColumnSnapshot[]
   order: readonly string[]
+  zoneOrder: Readonly<Record<DataGridColumnZone, readonly string[]>>
   visibleColumns: readonly DataGridColumnSnapshot[]
   byKey: Readonly<Record<string, DataGridColumnSnapshot>>
   pinnedLeftColumns: readonly DataGridColumnSnapshot[]
@@ -154,6 +157,7 @@ export interface DataGridColumnModel {
   setColumns(columns: readonly DataGridColumnInput[]): void
   batch?<TResult>(fn: () => TResult): TResult
   setColumnOrder(keys: readonly string[]): void
+  setColumnZoneOrder(zone: DataGridColumnZone, keys: readonly string[]): void
   setColumnVisibility(key: string, visible: boolean): void
   setColumnWidth(key: string, width: number | null): void
   setColumnPin(key: string, pin: DataGridColumnPin): void
@@ -182,6 +186,16 @@ function normalizePin(pin: DataGridColumnPin | undefined): DataGridColumnPin {
     return pin
   }
   return "none"
+}
+
+function resolveZoneForPin(pin: DataGridColumnPin): DataGridColumnZone {
+  if (pin === "left") {
+    return "pinnedLeft"
+  }
+  if (pin === "right") {
+    return "pinnedRight"
+  }
+  return "center"
 }
 
 function normalizeWidth(width: number | undefined | null): number | null {
@@ -423,6 +437,11 @@ export function createDataGridColumnModel(
   const listeners = new Set<DataGridColumnModelListener>()
   const columnsByKey = new Map<string, MutableColumnState>()
   let order: string[] = []
+  let zoneOrder: Record<DataGridColumnZone, string[]> = {
+    pinnedLeft: [],
+    center: [],
+    pinnedRight: [],
+  }
   let snapshotDirty = true
   let snapshotCache: DataGridColumnModelSnapshot | null = null
   let batchDepth = 0
@@ -452,14 +471,30 @@ export function createDataGridColumnModel(
       })
       .filter((entry): entry is DataGridColumnSnapshot => entry !== null)
 
-    const visibleColumns = columns.filter(column => column.state.visible)
-    const pinnedLeftColumns = columns.filter(column => column.state.visible && column.state.pin === "left")
-    const pinnedRightColumns = columns.filter(column => column.state.visible && column.state.pin === "right")
-    const centerColumns = columns.filter(column => column.state.visible && column.state.pin === "none")
+    const materializeZone = (zone: DataGridColumnZone): DataGridColumnSnapshot[] => {
+      const entries: DataGridColumnSnapshot[] = []
+      for (const key of zoneOrder[zone]) {
+        const column = byKey[key]
+        if (column?.state.visible) {
+          entries.push(column)
+        }
+      }
+      return entries
+    }
+    const pinnedLeftColumns = materializeZone("pinnedLeft")
+    const centerColumns = materializeZone("center")
+    const pinnedRightColumns = materializeZone("pinnedRight")
+    const visibleColumns = [...pinnedLeftColumns, ...centerColumns, ...pinnedRightColumns]
+    const frozenZoneOrder = Object.freeze({
+      pinnedLeft: Object.freeze([...zoneOrder.pinnedLeft]),
+      center: Object.freeze([...zoneOrder.center]),
+      pinnedRight: Object.freeze([...zoneOrder.pinnedRight]),
+    })
 
     snapshotCache = Object.freeze({
       columns: Object.freeze(columns),
       order: Object.freeze([...order]),
+      zoneOrder: frozenZoneOrder,
       visibleColumns: Object.freeze(visibleColumns),
       byKey: Object.freeze(byKey),
       pinnedLeftColumns: Object.freeze(pinnedLeftColumns),
@@ -493,9 +528,56 @@ export function createDataGridColumnModel(
     emit()
   }
 
+  function syncZoneOrderFromState() {
+    const nextZoneOrder: Record<DataGridColumnZone, string[]> = {
+      pinnedLeft: [],
+      center: [],
+      pinnedRight: [],
+    }
+    for (const key of order) {
+      const state = columnsByKey.get(key)
+      if (!state) {
+        continue
+      }
+      nextZoneOrder[resolveZoneForPin(state.state.pin)].push(key)
+    }
+    zoneOrder = nextZoneOrder
+  }
+
+  function removeKeyFromZones(key: string) {
+    for (const zone of ["pinnedLeft", "center", "pinnedRight"] as const) {
+      const index = zoneOrder[zone].indexOf(key)
+      if (index >= 0) {
+        zoneOrder[zone].splice(index, 1)
+      }
+    }
+  }
+
+  function insertKeyInCenterByBaseOrder(key: string) {
+    const baseIndex = order.indexOf(key)
+    if (baseIndex < 0) {
+      zoneOrder.center.push(key)
+      return
+    }
+    const insertIndex = zoneOrder.center.findIndex(candidate => {
+      const candidateIndex = order.indexOf(candidate)
+      return candidateIndex >= 0 && candidateIndex > baseIndex
+    })
+    if (insertIndex < 0) {
+      zoneOrder.center.push(key)
+      return
+    }
+    zoneOrder.center.splice(insertIndex, 0, key)
+  }
+
   function setColumnsValue(columns: readonly DataGridColumnInput[]) {
     columnsByKey.clear()
     order = []
+    zoneOrder = {
+      pinnedLeft: [],
+      center: [],
+      pinnedRight: [],
+    }
     const seen = new Set<string>()
     columns.forEach((column, index) => {
       if (!column || typeof column !== "object") {
@@ -515,11 +597,13 @@ export function createDataGridColumnModel(
           ? column as DataGridColumnDef
           : { ...column, key } as DataGridColumnDef,
       )
+      const state = resolveInitialColumnState(column, normalizedColumn)
       columnsByKey.set(key, {
         column: normalizedColumn,
-        state: resolveInitialColumnState(column, normalizedColumn),
+        state,
       })
       order.push(key)
+      zoneOrder[resolveZoneForPin(state.pin)].push(key)
     })
     markSnapshotDirty()
     emitOrQueue()
@@ -586,6 +670,53 @@ export function createDataGridColumnModel(
       }
 
       order = nextOrder
+      syncZoneOrderFromState()
+      markSnapshotDirty()
+      emitOrQueue()
+    },
+    setColumnZoneOrder(zone: DataGridColumnZone, keys: readonly string[]) {
+      ensureActive()
+      if (zone !== "pinnedLeft" && zone !== "center" && zone !== "pinnedRight") {
+        return
+      }
+      const current = zoneOrder[zone]
+      const currentSet = new Set(current)
+      const nextOrder: string[] = []
+      const seen = new Set<string>()
+
+      for (const key of keys) {
+        if (!currentSet.has(key) || seen.has(key)) {
+          continue
+        }
+        seen.add(key)
+        nextOrder.push(key)
+      }
+
+      for (const key of current) {
+        if (seen.has(key)) {
+          continue
+        }
+        seen.add(key)
+        nextOrder.push(key)
+      }
+
+      if (nextOrder.length === current.length) {
+        let unchanged = true
+        for (let index = 0; index < nextOrder.length; index += 1) {
+          if (nextOrder[index] !== current[index]) {
+            unchanged = false
+            break
+          }
+        }
+        if (unchanged) {
+          return
+        }
+      }
+
+      zoneOrder = {
+        ...zoneOrder,
+        [zone]: nextOrder,
+      }
       markSnapshotDirty()
       emitOrQueue()
     },
@@ -629,10 +760,17 @@ export function createDataGridColumnModel(
       if (state.state.pin === nextPin) {
         return
       }
+      removeKeyFromZones(key)
       state.state = Object.freeze({
         ...state.state,
         pin: nextPin,
       })
+      const nextZone = resolveZoneForPin(nextPin)
+      if (nextZone === "center") {
+        insertKeyInCenterByBaseOrder(key)
+      } else {
+        zoneOrder[nextZone].push(key)
+      }
       markSnapshotDirty()
       emitOrQueue()
     },
@@ -653,6 +791,11 @@ export function createDataGridColumnModel(
       listeners.clear()
       columnsByKey.clear()
       order = []
+      zoneOrder = {
+        pinnedLeft: [],
+        center: [],
+        pinnedRight: [],
+      }
       snapshotDirty = true
       snapshotCache = null
     },

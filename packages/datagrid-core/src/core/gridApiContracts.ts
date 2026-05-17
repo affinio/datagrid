@@ -16,6 +16,7 @@ import type {
   DataGridColumnHistogramOptions,
   DataGridColumnHistogramResult,
   DataGridColumnPin,
+  DataGridColumnZone,
   DataGridColumnModelSnapshot,
   DataGridColumnSnapshot,
   DataGridClientRowPatch,
@@ -223,6 +224,7 @@ export interface DataGridApiColumnsNamespace {
   insertBefore(columnKey: string, columns: readonly DataGridColumnInput[]): boolean
   insertAfter(columnKey: string, columns: readonly DataGridColumnInput[]): boolean
   setOrder(keys: readonly string[]): void
+  setZoneOrder(zone: DataGridColumnZone, keys: readonly string[]): void
   setVisibility(key: string, visible: boolean): void
   setWidth(key: string, width: number | null): void
   setPin(key: string, pin: DataGridColumnPin): void
@@ -373,6 +375,7 @@ export interface DataGridApiMetaNamespace {
 
 export interface DataGridUnifiedColumnState {
   order: readonly string[]
+  zoneOrder?: Partial<Readonly<Record<DataGridColumnZone, readonly string[]>>>
   visibility: Readonly<Record<string, boolean>>
   widths: Readonly<Record<string, number | null>>
   pins: Readonly<Record<string, DataGridColumnPin>>

@@ -540,6 +540,7 @@ export {
   type DataGridColumnPresentation,
   type DataGridColumnState,
   type DataGridColumnValueAccessors,
+  type DataGridColumnZone,
   type CreateDataGridColumnModelOptions,
   type BuildDataGridCellRenderModelOptions,
   type CreateDataGridCellTypeRegistryOptions,

@@ -127,6 +127,7 @@ export type {
   DataGridColumnNumberFormatOptions,
   DataGridColumnModelSnapshot,
   DataGridColumnPin,
+  DataGridColumnZone,
   DataGridColumnPresentation,
   DataGridColumnSnapshot,
   DataGridColumnStateSnapshot,

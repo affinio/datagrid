@@ -5,11 +5,50 @@
     "outDir": "dist",
     "declaration": true,
     "emitDeclarationOnly": false,
-    "declarationMap": true
+    "declarationMap": true,
+    "paths": {
+      "@affino/datagrid-format": [
+        "../datagrid-format/dist/index.d.ts"
+      ],
+      "@affino/datagrid-format/*": [
+        "../datagrid-format/dist/*"
+      ],
+      "@affino/projection-engine": [
+        "../projection-engine/dist/index.d.ts"
+      ],
+      "@affino/projection-engine/*": [
+        "../projection-engine/dist/*"
+      ],
+      "@affino/datagrid-plugins": [
+        "../datagrid-plugins/dist/index.d.ts"
+      ],
+      "@affino/datagrid-plugins/*": [
+        "../datagrid-plugins/dist/*"
+      ],
+      "@affino/datagrid-formula-engine": [
+        "../datagrid-formula-engine/dist/index.d.ts"
+      ],
+      "@affino/datagrid-formula-engine/*": [
+        "../datagrid-formula-engine/dist/*"
+      ],
+      "@affino/datagrid-pivot": [
+        "../datagrid-pivot/dist/index.d.ts"
+      ],
+      "@affino/datagrid-pivot/*": [
+        "../datagrid-pivot/dist/*"
+      ],
+      "@affino/datagrid-theme": [
+        "../datagrid-theme/dist/index.d.ts"
+      ],
+      "@affino/datagrid-theme/*": [
+        "../datagrid-theme/dist/*"
+      ]
+    }
   },
   "include": ["src", "plugins", "theme"],
   "exclude": ["src/**/__tests__/**"],
   "references": [
+    { "path": "../datagrid-format" },
     { "path": "../datagrid-formula-engine" },
     { "path": "../datagrid-pivot" },
     { "path": "../projection-engine" },

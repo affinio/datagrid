@@ -246,6 +246,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         },
         columns: {
           order: cloneSerializable(columnSnapshot.order),
+          zoneOrder: cloneSerializable(columnSnapshot.zoneOrder),
           visibility,
           widths,
           pins,
@@ -329,6 +330,12 @@ export function createDataGridApiStateMethods<TRow = unknown>(
               continue
             }
             columnModel.setColumnPin(key, pin)
+          }
+          const zoneOrder = migratedState.columns.zoneOrder
+          if (zoneOrder) {
+            columnModel.setColumnZoneOrder("pinnedLeft", Array.isArray(zoneOrder.pinnedLeft) ? zoneOrder.pinnedLeft : [])
+            columnModel.setColumnZoneOrder("center", Array.isArray(zoneOrder.center) ? zoneOrder.center : [])
+            columnModel.setColumnZoneOrder("pinnedRight", Array.isArray(zoneOrder.pinnedRight) ? zoneOrder.pinnedRight : [])
           }
         }
 

@@ -78,6 +78,42 @@ describe("table viewport column-model boundary", () => {
     cleanup()
   })
 
+  it("feeds projected column order into horizontal virtualization", () => {
+    const rows = buildRows(20)
+    const rowModel = createClientRowModel({ rows })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "a", initialState: { width: 120, pin: "left" } },
+        { key: "b", initialState: { width: 120, pin: "left" } },
+        { key: "c", initialState: { width: 120 } },
+        { key: "d", initialState: { width: 120 } },
+        { key: "e", initialState: { width: 120 } },
+      ],
+    })
+    columnModel.setColumnPin("d", "left")
+
+    const { container, header, cleanup } = mountLayoutNodes()
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+    })
+
+    controller.setViewportMetrics({ containerWidth: 900, containerHeight: 420, headerHeight: 40 })
+    controller.attach(container, header)
+    controller.refresh(true)
+
+    expect(columnModel.getSnapshot().order).toEqual(["a", "b", "c", "d", "e"])
+    expect(controller.derived.columns.pinnedLeftColumns.value.map(column => column.key)).toEqual(["a", "b", "d"])
+    expect(controller.derived.columns.visibleColumns.value.map(column => column.key)).toEqual(["a", "b", "d", "c", "e"])
+
+    controller.detach()
+    controller.dispose()
+    columnModel.dispose()
+    rowModel.dispose()
+    cleanup()
+  })
+
   it("supports switching to another column model at runtime", () => {
     const rows = buildRows(60)
     const rowModel = createClientRowModel({ rows })

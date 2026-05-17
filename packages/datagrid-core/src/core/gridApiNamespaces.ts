@@ -104,6 +104,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   insertColumnsBefore: DataGridApi<TRow>["columns"]["insertBefore"]
   insertColumnsAfter: DataGridApi<TRow>["columns"]["insertAfter"]
   setColumnOrder: DataGridApi<TRow>["columns"]["setOrder"]
+  setColumnZoneOrder: DataGridApi<TRow>["columns"]["setZoneOrder"]
   setColumnVisibility: DataGridApi<TRow>["columns"]["setVisibility"]
   setColumnWidth: DataGridApi<TRow>["columns"]["setWidth"]
   setColumnPin: DataGridApi<TRow>["columns"]["setPin"]
@@ -217,6 +218,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     insertBefore: methodSet.insertColumnsBefore,
     insertAfter: methodSet.insertColumnsAfter,
     setOrder: methodSet.setColumnOrder,
+    setZoneOrder: methodSet.setColumnZoneOrder,
     setVisibility: methodSet.setColumnVisibility,
     setWidth: methodSet.setColumnWidth,
     setPin: methodSet.setColumnPin,

@@ -2420,6 +2420,46 @@ describe("data grid api facade contracts", () => {
     expect(api.selection.getSnapshot()).toEqual(saved.selection)
   })
 
+  it("preserves projected column zone order through unified state", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "a", initialState: { pin: "left" } },
+        { key: "b", initialState: { pin: "left" } },
+        { key: "c" },
+        { key: "d" },
+        { key: "e" },
+      ],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: columnModel },
+        },
+      }),
+    })
+
+    api.columns.setPin("d", "left")
+    api.columns.setZoneOrder("pinnedLeft", ["d", "a", "b"])
+    const saved = api.state.get()
+
+    api.columns.setZoneOrder("pinnedLeft", ["a", "b", "d"])
+    api.columns.setPin("d", "none")
+    api.state.set(saved)
+
+    const snapshot = api.columns.getSnapshot()
+    expect(snapshot.order).toEqual(["a", "b", "c", "d", "e"])
+    expect(snapshot.zoneOrder.pinnedLeft).toEqual(["d", "a", "b"])
+    expect(snapshot.zoneOrder.center).toEqual(["c", "e"])
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["d", "a", "b", "c", "e"])
+
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
   it("exports and restores viewport position through unified state opt-in", () => {
     const rowModel = createClientRowModel({
       rows: [

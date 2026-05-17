@@ -176,6 +176,41 @@ type DataGridDefaultRendererRuntime = {
   resolveBodyRowIndexById: (rowId: string | number) => number
 }
 
+type DataGridProjectedColumnZone = "pinnedLeft" | "center" | "pinnedRight"
+
+interface DataGridProjectedColumnSnapshot {
+  zoneOrder?: Partial<Record<DataGridProjectedColumnZone, readonly string[]>>
+}
+
+interface DataGridProjectedColumnsApi {
+  setZoneOrder?: (zone: DataGridProjectedColumnZone, keys: readonly string[]) => void
+}
+
+function resolveColumnZone(pin: DataGridColumnPin): DataGridProjectedColumnZone {
+  if (pin === "left") {
+    return "pinnedLeft"
+  }
+  if (pin === "right") {
+    return "pinnedRight"
+  }
+  return "center"
+}
+
+function reorderColumnZoneKeys(
+  currentKeys: readonly string[],
+  sourceColumnKey: string,
+  targetColumnKey: string,
+  placement: "before" | "after",
+): string[] {
+  const nextKeys = currentKeys.filter(key => key !== sourceColumnKey)
+  const targetIndex = nextKeys.indexOf(targetColumnKey)
+  if (targetIndex < 0) {
+    return currentKeys.slice()
+  }
+  nextKeys.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, sourceColumnKey)
+  return nextKeys
+}
+
 function normalizeToolbarModule(module: DataGridAppToolbarModule): DataGridAppToolbarModule {
   return {
     ...module,
@@ -2886,32 +2921,26 @@ export default defineComponent({
         return false
       }
 
-      const nextOrder = currentColumns.map(column => column.key)
-      const sourceIndex = nextOrder.indexOf(normalizedSourceColumnKey)
-      const targetIndex = nextOrder.indexOf(normalizedTargetColumnKey)
-      if (sourceIndex < 0 || targetIndex < 0) {
-        return false
-      }
-
-      const movedColumnKey = nextOrder[sourceIndex]
-      if (!movedColumnKey) {
-        return false
-      }
-      nextOrder.splice(sourceIndex, 1)
-      const normalizedTargetIndex = nextOrder.indexOf(normalizedTargetColumnKey)
-      if (normalizedTargetIndex < 0) {
-        return false
-      }
-      const insertIndex = payload.placement === "after" ? normalizedTargetIndex + 1 : normalizedTargetIndex
-      nextOrder.splice(insertIndex, 0, movedColumnKey)
-
       const previousSelection = captureColumnSelectionState()
       const targetPin = (targetColumn.pin ?? "none") as DataGridColumnPin
       const sourcePin = (sourceColumn.pin ?? "none") as DataGridColumnPin
+      const targetZone = resolveColumnZone(targetPin)
+      const projectedSnapshot = props.runtime.columnSnapshot.value as DataGridProjectedColumnSnapshot
+      const targetZoneKeys = projectedSnapshot.zoneOrder?.[targetZone]
+        ?? currentColumns
+          .filter(column => ((column.pin ?? "none") as DataGridColumnPin) === targetPin)
+          .map(column => column.key)
+      const nextZoneOrder = reorderColumnZoneKeys(
+        targetZoneKeys,
+        normalizedSourceColumnKey,
+        normalizedTargetColumnKey,
+        payload.placement,
+      )
       if (sourcePin !== targetPin) {
         props.runtime.api.columns.setPin(normalizedSourceColumnKey, targetPin)
       }
-      props.runtime.api.columns.setOrder(nextOrder)
+      const columnsApi = props.runtime.api.columns as DataGridProjectedColumnsApi
+      columnsApi.setZoneOrder?.(targetZone, nextZoneOrder)
       restoreColumnInteractionAfterReorder(previousSelection)
       return true
     }

@@ -189,6 +189,7 @@ Core API:
 - `getSnapshot()` / `getColumn(key)`
 - `setColumns(columns)`
 - `setColumnOrder(keys)`
+- `setColumnZoneOrder(zone, keys)`
 - `setColumnVisibility(key, visible)`
 - `setColumnWidth(key, width)`
 - `setColumnPin(key, pin)`
@@ -197,8 +198,11 @@ Core API:
 Snapshot guarantees:
 
 - deterministic order output
-- `visibleColumns` is derived from canonical state
+- `order` is the stable base/global order; pinning must not mutate it
+- `zoneOrder.pinnedLeft`, `zoneOrder.center`, and `zoneOrder.pinnedRight` are the projected layout order
+- `visibleColumns` is projected as pinned-left, center, pinned-right
 - `byKey`, `pinnedLeftColumns`, `centerColumns`, `pinnedRightColumns` are derived snapshot indexes/segments
+- saved column state may include `zoneOrder` to restore pinned-zone order independently from base order
 - snapshots are structurally frozen
 
 Dynamic visibility contract:

@@ -33,9 +33,65 @@ describe("createDataGridColumnModel", () => {
 
     const snapshot = model.getSnapshot()
     expect(snapshot.order).toEqual(["c", "a", "b"])
-    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["c", "a"])
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["a", "c"])
     expect(model.getColumn("a")?.pin).toBe("left")
     expect(model.getColumn("c")?.width).toBe(240)
+    model.dispose()
+  })
+
+  it("projects pinned columns by zone without mutating base order", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "a", label: "A", initialState: { pin: "left" } },
+        { key: "b", label: "B", initialState: { pin: "left" } },
+        { key: "c", label: "C" },
+        { key: "d", label: "D" },
+        { key: "e", label: "E" },
+      ],
+    })
+
+    model.setColumnPin("d", "left")
+
+    let snapshot = model.getSnapshot()
+    expect(snapshot.order).toEqual(["a", "b", "c", "d", "e"])
+    expect(snapshot.zoneOrder.pinnedLeft).toEqual(["a", "b", "d"])
+    expect(snapshot.zoneOrder.center).toEqual(["c", "e"])
+    expect(snapshot.pinnedLeftColumns.map(column => column.key)).toEqual(["a", "b", "d"])
+    expect(snapshot.centerColumns.map(column => column.key)).toEqual(["c", "e"])
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["a", "b", "d", "c", "e"])
+
+    model.setColumnPin("d", "none")
+    snapshot = model.getSnapshot()
+    expect(snapshot.order).toEqual(["a", "b", "c", "d", "e"])
+    expect(snapshot.zoneOrder.pinnedLeft).toEqual(["a", "b"])
+    expect(snapshot.zoneOrder.center).toEqual(["c", "d", "e"])
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["a", "b", "c", "d", "e"])
+
+    model.dispose()
+  })
+
+  it("keeps existing pinned order stable and reorders pinned zones independently", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "a", initialState: { pin: "left" } },
+        { key: "b", initialState: { pin: "left" } },
+        { key: "c" },
+        { key: "d" },
+        { key: "e" },
+      ],
+    })
+
+    model.setColumnPin("d", "left")
+    model.setColumnPin("e", "left")
+    expect(model.getSnapshot().zoneOrder.pinnedLeft).toEqual(["a", "b", "d", "e"])
+
+    model.setColumnZoneOrder("pinnedLeft", ["d", "a", "e", "b"])
+    const snapshot = model.getSnapshot()
+    expect(snapshot.order).toEqual(["a", "b", "c", "d", "e"])
+    expect(snapshot.pinnedLeftColumns.map(column => column.key)).toEqual(["d", "a", "e", "b"])
+    expect(snapshot.centerColumns.map(column => column.key)).toEqual(["c"])
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["d", "a", "e", "b", "c"])
+
     model.dispose()
   })
 

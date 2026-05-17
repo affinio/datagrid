@@ -2356,6 +2356,31 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders headers and pinned panes in projected column order", () => {
+    const visibleColumns = [
+      { key: "a", pin: "left", width: 70, column: { key: "a", label: "A" } },
+      { key: "b", pin: "left", width: 80, column: { key: "b", label: "B" } },
+      { key: "d", pin: "left", width: 90, column: { key: "d", label: "D" } },
+      { key: "c", pin: "none", width: 100, column: { key: "c", label: "C" } },
+      { key: "e", pin: "none", width: 110, column: { key: "e", label: "E" } },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        showRowIndex: false,
+        selectionRange: null,
+        selectionAnchorCell: null,
+        visibleColumns,
+      }),
+    })
+
+    expect(wrapper.findAll(".grid-header-pane--left .grid-cell--pinned-left[data-column-key]").map(cell => cell.attributes("data-column-key"))).toEqual(["a", "b", "d"])
+    expect(wrapper.findAll(".grid-body-pane--left .datagrid-stage__cell[data-column-key]").map(cell => cell.attributes("data-column-key"))).toEqual(["a", "b", "d"])
+    expect(wrapper.findAll(".grid-header-viewport .grid-cell--header[data-column-key]").map(cell => cell.attributes("data-column-key"))).toEqual(["c", "e"])
+
+    wrapper.unmount()
+  })
+
   it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
     const handleRowIndexClick = vi.fn()
     const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const

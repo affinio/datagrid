@@ -89,6 +89,20 @@ interface PendingUnifiedStateApplication {
   options?: DataGridSetStateOptions
 }
 
+type DataGridProjectedColumnZone = "pinnedLeft" | "center" | "pinnedRight"
+
+type DataGridColumnStateWithZoneOrder = DataGridUnifiedColumnState & {
+  zoneOrder?: Partial<Record<DataGridProjectedColumnZone, readonly string[]>>
+}
+
+type DataGridColumnModelSnapshotWithZoneOrder = ReturnType<DataGridApi["columns"]["getSnapshot"]> & {
+  zoneOrder?: Partial<Record<DataGridProjectedColumnZone, readonly string[]>>
+}
+
+interface DataGridProjectedColumnsApi {
+  setZoneOrder?: (zone: DataGridProjectedColumnZone, keys: readonly string[]) => void
+}
+
 function normalizeWidth(width: number | null | undefined): number | null {
   if (!Number.isFinite(width)) {
     return null
@@ -149,12 +163,12 @@ export function useDataGridAppControlledState(
     return resolveActiveGrid()?.api ?? null
   }
 
-  const getColumnState = (): DataGridUnifiedColumnState | null => {
+  const getColumnState = (): DataGridColumnStateWithZoneOrder | null => {
     const columnsApi = resolveActiveApi()?.columns
     if (!columnsApi) {
       return null
     }
-    const snapshot = columnsApi.getSnapshot()
+    const snapshot = columnsApi.getSnapshot() as DataGridColumnModelSnapshotWithZoneOrder
     const visibility: Record<string, boolean> = {}
     const widths: Record<string, number | null> = {}
     const pins: Record<string, DataGridColumnPin> = {}
@@ -165,8 +179,18 @@ export function useDataGridAppControlledState(
       pins[column.key] = column.pin
     }
 
+    const snapshotZoneOrder = snapshot.zoneOrder
     return {
       order: [...snapshot.order],
+      ...(snapshotZoneOrder
+        ? {
+            zoneOrder: {
+              pinnedLeft: [...(snapshotZoneOrder.pinnedLeft ?? [])],
+              center: [...(snapshotZoneOrder.center ?? [])],
+              pinnedRight: [...(snapshotZoneOrder.pinnedRight ?? [])],
+            },
+          }
+        : {}),
       visibility,
       widths,
       pins,
@@ -236,6 +260,7 @@ export function useDataGridAppControlledState(
   }
 
   const getRequiredColumnKeys = (columnState: DataGridUnifiedColumnState | null | undefined): Set<string> => {
+    const projectedColumnState = columnState as DataGridColumnStateWithZoneOrder | null | undefined
     const required = new Set<string>()
     if (!columnState) {
       return required
@@ -250,6 +275,15 @@ export function useDataGridAppControlledState(
       required.add(columnKey)
     }
     for (const columnKey of Object.keys(columnState.pins ?? {})) {
+      required.add(columnKey)
+    }
+    for (const columnKey of projectedColumnState?.zoneOrder?.pinnedLeft ?? []) {
+      required.add(columnKey)
+    }
+    for (const columnKey of projectedColumnState?.zoneOrder?.center ?? []) {
+      required.add(columnKey)
+    }
+    for (const columnKey of projectedColumnState?.zoneOrder?.pinnedRight ?? []) {
       required.add(columnKey)
     }
     return required
@@ -290,6 +324,13 @@ export function useDataGridAppControlledState(
     }
     for (const [columnKey, pin] of Object.entries(columnState.pins)) {
       api.columns.setPin(columnKey, pin)
+    }
+    const zoneOrder = (columnState as DataGridColumnStateWithZoneOrder).zoneOrder
+    if (zoneOrder) {
+      const columnsApi = api.columns as DataGridProjectedColumnsApi
+      columnsApi.setZoneOrder?.("pinnedLeft", zoneOrder.pinnedLeft ?? [])
+      columnsApi.setZoneOrder?.("center", zoneOrder.center ?? [])
+      columnsApi.setZoneOrder?.("pinnedRight", zoneOrder.pinnedRight ?? [])
     }
     return true
   }
@@ -393,6 +434,13 @@ export function useDataGridAppControlledState(
       }
       for (const [columnKey, pin] of Object.entries(options.props.columnState.pins)) {
         api.columns.setPin(columnKey, pin)
+      }
+      const zoneOrder = (options.props.columnState as DataGridColumnStateWithZoneOrder).zoneOrder
+      if (zoneOrder) {
+        const columnsApi = api.columns as DataGridProjectedColumnsApi
+        columnsApi.setZoneOrder?.("pinnedLeft", zoneOrder.pinnedLeft ?? [])
+        columnsApi.setZoneOrder?.("center", zoneOrder.center ?? [])
+        columnsApi.setZoneOrder?.("pinnedRight", zoneOrder.pinnedRight ?? [])
       }
     }
 
