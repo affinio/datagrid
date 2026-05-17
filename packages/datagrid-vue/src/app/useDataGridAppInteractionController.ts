@@ -384,6 +384,13 @@ export function useDataGridAppInteractionController<
   const openContextMenuFromCurrentCell = () => {
     options.openContextMenuFromCurrentCell?.()
   }
+  const commitActiveInlineEditForInteraction = (): boolean => {
+    if (!options.editingCell.value) {
+      return false
+    }
+    options.commitInlineEdit("none")
+    return true
+  }
 
   const getBodyRowAtIndex = (rowIndex: number): DataGridRowNode<TRow> | null => {
     const runtime = options.runtime as typeof options.runtime & {
@@ -2162,13 +2169,7 @@ export function useDataGridAppInteractionController<
     isRangeMoveModifierActive: event => isRangeMoveEnabled.value && event.button === 0 && !event.shiftKey,
     isEditorInteractionTarget: target => Boolean(target?.closest(".cell-editor-input")),
     hasInlineEditor: () => options.editingCell.value != null,
-    commitInlineEdit: () => {
-      if (!options.editingCell.value) {
-        return false
-      }
-      options.commitInlineEdit("none")
-      return true
-    },
+    commitInlineEdit: commitActiveInlineEditForInteraction,
     resolveCellCoord: (row, columnKey) => {
       if (row.rowId == null) {
         return null
@@ -2247,6 +2248,7 @@ export function useDataGridAppInteractionController<
     if (!options.isCellEditable(anchorRow, baseRange.endRow, anchorColumnKey, baseRange.endColumn)) {
       return
     }
+    commitActiveInlineEditForInteraction()
     const originCoord = resolveFillOriginFocusCoord()
     const restartSession = resolveRestartableFillSession(baseRange)
     if (fillHandleStart.onSelectionHandleMouseDown(event)) {
@@ -2788,6 +2790,7 @@ export function useDataGridAppInteractionController<
       if (!options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
         return
       }
+      commitActiveInlineEditForInteraction()
       event.preventDefault()
       focusViewport()
       pendingRangeMove.value = true

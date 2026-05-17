@@ -179,7 +179,8 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Edit then context menu open/close.
   - Edit then start fill/range/selection/resize.
   - Touch double-tap edit only when viewport is idle.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app test -- --runInBand cellIo && pnpm e2e -- e2e/sandbox-interactions.spec.ts`
+- Status: Completed on 2026-05-17. Active inline editors now commit through the same `target: "none"` path before selected-cell range move and fill-handle drag; existing cell-rendering gates keep scroll-active double-click edit suppressed, and focused contracts cover cell IO/rendering plus app-controller edit transitions.
+- Validation command: `pnpm --filter @affino/datagrid-vue test:unit -- useDataGridAppInteractionController.contract.spec.ts --testNamePattern "inline editor|fill-handle drag|selected-cell range move" && pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/useDataGridTableStageCellIo.spec.ts src/stage/__tests__/useDataGridStageCellRendering.spec.ts && pnpm run test:e2e -- e2e/sandbox-interactions.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): stabilize editing interaction lifecycle`
 

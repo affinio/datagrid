@@ -1793,6 +1793,52 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyCellSelectionByCoord).not.toHaveBeenCalled()
   })
 
+  it("commits the active inline editor before arming selected-cell range move", () => {
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      editingCell,
+      commitInlineEdit,
+    } = createControllerHarness({
+      rowCount: 6,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 160,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(5, Math.floor(offset / 24))),
+    })
+
+    editingCell.value = {
+      rowId: "r1",
+      columnKey: "a",
+    }
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", createCell(0, 0), {
+      button: 0,
+      clientX: 120,
+      clientY: 10,
+    }), row, 0, 0)
+
+    expect(commitInlineEdit).toHaveBeenCalledTimes(1)
+    expect(commitInlineEdit).toHaveBeenCalledWith("none")
+    expect(controller.globalPointerListenersActive.value).toBe(true)
+  })
+
   it("does not start desktop cell-body range move before the pointer crosses the threshold", () => {
     const {
       controller,
@@ -2202,6 +2248,43 @@ describe("useDataGridAppInteractionController contract", () => {
       startColumn: 0,
       endColumn: 0,
     })
+  })
+
+  it("commits the active inline editor before starting fill-handle drag", () => {
+    const { controller, selectionSnapshot, editingCell, commitInlineEdit } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+    })
+    editingCell.value = {
+      rowId: "r1",
+      columnKey: "a",
+    }
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(commitInlineEdit).toHaveBeenCalledTimes(1)
+    expect(commitInlineEdit).toHaveBeenCalledWith("none")
+    expect(controller.isFillDragging.value).toBe(true)
   })
 
   it("cancels active fill drag on window blur without committing", () => {

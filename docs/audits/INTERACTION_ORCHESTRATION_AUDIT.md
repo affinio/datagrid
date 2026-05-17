@@ -29,7 +29,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 6 completed on 2026-05-17: touch-mode regression gates now cover scroll-first body gestures and explicit fill, range-move, column-resize, and row-resize handles.
 - Slice 7 completed on 2026-05-17: range-move start policy is regression-locked for desktop selected-cell body drag thresholds, touch-generated cell-body suppression, explicit touch handle coverage, and sandbox desktop body-drag e2e.
 - Slice 8 completed on 2026-05-17: focus ownership is now guarded for active editor/fill/range owners, inline editor focus uses `preventScroll`, and deferred viewport blur cleanup is covered when focus returns to the viewport.
-- Remaining high-risk work: edit lifecycle continuity and interaction performance gates.
+- Slice 9 completed on 2026-05-17: active inline editors now commit deterministically before selected-cell range move and fill-handle drag, while scroll-active edit suppression and cell IO/rendering contracts remain covered.
+- Remaining high-risk work: interaction performance gates and race e2e expansion.
 
 ## Files reviewed
 
@@ -194,8 +195,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 6. **Focus ownership spans multiple layers.**
    - Evidence: app interaction focuses the viewport/cell with `preventScroll`; stage focus runtime resolves visible cells; inline editor focus has a separate helper; blur handling commits/cancels through another utility.
    - Impact: current behavior is pragmatic, but focus restoration across virtualization, context menus, editors, and range interactions is a high-risk enterprise edge.
-   - Status: partially addressed. Stage anchor restoration now has an explicit guard for active editor/fill/range owners, inline editor focus uses `preventScroll`, and viewport blur deferred cleanup is covered.
-   - Required: keep edit commit/cancel and context-menu focus transitions covered as editing lifecycle work continues.
+   - Status: addressed for the current app-stage path. Stage anchor restoration now has an explicit guard for active editor/fill/range owners, inline editor focus uses `preventScroll`, viewport blur deferred cleanup is covered, and active editors commit before fill/range interactions take ownership.
+   - Required: keep context-menu focus transitions covered as race e2e work expands.
 
 7. **Pointer preview rAF batching is available but not consistently used.**
    - Evidence: `useDataGridGlobalPointerLifecycle` supports `pointerPreviewApplyMode: "raf"`, while `useDataGridAppInteractionController.ts` applies previews directly from window mousemove.
