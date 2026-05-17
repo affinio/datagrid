@@ -1748,7 +1748,14 @@ describe("useDataGridAppInteractionController contract", () => {
   })
 
   it("commits the previous inline editor without restoring its focus when pointer-selecting a new cell", () => {
-    const { controller, row, editingCell, commitInlineEdit, applyCellSelectionByCoord } = createControllerHarness({
+    const {
+      controller,
+      row,
+      editingCell,
+      commitInlineEdit,
+      applyCellSelectionByCoord,
+      ensureKeyboardActiveCellVisible,
+    } = createControllerHarness({
       rowCount: 3,
       columnCount: 3,
     })
@@ -1768,6 +1775,7 @@ describe("useDataGridAppInteractionController contract", () => {
     controller.handleCellMouseDown(pointerDown, row, 0, 1)
 
     expect(commitInlineEdit).toHaveBeenCalledWith("none")
+    expect(ensureKeyboardActiveCellVisible).not.toHaveBeenCalled()
     expect(applyCellSelectionByCoord).toHaveBeenCalledWith(
       expect.objectContaining({ rowIndex: 0, columnIndex: 1 }),
       false,

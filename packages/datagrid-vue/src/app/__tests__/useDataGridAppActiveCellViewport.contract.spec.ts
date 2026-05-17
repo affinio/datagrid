@@ -154,6 +154,30 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
   })
 
+  it("falls back to viewport focus with preventScroll when the active cell is not mounted", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const viewport = createViewport()
+    stage.appendChild(viewport)
+    document.body.appendChild(stage)
+
+    const syncViewport = vi.fn()
+
+    const { ensureKeyboardActiveCellVisible } = useDataGridAppActiveCellViewport({
+      bodyViewportRef: ref(viewport),
+      visibleColumns: ref([
+        { key: "center", pin: "center", width: 140 },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      columnWidths: ref({ center: 140 }),
+      normalizedBaseRowHeight: ref(31),
+      syncViewport,
+    })
+
+    ensureKeyboardActiveCellVisible(1, 0)
+
+    expect(viewport.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
   it("reveals the active cell inside a comfort zone instead of pinning it to the edge", async () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"

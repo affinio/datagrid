@@ -16,7 +16,7 @@ Target enterprise readiness: **9/10** after hardening invariants, large-range/se
 - `datagrid-vue-app` owns rendered selection state, row-selection UI, pinned-pane overlays, stage focus lookup, pointer routing, fill handles, and range-move hover affordances.
 - `datagrid-orchestration` owns reusable interaction composables for keyboard commands, drag selection, pointer routing, range move, fill handle start, overlay generation, row selection, and clipboard mutation helpers.
 
-This layering is mostly compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract. The remaining highest-risk issue is proving the contract with focused invariants for remount, edit blur, keyboard move, projection invalidation, and server placeholder replacement.
+This layering is mostly compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, and pointer-selection edit handoff. Remaining high-risk proof points are remount, broader keyboard move, projection invalidation, and server placeholder replacement.
 
 ## Exact Files Reviewed
 
@@ -119,7 +119,7 @@ Tests and benchmarks sampled:
 ### High
 
 1. **Active cell ownership is split across selection snapshot, anchor ref, DOM focus, and editing state.**
-   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract, but still needs invariant coverage for remount, edit blur, keyboard move, and server placeholder replacement.
+   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, and edit-handoff coverage. It still needs remount, broader keyboard move, and server placeholder replacement coverage.
 
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
    Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. However, e2e coverage does not yet prove focus, active cell, selected classes, overlay geometry, fill handle, and editor state across scroll-out/scroll-in remounts and server placeholder replacement.
@@ -244,14 +244,13 @@ Blocks to target:
 
 ## Recommended Next Work
 
-1. Add invariant tests for active cell, focus, editing, and selection ownership transitions.
-2. Add invariant tests for selection invalidation after sort/filter/group/pivot/cache replacement.
-3. Replace huge virtual-selection row scans with loaded interval metadata from row models.
-4. Define server-backed operation contracts for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
-5. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
-6. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
-7. Add a touch selection design with long press and explicit handles.
-8. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
+1. Add invariant tests for selection invalidation after sort/filter/group/pivot/cache replacement.
+2. Replace huge virtual-selection row scans with loaded interval metadata from row models.
+3. Define server-backed operation contracts for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
+4. Add e2e tests for selection continuity across virtualization remounts and pinned panes.
+5. Add grouped/tree app interaction tests for selection, keyboard, clipboard, and row selection.
+6. Add a touch selection design with long press and explicit handles.
+7. Add large-range performance gates for summary, aggregates, clipboard mutation planning, multi-range rendering, and selection drag.
 
 ## Validation Expectations
 

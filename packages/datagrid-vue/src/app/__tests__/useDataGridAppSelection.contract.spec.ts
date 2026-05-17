@@ -49,6 +49,52 @@ describe("useDataGridAppSelection contract", () => {
     expect(selection.selectionAnchor.value).toBeNull()
   })
 
+  it("uses the active range as the anchor owner for multi-range snapshots", () => {
+    const runtimeSnapshot = {
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: "r1",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        },
+        {
+          startRow: 5,
+          endRow: 7,
+          startCol: 2,
+          endCol: 2,
+          startRowId: "r6",
+          endRowId: "r8",
+          anchor: { rowIndex: 5, colIndex: 2, rowId: "r6" },
+          focus: { rowIndex: 7, colIndex: 2, rowId: "r8" },
+        },
+      ],
+      activeRangeIndex: 1,
+      activeCell: { rowIndex: 7, colIndex: 2, rowId: "r8" },
+    } as never
+
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      resolveRuntime: () => ({
+        api: {
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+
+    expect(selection.selectionSnapshot.value?.activeCell).toEqual({ rowIndex: 7, colIndex: 2, rowId: "r8" })
+    expect(selection.selectionAnchor.value).toEqual({ rowIndex: 5, colIndex: 2, rowId: "r6" })
+  })
+
   it("computes selected-cell aggregates through column valueGetter accessors", () => {
     const runtimeSnapshot = {
       ranges: [

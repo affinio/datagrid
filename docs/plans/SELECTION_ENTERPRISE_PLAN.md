@@ -25,6 +25,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 2: Active Cell, Focus, And Editing Invariants
 
+- Status: Completed on 2026-05-17. Added focused contracts for multi-range active anchor ownership, active-cell focus fallback with `preventScroll`, stage anchor fallback after virtualization, and pointer-selection edit handoff without restoring the previous editor focus.
 - Objective: prove that logical active cell, selection snapshot, DOM focus, and inline editing stay synchronized through keyboard moves, pointer selection, edit commit/cancel, blur, and focus restoration.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/snapshot.ts`

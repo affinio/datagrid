@@ -95,6 +95,30 @@ describe("useDataGridStageFocusRuntime", () => {
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
   })
 
+  it("falls back to viewport focus with preventScroll when the anchor cell is virtualized out", () => {
+    const bodyViewport = document.createElement("div")
+    bodyViewport.focus = vi.fn()
+
+    const runtime = useDataGridStageFocusRuntime({
+      bodyShellRef: ref(document.createElement("div")),
+      bodyViewportEl: ref(bodyViewport),
+      leftPaneContentRef: ref(null),
+      rightPaneContentRef: ref(null),
+      leftBottomPaneContentRef: ref(null),
+      rightBottomPaneContentRef: ref(null),
+      displayRows: ref([{} as DataGridTableStageBodyRow]),
+      visibleColumns: ref([{} as DataGridTableStageBodyColumn]),
+      viewportRowStart: ref(7),
+      resolveAbsoluteRowIndex: () => 7,
+      isSelectionAnchorCellSafe: () => true,
+      isCellEditableSafe: () => true,
+    })
+
+    runtime.restoreAnchorCellFocus()
+
+    expect(bodyViewport.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
   it("records focus fallback diagnostics only when perf tracing is enabled", () => {
     const { runtime } = createFocusRuntimeHarness({
       shouldRestoreAnchorFocus: () => false,
