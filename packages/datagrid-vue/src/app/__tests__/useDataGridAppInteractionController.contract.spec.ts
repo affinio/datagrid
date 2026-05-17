@@ -1371,6 +1371,75 @@ describe("useDataGridAppInteractionController contract", () => {
     )
   })
 
+  it("blocks Delete over server-backed grouped placeholder rows as group rows", async () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      clearPendingClipboardOperation,
+      recordIntentTransaction,
+      reportFillWarning,
+    } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+      runtimeRowModelDataSource: {},
+      bodyRowAtIndex: rowIndex => {
+        if (rowIndex === 0) {
+          return {
+            rowId: "__datagrid_group_placeholder__:status:new",
+            kind: "group",
+            __placeholder: true,
+            data: {},
+            state: { expanded: false },
+            groupMeta: {
+              groupKey: "status:new",
+              groupField: "status",
+              groupValue: "New",
+              level: 0,
+              childrenCount: 2,
+            },
+          } as unknown as DataGridRowNode<DemoRow>
+        }
+        return {
+          rowId: `r${rowIndex + 1}`,
+          kind: "data",
+          data: {},
+        } as unknown as DataGridRowNode<DemoRow>
+      },
+    })
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "__datagrid_group_placeholder__:status:new" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "__datagrid_group_placeholder__:status:new",
+        endRowId: "__datagrid_group_placeholder__:status:new",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "__datagrid_group_placeholder__:status:new" },
+        focus: { rowIndex: 0, colIndex: 1, rowId: "__datagrid_group_placeholder__:status:new" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(clearPendingClipboardOperation).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(recordIntentTransaction).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Selected range includes group rows. Use leaf rows or server operation.",
+    )
+  })
+
   it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {
     const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
       rowCount: 6,
@@ -2490,6 +2559,65 @@ describe("useDataGridAppInteractionController contract", () => {
         endRowId: "g1",
         anchor: { rowIndex: 0, colIndex: 0, rowId: "g1" },
         focus: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      }],
+    }
+
+    controller.startFillHandleDrag(new MouseEvent("mousedown", {
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      bubbles: true,
+      cancelable: true,
+    }))
+
+    expect(controller.isFillDragging.value).toBe(false)
+    expect(controller.fillPreviewRange.value).toBeNull()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Fill range includes group rows. Use leaf rows or server operation.",
+    )
+  })
+
+  it("blocks fill drag start over server-backed grouped placeholder rows as group rows", () => {
+    const { controller, selectionSnapshot, reportFillWarning } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 1,
+      runtimeRowModelDataSource: { commitFillOperation: vi.fn() },
+      bodyRowAtIndex: rowIndex => {
+        if (rowIndex === 0) {
+          return {
+            rowId: "__datagrid_group_placeholder__:status:new",
+            kind: "group",
+            __placeholder: true,
+            data: {},
+            state: { expanded: false },
+            groupMeta: {
+              groupKey: "status:new",
+              groupField: "status",
+              groupValue: "New",
+              level: 0,
+              childrenCount: 2,
+            },
+          } as unknown as DataGridRowNode<DemoRow>
+        }
+        return {
+          rowId: `r${rowIndex + 1}`,
+          kind: "data",
+          data: { a: "" },
+        } as unknown as DataGridRowNode<DemoRow>
+      },
+    })
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "__datagrid_group_placeholder__:status:new" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "__datagrid_group_placeholder__:status:new",
+        endRowId: "__datagrid_group_placeholder__:status:new",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "__datagrid_group_placeholder__:status:new" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "__datagrid_group_placeholder__:status:new" },
       }],
     }
 

@@ -138,6 +138,7 @@ RowModel baseline contract:
 - no implicit child selection by default
 - optional policy flag may enable group-to-children behavior
 - app clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges over group rows are blocked unless a future server operation explicitly defines group-row export or mutation semantics
+- server-backed grouped placeholder rows follow the same group-row blocking rule; they must not fall back to local leaf-only mutation or clipboard reads
 - local cell mutations never silently apply to only the leaf subset of a range that includes group rows
 
 Core helper for adapters:

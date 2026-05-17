@@ -15,6 +15,7 @@ type DemoRowNode =
   | { rowId: string; kind: "leaf"; data: DemoRow }
   | { rowId: string; kind: "leaf"; data: DemoRow; __placeholder: true }
   | { rowId: string; kind: "group"; data?: Partial<DemoRow>; groupMeta: { groupKey: string } }
+  | { rowId: string; kind: "group"; data?: Partial<DemoRow>; groupMeta: { groupKey: string }; __placeholder: true }
 
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
@@ -706,6 +707,26 @@ describe("useDataGridAppClipboard contract", () => {
     const { clipboard, lastAction } = createClipboardHarness({
       rowNodes: [
         { rowId: "group:status:new", kind: "group", groupMeta: { groupKey: "status:new" } },
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        { rowId: "r2", kind: "leaf", data: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
+      ],
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(false)
+    expect(lastAction.value).toBe("Selected range includes group rows. Use leaf rows or server export.")
+  })
+
+  it("blocks copy over server-backed grouped placeholder rows as group rows", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      rowNodes: [
+        {
+          rowId: "__datagrid_group_placeholder__:status:new",
+          kind: "group",
+          __placeholder: true,
+          groupMeta: { groupKey: "status:new" },
+        },
         { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
         { rowId: "r2", kind: "leaf", data: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
       ],

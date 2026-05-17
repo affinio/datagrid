@@ -100,6 +100,7 @@ Expansion snapshot roundtrip is deterministic for equal source/config.
 - Row selection may focus/select visible tree group row ids and reconciles against the current flattened projection.
 - Expansion changes mark virtual selections stale; row selection reconciliation removes hidden descendant row ids while preserving visible tree group row ids.
 - App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges over group rows are blocked unless a future server operation explicitly defines group-row export or mutation semantics.
+- Server-backed tree/group placeholder rows follow the same group-row blocking rule; they must not fall back to local leaf-only mutation or clipboard reads.
 - Local cell mutations never silently apply to only the leaf subset of a selected range that includes tree group rows.
 
 ## Diagnostics
