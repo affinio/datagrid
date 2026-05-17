@@ -1274,6 +1274,12 @@ const effectiveBodyViewportWidth = computed(() => {
     : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
 })
 
+function hasVisibleInlineEditor(): boolean {
+  return displayRows.value.some(row => (
+    visibleColumns.value.some(column => editing.value.isEditingCell(row, column.key))
+  ))
+}
+
 const focusRuntime = useDataGridStageFocusRuntime({
   bodyShellRef,
   bodyViewportEl,
@@ -1289,6 +1295,7 @@ const focusRuntime = useDataGridStageFocusRuntime({
   isCellEditableSafe: isCellEditableSafeBase,
   isBodyViewportScrolling,
   runWhenBodyViewportScrollIdle,
+  shouldRestoreAnchorFocus: () => !hasVisibleInlineEditor() && !isFillDragging.value && !isRangeMoving.value,
 })
 
 const {

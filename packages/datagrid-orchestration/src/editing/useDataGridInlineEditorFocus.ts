@@ -39,7 +39,7 @@ export function useDataGridInlineEditorFocus(
     if (!editor) {
       return
     }
-    editor.focus()
+    editor.focus({ preventScroll: true })
     if (editor instanceof HTMLInputElement) {
       editor.select()
       return
@@ -57,4 +57,3 @@ export function useDataGridInlineEditorFocus(
     focusInlineEditorElement,
   }
 }
-

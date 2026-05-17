@@ -28,7 +28,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 5 completed on 2026-05-17: mouse-event prevent-default policy is explicit, linked-surface touch pan listener behavior is covered, and the user interaction doc now includes the prevent-default/passive listener matrix.
 - Slice 6 completed on 2026-05-17: touch-mode regression gates now cover scroll-first body gestures and explicit fill, range-move, column-resize, and row-resize handles.
 - Slice 7 completed on 2026-05-17: range-move start policy is regression-locked for desktop selected-cell body drag thresholds, touch-generated cell-body suppression, explicit touch handle coverage, and sandbox desktop body-drag e2e.
-- Remaining high-risk work: focus/edit continuity and interaction performance gates.
+- Slice 8 completed on 2026-05-17: focus ownership is now guarded for active editor/fill/range owners, inline editor focus uses `preventScroll`, and deferred viewport blur cleanup is covered when focus returns to the viewport.
+- Remaining high-risk work: edit lifecycle continuity and interaction performance gates.
 
 ## Files reviewed
 
@@ -193,7 +194,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 6. **Focus ownership spans multiple layers.**
    - Evidence: app interaction focuses the viewport/cell with `preventScroll`; stage focus runtime resolves visible cells; inline editor focus has a separate helper; blur handling commits/cancels through another utility.
    - Impact: current behavior is pragmatic, but focus restoration across virtualization, context menus, editors, and range interactions is a high-risk enterprise edge.
-   - Required: keep one active-cell owner and add focus transition tests across scroll/remount/edit/menu.
+   - Status: partially addressed. Stage anchor restoration now has an explicit guard for active editor/fill/range owners, inline editor focus uses `preventScroll`, and viewport blur deferred cleanup is covered.
+   - Required: keep edit commit/cancel and context-menu focus transitions covered as editing lifecycle work continues.
 
 7. **Pointer preview rAF batching is available but not consistently used.**
    - Evidence: `useDataGridGlobalPointerLifecycle` supports `pointerPreviewApplyMode: "raf"`, while `useDataGridAppInteractionController.ts` applies previews directly from window mousemove.

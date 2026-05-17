@@ -16,6 +16,7 @@ export interface UseDataGridStageFocusRuntimeOptions {
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isBodyViewportScrolling?: Readonly<Ref<boolean>>
   runWhenBodyViewportScrollIdle?: (callback: () => void) => void
+  shouldRestoreAnchorFocus?: () => boolean
 }
 
 export interface UseDataGridStageFocusRuntimeResult {
@@ -125,6 +126,9 @@ export function useDataGridStageFocusRuntime(
   }
 
   function focusVisibleAnchorCell(): void {
+    if (options.shouldRestoreAnchorFocus?.() === false) {
+      return
+    }
     const anchorCell = resolveVisibleAnchorCellPosition(
       options.displayRows,
       options.visibleColumns,
@@ -151,6 +155,9 @@ export function useDataGridStageFocusRuntime(
       pendingAnchorFocusRestore = true
       options.runWhenBodyViewportScrollIdle(() => {
         pendingAnchorFocusRestore = false
+        if (options.shouldRestoreAnchorFocus?.() === false) {
+          return
+        }
         focusVisibleAnchorCell()
       })
       return

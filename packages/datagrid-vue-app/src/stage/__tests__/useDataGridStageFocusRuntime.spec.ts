@@ -6,6 +6,7 @@ import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "..
 function createFocusRuntimeHarness(options: {
   isScrolling?: boolean
   runWhenIdle?: (callback: () => void) => void
+  shouldRestoreAnchorFocus?: () => boolean
 } = {}) {
   const bodyViewport = document.createElement("div")
   const cell = document.createElement("button")
@@ -29,6 +30,7 @@ function createFocusRuntimeHarness(options: {
     isCellEditableSafe: () => true,
     isBodyViewportScrolling: ref(options.isScrolling ?? false),
     runWhenBodyViewportScrollIdle: options.runWhenIdle,
+    shouldRestoreAnchorFocus: options.shouldRestoreAnchorFocus,
   })
 
   return {
@@ -56,6 +58,31 @@ describe("useDataGridStageFocusRuntime", () => {
     expect(focusSpy).not.toHaveBeenCalled()
 
     idleCallbacks[0]?.()
+
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it("does not steal focus when anchor restoration is blocked before scroll idle", () => {
+    const idleCallbacks: Array<() => void> = []
+    let canRestore = false
+    const { cell, runtime } = createFocusRuntimeHarness({
+      isScrolling: true,
+      runWhenIdle: callback => {
+        idleCallbacks.push(callback)
+      },
+      shouldRestoreAnchorFocus: () => canRestore,
+    })
+    const focusSpy = vi.spyOn(cell, "focus")
+
+    runtime.restoreAnchorCellFocus()
+    idleCallbacks[0]?.()
+
+    expect(focusSpy).not.toHaveBeenCalled()
+
+    canRestore = true
+    runtime.restoreAnchorCellFocus()
+    idleCallbacks[1]?.()
 
     expect(focusSpy).toHaveBeenCalledTimes(1)
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })

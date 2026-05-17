@@ -158,7 +158,8 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Focus after selection, fill, range move, resize, context menu close, and edit commit/cancel.
   - Focus restoration after active cell scrolls out and remounts.
   - `preventScroll` assertions where focus should not move the viewport.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app test -- --runInBand focus && pnpm --filter @affino/datagrid-vue test -- --runInBand focus blur`
+- Status: Completed on 2026-05-17. Stage anchor focus restoration now has an explicit restore guard so active editors/fill/range owners can keep focus ownership; inline editor focus uses `preventScroll`; viewport blur contracts cover deferred null-target blur cleanup and focus return to the viewport.
+- Validation command: `pnpm --dir packages/datagrid-vue-app exec vitest run --config vitest.config.ts --passWithNoTests src/stage/__tests__/useDataGridStageFocusRuntime.spec.ts && pnpm --dir packages/datagrid-vue exec vitest run --config vitest.config.ts --passWithNoTests src/composables/__tests__/useDataGridViewportBlurHandler.contract.spec.ts src/composables/__tests__/useDataGridInlineEditorFocus.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): stabilize grid focus ownership`
 

@@ -75,4 +75,49 @@ describe("useDataGridViewportBlurHandler contract", () => {
     expect(closeContextMenu).toHaveBeenCalledTimes(1)
     expect(commitInlineEdit).toHaveBeenCalledTimes(1)
   })
+
+  it("defers null-target blur cleanup and cancels it when focus returns to the viewport", () => {
+    const stopDragSelection = vi.fn()
+    const stopFillSelection = vi.fn()
+    const stopRangeMove = vi.fn()
+    const stopColumnResize = vi.fn()
+    const closeContextMenu = vi.fn()
+    const commitInlineEdit = vi.fn(() => true)
+    const rafCallbacks: FrameRequestCallback[] = []
+    const viewport = document.createElement("div")
+    const viewportChild = document.createElement("button")
+    viewport.appendChild(viewportChild)
+    document.body.appendChild(viewport)
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      rafCallbacks.push(callback)
+      return rafCallbacks.length
+    })
+
+    const handler = useDataGridViewportBlurHandler({
+      resolveViewportElement: () => viewport,
+      resolveContextMenuElement: () => document.createElement("div"),
+      stopDragSelection,
+      stopFillSelection,
+      stopRangeMove,
+      stopColumnResize,
+      closeContextMenu,
+      hasInlineEditor: () => true,
+      commitInlineEdit,
+    })
+
+    expect(handler.handleViewportBlur(new FocusEvent("blur", { relatedTarget: null }))).toBe(true)
+    viewportChild.focus()
+    rafCallbacks[0]?.(0)
+    rafCallbacks[1]?.(0)
+
+    expect(stopDragSelection).not.toHaveBeenCalled()
+    expect(stopFillSelection).not.toHaveBeenCalled()
+    expect(stopRangeMove).not.toHaveBeenCalled()
+    expect(stopColumnResize).not.toHaveBeenCalled()
+    expect(closeContextMenu).not.toHaveBeenCalled()
+    expect(commitInlineEdit).not.toHaveBeenCalled()
+
+    rafSpy.mockRestore()
+    viewport.remove()
+  })
 })

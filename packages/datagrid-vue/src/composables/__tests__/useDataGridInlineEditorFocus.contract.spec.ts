@@ -20,6 +20,7 @@ describe("useDataGridInlineEditorFocus contract", () => {
 
     await focusOrchestration.focusInlineEditorElement("row-1", "owner", "text", false)
     expect(focusSpy).toHaveBeenCalledTimes(1)
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
     expect(selectSpy).toHaveBeenCalledTimes(1)
   })
 
@@ -41,4 +42,3 @@ describe("useDataGridInlineEditorFocus contract", () => {
     expect(clickSpy).toHaveBeenCalledTimes(1)
   })
 })
-
