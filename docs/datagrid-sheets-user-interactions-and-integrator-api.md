@@ -89,6 +89,15 @@ State transitions follow these rules:
 - Cell-range selection and row selection remain separate state machines. Shared keyboard, focus, and context-menu paths must choose a single target state before mutating either one.
 - Touch selection remains scroll-first until a documented mode transition or explicit touch affordance claims selection ownership.
 
+### Server-backed selection operations
+
+Server-backed grids use the operation matrix in `docs/server-datasource/selection-operations.md`.
+
+- Loaded data rows may use local materialized copy, cut, clear/delete, paste, fill, range move, and summary paths when the cells are editable and not group rows.
+- Unloaded or placeholder rows must use a server-delegated operation when that capability exists; otherwise the operation is blocked with a clear user-facing state.
+- Stale virtual selections must not run local materialized operations. The user must refresh/reselect or the app must delegate to a backend operation that validates `baseRevision` and projection identity.
+- Row selection `all` mode represents all rows in the current projection with exclusions; server-backed workflows must not enumerate unloaded row ids just to represent all-row selection.
+
 ### Event policy
 
 Mouse, touch-generated mouse, touch, wheel, keyboard, and context-menu events follow an explicit cancellation policy. The default rule is that native body scrolling and editor/input behavior win unless an affordance-owned grid interaction has already claimed the gesture.

@@ -25,13 +25,14 @@ This is the ordered reading path for package users and Codex agents integrating 
 13. [Backend template](./backend-template.md) - backend integration template.
 14. [Backend FastAPI reference](./backend-fastapi.md) - FastAPI reference implementation.
 15. [Consistency](./consistency.md) - `revision`, `datasetVersion`, invalidation, and conflict model.
+16. [Server selection operations](./selection-operations.md) - operation matrix for loaded, unloaded, placeholder, grouped, stale, local, blocked, and server-delegated selection work.
 
 ## Codex Support
 
-16. [Codex integration prompt](./codex-integration-prompt.md) - prompt for implementing an integration.
-17. [Core factories reference](../datagrid-core-factories-reference.md) - `createDataSourceBackedRowModel`.
-18. [State/events/diagnostics](../datagrid-state-events-compute-diagnostics.md) - `initialLoading`, `refreshing`, row-model state, and backpressure.
-19. [History](../datagrid-history.md) - undo/redo context.
+17. [Codex integration prompt](./codex-integration-prompt.md) - prompt for implementing an integration.
+18. [Core factories reference](../datagrid-core-factories-reference.md) - `createDataSourceBackedRowModel`.
+19. [State/events/diagnostics](../datagrid-state-events-compute-diagnostics.md) - `initialLoading`, `refreshing`, row-model state, and backpressure.
+20. [History](../datagrid-history.md) - undo/redo context.
 
 ## Internal References
 

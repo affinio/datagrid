@@ -90,6 +90,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 5: Server Selection Operation Contract
 
+- Status: Completed on 2026-05-17. Added `docs/server-datasource/selection-operations.md` with the materialized/server/blocked/virtual operation matrix for loaded rows, unloaded rows, placeholders, grouped rows, stale projections, and all-row selection; linked it from protocol, integration map, datasource protocol, user interaction docs, and audit status.
 - Objective: define the server-backed operation matrix before adding or changing public APIs for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
 - Affected packages/files:
   - `docs/server-datasource/integration-docs-map.md`

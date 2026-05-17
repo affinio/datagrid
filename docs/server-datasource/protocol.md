@@ -322,6 +322,24 @@ Backward compatibility:
 - if `boundaryToken` is omitted, the backend may still accept the request when it can safely do so
 - server-side `series` mode is currently rejected with `400 unsupported-fill-mode`
 
+## Selection Operations
+
+Server-delegated selection operations are documented in [Server selection operations](./selection-operations.md).
+
+Current protocol status:
+
+- Server fill boundary and commit are implemented.
+- Copy/export, cut, clear/delete, paste, range move, and summary over unloaded selections are planned contracts, not implemented HTTP routes in this protocol.
+- Until those routes exist, frontend code must keep unloaded or stale selection operations `blocked` unless a dedicated server capability is wired.
+
+Delegated selection operations should reuse the existing consistency vocabulary:
+
+- `operationId` for idempotency
+- `baseRevision` for stale-write checks
+- `projectionHash` or equivalent projection identity
+- `revision` and `datasetVersion` in mutation responses
+- scoped `invalidation`
+
 ## History Stack
 
 Normal undo/redo uses stack history.

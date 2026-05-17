@@ -65,6 +65,8 @@ Histogram `options.search` is scoped only to value-list search. It is independen
 - push application and refetch-on-overlap behavior
 - diagnostics via `getBackpressureDiagnostics()`
 
+Server-backed selection operation semantics are defined in `docs/server-datasource/selection-operations.md`. Current data-source row models expose enough loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, range move, and summary still require explicit backend capability wiring before they can run over unloaded rows.
+
 ## Diagnostics Contract
 
 `DataGridDataSourceBackpressureDiagnostics`:
