@@ -69,21 +69,23 @@ export function useDataGridPointerAutoScroll(
         : options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
 
       if (deltaX !== 0 || deltaY !== 0) {
+        const currentTop = viewport.scrollTop
+        const currentLeft = viewport.scrollLeft
         const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
         const maxScrollLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
-        const nextTop = Math.max(0, Math.min(maxScrollTop, viewport.scrollTop + deltaY))
-        const nextLeft = Math.max(0, Math.min(maxScrollLeft, viewport.scrollLeft + deltaX))
+        const nextTop = Math.max(0, Math.min(maxScrollTop, currentTop + deltaY))
+        const nextLeft = Math.max(0, Math.min(maxScrollLeft, currentLeft + deltaX))
 
-        if (nextTop !== viewport.scrollTop) {
+        if (nextTop !== currentTop) {
           viewport.scrollTop = nextTop
         }
-        if (nextLeft !== viewport.scrollLeft) {
+        if (nextLeft !== currentLeft) {
           viewport.scrollLeft = nextLeft
         }
 
         options.setScrollPosition({
-          top: viewport.scrollTop,
-          left: viewport.scrollLeft,
+          top: nextTop,
+          left: nextLeft,
         })
       }
 

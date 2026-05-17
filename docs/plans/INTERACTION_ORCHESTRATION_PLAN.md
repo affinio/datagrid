@@ -199,7 +199,8 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - Contract tests for rAF preview mode and immediate preview mode.
   - Auto-scroll layout-read count tests where feasible.
   - Performance-gate documentation for pointer preview budgets.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand pointerAutoScroll globalPointerLifecycle`
+- Status: Completed on 2026-05-17. Direct app-stage preview updates remain allowed under a documented frame budget; global pointer lifecycle now has explicit sync and rAF mode contracts, and pointer auto-scroll samples each viewport layout/scroll metric once per animation frame.
+- Validation command: `pnpm --dir packages/datagrid-vue exec vitest run --config vitest.config.ts --passWithNoTests src/composables/__tests__/useDataGridPointerAutoScroll.contract.spec.ts src/composables/__tests__/useDataGridGlobalPointerLifecycle.contract.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): budget pointer preview work`
 

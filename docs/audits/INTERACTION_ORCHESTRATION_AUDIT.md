@@ -30,7 +30,8 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 - Slice 7 completed on 2026-05-17: range-move start policy is regression-locked for desktop selected-cell body drag thresholds, touch-generated cell-body suppression, explicit touch handle coverage, and sandbox desktop body-drag e2e.
 - Slice 8 completed on 2026-05-17: focus ownership is now guarded for active editor/fill/range owners, inline editor focus uses `preventScroll`, and deferred viewport blur cleanup is covered when focus returns to the viewport.
 - Slice 9 completed on 2026-05-17: active inline editors now commit deterministically before selected-cell range move and fill-handle drag, while scroll-active edit suppression and cell IO/rendering contracts remain covered.
-- Remaining high-risk work: interaction performance gates and race e2e expansion.
+- Slice 10 completed on 2026-05-17: pointer preview work now has explicit sync/rAF lifecycle contracts, pointer auto-scroll layout reads are budgeted to one sample per metric per frame, and the performance gate doc records the direct-preview budget.
+- Remaining high-risk work: interaction race e2e expansion.
 
 ## Files reviewed
 
@@ -201,7 +202,8 @@ Enterprise blocker for mobile claims: the architecture still lacks a complete to
 7. **Pointer preview rAF batching is available but not consistently used.**
    - Evidence: `useDataGridGlobalPointerLifecycle` supports `pointerPreviewApplyMode: "raf"`, while `useDataGridAppInteractionController.ts` applies previews directly from window mousemove.
    - Impact: direct preview updates can be acceptable, but large selection/fill previews need frame-budget validation.
-   - Required: either enable rAF preview in the main stage path or add perf gates proving direct updates are within budget.
+   - Status: addressed through a direct-preview budget. Sync and rAF lifecycle modes are covered, pointer auto-scroll samples each viewport metric once per frame, and `docs/perf/datagrid-performance-gates.md` records the gate expectations.
+   - Required: keep benchmark thresholds current as race e2e/perf traces expand.
 
 ### Low
 

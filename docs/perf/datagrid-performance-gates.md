@@ -80,6 +80,15 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P95_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P99_MS=14`
+
+## Pointer Preview Frame Budget
+
+Current app-stage pointer previews use direct mousemove application for drag selection, fill, and range move, with auto-scroll running in `requestAnimationFrame`. This is acceptable only while the hot path stays bounded:
+
+- Global pointer lifecycle must keep both explicit modes covered: `pointerPreviewApplyMode: "sync"` applies immediately and `"raf"` coalesces preview work to one callback per frame.
+- Pointer auto-scroll may read each viewport layout/scroll metric at most once per animation frame before applying scroll deltas and active preview.
+- App-stage pointer listeners should stay active only while a pending or active pointer owner exists.
+- Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
   - `PERF_BUDGET_MAX_SCROLL_BURST_P95_MS=20`

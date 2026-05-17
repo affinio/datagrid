@@ -113,6 +113,93 @@ describe("useDataGridPointerAutoScroll contract", () => {
     expect(raf.handles().length).toBe(1)
   })
 
+  it("samples viewport layout and scroll offsets once per auto-scroll frame", () => {
+    const raf = createRafHarness()
+    const setScrollPosition = vi.fn()
+    const reads = {
+      rect: 0,
+      scrollTop: 0,
+      scrollLeft: 0,
+      scrollHeight: 0,
+      clientHeight: 0,
+      scrollWidth: 0,
+      clientWidth: 0,
+    }
+    let scrollTop = 100
+    let scrollLeft = 120
+    const viewport = {
+      get scrollTop() {
+        reads.scrollTop += 1
+        return scrollTop
+      },
+      set scrollTop(value: number) {
+        scrollTop = value
+      },
+      get scrollLeft() {
+        reads.scrollLeft += 1
+        return scrollLeft
+      },
+      set scrollLeft(value: number) {
+        scrollLeft = value
+      },
+      get scrollHeight() {
+        reads.scrollHeight += 1
+        return 2000
+      },
+      get clientHeight() {
+        reads.clientHeight += 1
+        return 400
+      },
+      get scrollWidth() {
+        reads.scrollWidth += 1
+        return 1800
+      },
+      get clientWidth() {
+        reads.clientWidth += 1
+        return 500
+      },
+      getBoundingClientRect: () => {
+        reads.rect += 1
+        return { top: 100, bottom: 500, left: 50, right: 550 }
+      },
+    } as unknown as HTMLElement
+
+    const composable = useDataGridPointerAutoScroll({
+      resolveInteractionState: () => ({ isDragSelecting: false, isFillDragging: true, isRangeMoving: false }),
+      resolveRangeMovePointer: () => null,
+      resolveFillPointer: () => ({ clientX: 546, clientY: 496 }),
+      resolveDragPointer: () => null,
+      resolveViewportElement: () => viewport,
+      resolveHeaderHeight: () => 32,
+      resolveAxisAutoScrollDelta(pointer, min, max) {
+        if (pointer < min + 20) return -10
+        if (pointer > max - 20) return 10
+        return 0
+      },
+      setScrollPosition,
+      applyRangeMovePreviewFromPointer: vi.fn(),
+      applyFillPreviewFromPointer: vi.fn(),
+      applyDragSelectionFromPointer: vi.fn(),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    composable.startInteractionAutoScroll()
+    const [frame] = raf.handles()
+    raf.run(frame ?? -1)
+
+    expect(setScrollPosition).toHaveBeenCalledWith({ top: 110, left: 130 })
+    expect(reads).toEqual({
+      rect: 1,
+      scrollTop: 1,
+      scrollLeft: 1,
+      scrollHeight: 1,
+      clientHeight: 1,
+      scrollWidth: 1,
+      clientWidth: 1,
+    })
+  })
+
   it("stops scheduled frame when interaction becomes idle", () => {
     const raf = createRafHarness()
     const interactionState = { isDragSelecting: true, isFillDragging: false, isRangeMoving: false }
