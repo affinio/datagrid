@@ -134,6 +134,8 @@ RowModel baseline contract:
 - shift range uses flattened row order
 - no implicit child selection by default
 - optional policy flag may enable group-to-children behavior
+- app clipboard copy/cut, paste targets, and clear/delete over group rows are blocked unless a future server operation explicitly defines group-row export or mutation semantics
+- local cell mutations never silently apply to only the leaf subset of a range that includes group rows
 
 Core helper for adapters:
 

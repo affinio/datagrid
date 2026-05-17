@@ -1324,6 +1324,53 @@ describe("useDataGridAppInteractionController contract", () => {
     )
   })
 
+  it("blocks Delete when the selected range includes a grouped projection row", async () => {
+    const {
+      controller,
+      row,
+      setSelectionSnapshot,
+      applyClipboardEdits,
+      clearPendingClipboardOperation,
+      recordIntentTransaction,
+      reportFillWarning,
+    } = createControllerHarness({
+      rowCount: 3,
+      columnCount: 2,
+      firstRowKind: "group",
+      firstRowExpanded: true,
+    })
+    setSelectionSnapshot({
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "g1",
+        endRowId: "g1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "g1" },
+        focus: { rowIndex: 0, colIndex: 1, rowId: "g1" },
+      }],
+    })
+
+    const keydown = new KeyboardEvent("keydown", {
+      key: "Delete",
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+    await flushAsync()
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(clearPendingClipboardOperation).not.toHaveBeenCalled()
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(recordIntentTransaction).not.toHaveBeenCalled()
+    expect(reportFillWarning).toHaveBeenCalledWith(
+      "Selected range includes group rows. Use leaf rows or server operation.",
+    )
+  })
+
   it("continues plain keyboard navigation from the anchor after a shift-extended range", () => {
     const { controller, row, selectionSnapshot, setSelectionSnapshot } = createControllerHarness({
       rowCount: 6,

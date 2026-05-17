@@ -111,6 +111,18 @@ export function resolveMissingRowIndexInRange<TRow>(
   ))[0]?.startRow ?? null
 }
 
+export function resolveGroupRowIndexInRange<TRow>(
+  getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null | undefined,
+  range: DataGridCopyRange,
+): number | null {
+  for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+    if (getBodyRowAtIndex(rowIndex)?.kind === "group") {
+      return rowIndex
+    }
+  }
+  return null
+}
+
 export interface DataGridVirtualSelectionOperationGuardResult {
   blocked: boolean
   message: string | null
@@ -599,6 +611,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         options.setLastAction?.(virtualGuard.message ?? "Selected range cannot be copied.")
         return false
       }
+      const groupRowIndex = resolveGroupRowIndexInRange(getBodyRowAtIndex, preflightRange)
+      if (groupRowIndex != null) {
+        options.setLastAction?.(
+          "Selected range includes group rows. Use leaf rows or server export.",
+        )
+        return false
+      }
       const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, preflightRange)
       if (missingRowIndex != null) {
         options.setLastAction?.(
@@ -665,6 +684,19 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const targetRanges = resolvePasteTargetRanges(activeCoord, matrixHeight, matrixWidth, pendingOperation)
     const normalizedTargetRange = targetRanges[0] ?? null
     if (!normalizedTargetRange) {
+      return false
+    }
+    const groupTargetRange = targetRanges.find(range => resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null)
+    if (groupTargetRange) {
+      options.setLastAction?.(
+        "Paste target includes group rows. Use leaf rows or server operation.",
+      )
+      return false
+    }
+    if (pendingOperation === "cut" && pendingSourceRange && resolveGroupRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
+      options.setLastAction?.(
+        "Cut source includes group rows. Use leaf rows or server operation.",
+      )
       return false
     }
     if (pendingOperation === "cut" && pendingSourceRange && rangesEqual(pendingSourceRange, normalizedTargetRange)) {

@@ -14,6 +14,7 @@ type DemoRow = {
 type DemoRowNode =
   | { rowId: string; kind: "leaf"; data: DemoRow }
   | { rowId: string; kind: "leaf"; data: DemoRow; __placeholder: true }
+  | { rowId: string; kind: "group"; data?: Partial<DemoRow>; groupMeta: { groupKey: string } }
 
 function createClipboardHarness(options: {
   readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
@@ -701,6 +702,21 @@ describe("useDataGridAppClipboard contract", () => {
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
   })
 
+  it("blocks copy when the selected range includes grouped projection rows", async () => {
+    const { clipboard, lastAction } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "group:status:new", kind: "group", groupMeta: { groupKey: "status:new" } },
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        { rowId: "r2", kind: "leaf", data: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
+      ],
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(false)
+    expect(lastAction.value).toBe("Selected range includes group rows. Use leaf rows or server export.")
+  })
+
   it("blocks clipboard operations when virtual selection metadata is stale", async () => {
     const { clipboard, lastAction } = createClipboardHarness({
       selectionSnapshot: {
@@ -830,5 +846,36 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(cut).toBe(false)
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
+  })
+
+  it("blocks paste targets that include grouped projection rows", async () => {
+    const { clipboard, currentCell, lastAction, rows, selectionRange } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        { rowId: "group:status:new", kind: "group", groupMeta: { groupKey: "status:new" } },
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    selectionRange.value = {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    await clipboard.copySelectedCells("keyboard")
+    selectionRange.value = {
+      startRow: 1,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    currentCell.value = { rowIndex: 1, columnIndex: 0 }
+
+    const applied = await clipboard.pasteSelectedCells("keyboard")
+
+    expect(applied).toBe(false)
+    expect(lastAction.value).toBe("Paste target includes group rows. Use leaf rows or server operation.")
+    expect(rows.value[1]).toEqual({ rowId: "r2", a: "A2", b: "B2", c: "C2" })
   })
 })

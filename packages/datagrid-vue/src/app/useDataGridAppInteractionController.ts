@@ -34,6 +34,7 @@ import {
   type DataGridCopyRange,
 } from "../advanced"
 import {
+  resolveGroupRowIndexInRange,
   resolveDataGridVirtualSelectionOperationGuard,
   resolveMissingRowIndexInRange,
 } from "./useDataGridAppClipboard"
@@ -2210,6 +2211,11 @@ export function useDataGridAppInteractionController<
     )
     if (virtualGuard.blocked) {
       options.reportFillWarning?.(virtualGuard.message ?? "Selected range cannot be cleared.")
+      return false
+    }
+    const groupRowIndex = resolveGroupRowIndexInRange(getBodyRowAtIndex, range)
+    if (groupRowIndex != null) {
+      options.reportFillWarning?.("Selected range includes group rows. Use leaf rows or server operation.")
       return false
     }
     const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, range)
