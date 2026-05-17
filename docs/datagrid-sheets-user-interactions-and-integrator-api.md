@@ -89,6 +89,13 @@ State transitions follow these rules:
 - Cell-range selection and row selection remain separate state machines. Shared keyboard, focus, and context-menu paths must choose a single target state before mutating either one.
 - Touch selection remains scroll-first until a documented mode transition or explicit touch affordance claims selection ownership.
 
+### Multi-range visual contract
+
+- Additive cell ranges remain part of the committed selection snapshot and render selected-cell highlighting for every selected rendered cell.
+- The active range owns active affordances: bordered overlay lanes, pinned-pane seam overlays, fill handle placement, range-move edge hover, clipboard target, and keyboard extension.
+- Inactive additive ranges do not render active overlay borders or edge hover affordances. They remain visible through cell selected styling and available to selection-aware operations that explicitly consume all ranges.
+- Pinned left, center, right, and pinned-bottom overlay lanes render the active range only when additive selection is active. Non-additive single-range selection renders its one committed range in every intersecting pane.
+
 ### Server-backed selection operations
 
 Server-backed grids use the operation matrix in `docs/server-datasource/selection-operations.md`.

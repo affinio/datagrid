@@ -150,4 +150,81 @@ describe("useDataGridStageOverlays", () => {
     expect(result.leftSelectionOverlaySegments.value[0]?.style.top).toBe("1332px")
     expect(result.leftSelectionSeamOverlaySegments.value[0]?.style.top).toBe("30px")
   })
+
+  it("limits additive selection overlay lanes to the active range across body and pinned-bottom panes", () => {
+    const geometryContext = computed(() => createGeometryContext())
+    const inactiveRange: DataGridOverlayRange = {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    const activeRange: DataGridOverlayRange = {
+      startRow: 1,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 3,
+    }
+
+    const result = useDataGridStageOverlays({
+      overlayGeometryContext: geometryContext,
+      bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(0),
+      bottomViewportClientHeight: ref(80),
+      visibleColumns: computed(() => createGeometryContext().renderedColumns),
+      displayRows: computed(() => [{}, {}]),
+      selectionRanges: computed(() => [inactiveRange, activeRange]),
+      selectionRange: computed(() => activeRange),
+      fillPreviewRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rowMetrics: computed(() => [
+        { top: 0, height: 31 },
+        { top: 31, height: 31 },
+      ]),
+      pinnedBottomRowMetrics: computed(() => [
+        { top: 0, height: 31 },
+        { top: 31, height: 31 },
+      ]),
+      isCellSelectedSafe: (rowOffset, columnIndex) => (
+        (rowOffset === 0 && columnIndex === 0)
+        || (rowOffset === 1 && columnIndex >= 1 && columnIndex <= 3)
+      ),
+      isCellInFillPreviewSafe: () => false,
+      isAdditiveSelection: computed(() => true),
+      isFillDragging: computed(() => false),
+      isRangeMoving: computed(() => false),
+      resolveVisibleRangeBounds(rangeValue) {
+        if (!rangeValue) {
+          return null
+        }
+        return {
+          startRowOffset: rangeValue.startRow,
+          endRowOffset: rangeValue.endRow,
+          startColumnIndex: rangeValue.startColumn,
+          endColumnIndex: rangeValue.endColumn,
+        }
+      },
+      resolvePinnedBottomVisibleRangeBounds(rangeValue) {
+        if (!rangeValue) {
+          return null
+        }
+        return {
+          startRowOffset: rangeValue.startRow,
+          endRowOffset: rangeValue.endRow,
+          startColumnIndex: rangeValue.startColumn,
+          endColumnIndex: rangeValue.endColumn,
+        }
+      },
+      customOverlays: computed(() => []),
+    })
+
+    expect(result.leftSelectionOverlaySegments.value).toHaveLength(0)
+    expect(result.centerSelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.rightSelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.rightSelectionSeamOverlaySegments.value).toHaveLength(1)
+    expect(result.leftPinnedBottomSelectionOverlaySegments.value).toHaveLength(0)
+    expect(result.centerPinnedBottomSelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.rightPinnedBottomSelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.rightPinnedBottomSelectionSeamOverlaySegments.value).toHaveLength(1)
+  })
 })

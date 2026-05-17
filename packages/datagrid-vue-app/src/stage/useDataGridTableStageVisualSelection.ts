@@ -130,22 +130,21 @@ export function useDataGridTableStageVisualSelection(
     edge: DataGridPendingEdge,
   ): boolean => {
     if (!isVisualFillSelectionActive()) {
-      return resolveVisualSelectionRanges().some(range => {
-        if (!isCellWithinRange(range, rowOffset, columnIndex)) {
-          return false
-        }
-        const rowIndex = options.viewportRowStart.value + rowOffset
-        switch (edge) {
-          case "top":
-            return rowIndex === range.startRow
-          case "right":
-            return columnIndex === range.endColumn
-          case "bottom":
-            return rowIndex === range.endRow
-          case "left":
-            return columnIndex === range.startColumn
-        }
-      })
+      const range = resolveVisualSelectionRange()
+      if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {
+        return false
+      }
+      const rowIndex = options.viewportRowStart.value + rowOffset
+      switch (edge) {
+        case "top":
+          return rowIndex === range.startRow
+        case "right":
+          return columnIndex === range.endColumn
+        case "bottom":
+          return rowIndex === range.endRow
+        case "left":
+          return columnIndex === range.startColumn
+      }
     }
     const range = resolveVisualSelectionRange()
     if (!range || !isCellWithinRange(range, rowOffset, columnIndex)) {

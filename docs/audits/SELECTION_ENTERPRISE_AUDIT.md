@@ -133,8 +133,8 @@ Tests and benchmarks sampled:
 5. **Range move can be armed from selected cell body on desktop paths.**
    `useDataGridAppInteractionController.ts` has a pending range-move start when the pointer begins inside the selected editable range. The stage has mouse hover edge affordances, and touch-generated mouse events are guarded, but the enterprise interaction contract should require explicit handles for touch and clearly separate edge-drag from body-drag behavior.
 
-6. **Pinned-pane selection is strong but still needs multi-range enterprise validation.**
-   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. Multi-range additive selection is intentionally reduced to the active range for some overlay paths when `isAdditiveSelection` is true. Cell classes still reflect all ranges, but the visual overlay contract should explicitly state whether all ranges or only the active range get full bordered overlays.
+6. **Pinned-pane selection is strong but still needs broader enterprise validation.**
+   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. The multi-range visual contract is now explicit: all additive ranges keep selected-cell highlighting, while active overlay lanes, pinned seams, fill handles, range-move edge hover, clipboard target, and keyboard extension belong to the active range. Unit tests cover active-range-only overlay lanes across left, center, right, and pinned-bottom panes. Header/row-index additive parity and hidden/reordered/horizontally virtualized column cases remain open.
 
 ### Medium
 
@@ -173,13 +173,13 @@ Tests and benchmarks sampled:
 | --- | --- | --- |
 | Active cell ownership | Functional but split across snapshot, anchor, focus runtime, and editing | Document one state machine and add remount/edit/server tests |
 | Range selection | Strong core/app support | Need broader e2e around virtualization and grouped rows |
-| Multi-range support | Supported for cell selection and clipboard ranges | Clarify visual overlay behavior and test pinned/header cases |
+| Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented | Need header/row-index parity and hidden/reordered column cases |
 | Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
 | Virtualization remount continuity | Logical model is suitable | Needs browser tests for focus/classes/overlays/editors after remount |
 | Keyboard navigation | Strong coverage through command and navigation routers | Need server/unloaded and pinned-pane e2e |
 | Shift selection | Implemented for keyboard and pointer | Need grouped/tree, placeholder, and remount coverage |
 | Ctrl/Cmd selection | Implemented for additive cell ranges | Need header/row parity and visual-overlay contract |
-| Pinned panes | Strong overlay geometry support | Need multi-range and active-cell e2e across panes |
+| Pinned panes | Strong overlay geometry support with active-range-only multi-range overlay coverage | Need active-cell e2e across panes |
 | Grouped/tree rows | Flattened-row semantics documented and tested in core | Need app interaction and server-backed grouped tests |
 | Clipboard | Good local safety; blocks unloaded copy | Needs server-delegated copy/export/cut/clear/delete contract |
 | Fill/range move conflicts | Dedicated lifecycles stop conflicting interactions | Need touch explicit-handle policy and server virtual range semantics |
