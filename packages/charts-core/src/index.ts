@@ -15,6 +15,9 @@ export type {
   LineChartGeometryOptions,
   LineChartPointGeometry,
   LineChartXScaleType,
+  PieChartGeometry,
+  PieChartGeometryOptions,
+  PieChartSliceGeometry,
 } from "./types"
 export {
   getChartNumberValue,
@@ -34,6 +37,7 @@ export {
 export { createChartBandScale } from "./bandScale"
 export { createBarChartGeometry } from "./barGeometry"
 export { createLineChartGeometry } from "./lineGeometry"
+export { createPieChartGeometry } from "./pieGeometry"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

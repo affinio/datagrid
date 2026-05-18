@@ -110,3 +110,38 @@ export interface LineChartGeometry {
   xDomain: ChartNumericDomain
   yDomain: ChartNumericDomain
 }
+
+export interface PieChartGeometryOptions {
+  rows: readonly ChartDatum[]
+  categoryField: string
+  valueField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  innerRadiusRatio?: number
+  startAngle?: number
+  endAngle?: number
+  minSliceAngle?: number
+}
+
+export interface PieChartSliceGeometry {
+  key: string
+  index: number
+  row: ChartDatum
+  category: string
+  value: number
+  percentage: number
+  startAngle: number
+  endAngle: number
+  padAngle: number
+  path: string
+  centroid: ChartPoint
+}
+
+export interface PieChartGeometry {
+  slices: PieChartSliceGeometry[]
+  plotArea: ChartRect
+  center: ChartPoint
+  radius: number
+  innerRadius: number
+  total: number
+}
