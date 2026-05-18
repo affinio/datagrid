@@ -31,6 +31,20 @@ Practical rule:
 - do not reuse the global revision counter across workspaces
 - do not let a workspace read another workspace's revision row
 
+## Enterprise Consistency Profile
+
+The implementation remains backward-compatible with clients that omit some tokens, but enterprise integrations should require the full consistency profile:
+
+- every pull response includes `revision` and `datasetVersion`
+- every edit commit sends `baseRevision`
+- every fill boundary response returns `projectionHash` and `boundaryToken`
+- every fill commit sends `baseRevision`, `projectionHash`, and `boundaryToken`
+- every mutation response includes a new `revision`, `datasetVersion`, and either row snapshots or scoped invalidation
+- normal undo/redo uses stack scope rather than operation-id replay routes
+- change-feed consumers track `datasetVersion` and recover through dataset invalidation when replay is incomplete
+
+Do not promote tokenless writes to production enterprise usage. If a backend accepts omitted tokens for compatibility, the integration should still send them whenever it has a prior pull, boundary, or mutation response.
+
 ## `baseRevision` For Edits
 
 `baseRevision` is the optimistic concurrency check for edit commits.
@@ -270,6 +284,17 @@ Practical rule:
 
 - if the datasetVersion changes, the frontend must assume that some part of the dataset has changed
 - datasetVersion should be included in mutation responses when available
+
+## Unsupported Current Modes
+
+The current server datasource implementation does not provide these enterprise behaviors yet:
+
+- websocket or server-sent-events live transport
+- offline mutation queue or durable reconnect replay
+- server-side grouping/tree/pivot projection in the FastAPI demo pull path
+- server-side series fill
+
+Integrations must treat these as unsupported unless they implement and test an explicit backend capability. The existing polling change feed is the supported live-update fallback, and dataset invalidation is the supported recovery path for incomplete event replay.
 
 ## Change Feed
 

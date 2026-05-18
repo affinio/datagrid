@@ -8,7 +8,7 @@ The server datasource architecture is production-shaped and should remain the fo
 - `createAffinoDatasource` in `packages/datagrid-server-adapters/src/index.ts`
 - the FastAPI/Postgres `server_demo` implementation under `backend/app/features/server_demo/`
 
-Current readiness is **7.5/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. The main blockers to a 9/10 target are not a missing architecture; they are hardening gaps: retry/backoff and offline semantics, websocket/live update transport, stricter mandatory consistency tokens for enterprise integrations, formal server grouping/tree/pivot contracts, and latency/placeholder performance gates.
+Current readiness is **7.5/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. The first contract-hardening slice is complete: docs now distinguish backward-compatible protocol behavior from the stricter enterprise integration profile. The main blockers to a 9/10 target are runtime hardening gaps: retry/backoff and offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and latency/placeholder performance gates.
 
 Do not introduce a parallel datasource stack. Tighten the current protocol, row model, HTTP adapter, backend services, and tests in small slices.
 
@@ -138,10 +138,10 @@ Backend:
    - Impact: transient network or 5xx failures expose placeholders/error rows until user or viewport activity retries.
    - Required: add configurable retry/backoff for idempotent pulls and change feed; keep mutations non-retried unless operation idempotency is guaranteed.
 
-2. **Enterprise consistency tokens are optional for backward compatibility.**
+2. **Enterprise consistency tokens are documented as required but remain optional at runtime.**
    - Evidence: protocol marks `baseRevision`, `projectionHash`, and `boundaryToken` as optional/recommended. Backend enforces them only when present.
    - Impact: integrations can accidentally accept stale edit/fill commits and still appear protocol-compliant.
-   - Required: define an enterprise mode/checklist where `baseRevision` is required for edits/fill and fill commits require `projectionHash` + `boundaryToken`.
+   - Required: add runtime enterprise mode or integration validation where `baseRevision` is required for edits/fill and fill commits require `projectionHash` + `boundaryToken`.
 
 3. **Server grouping/tree/pivot contracts are partially defined but not fully implemented in the demo backend.**
    - Evidence: core datasource requests include `groupBy`, `treeData`, `pivot`, and aggregation context. Backend `ServerDemoPullRequest` accepts only `range`, `sortModel`, and `filterModel`; fill projection schemas carry group/tree/pivot only for consistency hashing.
@@ -359,7 +359,7 @@ What blocks the target:
 - no websocket/live-update transport
 - no offline/reconnect contract
 - retry/backoff policy is not first-class
-- consistency tokens are optional instead of required for enterprise mode
+- consistency tokens are documented as required for enterprise integrations but still optional at runtime
 - server grouping/tree/pivot projection is unsupported in the current backend demo path
 - placeholder exposure, blank viewport detection, and pull latency are not perf-gated
 - integration tests do not yet cover selection/focus/edit continuity through server invalidation and cache replacement
@@ -368,9 +368,9 @@ What blocks the target:
 
 ### Phase 1: Contract Hardening
 
-- Mark `createDataSourceBackedRowModel` + `createAffinoDatasource` as the enterprise server datasource path.
-- Add an enterprise contract section requiring stable row ids, stable projection indexes, `datasetVersion`, `baseRevision`, and fill `projectionHash` / `boundaryToken`.
-- Explicitly mark offline, websocket, server grouping/tree/pivot, and series fill as unsupported until implemented.
+- Mark `createDataSourceBackedRowModel` + `createAffinoDatasource` as the enterprise server datasource path. Status: completed in the server datasource UX contract.
+- Add an enterprise contract section requiring stable row ids, stable projection indexes, `datasetVersion`, `baseRevision`, and fill `projectionHash` / `boundaryToken`. Status: completed in protocol, consistency, and UX docs.
+- Explicitly mark offline, websocket, server grouping/tree/pivot, and series fill as unsupported until implemented. Status: completed in protocol, consistency, and UX docs.
 
 ### Phase 2: Retry And Failure Semantics
 
@@ -477,6 +477,7 @@ Performance/benchmark tests:
 1. **Document enterprise datasource contract**
    - Files: `docs/server-datasource/protocol.md`, `docs/server-datasource/consistency.md`, `docs/server-datasource/ux-contract.md`
    - Outcome: required enterprise fields and unsupported features are explicit.
+   - Status: completed. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 2. **Add retry/backoff for idempotent reads**
    - Files: `packages/datagrid-server-client/src/http.ts`, `packages/datagrid-server-client/src/client.ts`, `packages/datagrid-server-client/src/changeFeedPoller.ts`

@@ -40,6 +40,29 @@ For this path, sorting, column filters, quick filter, advanced filter, grouping,
 
 That lifecycle is what provides stale-while-refresh behavior: cached visible rows remain readable while the server request is unresolved, and the cache is replaced only after a successful response.
 
+## Enterprise Contract
+
+For enterprise integrations, use `createDataSourceBackedRowModel` with `createAffinoDatasource` or an equivalent `DataGridDataSource` implementation. The older block-style `createServerBackedRowModel` is a lower-level path and does not represent the full invalidation, mutation, history, and change-feed UX contract.
+
+The backend integration must provide:
+
+- stable row ids and stable projection indexes
+- deterministic sorting/filtering with stable tie-breakers
+- `revision` and `datasetVersion` on pull and mutation responses
+- `baseRevision` on edit/fill commits from the frontend
+- `projectionHash` and `boundaryToken` for fill commit continuity
+- narrow row snapshots or invalidation for edits, fill, undo/redo, and change-feed events
+- stack undo/redo scope using workspace/table/user/session
+
+Current unsupported behavior:
+
+- websocket/SSE transport; use polling change feed today
+- offline mutation queue and reconnect replay
+- server-side grouping/tree/pivot projection in the FastAPI demo pull path
+- server-side series fill
+
+If a host app needs one of those capabilities, treat it as a separate backend capability slice with protocol, tests, and UX recovery behavior. Do not imply support by passing frontend query fields through an unimplemented backend projection path.
+
 ## Required Host App Rules
 
 ### Keep The Row Model Stable

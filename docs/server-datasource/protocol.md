@@ -18,6 +18,31 @@ The examples below match the current `server_demo` shape. If your table uses dif
 - `X-Workspace-Id` is the current workspace scope header.
 - Normal undo/redo scope uses `workspace_id`, `table_id`, `user_id`, and/or `session_id`.
 
+## Enterprise Integration Profile
+
+The protocol stays backward-compatible for existing demos and older clients, but enterprise integrations should treat the following fields as required:
+
+- Pull responses: stable row ids, stable projection indexes, `total`, `revision`, and `datasetVersion`.
+- Edit commits: `operationId` and `baseRevision`.
+- Fill boundary responses: `revision`, `projectionHash`, and `boundaryToken`.
+- Fill commits: `operationId`, `baseRevision`, `projectionHash`, and `boundaryToken`.
+- Mutation responses: `revision`, `datasetVersion`, narrow `invalidation` or row snapshots, and history state when history is enabled.
+- Change feed: monotonic `datasetVersion`, narrow invalidation when possible, and dataset invalidation fallback when replay is incomplete.
+
+Backward-compatible endpoints may still accept omitted tokens. That does not make tokenless writes enterprise-ready. A host app that omits these fields owns the stale-write and projection-drift risk.
+
+## Row Identity And Projection Rules
+
+Every server-backed projection must provide deterministic identity:
+
+- Leaf rows must have stable row ids that do not change across sorting, filtering, refresh, edits, undo/redo, or change-feed replay.
+- `index` must be stable within the returned projection snapshot and must match the requested `range`.
+- If server grouping/tree/pivot projection is implemented, group, tree, aggregate, and pivot rows must use deterministic ids that include enough projection context to avoid collisions with leaf row ids.
+- Placeholder/loading row ids are owned by the client row model and must not be returned by the backend as real row ids.
+- Sort ties must use a stable tie-breaker such as row id or source index.
+
+Current `server_demo` pull supports range, sort, and filter. Server-side grouping, tree projection, and pivot projection are not implemented in the current backend path; their fields are only part of frontend/core request and fill consistency contracts until a dedicated backend projection slice implements them.
+
 ## Pull
 
 `POST /api/server-demo/pull`
@@ -497,10 +522,12 @@ Current behavior:
 ## Current Limitations
 
 - server-side series fill is not implemented yet
+- server-side grouping, tree projection, and pivot projection are not implemented in the current FastAPI demo pull path
 - stack history is the normal undo/redo path
 - full off-viewport materialization may be bounded
 - polling/change feed is available as the current fallback path
 - websocket transport is not implemented yet
+- offline mutation queue and reconnect replay are not implemented yet
 - operation-id undo/redo remains available as low-level diagnostics/manual replay
 - change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large
 - the workspace scope is header-driven, not auth-driven
