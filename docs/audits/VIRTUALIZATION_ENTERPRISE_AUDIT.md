@@ -137,7 +137,7 @@ Orchestration, sandbox, tests, and benchmarks:
    `serverBackedRowModel.ts` returns available rows from cache and skips missing rows in `getRowsInRange`. Unlike `dataSourceBackedRowModel.ts`, it does not expose placeholder rows for every missing visual index. This is a risk for rendered-window continuity if this path remains supported for enterprise server-backed grids.
 
 3. **Interaction continuity across unloaded ranges is not fully proven.**
-   Active-cell visibility and scroll-to-cell behavior have dedicated logic in `useDataGridAppActiveCellViewport.ts`, `useDataGridCellVisibilityScroller.ts`, and `dataGridViewportCoreService.ts`. Selection/fill/copy paths also know about placeholders. However, large virtual selection coverage in `virtualSelection.ts` is still bounded by loaded-row scanning and has an explicit TODO for loaded intervals before huge virtual ranges.
+   Active-cell visibility and scroll-to-cell behavior have dedicated logic in `useDataGridAppActiveCellViewport.ts`, `useDataGridCellVisibilityScroller.ts`, and `dataGridViewportCoreService.ts`, with focused tests now covering active-cell focus remount, keyboard navigation beyond the rendered range, variable row heights, and horizontal virtualization. However, large virtual selection coverage in `virtualSelection.ts` is still bounded by loaded-row scanning and has an explicit TODO for loaded intervals before huge virtual ranges.
 
 4. **Pinned top-row rendering needs verification.**
    The app runtime partitions pinned top and bottom rows, and the stage clearly renders pinned bottom shell behavior. A dedicated pinned-top render path was not clearly verified in the reviewed stage files. Treat this as a verification gap, not a confirmed bug.
@@ -234,7 +234,7 @@ What blocks the target:
 - No required blank-viewport detection gate.
 - No placeholder exposure budget for server-backed grids.
 - Core/app virtualization ownership is not finalized as a documented contract.
-- Interaction continuity across unloaded or remounted ranges is not fully covered.
+- Interaction continuity across unloaded or remounted ranges is partially covered; active-cell focus and keyboard navigation are covered, while copy/paste/fill/edit lifecycle gaps remain.
 - Virtualized a11y mapping is not proven in the app-stage DOM.
 - 1M-row and 1k/10k-column behavior is not covered by enterprise browser gates.
 - Touch momentum and mobile server-backed loading behavior are not gated.
@@ -270,6 +270,7 @@ What blocks the target:
 
 ### Phase 4: Interaction Continuity Across Virtualization
 
+- Status: started. Active-cell focus and keyboard navigation across virtual unmount/remount are covered in `e2e/sandbox-interactions.spec.ts`; variable row-height and horizontal visibility contracts are covered in `packages/datagrid-vue/src/app/__tests__/useDataGridAppActiveCellViewport.contract.spec.ts` and `packages/datagrid-orchestration/src/__tests__/useDataGridCellVisibilityScroller.contract.spec.ts`.
 - Add tests for focus, active cell, edit lifecycle, selection, copy, paste, fill, keyboard navigation, and drag handles across virtual unmount/remount.
 - Include placeholder rows and unloaded rows in keyboard and clipboard tests.
 - Verify editor commit/cancel behavior when the edited row leaves and re-enters the rendered range.
@@ -351,7 +352,7 @@ What blocks the target:
 2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; controlled-latency warning budgets are wired, with hard-fail promotion still pending.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
 4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.
-5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount.
+5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount. Status: started with active-cell focus remount, keyboard navigation beyond the rendered range, and variable row-height/horizontal visibility contracts.
 6. Add wide-grid horizontal virtualization gates for 1k and 10k columns.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.
 8. Verify app-stage virtualized a11y attributes and add tests for row/column index mapping.

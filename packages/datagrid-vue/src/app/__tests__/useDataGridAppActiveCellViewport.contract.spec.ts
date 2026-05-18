@@ -178,6 +178,43 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     expect(viewport.focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
+  it("scrolls an unmounted variable-height active cell into a horizontally virtualized column before viewport focus fallback", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const viewport = createViewport()
+    stage.appendChild(viewport)
+    document.body.appendChild(stage)
+
+    const syncViewport = vi.fn()
+    const scrollListener = vi.fn()
+    viewport.addEventListener("scroll", scrollListener)
+    const rowOffsets = [0, 30, 90, 120, 190]
+    const rowHeights = [30, 60, 30, 70, 60]
+
+    const { ensureKeyboardActiveCellVisible } = useDataGridAppActiveCellViewport({
+      bodyViewportRef: ref(viewport),
+      visibleColumns: ref([
+        { key: "centerA", pin: "center", width: 80 },
+        { key: "centerB", pin: "center", width: 80 },
+        { key: "centerC", pin: "center", width: 80 },
+        { key: "centerD", pin: "center", width: 80 },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      columnWidths: ref({ centerA: 80, centerB: 80, centerC: 80, centerD: 80 }),
+      normalizedBaseRowHeight: ref(31),
+      resolveRowOffset: rowIndex => rowOffsets[rowIndex] ?? 0,
+      resolveRowHeight: rowIndex => rowHeights[rowIndex] ?? 31,
+      syncViewport,
+    })
+
+    ensureKeyboardActiveCellVisible(4, 3)
+
+    expect(viewport.scrollTop).toBe(130)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(syncViewport).toHaveBeenCalledTimes(2)
+    expect(scrollListener).toHaveBeenCalledTimes(2)
+    expect(viewport.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
   it("reveals the active cell inside a comfort zone instead of pinning it to the edge", async () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"

@@ -70,4 +70,36 @@ describe("useDataGridCellVisibilityScroller contract", () => {
     expect(viewport.scrollLeft).toBe(120)
     expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 0, left: 120 })
   })
+
+  it("uses variable row offsets and horizontal virtualized column bounds together", () => {
+    const viewport = createViewport(0, 0, 120, 160)
+    const setScrollPosition = vi.fn()
+    const rowOffsets = [0, 30, 90, 120, 190]
+    const rowHeights = [30, 60, 30, 70, 60]
+    const metrics: Metric[] = [
+      { start: 0, end: 80 },
+      { start: 80, end: 160 },
+      { start: 160, end: 240 },
+      { start: 240, end: 320 },
+    ]
+    const scroller = useDataGridCellVisibilityScroller<Coord, Metric>({
+      resolveViewportElement: () => viewport,
+      resolveColumnMetric: columnIndex => metrics[columnIndex],
+      resolveVirtualWindow: () => ({
+        rowTotal: 5,
+        colTotal: 4,
+      }),
+      resolveHeaderHeight: () => 0,
+      resolveRowHeight: () => 31,
+      resolveRowOffset: rowIndex => rowOffsets[rowIndex] ?? 0,
+      resolveRowHeightAtIndex: rowIndex => rowHeights[rowIndex] ?? 31,
+      setScrollPosition,
+    })
+
+    scroller.ensureCellVisible({ rowIndex: 4, columnIndex: 3 })
+
+    expect(viewport.scrollTop).toBe(130)
+    expect(viewport.scrollLeft).toBe(160)
+    expect(setScrollPosition).toHaveBeenLastCalledWith({ top: 130, left: 160 })
+  })
 })

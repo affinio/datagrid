@@ -200,6 +200,52 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
+  test("active cell focus returns to the remounted anchor after vertical virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    const sourceSignature = await cellSignature(sourceCell)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect.poll(async () => activeElementSignature(page)).toBe(sourceSignature)
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    await expect(page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect.poll(async () => activeElementSignature(page)).toBe(sourceSignature)
+  })
+
+  test("keyboard navigation past the rendered range keeps the active cell focused", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    for (let index = 0; index < 36; index += 1) {
+      await page.keyboard.press("ArrowDown")
+    }
+
+    const targetCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="38"][data-column-key="amount"]').first()
+    await expect(targetCell).toBeVisible({ timeout: 20_000 })
+    const targetSignature = await cellSignature(targetCell)
+    await expect.poll(async () => viewportRangeStart(page), { timeout: 10_000 }).toBeGreaterThan(2)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(targetSignature)
+    await expect.poll(async () => activeElementSignature(page)).toBe(targetSignature)
+  })
+
   test("selection anchor remounts with overlay fill handle after horizontal virtualization", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -625,6 +671,20 @@ async function selectionAnchorSignature(page: Page): Promise<string> {
       anchorCell.getAttribute("data-row-index") ?? "",
       anchorCell.getAttribute("data-column-index") ?? "",
       anchorCell.getAttribute("data-column-key") ?? "",
+    ].join(":")
+  })
+}
+
+async function activeElementSignature(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const activeElement = document.activeElement
+    if (!(activeElement instanceof HTMLElement) || !activeElement.classList.contains("grid-cell")) {
+      return "none"
+    }
+    return [
+      activeElement.getAttribute("data-row-index") ?? "",
+      activeElement.getAttribute("data-column-index") ?? "",
+      activeElement.getAttribute("data-column-key") ?? "",
     ].join(":")
   })
 }

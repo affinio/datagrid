@@ -12,7 +12,8 @@ Current execution state:
 - Slice 6 is completed and should be treated as the datasource visible-row retention baseline.
 - Slice 7 is completed and should be treated as the datasource placeholder telemetry baseline.
 - Slice 8 is completed and should be treated as the datasource placeholder budget baseline.
-- Slice 9 is the next implementation slice.
+- Slice 9 is completed and should be treated as the focus continuity baseline.
+- Slice 10 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -170,7 +171,7 @@ Current execution state:
 
 ## Slice 9: Focus Continuity Across Virtual Unmounts
 
-- Status: Planned. Reuse completed selection remount coverage where possible and focus this slice on virtualization-owned focus/visibility invariants.
+- Status: Completed. Existing selection remount coverage is now extended with active-cell DOM focus assertions after vertical unmount/remount, keyboard navigation beyond the rendered range, and contract coverage for unmounted active-cell visibility with variable row heights and horizontal virtualization. No runtime fix was required by this slice.
 - Objective: preserve active-cell and keyboard focus semantics when rows or cells leave and re-enter the virtual window.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
