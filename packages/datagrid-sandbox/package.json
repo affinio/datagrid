@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "maps:convert-world": "node scripts/convert-world-countries.mjs",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit"
   },
@@ -21,11 +22,13 @@
     "@affino/datagrid-vue-app-enterprise": "workspace:*",
     "@affino/datagrid-worker": "workspace:*",
     "@affino/popover-vue": "^1.1.0",
+    "@affino/world-map-core": "workspace:*",
     "vue": "3.4.38",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
+    "topojson-client": "^3.1.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vue-tsc": "^3.2.5"
