@@ -74,6 +74,12 @@ export interface DataGridCellParserContext {
   draft: string
 }
 
+export interface DataGridCellDraftValidationResult {
+  valid: boolean
+  value: unknown
+  reason?: string
+}
+
 export interface DataGridCellKeyboardContext {
   column: DataGridColumnDef<any>
   row?: unknown
@@ -124,6 +130,9 @@ export interface ParseDataGridCellDraftValueOptions<TRow = unknown> {
   draft: string
   registry?: DataGridCellTypeRegistry
 }
+
+export interface ValidateDataGridCellDraftValueOptions<TRow = unknown>
+  extends ParseDataGridCellDraftValueOptions<TRow> {}
 
 export interface ResolveDataGridCellKeyboardActionOptions<TRow = unknown> {
   column: DataGridColumnDef<TRow>
@@ -391,6 +400,10 @@ function parseDateDraft(draft: string): unknown {
   return Number.isFinite(timestamp) ? new Date(timestamp) : draft
 }
 
+function isInvalidParsedFallback(draft: string, parsed: unknown): boolean {
+  return typeof parsed === "string" && parsed === draft && draft.trim().length > 0
+}
+
 function coerceBoolean(value: unknown): boolean {
   if (typeof value === "boolean") {
     return value
@@ -461,6 +474,14 @@ function parseSelectDraft<TRow>(
   return match ? match.value : draft
 }
 
+function matchesSelectDraft(
+  option: DataGridCellTypeOption,
+  draft: string,
+): boolean {
+  const trimmed = draft.trim()
+  return option.label === trimmed || String(option.value ?? "") === trimmed
+}
+
 function isPromiseLike<TValue>(value: unknown): value is PromiseLike<TValue> {
   return typeof value === "object"
     && value !== null
@@ -519,7 +540,7 @@ export function resolveDataGridCellType<TRow = unknown>(
   options: ResolveDataGridCellTypeOptions<TRow>,
 ): DataGridCellTypeDefinition {
   const registry = options.registry ?? defaultRegistry
-  const cellType = normalizeCellTypeId(options.column.cellType)
+  const cellType = normalizeCellTypeId(options.column.cellType ?? options.column.dataType)
   return cellType
     ? (registry.get(cellType) ?? registry.get("text") ?? DEFAULT_TEXT_CELL_TYPE)
     : (registry.get("text") ?? DEFAULT_TEXT_CELL_TYPE)
@@ -621,6 +642,41 @@ export function parseDataGridCellDraftValue<TRow = unknown>(
     row: options.row,
     draft: options.draft,
   })
+}
+
+export function validateDataGridCellDraftValue<TRow = unknown>(
+  options: ValidateDataGridCellDraftValueOptions<TRow>,
+): DataGridCellDraftValidationResult {
+  const resolvedType = resolveDataGridCellType({
+    column: options.column,
+    registry: options.registry,
+  })
+  const value = parseDataGridCellDraftValue(options)
+  if (options.draft.trim().length === 0) {
+    return { valid: true, value }
+  }
+  if (
+    (resolvedType.id === "number" || resolvedType.id === "currency" || resolvedType.id === "percent")
+    && isInvalidParsedFallback(options.draft, value)
+  ) {
+    return { valid: false, value, reason: `invalid-${resolvedType.id}` }
+  }
+  if (
+    (resolvedType.id === "date" || resolvedType.id === "datetime")
+    && isInvalidParsedFallback(options.draft, value)
+  ) {
+    return { valid: false, value, reason: `invalid-${resolvedType.id}` }
+  }
+  if (resolvedType.id === "select") {
+    const selectOptions = resolveColumnOptions(options.column, options.row)
+    if (
+      selectOptions.length > 0
+      && !selectOptions.some(option => matchesSelectDraft(option, options.draft))
+    ) {
+      return { valid: false, value, reason: "invalid-select-option" }
+    }
+  }
+  return { valid: true, value }
 }
 
 export function resolveDataGridCellKeyboardAction<TRow = unknown>(

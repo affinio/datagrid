@@ -281,6 +281,32 @@ describe("useDataGridAppInlineEditing contract", () => {
     expect(harness.rows[0]?.kind === "group" ? null : harness.rows[0]?.data.owner).toBe("Ada")
   })
 
+  it("does not commit, cancel, or navigate while IME composition is active", () => {
+    const harness = createHarness()
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.editingCellValue.value = "draft"
+
+    const enterEvent = new KeyboardEvent("keydown", { key: "Enter", cancelable: true })
+    Object.defineProperty(enterEvent, "isComposing", { value: true })
+    harness.api.handleEditorKeydown(enterEvent)
+
+    expect(enterEvent.defaultPrevented).toBe(false)
+    expect(harness.applyEdits).not.toHaveBeenCalled()
+    expect(harness.api.editingCell.value).toEqual({ rowId: "r1", columnKey: "owner" })
+  })
+
+  it("keeps invalid number drafts in edit mode without mutating rows", () => {
+    const harness = createHarness()
+    harness.api.startInlineEdit(harness.rows[0]!, "amount")
+    harness.api.updateEditingCellValue("not-a-number")
+
+    harness.api.commitInlineEdit()
+
+    expect(harness.applyEdits).not.toHaveBeenCalled()
+    expect(harness.api.editingCellValidationMessage.value).toBe("invalid-number")
+    expect(harness.api.editingCell.value).toEqual({ rowId: "r1", columnKey: "amount" })
+  })
+
   it("swallows NotAllowedError when date editor showPicker requires a user gesture", async () => {
     const rows = [
       { rowId: "r1", kind: "data", data: { createdAt: new Date("2026-03-18T00:00:00.000Z") } },
@@ -378,6 +404,47 @@ describe("useDataGridAppInlineEditing contract", () => {
 
     expect(captureRowsSnapshotForRowIds).toHaveBeenCalledWith(["r1"])
     expect(captureRowsSnapshot).not.toHaveBeenCalled()
+  })
+
+  it("does not record successful history when a commit rejects", async () => {
+    const rows = [
+      { rowId: "r1", kind: "data", data: { owner: "Ada", status: "open", amount: 10 } },
+    ] as unknown as DataGridRowNode<DemoRow>[]
+    const recordEditTransaction = vi.fn()
+    const api = useDataGridAppInlineEditing<DemoRow, readonly DemoRow[]>({
+      mode: ref("base"),
+      bodyViewportRef: ref(null),
+      visibleColumns: ref([
+        { key: "owner", column: { key: "owner" } },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(rows.length),
+      runtime: {
+        api: {
+          rows: {
+            get: (rowIndex: number) => rows[rowIndex] ?? null,
+            applyEdits() {
+              throw new Error("conflict")
+            },
+          },
+        },
+      } as never,
+      readCell: row => String(row.kind === "group" ? "" : row.data.owner),
+      resolveRowIndexById: rowId => rows.findIndex(row => row.rowId === rowId),
+      applyCellSelection: vi.fn(),
+      ensureActiveCellVisible: vi.fn(),
+      isCellEditable: () => true,
+      captureRowsSnapshot: () => rows.map(row => (row.kind === "group" ? {} as DemoRow : { ...row.data })),
+      recordEditTransaction,
+    })
+
+    api.startInlineEdit(rows[0]!, "owner")
+    api.updateEditingCellValue("Grace")
+    api.commitInlineEdit()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(recordEditTransaction).not.toHaveBeenCalled()
+    expect(api.editingCellRejectedReason.value).toBe("conflict")
   })
 
   it("commits without restoring selection or focus when the next cell already owns pointer focus", () => {

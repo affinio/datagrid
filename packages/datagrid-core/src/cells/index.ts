@@ -8,6 +8,7 @@ export {
   resolveDataGridCellKeyboardAction,
   resolveDataGridCellType,
   toggleDataGridCellValue,
+  validateDataGridCellDraftValue,
   type BuildDataGridCellRenderModelOptions,
   type CreateDataGridCellTypeRegistryOptions,
   type DataGridCellClickAction,
@@ -17,6 +18,7 @@ export {
   type DataGridCellKeyboardContext,
   type DataGridCellParserContext,
   type DataGridCellRenderModel,
+  type DataGridCellDraftValidationResult,
   type DataGridResolvedCellInteraction,
   type DataGridCellTypeContext,
   type DataGridCellTypeDefinition,
@@ -30,4 +32,5 @@ export {
   type ResolveDataGridCellKeyboardActionOptions,
   type ResolveDataGridCellTypeOptions,
   type ToggleDataGridCellValueOptions,
+  type ValidateDataGridCellDraftValueOptions,
 } from "./runtime.js"

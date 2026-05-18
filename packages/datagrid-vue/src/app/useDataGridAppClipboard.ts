@@ -10,6 +10,7 @@ import type {
 import {
   evaluateDataGridVirtualSelectionOperation,
   getDataGridSelectionMissingRowIntervals,
+  validateDataGridCellDraftValue,
 } from "@affino/datagrid-core"
 import type { DataGridCopyRange } from "../advanced"
 import { useDataGridClipboardBridge, useDataGridCopyRangeHelpers } from "../advanced"
@@ -287,7 +288,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     const matrixHeight = Math.max(1, matrix.length)
     const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
-    const editsByRowId = new Map<string | number, Record<string, string>>()
+    const editsByRowId = new Map<string | number, Record<string, unknown>>()
     for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
       const row = options.ensureEditableRowAtIndex?.(rowIndex) ?? getBodyRowAtIndex(rowIndex)
       if (!row || row.rowId == null || row.kind === "group") {
@@ -301,11 +302,24 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         if (!options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
           continue
         }
+        const column = options.visibleColumns.value[columnIndex]
+        if (!column) {
+          continue
+        }
         const rowOffset = rowIndex - normalized.startRow
         const columnOffset = columnIndex - normalized.startColumn
         const value = matrix[rowOffset % matrixHeight]?.[columnOffset % matrixWidth] ?? ""
+        const validation = validateDataGridCellDraftValue({
+          column: column.column ?? { key: column.key },
+          row: row.data,
+          draft: value,
+        })
+        if (!validation.valid) {
+          options.setLastAction?.(`Paste skipped invalid ${columnKey}`)
+          continue
+        }
         const current = editsByRowId.get(row.rowId) ?? {}
-        current[columnKey] = value
+        current[columnKey] = validation.value
         editsByRowId.set(row.rowId, current)
       }
     }

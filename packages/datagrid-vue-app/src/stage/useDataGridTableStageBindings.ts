@@ -31,12 +31,12 @@ function createElementRefHandler(target: Ref<HTMLElement | null>): DataGridEleme
 export function useDataGridTableStageBindings<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageBindingsOptions<TRow>,
 ): UseDataGridTableStageBindingsResult<TRow> {
+  const updateEditingCellValue = (value: string): void => {
+    unref(options.updateEditingCellValue)(value)
+  }
+
   const captureHeaderViewportRef = createElementRefHandler(options.headerViewportRef)
   const captureBodyViewportRef = createElementRefHandler(options.bodyViewportRef)
-
-  const updateEditingCellValue = (value: string): void => {
-    options.editingCellValueRef.value = value
-  }
 
   const layoutSection = computed<DataGridTableStageLayoutSection>(() => ({
     gridContentStyle: unref(options.gridContentStyle),
@@ -153,9 +153,12 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     editingCellValue: options.editingCellValueRef.value,
     editingCellInitialFilter: unref(options.editingCellInitialFilter),
     editingCellOpenOnMount: unref(options.editingCellOpenOnMount),
+    editingCellValidationMessage: unref(options.editingCellValidationMessage),
+    editingCellPending: unref(options.editingCellPending),
+    editingCellRejectedReason: unref(options.editingCellRejectedReason),
     isEditingCell: unref(options.isEditingCell),
     startInlineEdit: unref(options.startInlineEdit),
-    updateEditingCellValue,
+    updateEditingCellValue: unref(options.updateEditingCellValue),
     handleEditorKeydown: unref(options.handleEditorKeydown),
     handleEditorBlur: unref(options.handleEditorBlur),
     commitInlineEdit: unref(options.commitInlineEdit),

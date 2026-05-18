@@ -47,4 +47,51 @@ describe("DataGridFilterableCombobox", () => {
     expect(cancelAnimationFrame).toHaveBeenCalledWith(7)
     frameCallback?.(performance.now())
   })
+
+  it("blocks commits while remote options are in a failed load state", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn()
+    const loadOptions = vi.fn().mockRejectedValue(new Error("offline"))
+    const wrapper = mount(DataGridFilterableCombobox, {
+      props: {
+        value: "",
+        options: [],
+        loadOptions,
+      },
+      attachTo: document.body,
+    })
+
+    await vi.waitFor(() => {
+      expect(loadOptions).toHaveBeenCalled()
+      expect(wrapper.get("input").attributes("aria-invalid")).toBe("true")
+    })
+
+    const input = wrapper.get("input")
+    await input.trigger("keydown", { key: "Enter" })
+
+    expect(wrapper.emitted("commit")).toBeUndefined()
+  })
+
+  it("does not commit or cancel while IME composition owns the key event", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn()
+    const wrapper = mount(DataGridFilterableCombobox, {
+      props: {
+        value: "open",
+        options: [{ label: "Open", value: "open" }],
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    await wrapper.get("input").trigger("keydown", {
+      key: "Enter",
+      isComposing: true,
+    })
+    await wrapper.get("input").trigger("keydown", {
+      key: "Escape",
+      isComposing: true,
+    })
+
+    expect(wrapper.emitted("commit")).toBeUndefined()
+    expect(wrapper.emitted("cancel")).toBeUndefined()
+  })
 })

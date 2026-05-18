@@ -183,6 +183,9 @@ export interface DataGridTableStageEditingSection<TRow extends Record<string, un
   editingCellValue: string
   editingCellInitialFilter: string
   editingCellOpenOnMount: boolean
+  editingCellValidationMessage: string | null
+  editingCellPending: boolean
+  editingCellRejectedReason: string | null
   isEditingCell: (row: DataGridTableRow<TRow>, columnKey: string) => boolean
   startInlineEdit: (
     row: DataGridTableRow<TRow>,
@@ -278,7 +281,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>
   extends Omit<{
     [K in keyof DataGridTableStageBindingsSource<TRow>]: DataGridMaybeRef<DataGridTableStageBindingsSource<TRow>[K]>
-  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef" | "updateEditingCellValue"> {
+  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef"> {
   editingCellValueRef: Ref<string>
   headerViewportRef: Ref<HTMLElement | null>
   bodyViewportRef: Ref<HTMLElement | null>

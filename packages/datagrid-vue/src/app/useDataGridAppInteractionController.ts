@@ -758,8 +758,15 @@ export function useDataGridAppInteractionController<
     if (event.ctrlKey || event.metaKey || event.altKey) {
       return false
     }
+    if (event.isComposing || event.key === "Process" || event.keyCode === 229) {
+      return false
+    }
     return event.key.length === 1
   }
+
+  const isCompositionKeyEvent = (event: KeyboardEvent): boolean => (
+    event.isComposing || event.key === "Process" || event.keyCode === 229
+  )
 
   const applyDirectCellEdit = async (
     row: DataGridRowNode<TRow>,
@@ -2960,6 +2967,9 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
     columnIndex: number,
   ): void => {
+    if (isCompositionKeyEvent(event)) {
+      return
+    }
     const rowIndex = resolveRowIndex(row, rowOffset)
     if (hasActiveFillPreviewState() && event.key === "Escape") {
       event.preventDefault()

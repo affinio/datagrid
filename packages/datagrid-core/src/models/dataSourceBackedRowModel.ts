@@ -743,7 +743,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         rollbackOptimisticTransaction(transaction, Array.from(rejectedRowIds))
         bumpRevision()
         emit()
-        return
+        throw error
       }
 
       removeOptimisticTransaction(transaction.id)
@@ -770,6 +770,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       rollbackOptimisticTransaction(transaction)
       bumpRevision()
       emit()
+      throw error
     }
   }
 

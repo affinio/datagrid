@@ -197,6 +197,7 @@ export {
   resolveDataGridCellKeyboardAction,
   resolveDataGridCellType,
   toggleDataGridCellValue,
+  validateDataGridCellDraftValue,
   type BuildDataGridCellRenderModelOptions,
   type CreateDataGridCellTypeRegistryOptions,
   type DataGridCellClickAction,
@@ -204,13 +205,16 @@ export {
   type DataGridCellEditorMode,
   type DataGridCellKeyboardAction,
   type DataGridCellRenderModel,
+  type DataGridCellDraftValidationResult,
   type DataGridResolvedCellInteraction,
   type DataGridCellTypeDefinition,
   type DataGridCellTypeId,
   type DataGridCellTypeOption,
   type DataGridCellTypeRegistry,
   type InvokeDataGridCellInteractionOptions,
+  type ParseDataGridCellDraftValueOptions,
   type ResolveDataGridCellInteractionOptions,
+  type ValidateDataGridCellDraftValueOptions,
 } from "../cells/index.js"
 
 export {

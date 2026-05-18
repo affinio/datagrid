@@ -20,6 +20,7 @@ This folder separates user-facing documentation from internal planning material.
 - [Model contracts](./datagrid-model-contracts.md)
 - [State/events/diagnostics](./datagrid-state-events-compute-diagnostics.md)
 - [History](./datagrid-history.md)
+- [Editing](./datagrid-editing.md)
 - [Data source protocol](./datagrid-data-source-protocol.md)
 
 ## Feature Guides

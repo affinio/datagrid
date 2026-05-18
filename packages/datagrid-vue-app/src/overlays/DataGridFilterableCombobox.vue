@@ -12,6 +12,8 @@
       :value="inputText"
       :placeholder="placeholder"
       :disabled="disabled"
+      :aria-busy="isLoading ? 'true' : undefined"
+      :aria-invalid="inputAriaInvalid"
       :aria-expanded="isOpen ? 'true' : 'false'"
       :aria-controls="panelId"
       aria-autocomplete="list"
@@ -132,6 +134,7 @@ const panelStyle = ref<Record<string, string>>({})
 const panelPlacement = ref<"above" | "below">("below")
 const inputText = ref("")
 const isLoading = ref(false)
+const loadError = ref<string | null>(null)
 const remoteOptions = ref<ReadonlyArray<DataGridFilterableComboboxOption>>([])
 const state = ref(createDataGridCellComboboxState({ open: false }))
 const panelId = `datagrid-filterable-combobox-${Math.random().toString(36).slice(2, 10)}`
@@ -171,6 +174,23 @@ const inputClassName = computed(() => [
 ])
 
 const inputStyleValue = computed<StyleValue>(() => attrs.style as StyleValue)
+
+const inputAriaInvalid = computed<"true" | "false" | "grammar" | "spelling" | undefined>(() => {
+  if (loadError.value) {
+    return "true"
+  }
+  const ariaInvalid = attrs["aria-invalid"]
+  if (ariaInvalid === true || ariaInvalid === "true") {
+    return "true"
+  }
+  if (ariaInvalid === false || ariaInvalid === "false" || ariaInvalid == null) {
+    return undefined
+  }
+  if (ariaInvalid === "grammar" || ariaInvalid === "spelling") {
+    return ariaInvalid
+  }
+  return "true"
+})
 
 const teleportTarget = computed(() => {
   if (props.inlinePanel) {
@@ -245,6 +265,7 @@ async function refreshRemoteOptions(query: string): Promise<void> {
   const currentRequestId = requestId + 1
   requestId = currentRequestId
   isLoading.value = true
+  loadError.value = null
   try {
     const loaded = await props.loadOptions(query)
     if (currentRequestId !== requestId) {
@@ -257,6 +278,13 @@ async function refreshRemoteOptions(query: string): Promise<void> {
       updatePanelPosition()
       scrollActiveOptionIntoView()
     })
+  } catch (error) {
+    if (currentRequestId !== requestId) {
+      return
+    }
+    loadError.value = error instanceof Error ? error.message : "options-load-failed"
+    remoteOptions.value = []
+    syncActiveIndex(false)
   } finally {
     if (currentRequestId === requestId) {
       isLoading.value = false
@@ -394,11 +422,17 @@ function resolveCommittedValue(): string {
 }
 
 function commitCurrentValue(target: CommitTarget = "stay"): void {
+  if (isLoading.value || loadError.value) {
+    return
+  }
   closeCombobox()
   emit("commit", resolveCommittedValue(), target)
 }
 
 function commitOption(value: string, target: CommitTarget = "stay"): void {
+  if (isLoading.value || loadError.value) {
+    return
+  }
   closeCombobox()
   emit("commit", value, target)
 }
@@ -447,6 +481,9 @@ function handleInputBlur(): void {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (props.disabled) {
+    return
+  }
+  if (event.isComposing || event.key === "Process" || event.keyCode === 229) {
     return
   }
   if (event.key === "ArrowDown") {
@@ -550,6 +587,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  requestId += 1
   cancelScheduledPanelPositionUpdate()
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", handleViewportChange)

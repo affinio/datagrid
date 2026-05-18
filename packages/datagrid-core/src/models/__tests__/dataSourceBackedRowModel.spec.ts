@@ -1688,7 +1688,7 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
     expect(commitCalls).toHaveLength(1)
     commitCalls[0]?.reject(new Error("commit failed"))
-    await patchPromise
+    await expect(patchPromise).rejects.toThrow("commit failed")
     await flushMicrotasks()
 
     expect(model.getRowsInRange({ start: 0, end: 1 })?.map(row => row.row.value)).toEqual([
@@ -1870,14 +1870,15 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     const patchRows = model.patchRows
+    let patchPromise: Promise<unknown> | null = null
     if (patchRows) {
-      patchRows([
+      patchPromise = Promise.resolve(patchRows([
         { rowId: 1, data: { value: "updated" } },
-      ])
+      ]))
     }
 
     await flushMicrotasks()
-    await flushMicrotasks()
+    await expect(patchPromise).rejects.toThrow("commit failed")
 
     expect(commitEdits).toHaveBeenCalledWith({
       edits: [
@@ -1926,14 +1927,15 @@ describe("createDataSourceBackedRowModel", () => {
     await flushMicrotasks()
 
     const patchRows = model.patchRows
+    let patchPromise: Promise<unknown> | null = null
     if (patchRows) {
-      patchRows([
+      patchPromise = Promise.resolve(patchRows([
         { rowId: 1, data: { value: "updated" } },
-      ])
+      ]))
     }
 
     await flushMicrotasks()
-    await flushMicrotasks()
+    await expect(patchPromise).rejects.toThrow("conflict")
 
     expect(commitEdits).toHaveBeenCalledWith({
       edits: [

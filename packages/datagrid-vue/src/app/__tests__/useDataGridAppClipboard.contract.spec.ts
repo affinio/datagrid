@@ -1,6 +1,6 @@
 import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
-import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type { DataGridColumnSnapshot, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
 import { useDataGridAppClipboard } from "../useDataGridAppClipboard"
 
@@ -34,6 +34,7 @@ function createClipboardHarness(options: {
   }>
   selectionSnapshot?: DataGridSelectionSnapshot | null
   rowNodes?: readonly (DemoRowNode | null)[]
+  visibleColumns?: readonly unknown[]
 } = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
@@ -76,11 +77,11 @@ function createClipboardHarness(options: {
       },
     } as never,
     totalRows: ref(rows.value.length),
-    visibleColumns: ref([
+    visibleColumns: ref((options.visibleColumns ?? [
       { key: "a" },
       { key: "b" },
       { key: "c" },
-    ] as never),
+    ]) as readonly DataGridColumnSnapshot[]),
     viewportRowStart: ref(0),
     resolveSelectionRange: () => selectionRange.value,
     resolveSelectionRanges: options.resolveSelectionRanges,
@@ -686,6 +687,27 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(applied).toBe(1)
     expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
+  })
+
+  it("skips invalid typed paste drafts without mutating the target cell", async () => {
+    const { clipboard, rows, lastAction } = createClipboardHarness({
+      visibleColumns: [
+        { key: "a" },
+        { key: "b", column: { key: "b", dataType: "number" } },
+        { key: "c" },
+      ],
+    })
+
+    const applied = await clipboard.applyClipboardEdits({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 1,
+    }, [["X", "not-a-number"]])
+
+    expect(applied).toBe(1)
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
+    expect(lastAction.value).toBe("Paste skipped invalid b")
   })
 
   it("blocks copy when a selected row is missing from the loaded cache", async () => {

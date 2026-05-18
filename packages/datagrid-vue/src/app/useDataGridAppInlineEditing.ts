@@ -1,7 +1,7 @@
 import { nextTick, ref, type Ref } from "vue"
 import {
   buildDataGridCellRenderModel,
-  parseDataGridCellDraftValue,
+  validateDataGridCellDraftValue,
   type DataGridColumnSnapshot,
   type DataGridRowNode,
 } from "@affino/datagrid-core"
@@ -69,17 +69,25 @@ export interface UseDataGridAppInlineEditingResult<TRow> {
   editingCellValue: Ref<string>
   editingCellInitialFilter: Ref<string>
   editingCellOpenOnMount: Ref<boolean>
+  editingCellValidationMessage: Ref<string | null>
+  editingCellPending: Ref<boolean>
+  editingCellRejectedReason: Ref<string | null>
   isEditingCell: (row: DataGridRowNode<TRow>, columnKey: string) => boolean
   startInlineEdit: (
     row: DataGridRowNode<TRow>,
     columnKey: string,
     options?: DataGridAppInlineEditStartOptions,
   ) => void
+  updateEditingCellValue: (value: string) => void
   appendInlineEditTextInput: (value: string) => boolean
   handleEditorBlur: () => void
   commitInlineEdit: (targetOrEvent?: DataGridAppInlineEditCommitTarget | boolean | FocusEvent) => void
   cancelInlineEdit: () => void
   handleEditorKeydown: (event: KeyboardEvent) => void
+}
+
+function isCompositionKeyEvent(event: KeyboardEvent): boolean {
+  return event.isComposing === true || event.key === "Process" || event.keyCode === 229
 }
 
 export function useDataGridAppInlineEditing<TRow, TSnapshot>(
@@ -116,6 +124,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const editingCellValue = ref("")
   const editingCellInitialFilter = ref("")
   const editingCellOpenOnMount = ref(false)
+  const editingCellValidationMessage = ref<string | null>(null)
+  const editingCellPending = ref(false)
+  const editingCellRejectedReason = ref<string | null>(null)
   const editingCellEditorMode = ref<"none" | "text" | "select" | "date" | "datetime">("none")
   const suppressNextBlurCommit = ref(false)
   const resolveBodyRowIndexById = options.resolveBodyRowIndexById ?? options.resolveRowIndexById ?? (() => -1)
@@ -232,7 +243,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         return
       }
       editor.focus({ preventScroll: true })
-      if (editor instanceof HTMLInputElement) {
+      if (typeof HTMLInputElement !== "undefined" && editor instanceof HTMLInputElement) {
         if (editor.type === "date" || editor.type === "datetime-local") {
           tryShowNativePicker(editor)
           return
@@ -241,7 +252,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         editor.setSelectionRange(caretPosition, caretPosition)
         return
       }
-      if (editor instanceof HTMLSelectElement) {
+      if (typeof HTMLSelectElement !== "undefined" && editor instanceof HTMLSelectElement) {
         tryShowNativePicker(editor)
       }
     }
@@ -257,7 +268,15 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     editingCellValue.value = ""
     editingCellInitialFilter.value = ""
     editingCellOpenOnMount.value = false
+    editingCellValidationMessage.value = null
+    editingCellRejectedReason.value = null
     editingCellEditorMode.value = "none"
+  }
+
+  const updateEditingCellValue = (value: string): void => {
+    editingCellValue.value = value
+    editingCellValidationMessage.value = null
+    editingCellRejectedReason.value = null
   }
 
   const restoreViewportFocus = (): void => {
@@ -405,6 +424,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       ? ""
       : (startOptions.draftValue ?? "")
     editingCellOpenOnMount.value = startOptions.openOnMount === true
+    editingCellValidationMessage.value = null
+    editingCellRejectedReason.value = null
     editingCellEditorMode.value = editorMode
     suppressNextBlurCommit.value = false
     focusInlineEditor()
@@ -426,7 +447,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       focusInlineEditor()
       return true
     }
-    editingCellValue.value += value
+    updateEditingCellValue(editingCellValue.value + value)
     focusInlineEditor()
     return true
   }
@@ -462,40 +483,40 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         ? readEditorSourceValue(rowNode, columnSnapshot)
         : (rowNode.data as Record<string, unknown>)[currentEditingCell.columnKey])
       : undefined
-    const parsedValue = columnSnapshot
-      ? parseDataGridCellDraftValue({
+    const validation = columnSnapshot
+      ? validateDataGridCellDraftValue({
         column: columnSnapshot.column,
         row: rowNode && rowNode.kind !== "group" ? rowNode.data : undefined,
         draft: editingCellValue.value,
       })
-      : editingCellValue.value
+      : { valid: true, value: editingCellValue.value }
+    if (!validation.valid) {
+      editingCellValidationMessage.value = validation.reason ?? "invalid-edit-draft"
+      focusInlineEditor()
+      return
+    }
+    const parsedValue = validation.value
     const afterSnapshot = typeof beforeSnapshot !== "undefined"
       ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, currentEditingCell.columnKey, parsedValue)
       : undefined
     clearInlineEdit()
-    const commitPromise = Promise.resolve(options.runtime.api.rows.applyEdits([
-      {
-        rowId: resolvedRowId,
-        data: {
-          [currentEditingCell.columnKey]: parsedValue,
-        } as Partial<TRow>,
-        previousData: {
-          [currentEditingCell.columnKey]: oldValue,
-        } as Partial<TRow>,
-      },
-    ]))
-    options.onCellEdit?.({
-      rowId: resolvedRowId,
-      columnKey: currentEditingCell.columnKey,
-      oldValue,
-      newValue: parsedValue,
-      patch: {
-        rowId: resolvedRowId,
-        data: {
-          [currentEditingCell.columnKey]: parsedValue,
-        } as Partial<TRow>,
-      },
-    })
+    editingCellPending.value = true
+    let commitPromise: Promise<unknown>
+    try {
+      commitPromise = Promise.resolve(options.runtime.api.rows.applyEdits([
+        {
+          rowId: resolvedRowId,
+          data: {
+            [currentEditingCell.columnKey]: parsedValue,
+          } as Partial<TRow>,
+          previousData: {
+            [currentEditingCell.columnKey]: oldValue,
+          } as Partial<TRow>,
+        },
+      ]))
+    } catch (error) {
+      commitPromise = Promise.reject(error)
+    }
     suppressNextBlurCommit.value = false
     if (target !== "none") {
       focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {
@@ -507,9 +528,25 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     }
     void commitPromise
       .then(() => {
+        editingCellPending.value = false
+        options.onCellEdit?.({
+          rowId: resolvedRowId,
+          columnKey: currentEditingCell.columnKey,
+          oldValue,
+          newValue: parsedValue,
+          patch: {
+            rowId: resolvedRowId,
+            data: {
+              [currentEditingCell.columnKey]: parsedValue,
+            } as Partial<TRow>,
+          },
+        })
         options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
       })
-      .catch(() => undefined)
+      .catch(error => {
+        editingCellPending.value = false
+        editingCellRejectedReason.value = error instanceof Error ? error.message : "edit-commit-failed"
+      })
   }
 
   const cancelInlineEdit = (): void => {
@@ -534,16 +571,25 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
 
   const handleEditorKeydown = (event: KeyboardEvent): void => {
     if (event.key === "Tab") {
+      if (isCompositionKeyEvent(event)) {
+        return
+      }
       event.preventDefault()
       commitInlineEdit(event.shiftKey ? "previous" : "next")
       return
     }
     if (event.key === "Enter") {
+      if (isCompositionKeyEvent(event)) {
+        return
+      }
       event.preventDefault()
       commitInlineEdit(event.shiftKey ? "above" : "below")
       return
     }
     if (event.key === "Escape") {
+      if (isCompositionKeyEvent(event)) {
+        return
+      }
       event.preventDefault()
       cancelInlineEdit()
     }
@@ -558,8 +604,12 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     editingCellValue,
     editingCellInitialFilter,
     editingCellOpenOnMount,
+    editingCellValidationMessage,
+    editingCellPending,
+    editingCellRejectedReason,
     isEditingCell,
     startInlineEdit,
+    updateEditingCellValue,
     appendInlineEditTextInput,
     commitInlineEdit,
     cancelInlineEdit,

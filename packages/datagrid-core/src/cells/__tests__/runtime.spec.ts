@@ -9,6 +9,7 @@ import {
   resolveDataGridCellKeyboardAction,
   resolveDataGridCellType,
   toggleDataGridCellValue,
+  validateDataGridCellDraftValue,
 } from "../runtime.js"
 
 describe("data grid cell engine", () => {
@@ -83,6 +84,45 @@ describe("data grid cell engine", () => {
       },
       draft: "Approved",
     })).toBe("Approved")
+  })
+
+  it("validates enterprise edit drafts before row mutation", () => {
+    expect(validateDataGridCellDraftValue({
+      column: { key: "amount", cellType: "number" },
+      draft: "42",
+    })).toMatchObject({ valid: true, value: 42 })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "amount", cellType: "number" },
+      draft: "nope",
+    })).toMatchObject({ valid: false, reason: "invalid-number" })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "created", cellType: "date" },
+      draft: "not-a-date",
+    })).toMatchObject({ valid: false, reason: "invalid-date" })
+
+    expect(validateDataGridCellDraftValue({
+      column: {
+        key: "status",
+        cellType: "select",
+        presentation: {
+          options: [
+            { value: "planned", label: "Planned" },
+          ],
+        },
+      },
+      draft: "planned",
+    })).toMatchObject({ valid: true, value: "planned" })
+
+    expect(validateDataGridCellDraftValue({
+      column: {
+        key: "status",
+        cellType: "select",
+        presentation: { options: ["Open", "Closed"] },
+      },
+      draft: "Archived",
+    })).toMatchObject({ valid: false, reason: "invalid-select-option" })
   })
 
   it("resolves keyboard and click behavior from the cell type", () => {

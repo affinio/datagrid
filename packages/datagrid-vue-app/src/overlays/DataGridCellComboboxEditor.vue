@@ -6,6 +6,7 @@
     :placeholder="placeholder"
     :initial-filter="initialFilter"
     :open-on-mount="openOnMount"
+    :disabled="disabled"
     :open-on-focus="false"
     @commit="handleCommit"
     @cancel="emit('cancel')"
@@ -26,6 +27,7 @@ defineProps<{
   placeholder?: string
   initialFilter?: string
   openOnMount?: boolean
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{

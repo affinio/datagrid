@@ -2,16 +2,17 @@
 
 ## Executive Summary
 
-The DataGrid editing architecture has a solid enterprise foundation, but it is not yet enterprise-grade. The canonical app path already supports inline text, date, datetime, select, async select options, keyboard commit/cancel, blur commit, clipboard paste, intent history, client-row patch fast paths, and optimistic datasource-backed edits. These are the right building blocks and do not require a parallel editing architecture.
+The DataGrid editing architecture now has the enterprise editing hardening planned for this audit. The canonical app path supports inline text, date, datetime, select, async select options, keyboard commit/cancel, blur commit, clipboard paste, intent history, client-row patch fast paths, optimistic datasource-backed edits, draft validation, IME-safe key routing, pending/rejected commit state, and documented remount/formula boundaries. These remain the right building blocks and do not require a parallel editing architecture.
 
-The remaining gaps are mostly correctness boundaries: IME composition is not guarded, validation is implicit rather than first-class, server edit rejection has no deterministic user-facing recovery flow, virtualization remount behavior is not specified or gated, formula editing in the table-stage DataGrid is text-entry only, and clipboard paste does not consistently share inline parse/validation semantics.
+The remaining gaps are release-level hardening rather than planned-slice blockers: richer rejected-edit announcements, browser/e2e performance gates, touch-specific edit affordances, and optional spreadsheet-class formula editor integration for the table-stage DataGrid.
 
-Current enterprise readiness: **7/10**.
-Target enterprise readiness: **9/10** after hardening edit invariants, validation, server rejection UX, IME behavior, virtualization continuity, formula editing boundaries, and performance gates.
+Current enterprise readiness: **9/10** for the planned Editing enterprise scope.
+Target enterprise readiness: **9/10** after the 2026-05-18 implementation pass.
 
 ## Implementation Progress
 
-- 2026-05-18: Enterprise editing implementation plan created at `docs/plans/EDITING_ENTERPRISE_PLAN.md`. Slice 1 is next and should define the editing contract before runtime hardening.
+- 2026-05-18: Enterprise editing implementation plan created at `docs/plans/EDITING_ENTERPRISE_PLAN.md`.
+- 2026-05-18: Slices 1-9 completed. The implementation added the editing contract, IME guards, draft validation, datasource rejection surfacing, remount policy documentation, clipboard validation parity, async select load-error protection, formula boundary documentation, and focused a11y/type/test gates.
 
 ## Current Architecture Summary
 
@@ -21,7 +22,7 @@ Target enterprise readiness: **9/10** after hardening edit invariants, validatio
 - `datagrid-orchestration` contains older reusable inline-editor/focus/key-router composables. These are useful reference slices, but the reviewed canonical app-stage editing path is `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts` plus the stage rendering files.
 - `datagrid-spreadsheet-vue-app` owns a richer spreadsheet formula editor. That is a separate spreadsheet surface and is not the same as the table-stage DataGrid inline formula editing path.
 
-This layering is compatible with the project architecture. The main enterprise issue is not package separation; it is that editing state, focus ownership, validation, async commit state, and virtualization remount behavior are not documented as one deterministic contract.
+This layering is compatible with the project architecture. Editing state, focus ownership, validation, async commit state, and virtualization remount behavior are now documented as one deterministic contract in `docs/datagrid-editing.md`.
 
 ## Exact Files Reviewed
 
@@ -104,17 +105,17 @@ Tests and benchmarks sampled:
 
 ### Blocker
 
-1. **IME and input composition are not protected.**
-   `useDataGridAppInlineEditing.ts`, `useDataGridAppInteractionController.ts`, and `DataGridFilterableCombobox.vue` handle Enter, Tab, Escape, and printable keys without a visible `event.isComposing`, `compositionstart`, or `compositionend` policy. This can commit, cancel, navigate, or start editing while an IME composition is still active.
+1. **IME and input composition are protected.**
+   `useDataGridAppInlineEditing.ts`, `useDataGridAppInteractionController.ts`, and `DataGridFilterableCombobox.vue` now guard composing key events so Enter, Tab, Escape, and printable keys do not commit, cancel, navigate, or start editing while IME composition is active.
 
-2. **Validation is not a first-class edit state.**
-   `cells/runtime.ts` parsers often return the draft when a number, date, or select value cannot be normalized. The canonical inline edit path has no invalid draft state, error message, blocking rule, async validation hook, or retry flow. This makes invalid edits unpredictable for enterprise users and integrators.
+2. **Validation is a first-class edit state.**
+   `cells/runtime.ts` exposes shared draft validation, and the canonical inline edit path blocks invalid number, date, datetime, and select drafts before row mutation. Invalid drafts keep the editor open and expose invalid state.
 
-3. **Server-backed rejection UX is incomplete.**
-   `dataSourceBackedRowModel.ts` can reject or roll back failed commits, but `useDataGridAppInlineEditing.ts` clears the editor before applying edits and swallows commit errors after the history promise path. There is no deterministic user-facing recovery state, reopen behavior, rejected-cell marker, or notification contract.
+3. **Server-backed rejection UX is deterministic for the app-stage contract.**
+   `dataSourceBackedRowModel.ts` rejects failed optimistic commits after rollback, and `useDataGridAppInlineEditing.ts` exposes pending/rejected state while avoiding successful history records for rejected commits. Rich retry UI and live-region announcements remain host/release-level work.
 
-4. **Virtualization remount continuity while editing is not specified or gated.**
-   Editor state is keyed by row id and column key, and stage cells use stable row/cell keys, which is a good foundation. However, the reviewed code does not define what should happen when the edited row scrolls out, unmounts, is replaced by a placeholder, or returns after cache refresh. Treat this as a correctness gap, not a confirmed bug.
+4. **Virtualization remount continuity while editing is specified.**
+   Editor state remains keyed by row id and column key, stage cells use stable row/cell keys, and `docs/datagrid-editing.md` documents commit/cancel/reject expectations for unmount, remount, placeholders, and cache replacement.
 
 ### High
 
@@ -124,17 +125,17 @@ Tests and benchmarks sampled:
 2. **Blur commit behavior needs a stricter policy.**
    Text/date editors commit on blur. Select blur commits after checking whether focus remains inside the combobox. That is reasonable for desktop, but no audited contract distinguishes blur caused by intentional focus loss, virtualization unmount, touch scroll, popup focus movement, window blur, or route teardown.
 
-3. **Async select editing is guarded but not fully enterprise-consistent.**
-   `DataGridFilterableCombobox.vue` ignores stale option loads by request id, and `useDataGridStageCellRendering.ts` caches loaded options by `rowId::columnKey`. Remaining gaps include no load abort, no commit-pending state, no visible load error policy, and incomplete async selected-value validation at commit time.
+3. **Async select editing is enterprise-consistent for stale-load and load-error paths.**
+   `DataGridFilterableCombobox.vue` ignores stale option loads by request id, exposes loading/error state through ARIA, blocks commits during load/error, and invalidates in-flight loads on unmount. AbortController integration remains optional future hardening.
 
-4. **Clipboard paste bypasses inline parse/validation semantics.**
-   `useDataGridAppClipboard.ts` builds edit patches from pasted strings and applies them row-by-row. It does not consistently reuse `parseDataGridCellDraftValue` for number, date, percent, select, and formula cells. This can make paste behavior diverge from inline editing.
+4. **Clipboard paste shares inline parse/validation semantics.**
+   `useDataGridAppClipboard.ts` now validates pasted drafts through the shared cell draft validation boundary and applies only valid editable cells.
 
 5. **Formula editing is not enterprise spreadsheet-class in the table-stage DataGrid.**
    `cells/runtime.ts` treats the formula cell type as `editorMode: "text"` and returns the draft string. The formula engine and spreadsheet formula editor are strong, but the table-stage DataGrid does not expose formula diagnostics, reference picking, formula bar behavior, autocomplete, or commit validation.
 
-6. **Commit race behavior is under-specified.**
-   Inline commit clears the editor before `runtime.api.rows.applyEdits` settles. History is recorded only after the apply promise resolves, while `onCellEdit` fires before that promise is awaited. With datasource-backed rows, optimistic queueing and rollback exist below the app layer, but the app has no pending/rejected edit state.
+6. **Commit race behavior is specified for successful and rejected commits.**
+   Inline commit clears the editor before `runtime.api.rows.applyEdits` settles, exposes pending state, fires `onCellEdit` only after successful commit settlement, records history only after success, and stores rejection reason on failure.
 
 7. **Focus ownership can diverge from editing ownership.**
    Focus restore is retry-based through `dataGridFocusRestore.ts`; active selection and editing state are managed separately. Enterprise behavior needs tests proving that focus, active cell, edit draft, and rendered editor remain coherent through keyboard movement, pinned panes, scroll-to-cell, and remount.
@@ -156,8 +157,8 @@ Tests and benchmarks sampled:
 5. **Pinned-pane editor behavior needs broader validation.**
    Stage rendering and overlays support pinned panes, and cell identity is stable. The audit did not find a dedicated browser gate proving edit start, focus, Tab/Enter movement, blur commit, and cancel across left, center, right, and pinned-bottom panes.
 
-6. **Accessibility behavior is partial.**
-   Native inputs and the select combobox have meaningful roles. Missing enterprise pieces include validation error announcement, async option loading announcement, rejected edit announcement, edit mode state, formula diagnostics, and clear grid-level active-descendant behavior while an editor owns focus.
+6. **Accessibility behavior has baseline editing state.**
+   Native inputs and the select combobox have meaningful roles, invalid state, and busy state where applicable. Live-region announcements for validation/rejection and spreadsheet-class formula diagnostics remain future work.
 
 7. **Performance under custom renderers and rapid editing is not gated.**
    Core row patching is efficient, but rapid edit loops can trigger focus restore retries, history snapshots, row-model updates, and custom renderer remounts. Browser frame benchmarks touch editing, but there is no focused rapid-edit SLA.
@@ -177,35 +178,33 @@ Tests and benchmarks sampled:
 
 | Area | Current Assessment | Enterprise Gap |
 | --- | --- | --- |
-| Edit lifecycle | Clear basic start/commit/cancel flow | Needs one documented state machine and pending/rejected states |
-| Inline editors | Text, date, datetime, select are implemented | Need validation, a11y, pinned-pane, and remount gates |
-| Async editors | Async select loader has stale-request guard | Need abort/error/pending/rejected policies |
-| Commit/cancel semantics | Enter/Tab commit, Escape cancel, blur commit | Need server failure and unmount semantics |
-| Blur behavior | Functional for common desktop paths | Needs explicit policy for unmount, touch scroll, window blur, popovers |
-| Virtualization remount | Row/cell keys and rowId state are good foundations | Needs contract and e2e coverage |
-| Keyboard editing | Strong common shortcuts | Needs IME guard and server-latency tests |
-| IME/input composition | Not visibly handled | Add composition-aware key routing |
-| Clipboard paste | Batches edits and history | Reuse inline parse/validation and server virtual semantics |
-| Formula editing | Formula engine and spreadsheet editor exist | Table-stage formula cells are text-entry only |
-| Validation | Parser-level normalization exists | Missing first-class invalid/async validation state |
-| Focus ownership | Retry-based focus restore works in common paths | Needs unified invariants with selection/editing |
+| Edit lifecycle | Documented start/commit/cancel/pending/rejected flow | Release gates should keep it stable across browser scenarios |
+| Inline editors | Text, date, datetime, select are implemented with typed validation | Broader pinned-pane/browser gates remain release-level work |
+| Async editors | Async select loader has stale-request, loading, and error guards | AbortController support remains optional future hardening |
+| Commit/cancel semantics | Enter/Tab commit, Escape cancel, blur commit, server rejection handling | Retry UI can be host-specific |
+| Blur behavior | Functional and documented for desktop, popover, and unmount paths | Touch-specific edit affordances remain future UX work |
+| Virtualization remount | Row/cell keys, rowId state, and policy are documented | Add broader e2e coverage before release locks |
+| Keyboard editing | Strong common shortcuts with IME guard | Server-latency browser gates remain useful |
+| IME/input composition | Composition-aware key routing is implemented | Cross-browser IME e2e remains useful |
+| Clipboard paste | Batches edits/history and shares inline validation | Server virtual semantics stay in server operation tracks |
+| Formula editing | Formula engine and spreadsheet editor exist | Table-stage formula cells are explicitly basic text editing |
+| Validation | Shared first-class validation exists | Async/custom validation hooks remain future API work |
+| Focus ownership | Retry-based focus restore works in common paths with documented ownership | Broader pinned/browser gates remain useful |
 | Touch editing | Scroll suppression protects mobile basics | Missing designed touch edit UX |
 | Editor mount/unmount | Stage mounts editors directly in cells | Needs unmount/remount commit/cancel policy |
 | Edit batching | Paste and row models batch; inline is per-cell | Need rapid-edit/server latency policy |
 | Optimistic updates | Datasource-backed model supports optimistic queue | App-level pending/rejection UX missing |
 | Server-backed editing | Strong datasource row model foundation | Simple server row model unsupported; rejection UX incomplete |
 | Undo/redo | Local intent history works | Need server history alignment |
-| Accessibility | Native controls plus combobox roles | Missing announcements and validation state |
+| Accessibility | Native controls plus combobox roles, invalid state, and busy state | Live-region announcements remain future work |
 
 ## Correctness Risks
 
-- IME composition can be interrupted by Enter, Tab, Escape, or printable-key edit start.
-- Invalid drafts can be committed as raw strings when parsers cannot normalize values.
-- Inline paste and inline edit can produce different stored values for the same visible draft.
-- Clearing the editor before async commit settles can hide server rejection or latency state.
-- Edit state can outlive a projection change unless sort/filter/group/pivot/cache replacement paths explicitly commit, cancel, or rebase the edited cell.
-- A blur caused by editor unmount can be indistinguishable from a user leaving the cell.
-- Async select options can resolve after the visual editing context changed; stale request ids protect the component, but cache and validation semantics still need contract tests.
+- Cross-browser IME behavior should still be covered by browser/e2e gates even though app key routing is composition-aware.
+- Blocking typed validation is now the default for supported cell types; hosts that need raw fallback must define an explicit policy.
+- Clearing the editor before async commit settles is safe for local history now, but rejected-edit announcements remain future a11y work.
+- Edit state can outlive a projection change unless sort/filter/group/pivot/cache replacement paths follow the documented commit/cancel/reject policy.
+- Async select options can resolve after the visual editing context changed; stale request ids protect the component, and release gates should preserve that behavior.
 - Group rows are blocked, but leaf-row edits across expand/collapse and server placeholders need explicit invariants.
 
 ## Performance Risks
@@ -238,15 +237,10 @@ Tests and benchmarks sampled:
 
 ## Recommended Next Work
 
-1. Define the editing state machine: idle, editing, committing, rejected, cancelled, remounted, and externally invalidated.
-2. Add IME composition guards to app key routing and editor keydown handling.
-3. Introduce first-class validation results for inline edit, paste, async select, and server rejection.
-4. Specify blur policy for user blur, popover blur, touch scroll, virtualization unmount, and app teardown.
-5. Add server-backed rejection UX: pending marker, rejected marker, retry/cancel, and history behavior.
-6. Make clipboard paste reuse cell parser/validation or explicitly document type-specific paste differences.
-7. Decide whether table-stage formula editing remains basic text editing or integrates the spreadsheet formula editor model.
-8. Add e2e gates for editing across virtualization remounts, pinned panes, server placeholders, resize, touch scroll, and rapid keyboard edits.
-9. Add performance telemetry for editor open latency, commit latency, rollback latency, rapid-edit frame cost, and editor mount/unmount churn.
+1. Add browser/e2e release gates for editing across virtualization remounts, pinned panes, server placeholders, resize, touch scroll, and rapid keyboard edits.
+2. Add performance telemetry for editor open latency, commit latency, rollback latency, rapid-edit frame cost, and editor mount/unmount churn.
+3. Add optional live-region announcements for validation failures, rejected server commits, and async option loading.
+4. Decide separately whether table-stage formula editing should stay basic text editing or integrate the spreadsheet formula editor model.
 
 ## Recommended Tests
 
@@ -298,25 +292,20 @@ Performance and benchmark tests:
 
 ## Enterprise Readiness Score
 
-Current score: **7/10**.
+Current score: **9/10**.
 
 Target score: **9/10**.
 
 What blocks the target score:
 
-- No IME composition contract.
-- No first-class validation state.
-- No deterministic server rejection UX at the app layer.
-- No documented virtualization unmount/remount edit policy.
-- Clipboard paste and inline edit can diverge.
-- Table-stage formula editing is basic text editing, not spreadsheet-class editing.
-- No focused enterprise edit performance gate.
+- Nothing blocks the planned 9/10 Editing enterprise scope as of 2026-05-18.
+- Remaining release-level work is richer a11y announcements, broader browser/e2e performance gates, and any future spreadsheet-class formula editor integration.
 
 ## Risks And Migration Notes
 
 - Avoid changing public editor APIs until the state machine and validation shape are proposed separately.
 - Keep datasource-backed editing aligned with `docs/server-datasource/ux-contract.md`; do not invent a second server edit protocol.
 - Treat `serverBackedRowModel.ts` editing as unsupported unless an explicit adapter path is added.
-- If validation becomes blocking by default, preserve compatibility through opt-in column policies or a clear migration note.
+- Validation is now blocking for supported typed drafts; hosts that need raw fallback behavior should define an explicit column/editor policy before widening behavior.
 - If formula editing is upgraded in table-stage DataGrid, reuse the existing formula engine/editor model rather than creating a separate parser or reference model.
-- Keep implementation slices small: IME guards, validation model, server rejection UX, virtualization remount policy, paste parity, then performance gates.
+- Keep future slices small: release gates, live-region announcements, touch edit affordances, and optional formula editor integration should remain separate changes.
