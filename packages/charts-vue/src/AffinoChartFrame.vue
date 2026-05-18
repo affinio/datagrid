@@ -118,6 +118,7 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
   --affino-chart-series-2: #16a34a;
   --affino-chart-series-3: #f59e0b;
   --affino-chart-series-4: #dc2626;
+  --affino-chart-series-5: #8b5cf6;
   --affino-chart-danger: #dc2626;
   --affino-chart-warning: #d97706;
   --affino-chart-success: #16a34a;

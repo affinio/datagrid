@@ -15,7 +15,7 @@ This package exposes the shared chart frame, initial chart-adjacent types, and r
 ## Public API
 
 ```ts
-import { AffinoBarChart, AffinoChartFrame, AffinoLineChart, createChartsVue } from "@affino/charts-vue"
+import { AffinoBarChart, AffinoChartFrame, AffinoLineChart, AffinoPieChart, createChartsVue } from "@affino/charts-vue"
 
 const chartsVue = createChartsVue()
 ```
@@ -104,6 +104,57 @@ Events:
 
 Each point event includes the core point geometry, source row, index, `xValue`, and `yValue`.
 
+## Pie Chart
+
+`AffinoPieChart` renders SVG pie and donut charts using `createPieChartGeometry()` from `@affino/charts-core`. The core package owns slice arc paths and percentages while Vue owns rendering, styling, interaction, accessibility, and the simple legend.
+
+```vue
+<script setup lang="ts">
+import { AffinoPieChart } from "@affino/charts-vue"
+
+const rows = [
+  { segment: "Alpha", revenue: 120 },
+  { segment: "Beta", revenue: 180 },
+]
+</script>
+
+<template>
+  <AffinoPieChart
+    :rows="rows"
+    category-field="segment"
+    value-field="revenue"
+    title="Revenue Share"
+    @slice-click="handleSliceClick"
+  />
+</template>
+```
+
+Use `innerRadiusRatio` for donut charts:
+
+```vue
+<AffinoPieChart
+  :rows="rows"
+  category-field="segment"
+  value-field="revenue"
+  :inner-radius-ratio="0.55"
+/>
+```
+
+Key props:
+
+- `rows`, `categoryField`, `valueField`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `innerRadiusRatio`, `startAngle`, `endAngle`, `showLegend`
+
+Events:
+
+- `slice-click`
+- `slice-hover`
+- `slice-leave`
+
+Each slice event includes the core slice geometry, source row, index, category, value, and percentage.
+
 ## Theme Tokens
 
 Consumers can override chart styling by setting CSS custom properties on `AffinoChartFrame` or a wrapping class:
@@ -119,6 +170,7 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-series-2`
 - `--affino-chart-series-3`
 - `--affino-chart-series-4`
+- `--affino-chart-series-5`
 - `--affino-chart-danger`
 - `--affino-chart-warning`
 - `--affino-chart-success`
@@ -128,10 +180,12 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-line-point-fill`
 - `--affino-chart-line-point-stroke`
 - `--affino-chart-line-point-hover-fill`
+- `--affino-chart-pie-slice-stroke`
+- `--affino-chart-pie-slice-hover-opacity`
 
 ## Non-Goals
 
 - No D3, Chart.js, Recharts, ECharts, or external chart rendering libraries.
 - No `datagrid-sandbox` dependency.
 - No `analytics-core` dependency.
-- No stacked, grouped, horizontal, animated, smoothed, multi-series, area-filled, or legend-backed charts yet.
+- No stacked, grouped, horizontal, animated, smoothed, multi-series, area-filled, advanced-label, nested, or sunburst charts yet.

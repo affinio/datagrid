@@ -1,4 +1,9 @@
-import type { BarChartBarGeometry, ChartDatum, LineChartPointGeometry } from "@affino/charts-core"
+import type {
+  BarChartBarGeometry,
+  ChartDatum,
+  LineChartPointGeometry,
+  PieChartSliceGeometry,
+} from "@affino/charts-core"
 
 export type ChartThemeVariant = "default" | "muted" | "success" | "warning" | "danger"
 
@@ -29,4 +34,13 @@ export interface AffinoLineChartPointEvent {
   index: number
   xValue: number
   yValue: number
+}
+
+export interface AffinoPieChartSliceEvent {
+  slice: PieChartSliceGeometry
+  row: ChartDatum
+  index: number
+  category: string
+  value: number
+  percentage: number
 }
