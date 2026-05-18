@@ -101,8 +101,8 @@ Vue app viewport and rendering:
 1. **Custom renderer isolation is weak.**
    `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. There is no error boundary, duration budget, memoized render context, slow-render fallback, or documented restriction against layout reads. This is acceptable for a flexible app API but not yet enterprise-grade.
 
-2. **Center pane diagnostics perform work even when no diagnostics callback is provided.**
-   `DataGridTableStageCenterPane.vue` builds diagnostic dependencies from row ids, rendered columns, and runtime revisions, then calls diagnostic sampling logic. The callback is optional, but the watcher and sample construction remain part of the component graph. This is a concrete avoidable cost in the render pipeline.
+2. **Center pane diagnostics are guarded when disabled.**
+   `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
 
 3. **Mount/unmount churn is not measured as a first-class budget.**
    Virtualization limits DOM size, but center/pinned cells remount as `displayRows` and rendered columns change. `useDataGridAppViewport.ts` has retained row/column window behavior and incremental row reuse, which is good, but there is no mount/unmount telemetry or browser gate for fast vertical plus horizontal scroll.
@@ -180,7 +180,7 @@ What blocks the target:
 
 ### Phase 1: Render Invariants And Diagnostics Discipline
 
-- Guard center-pane diagnostics so no row/value sampling occurs unless diagnostics are enabled.
+- Guard center-pane diagnostics so no row/value sampling occurs unless diagnostics are enabled. Status: completed for center-pane diagnostics.
 - Add unit/component tests that assert row/cell keys remain stable across scroll, column reorder, and pinned pane rendering.
 - Add render invariant tests for duplicate row ids, missing rows, and placeholder replacement.
 
@@ -266,7 +266,7 @@ Performance/benchmark tests:
 
 ## Prioritized Implementation Slices
 
-1. Guard center-pane diagnostics and add a regression test.
+1. Guard center-pane diagnostics and add a regression test. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 1.
 2. Add render telemetry counters behind existing perf tracing.
 3. Add custom renderer contract docs and tests for placeholder/interactive context stability.
 4. Add renderer error fallback or development-only error reporting.

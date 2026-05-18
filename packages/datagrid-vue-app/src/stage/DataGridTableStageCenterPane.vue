@@ -381,6 +381,9 @@ function buildJsonSafeRowDebug(row: DataGridTableStageBodyRow, rowOffset: number
 }
 
 function emitBodyDiagnostics(): void {
+  if (!props.reportCenterPaneDiagnostics) {
+    return
+  }
   const rows = displayRows.value
   const row1 = rows[1] ?? null
   const firstFive = rows.slice(0, 5).map((row, rowOffset) => buildJsonSafeRowDebug(row, rowOffset))
@@ -444,23 +447,32 @@ function emitBodyDiagnostics(): void {
 }
 
 onMounted(() => {
-  props.reportCenterPaneDiagnostics?.({ mounted: true })
-  emitBodyDiagnostics()
+  if (props.reportCenterPaneDiagnostics) {
+    props.reportCenterPaneDiagnostics({ mounted: true })
+    emitBodyDiagnostics()
+  }
 })
 
 watch(
-  () => [
-    displayRows.value.length,
-    displayRows.value.map((row) => {
-      const data = row.kind === "group" ? null : row.data as Record<string, unknown>
-      return `${String(row.rowId)}:${String(data?.region ?? "")}`
-    }).join("|"),
-    columns.value.renderedColumns.map(column => String(column.key)).join("|"),
-    String(props.runtimeRevision ?? "none"),
-    String(props.bodyRowsRevision ?? "none"),
-  ].join("|"),
   () => {
-    emitBodyDiagnostics()
+    if (!props.reportCenterPaneDiagnostics) {
+      return null
+    }
+    return [
+      displayRows.value.length,
+      displayRows.value.map((row) => {
+        const data = row.kind === "group" ? null : row.data as Record<string, unknown>
+        return `${String(row.rowId)}:${String(data?.region ?? "")}`
+      }).join("|"),
+      columns.value.renderedColumns.map(column => String(column.key)).join("|"),
+      String(props.runtimeRevision ?? "none"),
+      String(props.bodyRowsRevision ?? "none"),
+    ].join("|")
+  },
+  (signature) => {
+    if (signature != null) {
+      emitBodyDiagnostics()
+    }
   },
   { immediate: true },
 )

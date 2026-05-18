@@ -173,6 +173,7 @@ function createStageProps(
     cancelInlineEdit?: () => void
     showRowIndex?: boolean
     visibleColumns?: readonly DataGridColumnSnapshot[]
+    rows?: readonly DataGridTableRow<DemoRow>[]
     firstRowKind?: "data" | "group"
     firstRowExpanded?: boolean
     firstRowGroupKey?: string
@@ -182,7 +183,7 @@ function createStageProps(
   const visibleColumns = options?.visibleColumns ?? createColumns()
   const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
   const selectionAnchorCell = options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 }
-  const rows = createRows(options?.rowCount ?? 1).map((row, rowIndex) => {
+  const rows = (options?.rows ?? createRows(options?.rowCount ?? 1)).map((row, rowIndex) => {
     if (rowIndex === 0 && options?.firstRowKind === "group") {
       return {
         rowId: options.firstRowGroupKey ?? "group-1",
@@ -476,6 +477,56 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     expect(wrapper.find(".test-status-pill").text()).toBe("Status: real:A1")
+
+    wrapper.unmount()
+  })
+
+  it("does not sample center-pane diagnostics when diagnostics are disabled", async () => {
+    const regionGetter = vi.fn(() => "diagnostic-only")
+    const rowData = { centerA: "Visible" } as Record<string, unknown>
+    Object.defineProperty(rowData, "region", {
+      configurable: true,
+      enumerable: true,
+      get: regionGetter,
+    })
+    const rows = [{
+      rowId: "r1",
+      displayIndex: 0,
+      data: rowData,
+    }] as unknown as readonly DataGridTableRow<DemoRow>[]
+    const stageProps = createStageProps(() => false, {
+      rows,
+      visibleColumns: [
+        {
+          key: "centerA",
+          pin: "center",
+          width: 140,
+          column: {
+            key: "centerA",
+            label: "Center A",
+          },
+        },
+      ] as unknown as readonly DataGridColumnSnapshot[],
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+
+    await nextTick()
+
+    expect(wrapper.find('.grid-body-viewport .grid-cell[data-column-key="centerA"]').text()).toBe("Visible")
+    regionGetter.mockClear()
+
+    await wrapper.setProps({
+      rows: {
+        ...stageProps.rows,
+        displayRowsRevision: 1,
+      },
+    })
+    await nextTick()
+
+    expect(regionGetter).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
