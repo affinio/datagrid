@@ -1,8 +1,12 @@
 import { computed, ref } from "vue"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it } from "vitest"
 import type { DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridStageOverlayGeometryContext } from "../dataGridStageOverlayGeometry"
 import { useDataGridStageOverlays } from "../useDataGridStageOverlays"
+import {
+  DATA_GRID_PERF_STORE_KEY,
+  resolveDataGridPerfStore,
+} from "../../perf/dataGridPerfTrace"
 
 function createGeometryContext(): DataGridStageOverlayGeometryContext {
   const columns = [
@@ -36,6 +40,10 @@ function createGeometryContext(): DataGridStageOverlayGeometryContext {
 }
 
 describe("useDataGridStageOverlays", () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  })
+
   it("builds selection and custom overlay lanes", () => {
     const geometryContext = computed(() => createGeometryContext())
     const range: DataGridOverlayRange = {
@@ -98,6 +106,83 @@ describe("useDataGridStageOverlays", () => {
     expect(result.rightSelectionSeamOverlaySegments.value).toHaveLength(0)
     expect(result.centerCustomOverlayLanes.value).toHaveLength(1)
     expect(result.centerCustomOverlayLanes.value[0]?.segments).toHaveLength(1)
+    expect(resolveDataGridPerfStore()?.latest("overlayCompute")).toBeNull()
+  })
+
+  it("records overlay segment telemetry only when perf tracing is enabled", () => {
+    const geometryContext = computed(() => createGeometryContext())
+    const range: DataGridOverlayRange = {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 1,
+      endColumn: 2,
+    }
+
+    const result = useDataGridStageOverlays({
+      overlayGeometryContext: geometryContext,
+      bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(0),
+      bottomViewportClientHeight: ref(120),
+      visibleColumns: computed(() => createGeometryContext().renderedColumns),
+      displayRows: computed(() => [{}, {}]),
+      selectionRanges: computed(() => [range]),
+      selectionRange: computed(() => range),
+      fillPreviewRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rowMetrics: computed(() => [
+        { top: 0, height: 31 },
+        { top: 31, height: 31 },
+      ]),
+      pinnedBottomRowMetrics: computed(() => []),
+      isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex >= 1 && columnIndex <= 2,
+      isCellInFillPreviewSafe: () => false,
+      isAdditiveSelection: computed(() => false),
+      isFillDragging: computed(() => false),
+      isRangeMoving: computed(() => false),
+      resolveVisibleRangeBounds(rangeValue) {
+        if (!rangeValue) {
+          return null
+        }
+        return {
+          startRowOffset: rangeValue.startRow,
+          endRowOffset: rangeValue.endRow,
+          startColumnIndex: rangeValue.startColumn,
+          endColumnIndex: rangeValue.endColumn,
+        }
+      },
+      resolvePinnedBottomVisibleRangeBounds() {
+        return null
+      },
+      customOverlays: computed(() => [{
+        key: "custom",
+        ranges: [range],
+      }]),
+      perfTraceEnabled: true,
+    })
+
+    expect(result.centerSelectionOverlaySegments.value).toHaveLength(1)
+    expect(resolveDataGridPerfStore()?.latest("overlayCompute")).toMatchObject({
+      scope: "overlayCompute",
+      overlayKind: "selection",
+      surface: "body",
+      pane: "center",
+      segmentCount: 1,
+      laneCount: 0,
+      visibleRowCount: 2,
+      visibleColumnCount: 4,
+      selectionRangeCount: 1,
+      customOverlayCount: 1,
+    })
+
+    expect(result.centerCustomOverlayLanes.value).toHaveLength(1)
+    expect(resolveDataGridPerfStore()?.latest("overlayCompute")).toMatchObject({
+      scope: "overlayCompute",
+      overlayKind: "custom",
+      surface: "body",
+      pane: "center",
+      segmentCount: 1,
+      laneCount: 1,
+    })
   })
 
   it("keeps body pinned seam overlays aligned with transformed pinned content on scroll", () => {

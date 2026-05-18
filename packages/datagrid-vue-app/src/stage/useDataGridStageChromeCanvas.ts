@@ -4,6 +4,10 @@ import {
   resolveDeviceAlignedCanvasLineWidth,
   resolveDeviceAlignedCanvasStrokeCenter,
 } from "./dataGridChromeCanvasMath"
+import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+} from "../perf/dataGridPerfTrace"
 
 type GridChromeRedrawMode = "full" | "center-scroll"
 
@@ -33,6 +37,7 @@ export interface UseDataGridStageChromeCanvasOptions {
   headerChromeRenderModel: ComputedRef<DataGridChromeRenderModel>
   pinnedBottomChromeRenderModel: ComputedRef<DataGridChromeRenderModel>
   hasPivotHeaderGroups: ComputedRef<boolean>
+  perfTraceEnabled?: boolean
 }
 
 export interface UseDataGridStageChromeCanvasResult {
@@ -251,6 +256,43 @@ function drawGridChromeHeaderPane(
   drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
 }
 
+function countGridChromeDrawnPanes(
+  mode: GridChromeRedrawMode,
+  headerRenderModel: DataGridChromeRenderModel,
+  renderModel: DataGridChromeRenderModel,
+  bottomRenderModel: DataGridChromeRenderModel,
+): number {
+  const centerPanes = [
+    headerRenderModel.center,
+    renderModel.center,
+    bottomRenderModel.center,
+  ].filter(pane => pane.width > 0 && pane.height > 0).length
+  if (mode !== "full") {
+    return centerPanes
+  }
+  return centerPanes + [
+    headerRenderModel.left,
+    headerRenderModel.right,
+    renderModel.left,
+    renderModel.right,
+    bottomRenderModel.left,
+    bottomRenderModel.right,
+  ].filter(pane => pane.width > 0 && pane.height > 0).length
+}
+
+function countGridChromePaneLines(model: DataGridChromeRenderModel): number {
+  return model.left.horizontalLines.length
+    + model.left.verticalLines.length
+    + model.center.horizontalLines.length
+    + model.center.verticalLines.length
+    + model.right.horizontalLines.length
+    + model.right.verticalLines.length
+}
+
+function countGridChromePaneBands(model: DataGridChromeRenderModel): number {
+  return model.left.bands.length + model.center.bands.length + model.right.bands.length
+}
+
 export function useDataGridStageChromeCanvas(
   options: UseDataGridStageChromeCanvasOptions,
 ): UseDataGridStageChromeCanvasResult {
@@ -292,10 +334,12 @@ export function useDataGridStageChromeCanvas(
   }
 
   function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
+    const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
     gridChromeAnimationFrame = 0
     pendingGridChromeRedrawMode = "full"
     const headerRenderModel = options.headerChromeRenderModel.value
     const renderModel = options.chromeRenderModel.value
+    const bottomRenderModel = options.pinnedBottomChromeRenderModel.value
     const rowDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
     const columnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
     const headerColumnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-header-column-divider-color", columnDividerColor)
@@ -337,8 +381,6 @@ export function useDataGridStageChromeCanvas(
       drawGridChromeBodyPane(options.stageRootEl, rightContext, renderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
     }
 
-    const bottomRenderModel = options.pinnedBottomChromeRenderModel.value
-
     const leftBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftBottomChromeCanvasEl.value, bottomRenderModel.left.width, bottomRenderModel.left.height)
       : null
@@ -354,6 +396,22 @@ export function useDataGridStageChromeCanvas(
       : null
     if (rightBottomContext) {
       drawGridChromeBodyPane(options.stageRootEl, rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
+    }
+
+    if (options.perfTraceEnabled) {
+      const finishedAt = resolveDataGridPerfNow()
+      recordDataGridPerfSample({
+        scope: "chromeDraw",
+        ts: finishedAt,
+        totalMs: finishedAt - startedAt,
+        redrawMode: mode,
+        drawnPaneCount: countGridChromeDrawnPanes(mode, headerRenderModel, renderModel, bottomRenderModel),
+        bodyLineCount: countGridChromePaneLines(renderModel),
+        headerLineCount: countGridChromePaneLines(headerRenderModel),
+        pinnedBottomLineCount: countGridChromePaneLines(bottomRenderModel),
+        bodyBandCount: countGridChromePaneBands(renderModel),
+        pinnedBottomBandCount: countGridChromePaneBands(bottomRenderModel),
+      })
     }
   }
 

@@ -1665,6 +1665,10 @@ async function runScenario(page, sessionIndex, scenario) {
         .filter(sample => sample?.scope === "cellRenderer")
       const groupCellRendererPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
         .filter(sample => sample?.scope === "groupCellRenderer")
+      const chromeDrawPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "chromeDraw")
+      const overlayComputePerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "overlayCompute")
       verticalDiagnostics.virtualizationTelemetry = {
         sampleCount: viewportPerfSamples.length,
         latest: viewportPerfSamples[viewportPerfSamples.length - 1] ?? null,
@@ -1696,6 +1700,36 @@ async function runScenario(page, sessionIndex, scenario) {
         groupCellRendererInvocationCount: groupCellRendererPerfSamples.length,
         cellRendererDurationMs: summarizeNumbers(cellRendererPerfSamples.map(sample => sample.totalMs)),
         groupCellRendererDurationMs: summarizeNumbers(groupCellRendererPerfSamples.map(sample => sample.totalMs)),
+      }
+      verticalDiagnostics.chromeTelemetry = {
+        drawSampleCount: chromeDrawPerfSamples.length,
+        latestDraw: chromeDrawPerfSamples[chromeDrawPerfSamples.length - 1] ?? null,
+        drawDurationMs: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.totalMs)),
+        drawnPaneCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.drawnPaneCount)),
+        bodyLineCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.bodyLineCount)),
+        headerLineCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.headerLineCount)),
+        pinnedBottomLineCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.pinnedBottomLineCount)),
+        bodyBandCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.bodyBandCount)),
+        pinnedBottomBandCount: summarizeNumbers(chromeDrawPerfSamples.map(sample => sample.pinnedBottomBandCount)),
+      }
+      verticalDiagnostics.overlayTelemetry = {
+        computeSampleCount: overlayComputePerfSamples.length,
+        latestCompute: overlayComputePerfSamples[overlayComputePerfSamples.length - 1] ?? null,
+        computeDurationMs: summarizeNumbers(overlayComputePerfSamples.map(sample => sample.totalMs)),
+        segmentCount: summarizeNumbers(overlayComputePerfSamples.map(sample => sample.segmentCount)),
+        laneCount: summarizeNumbers(overlayComputePerfSamples.map(sample => sample.laneCount)),
+        selectionSegmentCount: summarizeNumbers(overlayComputePerfSamples
+          .filter(sample => sample.overlayKind === "selection")
+          .map(sample => sample.segmentCount)),
+        fillPreviewSegmentCount: summarizeNumbers(overlayComputePerfSamples
+          .filter(sample => sample.overlayKind === "fill-preview")
+          .map(sample => sample.segmentCount)),
+        movePreviewSegmentCount: summarizeNumbers(overlayComputePerfSamples
+          .filter(sample => sample.overlayKind === "move-preview")
+          .map(sample => sample.segmentCount)),
+        customOverlaySegmentCount: summarizeNumbers(overlayComputePerfSamples
+          .filter(sample => sample.overlayKind === "custom")
+          .map(sample => sample.segmentCount)),
       }
       verticalDiagnostics.longTasks = longTaskEntries.map(entry => ({
         startTime: entry.startTime,
@@ -1941,6 +1975,26 @@ function aggregateRuns(runs) {
       rowUnmountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.rowUnmountsPerScrollWrite)),
       cellMountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellMountsPerScrollWrite)),
       cellUnmountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellUnmountsPerScrollWrite)),
+    },
+    chromeTelemetry: {
+      drawSampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.drawSampleCount)),
+      drawDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.drawDurationMs?.p95)),
+      drawnPaneCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.drawnPaneCount?.p95)),
+      bodyLineCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.bodyLineCount?.p95)),
+      headerLineCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.headerLineCount?.p95)),
+      pinnedBottomLineCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.pinnedBottomLineCount?.p95)),
+      bodyBandCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.bodyBandCount?.p95)),
+      pinnedBottomBandCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.chromeTelemetry?.pinnedBottomBandCount?.p95)),
+    },
+    overlayTelemetry: {
+      computeSampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.computeSampleCount)),
+      computeDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.computeDurationMs?.p95)),
+      segmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.segmentCount?.p95)),
+      laneCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.laneCount?.p95)),
+      selectionSegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.selectionSegmentCount?.p95)),
+      fillPreviewSegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.fillPreviewSegmentCount?.p95)),
+      movePreviewSegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.movePreviewSegmentCount?.p95)),
+      customOverlaySegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.customOverlaySegmentCount?.p95)),
     },
     sortDiagnostics: {
       menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),

@@ -7,6 +7,10 @@ import type {
 } from "./dataGridTableStageBody.types"
 import type { DataGridTableStageCustomOverlay } from "./dataGridTableStage.types"
 import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+} from "../perf/dataGridPerfTrace"
+import {
   buildCustomOverlayLane,
   buildCustomSeamOverlayLane,
   buildPaneOverlaySegments,
@@ -42,6 +46,7 @@ export interface UseDataGridStageOverlaysOptions {
   resolveVisibleRangeBounds: (range: DataGridOverlayRange | null) => DataGridStageOverlayBounds | null
   resolvePinnedBottomVisibleRangeBounds: (range: DataGridOverlayRange | null) => DataGridStageOverlayBounds | null
   customOverlays: ComputedRef<readonly DataGridTableStageCustomOverlay[]>
+  perfTraceEnabled?: boolean
 }
 
 export interface UseDataGridStageOverlaysResult {
@@ -162,6 +167,66 @@ function normalizeBodyPinnedPaneSeamMetric<TMetrics extends DataGridStageOverlay
   return normalizeBodyPinnedPaneSeamMetricsList([metrics], scrollTop)[0] ?? null
 }
 
+function recordOverlayComputeSample(
+  options: UseDataGridStageOverlaysOptions,
+  startedAt: number,
+  overlayKind: string,
+  surface: string,
+  pane: string,
+  segmentCount: number,
+  laneCount = 0,
+): void {
+  if (!options.perfTraceEnabled) {
+    return
+  }
+  const finishedAt = resolveDataGridPerfNow()
+  recordDataGridPerfSample({
+    scope: "overlayCompute",
+    ts: finishedAt,
+    totalMs: finishedAt - startedAt,
+    overlayKind,
+    surface,
+    pane,
+    segmentCount,
+    laneCount,
+    visibleRowCount: options.displayRows.value.length,
+    visibleColumnCount: options.visibleColumns.value.length,
+    selectionRangeCount: options.selectionRanges.value.length,
+    customOverlayCount: options.customOverlays.value.length,
+  })
+}
+
+function computedOverlaySegments(
+  options: UseDataGridStageOverlaysOptions,
+  overlayKind: string,
+  surface: string,
+  pane: string,
+  buildSegments: () => readonly DataGridTableStageOverlaySegment[],
+): ComputedRef<readonly DataGridTableStageOverlaySegment[]> {
+  return computed(() => {
+    const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+    const segments = buildSegments()
+    recordOverlayComputeSample(options, startedAt, overlayKind, surface, pane, segments.length)
+    return segments
+  })
+}
+
+function computedOverlayLanes(
+  options: UseDataGridStageOverlaysOptions,
+  overlayKind: string,
+  surface: string,
+  pane: string,
+  buildLanes: () => readonly DataGridTableStageOverlayLane[],
+): ComputedRef<readonly DataGridTableStageOverlayLane[]> {
+  return computed(() => {
+    const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+    const lanes = buildLanes()
+    const segmentCount = lanes.reduce((count, lane) => count + lane.segments.length, 0)
+    recordOverlayComputeSample(options, startedAt, overlayKind, surface, pane, segmentCount, lanes.length)
+    return lanes
+  })
+}
+
 export function useDataGridStageOverlays(
   options: UseDataGridStageOverlaysOptions,
 ): UseDataGridStageOverlaysResult {
@@ -268,7 +333,7 @@ export function useDataGridStageOverlays(
     normalizeBodyPinnedPaneSeamMetric(visibleMovePreviewOverlayMetrics.value, options.bodyViewportScrollTop.value)
   ))
 
-  const leftSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const leftSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "left", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visibleSelectionOverlayMetricsList.value,
     "left",
@@ -276,7 +341,7 @@ export function useDataGridStageOverlays(
     selectionOverlayOptions,
   ))
 
-  const leftSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+  const leftSelectionSeamOverlaySegments = computedOverlaySegments(options, "selection", "body-seam", "left", () => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamSelectionOverlayMetricsList.value,
     "left",
@@ -284,7 +349,7 @@ export function useDataGridStageOverlays(
     selectionOverlayOptions,
   ))
 
-  const centerSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const centerSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "center", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visibleSelectionOverlayMetricsList.value,
     "center",
@@ -292,7 +357,7 @@ export function useDataGridStageOverlays(
     selectionOverlayOptions,
   ))
 
-  const rightSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const rightSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "right", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visibleSelectionOverlayMetricsList.value,
     "right",
@@ -300,7 +365,7 @@ export function useDataGridStageOverlays(
     selectionOverlayOptions,
   ))
 
-  const rightSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+  const rightSelectionSeamOverlaySegments = computedOverlaySegments(options, "selection", "body-seam", "right", () => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamSelectionOverlayMetricsList.value,
     "right",
@@ -308,7 +373,7 @@ export function useDataGridStageOverlays(
     selectionOverlayOptions,
   ))
 
-  const leftPinnedBottomSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const leftPinnedBottomSelectionOverlaySegments = computedOverlaySegments(options, "selection", "pinned-bottom", "left", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visiblePinnedBottomSelectionOverlayMetricsList.value,
     "left",
@@ -317,7 +382,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const leftPinnedBottomSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+  const leftPinnedBottomSelectionSeamOverlaySegments = computedOverlaySegments(options, "selection", "pinned-bottom-seam", "left", () => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visiblePinnedBottomSelectionOverlayMetricsList.value,
     "left",
@@ -326,7 +391,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const centerPinnedBottomSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const centerPinnedBottomSelectionOverlaySegments = computedOverlaySegments(options, "selection", "pinned-bottom", "center", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visiblePinnedBottomSelectionOverlayMetricsList.value,
     "center",
@@ -335,7 +400,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomSelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+  const rightPinnedBottomSelectionOverlaySegments = computedOverlaySegments(options, "selection", "pinned-bottom", "right", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visiblePinnedBottomSelectionOverlayMetricsList.value,
     "right",
@@ -344,7 +409,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomSelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+  const rightPinnedBottomSelectionSeamOverlaySegments = computedOverlaySegments(options, "selection", "pinned-bottom-seam", "right", () => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
     visiblePinnedBottomSelectionOverlayMetricsList.value,
     "right",
@@ -353,7 +418,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const leftFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const leftFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleFillPreviewOverlayMetrics.value,
     "left",
@@ -362,7 +427,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const leftFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const leftFillPreviewSeamOverlaySegments = computedOverlaySegments(options, "fill-preview", "body-seam", "left", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamFillPreviewOverlayMetrics.value,
     "left",
@@ -371,7 +436,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const centerFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const centerFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleFillPreviewOverlayMetrics.value,
     "center",
@@ -380,7 +445,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const rightFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const rightFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleFillPreviewOverlayMetrics.value,
     "right",
@@ -389,7 +454,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const rightFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const rightFillPreviewSeamOverlaySegments = computedOverlaySegments(options, "fill-preview", "body-seam", "right", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamFillPreviewOverlayMetrics.value,
     "right",
@@ -398,7 +463,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const leftPinnedBottomFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const leftPinnedBottomFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "pinned-bottom", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomFillPreviewOverlayMetrics.value,
     "left",
@@ -407,7 +472,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const leftPinnedBottomFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const leftPinnedBottomFillPreviewSeamOverlaySegments = computedOverlaySegments(options, "fill-preview", "pinned-bottom-seam", "left", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomFillPreviewOverlayMetrics.value,
     "left",
@@ -416,7 +481,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const centerPinnedBottomFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const centerPinnedBottomFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "pinned-bottom", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomFillPreviewOverlayMetrics.value,
     "center",
@@ -425,7 +490,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomFillPreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const rightPinnedBottomFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "pinned-bottom", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomFillPreviewOverlayMetrics.value,
     "right",
@@ -434,7 +499,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomFillPreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const rightPinnedBottomFillPreviewSeamOverlaySegments = computedOverlaySegments(options, "fill-preview", "pinned-bottom-seam", "right", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomFillPreviewOverlayMetrics.value,
     "right",
@@ -443,7 +508,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const leftMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const leftMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleMovePreviewOverlayMetrics.value,
     "left",
@@ -452,7 +517,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const leftMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const leftMovePreviewSeamOverlaySegments = computedOverlaySegments(options, "move-preview", "body-seam", "left", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamMovePreviewOverlayMetrics.value,
     "left",
@@ -461,7 +526,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const centerMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const centerMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleMovePreviewOverlayMetrics.value,
     "center",
@@ -470,7 +535,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const rightMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const rightMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visibleMovePreviewOverlayMetrics.value,
     "right",
@@ -479,7 +544,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const rightMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const rightMovePreviewSeamOverlaySegments = computedOverlaySegments(options, "move-preview", "body-seam", "right", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     bodyPinnedPaneSeamMovePreviewOverlayMetrics.value,
     "right",
@@ -488,7 +553,7 @@ export function useDataGridStageOverlays(
     bodyViewportHeight.value,
   ))
 
-  const leftPinnedBottomMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const leftPinnedBottomMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "pinned-bottom", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomMovePreviewOverlayMetrics.value,
     "left",
@@ -497,7 +562,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const leftPinnedBottomMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const leftPinnedBottomMovePreviewSeamOverlaySegments = computedOverlaySegments(options, "move-preview", "pinned-bottom-seam", "left", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomMovePreviewOverlayMetrics.value,
     "left",
@@ -506,7 +571,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const centerPinnedBottomMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const centerPinnedBottomMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "pinned-bottom", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomMovePreviewOverlayMetrics.value,
     "center",
@@ -515,7 +580,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomMovePreviewOverlaySegments = computed(() => buildPaneOverlaySegments(
+  const rightPinnedBottomMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "pinned-bottom", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomMovePreviewOverlayMetrics.value,
     "right",
@@ -524,7 +589,7 @@ export function useDataGridStageOverlays(
     bottomViewportHeight.value,
   ))
 
-  const rightPinnedBottomMovePreviewSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegments(
+  const rightPinnedBottomMovePreviewSeamOverlaySegments = computedOverlaySegments(options, "move-preview", "pinned-bottom-seam", "right", () => buildPinnedPaneSeamOverlaySegments(
     options.overlayGeometryContext.value,
     visiblePinnedBottomMovePreviewOverlayMetrics.value,
     "right",
@@ -547,43 +612,43 @@ export function useDataGridStageOverlays(
     }
   }))
 
-  const leftCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const leftCustomOverlayLanes = computedOverlayLanes(options, "custom", "body", "left", () => customOverlayMetrics.value
     .map(({ overlay, body }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "left", body))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const centerCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const centerCustomOverlayLanes = computedOverlayLanes(options, "custom", "body", "center", () => customOverlayMetrics.value
     .map(({ overlay, body }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "center", body))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const rightCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const rightCustomOverlayLanes = computedOverlayLanes(options, "custom", "body", "right", () => customOverlayMetrics.value
     .map(({ overlay, body }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "right", body))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const leftCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const leftCustomSeamOverlayLanes = computedOverlayLanes(options, "custom", "body-seam", "left", () => customOverlayMetrics.value
     .map(({ overlay, bodyPinnedPaneSeam }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "left", bodyPinnedPaneSeam))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const rightCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const rightCustomSeamOverlayLanes = computedOverlayLanes(options, "custom", "body-seam", "right", () => customOverlayMetrics.value
     .map(({ overlay, bodyPinnedPaneSeam }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "right", bodyPinnedPaneSeam))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const leftPinnedBottomCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const leftPinnedBottomCustomOverlayLanes = computedOverlayLanes(options, "custom", "pinned-bottom", "left", () => customOverlayMetrics.value
     .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "left", pinnedBottom, bottomViewportHeight.value))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const centerPinnedBottomCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const centerPinnedBottomCustomOverlayLanes = computedOverlayLanes(options, "custom", "pinned-bottom", "center", () => customOverlayMetrics.value
     .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "center", pinnedBottom, bottomViewportHeight.value))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const rightPinnedBottomCustomOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const rightPinnedBottomCustomOverlayLanes = computedOverlayLanes(options, "custom", "pinned-bottom", "right", () => customOverlayMetrics.value
     .map(({ overlay, pinnedBottom }) => buildCustomOverlayLane(options.overlayGeometryContext.value, overlay, "right", pinnedBottom, bottomViewportHeight.value))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const leftPinnedBottomCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const leftPinnedBottomCustomSeamOverlayLanes = computedOverlayLanes(options, "custom", "pinned-bottom-seam", "left", () => customOverlayMetrics.value
     .map(({ overlay, pinnedBottom }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "left", pinnedBottom, bottomViewportHeight.value))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 
-  const rightPinnedBottomCustomSeamOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => customOverlayMetrics.value
+  const rightPinnedBottomCustomSeamOverlayLanes = computedOverlayLanes(options, "custom", "pinned-bottom-seam", "right", () => customOverlayMetrics.value
     .map(({ overlay, pinnedBottom }) => buildCustomSeamOverlayLane(options.overlayGeometryContext.value, overlay, "right", pinnedBottom, bottomViewportHeight.value))
     .filter((lane): lane is DataGridTableStageOverlayLane => lane != null))
 

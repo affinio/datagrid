@@ -1243,6 +1243,7 @@ const {
   headerChromeRenderModel,
   pinnedBottomChromeRenderModel,
   hasPivotHeaderGroups,
+  perfTraceEnabled,
 })
 
 gridChromeSyncers.value = {
@@ -1802,6 +1803,7 @@ const {
   resolveVisibleRangeBounds,
   resolvePinnedBottomVisibleRangeBounds,
   customOverlays,
+  perfTraceEnabled,
 })
 
 const layoutRuntime = computed(() => ({

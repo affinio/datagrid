@@ -118,8 +118,8 @@ Vue app viewport and rendering:
 1. **Per-cell render helpers allocate many short-lived objects and closures.**
    `useDataGridStageRenderApis.grouped.ts`, `useDataGridStageCellState.ts`, `useDataGridStageRowState.ts`, and `useDataGridStageCellRendering.ts` return class/style objects, ARIA values, render contexts, and interactive closures from template-called functions. This is typical Vue code, but it needs telemetry under wide rendered windows and custom renderers.
 
-2. **Canvas chrome redraw is well separated but still shares the scroll frame.**
-   `useDataGridStageViewportRuntime.ts` flushes chrome redraw in the scroll frame, and `useDataGridStageChromeCanvas.ts` may redraw center/header/bottom canvases. The code supports `center-scroll` redraw mode, which is good. Enterprise readiness still needs a draw-duration budget and long-task detection.
+2. **Canvas chrome redraw is well separated and now sampled.**
+   `useDataGridStageViewportRuntime.ts` flushes chrome redraw in the scroll frame, and `useDataGridStageChromeCanvas.ts` may redraw center/header/bottom canvases. The code supports `center-scroll` redraw mode, and `dgPerfTrace=1` now emits `chromeDraw` samples with redraw mode, draw duration, drawn pane count, line counts, and band counts. Enterprise readiness still needs hard budgets and long-task correlation from browser gates.
 
 3. **Auto-height rendering uses layout reads by design.**
    `useDataGridStageChromeModel.ts` calls `getBoundingClientRect()` for visible rows in base auto-height mode. That is supported behavior, not a defect. The risk is layout thrash if auto-height measurement combines with custom renderers, resize, or fast scroll without a measured budget.
@@ -127,8 +127,8 @@ Vue app viewport and rendering:
 4. **Async select renderer/editor cache has no visible eviction policy.**
    `useDataGridStageCellRendering.ts` stores async select options in a `Map` keyed by row/column. This protects repeated option resolution, but high-churn virtual rows can grow cache memory unless lifecycle or cap semantics are documented.
 
-5. **Pinned panes multiply DOM cost by design.**
-   `DataGridTableStagePinnedPane.vue` renders separate DOM rows/cells for pinned columns and pinned bottom panes. This is the correct architecture for frozen panes, but enterprise gates must measure pinned-left plus pinned-right plus center DOM count and renderer invocation count.
+5. **Pinned panes multiply DOM and overlay cost by design.**
+   `DataGridTableStagePinnedPane.vue` renders separate DOM rows/cells for pinned columns and pinned bottom panes. This is the correct architecture for frozen panes. `stageRenderWindow`, `chromeDraw`, and `overlayCompute` samples now make pinned-left plus pinned-right plus center DOM, chrome, and overlay work visible in browser-frame artifacts.
 
 6. **Style/signature strings are computed from visible rows/columns.**
    `useDataGridStageChromeModel.ts` computes row metrics signatures, row band signatures, and column signatures. These are useful invalidation boundaries, but they should stay out of raw scroll handling and be sampled in perf traces for large windows.
@@ -254,10 +254,10 @@ Performance/benchmark tests:
 - `customRendererDurationMs`. Status: custom renderer duration samples are recorded under `dgPerfTrace=1`.
 - `rowMountCount` and `rowUnmountCount`. Status: extracted under `churnTelemetry`.
 - `cellMountCount` and `cellUnmountCount`. Status: extracted under `churnTelemetry`.
-- `chromeDrawDurationMs`
-- `chromeRedrawMode`
-- `overlayComputeDurationMs`
-- `overlaySegmentCount`
+- `chromeDrawDurationMs`. Status: recorded as `chromeDraw.totalMs` under `dgPerfTrace=1` and extracted under `chromeTelemetry`.
+- `chromeRedrawMode`. Status: recorded as `chromeDraw.redrawMode` under `dgPerfTrace=1`.
+- `overlayComputeDurationMs`. Status: recorded as `overlayCompute.totalMs` under `dgPerfTrace=1` and extracted under `overlayTelemetry`.
+- `overlaySegmentCount`. Status: recorded as `overlayCompute.segmentCount` under `dgPerfTrace=1`.
 - `blankViewportDetected`
 - `domNodeCount`
 - `layoutReadCount` in perf/dev mode
@@ -272,7 +272,7 @@ Performance/benchmark tests:
 4. Add renderer error fallback or development-only error reporting. Status: runtime error fallback is in place; development-only reporting remains optional.
 5. Add lightweight scroll rendering policy for expensive custom renderers. Status: completed for touch-mode active body scroll; browser-frame budgets remain planned.
 6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 6.
-7. Add chrome/overlay duration telemetry and gates.
+7. Add chrome/overlay duration telemetry and gates. Status: chrome/overlay telemetry is complete in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 7; hard budgets remain planned.
 8. Add browser-frame scenarios for pinned panes, auto-height rows, custom renderers, and wide columns.
 
 ## Risks And Migration Notes

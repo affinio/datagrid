@@ -126,6 +126,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - Throwing authored renderers fall back to the resolved display value for the affected cell; with `dgPerfTrace=1`, failed renderer samples include `rendererError: 1`.
   - With `dgPerfTrace=1`, the app stage records `stageRenderWindow`, `cellRenderer`, and `groupCellRenderer` samples; `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts render-window and renderer-duration aggregates under `renderTelemetry`.
   - Browser-frame vertical and horizontal diagnostics extract MutationObserver row/cell mount and unmount counts under `churnTelemetry`, so churn can be reviewed beside `renderTelemetry`.
+  - Chrome canvas draw work is sampled as `chromeDraw` and extracted under `chromeTelemetry`; overlay segment/lane computation is sampled as `overlayCompute` and extracted under `overlayTelemetry`.
   - Custom-renderer-heavy grids are not covered by a hard enterprise frame gate yet; planned rendering gates should reuse the enterprise browser-frame harness instead of adding a separate performance track.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`

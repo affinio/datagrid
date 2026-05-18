@@ -10,7 +10,8 @@ Current execution state:
 - Slice 4 is completed and should be treated as the custom renderer error fallback baseline.
 - Slice 5 is completed and should be treated as the touch-scroll lightweight rendering baseline.
 - Slice 6 is completed and should be treated as the render churn benchmark baseline.
-- Slice 7 is the next implementation slice.
+- Slice 7 is completed and should be treated as the chrome/overlay telemetry baseline.
+- Slice 8 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -118,7 +119,7 @@ Current execution state:
 
 ## Slice 7: Chrome And Overlay Duration Telemetry
 
-- Status: Planned.
+- Status: Completed. `dgPerfTrace=1` now records `chromeDraw` samples for redraw mode, draw duration, pane count, line counts, and band counts, plus `overlayCompute` samples for overlay kind, surface, pane, segment count, lane count, and visible window size. The enterprise browser-frame benchmark extracts these into `chromeTelemetry` and `overlayTelemetry`.
 - Objective: measure chrome draw duration, redraw mode, overlay compute duration, and overlay segment counts.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageChromeCanvas.ts`
@@ -126,9 +127,11 @@ Current execution state:
   - `packages/datagrid-vue-app/src/stage/dataGridPerfTrace.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: perf tracing exposes chrome and overlay work that shares the scroll frame.
-- Tests to add/update:
-  - Disabled-by-default telemetry tests.
-  - Overlay segment count extraction tests.
+- Tests added/covered:
+  - Disabled-by-default chrome and overlay telemetry tests.
+  - Enabled chrome draw telemetry test.
+  - Overlay segment and lane count telemetry tests.
+  - Browser benchmark extraction for chrome and overlay telemetry aggregates.
 - Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- useDataGridStageChromeCanvas useDataGridStageOverlays dataGridPerfTrace`
 - Risk level: Medium
 - Suggested commit message: `feat(datagrid-vue-app): trace chrome and overlay render cost`
@@ -160,8 +163,8 @@ Current execution state:
 4. Slice 4: Custom Renderer Error Fallback (completed)
 5. Slice 5: Lightweight Scroll Rendering Policy (completed)
 6. Slice 6: Mount And Unmount Churn Benchmark (completed)
-7. Slice 7: Chrome And Overlay Duration Telemetry (next)
-8. Slice 8: Enterprise Rendering Browser Gates
+7. Slice 7: Chrome And Overlay Duration Telemetry (completed)
+8. Slice 8: Enterprise Rendering Browser Gates (next)
 
 ## Execution Notes
 
