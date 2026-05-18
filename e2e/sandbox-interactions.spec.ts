@@ -229,6 +229,32 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
+  test("inline editor draft commits before attempted virtualization scroll", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.dblclick()
+    const sourceSignature = await cellSignature(sourceCell)
+    const editor = sourceCell.locator("input.cell-editor-input").first()
+    await expect(editor).toBeVisible({ timeout: 20_000 })
+    await editor.fill("98765")
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBe(0)
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect(sourceCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(sourceCell.locator("input.cell-editor-input")).toHaveCount(0)
+    await expect(sourceCell).toContainText("£98,765.00")
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+  })
+
   test("additive selection ranges remount after horizontal virtualization", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
