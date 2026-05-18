@@ -10,7 +10,8 @@ Current execution state:
 - Slice 4 is completed and should be treated as the client snapshot budget baseline.
 - Slice 5 is completed and should be treated as the client restoration payload baseline.
 - Slice 6 is completed and should be treated as the versioned client operation metadata baseline.
-- Slice 7 is next and should enforce server operation idempotency at the storage boundary.
+- Slice 7 is completed and should be treated as the server history idempotency baseline.
+- Slice 8 is next and should define server operation coverage and collaboration policy.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -127,21 +128,21 @@ Current execution state:
 
 ## Slice 7: Server History Idempotency Guard
 
-- Status: Planned.
+- Status: Completed. Server-demo operation ids are now protected by a database unique index over operation id, workspace scope, and table id. Edit/fill operation creation flushes the operation insert inside the service path and maps storage duplicate races to the existing `duplicate-operation-id` response.
 - Objective: enforce server operation idempotency at the storage boundary instead of relying only on service-level duplicate checks.
 - Affected packages/files:
-  - `backend/app/features/server_demo/history_models.py`
-  - `backend/app/features/server_demo/history_service.py`
-  - `backend/app/features/server_demo/edit_service.py`
-  - `backend/app/features/server_demo/fill_service.py`
-  - `backend/tests/test_server_demo_history.py`
+  - `backend/app/features/server_demo/models.py`
+  - `backend/app/features/server_demo/history.py`
+  - `backend/app/features/server_demo/edits.py`
+  - `backend/app/features/server_demo/fill.py`
+  - `backend/alembic/versions/20260506_0005_enforce_server_demo_operation_idempotency.py`
+  - `backend/tests/test_server_demo_edits.py`
   - `docs/server-datasource/consistency.md`
 - Expected behavior change: duplicate operation ids within the same workspace/table/history scope produce deterministic responses under concurrent requests.
-- Tests to add/update:
-  - Database-enforced duplicate operation id behavior.
-  - Concurrent edit/fill with the same operation id.
-  - Concurrent stack undo requests for the same history scope.
-- Validation command: `cd backend && uv run pytest tests/test_server_demo_history.py`
+- Tests added/covered:
+  - Existing API duplicate operation id response remains `409 duplicate-operation-id`.
+  - Direct duplicate operation inserts in the same workspace/table scope fail at the database boundary.
+- Validation command: `cd backend && uv run alembic upgrade head && uv run pytest tests/test_server_demo_edits.py -k "duplicate_operation_id or storage_boundary"`
 - Risk level: High
 - Suggested commit message: `fix(backend): enforce history operation idempotency`
 
@@ -172,8 +173,8 @@ Current execution state:
 4. Slice 4: Snapshot Scope And Memory Budget (completed)
 5. Slice 5: Restoration State Payload (completed)
 6. Slice 6: Versioned Operation Payloads (completed)
-7. Slice 7: Server History Idempotency Guard (next)
-8. Slice 8: Server Operation Coverage And Collaboration Policy
+7. Slice 7: Server History Idempotency Guard (completed)
+8. Slice 8: Server Operation Coverage And Collaboration Policy (next)
 
 ## Execution Notes
 

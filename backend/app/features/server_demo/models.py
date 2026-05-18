@@ -39,6 +39,13 @@ class ServerDemoOperation(Base):
     __table_args__ = (
         Index("ix_server_demo_operations_operation_id_workspace_id", "operation_id", "workspace_id"),
         Index(
+            "uq_server_demo_operations_scope_operation",
+            "operation_id",
+            text("COALESCE(workspace_id, '')"),
+            "table_id",
+            unique=True,
+        ),
+        Index(
             "ix_srv_demo_ops_ws_tbl_user_session_status_created",
             "workspace_id",
             "table_id",

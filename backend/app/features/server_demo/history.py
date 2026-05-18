@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
@@ -23,6 +24,7 @@ DEFAULT_SERVER_DEMO_SESSION_ID = "server-demo-session"
 OPERATION_STATUS_APPLIED = "applied"
 OPERATION_STATUS_DISCARDED = "discarded"
 OPERATION_STATUS_UNDONE = "undone"
+SERVER_DEMO_OPERATION_IDEMPOTENCY_INDEX = "uq_server_demo_operations_scope_operation"
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,52 @@ def _operation_scope_conditions(
     if session_id is not None:
         conditions.append(model.session_id == session_id)
     return conditions
+
+
+def _duplicate_operation_id_error(operation_id: str) -> ApiException:
+    return ApiException(
+        status_code=409,
+        code="duplicate-operation-id",
+        message=f"Operation {operation_id} already exists",
+    )
+
+
+def _is_operation_idempotency_error(exc: IntegrityError) -> bool:
+    if getattr(exc.orig, "constraint_name", None) == SERVER_DEMO_OPERATION_IDEMPOTENCY_INDEX:
+        return True
+    cause = getattr(exc.orig, "__cause__", None)
+    if getattr(cause, "constraint_name", None) == SERVER_DEMO_OPERATION_IDEMPOTENCY_INDEX:
+        return True
+    return SERVER_DEMO_OPERATION_IDEMPOTENCY_INDEX in str(exc)
+
+
+async def ensure_server_demo_operation_id_available(
+    session: AsyncSession,
+    *,
+    operation_id: str,
+    workspace_id: str | None,
+    table_id: str | None = SERVER_DEMO_TABLE.table_id,
+) -> None:
+    existing_count = await session.scalar(
+        select(func.count())
+        .select_from(ServerDemoOperationModel)
+        .where(
+            ServerDemoOperationModel.operation_id == operation_id,
+            workspace_column_condition(ServerDemoOperationModel.workspace_id, workspace_id),
+            ServerDemoOperationModel.table_id == table_id,
+        )
+    )
+    if existing_count:
+        raise _duplicate_operation_id_error(operation_id)
+
+
+async def flush_server_demo_operation_insert(session: AsyncSession, *, operation_id: str) -> None:
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        if _is_operation_idempotency_error(exc):
+            raise _duplicate_operation_id_error(operation_id) from exc
+        raise
 
 
 async def invalidate_redo_branch_for_scope(

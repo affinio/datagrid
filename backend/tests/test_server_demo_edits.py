@@ -7,6 +7,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.features.server_demo.invalidation import ServerDemoInvalidationService
 from app.features.server_demo.schemas import ServerDemoEditInvalidation
@@ -768,6 +769,48 @@ async def test_server_demo_duplicate_operation_id_is_rejected(client: AsyncClien
 
     assert second_response.status_code == 409
     assert second_response.json()["code"] == "duplicate-operation-id"
+
+
+async def test_server_demo_operation_id_is_unique_at_storage_boundary() -> None:
+    now = datetime.now(timezone.utc)
+    operation_id = "test-storage-duplicate-operation"
+
+    async with AsyncSessionLocal() as session:
+        session.add(
+            ServerDemoOperation(
+                operation_id=operation_id,
+                workspace_id=DEFAULT_SERVER_DEMO_WORKSPACE_ID,
+                table_id=DEFAULT_SERVER_DEMO_TABLE_ID,
+                user_id=None,
+                session_id="storage-boundary-session",
+                operation_type="edit",
+                status="applied",
+                operation_metadata={},
+                revision=now,
+                created_at=now,
+                modified_at=now,
+            )
+        )
+        await session.flush()
+
+        session.add(
+            ServerDemoOperation(
+                operation_id=operation_id,
+                workspace_id=DEFAULT_SERVER_DEMO_WORKSPACE_ID,
+                table_id=DEFAULT_SERVER_DEMO_TABLE_ID,
+                user_id=None,
+                session_id="other-storage-boundary-session",
+                operation_type="fill",
+                status="applied",
+                operation_metadata={},
+                revision=now,
+                created_at=now,
+                modified_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await session.flush()
+        await session.rollback()
 
 
 async def test_server_demo_noop_edit_still_creates_operation_and_event(client: AsyncClient) -> None:

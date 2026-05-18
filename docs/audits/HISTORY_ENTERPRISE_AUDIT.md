@@ -24,7 +24,8 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - 2026-05-18: Slice 4, Snapshot Scope And Memory Budget, is complete. Client app intent history now marks full/partial snapshots that exceed row, cell, or byte-estimate budgets and skips recording those over-budget intents instead of creating unbounded undo entries.
 - 2026-05-18: Slice 5, Restoration State Payload, is complete. Client app history snapshots now carry optional active-cell, selection snapshot, scroll anchor, focus target, and edit target metadata, and the Vue app stage restores selection/focus context through existing selection and active-cell viewport paths.
 - 2026-05-18: Slice 6, Versioned Operation Payloads, is complete. Core transaction metadata now preserves operation payloads, app intent descriptors can carry optional operation metadata, and built-in app history derives normalized version-1 operation metadata beside snapshot replay payloads.
-- Remaining runtime gaps: persisted operation recovery, server storage idempotency, broader server operation coverage, collaborative conflict policy, and deeper inline/formula editor recovery.
+- 2026-05-18: Slice 7, Server History Idempotency Guard, is complete. Server-demo operation ids are now protected by database uniqueness within workspace/table scope, and edit/fill insert races are converted to the existing `duplicate-operation-id` API error.
+- Remaining runtime gaps: persisted operation recovery, broader server operation coverage, collaborative conflict policy, concurrent server stack action coverage, and deeper inline/formula editor recovery.
 
 ## Current Architecture Summary
 
@@ -169,6 +170,7 @@ Backend and sandbox:
 
 2. **Server operation uniqueness is enforced in service code rather than database constraints.**
    `ServerDemoEditService.ensure_operation_id_available(...)` and `ServerDemoFillService.ensure_operation_id_available(...)` reject duplicate operation ids by query. The schema has indexes for operation id and workspace but no reviewed unique constraint. This is probably adequate in the demo path, but a production backend should enforce idempotency at the storage boundary.
+   Status after Slice 7: server-demo operation ids now have a storage-level unique index by operation id, normalized workspace scope, and table id. Service-level checks remain as the fast path, while insert-time uniqueness errors map to `duplicate-operation-id`.
 
 3. **Server redo branch invalidation is scoped and implemented, but needs broader tests.**
    Backend tests cover commit A/B, undo B, commit C, and discarded redo branch. Additional tests should cover redo invalidation after fill, mixed user/session scopes, failed commit after undo, and concurrent commits.
@@ -225,7 +227,7 @@ Backend and sandbox:
 - Server-side series fill is explicitly unsupported in the protocol.
 - Full off-viewport materialization may be bounded; server fill currently requires source and target row ids to be resolved.
 - The backend uses best-effort fallback for scope divergence between request/body/header and persisted operation scope. This is practical but should be tightened for production authorization.
-- Database-level idempotency should be strengthened with unique constraints or equivalent transactional insert semantics.
+- Database-level idempotency is enforced for server-demo edit/fill operation ids within workspace/table scope. Undo/redo action concurrency still needs focused stack-level coverage.
 - Change-feed gaps can fall back to dataset invalidation. That is safe but can erase precise history-linked invalidation.
 - Collaborative editing semantics are not defined beyond revision/stale-write checks and scoped history stacks.
 
@@ -292,7 +294,7 @@ What blocks the target:
 ### Phase 4: Server History Generalization
 
 - Move server-demo-specific history semantics into reusable backend package contracts where possible.
-- Add database idempotency constraints for operation ids within workspace/table scope.
+- Keep database idempotency constraints for operation ids within workspace/table scope and extend concurrency coverage to stack undo/redo.
 - Extend server history beyond cell events or explicitly document unsupported structural operations.
 - Add fill, edit, undo, redo, change-feed, and stale-revision tests under concurrent request scenarios.
 
@@ -364,7 +366,7 @@ Performance tests:
 4. Add snapshot size telemetry and soft warnings.
 5. Add selection/active-cell restoration payload for app history.
 6. Define versioned operation payloads for edit, paste, fill, and row operations.
-7. Add database uniqueness/idempotency guard for server operation ids.
+7. Add database uniqueness/idempotency guard for server operation ids. Completed in Slice 7.
 8. Add server concurrent undo/redo tests.
 9. Add collaborative overlap semantics.
 10. Add reload/recovery story for serialized or server-backed history.

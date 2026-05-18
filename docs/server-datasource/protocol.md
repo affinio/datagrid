@@ -568,7 +568,7 @@ Unsupported until a separate API is approved:
 Required API shape before offline replay can be implemented:
 
 - durable `operationId` for every mutation
-- backend duplicate-operation detection for each operation id
+- backend duplicate-operation detection for each operation id, enforced at the storage boundary where the backend owns durable history
 - deterministic response for duplicate operations
 - persisted mutation payload, projection state, `baseRevision`, workspace/table/user/session scope, and dependency tokens
 - explicit conflict policy for stale revision, projection mismatch, boundary mismatch, authorization loss, deleted rows, and unsupported fill modes

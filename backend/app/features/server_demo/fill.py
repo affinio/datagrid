@@ -5,11 +5,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import ApiException
 from app.features.server_demo.history import (
+    ensure_server_demo_operation_id_available,
+    flush_server_demo_operation_insert,
     invalidate_redo_branch_for_scope,
     normalize_history_scope_value,
     operation_scope_from_request,
@@ -25,7 +27,7 @@ from app.features.server_demo.serialization import (
 )
 from app.features.server_demo.schemas import ServerDemoFillBoundaryRequest, ServerDemoFillBoundaryResponse
 from app.features.server_demo.table import SERVER_DEMO_TABLE
-from app.features.server_demo.workspace import workspace_column_condition, workspace_scope_condition
+from app.features.server_demo.workspace import workspace_scope_condition
 from affino_grid_backend.core.mutations import GridHistoryStatus, PendingGridCellEvent
 from affino_grid_backend.core.revision import GridRevisionService
 from affino_grid_backend.fill import GridFillServiceBase
@@ -113,16 +115,12 @@ class ServerDemoFillService(GridFillServiceBase):
         return {row.id: row for row in rows}
 
     async def ensure_operation_id_available(self, session: AsyncSession, operation_id: str) -> None:
-        conditions = [ServerDemoOperationModel.operation_id == operation_id]
-        if self._workspace_id is not None:
-            conditions.append(workspace_column_condition(ServerDemoOperationModel.workspace_id, self._workspace_id))
-        existing_count = await session.scalar(select(func.count()).select_from(ServerDemoOperationModel).where(*conditions))
-        if existing_count:
-            raise ApiException(
-                status_code=409,
-                code="duplicate-operation-id",
-                message=f"Operation {operation_id} already exists",
-            )
+        await ensure_server_demo_operation_id_available(
+            session,
+            operation_id=operation_id,
+            workspace_id=self._workspace_id,
+            table_id=SERVER_DEMO_TABLE.table_id,
+        )
 
     async def create_fill_operation(
         self,
@@ -158,6 +156,7 @@ class ServerDemoFillService(GridFillServiceBase):
                 modified_at=changed_at,
             )
         )
+        await flush_server_demo_operation_insert(session, operation_id=operation_id)
 
     async def create_cell_events(
         self,

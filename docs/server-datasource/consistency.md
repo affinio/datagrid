@@ -354,7 +354,7 @@ Retries must preserve the original request body, range, filter/sort model, and `
 
 Retryable failures are transport failures and transient HTTP statuses (`408`, `425`, `429`, `5xx`). Stale revision, projection mismatch, boundary mismatch, validation, auth, and abort failures are not retryable.
 
-Mutations are consistency boundaries. Edits, fill commits, undo, and redo must not be retried automatically unless the backend provides durable operation-id idempotency and duplicate-operation suppression for that mutation type.
+Mutations are consistency boundaries. Edits, fill commits, undo, and redo must not be retried automatically unless the backend provides durable operation-id idempotency and duplicate-operation suppression for that mutation type. The server-demo datasource enforces edit/fill `operationId` uniqueness at the database boundary within workspace/table scope and maps duplicate inserts back to `duplicate-operation-id`.
 
 ## Offline And Reconnect Consistency
 
@@ -370,7 +370,7 @@ Reconnect is limited to read/live-update recovery:
 The client must not persist and replay mutations after connectivity loss unless a host app implements an explicit durable operation contract. That contract must include:
 
 - stable operation id allocation before the mutation leaves the client
-- duplicate-operation suppression on the backend
+- duplicate-operation suppression on the backend, preferably enforced by storage constraints within workspace/table scope
 - deterministic duplicate responses
 - persisted request body, `baseRevision`, projection hash, boundary token, and history scope
 - conflict handling for stale revision, projection mismatch, deleted rows, permission loss, and unsupported operations
