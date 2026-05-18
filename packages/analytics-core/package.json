@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run src/__tests__/index.test.ts --config ./vitest.config.ts"
+    "test": "vitest run --config ./vitest.config.ts"
   },
   "repository": {
     "type": "git",
