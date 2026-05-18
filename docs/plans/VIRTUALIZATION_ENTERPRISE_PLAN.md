@@ -7,7 +7,9 @@ Current execution state:
 - Slice 1 is already completed and should be treated as the baseline.
 - Slice 2 is completed and should be treated as the controller integration baseline.
 - Slice 3 is completed and should be treated as the browser blank-viewport detection baseline.
-- Slice 4 is runtime-fix-only work and is not warranted until Slice 3 or an equivalent regression exposes a blanking failure. Slice 5 is the next planned implementation slice unless a blank viewport failure is found.
+- Slice 4 is runtime-fix-only work and is not warranted until Slice 3 or an equivalent regression exposes a blanking failure.
+- Slice 5 is completed and should be treated as the adaptive overscan consistency baseline.
+- Slice 6 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -89,7 +91,7 @@ Current execution state:
 
 ## Slice 5: Adaptive Overscan Consistency Contract
 
-- Status: Planned.
+- Status: Completed. The Vue app row adaptive overscan path now consumes the core vertical overscan controller through the internal core surface, and focused core/Vue tests cover burst, jump, idle reset, disabled, horizontal edge clamping, and app-profile overscan behavior.
 - Objective: make adaptive overscan decisions consistent across core and Vue app paths without replacing the current architecture.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/dynamicOverscan.ts`
@@ -101,7 +103,7 @@ Current execution state:
   - Unit tests for wheel, touch, jump scroll, direction reversal, idle reset, and disabled adaptive overscan.
   - Contract tests comparing core and app overscan outputs where shared inputs exist.
   - Regression tests for overscan clamping near first and last row/column.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand overscan && pnpm --filter @affino/datagrid-vue test -- --runInBand viewport`
+- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand overscan && pnpm --filter @affino/datagrid-vue type-check && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts --testNamePattern viewport`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): align adaptive overscan contracts`
 

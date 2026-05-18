@@ -7,3 +7,13 @@ export {
   normalizeViewportRange,
   withResolvedRowIdentity,
 } from "./models/rowModel.js"
+export {
+  createHorizontalOverscanController,
+  createVerticalOverscanController,
+  type HorizontalOverscanConfig,
+  type HorizontalOverscanController,
+  type HorizontalOverscanInput,
+  type VerticalOverscanConfig,
+  type VerticalOverscanController,
+  type VerticalOverscanInput,
+} from "./virtualization/dynamicOverscan.js"

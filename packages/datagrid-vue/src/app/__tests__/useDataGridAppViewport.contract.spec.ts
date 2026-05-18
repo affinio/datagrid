@@ -1,6 +1,7 @@
 import { computed, ref } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridViewportPositionSnapshot } from "@affino/datagrid-core"
+import { createVerticalOverscanController } from "@affino/datagrid-core/internal"
 import { useDataGridAppViewport } from "../useDataGridAppViewport"
 
 const originalMatchMedia = window.matchMedia
@@ -89,6 +90,39 @@ function makeRows(count: number) {
 
 function makeBodyViewport(scrollLeft = 0, clientWidth = 800): HTMLElement {
   return { scrollTop: 0, scrollLeft, clientHeight: 600, clientWidth } as HTMLElement
+}
+
+function resolveSharedAppProfileOverscan(input: {
+  baseOverscan: number
+  viewportHeight: number
+  rowHeight: number
+  delta: number
+  timestamp: number
+}): number {
+  const frameMs = 16.7
+  const viewportRows = Math.ceil(Math.max(1, input.viewportHeight) / Math.max(1, input.rowHeight))
+  const maxOverscan = Math.min(64, Math.max(16, viewportRows))
+  const controller = createVerticalOverscanController({
+    minOverscan: input.baseOverscan,
+    velocityRatio: 160 / frameMs,
+    viewportRatio: 0,
+    decay: 0,
+    maxViewportMultiplier: Math.max(
+      0,
+      (Math.max(input.baseOverscan, maxOverscan) - input.baseOverscan) / Math.max(1, viewportRows),
+    ),
+    teleportMultiplier: Number.POSITIVE_INFINITY,
+    frameDurationMs: frameMs,
+    minSampleMs: 1,
+  })
+  controller.reset(0)
+  return Math.min(maxOverscan, controller.update({
+    timestamp: input.timestamp,
+    delta: input.delta,
+    viewportSize: input.viewportHeight,
+    itemSize: input.rowHeight,
+    virtualizationEnabled: input.baseOverscan > 0,
+  }).overscan)
 }
 
 function createEventHarness() {
@@ -337,7 +371,15 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(element))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 9, end: 45 })
+    const sharedOverscan = resolveSharedAppProfileOverscan({
+      baseOverscan: 1,
+      viewportHeight: 100,
+      rowHeight: 20,
+      delta: 400,
+      timestamp: 16,
+    })
+    expect(sharedOverscan).toBe(16)
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 25 - sharedOverscan, end: 29 + sharedOverscan })
 
     vi.advanceTimersByTime(121)
     syncRowsInRange.mockClear()
@@ -346,6 +388,47 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledWith({ start: 149, end: 155 })
+  })
+
+  it("keeps adaptive row overscan disabled when base overscan is zero", () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(16)
+      .mockReturnValue(32)
+
+    const raf = createRafHarness()
+    const syncRowsInRange = vi.fn(() => [])
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        rowPartition: ref({ bodyRowCount: 200, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 100,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    element.scrollTop = 500
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 25, end: 29 })
   })
 
   it("incrementally shifts visible rows when the viewport range overlaps the previous frame", () => {

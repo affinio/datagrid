@@ -6,6 +6,10 @@ import type {
   DataGridViewportPositionSnapshot,
   DataGridViewportRange,
 } from "@affino/datagrid-core"
+import {
+  createVerticalOverscanController,
+  type VerticalOverscanController,
+} from "@affino/datagrid-core/internal"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import type { DataGridAppMode, DataGridAppRowRenderMode } from "./useDataGridAppControls"
@@ -24,6 +28,9 @@ const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
+const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_FRAME_MS = 16.7
+const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_VELOCITY_RATIO =
+  DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS / DATA_GRID_ADAPTIVE_ROW_OVERSCAN_FRAME_MS
 
 type DataGridPerfSample = {
   scope: string
@@ -370,8 +377,10 @@ export function useDataGridAppViewport<TRow>(
   })
   let adaptiveRowOverscan = 0
   let lastAdaptiveOverscanScrollTop = 0
-  let lastAdaptiveOverscanSampleMs = 0
   let hasAdaptiveRowOverscanSample = false
+  let adaptiveRowOverscanController: VerticalOverscanController | null = null
+  let adaptiveRowOverscanControllerBase = -1
+  let adaptiveRowOverscanControllerMaxMultiplier = -1
 
   const resolveEffectiveRowOverscan = (): number => {
     const baseOverscan = rowOverscan.value
@@ -389,38 +398,80 @@ export function useDataGridAppViewport<TRow>(
     )
   }
 
+  const resolveAdaptiveRowOverscanController = (
+    baseOverscan: number,
+    clientHeight: number,
+    estimatedRowHeight: number,
+  ): VerticalOverscanController => {
+    const viewportRows = Math.ceil(Math.max(1, clientHeight) / Math.max(1, estimatedRowHeight))
+    const maxOverscan = resolveAdaptiveRowOverscanMax(clientHeight, estimatedRowHeight)
+    const maxViewportMultiplier = Math.max(
+      0,
+      (Math.max(baseOverscan, maxOverscan) - baseOverscan) / Math.max(1, viewportRows),
+    )
+    if (
+      !adaptiveRowOverscanController ||
+      adaptiveRowOverscanControllerBase !== baseOverscan ||
+      adaptiveRowOverscanControllerMaxMultiplier !== maxViewportMultiplier
+    ) {
+      adaptiveRowOverscanController = createVerticalOverscanController({
+        minOverscan: baseOverscan,
+        velocityRatio: DATA_GRID_ADAPTIVE_ROW_OVERSCAN_VELOCITY_RATIO,
+        viewportRatio: 0,
+        decay: 0,
+        maxViewportMultiplier,
+        teleportMultiplier: Number.POSITIVE_INFINITY,
+        frameDurationMs: DATA_GRID_ADAPTIVE_ROW_OVERSCAN_FRAME_MS,
+        minSampleMs: 1,
+      })
+      adaptiveRowOverscanControllerBase = baseOverscan
+      adaptiveRowOverscanControllerMaxMultiplier = maxViewportMultiplier
+    }
+    return adaptiveRowOverscanController
+  }
+
   const updateAdaptiveRowOverscan = (scrollTop: number, clientHeight: number): void => {
     const now = resolveDataGridPerfNow()
+    const baseOverscan = rowOverscan.value
     if (!hasAdaptiveRowOverscanSample) {
       lastAdaptiveOverscanScrollTop = scrollTop
-      lastAdaptiveOverscanSampleMs = now
       hasAdaptiveRowOverscanSample = true
       adaptiveRowOverscan = 0
+      resolveAdaptiveRowOverscanController(
+        baseOverscan,
+        clientHeight,
+        Math.max(1, options.normalizedBaseRowHeight.value),
+      ).reset(now)
       return
     }
-    const elapsedMs = Math.max(1, now - lastAdaptiveOverscanSampleMs)
     const deltaPx = Math.abs(scrollTop - lastAdaptiveOverscanScrollTop)
     const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
     const minAdaptiveDistancePx = Math.max(Math.max(1, clientHeight), estimatedRowHeight * 4)
     if (deltaPx < minAdaptiveDistancePx) {
       adaptiveRowOverscan = 0
       lastAdaptiveOverscanScrollTop = scrollTop
-      lastAdaptiveOverscanSampleMs = now
+      adaptiveRowOverscanController?.reset(now)
       return
     }
-    const projectedRows = Math.ceil(
-      (deltaPx / elapsedMs) * DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS / estimatedRowHeight,
+    const controller = resolveAdaptiveRowOverscanController(baseOverscan, clientHeight, estimatedRowHeight)
+    adaptiveRowOverscan = Math.min(
+      resolveAdaptiveRowOverscanMax(clientHeight, estimatedRowHeight),
+      controller.update({
+        timestamp: now,
+        delta: deltaPx,
+        viewportSize: clientHeight,
+        itemSize: estimatedRowHeight,
+        virtualizationEnabled: baseOverscan > 0,
+      }).overscan,
     )
-    adaptiveRowOverscan = Math.min(resolveAdaptiveRowOverscanMax(clientHeight, estimatedRowHeight), Math.max(0, projectedRows))
     lastAdaptiveOverscanScrollTop = scrollTop
-    lastAdaptiveOverscanSampleMs = now
   }
 
   const resetAdaptiveRowOverscan = (): void => {
     adaptiveRowOverscan = 0
     lastAdaptiveOverscanScrollTop = pendingViewportScrollTop
-    lastAdaptiveOverscanSampleMs = 0
     hasAdaptiveRowOverscanSample = false
+    adaptiveRowOverscanController?.reset(0)
   }
   const columnOverscan = computed(() => {
     const value = options.columnOverscan == null ? 2 : resolveMaybeRef(options.columnOverscan)

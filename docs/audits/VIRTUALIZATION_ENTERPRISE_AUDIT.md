@@ -252,7 +252,7 @@ What blocks the target:
 
 ### Phase 2: Scroll And Overscan Hardening
 
-- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection is covered in `e2e/sandbox-grid.spec.ts`; remaining Phase 2 work is server/touch/latency variants, overscan decision contracts, churn telemetry, and runtime telemetry.
+- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection is covered in `e2e/sandbox-grid.spec.ts`; adaptive overscan consistency is covered by `packages/datagrid-core/src/viewport/__tests__/verticalOverscan.contract.spec.ts` and `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`, with the Vue app path consuming the core overscan controller through the internal core surface. Remaining Phase 2 work is server/touch/latency variants, churn telemetry, and runtime telemetry.
 - Add blank-viewport detection in browser tests and optional runtime telemetry.
 - Record overscan decisions: base overscan, adaptive overscan, velocity, direction, touch mode, rendered row count, and rendered column count.
 - Add mount/unmount churn telemetry for rows and cells.
