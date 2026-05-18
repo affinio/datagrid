@@ -96,6 +96,14 @@ State transitions follow these rules:
 - Inactive additive ranges do not render active overlay borders or edge hover affordances. They remain visible through cell selected styling and available to selection-aware operations that explicitly consume all ranges.
 - Pinned left, center, right, and pinned-bottom overlay lanes render the active range only when additive selection is active. Non-additive single-range selection renders its one committed range in every intersecting pane.
 
+### Selection accessibility contract
+
+- Rendered body cells expose `aria-selected` from the logical selection snapshot: anchor cells and selected cells are `true`, unselected rendered cells are `false`.
+- Multi-range selections expose selected state for each rendered committed range even when only the active range owns overlays, fill handle, and range-move affordances.
+- Row-selection cells keep checkbox semantics separate from cell-range selection through `role="checkbox"` and `aria-checked`.
+- Non-materializable placeholder cells expose `aria-disabled="true"`; materializable placeholder cells remain interactive and materialize through the same edit/toggle paths as pointer and keyboard workflows.
+- Virtualized remounts must recompute accessible selected/disabled state from snapshot and row surface state after the cell returns to the DOM.
+
 ### Server-backed selection operations
 
 Server-backed grids use the operation matrix in `docs/server-datasource/selection-operations.md`.

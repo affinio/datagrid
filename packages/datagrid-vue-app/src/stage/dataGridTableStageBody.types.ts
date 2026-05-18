@@ -66,6 +66,7 @@ export interface DataGridTableStageBodyRenderApiBase {
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
   columnIndexByKey: (columnKey: string) => number
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
+  cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
   cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
   cellAriaChecked: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
   cellAriaPressed: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined

@@ -1463,6 +1463,33 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("exposes selection aria state for active selected cells", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const selectedCell = queryBodyCell(wrapper, 1, 1)
+    await selectedCell.trigger("mousedown", { button: 0, buttons: 1 })
+    await selectedCell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 1, 1).attributes("aria-selected")).toBe("true")
+    expect(queryBodyCell(wrapper, 2, 2).attributes("aria-selected")).toBe("false")
+
+    await wrapper.setProps({ rows: BASE_ROWS.slice() })
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 1, 1).attributes("aria-selected")).toBe("true")
+
+    wrapper.unmount()
+  })
+
   it("buffers a fast typed word into inline editing on a focused editable cell", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -8027,6 +8054,27 @@ describe("DataGrid app facade contract", () => {
     expect(queryBodyCell(wrapper, 1, 0).exists()).toBe(true)
     expect(queryBodyCell(wrapper, 2, 0).exists()).toBe(true)
     expect(queryBodyCell(wrapper, 1, 0).text()).toBe("")
+
+    wrapper.unmount()
+  })
+
+  it("marks non-materializable placeholder cells as aria-disabled", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 1,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(queryBodyCell(wrapper, 1, 0).attributes("aria-disabled")).toBe("true")
 
     wrapper.unmount()
   })

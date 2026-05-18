@@ -85,6 +85,7 @@ export interface UseDataGridStageRenderApisOptions {
   bodyCellSelectionStyle: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
+  cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
   cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
   cellAriaChecked: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
   cellAriaPressed: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
@@ -184,6 +185,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     resolveCellCustomStyle: options.resolveCellCustomStyle,
     columnIndexByKey: options.columnIndexByKey,
     cellTabIndex: options.cellTabIndex,
+    cellAriaSelected: options.cellAriaSelected,
     cellAriaRole: options.cellAriaRole,
     cellAriaChecked: options.cellAriaChecked,
     cellAriaPressed: options.cellAriaPressed,
@@ -253,6 +255,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     resolveCellCustomStyle: options.resolveCellCustomStyle,
     columnIndexByKey: options.columnIndexByKey,
     cellTabIndex: options.cellTabIndex,
+    cellAriaSelected: options.cellAriaSelected,
     cellAriaRole: options.cellAriaRole,
     cellAriaChecked: options.cellAriaChecked,
     cellAriaPressed: options.cellAriaPressed,

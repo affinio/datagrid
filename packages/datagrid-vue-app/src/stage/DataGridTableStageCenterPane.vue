@@ -46,6 +46,7 @@
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="columnIndex"
           :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
+          :aria-selected="renderApi.cellAriaSelected(renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
           :role="renderApi.cellAriaRole(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
           :aria-checked="renderApi.cellAriaChecked(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
           :aria-pressed="renderApi.cellAriaPressed(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"

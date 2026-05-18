@@ -88,6 +88,7 @@
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="renderApi.columnIndexByKey(column.key)"
           :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+          :aria-selected="renderApi.cellAriaSelected(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
           :role="renderApi.cellAriaRole(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
           :aria-checked="renderApi.cellAriaChecked(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
           :aria-pressed="renderApi.cellAriaPressed(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"

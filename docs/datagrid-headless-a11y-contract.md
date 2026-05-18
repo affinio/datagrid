@@ -1,6 +1,6 @@
 # DataGrid Headless A11y Contract
 
-Updated: `2026-02-08`
+Updated: `2026-05-18`
 
 `@affino/datagrid-core` now includes a deterministic headless accessibility state machine for keyboard, focus, and ARIA state.
 
@@ -46,9 +46,22 @@ These convert headless A11y state to DOM-ready attributes:
 - grid: `role`, `tabindex`, `aria-rowcount`, `aria-colcount`, `aria-activedescendant`
 - cell: `id`, `role`, `tabindex`, `aria-rowindex`, `aria-colindex`, `aria-selected`
 
+## Stage Selection Contract
+
+The app stage mirrors the committed selection snapshot into rendered cell accessibility state:
+
+- body cells expose `aria-selected="true"` for the active anchor cell and every rendered selected cell, including inactive additive ranges;
+- unselected rendered cells expose `aria-selected="false"` so virtualized remounts return a deterministic selected state;
+- row-selection checkbox cells keep `role="checkbox"` and `aria-checked` in sync with row-selection state;
+- placeholder cells that cannot materialize into editable rows expose `aria-disabled="true"`;
+- DOM focus restoration may lag virtualization, but selected/disabled state must be derived from the logical selection snapshot and row surface state, not from focus alone.
+
 ## Contract Tests
 
 - Core state machine:
   - `packages/datagrid-core/src/a11y/__tests__/headlessA11yStateMachine.contract.spec.ts`
 - Vue adapter DOM mapping:
   - `packages/datagrid-vue/src/adapters/__tests__/a11yAttributesAdapter.contract.spec.ts`
+- Stage selection accessibility:
+  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellState.spec.ts`

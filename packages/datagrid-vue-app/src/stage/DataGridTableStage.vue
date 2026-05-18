@@ -1172,6 +1172,7 @@ function isTouchRangeMoveHandleCell(row: TableRow, rowOffset: number, columnInde
 const {
   builtInCellClasses,
   cellStateClasses,
+  cellAriaSelected,
   cellAriaRole,
   cellAriaChecked,
   cellAriaPressed,
@@ -1188,6 +1189,7 @@ const {
   isCellEditableSafe,
   isEditingCellSafe,
   resolveCellEditorMode,
+  isCellSelectedSafe,
   isVisualSelectionAnchorCell,
   shouldHighlightSelectedCellVisual,
   isRangeMoveHandleHoverCell: isRangeMoveHandleHoverCellSafe,
@@ -1541,6 +1543,7 @@ const cellRuntime = computed(() => ({
   bodyCellSelectionStyle,
   resolveCellCustomStyle,
   cellTabIndex,
+  cellAriaSelected,
   cellAriaRole,
   cellAriaChecked,
   cellAriaPressed,

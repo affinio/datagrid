@@ -223,10 +223,10 @@ Tests and benchmarks sampled:
 
 ## Accessibility Risks
 
-- Stage cells expose roles, labels, checked/pressed/disabled states for interactive cells.
-- The broader virtualized grid a11y contract requires row/column count and indexes. This audit did not verify a complete selection-specific a11y story for active descendant, selected ranges, multi-range announcements, or placeholder rows.
-- Row-selection checkbox cells have aria checked coverage in component tests.
-- Enterprise readiness needs keyboard-only and screen-reader-oriented tests for active cell, selected range, row selection, multi-range, and virtualized remount.
+- Stage cells expose roles, labels, checked/pressed/disabled states for interactive cells, and now expose deterministic `aria-selected` for anchor cells, selected cells, additive ranges, and unselected rendered cells.
+- Non-materializable placeholder cells expose `aria-disabled`, and row-selection checkbox cells keep `aria-checked` coverage in component tests.
+- The broader virtualized grid a11y contract still requires row/column count and index coverage across the app stage.
+- Enterprise readiness still needs screen-reader-oriented validation for announcements across active cell, row selection, multi-range changes, and virtualized remount flows.
 
 ## Enterprise Readiness Score
 

@@ -20,7 +20,7 @@ function createColumn(
   } as DataGridTableStageBodyColumn
 }
 
-function createRow(): DataGridTableStageBodyRow {
+function createRow(partial: Partial<DataGridTableStageBodyRow> = {}): DataGridTableStageBodyRow {
   return {
     kind: "leaf",
     data: {},
@@ -31,6 +31,7 @@ function createRow(): DataGridTableStageBodyRow {
     originalIndex: 0,
     displayIndex: 0,
     state: { selected: false, group: false, pinned: "none", expanded: false },
+    ...partial,
   }
 }
 
@@ -73,6 +74,7 @@ describe("useDataGridStageCellState", () => {
       isCellEditableSafe: (_row, _rowOffset, column) => column.key !== "plain",
       isEditingCellSafe: (_row, columnKey) => columnKey === "status",
       resolveCellEditorMode: (_row, column) => column.key === "plain" ? "text" : "select",
+      isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset === 1 && columnIndex === 2,
       isVisualSelectionAnchorCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
       shouldHighlightSelectedCellVisual: (rowOffset, columnIndex) => rowOffset === 1 && columnIndex === 2,
       isRangeMoveHandleHoverCell: (rowOffset, columnIndex) => rowOffset === 1 && columnIndex === 1,
@@ -103,6 +105,7 @@ describe("useDataGridStageCellState", () => {
     })
     expect(service.cellAriaRole(row, 0, checkboxColumn, 0)).toBe("checkbox")
     expect(service.cellAriaChecked(row, 0, checkboxColumn, 0)).toBe("true")
+    expect(service.cellAriaSelected(0, 0)).toBe("true")
 
     expect(service.builtInCellClasses(row, 0, interactiveColumn, 1)).toMatchObject({
       "grid-cell--interactive": true,
@@ -124,10 +127,15 @@ describe("useDataGridStageCellState", () => {
       "grid-cell--clipboard-pending-left": false,
       "grid-cell--editing": false,
     })
+    expect(service.cellAriaSelected(1, 2)).toBe("true")
+    expect(service.cellAriaSelected(0, 2)).toBe("false")
     expect(service.builtInCellClasses(row, 0, plainColumn, 2)).toMatchObject({
       "grid-cell--select": false,
       "grid-cell--date": false,
       "grid-cell--interactive": false,
     })
+
+    const placeholderRow = createRow({ __placeholder: true } as Partial<DataGridTableStageBodyRow>)
+    expect(service.cellAriaDisabled(placeholderRow, 0, plainColumn, 2)).toBe("true")
   })
 })

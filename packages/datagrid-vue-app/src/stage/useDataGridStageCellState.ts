@@ -13,6 +13,7 @@ export interface UseDataGridStageCellStateOptions {
   isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
   isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
   resolveCellEditorMode: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "none" | "text" | "select" | "date" | "datetime"
+  isCellSelectedSafe: (rowOffset: number, columnIndex: number) => boolean
   isVisualSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
   shouldHighlightSelectedCellVisual: (rowOffset: number, columnIndex: number) => boolean
   isRangeMoveHandleHoverCell: (rowOffset: number, columnIndex: number) => boolean
@@ -24,6 +25,7 @@ export interface UseDataGridStageCellStateOptions {
 export interface UseDataGridStageCellStateResult {
   builtInCellClasses: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => Record<string, boolean>
   cellStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => Record<string, boolean>
+  cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
   cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
   cellAriaChecked: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
   cellAriaPressed: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
@@ -41,6 +43,10 @@ function isCheckboxColumn(column: DataGridTableStageBodyColumn): boolean {
 
 function isRowSelectionColumn(column: DataGridTableStageBodyColumn): boolean {
   return column.column.meta?.rowSelection === true
+}
+
+function isPlaceholderRow(row: DataGridTableStageBodyRow): boolean {
+  return (row as { __placeholder?: unknown }).__placeholder === true
 }
 
 function checkboxValueIsChecked(options: UseDataGridStageCellStateOptions, row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): boolean {
@@ -105,6 +111,14 @@ export function useDataGridStageCellState(
     }
   }
 
+  function cellAriaSelected(rowOffset: number, columnIndex: number): "true" | "false" {
+    return options.isVisualSelectionAnchorCell(rowOffset, columnIndex)
+      || options.isCellSelectedSafe(rowOffset, columnIndex)
+      || options.shouldHighlightSelectedCellVisual(rowOffset, columnIndex)
+      ? "true"
+      : "false"
+  }
+
   function cellAriaRole(
     row: DataGridTableStageBodyRow,
     rowOffset: number,
@@ -151,6 +165,9 @@ export function useDataGridStageCellState(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): "true" | undefined {
+    if (isPlaceholderRow(row) && !options.isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+      return "true"
+    }
     return resolveCellInteraction(options, row, rowOffset, column, columnIndex)?.disabled ? "true" : undefined
   }
 
@@ -169,6 +186,7 @@ export function useDataGridStageCellState(
   return {
     builtInCellClasses,
     cellStateClasses,
+    cellAriaSelected,
     cellAriaRole,
     cellAriaChecked,
     cellAriaPressed,

@@ -162,9 +162,9 @@ Tests searched/reviewed:
    - Impact: server-backed virtualized loading can be silent or confusing to assistive tech.
    - Required: expose loading/error placeholder state through row/cell labels and a live region with throttling.
 
-5. **Selection state is mostly visual.**
-   - Evidence: visual classes and overlays represent selection; headless cells can expose `aria-selected`, but the stage cells do not consistently use headless cell aria. Checkbox row selection does expose checked state.
-   - Impact: active cell, selected range, multi-range selection, fill preview, and range move state are not predictably announced.
+5. **Selection state announcements remain incomplete.**
+   - Evidence: visual classes and overlays represent selection, and stage body cells now expose deterministic `aria-selected` for rendered selected/unselected cells. Checkbox row selection exposes checked state.
+   - Impact: active-cell changes, multi-range summaries, fill preview, and range move state are still not predictably announced as higher-level changes.
    - Required: expose active cell and selection summary through ARIA and live-region messages without adding per-cell heavy DOM churn.
 
 ### Low

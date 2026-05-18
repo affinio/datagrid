@@ -264,6 +264,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 13: Selection Accessibility Contract
 
+- Status: Completed on 2026-05-18. Stage cells now expose deterministic `aria-selected` for active and additive selected ranges, non-materializable placeholder cells expose `aria-disabled`, row-selection checkbox ARIA remains covered, and focused component/unit contracts verify remount-safe selected state.
 - Objective: define and test selection-specific accessibility behavior for active cell, selected ranges, row selection, multi-range state, placeholder rows, and virtualized remounts.
 - Affected packages/files:
   - `docs/datagrid-headless-a11y-contract.md`
