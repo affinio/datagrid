@@ -275,7 +275,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
-  test("inline editor draft commits before attempted virtualization scroll", async ({ page }) => {
+  test("inline editor draft commits when its row leaves the virtual window", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
@@ -292,11 +292,14 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await editor.fill("98765")
 
     await setViewportScroll(viewport, { top: 1_400, left: 0 })
-    await expect.poll(async () => viewportRangeStart(page)).toBe(0)
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    await expect(sourceCell).toHaveCount(0)
+    await expect(page.locator("input.cell-editor-input")).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
     await expect(sourceCell).toHaveClass(/grid-cell--selection-anchor/)
-    await expect(sourceCell.locator("input.cell-editor-input")).toHaveCount(0)
     await expect(sourceCell).toContainText("£98,765.00")
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
@@ -399,9 +402,12 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const sourceIndex = Number(loadingRowId?.split(":").at(-1))
     expect(Number.isFinite(sourceIndex)).toBe(true)
     const realRowId = `srv-${sourceIndex.toString().padStart(6, "0")}`
+    const stableLoadingCell = page.locator(
+      `.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-row-id="${loadingRowId}"][data-column-key="name"]`,
+    ).first()
 
-    await loadingCell.click()
-    const loadingSignature = await cellSignature(loadingCell)
+    const loadingSignature = await cellSignature(stableLoadingCell)
+    await stableLoadingCell.click()
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(loadingSignature)
 
     const materializedCell = page.locator(

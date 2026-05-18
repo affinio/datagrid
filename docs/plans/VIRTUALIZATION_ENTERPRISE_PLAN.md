@@ -14,7 +14,8 @@ Current execution state:
 - Slice 8 is completed and should be treated as the datasource placeholder budget baseline.
 - Slice 9 is completed and should be treated as the focus continuity baseline.
 - Slice 10 is completed and should be treated as the selection/clipboard virtual-target guard baseline.
-- Slice 11 is the next implementation slice.
+- Slice 11 is completed and should be treated as the edit lifecycle continuity baseline.
+- Slice 12 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -210,19 +211,19 @@ Current execution state:
 
 ## Slice 11: Edit Lifecycle Continuity
 
-- Status: Planned.
+- Status: Completed. Active inline edits now commit when their rendered row or rendered column leaves the virtual window, covering vertical row unmounts and horizontal column unmounts without relying on DOM blur ordering. Existing placeholder-tail materialization coverage continues to validate edit-driven placeholder replacement.
 - Objective: define and test editor behavior when an edited cell is virtualized out and later remounted.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
   - `e2e/sandbox-interactions.spec.ts`
-- Expected behavior change: edit commit, cancel, blur, and remount behavior become deterministic and documented.
-- Tests to add/update:
-  - E2E for edit then scroll out of range.
-  - E2E for edit then programmatic scroll-to-cell.
-  - Component tests for placeholder replacement while edit state exists.
-- Validation command: `pnpm e2e -- e2e/sandbox-interactions.spec.ts`
+- Expected behavior change: edit commit, cancel, blur, and remount behavior are deterministic; virtualization unmount commits the draft once without forcing focus or scroll restoration.
+- Tests added/covered:
+  - E2E for edit then scroll out of the rendered row window.
+  - Existing E2E for placeholder-tail edit materialization.
+  - Server datasource placeholder replacement e2e stabilized with a rowId-anchored loading-cell locator.
+- Validation command: `pnpm exec playwright test e2e/sandbox-interactions.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): stabilize editing across virtualization`
 
@@ -373,8 +374,8 @@ Current execution state:
 8. Slice 8: Server Placeholder Exposure Budget
 9. Slice 9: Focus Continuity Across Virtual Unmounts
 10. Slice 10: Selection And Clipboard Continuity (completed)
-11. Slice 11: Edit Lifecycle Continuity (next)
-12. Slice 12: Wide Table Horizontal Virtualization Gate
+11. Slice 11: Edit Lifecycle Continuity (completed)
+12. Slice 12: Wide Table Horizontal Virtualization Gate (next)
 13. Slice 13: Grouped And Tree Row Virtualization Contract
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases
 15. Slice 15: Virtualized Accessibility Mapping

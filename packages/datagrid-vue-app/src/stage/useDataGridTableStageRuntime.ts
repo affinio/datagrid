@@ -1066,6 +1066,39 @@ export function useDataGridTableStageRuntime<
     onCellEdit: options.onCellEdit,
   })
 
+  const isRenderedEditingColumn = (columnKey: string): boolean => {
+    if (renderedColumns.value.some(column => column.key === columnKey)) {
+      return true
+    }
+    return orderedVisibleColumns.value.some(column => (
+      column.key === columnKey
+      && (column.pin === "left" || column.pin === "right")
+    ))
+  }
+
+  const isRenderedEditingRow = (rowId: string | number): boolean => {
+    return displayRows.value.some(row => row.rowId === rowId)
+      || pinnedBottomRows.value.some(row => row.rowId === rowId)
+  }
+
+  const commitInlineEditWhenRenderedCellUnmounts = (): void => {
+    const currentEditingCell = editingCell.value
+    if (!currentEditingCell) {
+      return
+    }
+    if (
+      isRenderedEditingRow(currentEditingCell.rowId)
+      && isRenderedEditingColumn(currentEditingCell.columnKey)
+    ) {
+      return
+    }
+    commitInlineEdit("none")
+  }
+
+  watch([displayRowsRevision, renderedColumns], () => {
+    commitInlineEditWhenRenderedCellUnmounts()
+  })
+
   isEditingCellForSelection = isEditingCell
 
   const editingCellRef = computed(() => editingCell.value)
