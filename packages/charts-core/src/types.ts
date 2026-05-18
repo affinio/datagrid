@@ -23,3 +23,14 @@ export interface ChartPoint {
   x: number
   y: number
 }
+
+export interface ChartNumericDomain {
+  min: number
+  max: number
+}
+
+export interface ChartLinearScale {
+  domain: ChartNumericDomain
+  range: { min: number; max: number }
+  scale(value: number): number
+}
