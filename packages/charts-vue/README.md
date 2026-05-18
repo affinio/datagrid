@@ -10,15 +10,36 @@ Reusable Vue rendering package for Affino chart experiences.
 
 ## Current State
 
-This package is scaffold-only. It exposes a minimal package entrypoint and initial public chart-adjacent types so later slices can add concrete chart components without changing the package shape.
+This package exposes the shared chart frame and initial public chart-adjacent types. Concrete chart components will be added in later slices.
 
 ## Public API
 
 ```ts
-import { createChartsVue } from "@affino/charts-vue"
+import { AffinoChartFrame, createChartsVue } from "@affino/charts-vue"
 
 const chartsVue = createChartsVue()
 ```
+
+`AffinoChartFrame` provides the reusable SVG container for future chart components. It owns consistent sizing, title and description rendering, accessible SVG labels, and empty, loading, and error states. Chart content is passed through the default SVG slot.
+
+## Theme Tokens
+
+Consumers can override chart styling by setting CSS custom properties on `AffinoChartFrame` or a wrapping class:
+
+- `--affino-chart-background`
+- `--affino-chart-surface`
+- `--affino-chart-border`
+- `--affino-chart-text`
+- `--affino-chart-muted-text`
+- `--affino-chart-axis`
+- `--affino-chart-grid`
+- `--affino-chart-series-1`
+- `--affino-chart-series-2`
+- `--affino-chart-series-3`
+- `--affino-chart-series-4`
+- `--affino-chart-danger`
+- `--affino-chart-warning`
+- `--affino-chart-success`
 
 ## Non-Goals
 

@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
-import { createChartsVue } from "../index"
+import { AffinoChartFrame, createChartsVue } from "../index"
 import type { ChartAnchorRect, ChartInteractionPoint, ChartThemeVariant } from "../index"
 
 describe("@affino/charts-vue", () => {
@@ -16,7 +16,8 @@ describe("@affino/charts-vue", () => {
   it("exports a clean package entrypoint", async () => {
     const entrypoint = await import("../index")
 
-    expect(Object.keys(entrypoint)).toEqual(["createChartsVue"])
+    expect(Object.keys(entrypoint)).toEqual(["AffinoChartFrame", "createChartsVue"])
+    expect(entrypoint.AffinoChartFrame).toBe(AffinoChartFrame)
     expect(entrypoint.createChartsVue).toBe(createChartsVue)
   })
 })
