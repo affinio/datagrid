@@ -945,6 +945,56 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("tracks placeholder exposure and viewport data availability telemetry", async () => {
+    const now = vi.spyOn(globalThis.performance, "now")
+    now.mockReturnValue(0)
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 4,
+    })
+
+    model.setViewportRange({ start: 0, end: 3 })
+    expect(calls).toHaveLength(1)
+    expect(model.getSparseRowModelDiagnostics()).toMatchObject({
+      placeholderExposureActiveRows: 4,
+      placeholderExposureEvents: 0,
+      viewportDataAvailabilityEvents: 0,
+    })
+
+    now.mockReturnValue(25)
+    calls[0]?.resolve({
+      rows: [
+        { index: 0, row: { id: 1, value: "row-1" }, rowId: 1 },
+        { index: 1, row: { id: 2, value: "row-2" }, rowId: 2 },
+        { index: 2, row: { id: 3, value: "row-3" }, rowId: 3 },
+        { index: 3, row: { id: 4, value: "row-4" }, rowId: 4 },
+      ],
+      total: 4,
+    })
+    await flushMicrotasks()
+
+    expect(model.getSparseRowModelDiagnostics()).toMatchObject({
+      placeholderExposureActiveRows: 0,
+      placeholderExposureEvents: 4,
+      placeholderExposureTotalMs: 100,
+      placeholderExposureMaxMs: 25,
+      placeholderExposureLastMs: 25,
+      viewportDataAvailabilityEvents: 1,
+      viewportDataAvailabilityTotalMs: 25,
+      viewportDataAvailabilityMaxMs: 25,
+      viewportDataAvailabilityLastMs: 25,
+    })
+    expect(model.getBackpressureDiagnostics()).toMatchObject({
+      placeholderExposureEvents: 4,
+      viewportDataAvailabilityEvents: 1,
+    })
+
+    model.dispose()
+    now.mockRestore()
+  })
+
   it("keeps old rows visible during pending filter refresh and swaps cache on success", async () => {
     const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
     const model = createDataSourceBackedRowModel({

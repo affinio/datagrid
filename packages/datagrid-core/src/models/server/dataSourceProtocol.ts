@@ -338,6 +338,15 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   cachedBehindRows: number
   criticalInFlight: boolean
   backgroundInFlight: boolean
+  placeholderExposureActiveRows: number
+  placeholderExposureEvents: number
+  placeholderExposureTotalMs: number
+  placeholderExposureMaxMs: number
+  placeholderExposureLastMs: number
+  viewportDataAvailabilityEvents: number
+  viewportDataAvailabilityTotalMs: number
+  viewportDataAvailabilityMaxMs: number
+  viewportDataAvailabilityLastMs: number
 }
 
 export type DataGridServerPivotRowRole = "group" | "detail" | "subtotal" | "grand-total"

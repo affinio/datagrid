@@ -424,6 +424,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   const rowCache = new Map<number, DataGridRowNode<T>>()
   const staleRetainedRowIndexes = new Set<number>()
+  const activePlaceholderExposureRows = new Map<number, number>()
   const rangeCache = createDataGridRangeCache<DataGridRowNode<T>>({
     chunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
     maxChunks: Math.max(1, Math.ceil(rowCacheLimit / DEFAULT_RANGE_CACHE_CHUNK_SIZE)),
@@ -455,7 +456,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
     cachedBehindRows: 0,
     criticalInFlight: false,
     backgroundInFlight: false,
+    placeholderExposureActiveRows: 0,
+    placeholderExposureEvents: 0,
+    placeholderExposureTotalMs: 0,
+    placeholderExposureMaxMs: 0,
+    placeholderExposureLastMs: 0,
+    viewportDataAvailabilityEvents: 0,
+    viewportDataAvailabilityTotalMs: 0,
+    viewportDataAvailabilityMaxMs: 0,
+    viewportDataAvailabilityLastMs: 0,
   }
+  let viewportDataAvailabilityStartedAtMs: number | null = null
 
   const unsubscribePush = typeof dataSource.subscribe === "function"
     ? dataSource.subscribe(event => {
@@ -540,12 +551,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCache.has(index)) {
       rowCache.delete(index)
     }
+    finishPlaceholderExposure(index)
     staleRetainedRowIndexes.delete(index)
     rowCache.set(index, row)
     rangeCache.setRow(index, row)
     enforceRowCacheLimit()
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
+    finishViewportDataAvailability()
   }
 
   function writeRowCacheWithOptimisticOverlay(index: number, row: DataGridRowNode<T>) {
@@ -769,6 +782,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
+  function readTelemetryNowMs(): number {
+    const now = globalThis.performance?.now?.()
+    return Number.isFinite(now) ? now : Date.now()
+  }
+
   function getPaginationSnapshot() {
     return buildPaginationSnapshot(rowCount, paginationInput)
   }
@@ -831,6 +849,67 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return rowCache.has(index) && !staleRetainedRowIndexes.has(index)
   }
 
+  function finishPlaceholderExposure(index: number, timestampMs = readTelemetryNowMs()): void {
+    const startedAtMs = activePlaceholderExposureRows.get(index)
+    if (typeof startedAtMs !== "number") {
+      return
+    }
+    activePlaceholderExposureRows.delete(index)
+    const durationMs = Math.max(0, timestampMs - startedAtMs)
+    diagnostics.placeholderExposureEvents += 1
+    diagnostics.placeholderExposureLastMs = durationMs
+    diagnostics.placeholderExposureTotalMs += durationMs
+    diagnostics.placeholderExposureMaxMs = Math.max(diagnostics.placeholderExposureMaxMs, durationMs)
+    diagnostics.placeholderExposureActiveRows = activePlaceholderExposureRows.size
+  }
+
+  function reconcilePlaceholderExposure(sourceViewport: DataGridViewportRange = toSourceRange(viewportRange)): void {
+    const timestampMs = readTelemetryNowMs()
+    const visiblePlaceholderIndexes = new Set<number>()
+    if (rowCount > 0) {
+      const bounded = normalizeViewportRange(sourceViewport, rowCount)
+      for (let index = bounded.start; index <= bounded.end; index += 1) {
+        if (!rowCache.has(index)) {
+          visiblePlaceholderIndexes.add(index)
+          if (!activePlaceholderExposureRows.has(index)) {
+            activePlaceholderExposureRows.set(index, timestampMs)
+          }
+        }
+      }
+    }
+    for (const index of Array.from(activePlaceholderExposureRows.keys())) {
+      if (!visiblePlaceholderIndexes.has(index)) {
+        finishPlaceholderExposure(index, timestampMs)
+      }
+    }
+    diagnostics.placeholderExposureActiveRows = activePlaceholderExposureRows.size
+  }
+
+  function finishViewportDataAvailability(timestampMs = readTelemetryNowMs()): void {
+    if (viewportDataAvailabilityStartedAtMs === null) {
+      return
+    }
+    if (getVisibleRowCount() > 0 && !isRangeFullyCached(toSourceRange(viewportRange))) {
+      return
+    }
+    const durationMs = Math.max(0, timestampMs - viewportDataAvailabilityStartedAtMs)
+    viewportDataAvailabilityStartedAtMs = null
+    diagnostics.viewportDataAvailabilityEvents += 1
+    diagnostics.viewportDataAvailabilityLastMs = durationMs
+    diagnostics.viewportDataAvailabilityTotalMs += durationMs
+    diagnostics.viewportDataAvailabilityMaxMs = Math.max(diagnostics.viewportDataAvailabilityMaxMs, durationMs)
+  }
+
+  function markViewportDataAvailabilityRequested(range: DataGridViewportRange): void {
+    if (rowCount <= 0 || !rangesOverlap(range, toSourceRange(viewportRange))) {
+      return
+    }
+    if (isRangeFullyCached(toSourceRange(viewportRange))) {
+      return
+    }
+    viewportDataAvailabilityStartedAtMs ??= readTelemetryNowMs()
+  }
+
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
     if (startIndex > upperBound) {
       return 0
@@ -875,6 +954,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCount <= 0) {
       diagnostics.cachedAheadRows = 0
       diagnostics.cachedBehindRows = 0
+      reconcilePlaceholderExposure(sourceViewport)
       return
     }
     diagnostics.cachedAheadRows = countCoveredRowsForward(
@@ -885,6 +965,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sourceViewport.start - 1,
       0,
     )
+    reconcilePlaceholderExposure(sourceViewport)
+    finishViewportDataAvailability()
   }
 
   function resolveVelocityAwareSourceRange(sourceViewport: DataGridViewportRange): DataGridViewportRange {
@@ -1259,10 +1341,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       bumpRevision()
     }
     diagnostics.invalidatedRows += rowCache.size
+    for (const index of Array.from(activePlaceholderExposureRows.keys())) {
+      finishPlaceholderExposure(index)
+    }
     rowCache.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
     diagnostics.rowCacheSize = rowCache.size
+    viewportDataAvailabilityStartedAtMs = null
     updateLoadingState()
   }
 
@@ -1700,6 +1786,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
     requestCounter = requestId
     const controller = new AbortController()
     const rangeCacheToken = rangeCache.beginLoad(requestRange)
+    if (priority !== "background") {
+      markViewportDataAvailabilityRequested(requestRange)
+    }
     const requestPromise = (async () => {
       diagnostics.paused = backpressurePaused
       diagnostics.pullRequested += 1
@@ -2243,6 +2332,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     ...patchMethods,
     ...externalUpdateMethods,
     getSparseRowModelDiagnostics() {
+      reconcilePlaceholderExposure()
+      finishViewportDataAvailability()
       return {
         kind: "data-source",
         rowCount: getVisibleRowCount(),
@@ -2250,6 +2341,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
         cachedRowCount: rowCache.size,
         cacheLimit: rowCacheLimit,
         ...resolveViewportLoadingDiagnostics(),
+        placeholderExposureActiveRows: diagnostics.placeholderExposureActiveRows,
+        placeholderExposureEvents: diagnostics.placeholderExposureEvents,
+        placeholderExposureTotalMs: diagnostics.placeholderExposureTotalMs,
+        placeholderExposureMaxMs: diagnostics.placeholderExposureMaxMs,
+        placeholderExposureLastMs: diagnostics.placeholderExposureLastMs,
+        viewportDataAvailabilityEvents: diagnostics.viewportDataAvailabilityEvents,
+        viewportDataAvailabilityTotalMs: diagnostics.viewportDataAvailabilityTotalMs,
+        viewportDataAvailabilityMaxMs: diagnostics.viewportDataAvailabilityMaxMs,
+        viewportDataAvailabilityLastMs: diagnostics.viewportDataAvailabilityLastMs,
       }
     },
     getLoadedRowIntervals(range) {
@@ -2308,6 +2408,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
           : lastViewportDirection
       viewportRange = nextViewport
       const sourceViewport = toSourceRange(nextViewport)
+      reconcilePlaceholderExposure(sourceViewport)
 
       if (resolvedEmptyTotal && rowCount <= 0) {
         updateCachedCoverageDiagnostics(sourceViewport)
@@ -2748,6 +2849,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
     },
     getBackpressureDiagnostics() {
+      reconcilePlaceholderExposure()
+      finishViewportDataAvailability()
       diagnostics.criticalInFlight = Boolean(criticalInFlight)
       diagnostics.backgroundInFlight = Boolean(backgroundInFlight)
       diagnostics.inFlight = diagnostics.criticalInFlight || diagnostics.backgroundInFlight
@@ -2774,9 +2877,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
       abortLaneInFlight("critical", "stale")
       abortLaneInFlight("background", "stale")
       listeners.clear()
+      for (const index of Array.from(activePlaceholderExposureRows.keys())) {
+        finishPlaceholderExposure(index)
+      }
       rowCache.clear()
       staleRetainedRowIndexes.clear()
       rangeCache.clear()
+      viewportDataAvailabilityStartedAtMs = null
       pendingCriticalPull = null
       pendingBackgroundPull = null
       scheduledViewportPull = null

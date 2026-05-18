@@ -106,6 +106,11 @@ function stats(values) {
   }
 }
 
+function diagnosticNumber(diagnostics, key) {
+  const value = diagnostics?.[key]
+  return Number.isFinite(value) ? value : 0
+}
+
 function createRng(seed) {
   let state = seed % 2147483647
   if (state <= 0) state += 2147483646
@@ -381,6 +386,9 @@ for (const seed of BENCH_SEEDS) {
       cvPct: scrollBurst.stat.cvPct.toFixed(2),
       coalesced: scrollBurst.diagnostics.pullCoalesced,
       deferred: scrollBurst.diagnostics.pullDeferred,
+      placeholderEvents: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureEvents"),
+      placeholderMaxMs: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
+      viewportDataMs: diagnosticNumber(scrollBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
     },
     {
       scenario: "filter-burst",
@@ -390,6 +398,9 @@ for (const seed of BENCH_SEEDS) {
       cvPct: filterBurst.stat.cvPct.toFixed(2),
       coalesced: filterBurst.diagnostics.pullCoalesced,
       deferred: filterBurst.diagnostics.pullDeferred,
+      placeholderEvents: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureEvents"),
+      placeholderMaxMs: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
+      viewportDataMs: diagnosticNumber(filterBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
     },
   ])
   console.log(`Total elapsed: ${elapsed.toFixed(2)}ms`)
@@ -441,6 +452,28 @@ const aggregateCoalesced = stats(
 const aggregateDeferred = stats(
   runResults.map(
     run => run.scenarios.scrollBurst.diagnostics.pullDeferred + run.scenarios.filterBurst.diagnostics.pullDeferred,
+  ),
+)
+const aggregatePlaceholderExposureEvents = stats(
+  runResults.map(
+    run => diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "placeholderExposureEvents")
+      + diagnosticNumber(run.scenarios.filterBurst.diagnostics, "placeholderExposureEvents"),
+  ),
+)
+const aggregatePlaceholderExposureMaxMs = stats(
+  runResults.map(
+    run => Math.max(
+      diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "placeholderExposureMaxMs"),
+      diagnosticNumber(run.scenarios.filterBurst.diagnostics, "placeholderExposureMaxMs"),
+    ),
+  ),
+)
+const aggregateViewportDataAvailabilityMaxMs = stats(
+  runResults.map(
+    run => Math.max(
+      diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "viewportDataAvailabilityMaxMs"),
+      diagnosticNumber(run.scenarios.filterBurst.diagnostics, "viewportDataAvailabilityMaxMs"),
+    ),
   ),
 )
 
@@ -512,6 +545,9 @@ const summary = {
     filterBurstP99Ms: aggregateFilterP99,
     pullCoalesced: aggregateCoalesced,
     pullDeferred: aggregateDeferred,
+    placeholderExposureEvents: aggregatePlaceholderExposureEvents,
+    placeholderExposureMaxMs: aggregatePlaceholderExposureMaxMs,
+    viewportDataAvailabilityMaxMs: aggregateViewportDataAvailabilityMaxMs,
   },
   runs: runResults,
   budgetErrors,

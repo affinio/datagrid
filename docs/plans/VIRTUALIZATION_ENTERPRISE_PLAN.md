@@ -10,7 +10,8 @@ Current execution state:
 - Slice 4 is runtime-fix-only work and is not warranted until Slice 3 or an equivalent regression exposes a blanking failure.
 - Slice 5 is completed and should be treated as the adaptive overscan consistency baseline.
 - Slice 6 is completed and should be treated as the datasource visible-row retention baseline.
-- Slice 7 is the next implementation slice.
+- Slice 7 is completed and should be treated as the datasource placeholder telemetry baseline.
+- Slice 8 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -130,13 +131,14 @@ Current execution state:
 
 ## Slice 7: Server Placeholder Exposure Telemetry
 
-- Status: Planned.
+- Status: Completed. Datasource diagnostics now expose placeholder exposure counts/durations and viewport data availability timing; the server datasource sandbox surfaces those values as diagnostics data attributes, and the datasource churn benchmark reports them in scenario output and aggregate JSON.
 - Objective: measure how long placeholder rows remain visible for server-backed virtualization.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
-  - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
-  - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollPerfTelemetry.ts`
+  - `packages/datagrid-core/src/models/rowModel.ts`
+  - `packages/datagrid-core/src/models/server/dataSourceProtocol.ts`
   - `packages/datagrid-sandbox/src/components/VueServerDataSourceGridCard.vue`
+  - `e2e/sandbox-grid.spec.ts`
   - `scripts/bench-datagrid-datasource-churn.mjs`
 - Expected behavior change: optional telemetry reports placeholder exposure duration, placeholder counts, and time from viewport request to row availability.
 - Tests to add/update:

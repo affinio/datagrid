@@ -112,7 +112,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - The Vue app path has practical production behavior: retained row/column windows, adaptive overscan, touch-aware minimum overscan, header scroll sync in rAF, and viewport position snapshot/restore.
 - Variable row-height support exists in the Vue app path through `dataGridRowHeightMetrics.ts`, including offset lookup and index-at-offset math.
 - Server datasource support in `dataSourceBackedRowModel.ts` includes placeholders, range cache integration, critical/background lanes, prefetch, velocity-aware source ranges, and stale retained viewport rows during cache replacement.
-- Existing tests cover important slices: horizontal stress, adaptive vertical overscan, auto row height, horizontal virtual window math, viewport/model bridge behavior, scroll/resize determinism, datasource placeholders, datasource visible-row retention during cache replacement/refresh, server row model cache behavior, and velocity overscan.
+- Existing tests cover important slices: horizontal stress, adaptive vertical overscan, auto row height, horizontal virtual window math, viewport/model bridge behavior, scroll/resize determinism, datasource placeholders, datasource visible-row retention during cache replacement/refresh, datasource placeholder exposure telemetry, server row model cache behavior, and velocity overscan.
 - Existing benchmark infrastructure already covers browser frames, enterprise browser frame extraction, row models, interactions, and datasource churn. This is a useful base for enterprise gates.
 
 ## Findings By Severity
@@ -123,7 +123,7 @@ Orchestration, sandbox, tests, and benchmarks:
    `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal Vue base-grid detectors plus server datasource visible-refresh coverage for rendered viewport continuity, duplicate visual indexes, and uncovered viewport bands. Remaining enterprise gaps are touch momentum, broader server latency profiles, zoom, resize, and wider horizontal stress coverage.
 
 2. **No CI budget for placeholder exposure under server latency.**
-   `dataSourceBackedRowModel.ts` has placeholder rows and prefetching, but there is no enforced budget for how long placeholders remain visible during fast scroll or cache refresh. `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` also identifies server-backed blank/loading measurement as remaining work.
+   `dataSourceBackedRowModel.ts` now reports placeholder exposure counts/durations and viewport data availability timing, and the datasource churn benchmark includes those values. The remaining gap is an enforced budget for fast scroll, cache refresh, and mobile latency profiles.
 
 3. **Virtualization ownership is split between core and Vue app without a final contract.**
    Core docs say viewport math should live in core and the adapter should not duplicate it. In practice, `dataGridViewportController.ts` and `useDataGridAppViewport.ts` both compute visible ranges, overscan, retained windows, and scroll-driven updates. This is not currently proven broken, but it blocks enterprise confidence until the boundary is documented and covered by contract tests or shared primitives.
@@ -195,7 +195,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - Overscan tradeoffs are currently adaptive and touch-aware. Enterprise hardening should record the chosen overscan reason and resulting row/column counts per frame.
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
 - 100-column behavior is covered better than 1k/10k-column behavior. Horizontal virtualization needs wide-grid gates with pinned columns and column resizing.
-- Server latency can shift cost from rendering to placeholder exposure and cache churn. This needs latency-profile benchmarks, not just local fake-server success paths.
+- Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output; the next gap is enforcing latency-profile budgets.
 - rAF frame budget and long tasks are already partially benchmarked by browser frame scripts, but the results should become required gates for enterprise scenarios.
 
 ## Server-Backed Virtualization Risks
@@ -261,7 +261,7 @@ What blocks the target:
 
 ### Phase 3: Server-Backed Virtualization Hardening
 
-- Status: started. `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts` now covers partial replacement, direction reversal, failed replacement reload, manual refresh failure, and retry while visible rows remain retained.
+- Status: started. `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts` now covers partial replacement, direction reversal, failed replacement reload, manual refresh failure, retry while visible rows remain retained, and placeholder exposure start/stop telemetry. `scripts/bench-datagrid-datasource-churn.mjs` reports placeholder exposure and viewport data availability metrics.
 - Add placeholder exposure timing and CI budgets for cold scroll, warm scroll, jump scroll, direction reversal, and cache replacement.
 - Test `dataSourceBackedRowModel.ts` under delayed, failed, retried, and partial responses.
 - Decide the enterprise status of `serverBackedRowModel.ts`: add placeholder parity or document it as a simple/non-enterprise path.
@@ -325,7 +325,7 @@ What blocks the target:
 - Long tasks during scroll.
 - Row/cell mount and unmount churn per second.
 - Heap growth and retained row/cell object counts.
-- Placeholder exposure time under source latency profiles.
+- Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; budget gates remain.
 - Custom renderer scroll cost with and without lightweight scroll rendering.
 - 10k, 100k, and 1M row benchmarks.
 - 100, 1k, and 10k column benchmarks.
@@ -348,7 +348,7 @@ What blocks the target:
 ## Prioritized Implementation Slices
 
 1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll. Status: started with Vue base-grid fast vertical/horizontal detector coverage and server datasource visible-refresh coverage in `e2e/sandbox-grid.spec.ts`; touch/device variants and broader server latency profiles remain.
-2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`.
+2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; enforceable latency budgets remain for the next slice.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
 4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount.

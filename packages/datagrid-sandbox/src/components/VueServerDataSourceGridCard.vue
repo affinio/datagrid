@@ -164,6 +164,19 @@
                 {{ viewportLoadingLabel }}
               </dd>
             </div>
+            <div class="server-grid__diagnostics-card">
+              <dt>Placeholder exposure</dt>
+              <dd
+                data-datagrid-server-placeholder-exposure
+                :data-active-rows="placeholderExposureActiveRowsData"
+                :data-events="placeholderExposureEventsData"
+                :data-total-ms="placeholderExposureTotalMsData"
+                :data-max-ms="placeholderExposureMaxMsData"
+                :data-viewport-availability-ms="viewportDataAvailabilityLastMsData"
+              >
+                {{ placeholderExposureLabel }}
+              </dd>
+            </div>
           </dl>
         </div>
 
@@ -2582,6 +2595,11 @@ const renderedViewportLabel = computed(() => {
 const loadedRowsLabel = computed(() => loadedRows.value.toLocaleString())
 const pendingRequestsLabel = computed(() => String(pendingRequests.value))
 const viewportLoadingRatioData = computed(() => String(sparseDiagnostics.value?.viewportLoadingRowRatio ?? 0))
+const placeholderExposureActiveRowsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureActiveRows ?? 0))
+const placeholderExposureEventsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureEvents ?? 0))
+const placeholderExposureTotalMsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureTotalMs ?? 0))
+const placeholderExposureMaxMsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureMaxMs ?? 0))
+const viewportDataAvailabilityLastMsData = computed(() => String(sparseDiagnostics.value?.viewportDataAvailabilityLastMs ?? 0))
 const viewportLoadingLabel = computed(() => {
   const diagnosticsState = sparseDiagnostics.value
   if (!diagnosticsState) {
@@ -2592,6 +2610,18 @@ const viewportLoadingLabel = computed(() => {
   const loadingViewportRows = diagnosticsState.viewportLoadingRowCount ?? 0
   const loadingPercent = Math.round((diagnosticsState.viewportLoadingRowRatio ?? 0) * 100)
   return `${loadingViewportRows} loading / ${loadedViewportRows} loaded / ${viewportRows} rows (${loadingPercent}%)`
+})
+const placeholderExposureLabel = computed(() => {
+  const diagnosticsState = sparseDiagnostics.value
+  if (!diagnosticsState) {
+    return "none"
+  }
+  const activeRows = diagnosticsState.placeholderExposureActiveRows ?? 0
+  const events = diagnosticsState.placeholderExposureEvents ?? 0
+  const totalMs = Math.round(diagnosticsState.placeholderExposureTotalMs ?? 0)
+  const maxMs = Math.round(diagnosticsState.placeholderExposureMaxMs ?? 0)
+  const availabilityMs = Math.round(diagnosticsState.viewportDataAvailabilityLastMs ?? 0)
+  return `${activeRows} active / ${events} events / ${totalMs}ms total / ${maxMs}ms max / ${availabilityMs}ms viewport`
 })
 const datasetVersionLabel = computed(() => {
   const value = changeFeedDiagnostics.value.currentDatasetVersion

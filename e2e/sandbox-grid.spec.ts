@@ -84,6 +84,10 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect.poll(async () => serverViewportLoadingRatio(page), {
       timeout: 20_000,
     }).toBeLessThanOrEqual(0.05)
+    await expect.poll(async () => serverPlaceholderExposureEvents(page), {
+      timeout: 20_000,
+    }).toBeGreaterThan(0)
+    expect(await serverPlaceholderExposureMaxMs(page)).toBeGreaterThanOrEqual(0)
     await assertNoBlankVerticalViewport(page)
 
     await page.getByRole("button", { name: "Refresh visible range" }).click()
@@ -1015,6 +1019,24 @@ async function serverViewportLoadingRatio(page: Page): Promise<number> {
     .getAttribute("data-ratio")
   const value = Number(raw)
   return Number.isFinite(value) ? value : 1
+}
+
+async function serverPlaceholderExposureEvents(page: Page): Promise<number> {
+  const raw = await page
+    .locator("[data-datagrid-server-placeholder-exposure]")
+    .first()
+    .getAttribute("data-events")
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : 0
+}
+
+async function serverPlaceholderExposureMaxMs(page: Page): Promise<number> {
+  const raw = await page
+    .locator("[data-datagrid-server-placeholder-exposure]")
+    .first()
+    .getAttribute("data-max-ms")
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : 0
 }
 
 async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
