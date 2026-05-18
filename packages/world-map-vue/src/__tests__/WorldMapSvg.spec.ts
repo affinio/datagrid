@@ -244,4 +244,75 @@ describe("WorldMapSvg", () => {
     await marker.trigger("mouseleave")
     expect(wrapper.emitted("marker-leave")?.[0]?.[0]).toEqual(markers[0])
   })
+
+  it("applies choropleth value fill only to countries with finite values", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        enableChoropleth: true,
+        countryValues: {
+          AA: 10,
+          BB: Number.NaN,
+        },
+      },
+    })
+
+    const firstPath = wrapper.find('[data-country-id="AA"]')
+    const secondPath = wrapper.find('[data-country-id="BB"]')
+
+    expect(firstPath.classes()).toContain("world-map-svg__country--valued")
+    expect(firstPath.attributes("style")).toContain("--affino-world-map-country-value-fill")
+    expect(secondPath.classes()).not.toContain("world-map-svg__country--valued")
+    expect(secondPath.attributes("style")).toBeUndefined()
+  })
+
+  it("preserves normal styling when choropleth rendering is disabled", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        enableChoropleth: false,
+        countryValues: {
+          AA: 10,
+        },
+      },
+    })
+
+    const firstPath = wrapper.find('[data-country-id="AA"]')
+    expect(firstPath.classes()).not.toContain("world-map-svg__country--valued")
+    expect(firstPath.attributes("style")).toBeUndefined()
+  })
+
+  it("keeps selected country state separate from choropleth fill", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        selectedCountryId: "AA",
+        enableChoropleth: true,
+        countryValues: {
+          AA: 10,
+        },
+      },
+    })
+
+    const firstPath = wrapper.find('[data-country-id="AA"]')
+    expect(firstPath.classes()).toContain("world-map-svg__country--valued")
+    expect(firstPath.classes()).toContain("world-map-svg__country--selected")
+    expect(firstPath.attributes("style")).not.toMatch(/(^|;)\s*fill\s*:/)
+  })
+
+  it("uses a stable mid intensity when country value domain has matching min and max", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        enableChoropleth: true,
+        countryValues: {
+          AA: 5,
+          BB: 5,
+        },
+      },
+    })
+
+    const firstPath = wrapper.find('[data-country-id="AA"]')
+    expect(firstPath.attributes("style")).toContain("50%")
+  })
 })

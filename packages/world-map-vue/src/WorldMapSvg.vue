@@ -42,7 +42,9 @@
             :class="{
               'world-map-svg__country--hovered': feature.id === hoveredCountryId,
               'world-map-svg__country--selected': feature.id === resolvedSelectedCountryId,
+              'world-map-svg__country--valued': countryValueFills.has(feature.id),
             }"
+            :style="getCountryStyle(feature)"
             :d="feature.path"
             tabindex="0"
             @mouseenter="handleCountryMouseEnter(feature)"
@@ -75,6 +77,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue"
+import type { CSSProperties } from "vue"
 import { projectWorldMapPosition } from "@affino/world-map-core"
 import type { WorldMapCountryId, WorldMapPathFeature, WorldMapScreenPoint } from "@affino/world-map-core"
 import type { WorldMapMarker } from "./types"
@@ -96,23 +99,34 @@ interface ProjectedWorldMapMarker extends WorldMapScreenPoint {
   marker: WorldMapMarker
 }
 
+interface WorldMapValueDomain {
+  min: number
+  max: number
+}
+
 const props = withDefaults(defineProps<{
   paths: WorldMapPathFeature[]
   markers?: WorldMapMarker[]
+  countryValues?: Record<string, number>
   width?: number
   height?: number
   selectedCountryId?: WorldMapCountryId | null
+  enableChoropleth?: boolean
   enableZoom?: boolean
   enableMarkers?: boolean
   enablePan?: boolean
+  countryValueMin?: number
+  countryValueMax?: number
   markerRadius?: number
   minZoom?: number
   maxZoom?: number
 }>(), {
   markers: () => [],
+  countryValues: () => ({}),
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
   selectedCountryId: undefined,
+  enableChoropleth: false,
   enableZoom: true,
   enableMarkers: true,
   enablePan: true,
@@ -160,6 +174,53 @@ const mapTransform = computed(() => `translate(${panX.value} ${panY.value}) scal
 const isZoomOutDisabled = computed(() => zoom.value <= resolvedMinZoom.value)
 const isZoomInDisabled = computed(() => zoom.value >= resolvedMaxZoom.value)
 const isResetDisabled = computed(() => zoom.value === 1 && panX.value === 0 && panY.value === 0)
+const countryValueDomain = computed<WorldMapValueDomain | null>(() => {
+  if (!props.enableChoropleth) {
+    return null
+  }
+
+  const finiteValues = Object.values(props.countryValues).filter(isFiniteNumber)
+  const hasProvidedMin = isFiniteNumber(props.countryValueMin)
+  const hasProvidedMax = isFiniteNumber(props.countryValueMax)
+  if (finiteValues.length === 0 && (!hasProvidedMin || !hasProvidedMax)) {
+    return null
+  }
+
+  const fallbackMin = finiteValues.length > 0 ? Math.min(...finiteValues) : props.countryValueMin
+  const fallbackMax = finiteValues.length > 0 ? Math.max(...finiteValues) : props.countryValueMax
+  const rawMin = hasProvidedMin ? props.countryValueMin : fallbackMin
+  const rawMax = hasProvidedMax ? props.countryValueMax : fallbackMax
+  if (!isFiniteNumber(rawMin) || !isFiniteNumber(rawMax)) {
+    return null
+  }
+
+  return {
+    min: Math.min(rawMin, rawMax),
+    max: Math.max(rawMin, rawMax),
+  }
+})
+const countryValueFills = computed(() => {
+  const domain = countryValueDomain.value
+  const fills = new Map<WorldMapCountryId, string>()
+  if (domain === null) {
+    return fills
+  }
+
+  for (const feature of props.paths) {
+    if (!Object.prototype.hasOwnProperty.call(props.countryValues, feature.id)) {
+      continue
+    }
+
+    const value = props.countryValues[feature.id]
+    if (!isFiniteNumber(value)) {
+      continue
+    }
+
+    fills.set(feature.id, resolveCountryValueFill(value, domain))
+  }
+
+  return fills
+})
 const projectedMarkers = computed<ProjectedWorldMapMarker[]>(() => {
   if (!props.enableMarkers) {
     return []
@@ -210,6 +271,17 @@ function handleCountryClick(event: MouseEvent, feature: WorldMapPathFeature): vo
 function selectCountry(feature: WorldMapPathFeature): void {
   setSelectedCountryId(resolvedSelectedCountryId.value === feature.id ? null : feature.id)
   emit("country-click", feature)
+}
+
+function getCountryStyle(feature: WorldMapPathFeature): CSSProperties | undefined {
+  const fill = countryValueFills.value.get(feature.id)
+  if (fill === undefined) {
+    return undefined
+  }
+
+  return {
+    "--affino-world-map-country-value-fill": fill,
+  } as CSSProperties
 }
 
 function handleMarkerMouseEnter(marker: WorldMapMarker): void {
@@ -438,6 +510,23 @@ function emitViewChange(): void {
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
+
+function resolveCountryValueFill(value: number, domain: WorldMapValueDomain): string {
+  const intensity = domain.min === domain.max
+    ? 0.5
+    : clamp((value - domain.min) / (domain.max - domain.min), 0, 1)
+  const highPercent = formatPercent(intensity * 100)
+  const lowPercent = formatPercent(100 - intensity * 100)
+  return `color-mix(in srgb, var(--affino-world-map-country-value-low-fill) ${lowPercent}%, var(--affino-world-map-country-value-high-fill) ${highPercent}%)`
+}
+
+function formatPercent(value: number): string {
+  return Number(value.toFixed(4)).toString()
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value)
+}
 </script>
 
 <style scoped>
@@ -454,6 +543,9 @@ function clamp(value: number, min: number, max: number): number {
   --affino-world-map-country-fill: #d6d3c8;
   --affino-world-map-country-stroke: #ffffff;
   --affino-world-map-country-hover-fill: #b8c7d4;
+  --affino-world-map-country-value-empty-fill: #d6d3c8;
+  --affino-world-map-country-value-low-fill: #dbeafe;
+  --affino-world-map-country-value-high-fill: #1d4ed8;
   --affino-world-map-country-selected-fill: #6f8ea7;
   --affino-world-map-country-selected-stroke: #334155;
   --affino-world-map-country-selected-hover-fill: #587a96;
@@ -553,6 +645,13 @@ function clamp(value: number, min: number, max: number): number {
 .world-map-svg__country:hover,
 .world-map-svg__country--hovered {
   fill: var(--affino-world-map-country-hover-fill);
+}
+
+.world-map-svg__country--valued {
+  fill: var(
+    --affino-world-map-country-value-fill,
+    var(--affino-world-map-country-value-empty-fill)
+  );
 }
 
 .world-map-svg__country--selected {

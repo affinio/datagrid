@@ -19,6 +19,8 @@
       :width="VIEWPORT.width"
       :height="VIEWPORT.height"
       :markers="DEMO_MARKERS"
+      :country-values="DEMO_COUNTRY_VALUES"
+      enable-choropleth
       :min-zoom="1"
       :max-zoom="8"
       @country-hover="handleCountryHover"
@@ -85,6 +87,15 @@ const DEMO_MARKERS: WorldMapMarker[] = [
     label: "New York",
   },
 ]
+
+const DEMO_COUNTRY_VALUES: Record<string, number> = {
+  "076": 42,
+  "124": 56,
+  "156": 83,
+  "250": 63,
+  "826": 72,
+  "840": 95,
+}
 
 const countries = ref<WorldMapCountryFeature[]>([])
 const pathFeatures = ref<WorldMapPathFeature[]>([])

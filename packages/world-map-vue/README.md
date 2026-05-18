@@ -24,6 +24,11 @@ import { WorldMapSvg } from "@affino/world-map-vue"
 
 const countries = ref<WorldMapCountryFeature[]>([])
 const selectedCountryId = ref<WorldMapCountryId | null>(null)
+const countryValues = {
+  "250": 63,
+  "826": 72,
+  "840": 95,
+}
 const markers: WorldMapMarker[] = [
   { id: "london", lon: -0.1276, lat: 51.5072, label: "London" },
   { id: "paris", lon: 2.3522, lat: 48.8566, label: "Paris" },
@@ -42,6 +47,8 @@ const pathFeatures = computed(() => createWorldMapPaths(countries.value, {
     v-model:selected-country-id="selectedCountryId"
     :paths="pathFeatures"
     :markers="markers"
+    :country-values="countryValues"
+    enable-choropleth
     :width="960"
     :height="480"
     @country-click="feature => console.log(feature.name)"
@@ -82,18 +89,40 @@ interface WorldMapMarker {
 
 Markers are projected with the same fixed equirectangular viewport as the country paths and render above countries inside the zoom/pan layer.
 
+## Choropleth Values
+
+Countries can be colored by numeric value using `countryValues` and `enableChoropleth`:
+
+```vue
+<WorldMapSvg
+  :paths="pathFeatures"
+  :country-values="{ '250': 63, '826': 72, '840': 95 }"
+  enable-choropleth
+/>
+```
+
+The keys are `WorldMapPathFeature.id` values. Countries without a finite value use normal country styling. `NaN`, `Infinity`, and `-Infinity` values are ignored.
+
+By default the component computes the value domain from finite values in `countryValues`. Pass `countryValueMin` and `countryValueMax` to pin the scale. When the domain minimum and maximum are equal, the component uses a stable middle intensity.
+
+The v0.1 choropleth scale is a small dependency-free `color-mix()` interpolation between `--affino-world-map-country-value-low-fill` and `--affino-world-map-country-value-high-fill`. Selected country styling takes precedence over value coloring.
+
 ## Props
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `paths` | `WorldMapPathFeature[]` | required | SVG path features to render. |
 | `markers` | `WorldMapMarker[]` | `[]` | Optional lon/lat point markers to render above countries. |
+| `countryValues` | `Record<string, number>` | `{}` | Numeric values keyed by `WorldMapPathFeature.id`. |
 | `width` | `number` | `960` | SVG viewBox width. |
 | `height` | `number` | `480` | SVG viewBox height. |
 | `selectedCountryId` | `string \| null \| undefined` | `undefined` | Semi-controlled selection. Use `v-model:selected-country-id` to control it in Vue templates. |
+| `enableChoropleth` | `boolean` | `false` | Enables value-based country coloring. |
 | `enableZoom` | `boolean` | `true` | Shows zoom controls and enables wheel zoom. |
 | `enableMarkers` | `boolean` | `true` | Enables marker rendering. |
 | `enablePan` | `boolean` | `true` | Enables drag-to-pan and grab cursor state. |
+| `countryValueMin` | `number \| undefined` | `undefined` | Optional lower bound for choropleth value normalization. |
+| `countryValueMax` | `number \| undefined` | `undefined` | Optional upper bound for choropleth value normalization. |
 | `markerRadius` | `number` | `4` | Marker circle radius in SVG units. |
 | `minZoom` | `number` | `1` | Minimum zoom level. Values below `0.1` are clamped. |
 | `maxZoom` | `number` | `8` | Maximum zoom level. Clamped to at least `minZoom`. |
@@ -151,6 +180,9 @@ Available variables:
 - `--affino-world-map-country-fill`
 - `--affino-world-map-country-stroke`
 - `--affino-world-map-country-hover-fill`
+- `--affino-world-map-country-value-empty-fill`
+- `--affino-world-map-country-value-low-fill`
+- `--affino-world-map-country-value-high-fill`
 - `--affino-world-map-country-selected-fill`
 - `--affino-world-map-country-selected-stroke`
 - `--affino-world-map-country-selected-hover-fill`
@@ -169,5 +201,5 @@ This package intentionally does not include:
 - built-in map data
 - TopoJSON conversion
 - marker labels, clustering, or heatmaps
-- choropleth rendering
+- choropleth legends, tooltips, or advanced color scales
 - MapLibre, D3, Canvas, or WebGL dependencies
