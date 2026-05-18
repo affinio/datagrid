@@ -171,6 +171,12 @@ const SCENARIOS = [
     interactionDiagnostics: true,
   },
   {
+    id: "interaction-drag-selection-pinned",
+    route: "/vue/base-grid",
+    interaction: "drag-selection-pinned",
+    interactionDiagnostics: true,
+  },
+  {
     id: "interaction-fill-autoscroll",
     route: "/vue/base-grid",
     interaction: "fill-autoscroll",
@@ -1310,6 +1316,20 @@ async function runScenario(page, sessionIndex, scenario) {
               ?? firstAmountCell()
             if (!(sourceCell instanceof HTMLElement)) {
               interactionDiagnostics.skipped.push("drag-selection:no-source-cell")
+              return
+            }
+            dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))
+            dispatchWindowMouse("mousemove", viewportEdgePoint(), { buttons: 1 })
+            await waitForPaint()
+            dispatchWindowMouse("mouseup", viewportEdgePoint())
+            break
+          }
+          case "drag-selection-pinned": {
+            const sourceCell = document.querySelector('.grid-body-pane--left .grid-cell[data-row-index="0"]')
+              ?? document.querySelector('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]')
+              ?? firstAmountCell()
+            if (!(sourceCell instanceof HTMLElement)) {
+              interactionDiagnostics.skipped.push("drag-selection-pinned:no-source-cell")
               return
             }
             dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))

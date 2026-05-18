@@ -438,6 +438,7 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS",
     "PERF_BUDGET_MAX_FILL_APPLY_P99_MS",
     "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS",
+    "PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS",
   ],
   "Benchmark harness propagates p99 budgets into CI profile",
 )
@@ -452,8 +453,24 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_FILL_APPLY_P99_MS",
     "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS",
     "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS",
+    "PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS",
+    "PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS",
   ],
-  "Interaction benchmark enforces p95/p99 budgets for selection/fill/multi-range lookup flows",
+  "Interaction benchmark enforces p95/p99 budgets for selection/fill/multi-range lookup/overlay flows",
+)
+
+registerTokenCheck(
+  "enterprise-selection-operation-budgets",
+  "scripts/bench-datagrid-enterprise-workloads.mjs",
+  [
+    "runSelectionEnterpriseScenario",
+    "PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS",
+    "PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS",
+    "PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS",
+    "PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS",
+    "bench-datagrid-enterprise-selection-operations.json",
+  ],
+  "Enterprise workload benchmark gates selection summary, virtual coverage, clipboard planning, and overlay planning",
 )
 
 registerTokenCheck(
@@ -465,6 +482,7 @@ registerTokenCheck(
     "touch-tablet-ci",
     "touch-phone-ci",
     "BENCH_INTERACTION_FAIL_ON_WARNINGS",
+    "interaction-drag-selection-pinned",
     "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
     "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS",
     "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS",
@@ -522,6 +540,7 @@ registerTokenCheck(
     "bench:datagrid:pivot:assert",
     "bench:datagrid:dependency-graph",
     "bench:datagrid:dependency-graph:assert",
+    "bench:datagrid:enterprise:selection:assert",
     "bench:datagrid:enterprise:browser-frames",
     "bench:datagrid:enterprise:browser-frames:assert",
     "bench:datagrid:enterprise:browser-frames:touch:assert",
@@ -658,7 +677,7 @@ registerTokenCheck(
     registerConditionCheck(
       assertBudgetId,
       false,
-      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets",
+      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, and enterprise selection assert keeps finite selection budgets",
       "package.json missing",
     )
   } else {
@@ -669,6 +688,7 @@ registerTokenCheck(
     const derivedCacheAssertScript = String(pkg?.scripts?.["bench:datagrid:derived-cache:assert"] ?? "")
     const pivotAssertScript = String(pkg?.scripts?.["bench:datagrid:pivot:assert"] ?? "")
     const treeAssertScript = String(pkg?.scripts?.["bench:datagrid:tree:assert"] ?? "")
+    const enterpriseSelectionAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:selection:assert"] ?? "")
     const rowmodelsVariance = extractEnvNumberFromScript(rowmodelsAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const rowmodelsHeap = extractEnvNumberFromScript(rowmodelsAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const interactionsVariance = extractEnvNumberFromScript(interactionsAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
@@ -681,6 +701,10 @@ registerTokenCheck(
     const pivotHeap = extractEnvNumberFromScript(pivotAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const treeVariance = extractEnvNumberFromScript(treeAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const treeHeap = extractEnvNumberFromScript(treeAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const selectionSummary = extractEnvNumberFromScript(enterpriseSelectionAssertScript, "PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS")
+    const selectionVirtualCoverage = extractEnvNumberFromScript(enterpriseSelectionAssertScript, "PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS")
+    const selectionClipboardPlanning = extractEnvNumberFromScript(enterpriseSelectionAssertScript, "PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS")
+    const selectionOverlayPlanning = extractEnvNumberFromScript(enterpriseSelectionAssertScript, "PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS")
     const ok =
       rowmodelsVariance != null &&
       rowmodelsHeap != null &&
@@ -693,14 +717,18 @@ registerTokenCheck(
       pivotVariance != null &&
       pivotHeap != null &&
       treeVariance != null &&
-      treeHeap != null
+      treeHeap != null &&
+      selectionSummary != null &&
+      selectionVirtualCoverage != null &&
+      selectionClipboardPlanning != null &&
+      selectionOverlayPlanning != null
     registerConditionCheck(
       assertBudgetId,
       ok,
-      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets",
+      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, and enterprise selection assert keeps finite selection budgets",
       ok
         ? "ok"
-        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}`,
+        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
     )
   }
 }

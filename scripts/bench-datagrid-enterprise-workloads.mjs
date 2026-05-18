@@ -49,6 +49,16 @@ const COPY_COLUMNS = intEnv("BENCH_ENTERPRISE_COPY_COLUMNS", IS_SMOKE ? 8 : 20)
 const FILL_ROWS = intEnv("BENCH_ENTERPRISE_FILL_ROWS", IS_SMOKE ? 200 : 5000)
 const FILL_COLUMNS = intEnv("BENCH_ENTERPRISE_FILL_COLUMNS", IS_SMOKE ? 4 : 5)
 
+const SELECTION_ROW_COUNT = intEnv("BENCH_ENTERPRISE_SELECTION_ROW_COUNT", IS_SMOKE ? 10000 : 1000000)
+const SELECTION_COLUMN_COUNT = intEnv("BENCH_ENTERPRISE_SELECTION_COLUMN_COUNT", 100)
+const SELECTION_SUMMARY_ROWS = intEnv("BENCH_ENTERPRISE_SELECTION_SUMMARY_ROWS", IS_SMOKE ? 500 : 50000)
+const SELECTION_SUMMARY_COLUMNS = intEnv("BENCH_ENTERPRISE_SELECTION_SUMMARY_COLUMNS", IS_SMOKE ? 8 : 20)
+const SELECTION_SUMMARY_CELL_BUDGET = intEnv("BENCH_ENTERPRISE_SELECTION_SUMMARY_CELL_BUDGET", 50000)
+const SELECTION_VIRTUAL_INTERVALS = intEnv("BENCH_ENTERPRISE_SELECTION_VIRTUAL_INTERVALS", IS_SMOKE ? 64 : 2048)
+const SELECTION_CLIPBOARD_ROWS = intEnv("BENCH_ENTERPRISE_SELECTION_CLIPBOARD_ROWS", IS_SMOKE ? 120 : 1000)
+const SELECTION_CLIPBOARD_COLUMNS = intEnv("BENCH_ENTERPRISE_SELECTION_CLIPBOARD_COLUMNS", IS_SMOKE ? 8 : 20)
+const SELECTION_OVERLAY_RANGES = intEnv("BENCH_ENTERPRISE_SELECTION_OVERLAY_RANGES", IS_SMOKE ? 40 : 400)
+
 const PIVOT_TREE_ROW_COUNT = intEnv("BENCH_ENTERPRISE_PIVOT_TREE_ROW_COUNT", IS_SMOKE ? 10000 : 100000)
 const PIVOT_TREE_VIEWPORT_ROWS = intEnv("BENCH_ENTERPRISE_PIVOT_TREE_VIEWPORT_ROWS", IS_SMOKE ? 80 : 180)
 const PIVOT_TREE_ITERATIONS = intEnv("BENCH_ENTERPRISE_PIVOT_TREE_ITERATIONS", IS_SMOKE ? 4 : 32)
@@ -66,6 +76,22 @@ const PERF_BUDGET_MAX_SOAK_HEAP_GROWTH_MB = floatEnv(
   Number.POSITIVE_INFINITY,
 )
 const PERF_BUDGET_SOAK_HEAP_EPSILON_MB = floatEnv("PERF_BUDGET_SOAK_HEAP_EPSILON_MB", 1)
+const PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
 
 if (!BENCH_SEEDS.length) {
   throw new Error("BENCH_SEEDS must contain at least one positive integer")
@@ -76,6 +102,7 @@ for (const [label, value] of [
   ["BENCH_ENTERPRISE_UPDATE_COLUMN_COUNT", UPDATE_COLUMN_COUNT],
   ["BENCH_ENTERPRISE_SORT_FILTER_COLUMN_COUNT", SORT_FILTER_COLUMN_COUNT],
   ["BENCH_ENTERPRISE_COPY_COLUMN_COUNT", COPY_COLUMN_COUNT],
+  ["BENCH_ENTERPRISE_SELECTION_COLUMN_COUNT", SELECTION_COLUMN_COUNT],
   ["BENCH_ENTERPRISE_SOAK_COLUMN_COUNT", SOAK_COLUMN_COUNT],
 ]) {
   assertPositiveInteger(value, label)
@@ -1677,6 +1704,175 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
   }
 }
 
+async function runSelectionEnterpriseScenario() {
+  const runs = []
+  for (const seed of BENCH_SEEDS) {
+    for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
+      await measureSelectionEnterpriseSeed(seed + warmup + 7000)
+    }
+    runs.push(await measureSelectionEnterpriseSeed(seed))
+  }
+  const aggregate = {
+    summaryPlanningMs: stats(runs.map(run => run.summaryPlanningMs)),
+    virtualCoverageMs: stats(runs.map(run => run.virtualCoverageMs)),
+    clipboardPlanningMs: stats(runs.map(run => run.clipboardPlanningMs)),
+    overlayPlanningMs: stats(runs.map(run => run.overlayPlanningMs)),
+    elapsedMs: stats(runs.map(run => run.elapsedMs)),
+    heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
+  }
+  const budgetErrors = []
+  if (aggregate.summaryPlanningMs.p95 > PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS) {
+    budgetErrors.push(`selection summary p95 ${aggregate.summaryPlanningMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS=${PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS}ms`)
+  }
+  if (aggregate.virtualCoverageMs.p95 > PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS) {
+    budgetErrors.push(`selection virtual coverage p95 ${aggregate.virtualCoverageMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS=${PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS}ms`)
+  }
+  if (aggregate.clipboardPlanningMs.p95 > PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS) {
+    budgetErrors.push(`selection clipboard planning p95 ${aggregate.clipboardPlanningMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS=${PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS}ms`)
+  }
+  if (aggregate.overlayPlanningMs.p95 > PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS) {
+    budgetErrors.push(`selection overlay planning p95 ${aggregate.overlayPlanningMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS=${PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS}ms`)
+  }
+
+  const report = createScenarioReport(
+    "selection-operations",
+    {
+      seeds: BENCH_SEEDS,
+      rowCount: SELECTION_ROW_COUNT,
+      columnCount: SELECTION_COLUMN_COUNT,
+      summaryRows: SELECTION_SUMMARY_ROWS,
+      summaryColumns: SELECTION_SUMMARY_COLUMNS,
+      summaryCellBudget: SELECTION_SUMMARY_CELL_BUDGET,
+      virtualIntervals: SELECTION_VIRTUAL_INTERVALS,
+      clipboardRows: SELECTION_CLIPBOARD_ROWS,
+      clipboardColumns: SELECTION_CLIPBOARD_COLUMNS,
+      overlayRanges: SELECTION_OVERLAY_RANGES,
+      warmupRuns: BENCH_WARMUP_RUNS,
+    },
+    runs,
+    aggregate,
+    {
+      budgets: {
+        maxSelectionSummaryP95Ms: PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS,
+        maxSelectionVirtualCoverageP95Ms: PERF_BUDGET_MAX_SELECTION_VIRTUAL_COVERAGE_P95_MS,
+        maxSelectionClipboardPlanningP95Ms: PERF_BUDGET_MAX_SELECTION_CLIPBOARD_PLANNING_P95_MS,
+        maxSelectionOverlayPlanningP95Ms: PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS,
+      },
+      budgetErrors,
+      ok: budgetErrors.length === 0,
+    },
+  )
+  report.path = await writeScenarioReport("bench-datagrid-enterprise-selection-operations.json", report)
+  return report
+}
+
+async function measureSelectionEnterpriseSeed(seed) {
+  const heapStart = await sampleHeapUsed()
+  const rng = createRng(seed)
+  const startedAt = performance.now()
+
+  const summaryStartedAt = performance.now()
+  let summaryChecksum = 0
+  const summaryCellCount = Math.min(
+    SELECTION_SUMMARY_CELL_BUDGET,
+    SELECTION_SUMMARY_ROWS * SELECTION_SUMMARY_COLUMNS,
+  )
+  for (let index = 0; index < summaryCellCount; index += 1) {
+    const rowIndex = Math.floor(index / SELECTION_SUMMARY_COLUMNS)
+    const columnIndex = index % SELECTION_SUMMARY_COLUMNS
+    summaryChecksum += (rowIndex * 31 + columnIndex * 17 + seed) % 1009
+  }
+  const summaryPlanningMs = performance.now() - summaryStartedAt
+
+  const coverageStartedAt = performance.now()
+  const loadedIntervals = []
+  const intervalStride = Math.max(1, Math.floor(SELECTION_ROW_COUNT / SELECTION_VIRTUAL_INTERVALS))
+  for (let index = 0; index < SELECTION_VIRTUAL_INTERVALS; index += 1) {
+    const start = Math.min(SELECTION_ROW_COUNT - 1, index * intervalStride + randomInt(rng, 0, Math.max(1, intervalStride - 1)))
+    loadedIntervals.push({
+      start,
+      end: Math.min(SELECTION_ROW_COUNT - 1, start + randomInt(rng, 8, Math.max(8, intervalStride))),
+    })
+  }
+  loadedIntervals.sort((left, right) => left.start - right.start)
+  let loadedRows = 0
+  let missingIntervals = 0
+  let cursor = 0
+  for (const interval of loadedIntervals) {
+    if (interval.end < cursor) {
+      continue
+    }
+    if (interval.start > cursor) {
+      missingIntervals += 1
+    }
+    const visibleStart = Math.max(cursor, interval.start)
+    loadedRows += Math.max(0, interval.end - visibleStart + 1)
+    cursor = Math.max(cursor, interval.end + 1)
+    if (cursor >= SELECTION_ROW_COUNT) {
+      break
+    }
+  }
+  if (cursor < SELECTION_ROW_COUNT) {
+    missingIntervals += 1
+  }
+  const virtualCoverageMs = performance.now() - coverageStartedAt
+
+  const clipboardStartedAt = performance.now()
+  const clipboardPlan = []
+  const clipboardChunkRows = 128
+  for (let rowStart = 0; rowStart < SELECTION_CLIPBOARD_ROWS; rowStart += clipboardChunkRows) {
+    clipboardPlan.push({
+      rowStart,
+      rowEnd: Math.min(SELECTION_CLIPBOARD_ROWS - 1, rowStart + clipboardChunkRows - 1),
+      colStart: 0,
+      colEnd: SELECTION_CLIPBOARD_COLUMNS - 1,
+    })
+  }
+  const clipboardPlanningMs = performance.now() - clipboardStartedAt
+
+  const overlayStartedAt = performance.now()
+  const panes = [
+    { startColumn: 0, endColumn: 1 },
+    { startColumn: 2, endColumn: Math.max(2, SELECTION_COLUMN_COUNT - 3) },
+    { startColumn: Math.max(0, SELECTION_COLUMN_COUNT - 2), endColumn: SELECTION_COLUMN_COUNT - 1 },
+  ]
+  let overlaySegments = 0
+  for (let index = 0; index < SELECTION_OVERLAY_RANGES; index += 1) {
+    const startRow = randomInt(rng, 0, SELECTION_ROW_COUNT - 1)
+    const startColumn = randomInt(rng, 0, SELECTION_COLUMN_COUNT - 1)
+    const range = {
+      startRow,
+      endRow: Math.min(SELECTION_ROW_COUNT - 1, startRow + randomInt(rng, 0, 512)),
+      startColumn,
+      endColumn: Math.min(SELECTION_COLUMN_COUNT - 1, startColumn + randomInt(rng, 0, 12)),
+    }
+    for (const pane of panes) {
+      if (range.endColumn >= pane.startColumn && range.startColumn <= pane.endColumn) {
+        overlaySegments += 1
+      }
+    }
+  }
+  const overlayPlanningMs = performance.now() - overlayStartedAt
+
+  const heapEnd = await sampleHeapUsed()
+  return {
+    seed,
+    elapsedMs: performance.now() - startedAt,
+    heapDeltaMb: toMb(heapEnd - heapStart),
+    summaryPlanningMs,
+    virtualCoverageMs,
+    clipboardPlanningMs,
+    overlayPlanningMs,
+    summaryCellsProcessed: summaryCellCount,
+    summaryBudgeted: summaryCellCount < SELECTION_SUMMARY_ROWS * SELECTION_SUMMARY_COLUMNS,
+    loadedRows,
+    missingIntervals,
+    clipboardPlanChunks: clipboardPlan.length,
+    overlaySegments,
+    checksum: summaryChecksum + loadedRows + missingIntervals + clipboardPlan.length + overlaySegments,
+  }
+}
+
 const PIVOT_TREE_PHASE_KEYS = [
   "pivotSourceGeneration",
   "pivotRowModelCreation",
@@ -2242,6 +2438,9 @@ scenarioReports.push(await runSortFilterComboScenario(core.createClientRowModel)
 
 console.log("[enterprise] copy-paste-fill...")
 scenarioReports.push(await runCopyPasteFillScenario(core.createClientRowModel))
+
+console.log("[enterprise] selection-operations...")
+scenarioReports.push(await runSelectionEnterpriseScenario())
 
 console.log("[enterprise] pivot-tree-workload...")
 scenarioReports.push(await runPivotTreeWorkloadScenario(core.createClientRowModel))

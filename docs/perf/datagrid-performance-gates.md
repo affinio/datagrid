@@ -82,15 +82,23 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_MAX_FILL_APPLY_P99_MS=14`
   - `PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS=1`
   - `PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS=2`
+  - `PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS=4`
+  - `PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS=8`
 - Selection rendering lookup:
   - Additive range cell predicates use row-bucketed lookup for ranges spanning up to `256` rows.
   - The lookup indexes up to `50,000` row buckets per selection snapshot; taller or overflow ranges remain in a fallback list.
   - The interaction benchmark includes `multi-range-lookup-proxy` with `BENCH_MULTI_RANGE_COUNT=2000` by default.
+- Selection overlay planning:
+  - The interaction benchmark includes `selection-overlay-proxy`, which builds active/additive range segments across left-pinned, center, and right-pinned panes.
+  - CI gates p95 and p99 overlay planning with `PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS` and `PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS`.
 - Selection summary and aggregate labels:
   - Local selected-cell summary work is capped at `50,000` processed cells per summary.
   - Virtual selections must use loaded/missing interval metadata when present instead of probing every unloaded row.
   - App aggregate labels must distinguish full selected count from loaded/local cells included in the aggregate and append `budgeted` when the local cap is reached.
   - Server-global summary over unloaded rows remains a datasource operation, not a local fallback.
+- Enterprise selection operations:
+  - `bench:datagrid:enterprise:selection:assert` runs the smoke enterprise workload with hard selection budgets for summary planning, virtual coverage, clipboard planning, and overlay planning.
+  - The scenario artifact is `artifacts/performance/bench-datagrid-enterprise-selection-operations.json`; the combined assert artifact is `artifacts/performance/bench-datagrid-enterprise-selection.assert.json`.
 
 ## Pointer Preview Frame Budget
 
@@ -99,7 +107,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Global pointer lifecycle must keep both explicit modes covered: `pointerPreviewApplyMode: "sync"` applies immediately and `"raf"` coalesces preview work to one callback per frame.
 - Pointer auto-scroll may read each viewport layout/scroll metric at most once per animation frame before applying scroll deltas and active preview.
 - App-stage pointer listeners should stay active only while a pending or active pointer owner exists.
-- With `dgPerfTrace=1`, interaction diagnostics expose `interactionOwner`, `interactionCancel`, `interactionPreview`, `interactionAutoScroll`, `interactionPreventDefault`, and `stageFocusRestore` samples. `scripts/bench-datagrid-enterprise-browser-frames.mjs` consumes these scopes in profile-gated interaction scenarios for drag selection, fill auto-scroll, range-move auto-scroll, resize drag, and context menu open/cleanup.
+- With `dgPerfTrace=1`, interaction diagnostics expose `interactionOwner`, `interactionCancel`, `interactionPreview`, `interactionAutoScroll`, `interactionPreventDefault`, and `stageFocusRestore` samples. `scripts/bench-datagrid-enterprise-browser-frames.mjs` consumes these scopes in profile-gated interaction scenarios for drag selection, pinned-pane drag selection, fill auto-scroll, range-move auto-scroll, resize drag, and context menu open/cleanup.
 - Interaction frame budgets are profile-scoped through `BENCH_INTERACTION_DEVICE_PROFILE`. `desktop-ci` is the default hard-fail profile and uses `PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS=8`, `PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS=12`, `PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS=4`, and `PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX=2`. `touch-tablet-ci` uses `12`, `18`, `6`, and `3`; `touch-phone-ci` uses `14`, `20`, `7`, and `4`. These are automated Chromium profile gates, not a substitute for hardware validation.
 - `BENCH_INTERACTION_FAIL_ON_WARNINGS` defaults to `true` for the built-in profiles. Set it to `false` only for exploratory local observation runs.
 - Hard-fail scripts: `pnpm run bench:datagrid:enterprise:browser-frames:assert` for desktop Chromium and `pnpm run bench:datagrid:enterprise:browser-frames:touch:assert` for tablet/coarse-pointer Chromium.
@@ -201,8 +209,8 @@ Source of truth:
 - CI artifact bundle `datagrid-quality-gates` from the latest pipeline run.
 
 Status in this local environment:
-- Benchmarks were not executed locally because `node/npm` are unavailable.
-- Threshold enforcement is configured and active in CI.
+- Focused selection benchmark gates were executed locally for the latest selection slice: `bench:datagrid:interactions:assert` and `bench:datagrid:enterprise:selection:assert`.
+- Browser-frame selection gates still require the sandbox app/browser benchmark environment and remain configured for CI/profile-gated runs.
 
 Runtime perf-by-design contract reference:
 - `docs/perf/datagrid-perf-by-design-runtime.md`

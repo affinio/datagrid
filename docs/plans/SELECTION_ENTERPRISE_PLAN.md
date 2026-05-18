@@ -284,6 +284,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 14: Selection Enterprise Performance Gate
 
+- Status: Completed on 2026-05-18. Interaction benchmarks now hard-gate selection overlay planning alongside drag/fill/multi-range lookup, enterprise smoke workloads gate summary/virtual coverage/clipboard/overlay planning, browser-frame diagnostics include pinned-pane drag selection, and perf-contract checks lock the budget wiring.
 - Objective: convert selection benchmarks into warning-first and then hard-fail enterprise gates for drag selection, multi-range rendering, clipboard planning, summaries, overlays, and virtual coverage decisions.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`

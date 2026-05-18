@@ -25,6 +25,7 @@ const INTERACTION_ROW_HEIGHT = Number.parseInt(process.env.BENCH_INTERACTION_ROW
 const INTERACTION_SELECTION_ITERATIONS = Number.parseInt(process.env.BENCH_SELECTION_ITERATIONS ?? "900", 10)
 const INTERACTION_FILL_ITERATIONS = Number.parseInt(process.env.BENCH_FILL_ITERATIONS ?? "320", 10)
 const INTERACTION_MULTI_RANGE_ITERATIONS = Number.parseInt(process.env.BENCH_MULTI_RANGE_ITERATIONS ?? "700", 10)
+const INTERACTION_SELECTION_OVERLAY_ITERATIONS = Number.parseInt(process.env.BENCH_SELECTION_OVERLAY_ITERATIONS ?? "700", 10)
 const INTERACTION_DRAG_STEPS = Number.parseInt(process.env.BENCH_SELECTION_DRAG_STEPS ?? "12", 10)
 const INTERACTION_VIEWPORT_ROWS = Number.parseInt(process.env.BENCH_INTERACTION_VIEWPORT_ROWS ?? "28", 10)
 const INTERACTION_VIEWPORT_WIDTH = Number.parseInt(process.env.BENCH_INTERACTION_VIEWPORT_WIDTH ?? "1240", 10)
@@ -51,6 +52,12 @@ const PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS = Number.parseFloat(
 const PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS = Number.parseFloat(
   process.env.PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS ?? "Infinity",
 )
+const PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS ?? "Infinity",
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_VARIANCE_PCT ?? "Infinity")
 const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDGET_VARIANCE_MIN_MEAN_MS ?? "0.5")
 const PERF_BUDGET_ELAPSED_VARIANCE_MIN_MEAN_MS = Number.parseFloat(
@@ -67,6 +74,7 @@ assertPositiveInteger(INTERACTION_ROW_HEIGHT, "BENCH_INTERACTION_ROW_HEIGHT")
 assertPositiveInteger(INTERACTION_SELECTION_ITERATIONS, "BENCH_SELECTION_ITERATIONS")
 assertPositiveInteger(INTERACTION_FILL_ITERATIONS, "BENCH_FILL_ITERATIONS")
 assertPositiveInteger(INTERACTION_MULTI_RANGE_ITERATIONS, "BENCH_MULTI_RANGE_ITERATIONS")
+assertPositiveInteger(INTERACTION_SELECTION_OVERLAY_ITERATIONS, "BENCH_SELECTION_OVERLAY_ITERATIONS")
 assertPositiveInteger(INTERACTION_DRAG_STEPS, "BENCH_SELECTION_DRAG_STEPS")
 assertPositiveInteger(INTERACTION_VIEWPORT_ROWS, "BENCH_INTERACTION_VIEWPORT_ROWS")
 assertPositiveInteger(INTERACTION_VIEWPORT_WIDTH, "BENCH_INTERACTION_VIEWPORT_WIDTH")
@@ -466,13 +474,127 @@ function runMultiRangeLookupScenario(seed) {
   return stats(durations)
 }
 
+function buildSelectionOverlaySegments(range, viewportRows, viewportColumns, columnWidths, rowHeight) {
+  const visibleRows = overlapRange(
+    { start: range.startRow, end: range.endRow },
+    viewportRows,
+  )
+  const visibleColumns = overlapRange(
+    { start: range.startColumn, end: range.endColumn },
+    viewportColumns,
+  )
+  if (!visibleRows || !visibleColumns) {
+    return []
+  }
+  let left = 0
+  for (let columnIndex = viewportColumns.start; columnIndex < visibleColumns.start; columnIndex += 1) {
+    left += columnWidths[columnIndex] ?? 0
+  }
+  let width = 0
+  for (let columnIndex = visibleColumns.start; columnIndex <= visibleColumns.end; columnIndex += 1) {
+    width += columnWidths[columnIndex] ?? 0
+  }
+  return [{
+    key: `${visibleRows.start}:${visibleRows.end}:${visibleColumns.start}:${visibleColumns.end}`,
+    top: (visibleRows.start - viewportRows.start) * rowHeight,
+    left,
+    width,
+    height: (visibleRows.end - visibleRows.start + 1) * rowHeight,
+  }]
+}
+
+function runSelectionOverlayScenario(seed) {
+  const rng = createRng(seed)
+  const durations = []
+  const { widths, offsets, totalWidth } = buildColumnOffsets(INTERACTION_COLUMN_COUNT, rng)
+  const maxRowStart = Math.max(0, INTERACTION_ROW_COUNT - INTERACTION_VIEWPORT_ROWS)
+  const maxHorizontalScroll = Math.max(0, totalWidth - INTERACTION_VIEWPORT_WIDTH)
+  let checksum = 0
+
+  const runOne = () => {
+    const rowStart = randomInt(rng, 0, maxRowStart)
+    const viewportRows = {
+      start: rowStart,
+      end: Math.min(INTERACTION_ROW_COUNT - 1, rowStart + INTERACTION_VIEWPORT_ROWS - 1),
+    }
+    const viewportColumns = resolveColumnRangeForScroll(
+      offsets,
+      randomInt(rng, 0, maxHorizontalScroll),
+      INTERACTION_VIEWPORT_WIDTH,
+      INTERACTION_PINNED_LEFT_COLUMNS,
+      INTERACTION_PINNED_RIGHT_COLUMNS,
+    )
+    const activeRange = normalizeSelectionRange({
+      startRow: rowStart + randomInt(rng, 0, Math.max(0, INTERACTION_VIEWPORT_ROWS - 1)),
+      endRow: rowStart + randomInt(rng, 0, Math.max(0, INTERACTION_VIEWPORT_ROWS + 48)),
+      startColumn: randomInt(rng, 0, INTERACTION_COLUMN_COUNT - 1),
+      endColumn: randomInt(rng, 0, INTERACTION_COLUMN_COUNT - 1),
+    })
+    const overlayRanges = [activeRange]
+    for (let index = 0; index < 24; index += 1) {
+      const rangeStartRow = randomInt(rng, 0, INTERACTION_ROW_COUNT - 1)
+      const rangeStartColumn = randomInt(rng, 0, INTERACTION_COLUMN_COUNT - 1)
+      overlayRanges.push(normalizeSelectionRange({
+        startRow: rangeStartRow,
+        endRow: Math.min(INTERACTION_ROW_COUNT - 1, rangeStartRow + randomInt(rng, 0, 128)),
+        startColumn: rangeStartColumn,
+        endColumn: Math.min(INTERACTION_COLUMN_COUNT - 1, rangeStartColumn + randomInt(rng, 0, 8)),
+      }))
+    }
+
+    const panes = [
+      { start: 0, end: Math.max(0, INTERACTION_PINNED_LEFT_COLUMNS - 1) },
+      viewportColumns,
+      {
+        start: Math.max(0, INTERACTION_COLUMN_COUNT - INTERACTION_PINNED_RIGHT_COLUMNS),
+        end: INTERACTION_COLUMN_COUNT - 1,
+      },
+    ]
+    for (const range of overlayRanges) {
+      for (const paneColumns of panes) {
+        const segments = buildSelectionOverlaySegments(
+          range,
+          viewportRows,
+          paneColumns,
+          widths,
+          INTERACTION_ROW_HEIGHT,
+        )
+        for (const segment of segments) {
+          checksum += segment.top + segment.left + segment.width + segment.height
+        }
+      }
+    }
+  }
+
+  for (let warmup = 0; warmup < BENCH_INTERACTION_WARMUP_BATCHES; warmup += 1) {
+    for (let batch = 0; batch < BENCH_INTERACTION_MEASUREMENT_BATCH_SIZE; batch += 1) {
+      runOne()
+    }
+  }
+
+  for (let iteration = 0; iteration < INTERACTION_SELECTION_OVERLAY_ITERATIONS; iteration += 1) {
+    const startedAt = performance.now()
+    for (let batch = 0; batch < BENCH_INTERACTION_MEASUREMENT_BATCH_SIZE; batch += 1) {
+      runOne()
+    }
+    const elapsed = performance.now() - startedAt
+    durations.push(elapsed / BENCH_INTERACTION_MEASUREMENT_BATCH_SIZE)
+  }
+
+  if (!Number.isFinite(checksum)) {
+    throw new Error("Selection overlay scenario produced invalid checksum")
+  }
+
+  return stats(durations)
+}
+
 const budgetErrors = []
 const varianceSkippedChecks = []
 const runResults = []
 
 console.log("\nAffino DataGrid Interaction Benchmark (synthetic)")
 console.log(
-  `seeds=${BENCH_SEEDS.join(",")} rows=${INTERACTION_ROW_COUNT} columns=${INTERACTION_COLUMN_COUNT} selectionIterations=${INTERACTION_SELECTION_ITERATIONS} fillIterations=${INTERACTION_FILL_ITERATIONS} multiRangeIterations=${INTERACTION_MULTI_RANGE_ITERATIONS} warmupRuns=${BENCH_WARMUP_RUNS} batchSize=${BENCH_INTERACTION_MEASUREMENT_BATCH_SIZE}`,
+  `seeds=${BENCH_SEEDS.join(",")} rows=${INTERACTION_ROW_COUNT} columns=${INTERACTION_COLUMN_COUNT} selectionIterations=${INTERACTION_SELECTION_ITERATIONS} fillIterations=${INTERACTION_FILL_ITERATIONS} multiRangeIterations=${INTERACTION_MULTI_RANGE_ITERATIONS} selectionOverlayIterations=${INTERACTION_SELECTION_OVERLAY_ITERATIONS} warmupRuns=${BENCH_WARMUP_RUNS} batchSize=${BENCH_INTERACTION_MEASUREMENT_BATCH_SIZE}`,
 )
 
 for (const seed of BENCH_SEEDS) {
@@ -481,6 +603,7 @@ for (const seed of BENCH_SEEDS) {
     runSelectionDragScenario(warmupSeed)
     runFillApplyScenario(warmupSeed)
     runMultiRangeLookupScenario(warmupSeed)
+    runSelectionOverlayScenario(warmupSeed)
   }
 
   const heapStart = process.memoryUsage().heapUsed
@@ -488,6 +611,7 @@ for (const seed of BENCH_SEEDS) {
   const selectionDrag = runSelectionDragScenario(seed)
   const fillApply = runFillApplyScenario(seed)
   const multiRangeLookup = runMultiRangeLookupScenario(seed)
+  const selectionOverlay = runSelectionOverlayScenario(seed)
   const elapsedMs = performance.now() - startedAt
   const heapEnd = process.memoryUsage().heapUsed
   const heapDeltaMb = (heapEnd - heapStart) / (1024 * 1024)
@@ -500,6 +624,7 @@ for (const seed of BENCH_SEEDS) {
       selectionDrag,
       fillApply,
       multiRangeLookup,
+      selectionOverlay,
     },
   })
 
@@ -528,6 +653,14 @@ for (const seed of BENCH_SEEDS) {
       p99Ms: multiRangeLookup.p99.toFixed(3),
       cvPct: multiRangeLookup.cvPct.toFixed(2),
       maxMs: multiRangeLookup.max.toFixed(3),
+    },
+    {
+      scenario: "selection-overlay-proxy",
+      p50Ms: selectionOverlay.p50.toFixed(3),
+      p95Ms: selectionOverlay.p95.toFixed(3),
+      p99Ms: selectionOverlay.p99.toFixed(3),
+      cvPct: selectionOverlay.cvPct.toFixed(2),
+      maxMs: selectionOverlay.max.toFixed(3),
     },
   ])
   console.log(`Total elapsed: ${elapsedMs.toFixed(2)}ms`)
@@ -573,6 +706,16 @@ for (const seed of BENCH_SEEDS) {
       `seed ${seed}: multi-range lookup p99 ${multiRangeLookup.p99.toFixed(3)}ms exceeds PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS=${PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS}ms`,
     )
   }
+  if (selectionOverlay.p95 > PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS) {
+    budgetErrors.push(
+      `seed ${seed}: selection-overlay p95 ${selectionOverlay.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS=${PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS}ms`,
+    )
+  }
+  if (selectionOverlay.p99 > PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS) {
+    budgetErrors.push(
+      `seed ${seed}: selection-overlay p99 ${selectionOverlay.p99.toFixed(3)}ms exceeds PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS=${PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS}ms`,
+    )
+  }
 }
 
 const aggregateElapsed = stats(runResults.map((run) => run.elapsedMs))
@@ -583,6 +726,8 @@ const aggregateFillP95 = stats(runResults.map((run) => run.scenarios.fillApply.p
 const aggregateFillP99 = stats(runResults.map((run) => run.scenarios.fillApply.p99))
 const aggregateMultiRangeLookupP95 = stats(runResults.map((run) => run.scenarios.multiRangeLookup.p95))
 const aggregateMultiRangeLookupP99 = stats(runResults.map((run) => run.scenarios.multiRangeLookup.p99))
+const aggregateSelectionOverlayP95 = stats(runResults.map((run) => run.scenarios.selectionOverlay.p95))
+const aggregateSelectionOverlayP99 = stats(runResults.map((run) => run.scenarios.selectionOverlay.p99))
 
 if (shouldEnforceElapsedVariance(aggregateElapsed)) {
   if (aggregateElapsed.cvPct > PERF_BUDGET_MAX_VARIANCE_PCT) {
@@ -603,6 +748,8 @@ for (const aggregate of [
   { name: "fill-apply p99", stat: aggregateFillP99 },
   { name: "multi-range lookup p95", stat: aggregateMultiRangeLookupP95 },
   { name: "multi-range lookup p99", stat: aggregateMultiRangeLookupP99 },
+  { name: "selection-overlay p95", stat: aggregateSelectionOverlayP95 },
+  { name: "selection-overlay p99", stat: aggregateSelectionOverlayP99 },
 ]) {
   if (PERF_BUDGET_MAX_VARIANCE_PCT === Number.POSITIVE_INFINITY) {
     continue
@@ -645,6 +792,9 @@ const summary = {
       iterations: INTERACTION_MULTI_RANGE_ITERATIONS,
       rangeCount: INTERACTION_MULTI_RANGE_COUNT,
     },
+    selectionOverlay: {
+      iterations: INTERACTION_SELECTION_OVERLAY_ITERATIONS,
+    },
   },
   budgets: {
     totalMs: PERF_BUDGET_TOTAL_MS,
@@ -654,6 +804,8 @@ const summary = {
     maxFillApplyP99Ms: PERF_BUDGET_MAX_FILL_APPLY_P99_MS,
     maxMultiRangeLookupP95Ms: PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS,
     maxMultiRangeLookupP99Ms: PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS,
+    maxSelectionOverlayP95Ms: PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS,
+    maxSelectionOverlayP99Ms: PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS,
     maxVariancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
     varianceMinMeanMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
     maxHeapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
@@ -676,6 +828,8 @@ const summary = {
     fillApplyP99Ms: aggregateFillP99,
     multiRangeLookupP95Ms: aggregateMultiRangeLookupP95,
     multiRangeLookupP99Ms: aggregateMultiRangeLookupP99,
+    selectionOverlayP95Ms: aggregateSelectionOverlayP95,
+    selectionOverlayP99Ms: aggregateSelectionOverlayP99,
   },
   runs: runResults,
   budgetErrors,

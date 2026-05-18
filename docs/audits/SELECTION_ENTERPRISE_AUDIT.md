@@ -239,7 +239,7 @@ Blocks to target:
 - Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
 - Active cell/focus/edit ownership is not specified as one state machine.
 - Touch selection has browser-covered long-press and explicit-handle behavior, but still needs real-device validation.
-- Large-range performance lacks enforced budgets for clipboard and overlays.
+- Large-range selection performance now has hard gates for overlay planning, enterprise smoke gates for clipboard planning, summary planning, and virtual coverage, and browser-frame coverage for pinned-pane drag selection. Server-delegated operation latency budgets remain future work until those handlers exist.
 - Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
 
 ## Recommended Next Work
@@ -247,7 +247,7 @@ Blocks to target:
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
 2. Add e2e tests for pinned/horizontal selection remount, server placeholders, and editor remount state.
 3. Execute the real-device touch selection matrix and tune hardware thresholds if the Chromium budgets do not match device traces.
-4. Add large-range performance gates for clipboard mutation planning, overlays, and selection drag.
+4. Add server-delegated operation latency gates after copy/export, cut, clear/delete, paste, range move, and summary handlers are implemented.
 
 ## Validation Expectations
 

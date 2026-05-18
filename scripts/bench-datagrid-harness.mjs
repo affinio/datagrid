@@ -124,6 +124,8 @@ const tasks = [
         PERF_BUDGET_MAX_FILL_APPLY_P99_MS: "14",
         PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS: "1",
         PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS: "2",
+        PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS: "4",
+        PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS: "8",
       },
       local: {
         PERF_BUDGET_TOTAL_MS: "Infinity",
@@ -133,6 +135,8 @@ const tasks = [
         PERF_BUDGET_MAX_FILL_APPLY_P99_MS: "Infinity",
         PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS: "Infinity",
         PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS: "Infinity",
+        PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS: "Infinity",
+        PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS: "Infinity",
       },
     },
   },
