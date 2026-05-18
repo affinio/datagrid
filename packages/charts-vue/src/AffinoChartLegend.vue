@@ -111,6 +111,7 @@ function isInteractiveEventTarget(item: ChartLegendItem, element: EventTarget | 
   grid-template-columns: 12px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  max-width: 100%;
   min-width: 0;
   outline: none;
 }
@@ -145,5 +146,6 @@ function isInteractiveEventTarget(item: ChartLegendItem, element: EventTarget | 
 .affino-chart-legend__value {
   color: var(--affino-chart-muted-text, #667085);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 </style>

@@ -46,6 +46,7 @@
           title="Users by Channel"
           description="Donut mode using shared legend"
           :inner-radius-ratio="0.56"
+          :width="640"
           :height="320"
           @slice-click="recordPieEvent('click', $event)"
           @slice-hover="recordPieEvent('hover', $event)"
@@ -254,7 +255,8 @@ function formatPercent(value: number): string {
 .charts-demo__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  gap: 12px;
+  align-items: start;
+  gap: 14px;
 }
 
 .charts-demo__theme {
@@ -280,6 +282,10 @@ function formatPercent(value: number): string {
 .charts-demo__chart-card,
 .charts-demo__debug {
   min-width: 0;
+}
+
+.charts-demo__chart-card {
+  display: grid;
 }
 
 .charts-demo__chart-card--wide {

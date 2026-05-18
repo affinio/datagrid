@@ -128,6 +128,8 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
   border: 1px solid var(--affino-chart-border);
   border-radius: 8px;
   font-family: inherit;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .affino-chart-frame__header {
@@ -154,6 +156,7 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
 .affino-chart-frame__stage {
   position: relative;
   background: var(--affino-chart-surface);
+  min-width: 0;
 }
 
 .affino-chart-frame__svg {
@@ -172,7 +175,8 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
   font-size: 14px;
   line-height: 1.4;
   text-align: center;
-  background: color-mix(in srgb, var(--affino-chart-surface) 88%, transparent);
+  background: color-mix(in srgb, var(--affino-chart-surface) 92%, transparent);
+  backdrop-filter: blur(1px);
 }
 
 .affino-chart-frame__state--error {
