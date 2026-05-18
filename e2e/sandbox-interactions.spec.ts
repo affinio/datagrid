@@ -229,6 +229,45 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
+  test("additive selection ranges remount after horizontal virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const previousCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="name"]').first()
+    const activeCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(previousCell).toBeVisible({ timeout: 20_000 })
+    await expect(activeCell).toBeVisible({ timeout: 20_000 })
+
+    await previousCell.click()
+    await activeCell.click({ modifiers: ["Control"] })
+
+    const previousSignature = await cellSignature(previousCell)
+    const activeSignature = await cellSignature(activeCell)
+    await expect(stage).toHaveClass(/grid-stage--additive-selection/)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(activeSignature)
+    await expect(previousCell).toHaveClass(/grid-cell--selected/)
+    await expect(activeCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect.poll(async () => selectedCellSignatures(page)).toEqual(expect.arrayContaining([previousSignature, activeSignature]))
+
+    await setViewportScroll(viewport, { top: 0, left: 2_400 })
+    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(0)
+    await expect(page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(previousCell).toBeVisible({ timeout: 20_000 })
+    await expect(activeCell).toBeVisible({ timeout: 20_000 })
+    await expect(stage).toHaveClass(/grid-stage--additive-selection/)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(activeSignature)
+    await expect(previousCell).toHaveClass(/grid-cell--selected/)
+    await expect(activeCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(activeCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectedCellSignatures(page)).toEqual(expect.arrayContaining([previousSignature, activeSignature]))
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+  })
+
   test("placeholder tail materialization keeps selection anchor and fill handle", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/shell/base-grid")
 
@@ -529,6 +568,17 @@ async function cellSignature(cell: Locator): Promise<string> {
     element.getAttribute("data-column-index") ?? "",
     element.getAttribute("data-column-key") ?? "",
   ].join(":"))
+}
+
+async function selectedCellSignatures(page: Page): Promise<string[]> {
+  return await page.evaluate(() => {
+    return Array.from(document.querySelectorAll<HTMLElement>(".grid-cell--selected, .grid-cell--selection-anchor"))
+      .map(element => [
+        element.getAttribute("data-row-index") ?? "",
+        element.getAttribute("data-column-index") ?? "",
+        element.getAttribute("data-column-key") ?? "",
+      ].join(":"))
+  })
 }
 
 async function latestPerfSample(page: Page, scope: string): Promise<Record<string, unknown> | null> {

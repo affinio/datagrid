@@ -134,7 +134,7 @@ Tests and benchmarks sampled:
    `useDataGridAppInteractionController.ts` has a pending range-move start when the pointer begins inside the selected editable range. The stage has mouse hover edge affordances, and touch-generated mouse events are guarded, but the enterprise interaction contract should require explicit handles for touch and clearly separate edge-drag from body-drag behavior.
 
 6. **Pinned-pane selection is strong but still needs broader enterprise validation.**
-   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. The multi-range visual contract is now explicit: all additive ranges keep selected-cell highlighting, while active overlay lanes, pinned seams, fill handles, range-move edge hover, clipboard target, and keyboard extension belong to the active range. Unit tests cover active-range-only overlay lanes across left, center, right, and pinned-bottom panes, additive cell classes are now locked against projected pinned/reordered visible column indexes when hidden columns are omitted, and row-index/header selected states now honor additive full-row/full-column ranges. Horizontally virtualized browser cases remain open.
+   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. The multi-range visual contract is now explicit: all additive ranges keep selected-cell highlighting, while active overlay lanes, pinned seams, fill handles, range-move edge hover, clipboard target, and keyboard extension belong to the active range. Unit tests cover active-range-only overlay lanes across left, center, right, and pinned-bottom panes, additive cell classes are now locked against projected pinned/reordered visible column indexes when hidden columns are omitted, and row-index/header selected states now honor additive full-row/full-column ranges. Browser coverage proves Ctrl-additive selected cells, the active anchor, and the fill handle remount correctly after horizontal virtualization.
 
 ### Medium
 
@@ -150,8 +150,8 @@ Tests and benchmarks sampled:
 4. **Focus synchronization is retry-based rather than state-machine based.**
    `dataGridFocusRestore.ts` retries focus after `nextTick` and rAF, which is pragmatic. Enterprise readiness needs tests proving this is enough for virtualization remounts, pinned panes, editor mount, server placeholder replacement, and horizontal virtualization.
 
-5. **Ctrl/Cmd additive selection has row/header parity coverage, with browser gaps remaining.**
-   Cell additive ranges are tested, including pinned/reordered visible column indexes with hidden columns omitted. Header and row-index selected states now have additive full-column/full-row parity coverage; remaining browser coverage is still stronger for cell paths than for horizontally virtualized header/row-index cases.
+5. **Ctrl/Cmd additive selection has row/header parity and browser remount coverage.**
+   Cell additive ranges are tested, including pinned/reordered visible column indexes with hidden columns omitted. Header and row-index selected states now have additive full-column/full-row parity coverage, and browser coverage proves additive cell ranges survive horizontal virtualization remounts.
 
 6. **Selection rendering and overlay planning now have local performance gates.**
    `useDataGridTableStageVisualSelection.ts` indexes sparse additive ranges by row for rendered-cell predicates and keeps tall/overflow ranges in a bounded fallback path. Interaction benchmarks gate multi-range lookup and selection overlay planning across pinned/center panes. Future server-delegated operation latency gates still depend on backend handlers.
@@ -173,12 +173,12 @@ Tests and benchmarks sampled:
 | --- | --- | --- |
 | Active cell ownership | Documented across snapshot, anchor, focus runtime, and editing with focused contracts | Add browser-level editor remount and browser-level server datasource placeholder tests |
 | Range selection | Strong core/app support with grouped/tree and vertical remount coverage | Need broader e2e around pinned/horizontal virtualization and server placeholders |
-| Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented; projected pinned/reordered cell-class mapping and additive header/row-index parity covered | Need horizontally virtualized browser cases |
+| Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented; projected pinned/reordered cell-class mapping, additive header/row-index parity, and horizontal browser remounts covered | Watch future server/unloaded multi-range operation semantics |
 | Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
 | Virtualization remount continuity | Logical model is suitable; vertical, right-pinned vertical, horizontal selected-cell remounts, and shell placeholder materialization are browser-covered; horizontal selected-column remount, editor draft remount, and placeholder materialization selection handoff are component-covered | Needs browser tests for editors and server datasource placeholders after remount |
 | Keyboard navigation | Strong coverage through command and navigation routers | Need server/unloaded and pinned-pane e2e |
 | Shift selection | Implemented for keyboard and pointer; grouped/tree app contract covers flattened group rows | Need placeholder and remount coverage |
-| Ctrl/Cmd selection | Implemented for additive cell ranges | Need header/row parity and visual-overlay contract |
+| Ctrl/Cmd selection | Implemented for additive cell ranges; header/row-index selected states and active-range visual overlay contract covered | Need server/unloaded behavior coverage |
 | Pinned panes | Strong overlay geometry support with active-range-only multi-range overlay coverage | Need active-cell e2e across panes |
 | Grouped/tree rows | Flattened-row semantics documented and tested in core; clipboard/paste/clear/fill block group rows; app contracts and e2e cover keyboard shift, additive cell ranges, row-selection reconciliation, fill blocking, collapse/expand invalidation/reconcile paths, and server-backed grouped placeholders for group row ids | Watch future server-defined group-row operation semantics |
 | Clipboard | Good local safety; blocks unloaded copy | Needs server-delegated copy/export/cut/clear/delete contract |
