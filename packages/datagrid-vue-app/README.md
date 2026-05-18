@@ -1339,6 +1339,7 @@ const columns: DataGridAppColumnInput<Row>[] = [
 - `column` and `columnIndex`
 - `value`: raw string value used by the stage
 - `displayValue`: formatted display string after presentation rules
+- `surface`: rendered surface metadata; `surface.kind` is `"real"` for materialized rows and `"placeholder"` for visual placeholder rows
 - `interactive`: resolved cell interaction contract when the column declares `cellInteraction`; otherwise `null`
 
 `groupCellRenderer` receives the same display fields for group rows plus `group`, which includes:
@@ -1386,8 +1387,21 @@ Guidelines:
 - keep group expand/collapse behind an explicit trigger inside `groupCellRenderer`; do not rely on the whole group cell acting as the disclosure target
 - the grid shell still owns focus, selection, fill, clipboard, menus, and editing; `cellInteraction` only adds semantic invoke behavior inside that model
 - prefer pure render output from row data over local mutable renderer state
+- do not mutate grid state, row data, selection, focus, or editor state while the renderer is running
+- avoid synchronous layout reads such as `getBoundingClientRect()`, `clientWidth`, or computed-style reads inside renderers; measure layout in your surrounding app lifecycle instead
+- return bounded Vue content for each cell; expensive charts, popovers, network work, or observers should mount lazily behind explicit user intent
+- provide stable keys for repeated child VNodes returned from a renderer so virtualized row/column remounts do not lose child identity unnecessarily
+- treat `surface.kind === "placeholder"` as a display-only state; do not assume placeholder rows are persisted or editable until the grid materializes them through the placeholder-row policy
+- keep per-cell renderer work proportional to one cell because the stage invokes renderers synchronously for every rendered center and pinned cell
 - keep identifiers, derived values, and formula-result columns read-only where appropriate
 - if a renderer caches local UI state, listen for targeted app-layer cell refresh and re-sync on refresh
+
+Performance expectations:
+
+- Renderers run in the same Vue render pass as virtualized row and column window updates.
+- Wide grids, pinned panes, and pinned-bottom rows multiply the number of rendered cell surfaces.
+- The grid may use lightweight display-value rendering during active touch scroll; renderers must not be the only place where essential text, ARIA labels, selection state, or edit affordances exist.
+- Enterprise custom-renderer scenarios should be validated with the browser-frame/perf gates documented in `docs/perf/datagrid-performance-gates.md` before being treated as a performance baseline.
 
 ### System checkbox interactions
 

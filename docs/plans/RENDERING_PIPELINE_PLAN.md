@@ -5,7 +5,8 @@ This plan converts `docs/audits/RENDERING_PIPELINE_AUDIT.md` into small, separab
 Current execution state:
 
 - Slice 1 is completed and should be treated as the center-pane diagnostics guard baseline.
-- Slice 2 is the next implementation slice.
+- Slice 2 is completed and should be treated as the renderer contract documentation baseline.
+- Slice 3 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -26,14 +27,14 @@ Current execution state:
 
 ## Slice 2: Renderer Contract Documentation
 
-- Status: Planned.
+- Status: Completed. Public renderer documentation now names renderer purity, synchronous layout-read avoidance, no grid-state mutation during render, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations.
 - Objective: document public renderer expectations before adding stricter isolation or fallback behavior.
 - Affected packages/files:
   - `packages/datagrid-vue-app/README.md`
   - `docs/audits/RENDERING_PIPELINE_AUDIT.md`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: no runtime behavior change; user-facing docs describe renderer purity, layout-read avoidance, stable VNode keys, placeholder surface context, and scroll-time cost expectations.
-- Tests to add/update:
+- Tests added/covered:
   - Docs validation only.
 - Validation command: `node ./scripts/check-datagrid-docs-framework-track.mjs`
 - Risk level: Low
@@ -145,8 +146,8 @@ Current execution state:
 ## Recommended Execution Order
 
 1. Slice 1: Center Pane Diagnostics Guard (completed)
-2. Slice 2: Renderer Contract Documentation (next)
-3. Slice 3: Render Telemetry Counters
+2. Slice 2: Renderer Contract Documentation (completed)
+3. Slice 3: Render Telemetry Counters (next)
 4. Slice 4: Custom Renderer Error Fallback
 5. Slice 5: Lightweight Scroll Rendering Policy
 6. Slice 6: Mount And Unmount Churn Benchmark

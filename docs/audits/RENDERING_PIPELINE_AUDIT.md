@@ -99,7 +99,7 @@ Vue app viewport and rendering:
 ### High
 
 1. **Custom renderer isolation is weak.**
-   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. There is no error boundary, duration budget, memoized render context, slow-render fallback, or documented restriction against layout reads. This is acceptable for a flexible app API but not yet enterprise-grade.
+   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. Public renderer expectations now document pure output, no grid-state mutation during render, synchronous layout-read avoidance, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations. Remaining gaps are runtime error fallback, slow-render sampling, render telemetry, and browser-frame budgets.
 
 2. **Center pane diagnostics are guarded when disabled.**
    `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
@@ -186,7 +186,7 @@ What blocks the target:
 
 ### Phase 2: Renderer Contract And Isolation
 
-- Document public renderer expectations: no synchronous layout reads, no grid-state mutation during render, stable keys for returned VNodes, and bounded work per cell.
+- Document public renderer expectations: no synchronous layout reads, no grid-state mutation during render, stable keys for returned VNodes, and bounded work per cell. Status: completed in `packages/datagrid-vue-app/README.md`.
 - Add renderer error handling or a safe fallback boundary.
 - Add optional slow-render sampling in development/perf mode.
 
@@ -268,7 +268,7 @@ Performance/benchmark tests:
 
 1. Guard center-pane diagnostics and add a regression test. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 1.
 2. Add render telemetry counters behind existing perf tracing.
-3. Add custom renderer contract docs and tests for placeholder/interactive context stability.
+3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs are in place; runtime isolation remains.
 4. Add renderer error fallback or development-only error reporting.
 5. Add lightweight scroll rendering policy for expensive custom renderers.
 6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll.
