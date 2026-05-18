@@ -252,3 +252,35 @@ export interface MetricModel {
   delta: MetricDeltaModel | null
   trend: number[]
 }
+
+export interface HistogramGeometryOptions {
+  rows: readonly ChartDatum[]
+  valueField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  binCount?: number
+  valueMin?: number
+  valueMax?: number
+  includeOutOfRange?: boolean
+}
+
+export interface HistogramBinGeometry {
+  key: string
+  index: number
+  min: number
+  max: number
+  count: number
+  values: number[]
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface HistogramGeometry {
+  bins: HistogramBinGeometry[]
+  plotArea: ChartRect
+  valueDomain: ChartNumericDomain
+  countDomain: ChartNumericDomain
+  totalCount: number
+}

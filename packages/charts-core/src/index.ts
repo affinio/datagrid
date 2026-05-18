@@ -15,6 +15,9 @@ export type {
   ChartPoint,
   ChartRect,
   ChartSize,
+  HistogramBinGeometry,
+  HistogramGeometry,
+  HistogramGeometryOptions,
   LineChartGeometry,
   LineChartGeometryOptions,
   LineChartPointGeometry,
@@ -53,6 +56,7 @@ export { createPieChartGeometry } from "./pieGeometry"
 export { createScatterChartGeometry } from "./scatterGeometry"
 export { createAreaChartGeometry } from "./areaGeometry"
 export { createMetricModel } from "./metricModel"
+export { createHistogramGeometry } from "./histogramGeometry"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }
