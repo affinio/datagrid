@@ -38,6 +38,7 @@ Per-benchmark outputs (JSON):
 - `artifacts/performance/bench-datagrid-tree-workload.json`
 - `artifacts/performance/bench-datagrid-tree-workload-matrix.json`
 - `artifacts/performance/bench-datagrid-rowmodels.json`
+- `artifacts/performance/bench-datagrid-enterprise-browser-frames.json`
 
 Harness summary:
 - `artifacts/performance/datagrid-benchmark-report.json`
@@ -111,6 +112,11 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Interaction frame budgets are profile-scoped through `BENCH_INTERACTION_DEVICE_PROFILE`. `desktop-ci` is the default hard-fail profile and uses `PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS=8`, `PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS=12`, `PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS=4`, and `PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX=2`. `touch-tablet-ci` uses `12`, `18`, `6`, and `3`; `touch-phone-ci` uses `14`, `20`, `7`, and `4`. These are automated Chromium profile gates, not a substitute for hardware validation.
 - `BENCH_INTERACTION_FAIL_ON_WARNINGS` defaults to `true` for the built-in profiles. Set it to `false` only for exploratory local observation runs.
 - Hard-fail scripts: `pnpm run bench:datagrid:enterprise:browser-frames:assert` for desktop Chromium and `pnpm run bench:datagrid:enterprise:browser-frames:touch:assert` for tablet/coarse-pointer Chromium.
+- Virtualization browser gates:
+  - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; the horizontal stress scenario uses `10k` rows and `1000` columns through `BENCH_BROWSER_WIDE_ROW_SCENARIOS=horizontal-scroll-only` and `BENCH_BROWSER_WIDE_COLUMN_SCENARIOS=horizontal-scroll-only`.
+  - The CI harness includes `enterprise-browser-frames` with the same focused virtualization scenario set and row/column overrides.
+  - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.
+  - Hard budgets use `BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS=true` and cover `PERF_BUDGET_MAX_FRAME_P95_MS=120`, `PERF_BUDGET_MAX_DROPPED_FRAME_PCT=90`, `PERF_BUDGET_MAX_LONG_TASK_COUNT=600`, `PERF_BUDGET_MAX_HEAP_DELTA_MB=260`, `PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS=10`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95=160`, `PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS=0`, and `PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS=220`.
 - Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
@@ -184,13 +190,13 @@ Perf-contract fail-fast gate:
 - `pnpm run quality:perf:datagrid`
 - Script: `scripts/check-datagrid-perf-contracts.mjs`
 - Report: `artifacts/quality/datagrid-perf-contracts-report.json`
-- Includes static guard for benchmark harness task matrix (`vue-adapters`, `laravel-morph`, `interaction-models`, `datasource-churn`, `derived-cache`, `pivot-workload`, `tree-workload`, `row-models`) and mode-scoped budget wiring.
+- Includes static guard for benchmark harness task matrix (`vue-adapters`, `laravel-morph`, `interaction-models`, `datasource-churn`, `derived-cache`, `pivot-workload`, `tree-workload`, `enterprise-browser-frames`, `row-models`) and mode-scoped budget wiring.
 
 Fail-fast behavior:
 - Harness exits non-zero when any benchmark fails budget checks.
 - Runtime report gate (`scripts/check-datagrid-benchmark-report.mjs`) validates:
   - report freshness,
-  - required suites presence (`vue-adapters`, `laravel-morph`, `interaction-models`, `datasource-churn`, `derived-cache`, `row-models`),
+  - required suites presence (`vue-adapters`, `laravel-morph`, `interaction-models`, `datasource-churn`, `derived-cache`, `row-models`, `enterprise-browser-frames`),
   - tree workload stress suite presence in harness report (`tree-workload`) with CI fail-fast through harness `ok` status,
   - harness report consistency (no duplicate task ids, valid durations, status/ok consistency),
   - presence and completeness of `budgets.byTask` map for required suites,

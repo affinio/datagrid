@@ -20,7 +20,8 @@ Current execution state:
 - Slice 14 is completed and should be treated as the resize/fractional viewport baseline.
 - Slice 15 is completed and should be treated as the virtualized accessibility mapping baseline.
 - Slice 16 is completed and should be treated as the virtualization telemetry extraction baseline.
-- Slice 17 is the next implementation slice.
+- Slice 17 is completed and should be treated as the enterprise virtualization perf gate baseline.
+- Slice 18 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -331,7 +332,7 @@ Current execution state:
 
 ## Slice 17: Perf Gates For Enterprise Virtualization
 
-- Status: Planned. This slice should consume telemetry/benchmarks from earlier slices instead of introducing a separate performance track.
+- Status: Completed. Enterprise browser-frame benchmarks now support focused scenario selection, scenario-specific row/column overrides, hard virtualization budgets, CI harness wiring, benchmark report validation, and baseline entries for the new `enterprise-browser-frames` suite.
 - Objective: turn telemetry and benchmarks into repeatable gates for large and wide grids.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`
@@ -341,12 +342,12 @@ Current execution state:
   - `scripts/bench-datagrid-rowmodels.mjs`
   - `scripts/bench-datagrid-interactions.mjs`
 - Expected behavior change: CI or local validation can report pass/fail or warning-only budgets for frame time, long tasks, rendered counts, churn, placeholder exposure, and heap growth.
-- Tests to add/update:
-  - 10k, 100k, and 1M row benchmark scenarios.
-  - 100, 1k, and 10k column benchmark scenarios.
-  - Custom renderer benchmark scenario.
-  - Server latency benchmark scenario.
-- Validation command: `node scripts/bench-datagrid-harness.mjs`
+- Tests added/covered:
+  - Focused 100k-row browser virtualization gate in the enterprise browser-frame benchmark.
+  - Focused `10k`-row / `1000`-column browser virtualization gate for horizontal scrolling through scenario-specific row/column overrides.
+  - Server datasource placeholder browser scenario with virtualization telemetry budgets.
+  - Benchmark report validation for the new enterprise browser-frame suite.
+- Validation command: `pnpm run quality:perf:datagrid && pnpm run bench:datagrid:enterprise:virtualization:assert`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): add enterprise virtualization perf gates`
 
@@ -386,8 +387,8 @@ Current execution state:
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (completed)
 15. Slice 15: Virtualized Accessibility Mapping (completed)
 16. Slice 16: Telemetry Events For Virtualization (completed)
-17. Slice 17: Perf Gates For Enterprise Virtualization (next)
-18. Slice 18: Documentation And Support Matrix
+17. Slice 17: Perf Gates For Enterprise Virtualization (completed)
+18. Slice 18: Documentation And Support Matrix (next)
 
 ## Execution Notes
 

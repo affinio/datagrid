@@ -55,6 +55,14 @@
       "maxDurationDriftPct": 420,
       "maxAggregateElapsedDriftPct": 420,
       "maxAggregateHeapDriftPct": 180
+    },
+    "enterprise-browser-frames": {
+      "durationMs": 180000,
+      "aggregateElapsedMs": 180000,
+      "aggregateHeapMb": 260,
+      "maxDurationDriftPct": 200,
+      "maxAggregateElapsedDriftPct": 200,
+      "maxAggregateHeapDriftPct": 200
     }
   }
 }

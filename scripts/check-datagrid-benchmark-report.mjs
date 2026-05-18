@@ -9,7 +9,7 @@ const outputPath = resolve(
 )
 const requiredTasks = (
   process.env.DATAGRID_BENCH_REQUIRED_TASKS ??
-  "vue-adapters,laravel-morph,interaction-models,datasource-churn,derived-cache,row-models"
+  "vue-adapters,laravel-morph,interaction-models,datasource-churn,derived-cache,row-models,enterprise-browser-frames"
 )
   .split(",")
   .map(task => task.trim())
@@ -122,6 +122,7 @@ function isFiniteBudgetLiteral(value) {
 
 function resolveElapsedWorstCase(root) {
   return (
+    readNestedNumber(root, "aggregate.elapsedMs") ??
     readNestedNumber(root, "aggregate.elapsedMs.p99") ??
     readNestedNumber(root, "aggregate.elapsedMs.p95") ??
     readNestedNumber(root, "aggregate.elapsed.p99") ??
@@ -405,6 +406,30 @@ if (report) {
       `task '${taskId}' benchmark summary must not contain budget errors`,
       { budgetErrorsCount: budgetErrors.length },
     )
+
+    if (taskId === "enterprise-browser-frames") {
+      const virtualizationTelemetry = benchmarkJson.aggregate?.virtualizationTelemetry
+      register(
+        Boolean(virtualizationTelemetry && typeof virtualizationTelemetry === "object"),
+        "task-enterprise-browser-frames-virtualization-telemetry",
+        "enterprise browser frame artifact must expose virtualizationTelemetry aggregate",
+      )
+      register(
+        readNestedNumber(benchmarkJson, "aggregate.virtualizationTelemetry.sampleCount.max") > 0,
+        "task-enterprise-browser-frames-virtualization-samples",
+        "enterprise browser frame artifact must include viewport telemetry samples",
+      )
+      register(
+        readNestedNumber(benchmarkJson, "aggregate.virtualizationTelemetry.blankViewportCount.max") === 0,
+        "task-enterprise-browser-frames-no-blank-viewports",
+        "enterprise browser frame artifact must report zero blank viewport telemetry events",
+      )
+      register(
+        typeof benchmarkJson.budgets?.virtualization === "object" && benchmarkJson.budgets.virtualization !== null,
+        "task-enterprise-browser-frames-virtualization-budgets",
+        "enterprise browser frame artifact must expose virtualization budgets",
+      )
+    }
 
     if (expectedMode !== "ci") {
       continue

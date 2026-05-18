@@ -153,8 +153,8 @@ Orchestration, sandbox, tests, and benchmarks:
 2. **Accessibility mapping for virtualized app-stage DOM is covered at the attribute level.**
    `docs/datagrid-headless-a11y-contract.md` documents the virtualized stage DOM mapping, `a11yAttributesAdapter.ts` has adapter contract coverage, and the Vue app stage now exposes grid row/column counts plus one-based row/column indexes for virtualized center and pinned cells. Remaining gaps are screen-reader device validation and deeper grouped/server placeholder semantics.
 
-3. **Virtualization telemetry is started but not yet a hard gate.**
-   `dgPerfTrace=1` viewport samples now expose rendered row/column counts, range resolve timing, row/column overscan, placeholder rows, and blank-viewport flags, and the enterprise browser-frame benchmark extracts those samples into `virtualizationTelemetry`. Remaining gaps are CI budget promotion and first-class mount/unmount churn limits.
+3. **Virtualization telemetry is now wired into a repeatable browser gate.**
+   `dgPerfTrace=1` viewport samples expose rendered row/column counts, range resolve timing, row/column overscan, placeholder rows, and blank-viewport flags. The enterprise browser-frame benchmark extracts those samples into `virtualizationTelemetry`, and the CI harness now includes an `enterprise-browser-frames` task with hard virtualization budgets. Remaining gaps are broader 10k-column/1M-row profiles and first-class mount/unmount churn limits.
 
 4. **Browser zoom, fractional pixels, and high DPI coverage is started.**
    Core range invariants now cover fractional row heights, fractional column widths, zoom, and near-max horizontal scroll. `e2e/sandbox-grid.spec.ts` covers high-DPI viewport resize while scrolled and server datasource resize while loading. Remaining gaps are explicit browser zoom coverage, device matrix execution, and fractional row/column resize gestures in the rendered app path.
@@ -196,7 +196,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
 - Horizontal virtualization now has core 1k/10k-column stress gates with pinned columns and mutation coverage, core fractional-width range invariants, plus 1000-column and high-DPI resize Vue sandbox blank-band gates. Enterprise coverage still needs browser/device variants for 10k columns and resize/reorder/hide/show in the rendered app path.
 - Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output, with warning-only datasource churn budgets; the next gap is hard-fail promotion after baseline variance settles.
-- rAF frame budget, viewport update samples, rendered counts, placeholder rows, blank-viewport flags, and long tasks are now extractable by the enterprise browser-frame benchmark, but the results should become required gates for enterprise scenarios.
+- rAF frame budget, viewport update samples, rendered counts, placeholder rows, blank-viewport flags, long tasks, and heap growth are now covered by the focused enterprise browser-frame virtualization gate. Broader device/profile promotion remains.
 
 ## Server-Backed Virtualization Risks
 
@@ -232,7 +232,7 @@ Orchestration, sandbox, tests, and benchmarks:
 What blocks the target:
 
 - No required blank-viewport detection gate.
-- No placeholder exposure budget for server-backed grids.
+- Server placeholder exposure budgets are warning-only in datasource churn; focused browser placeholder-row budgets are hard-gated in the enterprise virtualization browser scenario.
 - Core/app virtualization ownership is not finalized as a documented contract.
 - Interaction continuity across unloaded or remounted ranges is partially covered; active-cell focus and keyboard navigation are covered, while copy/paste/fill/edit lifecycle gaps remain.
 - Virtualized a11y attribute mapping is covered in the app-stage DOM; screen-reader device behavior and grouped/server semantics remain to be proven.
@@ -279,11 +279,12 @@ What blocks the target:
 
 ### Phase 5: Enterprise Validation And Perf Gates
 
+- Status: started. The CI benchmark harness now includes a focused `enterprise-browser-frames` task for 100k-row vertical/server placeholder telemetry plus a 10k-row / 1000-column horizontal stress scenario; broader stress profiles remain.
 - Promote browser frame scripts and datasource churn scripts into required or scheduled gates for enterprise scenarios.
 - Add large dataset gates for 10k, 100k, and 1M rows.
 - Continue broadening wide dataset gates beyond the covered core 1k/10k-column stress contract and Vue 1000-column browser smoke path.
 - Add server latency profiles with placeholder exposure budgets.
-- Add long-task, rAF frame budget, heap growth, mount churn, and blank-viewport budgets.
+- Add long-task, rAF frame budget, heap growth, mount churn, and blank-viewport budgets. Status: focused browser budgets now cover frame p95, dropped-frame percentage, long-task count, heap delta, viewport update p95, range resolve p95, rendered row/column counts, placeholder rows, and blank viewport count; mount-churn hard budgets remain.
 - Add device or emulated-device Playwright coverage for touch momentum.
 
 ## Recommended Tests
@@ -324,7 +325,7 @@ What blocks the target:
 - Visible range calculation p50/p95/p99.
 - rAF frame budget and dropped-frame percentage.
 - Long tasks during scroll.
-- Row/cell mount and unmount churn per second. Status: mutation-derived churn is available in browser diagnostics; gate promotion remains.
+- Row/cell mount and unmount churn per second. Status: mutation-derived churn is available in browser diagnostics; dedicated hard churn budget promotion remains.
 - Heap growth and retained row/cell object counts.
 - Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; warning-only budget gates are wired for controlled latency and can be promoted with `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`.
 - Custom renderer scroll cost with and without lightweight scroll rendering.
@@ -351,7 +352,7 @@ What blocks the target:
 1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll. Status: started with Vue base-grid fast vertical/horizontal detector coverage and server datasource visible-refresh coverage in `e2e/sandbox-grid.spec.ts`; touch/device variants and broader server latency profiles remain.
 2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; controlled-latency warning budgets are wired, with hard-fail promotion still pending.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
-4. Add mounted row/cell churn metrics and browser frame budgets to performance gates. Status: runtime viewport telemetry and browser benchmark extraction are in place; budget promotion remains.
+4. Add mounted row/cell churn metrics and browser frame budgets to performance gates. Status: focused enterprise browser-frame virtualization budgets are now in the CI harness; dedicated mount-churn hard budgets remain.
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount. Status: started with active-cell focus remount, keyboard navigation beyond the rendered range, and variable row-height/horizontal visibility contracts.
 6. Add wide-grid horizontal virtualization gates for 1k and 10k columns. Status: core 1k/10k stress coverage and a Vue 1000-column browser smoke gate are in place; broader browser/device gates remain.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.

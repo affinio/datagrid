@@ -10,7 +10,11 @@ const BENCH_BROWSER_BASE_URL = process.env.BENCH_BROWSER_BASE_URL ?? "http://127
 const BENCH_BROWSER_ROUTE = process.env.BENCH_BROWSER_ROUTE ?? "/vue/shell/base-grid"
 const BENCH_BROWSER_SESSIONS = intEnv("BENCH_BROWSER_SESSIONS", 2)
 const BENCH_BROWSER_ROW_COUNT = intEnv("BENCH_BROWSER_ROW_COUNT", 100000)
+const BENCH_BROWSER_WIDE_ROW_COUNT = intEnv("BENCH_BROWSER_WIDE_ROW_COUNT", BENCH_BROWSER_ROW_COUNT)
+const BENCH_BROWSER_WIDE_ROW_SCENARIOS = parseCsvEnv("BENCH_BROWSER_WIDE_ROW_SCENARIOS")
 const BENCH_BROWSER_COLUMN_COUNT = intEnv("BENCH_BROWSER_COLUMN_COUNT", 32)
+const BENCH_BROWSER_WIDE_COLUMN_COUNT = intEnv("BENCH_BROWSER_WIDE_COLUMN_COUNT", BENCH_BROWSER_COLUMN_COUNT)
+const BENCH_BROWSER_WIDE_COLUMN_SCENARIOS = parseCsvEnv("BENCH_BROWSER_WIDE_COLUMN_SCENARIOS")
 const BENCH_BROWSER_SCROLL_STEPS = intEnv("BENCH_BROWSER_SCROLL_STEPS", 240)
 const BENCH_BROWSER_SMOOTH_SCROLL_STEPS = intEnv(
   "BENCH_BROWSER_SMOOTH_SCROLL_STEPS",
@@ -21,6 +25,7 @@ const BENCH_BROWSER_HORIZONTAL_STEPS = intEnv("BENCH_BROWSER_HORIZONTAL_STEPS", 
 const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS", 16)
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
+const BENCH_BROWSER_SCENARIO_FILTER = parseCsvEnv("BENCH_BROWSER_SCENARIOS")
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_FILTER = (process.env.BENCH_BROWSER_ENABLE_FILTER ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_SORT = (process.env.BENCH_BROWSER_ENABLE_SORT ?? "true").trim().toLowerCase() !== "false"
@@ -87,6 +92,15 @@ const BENCH_INTERACTION_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_INTERACTION_FAIL_ON_WARNINGS",
   interactionDeviceProfile.failOnWarnings,
 )
+const BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS",
+  false,
+)
+const PERF_BUDGET_MAX_VARIANCE_PCT = floatEnv("PERF_BUDGET_MAX_VARIANCE_PCT", 999999)
+const PERF_BUDGET_MAX_HEAP_DELTA_MB = floatEnv("PERF_BUDGET_MAX_HEAP_DELTA_MB", 999999)
+const PERF_BUDGET_MAX_FRAME_P95_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P95_MS", 120)
+const PERF_BUDGET_MAX_DROPPED_FRAME_PCT = floatEnv("PERF_BUDGET_MAX_DROPPED_FRAME_PCT", 80)
+const PERF_BUDGET_MAX_LONG_TASK_COUNT = floatEnv("PERF_BUDGET_MAX_LONG_TASK_COUNT", 999999)
 const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
   interactionDeviceProfile.budgets.previewP95Ms,
@@ -103,13 +117,38 @@ const PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX",
   interactionDeviceProfile.budgets.scrollSyncDriftPx,
 )
+const PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS",
+  180,
+)
+const PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS",
+  10,
+)
+const PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95 = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95",
+  180,
+)
+const PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95 = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95",
+  160,
+)
+const PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS",
+  0,
+)
+const PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS = floatEnv(
+  "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS",
+  220,
+)
 
-const SCENARIOS = [
+const ALL_SCENARIOS = [
   {
     id: "vertical-scroll-only",
     verticalScroll: true,
     verticalSmoothScroll: false,
     verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
     smoothScroll: false,
     horizontalScroll: false,
     filter: false,
@@ -131,6 +170,8 @@ const SCENARIOS = [
     id: "horizontal-scroll-only",
     verticalScroll: false,
     verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
     horizontalScroll: true,
     filter: false,
     sort: false,
@@ -170,6 +211,7 @@ const SCENARIOS = [
     verticalScroll: true,
     verticalSmoothScroll: false,
     verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
     datasourcePlaceholderDiagnostics: true,
     horizontalScroll: false,
     filter: false,
@@ -213,10 +255,20 @@ const SCENARIOS = [
     interactionDiagnostics: true,
   },
 ]
+const SCENARIOS = BENCH_BROWSER_SCENARIO_FILTER.length > 0
+  ? ALL_SCENARIOS.filter(scenario => BENCH_BROWSER_SCENARIO_FILTER.includes(scenario.id))
+  : ALL_SCENARIOS
+if (SCENARIOS.length === 0) {
+  throw new Error(
+    `BENCH_BROWSER_SCENARIOS did not match any scenario. Available: ${ALL_SCENARIOS.map(scenario => scenario.id).join(", ")}`,
+  )
+}
 
 assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
 assertPositiveInteger(BENCH_BROWSER_ROW_COUNT, "BENCH_BROWSER_ROW_COUNT")
+assertPositiveInteger(BENCH_BROWSER_WIDE_ROW_COUNT, "BENCH_BROWSER_WIDE_ROW_COUNT")
 assertPositiveInteger(BENCH_BROWSER_COLUMN_COUNT, "BENCH_BROWSER_COLUMN_COUNT")
+assertPositiveInteger(BENCH_BROWSER_WIDE_COLUMN_COUNT, "BENCH_BROWSER_WIDE_COLUMN_COUNT")
 assertPositiveInteger(BENCH_BROWSER_SCROLL_STEPS, "BENCH_BROWSER_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_STEPS, "BENCH_BROWSER_SMOOTH_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX, "BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX")
@@ -225,14 +277,32 @@ assertPositiveInteger(BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS, "BENCH_BROWSER_SMOOTH
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
 assertNonNegativeInteger(BENCH_BROWSER_CELL_UPDATE_BURST, "BENCH_BROWSER_CELL_UPDATE_BURST")
 for (const [value, label] of [
+  [PERF_BUDGET_MAX_VARIANCE_PCT, "PERF_BUDGET_MAX_VARIANCE_PCT"],
+  [PERF_BUDGET_MAX_HEAP_DELTA_MB, "PERF_BUDGET_MAX_HEAP_DELTA_MB"],
+  [PERF_BUDGET_MAX_FRAME_P95_MS, "PERF_BUDGET_MAX_FRAME_P95_MS"],
+  [PERF_BUDGET_MAX_DROPPED_FRAME_PCT, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT"],
+  [PERF_BUDGET_MAX_LONG_TASK_COUNT, "PERF_BUDGET_MAX_LONG_TASK_COUNT"],
   [PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS, "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS, "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS, "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS"],
   [PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX, "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS, "PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS, "PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95, "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95, "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS, "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS"],
+  [PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS, "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS"],
 ]) {
   if (value < 0) {
     throw new Error(`${label} must be non-negative`)
   }
+}
+
+function parseCsvEnv(name) {
+  return String(process.env[name] ?? "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean)
 }
 
 function intEnv(name, fallback) {
@@ -352,7 +422,19 @@ function buildScenarioUrl(scenario) {
   return url.toString()
 }
 
-async function configureSandbox(page) {
+function resolveScenarioColumnCount(scenario) {
+  return BENCH_BROWSER_WIDE_COLUMN_SCENARIOS.includes(scenario.id)
+    ? BENCH_BROWSER_WIDE_COLUMN_COUNT
+    : BENCH_BROWSER_COLUMN_COUNT
+}
+
+function resolveScenarioRowCount(scenario) {
+  return BENCH_BROWSER_WIDE_ROW_SCENARIOS.includes(scenario.id)
+    ? BENCH_BROWSER_WIDE_ROW_COUNT
+    : BENCH_BROWSER_ROW_COUNT
+}
+
+async function configureSandbox(page, config) {
   return await page.evaluate(({ rowCount, columnCount }) => {
     function selectNearestByLabel(pattern, target) {
       const labels = Array.from(document.querySelectorAll("label"))
@@ -409,10 +491,7 @@ async function configureSandbox(page) {
       viewTable: selectValueByLabel(/^(\s*)View\b/i, "table"),
       rowModeFixed: selectValueByLabel(/^(\s*)Row mode\b/i, "fixed"),
     }
-  }, {
-    rowCount: BENCH_BROWSER_ROW_COUNT,
-    columnCount: BENCH_BROWSER_COLUMN_COUNT,
-  })
+  }, config)
 }
 
 async function runScenario(page, sessionIndex, scenario) {
@@ -1895,11 +1974,81 @@ function buildInteractionBudgetWarnings(scenarioReports) {
   return warnings
 }
 
+function buildVirtualizationBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    const diagnostics = report.aggregate.virtualizationTelemetry
+    if (!diagnostics || diagnostics.sampleCount.max <= 0) {
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization viewport update p95`,
+      diagnostics.viewportUpdateMs.p95,
+      PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization range resolve p95`,
+      diagnostics.rangeResolveMs.p95,
+      PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization rendered rows p95`,
+      diagnostics.renderedRows.p95,
+      PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization rendered columns p95`,
+      diagnostics.renderedColumns.p95,
+      PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization placeholder rows max`,
+      diagnostics.placeholderRows.max,
+      PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} virtualization blank viewport count`,
+      diagnostics.blankViewportCount.max,
+      PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
+    )
+  }
+  for (const scenario of SCENARIOS) {
+    if (!scenario.virtualizationTelemetryRequired) {
+      continue
+    }
+    const diagnostics = scenarioReports[scenario.id]?.aggregate?.virtualizationTelemetry
+    if (!diagnostics || diagnostics.sampleCount.max <= 0) {
+      warnings.push(`${scenario.id} virtualization telemetry produced no viewport samples`)
+    }
+  }
+  return warnings
+}
+
+function buildBrowserResourceBudgetWarnings(aggregate) {
+  const warnings = []
+  addWarningIfAbove(warnings, "enterprise browser frame p95", aggregate.frameP95Ms.p95, PERF_BUDGET_MAX_FRAME_P95_MS)
+  addWarningIfAbove(
+    warnings,
+    "enterprise browser dropped frame pct p95",
+    aggregate.droppedFramePct.p95,
+    PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
+  )
+  addWarningIfAbove(warnings, "enterprise browser long task count p95", aggregate.longTaskCount.p95, PERF_BUDGET_MAX_LONG_TASK_COUNT)
+  addWarningIfAbove(warnings, "enterprise browser heap delta p95", aggregate.heapDeltaMb.p95, PERF_BUDGET_MAX_HEAP_DELTA_MB)
+  return warnings
+}
+
 const startedAt = performance.now()
 
 console.log("\nAffino DataGrid Enterprise Browser Frame Benchmark")
 console.log(
-  `baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} rows=${BENCH_BROWSER_ROW_COUNT} columns=${BENCH_BROWSER_COLUMN_COUNT} deviceProfile=${BENCH_INTERACTION_DEVICE_PROFILE}`,
+  `baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} rows=${BENCH_BROWSER_ROW_COUNT} wideRows=${BENCH_BROWSER_WIDE_ROW_COUNT} columns=${BENCH_BROWSER_COLUMN_COUNT} wideColumns=${BENCH_BROWSER_WIDE_COLUMN_COUNT} deviceProfile=${BENCH_INTERACTION_DEVICE_PROFILE}`,
 )
 
 const sandboxServer = await ensureSandboxServer(BENCH_BROWSER_BASE_URL, BENCH_BROWSER_ROUTE, "enterprise-browser-frames")
@@ -1926,7 +2075,10 @@ try {
         timeout: 120000,
       })
       await page.waitForSelector(BENCH_VIEWPORT_SELECTOR, { timeout: 30000 })
-      const setupResult = await configureSandbox(page)
+      const setupResult = await configureSandbox(page, {
+        rowCount: resolveScenarioRowCount(scenario),
+        columnCount: resolveScenarioColumnCount(scenario),
+      })
       setup.push({ scenario: scenario.id, session: session + 1, ...setupResult })
       await page.waitForTimeout(240)
       const metrics = await runScenario(page, session, scenario)
@@ -1942,12 +2094,22 @@ try {
 
 const elapsedMs = performance.now() - startedAt
 const scenarioReports = buildScenarioSummary(sessions)
-const budgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
-const budgetErrors = BENCH_INTERACTION_FAIL_ON_WARNINGS ? [...budgetWarnings] : []
+const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
+const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
+const budgetWarnings = [...interactionBudgetWarnings, ...virtualizationBudgetWarnings]
+const budgetErrors = [
+  ...(BENCH_INTERACTION_FAIL_ON_WARNINGS ? interactionBudgetWarnings : []),
+  ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
+]
 const aggregate = {
   elapsedMs,
   ...aggregateRuns(sessions),
   worstScenarioByFrameP95: resolveWorstScenario(scenarioReports),
+}
+const browserResourceBudgetWarnings = buildBrowserResourceBudgetWarnings(aggregate)
+budgetWarnings.push(...browserResourceBudgetWarnings)
+if (BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS) {
+  budgetErrors.push(...browserResourceBudgetWarnings)
 }
 
 const summary = {
@@ -1959,7 +2121,11 @@ const summary = {
     route: BENCH_BROWSER_ROUTE,
     sessions: BENCH_BROWSER_SESSIONS,
     rowCount: BENCH_BROWSER_ROW_COUNT,
+    wideRowCount: BENCH_BROWSER_WIDE_ROW_COUNT,
+    wideRowScenarios: BENCH_BROWSER_WIDE_ROW_SCENARIOS,
     columnCount: BENCH_BROWSER_COLUMN_COUNT,
+    wideColumnCount: BENCH_BROWSER_WIDE_COLUMN_COUNT,
+    wideColumnScenarios: BENCH_BROWSER_WIDE_COLUMN_SCENARIOS,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
     smoothScrollSteps: BENCH_BROWSER_SMOOTH_SCROLL_STEPS,
     smoothScrollDeltaPx: BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX,
@@ -1974,14 +2140,50 @@ const summary = {
     interactionDeviceProfileDescription: interactionDeviceProfile.description,
     browserContext: interactionDeviceProfile.context,
     interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
+    virtualizationFailOnWarnings: BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
       focusRestoreMaxMs: PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
       scrollSyncDriftPx: PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
     },
+    virtualizationBudgets: {
+      viewportUpdateP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS,
+      rangeResolveP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS,
+      renderedRowsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95,
+      renderedColumnsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95,
+      blankViewportCount: PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
+      placeholderRows: PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
+    },
+    resourceBudgets: {
+      frameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
+      droppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
+      longTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
+      heapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
+    },
     headless: BENCH_BROWSER_HEADLESS,
     scenarios: SCENARIOS.map(scenario => scenario.id),
+  },
+  budgets: {
+    maxVariancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
+    maxHeapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
+    maxFrameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
+    maxDroppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
+    maxLongTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
+    interaction: {
+      previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
+      autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
+      focusRestoreMaxMs: PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
+      scrollSyncDriftPx: PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
+    },
+    virtualization: {
+      viewportUpdateP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS,
+      rangeResolveP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS,
+      renderedRowsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95,
+      renderedColumnsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95,
+      blankViewportCount: PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
+      placeholderRows: PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
+    },
   },
   setup,
   aggregate,
@@ -2006,7 +2208,7 @@ for (const scenario of SCENARIOS) {
   )
 }
 if (budgetWarnings.length > 0) {
-  console.warn("\nInteraction performance warnings:")
+  console.warn("\nEnterprise browser frame performance warnings:")
   for (const warning of budgetWarnings) {
     console.warn(`- ${warning}`)
   }
