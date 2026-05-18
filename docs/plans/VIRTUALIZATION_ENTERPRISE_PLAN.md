@@ -1,9 +1,10 @@
 # DataGrid Virtualization Enterprise Implementation Plan
 
-This plan converts `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, separable implementation slices. The order is intentional: prove correctness first, then prevent blanking, then harden server-backed and interaction behavior, then broaden enterprise performance gates.
+This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, separable implementation slices. The order is intentional: prove correctness first, then prevent blanking, then harden server-backed and interaction behavior, then broaden enterprise performance gates.
 
 ## Slice 1: Core Visible Range Invariants
 
+- Status: Completed. Core invariant coverage now lives in `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`.
 - Objective: establish deterministic row and column range invariants for the existing core virtualizers.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/axisVirtualizer.ts`
@@ -225,7 +226,7 @@ This plan converts `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, separab
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
   - `docs/datagrid-viewport-rowmodel-boundary.md`
-  - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
+  - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 - Expected behavior change: grouped/tree expansion behavior is either implemented as a tested virtual row-model contract or documented as unsupported/partial.
 - Tests to add/update:
   - Unit tests for expand/collapse invalidating ranges around the viewport.
@@ -312,11 +313,11 @@ This plan converts `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, separab
 
 - Objective: keep enterprise virtualization behavior, limitations, and validation expectations explicit.
 - Affected packages/files:
-  - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
-  - `docs/VIRTUALIZATION_ENTERPRISE_PLAN.md`
+  - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
+  - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md`
   - `docs/datagrid-viewport-rowmodel-boundary.md`
   - `docs/perf/datagrid-performance-gates.md`
-  - `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
+  - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - Expected behavior change: documentation names supported, partial, and unsupported virtualization behavior without implying unverified enterprise guarantees.
 - Tests to add/update:
   - Markdown/docs validation only.

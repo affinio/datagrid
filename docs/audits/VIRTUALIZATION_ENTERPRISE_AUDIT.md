@@ -30,7 +30,7 @@ Documentation:
 - `docs/datagrid-viewport-controller-decomposition.md`
 - `docs/datagrid-viewport-math-engine.md`
 - `docs/datagrid-viewport-rowmodel-boundary.md`
-- `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
+- `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - `docs/perf/datagrid-performance-gates.md`
 - `docs/datagrid-headless-a11y-contract.md`
 
@@ -123,7 +123,7 @@ Orchestration, sandbox, tests, and benchmarks:
    Existing e2e coverage in `e2e/sandbox-grid.spec.ts` verifies that rendered rows exist after a long scroll, but it does not prove that fast scroll, touch momentum, server latency, cache replacement, zoom, resize, or wide horizontal scroll never expose blank gaps. This is the top blocker for enterprise readiness because the primary user expectation is stable visual continuity.
 
 2. **No CI budget for placeholder exposure under server latency.**
-   `dataSourceBackedRowModel.ts` has placeholder rows and prefetching, but there is no enforced budget for how long placeholders remain visible during fast scroll or cache refresh. `docs/MOBILE_TOUCH_SCROLL_AUDIT.md` also identifies server-backed blank/loading measurement as remaining work.
+   `dataSourceBackedRowModel.ts` has placeholder rows and prefetching, but there is no enforced budget for how long placeholders remain visible during fast scroll or cache refresh. `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` also identifies server-backed blank/loading measurement as remaining work.
 
 3. **Virtualization ownership is split between core and Vue app without a final contract.**
    Core docs say viewport math should live in core and the adapter should not duplicate it. In practice, `dataGridViewportController.ts` and `useDataGridAppViewport.ts` both compute visible ranges, overscan, retained windows, and scroll-driven updates. This is not currently proven broken, but it blocks enterprise confidence until the boundary is documented and covered by contract tests or shared primitives.
@@ -210,7 +210,7 @@ Orchestration, sandbox, tests, and benchmarks:
 
 ## Touch/Mobile Virtualization Risks
 
-- `docs/MOBILE_TOUCH_SCROLL_AUDIT.md` already identifies the current state: desktop scroll foundations are strong, Phase 1 touch quick wins are implemented, and remaining gaps include long-press selection, lightweight rendering while scrolling, server-backed blank/loading measurement, and Playwright/device gates.
+- `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` already identifies the current state: desktop scroll foundations are strong, Phase 1 touch quick wins are implemented, and remaining gaps include long-press selection, lightweight rendering while scrolling, server-backed blank/loading measurement, and Playwright/device gates.
 - Touch momentum can move the viewport faster than ordinary wheel tests. Overscan and prefetch must be validated against actual device or browser-emulated momentum.
 - Touch selection, long press, fill handles, and editing must be tested while rows unmount/remount.
 - Header/body/pinned pane sync should be verified during momentum scroll and horizontal pan.
@@ -243,6 +243,7 @@ What blocks the target:
 
 ### Phase 1: Correctness And Invariant Audit
 
+- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; remaining Phase 1 work is controller/app-stage, lifecycle, and fractional/browser coverage.
 - Define the canonical virtualization contract for core and Vue app paths.
 - Add invariant tests for visible range math: no off-by-one gaps, no duplicates, no missing rows, stable start/end semantics, and deterministic range output.
 - Cover sort, filter, group, pivot, cache replacement, container resize, column resize, reorder, hide/show, pinned columns, pinned top rows, and pinned bottom rows.
@@ -271,7 +272,7 @@ What blocks the target:
 - Include placeholder rows and unloaded rows in keyboard and clipboard tests.
 - Verify editor commit/cancel behavior when the edited row leaves and re-enters the rendered range.
 - Verify pinned panes remain synchronized with center pane focus and selection state.
-- Complete touch long-press and mobile interaction coverage called out in `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`.
+- Complete touch long-press and mobile interaction coverage called out in `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`.
 
 ### Phase 5: Enterprise Validation And Perf Gates
 
@@ -286,6 +287,7 @@ What blocks the target:
 
 ### Unit Tests
 
+- Core axis virtualizer range invariants for zero rows, one row, exact viewport fit, start/end edges, reverse direction, oversized overscan, disabled virtualization, and horizontal pinned-width max-scroll math are covered in `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`.
 - Axis virtualizer range boundaries for zero rows, one row, exact viewport fit, partial fit, overscan over edges, reverse direction, and huge counts.
 - Vertical virtualizer with fixed heights, estimated heights, zoom adjustments, native scroll limit clamp, and virtual max clamp.
 - Horizontal virtualizer with pinned widths, fractional column widths, hidden columns, reordered columns, and scroll positions near max.
