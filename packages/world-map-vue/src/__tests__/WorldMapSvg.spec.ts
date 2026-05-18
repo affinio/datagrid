@@ -72,6 +72,35 @@ describe("WorldMapSvg", () => {
     vi.restoreAllMocks()
   })
 
+  it("renders countries and markers inside explicit svg layers", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+      },
+    })
+
+    expect(wrapper.find(".world-map-svg__ocean-layer .world-map-svg__ocean").exists()).toBe(true)
+
+    const viewportLayer = wrapper.find(".world-map-svg__viewport-layer")
+    expect(viewportLayer.exists()).toBe(true)
+    expect(viewportLayer.classes()).toContain("world-map-svg__map-layer")
+
+    const countryLayer = wrapper.find(".world-map-svg__country-layer")
+    expect(countryLayer.exists()).toBe(true)
+    expect(countryLayer.classes()).toContain("world-map-svg__country-fill-layer")
+    expect(countryLayer.findAll(".world-map-svg__country")).toHaveLength(2)
+
+    expect(wrapper.find(".world-map-svg__country-border-layer").attributes("pointer-events")).toBe("none")
+    expect(wrapper.find(".world-map-svg__track-layer").attributes("pointer-events")).toBe("none")
+    expect(wrapper.find(".world-map-svg__overlay-layer").attributes("pointer-events")).toBe("none")
+    expect(wrapper.find(".world-map-svg__label-layer").attributes("pointer-events")).toBe("none")
+
+    const markerLayer = wrapper.find(".world-map-svg__marker-layer")
+    expect(markerLayer.exists()).toBe(true)
+    expect(markerLayer.findAll(".world-map-svg__marker")).toHaveLength(2)
+  })
+
   it("emits selection updates for country, selected country, background, and Escape", async () => {
     const wrapper = mount(WorldMapSvg, {
       props: {

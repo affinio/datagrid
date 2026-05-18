@@ -25,56 +25,82 @@
         @pointercancel="handlePointerCancel"
         @wheel="handleWheel"
       >
-        <rect
-          class="world-map-svg__ocean"
-          x="0"
-          y="0"
-          :width="resolvedWidth"
-          :height="resolvedHeight"
-        />
-        <g class="world-map-svg__map-layer" :transform="mapTransform">
-          <path
-            v-for="feature in paths"
-            :key="feature.id"
-            class="world-map-svg__country"
-            :data-country-id="feature.id"
-            :data-country-name="feature.name"
-            :class="{
-              'world-map-svg__country--hovered': feature.id === hoveredCountryId,
-              'world-map-svg__country--selected': feature.id === resolvedSelectedCountryId,
-              'world-map-svg__country--valued': countryValueFills.has(feature.id),
-            }"
-            :style="getCountryStyle(feature)"
-            :d="feature.path"
-            tabindex="0"
-            @mouseenter="handleCountryMouseEnter(feature)"
-            @mouseleave="handleCountryMouseLeave(feature)"
-            @click.stop="handleCountryClick($event, feature)"
-            @keydown.enter.prevent="selectCountry(feature)"
-            @keydown.space.prevent="selectCountry(feature)"
+        <g class="world-map-svg__ocean-layer" aria-hidden="true">
+          <rect
+            class="world-map-svg__ocean"
+            x="0"
+            y="0"
+            :width="resolvedWidth"
+            :height="resolvedHeight"
           />
-          <circle
-            v-for="marker in projectedMarkers"
-            :key="marker.marker.id"
-            class="world-map-svg__marker"
-            :data-marker-id="marker.marker.id"
-            :data-marker-label="marker.marker.label"
-            :data-marker-variant="markerVariant(marker.marker)"
-            :class="{
-              'world-map-svg__marker--hovered': marker.marker.id === hoveredMarkerId,
-              'world-map-svg__marker--selected': marker.marker.id === resolvedSelectedMarkerId,
-              [`world-map-svg__marker--variant-${markerVariant(marker.marker)}`]: true,
-            }"
-            :cx="marker.x"
-            :cy="marker.y"
-            :r="markerVisualRadius"
-            tabindex="0"
-            @mouseenter="handleMarkerMouseEnter($event, marker)"
-            @mouseleave="handleMarkerMouseLeave($event, marker)"
-            @click.stop="handleMarkerClick($event, marker)"
-            @keydown.enter.prevent="handleMarkerKeyboardActivate($event, marker)"
-            @keydown.space.prevent="handleMarkerKeyboardActivate($event, marker)"
-          />
+        </g>
+        <g class="world-map-svg__viewport-layer world-map-svg__map-layer" :transform="mapTransform">
+          <g class="world-map-svg__country-layer world-map-svg__country-fill-layer">
+            <path
+              v-for="feature in paths"
+              :key="feature.id"
+              class="world-map-svg__country"
+              :data-country-id="feature.id"
+              :data-country-name="feature.name"
+              :class="{
+                'world-map-svg__country--hovered': feature.id === hoveredCountryId,
+                'world-map-svg__country--selected': feature.id === resolvedSelectedCountryId,
+                'world-map-svg__country--valued': countryValueFills.has(feature.id),
+              }"
+              :style="getCountryStyle(feature)"
+              :d="feature.path"
+              tabindex="0"
+              @mouseenter="handleCountryMouseEnter(feature)"
+              @mouseleave="handleCountryMouseLeave(feature)"
+              @click.stop="handleCountryClick($event, feature)"
+              @keydown.enter.prevent="selectCountry(feature)"
+              @keydown.space.prevent="selectCountry(feature)"
+            />
+          </g>
+          <g
+            class="world-map-svg__country-border-layer"
+            aria-hidden="true"
+            pointer-events="none"
+          ></g>
+          <g
+            class="world-map-svg__track-layer"
+            aria-hidden="true"
+            pointer-events="none"
+          ></g>
+          <g class="world-map-svg__marker-layer">
+            <circle
+              v-for="marker in projectedMarkers"
+              :key="marker.marker.id"
+              class="world-map-svg__marker"
+              :data-marker-id="marker.marker.id"
+              :data-marker-label="marker.marker.label"
+              :data-marker-variant="markerVariant(marker.marker)"
+              :class="{
+                'world-map-svg__marker--hovered': marker.marker.id === hoveredMarkerId,
+                'world-map-svg__marker--selected': marker.marker.id === resolvedSelectedMarkerId,
+                [`world-map-svg__marker--variant-${markerVariant(marker.marker)}`]: true,
+              }"
+              :cx="marker.x"
+              :cy="marker.y"
+              :r="markerVisualRadius"
+              tabindex="0"
+              @mouseenter="handleMarkerMouseEnter($event, marker)"
+              @mouseleave="handleMarkerMouseLeave($event, marker)"
+              @click.stop="handleMarkerClick($event, marker)"
+              @keydown.enter.prevent="handleMarkerKeyboardActivate($event, marker)"
+              @keydown.space.prevent="handleMarkerKeyboardActivate($event, marker)"
+            />
+          </g>
+          <g
+            class="world-map-svg__overlay-layer"
+            aria-hidden="true"
+            pointer-events="none"
+          ></g>
+          <g
+            class="world-map-svg__label-layer"
+            aria-hidden="true"
+            pointer-events="none"
+          ></g>
         </g>
       </svg>
     </div>

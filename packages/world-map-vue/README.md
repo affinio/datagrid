@@ -105,6 +105,20 @@ interface WorldMapMarkerInteraction {
 
 Markers are projected with the same fixed equirectangular viewport as the country paths and render above countries inside the zoom/pan layer. The optional `variant` field provides generic visual states for dashboards, GPS tracking, analytics, auctions, and similar overlays without imposing a domain-specific schema.
 
+## SVG Render Layers
+
+`WorldMapSvg` renders a stable internal SVG layer structure:
+
+- `world-map-svg__ocean-layer` for the ocean/background rectangle.
+- `world-map-svg__viewport-layer` for the transformed zoom/pan viewport. The legacy `world-map-svg__map-layer` class remains on this group for compatibility.
+- `world-map-svg__country-layer` / `world-map-svg__country-fill-layer` for country paths and country interactions.
+- `world-map-svg__country-border-layer` as an empty non-interactive placeholder for future separate border rendering.
+- `world-map-svg__track-layer` as an empty non-interactive placeholder for future route/GPS track rendering.
+- `world-map-svg__marker-layer` for lon/lat markers, above countries.
+- `world-map-svg__overlay-layer` and `world-map-svg__label-layer` as empty non-interactive placeholders for future overlays and labels.
+
+Tracks, labels, custom overlay slots, and alternate map datasets are not implemented yet. The current layer structure is intentionally internal and preserves the existing props, events, and marker/country behavior.
+
 ## Marker Selection And Scale
 
 Markers support semi-controlled selection through `v-model:selected-marker-id`:
