@@ -372,6 +372,51 @@ async def test_new_commit_after_stack_undo_invalidates_redo_branch(client: Async
     assert await pull_name(client, workspace_id=workspace_id) == "Third"
 
 
+async def test_stack_undo_rejects_remote_overlap_conflict_without_overwrite(client: AsyncClient) -> None:
+    workspace_id = "history-stack-conflict"
+    row_id = "hist-conflict-000000"
+    await insert_workspace_rows(workspace_id=workspace_id, id_prefix="hist-conflict")
+
+    await commit_name(
+        client,
+        workspace_id=workspace_id,
+        row_id=row_id,
+        value="Local User Edit",
+        operation_id="conflict-local",
+        user_id="history-user-a",
+        session_id="history-session-a",
+    )
+    await commit_name(
+        client,
+        workspace_id=workspace_id,
+        row_id=row_id,
+        value="Remote User Edit",
+        operation_id="conflict-remote",
+        user_id="history-user-b",
+        session_id="history-session-b",
+    )
+
+    status_code, body = await stack_action(
+        client,
+        "undo",
+        workspace_id=workspace_id,
+        user_id="history-user-a",
+        session_id="history-session-a",
+    )
+    operation = await fetch_operation(workspace_id, "conflict-local")
+
+    assert status_code == 200
+    assert body["operationId"] == "conflict-local"
+    assert body["affectedRows"] == 0
+    assert body["affectedCells"] == 0
+    assert body["rejected"] == [{"rowId": row_id, "columnId": "name", "reason": "history-conflict"}]
+    assert body["canUndo"] is True
+    assert body["latestUndoOperationId"] == "conflict-local"
+    assert body["canRedo"] is False
+    assert operation.status == "applied"
+    assert await pull_name(client, workspace_id=workspace_id) == "Remote User Edit"
+
+
 async def test_operation_id_based_undo_redo_still_works(client: AsyncClient) -> None:
     workspace_id = "history-stack-explicit"
     row_id = "hist-explicit-000000"

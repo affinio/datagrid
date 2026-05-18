@@ -11,7 +11,7 @@ Current execution state:
 - Slice 5 is completed and should be treated as the client restoration payload baseline.
 - Slice 6 is completed and should be treated as the versioned client operation metadata baseline.
 - Slice 7 is completed and should be treated as the server history idempotency baseline.
-- Slice 8 is next and should define server operation coverage and collaboration policy.
+- Slice 8 is completed and should be treated as the server operation coverage and collaboration conflict baseline.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -148,20 +148,19 @@ Current execution state:
 
 ## Slice 8: Server Operation Coverage And Collaboration Policy
 
-- Status: Planned.
+- Status: Completed. Server stack replay remains limited to edit/fill cell events, unsupported structural/workbook operations are documented as outside the current server history contract, and cell-event undo/redo now rejects overlapping remote edits with `history-conflict` instead of overwriting the current value.
 - Objective: either extend server-backed history beyond cell edit/fill events or explicitly document unsupported structural/collaborative operations and their conflict behavior.
 - Affected packages/files:
-  - `backend/app/features/server_demo/history_service.py`
-  - `backend/tests/test_server_demo_history.py`
+  - `backend/packages/affino_grid_backend/affino_grid_backend/history/base.py`
+  - `backend/tests/test_server_demo_history_stack.py`
   - `docs/datagrid-history.md`
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/consistency.md`
 - Expected behavior change: server-backed history has deterministic capability behavior for row insert/delete, structural operations, remote overlap conflicts, reload recovery, and stale operation replay.
-- Tests to add/update:
-  - Unsupported structural operations fail with a capability error or are replayed if implemented.
-  - Local undo after overlapping remote changes follows the documented conflict policy.
-  - Reload/status sync does not imply unavailable client history recovery.
-- Validation command: `cd backend && uv run pytest tests/test_server_demo_history.py`
+- Tests added/covered:
+  - Local stack undo after another user/session edits the same cell returns `history-conflict`, keeps the operation applied, and preserves the remote value.
+  - Existing stack undo/redo, scope isolation, and redo invalidation coverage remains passing.
+- Validation command: `cd backend && uv run pytest tests/test_server_demo_history_stack.py`
 - Risk level: High
 - Suggested commit message: `docs(datagrid): define server history operation scope`
 
@@ -174,7 +173,7 @@ Current execution state:
 5. Slice 5: Restoration State Payload (completed)
 6. Slice 6: Versioned Operation Payloads (completed)
 7. Slice 7: Server History Idempotency Guard (completed)
-8. Slice 8: Server Operation Coverage And Collaboration Policy (next)
+8. Slice 8: Server Operation Coverage And Collaboration Policy (completed)
 
 ## Execution Notes
 

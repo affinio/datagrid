@@ -153,6 +153,8 @@ For server-backed DataGrid instances, this stack is the history owner. Client sn
 
 Current server stack history is operation-backed for server edit/fill cell events. It is not a general operation log for row insertion/deletion, column changes, selection state, formula-edit state, grouping/tree/pivot state, or workbook-level mutations unless the host backend adds those capabilities.
 
+For cell-event undo/redo, the backend must verify that the current cell value still matches the value produced by the operation being reversed or replayed. If a remote overlapping edit changed the cell, the stack action must reject that cell with `history-conflict`, leave the row unchanged, and leave the operation on its current stack side. This is conflict prevention, not collaborative merge.
+
 ## Fill Idempotency
 
 A fill commit with the same:

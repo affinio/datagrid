@@ -405,6 +405,8 @@ Server-backed grids should route normal undo/redo through this stack instead of 
 
 Current server stack history covers edit/fill cell events recorded by the server demo backend. Structural row operations, column operations, selection state, formula-edit state, grouping/tree/pivot state, and workbook-level operations are unsupported unless a host backend implements and documents an explicit capability.
 
+Cell-event stack replay is conflict-checked. Undo expects the current cell value to match the operation's recorded after-value; redo expects it to match the recorded before-value. If another user/session changed that cell, the response contains a rejected cell with reason `history-conflict`, no row overwrite is performed, and the operation remains on its current stack side.
+
 Undo/redo must be treated as mutations:
 
 - they update persisted row state

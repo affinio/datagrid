@@ -119,10 +119,16 @@ class GridHistoryServiceBase(ABC):
                 continue
 
             try:
-                raw_value = self.event_before_value(event) if action == "undo" else self.event_after_value(event)
-                target_value = self.normalize_edit_value(column_id, raw_value)
+                target_raw_value = self.event_before_value(event) if action == "undo" else self.event_after_value(event)
+                expected_raw_value = self.event_after_value(event) if action == "undo" else self.event_before_value(event)
+                target_value = self.normalize_edit_value(column_id, target_raw_value)
+                expected_current_value = self.normalize_edit_value(column_id, expected_raw_value)
             except ApiException as exc:
                 rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason=exc.code))
+                continue
+
+            if self.get_row_value(row, column_id) != expected_current_value:
+                rejected.append(GridRejectedCell(row_id=row_id, column_id=column_id, reason="history-conflict"))
                 continue
 
             prepared_events.append((event, row, target_value, row_id, column_id))

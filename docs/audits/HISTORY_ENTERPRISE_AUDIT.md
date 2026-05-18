@@ -25,7 +25,8 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - 2026-05-18: Slice 5, Restoration State Payload, is complete. Client app history snapshots now carry optional active-cell, selection snapshot, scroll anchor, focus target, and edit target metadata, and the Vue app stage restores selection/focus context through existing selection and active-cell viewport paths.
 - 2026-05-18: Slice 6, Versioned Operation Payloads, is complete. Core transaction metadata now preserves operation payloads, app intent descriptors can carry optional operation metadata, and built-in app history derives normalized version-1 operation metadata beside snapshot replay payloads.
 - 2026-05-18: Slice 7, Server History Idempotency Guard, is complete. Server-demo operation ids are now protected by database uniqueness within workspace/table scope, and edit/fill insert races are converted to the existing `duplicate-operation-id` API error.
-- Remaining runtime gaps: persisted operation recovery, broader server operation coverage, collaborative conflict policy, concurrent server stack action coverage, and deeper inline/formula editor recovery.
+- 2026-05-18: Slice 8, Server Operation Coverage And Collaboration Policy, is complete. Server stack history remains explicitly limited to edit/fill cell events, and cell-event undo/redo now rejects overlapping remote edits with `history-conflict` without overwriting the remote value.
+- Remaining runtime gaps: persisted operation recovery, broader server operation implementation beyond documented cell-event support, concurrent server stack action coverage, and deeper inline/formula editor recovery.
 
 ## Current Architecture Summary
 
@@ -162,6 +163,7 @@ Backend and sandbox:
 
 6. **Server-backed history currently records cell events, not all DataGrid operations.**
    `GridHistoryServiceBase` replays `before_value` / `after_value` cell events. Backend edit/fill paths record cell events, but structural row insert/delete, column operations, selection state, formulas, grouping/tree expansion, pivot changes, and workbook-level operations are unsupported rather than broken.
+   Status after Slice 8: server stack history is documented as cell-event only unless a host backend adds an explicit capability. Cell-event undo/redo now checks the current cell value and rejects remote overlaps with `history-conflict` instead of overwriting them.
 
 ### Medium
 
@@ -180,6 +182,7 @@ Backend and sandbox:
 
 5. **Server history replay is deterministic only for compatible cell-event operations.**
    `GridHistoryServiceBase.apply_loaded_operation(...)` rejects missing rows/unsupported columns and returns rejected cells without partial writes when preparation fails. That is good. Still, deterministic replay over changed projections, moved rows, deleted rows, or schema changes is not fully defined.
+   Status after Slice 8: changed same-cell values are now deterministic conflicts. Changed projections, moved rows, deleted rows, and schema changes remain capability-specific backend concerns.
 
 6. **History status is eventually synced through adapter cache.**
    `createAffinoDatasource(...)` updates cached history status from mutation responses and `/history/status`. `DataGridDefaultRenderer.ts` watches datasource history status. This is a sound design, but toolbar state can lag if a mutation omits history fields and the status probe fails.
@@ -229,7 +232,7 @@ Backend and sandbox:
 - The backend uses best-effort fallback for scope divergence between request/body/header and persisted operation scope. This is practical but should be tightened for production authorization.
 - Database-level idempotency is enforced for server-demo edit/fill operation ids within workspace/table scope. Undo/redo action concurrency still needs focused stack-level coverage.
 - Change-feed gaps can fall back to dataset invalidation. That is safe but can erase precise history-linked invalidation.
-- Collaborative editing semantics are not defined beyond revision/stale-write checks and scoped history stacks.
+- Collaborative editing semantics now include cell-event overlap prevention for server stack undo/redo. They still do not include automatic merge or structural operation replay.
 
 ## Virtualization Interaction Risks
 
@@ -250,7 +253,7 @@ Backend and sandbox:
 
 - Client intent history is in-memory only. It does not survive reload, crash, tab close, or device handoff.
 - Server history persists operations and cell events, but currently targets the server-demo table rather than a generalized backend-owned table contract.
-- There is no collaborative merge model for undoing a local operation after other users edited overlapping cells.
+- Server stack undo/redo rejects overlapping cell-event conflicts instead of merging them. There is still no collaborative merge model for resolving those conflicts automatically.
 - There is no durable operation serialization format for app-layer client history.
 - There is no public recovery API for “restore history from serialized operations”.
 
@@ -295,12 +298,12 @@ What blocks the target:
 
 - Move server-demo-specific history semantics into reusable backend package contracts where possible.
 - Keep database idempotency constraints for operation ids within workspace/table scope and extend concurrency coverage to stack undo/redo.
-- Extend server history beyond cell events or explicitly document unsupported structural operations.
+- Extend server history beyond cell events or keep unsupported structural operations documented as explicit backend capability gaps.
 - Add fill, edit, undo, redo, change-feed, and stale-revision tests under concurrent request scenarios.
 
 ### Phase 5: Collaboration And Recovery
 
-- Define per-operation author/session metadata and overlap conflict rules.
+- Define deeper per-operation author/session metadata and merge rules beyond the current cell-event overlap rejection.
 - Define local undo behavior after remote changes touch the same cells.
 - Add persisted client operation history or declare client history non-recoverable.
 - Add recovery tests for reload/status sync and stale operation replay.
@@ -368,7 +371,7 @@ Performance tests:
 6. Define versioned operation payloads for edit, paste, fill, and row operations.
 7. Add database uniqueness/idempotency guard for server operation ids. Completed in Slice 7.
 8. Add server concurrent undo/redo tests.
-9. Add collaborative overlap semantics.
+9. Add collaborative overlap semantics. Initial cell-event conflict rejection completed in Slice 8.
 10. Add reload/recovery story for serialized or server-backed history.
 
 ## Migration Notes

@@ -137,12 +137,13 @@ Inline editor content and formula-edit state are metadata only in the current pa
 
 ## Collaboration And Conflict Semantics
 
-Current collaboration behavior is limited:
+Current collaboration behavior is explicit but limited:
 
 - Server-backed mutations use revision and projection tokens to reject stale edits/fill commits where supported.
 - Server stack history is scoped by workspace, table, and user/session.
+- Server stack undo/redo for cell events checks the current cell value before replay. If another user/session has changed the same cell since the original operation, the backend rejects that cell with `history-conflict` and does not overwrite the remote value.
 - There is no collaborative merge model for client snapshot history.
-- Undo after a remote overlapping change follows the backend operation replay behavior for server-backed cell events; broader conflict policy is planned work.
+- Structural row operations, column operations, selection state, formula-edit state, grouping/tree/pivot state, and workbook-level operations are not part of the current server stack history contract unless a host backend adds an explicit capability.
 
 If a host app supports multi-user editing, it should prefer server-backed history with explicit revision, dataset-version, operation-id, and scope handling. Client snapshot history should be treated as single-session local undo/redo.
 
