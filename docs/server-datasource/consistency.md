@@ -149,6 +149,10 @@ Normal UX should use:
 The frontend should not need to know the latest `operationId` for normal undo/redo.
 The legacy `/api/server-demo/operations/{operation_id}/undo|redo` routes remain available for low-level diagnostics/manual replay.
 
+For server-backed DataGrid instances, this stack is the history owner. Client snapshot history is for local row models and must not be used as the durability or replay mechanism for unloaded server rows. A server-backed undo/redo action should be resolved by scope, not by the currently rendered viewport.
+
+Current server stack history is operation-backed for server edit/fill cell events. It is not a general operation log for row insertion/deletion, column changes, selection state, formula-edit state, grouping/tree/pivot state, or workbook-level mutations unless the host backend adds those capabilities.
+
 ## Fill Idempotency
 
 A fill commit with the same:
@@ -187,6 +191,19 @@ They must:
 - follow the same scope and consistency rules as edit and fill commits
 
 Undo/redo must produce the same observable effects as applying or reverting the original operation.
+
+Undo and redo are not read retries. The client must not automatically retry them after transport failure unless the backend provides duplicate-operation suppression and deterministic duplicate responses for that mutation class.
+
+## Client Snapshot History Boundary
+
+Client snapshot history is in-memory and session-local:
+
+- it is lost on reload
+- it is not serialized as an operation log
+- it cannot recover pending mutations after reconnect
+- it can restore only the row snapshots captured in the current app session
+
+Client snapshot history can overwrite unrelated fields on the same row if they changed after the snapshot was captured. Server-backed or collaborative integrations should prefer server stack history with revision, dataset-version, operation-id, and explicit scope handling.
 
 ## Commit Response History State
 

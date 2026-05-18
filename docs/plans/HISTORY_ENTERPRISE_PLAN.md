@@ -4,22 +4,23 @@ This plan converts `docs/audits/HISTORY_ENTERPRISE_AUDIT.md` into small, separab
 
 Current execution state:
 
-- Slice 1 is next and should establish the enterprise history contract baseline before runtime hardening.
+- Slice 1 is completed and should be treated as the enterprise history contract baseline.
+- Slice 2 is next and should serialize async history actions before deeper failure-compensation work.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
 
 ## Slice 1: Enterprise History Contract
 
-- Status: Planned, next.
+- Status: Completed. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. Server datasource protocol and consistency docs now state that server-backed grids should route normal undo/redo through scoped stack history and keep operation-id replay as diagnostics/manual replay.
 - Objective: define the supported history modes, ownership boundaries, stack invariants, persistence boundaries, and unsupported enterprise behaviors before tightening runtime semantics.
 - Affected packages/files:
   - `docs/datagrid-history.md`
   - `docs/audits/HISTORY_ENTERPRISE_AUDIT.md`
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/consistency.md`
-- Expected behavior change: no runtime behavior change; host apps get an explicit contract for client snapshot history versus server stack history, redo invalidation, persistence, reload, and collaborative limitations.
-- Tests to add/update:
+- Expected behavior change: no runtime behavior change; host apps now have an explicit contract for client snapshot history versus server stack history, redo invalidation, persistence, reload, and collaborative limitations.
+- Tests added/covered:
   - Docs validation only.
 - Validation command: `node ./scripts/check-datagrid-docs-framework-track.mjs`
 - Risk level: Low
@@ -157,7 +158,7 @@ Current execution state:
 ## Recommended Execution Order
 
 1. Slice 1: Enterprise History Contract
-2. Slice 2: Async History Action Serialization
+2. Slice 2: Async History Action Serialization (next)
 3. Slice 3: Undo Failure Compensation
 4. Slice 4: Snapshot Scope And Memory Budget
 5. Slice 5: Restoration State Payload

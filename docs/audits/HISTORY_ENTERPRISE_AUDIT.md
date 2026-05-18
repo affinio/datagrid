@@ -16,6 +16,11 @@ The main gaps are operation serialization, memory limits by byte/cell count, sel
 
 Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, async locking, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
 
+## Implementation Progress
+
+- 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
+- Remaining runtime gaps are unchanged: async action serialization, undo failure compensation, snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
+
 ## Current Architecture Summary
 
 - `packages/datagrid-core/src/core/transactionService.ts` owns generic transaction mechanics: commands, rollback payloads, pending batches, undo/redo stacks, max depth, lifecycle snapshots, and transaction events.
@@ -125,6 +130,7 @@ Backend and sandbox:
 
 2. **There is no unified history contract across client snapshot history and server operation history.**
    `docs/datagrid-history.md` documents the public prop/controller, while `docs/server-datasource/protocol.md` documents server stack history. The code supports both, but the boundary is implicit: client history restores snapshots, server history replays persisted operations. Enterprise consumers need a single contract that states which mode owns undo/redo, what is persisted, how redo invalidation works, and what restoration semantics are guaranteed.
+   Status after Slice 1: documentation now defines this boundary. Runtime hardening and operation serialization remain open.
 
 ### High
 

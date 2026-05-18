@@ -401,6 +401,17 @@ Required scope:
 - `table_id`
 - `user_id` and/or `session_id`
 
+Server-backed grids should route normal undo/redo through this stack instead of client snapshot history. The stack owner is the backend datasource scope, so undo/redo can replay persisted operations for rows that are not currently materialized in the viewport.
+
+Current server stack history covers edit/fill cell events recorded by the server demo backend. Structural row operations, column operations, selection state, formula-edit state, grouping/tree/pivot state, and workbook-level operations are unsupported unless a host backend implements and documents an explicit capability.
+
+Undo/redo must be treated as mutations:
+
+- they update persisted row state
+- they advance `revision` / `datasetVersion`
+- they invalidate the affected client cache scope
+- they update stack status for the same workspace/table/user/session scope
+
 ### Response
 
 Stack undo/redo return the same mutation shape, plus `action` on the stack route:
@@ -442,6 +453,8 @@ Stack undo/redo return the same mutation shape, plus `action` on the stack route
 `POST /api/server-demo/operations/{operation_id}/redo`
 
 These routes remain available for low-level diagnostics/manual replay.
+
+Do not use these routes as the normal toolbar or keyboard undo/redo path. Operation-id replay can target a specific operation outside the user's current stack position, while stack undo/redo preserves redo-branch invalidation and current scope order.
 
 If the operation is unknown, the backend returns `404 operation-not-found`.
 
