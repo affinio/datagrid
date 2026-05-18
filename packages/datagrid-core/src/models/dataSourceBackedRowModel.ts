@@ -465,6 +465,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
     viewportDataAvailabilityTotalMs: 0,
     viewportDataAvailabilityMaxMs: 0,
     viewportDataAvailabilityLastMs: 0,
+    viewportCacheHitRows: 0,
+    viewportCacheMissRows: 0,
+    viewportCacheHitRatio: 1,
+    blankViewportActive: false,
+    blankViewportEvents: 0,
+    pullDurationEvents: 0,
+    pullDurationTotalMs: 0,
+    pullDurationMaxMs: 0,
+    pullDurationLastMs: 0,
   }
   let viewportDataAvailabilityStartedAtMs: number | null = null
 
@@ -910,6 +919,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     viewportDataAvailabilityStartedAtMs ??= readTelemetryNowMs()
   }
 
+  function recordPullDuration(startedAtMs: number, timestampMs = readTelemetryNowMs()): void {
+    const durationMs = Math.max(0, timestampMs - startedAtMs)
+    diagnostics.pullDurationEvents += 1
+    diagnostics.pullDurationLastMs = durationMs
+    diagnostics.pullDurationTotalMs += durationMs
+    diagnostics.pullDurationMaxMs = Math.max(diagnostics.pullDurationMaxMs, durationMs)
+  }
+
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
     if (startIndex > upperBound) {
       return 0
@@ -954,9 +971,32 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCount <= 0) {
       diagnostics.cachedAheadRows = 0
       diagnostics.cachedBehindRows = 0
+      diagnostics.viewportCacheHitRows = 0
+      diagnostics.viewportCacheMissRows = 0
+      diagnostics.viewportCacheHitRatio = 1
+      diagnostics.blankViewportActive = false
       reconcilePlaceholderExposure(sourceViewport)
       return
     }
+    const bounded = normalizeViewportRange(sourceViewport, rowCount)
+    let hitRows = 0
+    let missRows = 0
+    for (let index = bounded.start; index <= bounded.end; index += 1) {
+      if (isIndexCached(index)) {
+        hitRows += 1
+      } else {
+        missRows += 1
+      }
+    }
+    const viewportRows = hitRows + missRows
+    const blankViewportActive = viewportRows > 0 && hitRows === 0
+    if (blankViewportActive && !diagnostics.blankViewportActive) {
+      diagnostics.blankViewportEvents += 1
+    }
+    diagnostics.viewportCacheHitRows = hitRows
+    diagnostics.viewportCacheMissRows = missRows
+    diagnostics.viewportCacheHitRatio = viewportRows > 0 ? hitRows / viewportRows : 1
+    diagnostics.blankViewportActive = blankViewportActive
     diagnostics.cachedAheadRows = countCoveredRowsForward(
       sourceViewport.end + 1,
       Math.max(0, rowCount - 1),
@@ -1796,6 +1836,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         diagnostics.prefetchStarted += 1
       }
       error = priority === "background" ? error : null
+      const pullStartedAtMs = readTelemetryNowMs()
 
       try {
         const result = await dataSource.pull({
@@ -1817,6 +1858,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             cursor: paginationCursor,
           },
         })
+        recordPullDuration(pullStartedAtMs)
 
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
@@ -1882,6 +1924,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (isAbortError(reasonError)) {
           return
         }
+        recordPullDuration(pullStartedAtMs)
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
           diagnostics.pullDropped += 1
@@ -2332,6 +2375,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     ...patchMethods,
     ...externalUpdateMethods,
     getSparseRowModelDiagnostics() {
+      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
       reconcilePlaceholderExposure()
       finishViewportDataAvailability()
       return {
@@ -2350,6 +2394,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
         viewportDataAvailabilityTotalMs: diagnostics.viewportDataAvailabilityTotalMs,
         viewportDataAvailabilityMaxMs: diagnostics.viewportDataAvailabilityMaxMs,
         viewportDataAvailabilityLastMs: diagnostics.viewportDataAvailabilityLastMs,
+        viewportCacheHitRows: diagnostics.viewportCacheHitRows,
+        viewportCacheMissRows: diagnostics.viewportCacheMissRows,
+        viewportCacheHitRatio: diagnostics.viewportCacheHitRatio,
+        blankViewportActive: diagnostics.blankViewportActive,
+        blankViewportEvents: diagnostics.blankViewportEvents,
+        pullDurationEvents: diagnostics.pullDurationEvents,
+        pullDurationTotalMs: diagnostics.pullDurationTotalMs,
+        pullDurationMaxMs: diagnostics.pullDurationMaxMs,
+        pullDurationLastMs: diagnostics.pullDurationLastMs,
       }
     },
     getLoadedRowIntervals(range) {
@@ -2408,7 +2461,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
           : lastViewportDirection
       viewportRange = nextViewport
       const sourceViewport = toSourceRange(nextViewport)
-      reconcilePlaceholderExposure(sourceViewport)
+      updateCachedCoverageDiagnostics(sourceViewport)
 
       if (resolvedEmptyTotal && rowCount <= 0) {
         updateCachedCoverageDiagnostics(sourceViewport)

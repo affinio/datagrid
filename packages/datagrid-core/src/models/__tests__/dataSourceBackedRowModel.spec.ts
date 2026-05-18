@@ -961,6 +961,12 @@ describe("createDataSourceBackedRowModel", () => {
       placeholderExposureActiveRows: 4,
       placeholderExposureEvents: 0,
       viewportDataAvailabilityEvents: 0,
+      viewportCacheHitRows: 0,
+      viewportCacheMissRows: 4,
+      viewportCacheHitRatio: 0,
+      blankViewportActive: true,
+      blankViewportEvents: 1,
+      pullDurationEvents: 0,
     })
 
     now.mockReturnValue(25)
@@ -985,10 +991,21 @@ describe("createDataSourceBackedRowModel", () => {
       viewportDataAvailabilityTotalMs: 25,
       viewportDataAvailabilityMaxMs: 25,
       viewportDataAvailabilityLastMs: 25,
+      viewportCacheHitRows: 4,
+      viewportCacheMissRows: 0,
+      viewportCacheHitRatio: 1,
+      blankViewportActive: false,
+      blankViewportEvents: 1,
+      pullDurationEvents: 1,
+      pullDurationTotalMs: 25,
+      pullDurationMaxMs: 25,
+      pullDurationLastMs: 25,
     })
     expect(model.getBackpressureDiagnostics()).toMatchObject({
       placeholderExposureEvents: 4,
       viewportDataAvailabilityEvents: 1,
+      blankViewportEvents: 1,
+      pullDurationEvents: 1,
     })
 
     model.dispose()

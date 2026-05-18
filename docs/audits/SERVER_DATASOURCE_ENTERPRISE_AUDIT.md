@@ -8,7 +8,7 @@ The server datasource architecture is production-shaped and should remain the fo
 - `createAffinoDatasource` in `packages/datagrid-server-adapters/src/index.ts`
 - the FastAPI/Postgres `server_demo` implementation under `backend/app/features/server_demo/`
 
-Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete and idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and latency/placeholder performance gates.
+Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete, idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`, and datasource latency telemetry now covers placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and promotion of latency telemetry into CI/browser performance gates.
 
 Do not introduce a parallel datasource stack. Tighten the current protocol, row model, HTTP adapter, backend services, and tests in small slices.
 
@@ -148,10 +148,10 @@ Backend:
    - Impact: grouped/tree/pivot server-backed behavior is supported by the frontend contract but unsupported by the current FastAPI demo pull projection.
    - Required: either implement server grouping/tree/pivot projection or explicitly mark those server-demo features unsupported outside consistency hashing.
 
-4. **Placeholder exposure and blank-viewport resilience are not gated by latency budgets.**
-   - Evidence: unit tests verify placeholder rows and stale visible rows, but there is no reviewed perf gate for placeholder exposure time, critical pull latency, blank viewport detection, or cache hit rate.
-   - Impact: correctness can pass while enterprise UX degrades under realistic latency.
-   - Required: add telemetry and CI/manual perf gates for visible placeholder duration and blank viewport detection.
+4. **Placeholder exposure and blank-viewport resilience are observable but not hard-gated.**
+   - Evidence: `createDataSourceBackedRowModel` exposes placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration diagnostics; the sandbox and browser-frame harness export these fields. The placeholder budget remains warning-only while baselines settle.
+   - Impact: regressions are now visible in artifacts, but CI can still pass while enterprise UX degrades under realistic latency.
+   - Required: promote stable latency budgets into hard CI/browser gates once variance is understood.
 
 5. **Simple `createServerBackedRowModel` remains a weaker alternate path.**
    - Evidence: `serverBackedRowModel.ts` wraps block-based `ServerRowModel`; the stronger docs and UX contract point to `createDataSourceBackedRowModel`.
@@ -175,10 +175,10 @@ Backend:
    - Impact: integrations with grouped/tree/pivot rows may create unstable ids unless docs give exact row-id rules.
    - Required: add row identity invariants for leaf, group, tree, aggregate, and placeholder rows.
 
-4. **Latency handling exists but is mostly reactive.**
-   - Evidence: placeholders, stale row retention, background prefetch, critical/background lanes, and error rows are implemented; no SLA telemetry is attached to pull latency or placeholder exposure.
-   - Impact: behavior is functionally correct but difficult to tune or enforce.
-   - Required: expose pull timing, placeholder exposure, retry count, and cache coverage metrics.
+4. **Latency telemetry exists but still needs gate promotion.**
+   - Evidence: placeholders, stale row retention, background prefetch, critical/background lanes, and error rows are implemented; datasource diagnostics now include pull duration, placeholder exposure, viewport availability, blank viewport events, and cache coverage.
+   - Impact: behavior is easier to tune and inspect, but enterprise acceptance still depends on promoting stable budgets to hard gates.
+   - Required: add hard gate thresholds for placeholder exposure, viewport availability, pull duration, and blank viewport events after benchmark variance is established.
 
 5. **Backend safeguards can become UX failures without client-facing policy.**
    - Evidence: backend returns `pull-range-too-large`, `filter-count-too-large`, fill limits, and histogram limits.
@@ -208,8 +208,8 @@ Backend:
 
 ## Performance Risks
 
-- Pull latency is not measured at the datasource row model boundary.
-- Placeholder exposure time is not measured.
+- Pull latency is measured at the datasource row model boundary but is not yet hard-gated.
+- Placeholder exposure, blank viewport events, viewport availability, and viewport cache hit/miss ratio are measured but are not yet hard-gated.
 - Retry storms are possible if a future retry layer is added without backoff and request coalescing awareness.
 - Broad dataset invalidation can refresh more rows than necessary after change-feed gaps.
 - Large filtered counts can be expensive; backend has `grid_max_filter_count_rows`, but client UX for count-limit failures is not formalized.
@@ -218,7 +218,7 @@ Backend:
 ## Server-Backed Virtualization Risks
 
 - The strong path is `createDataSourceBackedRowModel`; using lower-level `createServerBackedRowModel` for enterprise server-backed grids risks weaker invalidation and mutation behavior.
-- Cache replacement keeps visible rows, but placeholder exposure under high latency is not budgeted.
+- Cache replacement keeps visible rows, and placeholder/blank viewport telemetry is observable; high-latency budgets still need hard gate promotion.
 - Critical/background lanes are useful, but their telemetry is internal diagnostics rather than a visible perf gate.
 - Server invalidation can force broad reloads when row snapshots are missing.
 

@@ -892,6 +892,12 @@ async function runScenario(page, sessionIndex, scenario) {
         totalMs: readNumber("totalMs"),
         maxMs: readNumber("maxMs"),
         viewportAvailabilityMs: readNumber("viewportAvailabilityMs"),
+        blankViewportActive: readNumber("blankViewportActive"),
+        blankViewportEvents: readNumber("blankViewportEvents"),
+        cacheHitRatio: readNumber("cacheHitRatio"),
+        cacheMissRows: readNumber("cacheMissRows"),
+        pullDurationMs: readNumber("pullDurationMs"),
+        pullDurationMaxMs: readNumber("pullDurationMaxMs"),
       }
     }
     const captureScrollContainerDiagnostics = () => {

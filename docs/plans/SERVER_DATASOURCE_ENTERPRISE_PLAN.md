@@ -6,7 +6,8 @@ Current execution state:
 
 - Slice 1 is completed and should be treated as the enterprise datasource contract baseline.
 - Slice 2 is completed and should be treated as the idempotent read retry/backoff baseline.
-- Slice 3 is the next implementation slice.
+- Slice 3 is completed and should be treated as the datasource latency telemetry baseline.
+- Slice 4 is the next implementation slice.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -49,19 +50,20 @@ Current execution state:
 
 ## Slice 3: Placeholder And Blank Viewport Telemetry
 
-- Status: Planned.
+- Status: Completed. `createDataSourceBackedRowModel` now reports placeholder exposure, viewport data availability, viewport cache hit/miss ratio, blank viewport events, and pull duration diagnostics. The server datasource sandbox exposes these fields as browser-readable attributes, and the enterprise browser-frame harness includes them in datasource placeholder artifacts.
 - Objective: expose placeholder exposure, blank viewport, cache coverage, and pull timing diagnostics for server-backed virtualization.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
   - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `docs/perf/datagrid-performance-gates.md`
-- Expected behavior change: latency UX becomes observable and can be promoted into performance gates.
+- Expected behavior change: latency UX is observable at the row-model boundary and in browser benchmark artifacts without changing the datasource protocol.
 - Tests to add/update:
-  - Loading placeholder exposure transitions from loading to loaded/error/retry.
-  - Blank viewport count remains zero during delayed pulls with retained stale rows.
-  - Browser artifact includes placeholder exposure and cache coverage summaries.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- dataSourceBackedRowModel`
+  - Loading placeholder exposure transitions from loading to loaded.
+  - Blank viewport and cache coverage diagnostics update before and after delayed pulls.
+  - Pull duration diagnostics are recorded for completed pulls.
+  - Browser artifact includes placeholder exposure, cache coverage, blank viewport, viewport availability, and pull duration summaries.
+- Validation command: `pnpm exec vitest run packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `feat(datagrid-core): trace datasource placeholder exposure`
 
@@ -139,8 +141,8 @@ Current execution state:
 
 1. Slice 1: Enterprise Datasource Contract (completed)
 2. Slice 2: Retry And Backoff For Idempotent Reads (completed)
-3. Slice 3: Placeholder And Blank Viewport Telemetry (next)
-4. Slice 4: Invalidation Matrix Hardening
+3. Slice 3: Placeholder And Blank Viewport Telemetry (completed)
+4. Slice 4: Invalidation Matrix Hardening (next)
 5. Slice 5: Server Projection Capability Contract
 6. Slice 6: Live Update Transport Abstraction
 7. Slice 7: Offline And Reconnect Policy

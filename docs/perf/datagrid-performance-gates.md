@@ -146,6 +146,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS=1`
   - `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=false`
   - Placeholder exposure gates are warning-only by default while baseline variance settles. Set `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true` to promote these warnings to hard failures.
+  - Server datasource browser artifacts include placeholder exposure, viewport data availability, blank viewport events, viewport cache hit/miss ratio, and pull duration. Placeholder exposure and viewport availability have warning budgets today; blank viewport/cache/pull-duration fields are collected for baseline review before hard budget promotion.
   - The controlled-latency placeholder scenario covers cold scroll, warm scroll, direction reversal, jump scroll, and retry after a failed pull.
 - Derived cache (stable cache + invalidation pressure):
   - `BENCH_DERIVED_CACHE_ROW_COUNT=50000`
@@ -280,5 +281,5 @@ The demo runtime now includes an adapter-level telemetry primitive:
 - Emits active-scroll snapshot metrics: `fps`, `avgFrameMs`, `droppedFrames`, `longTaskFrames`, and quality (`unknown` | `good` | `degraded`).
 - `recordVirtualizationEvent(...)` is disabled by default and records bounded virtualized viewport events only when `virtualizationTelemetryEnabled` is explicitly set.
 - With `dgPerfTrace=1`, the Vue app viewport records `viewportRaf` samples containing rendered row/column counts, row/column ranges, range resolve time, row/column overscan, placeholder row count, and blank-viewport flags.
-- `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts those samples into `virtualizationTelemetry` summaries for vertical diagnostics scenarios, alongside long-task and datasource placeholder exposure diagnostics.
+- `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts those samples into `virtualizationTelemetry` summaries for vertical diagnostics scenarios, alongside long-task and datasource placeholder/cache/pull-latency diagnostics.
 - Intended for local quality diagnostics and interaction tuning (not a replacement for CI benchmark gates).

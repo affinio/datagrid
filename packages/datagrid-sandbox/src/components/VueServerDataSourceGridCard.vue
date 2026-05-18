@@ -173,6 +173,12 @@
                 :data-total-ms="placeholderExposureTotalMsData"
                 :data-max-ms="placeholderExposureMaxMsData"
                 :data-viewport-availability-ms="viewportDataAvailabilityLastMsData"
+                :data-blank-viewport-active="blankViewportActiveData"
+                :data-blank-viewport-events="blankViewportEventsData"
+                :data-cache-hit-ratio="viewportCacheHitRatioData"
+                :data-cache-miss-rows="viewportCacheMissRowsData"
+                :data-pull-duration-ms="pullDurationLastMsData"
+                :data-pull-duration-max-ms="pullDurationMaxMsData"
               >
                 {{ placeholderExposureLabel }}
               </dd>
@@ -2603,6 +2609,12 @@ const placeholderExposureEventsData = computed(() => String(sparseDiagnostics.va
 const placeholderExposureTotalMsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureTotalMs ?? 0))
 const placeholderExposureMaxMsData = computed(() => String(sparseDiagnostics.value?.placeholderExposureMaxMs ?? 0))
 const viewportDataAvailabilityLastMsData = computed(() => String(sparseDiagnostics.value?.viewportDataAvailabilityLastMs ?? 0))
+const blankViewportActiveData = computed(() => String(sparseDiagnostics.value?.blankViewportActive ? 1 : 0))
+const blankViewportEventsData = computed(() => String(sparseDiagnostics.value?.blankViewportEvents ?? 0))
+const viewportCacheHitRatioData = computed(() => String(sparseDiagnostics.value?.viewportCacheHitRatio ?? 1))
+const viewportCacheMissRowsData = computed(() => String(sparseDiagnostics.value?.viewportCacheMissRows ?? 0))
+const pullDurationLastMsData = computed(() => String(sparseDiagnostics.value?.pullDurationLastMs ?? 0))
+const pullDurationMaxMsData = computed(() => String(sparseDiagnostics.value?.pullDurationMaxMs ?? 0))
 const viewportLoadingLabel = computed(() => {
   const diagnosticsState = sparseDiagnostics.value
   if (!diagnosticsState) {
@@ -2624,7 +2636,10 @@ const placeholderExposureLabel = computed(() => {
   const totalMs = Math.round(diagnosticsState.placeholderExposureTotalMs ?? 0)
   const maxMs = Math.round(diagnosticsState.placeholderExposureMaxMs ?? 0)
   const availabilityMs = Math.round(diagnosticsState.viewportDataAvailabilityLastMs ?? 0)
-  return `${activeRows} active / ${events} events / ${totalMs}ms total / ${maxMs}ms max / ${availabilityMs}ms viewport`
+  const cachePercent = Math.round((diagnosticsState.viewportCacheHitRatio ?? 1) * 100)
+  const blankEvents = diagnosticsState.blankViewportEvents ?? 0
+  const pullMs = Math.round(diagnosticsState.pullDurationLastMs ?? 0)
+  return `${activeRows} active / ${events} events / ${totalMs}ms total / ${maxMs}ms max / ${availabilityMs}ms viewport / ${cachePercent}% cache / ${blankEvents} blank / ${pullMs}ms pull`
 })
 const datasetVersionLabel = computed(() => {
   const value = changeFeedDiagnostics.value.currentDatasetVersion

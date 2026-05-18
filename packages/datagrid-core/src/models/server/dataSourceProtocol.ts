@@ -347,6 +347,15 @@ export interface DataGridDataSourceBackpressureDiagnostics {
   viewportDataAvailabilityTotalMs: number
   viewportDataAvailabilityMaxMs: number
   viewportDataAvailabilityLastMs: number
+  viewportCacheHitRows: number
+  viewportCacheMissRows: number
+  viewportCacheHitRatio: number
+  blankViewportActive: boolean
+  blankViewportEvents: number
+  pullDurationEvents: number
+  pullDurationTotalMs: number
+  pullDurationMaxMs: number
+  pullDurationLastMs: number
 }
 
 export type DataGridServerPivotRowRole = "group" | "detail" | "subtotal" | "grand-total"
