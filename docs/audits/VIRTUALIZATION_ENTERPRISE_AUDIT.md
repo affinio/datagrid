@@ -30,6 +30,7 @@ Documentation:
 - `docs/datagrid-viewport-controller-decomposition.md`
 - `docs/datagrid-viewport-math-engine.md`
 - `docs/datagrid-viewport-rowmodel-boundary.md`
+- `docs/datagrid-virtualization-support-matrix.md`
 - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - `docs/perf/datagrid-performance-gates.md`
 - `docs/datagrid-headless-a11y-contract.md`
@@ -172,6 +173,9 @@ Orchestration, sandbox, tests, and benchmarks:
 
 3. **Grouped/tree expansion behavior is now documented for the row-model boundary.**
    `docs/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, grouped/tree-specific a11y semantics, and server/data-source grouped placeholder metadata.
+
+4. **Enterprise support status is explicit.**
+   `docs/datagrid-virtualization-support-matrix.md` documents supported and partial behavior for public virtualization configuration, core/app ownership, server row models, grouped/tree rows, interaction continuity, virtualized a11y, touch/mobile, telemetry, and perf gates. This reduces ambiguity but does not replace the remaining validation work listed below.
 
 ## Correctness Risks
 
@@ -357,7 +361,7 @@ What blocks the target:
 6. Add wide-grid horizontal virtualization gates for 1k and 10k columns. Status: core 1k/10k stress coverage and a Vue 1000-column browser smoke gate are in place; broader browser/device gates remain.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.
 8. Verify app-stage virtualized a11y attributes and add tests for row/column index mapping. Status: covered for virtualized center/pinned cells, selection state, and placeholder disabled metadata; screen-reader device validation remains.
-9. Decide the enterprise status of `serverBackedRowModel.ts` and either add placeholder parity or document it as a simple path.
+9. Decide the enterprise status of `serverBackedRowModel.ts` and either add placeholder parity or document it as a simple path. Status: documented as a compatibility/simple path in the virtualization support matrix; placeholder parity remains open if it is promoted to an enterprise server-backed path.
 10. Add rowId-to-index or server scroll-target resolution for unloaded rows.
 
 ## Risks And Migration Notes

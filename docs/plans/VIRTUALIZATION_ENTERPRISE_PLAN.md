@@ -21,7 +21,7 @@ Current execution state:
 - Slice 15 is completed and should be treated as the virtualized accessibility mapping baseline.
 - Slice 16 is completed and should be treated as the virtualization telemetry extraction baseline.
 - Slice 17 is completed and should be treated as the enterprise virtualization perf gate baseline.
-- Slice 18 is the next implementation slice.
+- Slice 18 is completed and should be treated as the virtualization support matrix baseline.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -353,7 +353,7 @@ Current execution state:
 
 ## Slice 18: Documentation And Support Matrix
 
-- Status: Planned.
+- Status: Completed. `docs/datagrid-virtualization-support-matrix.md` now names supported, partial, and unsupported/ungated virtualization behavior across configuration, ownership, server row models, grouped/tree rows, interaction continuity, a11y, touch/mobile, telemetry, and enterprise perf gates.
 - Objective: keep enterprise virtualization behavior, limitations, and validation expectations explicit.
 - Affected packages/files:
   - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
@@ -362,9 +362,9 @@ Current execution state:
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - Expected behavior change: documentation names supported, partial, and unsupported virtualization behavior without implying unverified enterprise guarantees.
-- Tests to add/update:
-  - Markdown/docs validation only.
-  - Link/reference validation if available.
+- Tests added/covered:
+  - User-facing support matrix linked from docs README, feature catalog, row-model boundary, perf gates, and mobile/touch audit.
+  - Plan and audit status aligned with the support matrix baseline.
 - Validation command: `node ./scripts/check-datagrid-docs-framework-track.mjs`
 - Risk level: Low
 - Suggested commit message: `docs(datagrid): document virtualization support matrix`
@@ -388,7 +388,7 @@ Current execution state:
 15. Slice 15: Virtualized Accessibility Mapping (completed)
 16. Slice 16: Telemetry Events For Virtualization (completed)
 17. Slice 17: Perf Gates For Enterprise Virtualization (completed)
-18. Slice 18: Documentation And Support Matrix (next)
+18. Slice 18: Documentation And Support Matrix (completed)
 
 ## Execution Notes
 

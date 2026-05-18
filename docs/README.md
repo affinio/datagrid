@@ -10,6 +10,7 @@ This folder separates user-facing documentation from internal planning material.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
 - [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.
 - [Troubleshooting runbook](./datagrid-troubleshooting-runbook.md) - operational debugging guide.
+- [Virtualization support matrix](./datagrid-virtualization-support-matrix.md) - supported, partial, and unsupported enterprise virtualization behavior.
 
 ## Core References
 

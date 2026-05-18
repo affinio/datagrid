@@ -113,6 +113,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - `BENCH_INTERACTION_FAIL_ON_WARNINGS` defaults to `true` for the built-in profiles. Set it to `false` only for exploratory local observation runs.
 - Hard-fail scripts: `pnpm run bench:datagrid:enterprise:browser-frames:assert` for desktop Chromium and `pnpm run bench:datagrid:enterprise:browser-frames:touch:assert` for tablet/coarse-pointer Chromium.
 - Virtualization browser gates:
+  - Current supported and partial virtualization guarantees are summarized in `docs/datagrid-virtualization-support-matrix.md`.
   - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; the horizontal stress scenario uses `10k` rows and `1000` columns through `BENCH_BROWSER_WIDE_ROW_SCENARIOS=horizontal-scroll-only` and `BENCH_BROWSER_WIDE_COLUMN_SCENARIOS=horizontal-scroll-only`.
   - The CI harness includes `enterprise-browser-frames` with the same focused virtualization scenario set and row/column overrides.
   - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.

@@ -48,8 +48,8 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | Pivot | Pivot drilldown (`getPivotCellDrilldown`) | Core + Adapter | main-thread, worker-owned, server-side* | Details path from pivot cell back to source rows. |
 | Pivot | Pivot layout export/import + interop snapshot | Core + Adapter | main-thread, worker-owned, server-side* | Persist/restore pivot layout and cross-boundary interop payloads. |
 | Pagination | Pagination model/snapshot | Core + Adapter | all | Deterministic paging inputs and snapshot outputs. |
-| Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets. |
-| Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support. |
+| Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets; see the [virtualization support matrix](./datagrid-virtualization-support-matrix.md) for enterprise limits. |
+| Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support; enabled explicitly for wide app grids. |
 | Columns | Visibility, order, sizing, pinning | Core + Adapter | all | Canonical column model (`pin` contract, snapshots, state updates). |
 | App UX | Built-in column menu with declarative trigger, section/action config, disabled reasons, custom items, and async value filters | App | main-thread, worker-owned, server-side* | `columnMenu` supports boolean enablement plus object-form `trigger`, `items`, `disabled`, `disabledReasons`, `labels`, `actions`, `customItems`, and per-column overrides for the standard `sort/group/pin/filter` menu. Value-filter lists can resolve from async row-model histograms and forward server-side search. |
 | App UX | Localizable built-in toolbar panels | App | main-thread, worker-owned | `advancedFilter.labels` and `columnLayout.labels` cover trigger text, panel chrome, actions, field labels, join labels, and advanced-filter operator labels for app-level localization. |

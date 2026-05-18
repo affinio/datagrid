@@ -10,6 +10,8 @@ The first mobile/touch quick wins are now implemented in the Vue app-stage path:
 
 The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17, and selection enterprise slices are closed as of 2026-05-18. Automated Chromium desktop and touch-emulated interaction thresholds are hard-fail gates, while hardware-specific mobile risk is tracked as device execution and threshold review from real traces.
 
+Current virtualization support status for touch/mobile, server-backed rows, and browser perf gates is summarized in `docs/datagrid-virtualization-support-matrix.md`.
+
 ## Implementation Status
 
 Completed in Phase 1:
