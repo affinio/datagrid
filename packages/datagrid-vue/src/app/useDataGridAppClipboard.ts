@@ -693,9 +693,22 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       )
       return false
     }
+    const missingTargetRange = targetRanges.find(range => resolveMissingRowIndexInRange(getBodyRowAtIndex, range) != null)
+    if (missingTargetRange) {
+      options.setLastAction?.(
+        "Paste target includes unloaded rows. Load rows or use server operation.",
+      )
+      return false
+    }
     if (pendingOperation === "cut" && pendingSourceRange && resolveGroupRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
       options.setLastAction?.(
         "Cut source includes group rows. Use leaf rows or server operation.",
+      )
+      return false
+    }
+    if (pendingOperation === "cut" && pendingSourceRange && resolveMissingRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
+      options.setLastAction?.(
+        "Cut source includes unloaded rows. Load rows or use server operation.",
       )
       return false
     }

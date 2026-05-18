@@ -110,7 +110,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 6: Server-Backed Clipboard And Mutation Delegation
 
-- Status: Partially completed on 2026-05-17. Clipboard, clear/delete, and local range-move paths now consult virtual selection metadata before local materialized work; stale virtual selections are blocked with an explicit message, and unloaded virtual ranges remain blocked when no server delegation handler is configured. Full server-delegated copy/export, cut, clear/delete, paste, range move, and summary endpoints remain planned contract work.
+- Status: Partially completed on 2026-05-18. Clipboard, clear/delete, and local range-move paths now consult virtual selection metadata before local materialized work; stale virtual selections are blocked with an explicit message, unloaded virtual ranges remain blocked when no server delegation handler is configured, and paste targets containing unloaded or placeholder rows now block instead of partially mutating loaded rows. Full server-delegated copy/export, cut, clear/delete, paste, range move, and summary endpoints remain planned contract work.
 - Objective: implement the approved server operation decisions for clipboard, clear/delete, fill, and range move without making local materialized paths unsafe.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`

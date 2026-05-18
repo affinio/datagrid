@@ -899,4 +899,68 @@ describe("useDataGridAppClipboard contract", () => {
     expect(lastAction.value).toBe("Paste target includes group rows. Use leaf rows or server operation.")
     expect(rows.value[1]).toEqual({ rowId: "r2", a: "A2", b: "B2", c: "C2" })
   })
+
+  it("blocks paste targets that include unloaded rows", async () => {
+    const { clipboard, currentCell, lastAction, rows, selectionRange } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        null,
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    selectionRange.value = {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    await clipboard.copySelectedCells("keyboard")
+    selectionRange.value = {
+      startRow: 1,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    currentCell.value = { rowIndex: 1, columnIndex: 0 }
+
+    const applied = await clipboard.pasteSelectedCells("keyboard")
+
+    expect(applied).toBe(false)
+    expect(lastAction.value).toBe("Paste target includes unloaded rows. Load rows or use server operation.")
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "A1", b: "B1", c: "C1" })
+    expect(rows.value[1]).toEqual({ rowId: "r2", a: "A2", b: "B2", c: "C2" })
+  })
+
+  it("blocks paste targets that include placeholder rows", async () => {
+    const { clipboard, currentCell, lastAction, rows, selectionRange } = createClipboardHarness({
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        { rowId: "__datagrid_placeholder__:1", kind: "leaf", __placeholder: true, data: { rowId: "r2", a: "", b: "", c: "" } },
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+    })
+
+    selectionRange.value = {
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    await clipboard.copySelectedCells("keyboard")
+    selectionRange.value = {
+      startRow: 1,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    currentCell.value = { rowIndex: 1, columnIndex: 0 }
+
+    const applied = await clipboard.pasteSelectedCells("keyboard")
+
+    expect(applied).toBe(false)
+    expect(lastAction.value).toBe("Paste target includes unloaded rows. Load rows or use server operation.")
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "A1", b: "B1", c: "C1" })
+    expect(rows.value[1]).toEqual({ rowId: "r2", a: "A2", b: "B2", c: "C2" })
+  })
 })
