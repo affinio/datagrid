@@ -1,4 +1,8 @@
 export type {
+  AreaChartGeometry,
+  AreaChartGeometryOptions,
+  AreaChartPointGeometry,
+  AreaChartXScaleType,
   BarChartBarGeometry,
   BarChartGeometry,
   BarChartGeometryOptions,
@@ -42,6 +46,7 @@ export { createBarChartGeometry } from "./barGeometry"
 export { createLineChartGeometry } from "./lineGeometry"
 export { createPieChartGeometry } from "./pieGeometry"
 export { createScatterChartGeometry } from "./scatterGeometry"
+export { createAreaChartGeometry } from "./areaGeometry"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

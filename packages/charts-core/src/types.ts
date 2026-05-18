@@ -178,3 +178,37 @@ export interface ScatterChartGeometry {
   yDomain: ChartNumericDomain
   radiusDomain: ChartNumericDomain | null
 }
+
+export type AreaChartXScaleType = "index" | "number"
+
+export interface AreaChartGeometryOptions {
+  rows: readonly ChartDatum[]
+  xField?: string
+  yField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  xScaleType?: AreaChartXScaleType
+  includeZeroY?: boolean
+  baselineValue?: number
+}
+
+export interface AreaChartPointGeometry {
+  key: string
+  index: number
+  row: ChartDatum
+  xValue: number
+  yValue: number
+  x: number
+  y: number
+}
+
+export interface AreaChartGeometry {
+  points: AreaChartPointGeometry[]
+  linePath: string
+  areaPath: string
+  baselineValue: number
+  baselineY: number
+  plotArea: ChartRect
+  xDomain: ChartNumericDomain
+  yDomain: ChartNumericDomain
+}
