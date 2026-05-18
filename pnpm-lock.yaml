@@ -358,6 +358,12 @@ importers:
         specifier: ^4.0.15
         version: 4.0.15(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
 
+  packages/world-map-core:
+    devDependencies:
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
+
 packages:
 
   '@affino/focus-utils@1.1.0':

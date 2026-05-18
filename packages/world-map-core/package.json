@@ -1,0 +1,45 @@
+{
+  "name": "@affino/world-map-core",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Headless world map core types and utilities for Affino map features",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config ./vitest.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/world-map-core"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/world-map-core#readme",
+  "license": "MIT",
+  "keywords": [
+    "affino",
+    "world-map",
+    "map",
+    "headless",
+    "core"
+  ],
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}
