@@ -9,6 +9,10 @@ The remaining gaps are mostly correctness boundaries: IME composition is not gua
 Current enterprise readiness: **7/10**.
 Target enterprise readiness: **9/10** after hardening edit invariants, validation, server rejection UX, IME behavior, virtualization continuity, formula editing boundaries, and performance gates.
 
+## Implementation Progress
+
+- 2026-05-18: Enterprise editing implementation plan created at `docs/plans/EDITING_ENTERPRISE_PLAN.md`. Slice 1 is next and should define the editing contract before runtime hardening.
+
 ## Current Architecture Summary
 
 - `datagrid-core` owns cell runtime metadata, parser/formatter behavior, edit-model storage, row-model mutation paths, formula engine primitives, and datasource-backed commit/rollback mechanics.
