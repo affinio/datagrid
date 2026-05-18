@@ -80,6 +80,12 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
   - `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P95_MS=8`
   - `PERF_BUDGET_MAX_FILL_APPLY_P99_MS=14`
+  - `PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS=1`
+  - `PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS=2`
+- Selection rendering lookup:
+  - Additive range cell predicates use row-bucketed lookup for ranges spanning up to `256` rows.
+  - The lookup indexes up to `50,000` row buckets per selection snapshot; taller or overflow ranges remain in a fallback list.
+  - The interaction benchmark includes `multi-range-lookup-proxy` with `BENCH_MULTI_RANGE_COUNT=2000` by default.
 - Selection summary and aggregate labels:
   - Local selected-cell summary work is capped at `50,000` processed cells per summary.
   - Virtual selections must use loaded/missing interval metadata when present instead of probing every unloaded row.

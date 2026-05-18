@@ -6,6 +6,9 @@ import type {
   DataGridTableStageAnchorCell,
 } from "./dataGridTableStage.types"
 
+const VISUAL_SELECTION_LOOKUP_MAX_INDEXED_ROWS = 50_000
+const VISUAL_SELECTION_LOOKUP_MAX_INLINE_ROW_SPAN = 256
+
 export interface UseDataGridTableStageVisualSelectionOptions {
   mode: Ref<DataGridTableMode>
   viewportRowStart: Ref<number>
@@ -30,6 +33,34 @@ export interface UseDataGridTableStageVisualSelectionResult {
   isCellOnSelectionEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean
 }
 
+interface NormalizedVisualSelectionRange extends DataGridCopyRange {
+  startRow: number
+  endRow: number
+  startColumn: number
+  endColumn: number
+}
+
+interface VisualSelectionLookup {
+  rowBuckets: Map<number, NormalizedVisualSelectionRange[]>
+  overflowRanges: NormalizedVisualSelectionRange[]
+  rangeCount: number
+  singleCellRange: NormalizedVisualSelectionRange | null
+}
+
+function normalizeVisualSelectionRange(range: DataGridCopyRange): NormalizedVisualSelectionRange {
+  return {
+    ...range,
+    startRow: Math.min(range.startRow, range.endRow),
+    endRow: Math.max(range.startRow, range.endRow),
+    startColumn: Math.min(range.startColumn, range.endColumn),
+    endColumn: Math.max(range.startColumn, range.endColumn),
+  }
+}
+
+function isSingleCellRange(range: DataGridCopyRange): boolean {
+  return range.startRow === range.endRow && range.startColumn === range.endColumn
+}
+
 export function useDataGridTableStageVisualSelection(
   options: UseDataGridTableStageVisualSelectionOptions,
 ): UseDataGridTableStageVisualSelectionResult {
@@ -42,6 +73,39 @@ export function useDataGridTableStageVisualSelection(
       return [interactionRange]
     }
     return options.resolveCommittedSelectionRanges()
+  })
+  const selectionLookup = computed<VisualSelectionLookup>(() => {
+    const ranges = selectionRanges.value.map(normalizeVisualSelectionRange)
+    const rowBuckets = new Map<number, NormalizedVisualSelectionRange[]>()
+    const overflowRanges: NormalizedVisualSelectionRange[] = []
+    let indexedRows = 0
+
+    for (const range of ranges) {
+      const rowSpan = range.endRow - range.startRow + 1
+      if (
+        rowSpan <= VISUAL_SELECTION_LOOKUP_MAX_INLINE_ROW_SPAN
+        && indexedRows + rowSpan <= VISUAL_SELECTION_LOOKUP_MAX_INDEXED_ROWS
+      ) {
+        for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+          const bucket = rowBuckets.get(rowIndex)
+          if (bucket) {
+            bucket.push(range)
+          } else {
+            rowBuckets.set(rowIndex, [range])
+          }
+        }
+        indexedRows += rowSpan
+      } else {
+        overflowRanges.push(range)
+      }
+    }
+
+    return {
+      rowBuckets,
+      overflowRanges,
+      rangeCount: ranges.length,
+      singleCellRange: ranges.length === 1 && ranges[0] && isSingleCellRange(ranges[0]) ? ranges[0] : null,
+    }
   })
 
   const resolveVisualAnchorCell = (): DataGridTableStageAnchorCell | null => {
@@ -60,8 +124,6 @@ export function useDataGridTableStageVisualSelection(
   }
 
   const resolveVisualSelectionRange = (): DataGridCopyRange | null => selectionRange.value
-  const resolveVisualSelectionRanges = (): readonly DataGridCopyRange[] => selectionRanges.value
-
   const isVisualFillSelectionActive = (): boolean => {
     return options.mode.value === "base" && options.isFillDragging.value && Boolean(options.fillPreviewRange.value)
   }
@@ -80,6 +142,21 @@ export function useDataGridTableStageVisualSelection(
     )
   }
 
+  const isCellWithinSelectionLookup = (rowOffset: number, columnIndex: number): boolean => {
+    const rowIndex = options.viewportRowStart.value + rowOffset
+    const lookup = selectionLookup.value
+    const rowBucket = lookup.rowBuckets.get(rowIndex)
+    if (rowBucket?.some(range => columnIndex >= range.startColumn && columnIndex <= range.endColumn)) {
+      return true
+    }
+    return lookup.overflowRanges.some(range => (
+      rowIndex >= range.startRow
+      && rowIndex <= range.endRow
+      && columnIndex >= range.startColumn
+      && columnIndex <= range.endColumn
+    ))
+  }
+
   const isSelectionAnchorCell = (rowOffset: number, columnIndex: number): boolean => {
     const anchorCell = resolveVisualAnchorCell()
     if (anchorCell) {
@@ -91,7 +168,7 @@ export function useDataGridTableStageVisualSelection(
 
   const isCellSelected = (rowOffset: number, columnIndex: number): boolean => {
     if (!isVisualFillSelectionActive()) {
-      return resolveVisualSelectionRanges().some(range => isCellWithinRange(range, rowOffset, columnIndex))
+      return isCellWithinSelectionLookup(rowOffset, columnIndex)
     }
     const range = resolveVisualSelectionRange()
     return range ? isCellWithinRange(range, rowOffset, columnIndex) : false
@@ -99,16 +176,11 @@ export function useDataGridTableStageVisualSelection(
 
   const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
     if (!isVisualFillSelectionActive()) {
-      const ranges = resolveVisualSelectionRanges()
-      if (ranges.length === 0 || !ranges.some(range => isCellWithinRange(range, rowOffset, columnIndex))) {
+      const lookup = selectionLookup.value
+      if (lookup.rangeCount === 0 || !isCellWithinSelectionLookup(rowOffset, columnIndex)) {
         return false
       }
-      if (
-        ranges.length === 1
-        && ranges[0]
-        && ranges[0].startRow === ranges[0].endRow
-        && ranges[0].startColumn === ranges[0].endColumn
-      ) {
+      if (lookup.singleCellRange) {
         return false
       }
       return !isSelectionAnchorCell(rowOffset, columnIndex)

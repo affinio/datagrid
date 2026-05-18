@@ -437,6 +437,7 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_WINDOW_SHIFT_P99_MS",
     "PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS",
     "PERF_BUDGET_MAX_FILL_APPLY_P99_MS",
+    "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS",
   ],
   "Benchmark harness propagates p99 budgets into CI profile",
 )
@@ -449,8 +450,10 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS",
     "PERF_BUDGET_MAX_FILL_APPLY_P95_MS",
     "PERF_BUDGET_MAX_FILL_APPLY_P99_MS",
+    "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS",
+    "PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS",
   ],
-  "Interaction benchmark enforces p95/p99 budgets for selection/fill flows",
+  "Interaction benchmark enforces p95/p99 budgets for selection/fill/multi-range lookup flows",
 )
 
 registerTokenCheck(

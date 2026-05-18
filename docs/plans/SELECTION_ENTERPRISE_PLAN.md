@@ -244,6 +244,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 12: Selection Rendering Lookup Budget
 
+- Status: Completed on 2026-05-18. Rendered-cell additive selection predicates now use a row-bucketed lookup for sparse/many-range selection snapshots, indexing ranges up to a bounded row-entry budget and keeping tall/overflow ranges in a fallback list. Unit coverage now locks many additive ranges plus an overflow range, and the interaction benchmark includes a `multi-range-lookup-proxy` scenario with p95/p99 budget wiring in package scripts, harness, and perf-contract checks.
 - Objective: keep rendered-cell selection checks bounded when many additive ranges are present.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
