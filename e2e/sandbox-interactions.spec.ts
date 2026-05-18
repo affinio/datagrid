@@ -229,6 +229,39 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
+  test("placeholder tail materialization keeps selection anchor and fill handle", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
+
+    await page.locator('.controls label:has-text("Rows") select').selectOption("1000")
+    await page.locator('.controls label:has-text("Placeholder tail") input[type="checkbox"]').check()
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await setViewportScroll(viewport, { top: 100_000, left: 0 })
+
+    const placeholderAmountCell = page.locator(
+      '.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="1000"][data-row-id="__datagrid_placeholder__:1000"][data-column-key="amount"]',
+    ).first()
+    await expect(placeholderAmountCell).toBeVisible({ timeout: 20_000 })
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+
+    await placeholderAmountCell.dblclick()
+    const editor = placeholderAmountCell.locator("input.cell-editor-input").first()
+    await expect(editor).toBeVisible({ timeout: 20_000 })
+    await editor.fill("4321")
+    await editor.blur()
+
+    const materializedAmountCell = page.locator(
+      '.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="1000"][data-row-id="sandbox-placeholder-1001"][data-column-key="amount"]',
+    ).first()
+    await expect(materializedAmountCell).toBeVisible({ timeout: 20_000 })
+    await expect(materializedAmountCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(materializedAmountCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(materializedAmountCell))
+  })
+
   test("fill drag with auto-scroll cleans up on mouseup outside the viewport", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
