@@ -1,0 +1,45 @@
+{
+  "name": "@affino/analytics-core",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Headless analytics core for Affino query and aggregation logic",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src/__tests__/index.test.ts --config ./vitest.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/analytics-core"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/analytics-core#readme",
+  "license": "MIT",
+  "keywords": [
+    "affino",
+    "analytics",
+    "query",
+    "aggregation",
+    "headless"
+  ],
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}

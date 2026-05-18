@@ -42,6 +42,8 @@
       "@affino/datagrid-laravel/*": ["./packages/datagrid-laravel/resources/js/*"],
       "@affino/datagrid-laravel-app": ["./packages/datagrid-laravel-app/src/index.ts"],
       "@affino/datagrid-laravel-app/*": ["./packages/datagrid-laravel-app/src/*"],
+      "@affino/analytics-core": ["./packages/analytics-core/src/index.ts"],
+      "@affino/analytics-core/*": ["./packages/analytics-core/src/*"],
       "@affino/projection-engine": ["./packages/projection-engine/src/index.ts"],
       "@affino/projection-engine/*": ["./packages/projection-engine/src/*"]
     }
