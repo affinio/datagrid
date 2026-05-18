@@ -370,6 +370,27 @@ function clamp(value: number, min: number, max: number): number {
 </script>
 
 <style scoped>
+:where(.world-map-svg) {
+  --affino-world-map-ocean-fill: #e6f0f4;
+  --affino-world-map-stage-background: #eef5f8;
+  --affino-world-map-stage-border: #d1d5db;
+  --affino-world-map-control-background: #ffffff;
+  --affino-world-map-control-border: #d1d5db;
+  --affino-world-map-control-color: #1f2937;
+  --affino-world-map-control-hover-background: #f8fafc;
+  --affino-world-map-control-disabled-opacity: 0.45;
+  --affino-world-map-control-disabled-cursor: default;
+  --affino-world-map-country-fill: #d6d3c8;
+  --affino-world-map-country-stroke: #ffffff;
+  --affino-world-map-country-hover-fill: #b8c7d4;
+  --affino-world-map-country-selected-fill: #6f8ea7;
+  --affino-world-map-country-selected-stroke: #334155;
+  --affino-world-map-country-selected-hover-fill: #587a96;
+  --affino-world-map-country-selected-hover-stroke: #1f2937;
+  --affino-world-map-country-focus-fill: #c4d0da;
+  --affino-world-map-country-focus-stroke: #1f2937;
+}
+
 .world-map-svg {
   min-height: 0;
   display: flex;
@@ -388,25 +409,25 @@ function clamp(value: number, min: number, max: number): number {
 .world-map-svg__controls button {
   height: 30px;
   padding: 0 10px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--affino-world-map-control-border);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1f2937;
+  background: var(--affino-world-map-control-background);
+  color: var(--affino-world-map-control-color);
   font-size: 12px;
   cursor: pointer;
 }
 
 .world-map-svg__controls button:hover {
-  background: #f8fafc;
+  background: var(--affino-world-map-control-hover-background);
 }
 
 .world-map-svg__controls button:disabled {
-  cursor: default;
-  opacity: 0.45;
+  cursor: var(--affino-world-map-control-disabled-cursor);
+  opacity: var(--affino-world-map-control-disabled-opacity);
 }
 
 .world-map-svg__controls button:disabled:hover {
-  background: #ffffff;
+  background: var(--affino-world-map-control-background);
 }
 
 .world-map-svg__stage {
@@ -414,9 +435,9 @@ function clamp(value: number, min: number, max: number): number {
   min-height: 0;
   flex: 1;
   overflow: auto;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--affino-world-map-stage-border);
   border-radius: 8px;
-  background: #eef5f8;
+  background: var(--affino-world-map-stage-background);
 }
 
 .world-map-svg__svg {
@@ -440,13 +461,13 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 .world-map-svg__ocean {
-  fill: #e6f0f4;
+  fill: var(--affino-world-map-ocean-fill);
   pointer-events: none;
 }
 
 .world-map-svg__country {
-  fill: #d6d3c8;
-  stroke: #ffffff;
+  fill: var(--affino-world-map-country-fill);
+  stroke: var(--affino-world-map-country-stroke);
   stroke-width: 0.7;
   outline: none;
   vector-effect: non-scaling-stroke;
@@ -456,18 +477,18 @@ function clamp(value: number, min: number, max: number): number {
 
 .world-map-svg__country:hover,
 .world-map-svg__country--hovered {
-  fill: #b8c7d4;
+  fill: var(--affino-world-map-country-hover-fill);
 }
 
 .world-map-svg__country--selected {
-  fill: #6f8ea7;
-  stroke: #334155;
+  fill: var(--affino-world-map-country-selected-fill);
+  stroke: var(--affino-world-map-country-selected-stroke);
 }
 
 .world-map-svg__country--selected:hover,
 .world-map-svg__country--selected.world-map-svg__country--hovered {
-  fill: #587a96;
-  stroke: #1f2937;
+  fill: var(--affino-world-map-country-selected-hover-fill);
+  stroke: var(--affino-world-map-country-selected-hover-stroke);
 }
 
 .world-map-svg__country:focus,
@@ -476,8 +497,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 .world-map-svg__country:focus-visible {
-  fill: #c4d0da;
-  stroke: #1f2937;
+  fill: var(--affino-world-map-country-focus-fill);
+  stroke: var(--affino-world-map-country-focus-stroke);
   stroke-width: 1.2;
 }
 
