@@ -6,7 +6,7 @@ The DataGrid rendering architecture has a strong production foundation. The curr
 
 The system does not need a parallel rendering architecture. The enterprise gaps are narrower: custom renderer isolation, scroll-time lightweight rendering, render churn telemetry, expensive diagnostics and signature work in hot paths, duplicated center/pinned cell templates, and browser/performance gates that prove large and wide tables stay within frame budget.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after hardening renderer contracts, adding blank/churn/frame telemetry, proving custom-renderer behavior under scroll, and adding focused browser gates for pinned panes, overlays, auto-height rows, and wide horizontal virtualization.
+Current enterprise readiness is **8/10**. A realistic target is **9/10** after hardware/browser variance is baselined for the new enterprise rendering gates and the remaining center/pinned template drift risks are covered.
 
 ## Current Architecture Summary
 
@@ -88,18 +88,18 @@ Vue app viewport and rendering:
 
 ## Findings By Severity
 
-### Blocker
+### Previously Blocking Risks
 
-1. **No explicit enterprise render-frame gate for custom renderers.**
-   `useDataGridStageCellRendering.ts` invokes public `cellRenderer` and `groupCellRenderer` synchronously during Vue render, and `DataGridCellContentRenderer.ts` is a direct VNode passthrough. Existing tests verify renderer output, not scroll-frame budget, slow renderer detection, error isolation, or mount churn. This blocks an enterprise performance claim for custom-renderer-heavy grids.
+1. **Custom-renderer frame gates now exist, but baseline variance still needs observation.**
+   `scripts/bench-datagrid-enterprise-browser-frames.mjs` includes slow custom renderer and auto-height custom renderer scenarios, and CI harness mode hard-fails missing render/chrome/renderer telemetry through `BENCH_RENDERING_FAIL_ON_WARNINGS=true`. Remaining risk is tuning frame budgets after repeated CI and hardware runs.
 
-2. **No explicit enterprise render-frame gate for lightweight custom-renderer scroll.**
-   `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` now records touch scroll lightweight rendering as implemented: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderers are bypassed in favor of resolved display values. Remaining risk is budget enforcement for custom-renderer-heavy scroll scenarios, especially pinned panes, auto-height rows, and wide windows.
+2. **Lightweight custom-renderer scroll has browser coverage, but real-device validation remains.**
+   `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` records touch scroll lightweight rendering as implemented, and the enterprise browser-frame gate now covers custom-renderer-heavy, pinned, auto-height, overlay, and wide-window scenarios. Remaining risk is validating the policy on representative hardware beyond automated Chromium profiles.
 
 ### High
 
 1. **Custom renderer isolation is partially hardened.**
-   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. Public renderer expectations now document pure output, no grid-state mutation during render, synchronous layout-read avoidance, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations. Runtime error fallback is in place for `cellRenderer` and `groupCellRenderer`, so authored renderer exceptions fall back to the resolved display value without breaking the grid render tree. Remaining gaps are slow-render sampling and browser-frame budgets.
+   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. Public renderer expectations now document pure output, no grid-state mutation during render, synchronous layout-read avoidance, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations. Runtime error fallback is in place for `cellRenderer` and `groupCellRenderer`, so authored renderer exceptions fall back to the resolved display value without breaking the grid render tree. Browser-frame scenarios now cover slow renderers; optional slow-render developer warnings remain future work.
 
 2. **Center pane diagnostics are guarded when disabled.**
    `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
@@ -111,7 +111,7 @@ Vue app viewport and rendering:
    `DataGridTableStageCenterPane.vue` and `DataGridTableStagePinnedPane.vue` both render row state classes, cell state classes, editors, checkbox cells, and `DataGridCellContentRenderer`. This is not broken, but it raises drift risk and makes renderer lifecycle changes harder to apply consistently.
 
 5. **Selection/fill/move overlay recomputation is broad for large visible windows.**
-   `useDataGridStageOverlays.ts` scans visible rows and visible columns through `resolveVisibleBounds(...)` for selection/fill predicates, then computes many pane-specific overlay segment sets. The work is bounded by the rendered window, but it is not currently budgeted or sampled during drag/scroll.
+   `useDataGridStageOverlays.ts` scans visible rows and visible columns through `resolveVisibleBounds(...)` for selection/fill predicates, then computes many pane-specific overlay segment sets. The work is bounded by the rendered window, and `rendering-overlay-heavy-selection-fill` now verifies selection/fill/custom overlay telemetry is present in the enterprise browser-frame gate.
 
 ### Medium
 
@@ -164,17 +164,15 @@ Vue app viewport and rendering:
 
 ## Enterprise Readiness
 
-Current score: **7/10**.
+Current score: **8/10**.
 
 Target score: **9/10**.
 
 What blocks the target:
 
-- Missing custom renderer budget and slow-render frame gates.
-- Missing real-device validation and hard budgets for the lightweight touch-scroll renderer degradation policy.
-- Missing render churn telemetry and DOM node budget gates.
-- Missing browser gates for custom renderers, auto-height rows, pinned panes, overlays, and wide horizontal virtualization.
-- Avoidable center-pane diagnostics work in normal rendering.
+- Repeated CI and hardware baselines for the new custom-renderer, auto-height, pinned, overlay, and wide horizontal browser gates.
+- Hard frame-budget tuning for rendering-heavy scenarios after baseline variance settles.
+- Remaining center/pinned template drift risk.
 
 ## Recommended Implementation Roadmap
 
@@ -204,12 +202,12 @@ What blocks the target:
 ### Phase 5: Enterprise Browser Gates
 
 - Add Playwright or browser-frame scenarios for:
-  - 100k rows with plain cells.
-  - 100k rows with slow custom renderers.
-  - 1k to 10k columns with horizontal virtualization.
-  - pinned left/right plus pinned bottom panes.
-  - auto-height rows with variable custom renderer heights.
-  - server placeholders during cache refresh.
+  - 100k rows with plain cells. Status: completed.
+  - 100k rows with slow custom renderers. Status: completed.
+  - 1k columns with horizontal virtualization and pinned left/right panes. Status: completed.
+  - auto-height rows with custom renderer heights. Status: completed.
+  - overlay-heavy selection/fill/custom overlays. Status: completed.
+  - server placeholders during cache refresh. Status: completed in the virtualization browser gate.
 
 ## Recommended Tests
 
@@ -270,10 +268,10 @@ Performance/benchmark tests:
 2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; browser-frame churn telemetry is in place.
 3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs and runtime error fallback are in place.
 4. Add renderer error fallback or development-only error reporting. Status: runtime error fallback is in place; development-only reporting remains optional.
-5. Add lightweight scroll rendering policy for expensive custom renderers. Status: completed for touch-mode active body scroll; browser-frame budgets remain planned.
+5. Add lightweight scroll rendering policy for expensive custom renderers. Status: completed for touch-mode active body scroll; browser-frame rendering scenarios are in place.
 6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 6.
 7. Add chrome/overlay duration telemetry and gates. Status: chrome/overlay telemetry is complete in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 7; hard budgets remain planned.
-8. Add browser-frame scenarios for pinned panes, auto-height rows, custom renderers, and wide columns.
+8. Add browser-frame scenarios for pinned panes, auto-height rows, custom renderers, overlays, and wide columns. Status: completed.
 
 ## Risks And Migration Notes
 

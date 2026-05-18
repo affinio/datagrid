@@ -317,6 +317,7 @@
         :striped-rows="stripedRows"
         :state-persistence="sandboxViewportPersistence"
         :grid-lines="gridLines"
+        :custom-overlays="benchmarkCustomOverlays"
         :show-row-index="true"
         :row-selection="!props.timesheetShowcase"
         :row-reorder="rowReorder"
@@ -360,6 +361,7 @@ import {
   type DataGridColumnMenuProp,
   type DataGridGridLinesProp,
   type DataGridPlaceholderRowsProp,
+  type DataGridTableStageCustomOverlay,
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
@@ -468,6 +470,8 @@ interface PublicDataGridExpose {
 
 type ThemePreset = "default" | "industrial" | "sugar" | "custom";
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked" | "custom";
+type ShellBenchmarkRenderProfile = "plain" | "slow-custom-renderers" | "overlay-heavy";
+type ShellBenchmarkPinnedProfile = "default" | "wide-pinned";
 type DeclarativeCellMenuConfig = Exclude<DataGridCellMenuProp, boolean | null>;
 type DeclarativeRowIndexMenuConfig = Exclude<DataGridRowIndexMenuProp, boolean | null>;
 type ShellStatusTone = "neutral" | "info" | "warning" | "success";
@@ -522,6 +526,27 @@ const TREE_STATUS_OPTIONS = [
 ] as const;
 
 const SHELL_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:shell-saved-view";
+
+function readShellBenchmarkSearchParam(name: string): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function resolveShellBenchmarkRenderProfile(): ShellBenchmarkRenderProfile {
+  const value = readShellBenchmarkSearchParam("renderProfile");
+  return value === "slow-custom-renderers" || value === "overlay-heavy" ? value : "plain";
+}
+
+function resolveShellBenchmarkPinnedProfile(): ShellBenchmarkPinnedProfile {
+  return readShellBenchmarkSearchParam("pinnedProfile") === "wide-pinned"
+    ? "wide-pinned"
+    : "default";
+}
+
+const benchmarkRenderProfile = resolveShellBenchmarkRenderProfile();
+const benchmarkPinnedProfile = resolveShellBenchmarkPinnedProfile();
 
 const COMPACT_COLUMN_MENU = defineDataGridColumnMenu({
   items: ["sort", "group", "pin"],
@@ -917,6 +942,38 @@ function buildShellGroupCellRenderer(columnKey: string) {
 
     return h("span", { class: "shell-group-secondary" }, `${renderShellGroupLabel(group.field)}: ${group.value}`);
   };
+}
+
+function buildShellBenchmarkCellRenderer(columnKey: string) {
+  return ({ row, displayValue }: {
+    row: unknown;
+    displayValue: string;
+  }) => {
+    const source = row && typeof row === "object"
+      ? (row as Record<string, unknown>)[columnKey]
+      : displayValue;
+    const text = String(source ?? displayValue ?? "");
+    let checksum = 0;
+    for (let iteration = 0; iteration < 48; iteration += 1) {
+      for (let index = 0; index < text.length; index += 1) {
+        checksum = ((checksum << 5) - checksum + text.charCodeAt(index) + iteration) | 0;
+      }
+    }
+    return h("span", { class: "shell-benchmark-renderer" }, [
+      h("span", { class: "shell-benchmark-renderer__value" }, displayValue),
+      h("span", { class: "shell-benchmark-renderer__meta" }, `r${Math.abs(checksum % 997)}`),
+    ]);
+  };
+}
+
+function shouldUseShellBenchmarkRenderer(column: DataGridAppColumnInput): boolean {
+  if (benchmarkRenderProfile !== "slow-custom-renderers") {
+    return false;
+  }
+  return column.key === "name"
+    || column.key === "amount"
+    || column.key === "status"
+    || column.key.startsWith("extra_");
 }
 
 function sumTimesheetDays(row: Omit<TimesheetRow, "total">): number {
@@ -1558,21 +1615,32 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
   }
 
   return applySandboxColumnLabelOverrides(builtColumns.map((column) => {
+    const benchmarkCellRenderer = shouldUseShellBenchmarkRenderer(column)
+      ? buildShellBenchmarkCellRenderer(column.key)
+      : null;
     if (column.key === "status") {
       return {
         ...column,
-        cellRenderer: ({ row, displayValue }) => h("span", {
-          class: [
-            "shell-status-pill",
-            `shell-status-pill--${resolveShellStatusTone(row && typeof row === "object" ? (row as Record<string, unknown>).status : displayValue)}`,
-          ],
-        }, displayValue),
+        cellRenderer: benchmarkCellRenderer
+          ?? (({ row, displayValue }) => h("span", {
+            class: [
+              "shell-status-pill",
+              `shell-status-pill--${resolveShellStatusTone(row && typeof row === "object" ? (row as Record<string, unknown>).status : displayValue)}`,
+            ],
+          }, displayValue)),
       };
     }
     if (column.key === "name" || column.key === "id") {
       return {
         ...column,
+        ...(benchmarkCellRenderer ? { cellRenderer: benchmarkCellRenderer } : {}),
         groupCellRenderer: buildShellGroupCellRenderer(column.key),
+      };
+    }
+    if (benchmarkCellRenderer) {
+      return {
+        ...column,
+        cellRenderer: benchmarkCellRenderer,
       };
     }
     return column;
@@ -1656,6 +1724,33 @@ const gridLines = computed<DataGridGridLinesProp>(() => {
     header: showHeaderColumnLines.value ? "columns" : "none",
     pinnedSeparators: showPinnedSeparators.value,
   };
+});
+const benchmarkCustomOverlays = computed<readonly DataGridTableStageCustomOverlay[] | undefined>(() => {
+  if (benchmarkRenderProfile !== "overlay-heavy" || props.mode !== "base") {
+    return undefined;
+  }
+  const maxRow = Math.max(0, rowCount.value - 1);
+  const maxColumn = Math.max(0, columns.value.length - 1);
+  if (maxRow <= 0 || maxColumn <= 0) {
+    return undefined;
+  }
+  return Array.from({ length: 18 }, (_, index): DataGridTableStageCustomOverlay => {
+    const startRow = Math.min(maxRow, index * 17);
+    const startColumn = Math.min(maxColumn, index % Math.max(1, Math.min(12, maxColumn + 1)));
+    return {
+      key: `shell-benchmark-overlay-${index + 1}`,
+      ranges: [{
+        startRow,
+        endRow: Math.min(maxRow, startRow + 72),
+        startColumn,
+        endColumn: Math.min(maxColumn, startColumn + 8),
+      }],
+      borderColor: index % 2 === 0 ? "rgba(37, 99, 235, 0.72)" : "rgba(13, 148, 136, 0.72)",
+      backgroundColor: index % 2 === 0 ? "rgba(37, 99, 235, 0.08)" : "rgba(13, 148, 136, 0.08)",
+      borderStyle: index % 3 === 0 ? "dashed" : "solid",
+      zIndex: 5,
+    };
+  });
 });
 const sandboxLayoutMode = computed(() => {
   return viewMode.value === "gantt" ? "fill" : "auto-height";
@@ -1907,6 +2002,25 @@ const effectiveColumnState = computed<DataGridUnifiedColumnState>(() => {
     return createTimesheetColumnState(columns.value);
   }
   const base = normalizeColumnState(columnState.value, columns.value);
+  if (benchmarkPinnedProfile === "wide-pinned" && props.mode === "base") {
+    const pinned = {
+      order: [...base.order],
+      visibility: { ...base.visibility },
+      widths: { ...base.widths },
+      pins: { ...base.pins },
+    };
+    const visibleKeys = columns.value.map(column => column.key);
+    for (const key of visibleKeys) {
+      pinned.pins[key] = "none";
+    }
+    for (const key of visibleKeys.slice(0, 2)) {
+      pinned.pins[key] = "left";
+    }
+    for (const key of visibleKeys.slice(-2)) {
+      pinned.pins[key] = "right";
+    }
+    return pinned;
+  }
   if (
     props.mode !== "pivot" ||
     pivotViewMode.value !== "pivot" ||
@@ -2542,6 +2656,26 @@ const collapseAllGroups = (): void => {
   color: #165c3d;
   background: rgba(225, 245, 233, 0.96);
   border-color: rgba(163, 210, 180, 0.92);
+}
+
+:deep(.shell-benchmark-renderer) {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12rem;
+  min-height: 1.9rem;
+  max-width: 100%;
+  line-height: 1.15;
+}
+
+:deep(.shell-benchmark-renderer__value) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(.shell-benchmark-renderer__meta) {
+  color: rgba(71, 85, 105, 0.72);
+  font-size: 0.66rem;
 }
 
 :deep(.shell-group-line) {

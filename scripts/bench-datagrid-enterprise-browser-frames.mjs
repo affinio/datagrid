@@ -96,6 +96,10 @@ const BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS",
   false,
 )
+const BENCH_RENDERING_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_RENDERING_FAIL_ON_WARNINGS",
+  false,
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = floatEnv("PERF_BUDGET_MAX_VARIANCE_PCT", 999999)
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = floatEnv("PERF_BUDGET_MAX_HEAP_DELTA_MB", 999999)
 const PERF_BUDGET_MAX_FRAME_P95_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P95_MS", 120)
@@ -189,6 +193,79 @@ const ALL_SCENARIOS = [
     verticalDiagnostics: true,
     virtualizationTelemetryRequired: true,
     horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "rendering-plain-100k",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "rendering-slow-custom-renderers",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    cellRendererTelemetryRequired: true,
+    renderProfile: "slow-custom-renderers",
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "rendering-wide-pinned-horizontal",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    pinnedColumnTelemetryRequired: true,
+    pinnedProfile: "wide-pinned",
+    horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "rendering-auto-height-custom-renderers",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    cellRendererTelemetryRequired: true,
+    renderProfile: "slow-custom-renderers",
+    rowHeightMode: "auto",
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "rendering-overlay-heavy-selection-fill",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    overlayTelemetryRequired: true,
+    customOverlayTelemetryRequired: true,
+    selectionOverlayTelemetryRequired: true,
+    fillOverlayTelemetryRequired: true,
+    renderProfile: "overlay-heavy",
+    overlayStress: true,
+    horizontalScroll: false,
     filter: false,
     sort: false,
     cellUpdates: false,
@@ -439,6 +516,12 @@ function buildScenarioUrl(scenario) {
   if (scenario.verticalDiagnostics || scenario.sortDiagnostics || scenario.interactionDiagnostics) {
     url.searchParams.set("dgPerfTrace", "1")
   }
+  if (scenario.renderProfile) {
+    url.searchParams.set("renderProfile", scenario.renderProfile)
+  }
+  if (scenario.pinnedProfile) {
+    url.searchParams.set("pinnedProfile", scenario.pinnedProfile)
+  }
   return url.toString()
 }
 
@@ -455,7 +538,7 @@ function resolveScenarioRowCount(scenario) {
 }
 
 async function configureSandbox(page, config) {
-  return await page.evaluate(({ rowCount, columnCount }) => {
+  return await page.evaluate(({ rowCount, columnCount, rowHeightMode }) => {
     function selectNearestByLabel(pattern, target) {
       const labels = Array.from(document.querySelectorAll("label"))
       const label = labels.find(candidate => pattern.test(candidate.textContent ?? ""))
@@ -509,7 +592,7 @@ async function configureSandbox(page, config) {
       columns: selectNearestByLabel(/^(\s*)Cols\b/i, columnCount),
       renderVirtualization: selectValueByLabel(/^(\s*)Render\b/i, "virtualization"),
       viewTable: selectValueByLabel(/^(\s*)View\b/i, "table"),
-      rowModeFixed: selectValueByLabel(/^(\s*)Row mode\b/i, "fixed"),
+      rowMode: selectValueByLabel(/^(\s*)Row mode\b/i, rowHeightMode),
     }
   }, config)
 }
@@ -989,6 +1072,87 @@ async function runScenario(page, sessionIndex, scenario) {
 
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
     const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+
+    const runOverlayStress = async () => {
+      const elementCenter = (element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+        }
+      }
+      const dispatchElementMouse = (element, type, point, init = {}) => {
+        element.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: init.button ?? 0,
+          buttons: init.buttons ?? (type === "mouseup" ? 0 : 1),
+          clientX: point.x,
+          clientY: point.y,
+          view: window,
+        }))
+      }
+      const dispatchWindowMouse = (type, point, init = {}) => {
+        window.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: init.button ?? 0,
+          buttons: init.buttons ?? (type === "mouseup" ? 0 : 1),
+          clientX: point.x,
+          clientY: point.y,
+          view: window,
+        }))
+      }
+      const bodyCells = Array.from(
+        document.querySelectorAll(".grid-body-viewport .grid-cell"),
+      ).filter(candidate => candidate instanceof HTMLElement)
+      const sourceCell = document.querySelector('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]')
+        ?? bodyCells[0]
+      const targetCell = bodyCells[Math.min(bodyCells.length - 1, 18)]
+      if (sourceCell instanceof HTMLElement && targetCell instanceof HTMLElement) {
+        dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))
+        dispatchWindowMouse("mousemove", elementCenter(targetCell), { buttons: 1 })
+        await waitForPaint()
+        captureTelemetry("overlay-stress:selection-preview")
+        dispatchWindowMouse("mouseup", elementCenter(targetCell))
+        await waitForPaint()
+        captureTelemetry("overlay-stress:selection")
+      } else {
+        interactions.skipped.push("overlay-stress:no-selection-cells")
+      }
+
+      const amountCell = document.querySelector('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]')
+      if (amountCell instanceof HTMLElement) {
+        const point = elementCenter(amountCell)
+        dispatchElementMouse(amountCell, "mousedown", point)
+        dispatchWindowMouse("mouseup", point)
+        amountCell.click()
+        await waitForPaint()
+      }
+      await waitForCondition(() => document.querySelector(".cell-fill-handle") != null, 1500)
+      const fillHandle = document.querySelector(".cell-fill-handle")
+      if (fillHandle instanceof HTMLElement) {
+        const handlePoint = elementCenter(fillHandle)
+        const rect = viewport.getBoundingClientRect()
+        const targetPoint = {
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.bottom - 6),
+        }
+        dispatchElementMouse(fillHandle, "mousedown", handlePoint)
+        dispatchWindowMouse("mousemove", targetPoint, { buttons: 1 })
+        await waitForPaint()
+        captureTelemetry("overlay-stress:fill-preview")
+        dispatchWindowMouse("mouseup", targetPoint)
+        await waitForPaint()
+      } else {
+        interactions.skipped.push("overlay-stress:no-fill-handle")
+      }
+    }
+
+    if (input.scenario.overlayStress) {
+      await runOverlayStress()
+      captureRenderedSnapshot("overlay-stress")
+    }
 
     if (input.scenario.verticalScroll && maxTop > 0) {
       let previousSnapshot = captureRenderedSnapshot("vertical:before-loop")
@@ -1730,6 +1894,7 @@ async function runScenario(page, sessionIndex, scenario) {
         customOverlaySegmentCount: summarizeNumbers(overlayComputePerfSamples
           .filter(sample => sample.overlayKind === "custom")
           .map(sample => sample.segmentCount)),
+        customOverlayCount: summarizeNumbers(overlayComputePerfSamples.map(sample => sample.customOverlayCount)),
       }
       verticalDiagnostics.longTasks = longTaskEntries.map(entry => ({
         startTime: entry.startTime,
@@ -1995,6 +2160,7 @@ function aggregateRuns(runs) {
       fillPreviewSegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.fillPreviewSegmentCount?.p95)),
       movePreviewSegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.movePreviewSegmentCount?.p95)),
       customOverlaySegmentCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.customOverlaySegmentCount?.p95)),
+      customOverlayCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.overlayTelemetry?.customOverlayCount?.max)),
     },
     sortDiagnostics: {
       menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),
@@ -2202,6 +2368,50 @@ function buildRenderChurnBudgetWarnings(scenarioReports) {
   return warnings
 }
 
+function buildRenderingTelemetryWarnings(scenarioReports) {
+  const warnings = []
+  for (const scenario of SCENARIOS) {
+    if (!scenario.renderingTelemetryRequired) {
+      continue
+    }
+    const aggregate = scenarioReports[scenario.id]?.aggregate
+    const renderTelemetry = aggregate?.renderTelemetry
+    const chromeTelemetry = aggregate?.chromeTelemetry
+    const overlayTelemetry = aggregate?.overlayTelemetry
+    const hasRenderWindowTelemetry = (renderTelemetry?.renderWindowSampleCount?.max ?? 0) > 0
+    const hasCellRendererTelemetry = (renderTelemetry?.cellRendererInvocationCount?.max ?? 0) > 0
+    if (!hasRenderWindowTelemetry && !(scenario.cellRendererTelemetryRequired && hasCellRendererTelemetry)) {
+      warnings.push(`${scenario.id} rendering telemetry produced no render-window samples`)
+    }
+    if (!chromeTelemetry || chromeTelemetry.drawSampleCount.max <= 0) {
+      warnings.push(`${scenario.id} rendering telemetry produced no chrome draw samples`)
+    }
+    if (scenario.cellRendererTelemetryRequired && (renderTelemetry?.cellRendererInvocationCount?.max ?? 0) <= 0) {
+      warnings.push(`${scenario.id} rendering telemetry produced no cell renderer samples`)
+    }
+    if (
+      scenario.pinnedColumnTelemetryRequired
+      && (renderTelemetry?.pinnedColumnCount?.max ?? 0) <= 0
+      && (chromeTelemetry?.drawnPaneCount?.max ?? 0) <= 1
+    ) {
+      warnings.push(`${scenario.id} rendering telemetry produced no pinned pane samples`)
+    }
+    if (scenario.overlayTelemetryRequired && (overlayTelemetry?.computeSampleCount?.max ?? 0) <= 0) {
+      warnings.push(`${scenario.id} overlay telemetry produced no compute samples`)
+    }
+    if (scenario.customOverlayTelemetryRequired && (overlayTelemetry?.customOverlayCount?.max ?? 0) <= 0) {
+      warnings.push(`${scenario.id} overlay telemetry produced no custom overlay samples`)
+    }
+    if (scenario.selectionOverlayTelemetryRequired && (overlayTelemetry?.selectionSegmentCount?.max ?? 0) <= 0) {
+      warnings.push(`${scenario.id} overlay telemetry produced no selection overlay segments`)
+    }
+    if (scenario.fillOverlayTelemetryRequired && (overlayTelemetry?.fillPreviewSegmentCount?.max ?? 0) <= 0) {
+      warnings.push(`${scenario.id} overlay telemetry produced no fill preview segments`)
+    }
+  }
+  return warnings
+}
+
 function buildBrowserResourceBudgetWarnings(aggregate) {
   const warnings = []
   addWarningIfAbove(warnings, "enterprise browser frame p95", aggregate.frameP95Ms.p95, PERF_BUDGET_MAX_FRAME_P95_MS)
@@ -2250,6 +2460,7 @@ try {
       const setupResult = await configureSandbox(page, {
         rowCount: resolveScenarioRowCount(scenario),
         columnCount: resolveScenarioColumnCount(scenario),
+        rowHeightMode: scenario.rowHeightMode ?? "fixed",
       })
       setup.push({ scenario: scenario.id, session: session + 1, ...setupResult })
       await page.waitForTimeout(240)
@@ -2269,11 +2480,18 @@ const scenarioReports = buildScenarioSummary(sessions)
 const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
 const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
-const budgetWarnings = [...interactionBudgetWarnings, ...virtualizationBudgetWarnings, ...renderChurnBudgetWarnings]
+const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
+const budgetWarnings = [
+  ...interactionBudgetWarnings,
+  ...virtualizationBudgetWarnings,
+  ...renderChurnBudgetWarnings,
+  ...renderingTelemetryWarnings,
+]
 const budgetErrors = [
   ...(BENCH_INTERACTION_FAIL_ON_WARNINGS ? interactionBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
+  ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
 ]
 const aggregate = {
   elapsedMs,
@@ -2315,6 +2533,7 @@ const summary = {
     browserContext: interactionDeviceProfile.context,
     interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
     virtualizationFailOnWarnings: BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS,
+    renderingFailOnWarnings: BENCH_RENDERING_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,

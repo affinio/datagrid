@@ -11,7 +11,7 @@ Current execution state:
 - Slice 5 is completed and should be treated as the touch-scroll lightweight rendering baseline.
 - Slice 6 is completed and should be treated as the render churn benchmark baseline.
 - Slice 7 is completed and should be treated as the chrome/overlay telemetry baseline.
-- Slice 8 is the next implementation slice.
+- Slice 8 is completed and should be treated as the enterprise rendering browser-gate baseline.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -138,14 +138,15 @@ Current execution state:
 
 ## Slice 8: Enterprise Rendering Browser Gates
 
-- Status: Planned.
+- Status: Completed. The enterprise browser-frame benchmark now includes rendering-specific scenarios for a 100k-row plain baseline, 100k-row slow custom renderers, 1000-column wide pinned horizontal scroll, auto-height custom renderers, and overlay-heavy selection/fill/custom overlays. CI harness mode hard-fails missing rendering telemetry through `BENCH_RENDERING_FAIL_ON_WARNINGS=true`.
 - Objective: add browser-frame scenarios for custom renderers, auto-height rows, pinned panes, overlays, and wide horizontal rendering.
 - Affected packages/files:
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `scripts/bench-datagrid-harness.mjs`
+  - `packages/datagrid-sandbox/src/components/VueShellGridCard.vue`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: rendering-heavy grids have repeatable local/CI performance gates.
-- Tests to add/update:
+- Tests added/covered:
   - 100k-row plain rendering baseline.
   - 100k-row slow custom renderer scenario.
   - 1k-column pinned-pane scenario.
@@ -164,7 +165,7 @@ Current execution state:
 5. Slice 5: Lightweight Scroll Rendering Policy (completed)
 6. Slice 6: Mount And Unmount Churn Benchmark (completed)
 7. Slice 7: Chrome And Overlay Duration Telemetry (completed)
-8. Slice 8: Enterprise Rendering Browser Gates (next)
+8. Slice 8: Enterprise Rendering Browser Gates (completed)
 
 ## Execution Notes
 

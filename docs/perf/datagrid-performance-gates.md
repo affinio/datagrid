@@ -115,7 +115,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Virtualization browser gates:
   - Current supported and partial virtualization guarantees are summarized in `docs/datagrid-virtualization-support-matrix.md`.
   - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; the horizontal stress scenario uses `10k` rows and `1000` columns through `BENCH_BROWSER_WIDE_ROW_SCENARIOS=horizontal-scroll-only` and `BENCH_BROWSER_WIDE_COLUMN_SCENARIOS=horizontal-scroll-only`.
-  - The CI harness includes `enterprise-browser-frames` with the same focused virtualization scenario set and row/column overrides.
+  - The CI harness includes `enterprise-browser-frames` with the focused virtualization and rendering scenario sets plus row/column overrides.
   - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.
   - Hard budgets use `BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS=true` and cover `PERF_BUDGET_MAX_FRAME_P95_MS=120`, `PERF_BUDGET_MAX_DROPPED_FRAME_PCT=90`, `PERF_BUDGET_MAX_LONG_TASK_COUNT=600`, `PERF_BUDGET_MAX_HEAP_DELTA_MB=260`, `PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS=10`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95=160`, `PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS=0`, and `PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS=220`.
   - The same hard-fail profile records render churn under `churnTelemetry` and gates per-scroll-write row/cell mounts and unmounts through `PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE=220`, `PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE=220`, `PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE=30000`, and `PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE=30000`.
@@ -127,7 +127,10 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - With `dgPerfTrace=1`, the app stage records `stageRenderWindow`, `cellRenderer`, and `groupCellRenderer` samples; `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts render-window and renderer-duration aggregates under `renderTelemetry`.
   - Browser-frame vertical and horizontal diagnostics extract MutationObserver row/cell mount and unmount counts under `churnTelemetry`, so churn can be reviewed beside `renderTelemetry`.
   - Chrome canvas draw work is sampled as `chromeDraw` and extracted under `chromeTelemetry`; overlay segment/lane computation is sampled as `overlayCompute` and extracted under `overlayTelemetry`.
-  - Custom-renderer-heavy grids are not covered by a hard enterprise frame gate yet; planned rendering gates should reuse the enterprise browser-frame harness instead of adding a separate performance track.
+  - The enterprise browser-frame benchmark includes rendering scenarios for `rendering-plain-100k`, `rendering-slow-custom-renderers`, `rendering-wide-pinned-horizontal`, `rendering-auto-height-custom-renderers`, and `rendering-overlay-heavy-selection-fill`.
+  - The rendering scenarios cover a 100k-row plain baseline, 100k-row slow custom renderers, 1000-column pinned horizontal scroll, auto-height custom renderers, and overlay-heavy selection/fill/custom overlays.
+  - CI harness mode sets `BENCH_RENDERING_FAIL_ON_WARNINGS=true`; missing render-window, chrome draw, renderer invocation, pinned-column, or overlay telemetry in those scenarios fails the enterprise browser-frame task.
+  - The sandbox benchmark route accepts perf-only query profiles (`renderProfile=slow-custom-renderers|overlay-heavy`, `pinnedProfile=wide-pinned`) so the gates exercise production DataGrid rendering paths without adding a separate benchmark app.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
   - `PERF_BUDGET_MAX_SCROLL_BURST_P95_MS=20`
