@@ -6,7 +6,8 @@ Current execution state:
 
 - Slice 1 is already completed and should be treated as the baseline.
 - Slice 2 is completed and should be treated as the controller integration baseline.
-- Slice 3 is the next implementation slice.
+- Slice 3 is completed and should be treated as the browser blank-viewport detection baseline.
+- Slice 4 is runtime-fix-only work and is not warranted until Slice 3 or an equivalent regression exposes a blanking failure. Slice 5 is the next planned implementation slice unless a blank viewport failure is found.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -53,7 +54,7 @@ Current execution state:
 
 ## Slice 3: Blank Viewport Detection Harness
 
-- Status: Planned.
+- Status: Completed. `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal browser detectors for rendered viewport coverage, duplicate visual indexes, and uncovered viewport bands in the Vue base grid path.
 - Objective: add an automated browser detector that fails when the rendered viewport has visible blank gaps during scroll.
 - Affected packages/files:
   - `e2e/sandbox-grid.spec.ts`
@@ -71,7 +72,7 @@ Current execution state:
 
 ## Slice 4: Blank Viewport Prevention Fixes
 
-- Status: Planned. This slice should only make runtime fixes for failures proven by Slice 3 or by an equivalent focused regression.
+- Status: Deferred. This slice should only make runtime fixes for failures proven by Slice 3 or by an equivalent focused regression; no runtime fix was warranted by the completed Slice 3 detector baseline.
 - Objective: fix any blank viewport failures found by Slice 3 without changing the public virtualization API.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`

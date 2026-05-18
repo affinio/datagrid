@@ -119,8 +119,8 @@ Orchestration, sandbox, tests, and benchmarks:
 
 ### Blocker
 
-1. **No automated enterprise blank-viewport gate.**
-   Existing e2e coverage in `e2e/sandbox-grid.spec.ts` verifies that rendered rows exist after a long scroll, but it does not prove that fast scroll, touch momentum, server latency, cache replacement, zoom, resize, or wide horizontal scroll never expose blank gaps. This is the top blocker for enterprise readiness because the primary user expectation is stable visual continuity.
+1. **Automated blank-viewport gating is started but not enterprise-complete.**
+   `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal Vue base-grid detectors for rendered viewport coverage, duplicate visual indexes, and uncovered viewport bands. Remaining enterprise gaps are touch momentum, server latency, cache replacement, zoom, resize, and wider horizontal stress coverage.
 
 2. **No CI budget for placeholder exposure under server latency.**
    `dataSourceBackedRowModel.ts` has placeholder rows and prefetching, but there is no enforced budget for how long placeholders remain visible during fast scroll or cache refresh. `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` also identifies server-backed blank/loading measurement as remaining work.
@@ -252,6 +252,7 @@ What blocks the target:
 
 ### Phase 2: Scroll And Overscan Hardening
 
+- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection is covered in `e2e/sandbox-grid.spec.ts`; remaining Phase 2 work is server/touch/latency variants, overscan decision contracts, churn telemetry, and runtime telemetry.
 - Add blank-viewport detection in browser tests and optional runtime telemetry.
 - Record overscan decisions: base overscan, adaptive overscan, velocity, direction, touch mode, rendered row count, and rendered column count.
 - Add mount/unmount churn telemetry for rows and cells.
@@ -345,7 +346,7 @@ What blocks the target:
 
 ## Prioritized Implementation Slices
 
-1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll.
+1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll. Status: started with Vue base-grid fast vertical and horizontal detector coverage in `e2e/sandbox-grid.spec.ts`; server-backed and touch/device variants remain.
 2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
 4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.

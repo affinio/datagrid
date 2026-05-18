@@ -17,6 +17,30 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     expect(total).toBeGreaterThan(rendered)
   })
 
+  test("vue base grid does not expose blank vertical viewport bands during fast scroll", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=50000")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    await assertNoBlankVerticalViewport(page)
+    await runFastVerticalDetectionSession(page, viewport)
+    await assertNoBlankVerticalViewport(page)
+  })
+
+  test("vue base grid does not expose blank horizontal viewport bands with column virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=10000")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await selectGridOption(page, "Cols", "32")
+    await expect.poll(async () => totalColumns(page)).toBeGreaterThanOrEqual(32)
+
+    await assertNoBlankHorizontalViewport(page)
+    await runFastHorizontalDetectionSession(page, viewport)
+    await assertNoBlankHorizontalViewport(page)
+  })
+
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
     await gotoSandboxRoute(page, "/core/base-grid")
 
@@ -662,6 +686,32 @@ async function runLongVerticalSession(viewport: Locator): Promise<void> {
   })
 }
 
+async function runFastVerticalDetectionSession(page: Page, viewport: Locator): Promise<void> {
+  const maxTop = await viewport.evaluate(element => Math.max(0, element.scrollHeight - element.clientHeight))
+  expect(maxTop).toBeGreaterThan(0)
+  const positions = [0.12, 0.35, 0.68, 0.92, 0.54, 0.18, 0.76, 0.98]
+  for (const ratio of positions) {
+    await setViewportScroll(viewport, { top: Math.round(maxTop * ratio), left: await viewportScrollLeft(viewport) })
+    await page.waitForTimeout(32)
+    await assertNoBlankVerticalViewport(page)
+  }
+}
+
+async function runFastHorizontalDetectionSession(page: Page, viewport: Locator): Promise<void> {
+  const maxLeft = await viewport.evaluate(element => Math.max(0, element.scrollWidth - element.clientWidth))
+  expect(maxLeft).toBeGreaterThan(0)
+  const positions = [0.16, 0.42, 0.74, 0.96, 0.58, 0.22, 0.86, 1]
+  for (const ratio of positions) {
+    await setViewportScroll(viewport, { top: await viewportScrollTop(viewport), left: Math.round(maxLeft * ratio) })
+    await page.waitForTimeout(32)
+    await assertNoBlankHorizontalViewport(page)
+  }
+}
+
+async function selectGridOption(page: Page, label: string, option: string): Promise<void> {
+  await page.getByLabel(label).selectOption({ label: option })
+}
+
 async function dispatchTouchPan(page: Page, viewport: Locator, distanceY: number): Promise<void> {
   await viewport.scrollIntoViewIfNeeded()
   const box = await viewport.evaluate(element => {
@@ -921,6 +971,12 @@ async function totalRows(page: Page): Promise<number> {
   return match ? Number(match[1]) : 0
 }
 
+async function totalColumns(page: Page): Promise<number> {
+  const raw = (await metaSpan(page, "Columns:").textContent())?.trim() ?? ""
+  const match = raw.match(/Columns:\s*(\d+)/)
+  return match ? Number(match[1]) : 0
+}
+
 async function renderedRows(page: Page): Promise<number> {
   const raw = (await page.locator(".card__footer").textContent())?.trim() ?? ""
   const match = raw.match(/Rendered\s+(\d+)\s*\/\s*(\d+)\s*rows/i)
@@ -934,4 +990,173 @@ async function serverViewportLoadingRatio(page: Page): Promise<number> {
     .getAttribute("data-ratio")
   const value = Number(raw)
   return Number.isFinite(value) ? value : 1
+}
+
+async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
+  const result = await page.evaluate(() => {
+    const findVisibleElement = (selector: string): HTMLElement | null => {
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none"
+        ) {
+          return element
+        }
+      }
+      return null
+    }
+    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    if (!viewport) {
+      return { ok: false, reason: "missing viewport" }
+    }
+    const viewportRect = viewport.getBoundingClientRect()
+    const top = viewportRect.top
+    const bottom = viewportRect.top + viewport.clientHeight
+    const rows = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+      .map(row => {
+        const rect = row.getBoundingClientRect()
+        return {
+          rowIndex: row.getAttribute("data-row-index") ?? "",
+          top: rect.top,
+          bottom: rect.bottom,
+          visibleTop: Math.max(rect.top, top),
+          visibleBottom: Math.min(rect.bottom, bottom),
+        }
+      })
+      .filter(row => row.visibleBottom - row.visibleTop > 1)
+      .sort((left, right) => left.visibleTop - right.visibleTop)
+
+    const rowIndexes = rows.map(row => row.rowIndex)
+    const duplicateRowIndexes = rowIndexes.filter((rowIndex, index) => rowIndexes.indexOf(rowIndex) !== index)
+    const gaps: Array<{ from: number; to: number; size: number; reason: string }> = []
+    const tolerance = 2
+    if (!rows.length) {
+      gaps.push({ from: top, to: bottom, size: bottom - top, reason: "no rows" })
+    } else {
+      let coveredBottom = rows[0]!.visibleTop
+      if (coveredBottom > top + tolerance) {
+        gaps.push({ from: top, to: coveredBottom, size: coveredBottom - top, reason: "top" })
+      }
+      for (const row of rows) {
+        if (row.visibleTop > coveredBottom + tolerance) {
+          gaps.push({ from: coveredBottom, to: row.visibleTop, size: row.visibleTop - coveredBottom, reason: "between rows" })
+        }
+        coveredBottom = Math.max(coveredBottom, row.visibleBottom)
+      }
+      if (coveredBottom < bottom - tolerance) {
+        gaps.push({ from: coveredBottom, to: bottom, size: bottom - coveredBottom, reason: "bottom" })
+      }
+    }
+
+    return {
+      ok: gaps.length === 0 && duplicateRowIndexes.length === 0,
+      renderedRows: rows.length,
+      rowIndexes,
+      duplicateRowIndexes,
+      gaps,
+      viewport: { top, bottom, scrollTop: viewport.scrollTop, clientHeight: viewport.clientHeight },
+    }
+  })
+
+  expect(result, JSON.stringify(result, null, 2)).toMatchObject({
+    ok: true,
+    duplicateRowIndexes: [],
+    gaps: [],
+  })
+  expect(result.renderedRows).toBeGreaterThan(0)
+}
+
+async function assertNoBlankHorizontalViewport(page: Page): Promise<void> {
+  const result = await page.evaluate(() => {
+    const findVisibleElement = (selector: string): HTMLElement | null => {
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none"
+        ) {
+          return element
+        }
+      }
+      return null
+    }
+    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    if (!viewport) {
+      return { ok: false, reason: "missing viewport" }
+    }
+    const viewportRect = viewport.getBoundingClientRect()
+    const left = viewportRect.left
+    const right = viewportRect.left + viewport.clientWidth
+    const top = viewportRect.top
+    const bottom = viewportRect.top + viewport.clientHeight
+    const row = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+      .find(candidate => {
+        const rect = candidate.getBoundingClientRect()
+        return rect.bottom > top + 1 && rect.top < bottom - 1
+      })
+    if (!row) {
+      return { ok: false, reason: "missing visible row" }
+    }
+
+    const cells = Array.from(row.querySelectorAll<HTMLElement>(".grid-cell[data-column-index]"))
+      .map(cell => {
+        const rect = cell.getBoundingClientRect()
+        return {
+          columnIndex: cell.getAttribute("data-column-index") ?? "",
+          columnKey: cell.getAttribute("data-column-key") ?? "",
+          left: rect.left,
+          right: rect.right,
+          visibleLeft: Math.max(rect.left, left),
+          visibleRight: Math.min(rect.right, right),
+        }
+      })
+      .filter(cell => cell.visibleRight - cell.visibleLeft > 1)
+      .sort((leftCell, rightCell) => leftCell.visibleLeft - rightCell.visibleLeft)
+
+    const columnIndexes = cells.map(cell => cell.columnIndex)
+    const duplicateColumnIndexes = columnIndexes.filter((columnIndex, index) => columnIndexes.indexOf(columnIndex) !== index)
+    const gaps: Array<{ from: number; to: number; size: number; reason: string }> = []
+    const tolerance = 2
+    if (!cells.length) {
+      gaps.push({ from: left, to: right, size: right - left, reason: "no cells" })
+    } else {
+      let coveredRight = cells[0]!.visibleLeft
+      if (coveredRight > left + tolerance) {
+        gaps.push({ from: left, to: coveredRight, size: coveredRight - left, reason: "left" })
+      }
+      for (const cell of cells) {
+        if (cell.visibleLeft > coveredRight + tolerance) {
+          gaps.push({ from: coveredRight, to: cell.visibleLeft, size: cell.visibleLeft - coveredRight, reason: "between cells" })
+        }
+        coveredRight = Math.max(coveredRight, cell.visibleRight)
+      }
+      if (coveredRight < right - tolerance) {
+        gaps.push({ from: coveredRight, to: right, size: right - coveredRight, reason: "right" })
+      }
+    }
+
+    return {
+      ok: gaps.length === 0 && duplicateColumnIndexes.length === 0,
+      renderedCells: cells.length,
+      rowIndex: row.getAttribute("data-row-index") ?? "",
+      columnIndexes,
+      duplicateColumnIndexes,
+      gaps,
+      viewport: { left, right, scrollLeft: viewport.scrollLeft, clientWidth: viewport.clientWidth },
+    }
+  })
+
+  expect(result, JSON.stringify(result, null, 2)).toMatchObject({
+    ok: true,
+    duplicateColumnIndexes: [],
+    gaps: [],
+  })
+  expect(result.renderedCells).toBeGreaterThan(0)
 }
