@@ -81,10 +81,10 @@ describe("WorldMapDemo", () => {
     const wrapper = mount(WorldMapDemo)
     await flushUi()
 
-    const paths = wrapper.findAll(".world-map-demo__country")
+    const paths = wrapper.findAll(".world-map-svg__country")
     const firstPath = wrapper.find('[data-country-id="AA"]')
     const secondPath = wrapper.find('[data-country-id="BB"]')
-    const mapLayer = wrapper.find(".world-map-demo__map-layer")
+    const mapLayer = wrapper.find(".world-map-svg__map-layer")
 
     expect(firstPath.exists()).toBe(true)
     expect(paths).toHaveLength(2)
@@ -116,7 +116,7 @@ describe("WorldMapDemo", () => {
       clientX: 100,
       clientY: 100,
     })
-    dispatchPointerLikeEvent(wrapper.find(".world-map-demo__svg").element, "pointerup", {
+    dispatchPointerLikeEvent(wrapper.find(".world-map-svg__svg").element, "pointerup", {
       button: 0,
       pointerId: 1,
       clientX: 100,
@@ -145,7 +145,7 @@ describe("WorldMapDemo", () => {
     await secondPath.trigger("click")
     expect(wrapper.text()).toContain("Country B (BB)")
 
-    await wrapper.find(".world-map-demo__svg").trigger("click")
+    await wrapper.find(".world-map-svg__svg").trigger("click")
     expect(wrapper.text()).toContain("Selected")
     expect(wrapper.text()).toContain("none")
 

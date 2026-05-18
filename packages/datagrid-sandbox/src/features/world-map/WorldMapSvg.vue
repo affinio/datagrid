@@ -1,0 +1,461 @@
+<template>
+  <section class="world-map-svg" :class="{ 'world-map-svg--panning': isPanning }">
+    <div v-if="enableZoom" class="world-map-svg__controls" aria-label="World map view controls">
+      <button type="button" @click="zoomOut">Zoom out</button>
+      <button type="button" @click="zoomIn">Zoom in</button>
+      <button type="button" @click="resetView">Reset view</button>
+    </div>
+
+    <div class="world-map-svg__stage">
+      <svg
+        class="world-map-svg__svg"
+        :viewBox="`0 0 ${resolvedWidth} ${resolvedHeight}`"
+        role="img"
+        aria-label="World map"
+        @click="handleSvgClick"
+        @pointerdown="handlePointerDown"
+        @pointermove="handlePointerMove"
+        @pointerup="handlePointerUp"
+        @pointercancel="handlePointerCancel"
+        @wheel="handleWheel"
+      >
+        <rect
+          class="world-map-svg__ocean"
+          x="0"
+          y="0"
+          :width="resolvedWidth"
+          :height="resolvedHeight"
+        />
+        <g class="world-map-svg__map-layer" :transform="mapTransform">
+          <path
+            v-for="feature in paths"
+            :key="feature.id"
+            class="world-map-svg__country"
+            :data-country-id="feature.id"
+            :data-country-name="feature.name"
+            :class="{
+              'world-map-svg__country--hovered': feature.id === hoveredCountryId,
+              'world-map-svg__country--selected': feature.id === resolvedSelectedCountryId,
+            }"
+            :d="feature.path"
+            tabindex="0"
+            @mouseenter="handleCountryMouseEnter(feature)"
+            @mouseleave="handleCountryMouseLeave(feature)"
+            @click.stop="handleCountryClick($event, feature)"
+            @keydown.enter.prevent="selectCountry(feature)"
+            @keydown.space.prevent="selectCountry(feature)"
+          />
+        </g>
+      </svg>
+    </div>
+  </section>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from "vue"
+import type { WorldMapCountryId, WorldMapPathFeature } from "@affino/world-map-core"
+
+const DEFAULT_WIDTH = 960
+const DEFAULT_HEIGHT = 480
+const DEFAULT_MIN_ZOOM = 1
+const DEFAULT_MAX_ZOOM = 8
+const ZOOM_STEP = 1.25
+const DRAG_THRESHOLD_PX = 3
+
+interface WorldMapViewState {
+  zoom: number
+  panX: number
+  panY: number
+}
+
+const props = withDefaults(defineProps<{
+  paths: WorldMapPathFeature[]
+  width?: number
+  height?: number
+  selectedCountryId?: WorldMapCountryId | null
+  enableZoom?: boolean
+  enablePan?: boolean
+  minZoom?: number
+  maxZoom?: number
+}>(), {
+  width: DEFAULT_WIDTH,
+  height: DEFAULT_HEIGHT,
+  selectedCountryId: undefined,
+  enableZoom: true,
+  enablePan: true,
+  minZoom: DEFAULT_MIN_ZOOM,
+  maxZoom: DEFAULT_MAX_ZOOM,
+})
+
+const emit = defineEmits<{
+  "update:selectedCountryId": [countryId: WorldMapCountryId | null]
+  "country-click": [feature: WorldMapPathFeature]
+  "country-hover": [feature: WorldMapPathFeature]
+  "country-leave": [feature: WorldMapPathFeature]
+  "view-change": [state: WorldMapViewState]
+}>()
+
+const hoveredCountryId = ref<WorldMapCountryId | null>(null)
+const internalSelectedCountryId = ref<WorldMapCountryId | null>(null)
+const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const isPanning = ref(false)
+const hasDragged = ref(false)
+const suppressNextClick = ref(false)
+const panStart = ref({
+  pointerId: -1,
+  clientX: 0,
+  clientY: 0,
+  panX: 0,
+  panY: 0,
+  countryId: null as WorldMapCountryId | null,
+})
+
+const resolvedWidth = computed(() => props.width)
+const resolvedHeight = computed(() => props.height)
+const resolvedMinZoom = computed(() => Math.max(0.1, props.minZoom))
+const resolvedMaxZoom = computed(() => Math.max(resolvedMinZoom.value, props.maxZoom))
+const resolvedSelectedCountryId = computed(() => (
+  props.selectedCountryId === undefined ? internalSelectedCountryId.value : props.selectedCountryId
+))
+const mapTransform = computed(() => `translate(${panX.value} ${panY.value}) scale(${zoom.value})`)
+
+onMounted(() => {
+  window.addEventListener("keydown", handleWindowKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleWindowKeydown)
+})
+
+function handleCountryMouseEnter(feature: WorldMapPathFeature): void {
+  hoveredCountryId.value = feature.id
+  emit("country-hover", feature)
+}
+
+function handleCountryMouseLeave(feature: WorldMapPathFeature): void {
+  hoveredCountryId.value = null
+  emit("country-leave", feature)
+}
+
+function handleCountryClick(event: MouseEvent, feature: WorldMapPathFeature): void {
+  if (consumeSuppressedClick()) {
+    event.stopPropagation()
+    return
+  }
+
+  selectCountry(feature)
+}
+
+function selectCountry(feature: WorldMapPathFeature): void {
+  setSelectedCountryId(resolvedSelectedCountryId.value === feature.id ? null : feature.id)
+  emit("country-click", feature)
+}
+
+function handleSvgClick(): void {
+  if (consumeSuppressedClick()) {
+    return
+  }
+
+  clearSelectedCountry()
+}
+
+function clearSelectedCountry(): void {
+  setSelectedCountryId(null)
+}
+
+function setSelectedCountryId(countryId: WorldMapCountryId | null): void {
+  if (props.selectedCountryId === undefined) {
+    internalSelectedCountryId.value = countryId
+  }
+  emit("update:selectedCountryId", countryId)
+}
+
+function handleWindowKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    clearSelectedCountry()
+  }
+}
+
+function zoomIn(): void {
+  if (!props.enableZoom) {
+    return
+  }
+
+  setZoom(zoom.value * ZOOM_STEP, {
+    x: resolvedWidth.value / 2,
+    y: resolvedHeight.value / 2,
+  })
+}
+
+function zoomOut(): void {
+  if (!props.enableZoom) {
+    return
+  }
+
+  setZoom(zoom.value / ZOOM_STEP, {
+    x: resolvedWidth.value / 2,
+    y: resolvedHeight.value / 2,
+  })
+}
+
+function resetView(): void {
+  zoom.value = 1
+  panX.value = 0
+  panY.value = 0
+  emitViewChange()
+}
+
+function handleWheel(event: WheelEvent): void {
+  if (!props.enableZoom) {
+    return
+  }
+
+  event.preventDefault()
+  const center = svgPointFromClient(event.currentTarget as SVGSVGElement, event.clientX, event.clientY)
+  const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+  setZoom(zoom.value * factor, center)
+}
+
+function handlePointerDown(event: PointerEvent): void {
+  if (!props.enablePan || event.button !== 0) {
+    return
+  }
+
+  isPanning.value = true
+  hasDragged.value = false
+  panStart.value = {
+    pointerId: event.pointerId,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    panX: panX.value,
+    panY: panY.value,
+    countryId: findEventCountryId(event),
+  }
+  ;(event.currentTarget as SVGSVGElement).setPointerCapture?.(event.pointerId)
+}
+
+function handlePointerMove(event: PointerEvent): void {
+  if (!props.enablePan || !isPanning.value || event.pointerId !== panStart.value.pointerId) {
+    return
+  }
+
+  const clientDeltaX = event.clientX - panStart.value.clientX
+  const clientDeltaY = event.clientY - panStart.value.clientY
+  if (!hasDragged.value && Math.hypot(clientDeltaX, clientDeltaY) < DRAG_THRESHOLD_PX) {
+    return
+  }
+
+  const svgDelta = svgDeltaFromClient(event.currentTarget as SVGSVGElement, clientDeltaX, clientDeltaY)
+  hasDragged.value = true
+  panX.value = panStart.value.panX + svgDelta.x
+  panY.value = panStart.value.panY + svgDelta.y
+  emitViewChange()
+}
+
+function handlePointerUp(event: PointerEvent): void {
+  finishPan(event)
+}
+
+function handlePointerCancel(event: PointerEvent): void {
+  finishPan(event)
+}
+
+function finishPan(event: PointerEvent): void {
+  if (!isPanning.value || event.pointerId !== panStart.value.pointerId) {
+    return
+  }
+
+  if (hasDragged.value) {
+    suppressBrowserClick()
+  } else if (panStart.value.countryId !== null) {
+    const feature = props.paths.find((pathFeature) => pathFeature.id === panStart.value.countryId)
+    if (feature !== undefined) {
+      selectCountry(feature)
+    }
+    suppressBrowserClick()
+  }
+
+  isPanning.value = false
+  ;(event.currentTarget as SVGSVGElement).releasePointerCapture?.(event.pointerId)
+}
+
+function setZoom(nextZoom: number, center: { x: number; y: number }): void {
+  const clampedZoom = clamp(nextZoom, resolvedMinZoom.value, resolvedMaxZoom.value)
+  if (clampedZoom === zoom.value) {
+    return
+  }
+
+  const worldX = (center.x - panX.value) / zoom.value
+  const worldY = (center.y - panY.value) / zoom.value
+  panX.value = center.x - worldX * clampedZoom
+  panY.value = center.y - worldY * clampedZoom
+  zoom.value = clampedZoom
+  emitViewChange()
+}
+
+function svgPointFromClient(svg: SVGSVGElement, clientX: number, clientY: number): { x: number; y: number } {
+  const rect = svg.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    return {
+      x: resolvedWidth.value / 2,
+      y: resolvedHeight.value / 2,
+    }
+  }
+
+  return {
+    x: ((clientX - rect.left) / rect.width) * resolvedWidth.value,
+    y: ((clientY - rect.top) / rect.height) * resolvedHeight.value,
+  }
+}
+
+function svgDeltaFromClient(svg: SVGSVGElement, deltaX: number, deltaY: number): { x: number; y: number } {
+  const rect = svg.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    return { x: deltaX, y: deltaY }
+  }
+
+  return {
+    x: (deltaX / rect.width) * resolvedWidth.value,
+    y: (deltaY / rect.height) * resolvedHeight.value,
+  }
+}
+
+function suppressBrowserClick(): void {
+  suppressNextClick.value = true
+  window.setTimeout(() => {
+    suppressNextClick.value = false
+  }, 0)
+}
+
+function consumeSuppressedClick(): boolean {
+  if (!suppressNextClick.value) {
+    return false
+  }
+
+  suppressNextClick.value = false
+  return true
+}
+
+function findEventCountryId(event: PointerEvent): WorldMapCountryId | null {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return null
+  }
+
+  return target.closest<SVGPathElement>(".world-map-svg__country")?.dataset.countryId ?? null
+}
+
+function emitViewChange(): void {
+  emit("view-change", {
+    zoom: zoom.value,
+    panX: panX.value,
+    panY: panY.value,
+  })
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+</script>
+
+<style scoped>
+.world-map-svg {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.world-map-svg__controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.world-map-svg__controls button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2937;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.world-map-svg__controls button:hover {
+  background: #f8fafc;
+}
+
+.world-map-svg__stage {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #eef5f8;
+}
+
+.world-map-svg__svg {
+  display: block;
+  width: min(100%, 960px);
+  min-width: 720px;
+  height: auto;
+  margin: 0 auto;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+.world-map-svg--panning .world-map-svg__svg {
+  cursor: grabbing;
+}
+
+.world-map-svg__ocean {
+  fill: #e6f0f4;
+  pointer-events: none;
+}
+
+.world-map-svg__country {
+  fill: #d6d3c8;
+  stroke: #ffffff;
+  stroke-width: 0.7;
+  outline: none;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  transition: fill 120ms ease, stroke 120ms ease;
+}
+
+.world-map-svg__country:hover,
+.world-map-svg__country--hovered {
+  fill: #b8c7d4;
+}
+
+.world-map-svg__country--selected {
+  fill: #6f8ea7;
+  stroke: #334155;
+}
+
+.world-map-svg__country--selected:hover,
+.world-map-svg__country--selected.world-map-svg__country--hovered {
+  fill: #587a96;
+  stroke: #1f2937;
+}
+
+.world-map-svg__country:focus,
+.world-map-svg__country:focus-visible {
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .world-map-svg__controls {
+    justify-content: flex-start;
+  }
+}
+</style>
