@@ -26,10 +26,23 @@
       :max-zoom="8"
       @country-hover="handleCountryHover"
       @country-leave="handleCountryLeave"
-      @marker-click="handleMarkerInteraction"
-      @marker-hover="handleMarkerInteraction"
+      @marker-click="handleMarkerClick"
+      @marker-hover="handleMarkerHover"
+      @marker-leave="handleMarkerLeave"
       @view-change="viewState = $event"
     />
+
+    <aside
+      v-if="geoTagInteraction !== null"
+      class="world-map-demo__geo-tag"
+      :class="`world-map-demo__geo-tag--${geoTagVariant}`"
+      :style="geoTagStyle"
+      aria-label="World map geo tag"
+    >
+      <span>Geo tag</span>
+      <strong>{{ geoTagLabel }}</strong>
+      <small>{{ geoTagCoordinates }}</small>
+    </aside>
 
     <aside class="world-map-demo__debug" aria-label="World map debug state">
       <div>
@@ -61,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { createWorldMapPaths } from "@affino/world-map-core"
 import type {
   WorldMapCountryFeature,
@@ -116,7 +129,8 @@ const pathFeatures = ref<WorldMapPathFeature[]>([])
 const hoveredCountryId = ref<WorldMapCountryId | null>(null)
 const selectedCountryId = ref<WorldMapCountryId | null>(null)
 const selectedMarkerId = ref<string | null>(null)
-const markerAnchor = ref<WorldMapMarkerInteraction | null>(null)
+const hoveredMarkerInteraction = ref<WorldMapMarkerInteraction | null>(null)
+const selectedMarkerInteraction = ref<WorldMapMarkerInteraction | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref<string | null>(null)
 const viewState = ref({
@@ -137,17 +151,44 @@ const selectedLabel = computed(() => formatCountryLabel(countryById.value.get(se
 const selectedMarkerLabel = computed(() => formatMarkerLabel(markerById.value.get(selectedMarkerId.value ?? "")))
 const zoomLabel = computed(() => viewState.value.zoom.toFixed(2))
 const panLabel = computed(() => `${Math.round(viewState.value.panX)}, ${Math.round(viewState.value.panY)}`)
+const geoTagInteraction = computed(() => selectedMarkerInteraction.value ?? hoveredMarkerInteraction.value)
 const markerAnchorLabel = computed(() => {
-  if (markerAnchor.value === null) {
+  if (geoTagInteraction.value === null) {
     return "none"
   }
 
-  const { marker, clientPoint, anchorRect } = markerAnchor.value
+  const { marker, clientPoint, anchorRect } = geoTagInteraction.value
   return `${marker.label ?? marker.id}: ${Math.round(clientPoint.x)}, ${Math.round(clientPoint.y)} (${Math.round(anchorRect.width)}x${Math.round(anchorRect.height)})`
 })
+const geoTagStyle = computed(() => {
+  const interaction = geoTagInteraction.value
+  if (interaction === null) {
+    return undefined
+  }
+
+  return {
+    left: `${Math.round(interaction.clientPoint.x)}px`,
+    top: `${Math.round(interaction.anchorRect.y - 8)}px`,
+  }
+})
+const geoTagLabel = computed(() => {
+  const marker = geoTagInteraction.value?.marker
+  return marker === undefined ? "" : marker.label ?? marker.id
+})
+const geoTagCoordinates = computed(() => {
+  const marker = geoTagInteraction.value?.marker
+  return marker === undefined ? "" : `${marker.lat.toFixed(4)}, ${marker.lon.toFixed(4)}`
+})
+const geoTagVariant = computed(() => geoTagInteraction.value?.marker.variant ?? "default")
 
 onMounted(() => {
   void loadMap()
+})
+
+watch(selectedMarkerId, (markerId) => {
+  if (markerId === null) {
+    selectedMarkerInteraction.value = null
+  }
 })
 
 async function loadMap(): Promise<void> {
@@ -183,8 +224,18 @@ function handleCountryLeave(feature: WorldMapPathFeature): void {
   }
 }
 
-function handleMarkerInteraction(interaction: WorldMapMarkerInteraction): void {
-  markerAnchor.value = interaction
+function handleMarkerClick(interaction: WorldMapMarkerInteraction): void {
+  selectedMarkerInteraction.value = selectedMarkerId.value === interaction.marker.id ? interaction : null
+}
+
+function handleMarkerHover(interaction: WorldMapMarkerInteraction): void {
+  hoveredMarkerInteraction.value = interaction
+}
+
+function handleMarkerLeave(interaction: WorldMapMarkerInteraction): void {
+  if (hoveredMarkerInteraction.value?.marker.id === interaction.marker.id) {
+    hoveredMarkerInteraction.value = null
+  }
 }
 
 function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
@@ -231,6 +282,65 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
 
 .world-map-demo__state--error {
   color: #991b1b;
+}
+
+.world-map-demo__geo-tag {
+  position: fixed;
+  z-index: 40;
+  display: grid;
+  min-width: 132px;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  color: #111827;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+
+.world-map-demo__geo-tag::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid #d1d5db;
+  border-bottom: 1px solid #d1d5db;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.world-map-demo__geo-tag span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.world-map-demo__geo-tag strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.world-map-demo__geo-tag small {
+  color: #475569;
+  font-size: 11px;
+}
+
+.world-map-demo__geo-tag--success {
+  border-color: #86efac;
+}
+
+.world-map-demo__geo-tag--warning {
+  border-color: #fcd34d;
+}
+
+.world-map-demo__geo-tag--muted {
+  border-color: #cbd5e1;
 }
 
 .world-map-demo__debug {

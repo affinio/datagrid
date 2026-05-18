@@ -94,6 +94,14 @@ describe("WorldMapDemo", () => {
     expect(wrapper.text()).toContain("1.00")
     expect(wrapper.text()).toContain("Pan")
     expect(wrapper.text()).toContain("0, 0")
+    expect(wrapper.findAll(".world-map-svg__marker")).toHaveLength(3)
+
+    await wrapper.find('[data-marker-id="london"]').trigger("click")
+    await nextTick()
+    expect(wrapper.text()).toContain("Marker")
+    expect(wrapper.text()).toContain("London (london)")
+    expect(wrapper.find(".world-map-demo__geo-tag").text()).toContain("Geo tag")
+    expect(wrapper.find(".world-map-demo__geo-tag").text()).toContain("London")
 
     await findButtonByText(wrapper, "Zoom in")?.trigger("click")
     await nextTick()
