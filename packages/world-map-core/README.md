@@ -49,6 +49,21 @@ const point = projectWorldMapPosition(
 
 The default projection is `equirectangular`.
 
+## Path Data
+
+```ts
+import { createWorldMapPath } from "@affino/world-map-core"
+
+const pathFeature = createWorldMapPath(feature, {
+  viewport: { width: 360, height: 180 },
+  precision: 2,
+})
+
+// { id, name, iso2, iso3, path, properties }
+```
+
+`Polygon` and `MultiPolygon` rings are projected with the selected projection and emitted as SVG path data. Empty rings are skipped.
+
 ## Non-Goals For v0.1
 
 - No renderer components.

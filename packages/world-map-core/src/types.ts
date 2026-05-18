@@ -22,6 +22,12 @@ export interface ProjectWorldMapPositionOptions {
   projection?: WorldMapProjectionType
 }
 
+export interface CreateWorldMapPathOptions {
+  viewport: WorldMapViewport
+  projection?: WorldMapProjectionType
+  precision?: number
+}
+
 export interface WorldMapPolygonGeometry {
   type: "Polygon"
   coordinates: WorldMapPosition[][]
@@ -42,5 +48,14 @@ export interface WorldMapCountryFeature {
   iso2?: string
   iso3?: string
   geometry: WorldMapGeometry
+  properties?: Record<string, unknown>
+}
+
+export interface WorldMapPathFeature {
+  id: WorldMapCountryId
+  name: string
+  iso2?: string
+  iso3?: string
+  path: string
   properties?: Record<string, unknown>
 }

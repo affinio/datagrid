@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest"
 import {
+  createWorldMapPath,
+  createWorldMapPaths,
   createWorldMapCore,
   projectWorldMapPosition,
 } from "@affino/world-map-core"
 import type {
+  CreateWorldMapPathOptions,
   ProjectWorldMapPositionOptions,
   WorldMapCountryFeature,
   WorldMapCountryId,
   WorldMapGeometry,
+  WorldMapPathFeature,
   WorldMapPosition,
 } from "@affino/world-map-core"
 
@@ -96,5 +100,183 @@ describe("world-map-core", () => {
       viewport: { width: 720, height: 360 },
       projection: "equirectangular",
     })
+  })
+
+  it("creates SVG path data for polygon geometry", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "polygon",
+      name: "Polygon",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: -180, lat: 90 },
+          { lon: 0, lat: 0 },
+          { lon: 180, lat: -90 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+    }).path).toBe("M 0 0 L 180 90 L 360 180 Z")
+  })
+
+  it("creates SVG path data for multipolygon geometry", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "multipolygon",
+      name: "MultiPolygon",
+      geometry: {
+        type: "MultiPolygon",
+        coordinates: [
+          [[
+            { lon: -180, lat: 90 },
+            { lon: 0, lat: 0 },
+          ]],
+          [[
+            { lon: 0, lat: 0 },
+            { lon: 180, lat: -90 },
+          ]],
+        ],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+    }).path).toBe("M 0 0 L 180 90 Z M 180 90 L 360 180 Z")
+  })
+
+  it("rounds projected path coordinates to the requested precision", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "precision",
+      name: "Precision",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[{ lon: 1, lat: 1 }]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 100, height: 100 },
+      precision: 2,
+    }).path).toBe("M 50.28 49.44 Z")
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 100, height: 100 },
+      precision: 0,
+    }).path).toBe("M 50 49 Z")
+  })
+
+  it("skips empty rings", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "empty",
+      name: "Empty",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [],
+          [{ lon: 0, lat: 0 }],
+        ],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+    }).path).toBe("M 180 90 Z")
+
+    expect(createWorldMapPath({
+      ...feature,
+      geometry: {
+        type: "Polygon",
+        coordinates: [[]],
+      },
+    }, {
+      viewport: { width: 360, height: 180 },
+    }).path).toBe("")
+  })
+
+  it("preserves feature metadata on path features", () => {
+    const properties = { region: "Europe" }
+    const feature: WorldMapCountryFeature = {
+      id: "FR",
+      name: "France",
+      iso2: "FR",
+      iso3: "FRA",
+      properties,
+      geometry: {
+        type: "Polygon",
+        coordinates: [[{ lon: 0, lat: 0 }]],
+      },
+    }
+
+    const pathFeature: WorldMapPathFeature = createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+    })
+
+    expect(pathFeature).toEqual({
+      id: "FR",
+      name: "France",
+      iso2: "FR",
+      iso3: "FRA",
+      path: "M 180 90 Z",
+      properties,
+    })
+  })
+
+  it("does not mutate input features or path options", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "immutable",
+      name: "Immutable",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[{ lon: 0, lat: 0 }]],
+      },
+      properties: { stable: true },
+    }
+    const options: CreateWorldMapPathOptions = {
+      viewport: { width: 360, height: 180 },
+      projection: "equirectangular",
+      precision: 0,
+    }
+
+    expect(createWorldMapPath(feature, options).path).toBe("M 180 90 Z")
+    expect(feature).toEqual({
+      id: "immutable",
+      name: "Immutable",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[{ lon: 0, lat: 0 }]],
+      },
+      properties: { stable: true },
+    })
+    expect(options).toEqual({
+      viewport: { width: 360, height: 180 },
+      projection: "equirectangular",
+      precision: 0,
+    })
+  })
+
+  it("creates path features in input order", () => {
+    const features: WorldMapCountryFeature[] = [
+      {
+        id: "first",
+        name: "First",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[{ lon: -180, lat: 90 }]],
+        },
+      },
+      {
+        id: "second",
+        name: "Second",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[{ lon: 180, lat: -90 }]],
+        },
+      },
+    ]
+
+    expect(createWorldMapPaths(features, {
+      viewport: { width: 360, height: 180 },
+    }).map((feature) => feature.id)).toEqual(["first", "second"])
   })
 })
