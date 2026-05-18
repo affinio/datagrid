@@ -93,6 +93,67 @@ describe("useDataGridScrollPerfTelemetry contract", () => {
       vi.useRealTimers()
     }
   })
+
+  it("keeps virtualization event recording disabled by default", () => {
+    const telemetry = useDataGridScrollPerfTelemetry()
+
+    telemetry.recordVirtualizationEvent({
+      type: "viewport",
+      timestamp: 12,
+      totalMs: 3,
+      renderedRows: 24,
+      renderedColumns: 8,
+    })
+
+    expect(telemetry.getSnapshot().virtualizationEvents).toEqual([])
+    expect(telemetry.getSnapshot().latestVirtualizationEvent).toBeNull()
+
+    telemetry.dispose()
+  })
+
+  it("records bounded virtualization event shape when explicitly enabled", () => {
+    const telemetry = useDataGridScrollPerfTelemetry({
+      virtualizationTelemetryEnabled: true,
+      maxVirtualizationEvents: 1,
+    })
+
+    telemetry.recordVirtualizationEvent({
+      type: "viewport",
+      timestamp: 12,
+      totalMs: 3,
+      renderedRows: 24,
+      renderedColumns: 8,
+      rowStart: 40,
+      rowEnd: 63,
+      columnStart: 2,
+      columnEnd: 9,
+      rowOverscan: 8,
+      columnOverscan: 2,
+      placeholderRows: 0,
+      blankViewport: false,
+    })
+    telemetry.recordVirtualizationEvent({
+      type: "blank-viewport",
+      timestamp: 16,
+      renderedRows: 0,
+      renderedColumns: 8,
+      blankViewport: true,
+    })
+
+    expect(telemetry.getSnapshot().virtualizationEvents).toEqual([
+      expect.objectContaining({
+        type: "blank-viewport",
+        timestamp: 16,
+        renderedRows: 0,
+        renderedColumns: 8,
+        blankViewport: true,
+        longTaskFrames: 0,
+      }),
+    ])
+    expect(telemetry.getSnapshot().latestVirtualizationEvent?.type).toBe("blank-viewport")
+
+    telemetry.dispose()
+  })
 })
 
 function runFrame(queue: FrameRequestCallback[], timestamp: number): void {

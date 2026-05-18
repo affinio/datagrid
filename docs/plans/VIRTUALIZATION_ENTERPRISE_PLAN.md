@@ -19,7 +19,8 @@ Current execution state:
 - Slice 13 is completed and should be treated as the grouped/tree row-model boundary baseline.
 - Slice 14 is completed and should be treated as the resize/fractional viewport baseline.
 - Slice 15 is completed and should be treated as the virtualized accessibility mapping baseline.
-- Slice 16 is the next implementation slice.
+- Slice 16 is completed and should be treated as the virtualization telemetry extraction baseline.
+- Slice 17 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -311,7 +312,7 @@ Current execution state:
 
 ## Slice 16: Telemetry Events For Virtualization
 
-- Status: Planned.
+- Status: Completed. Optional scroll/virtualization telemetry now records bounded event payloads only when enabled, and `dgPerfTrace=1` viewport samples include rendered row/column counts, range resolve timing, row/column overscan, placeholder rows, blank-viewport flags, and benchmark extraction summaries.
 - Objective: add low-overhead telemetry for range calculation, rendered counts, overscan, blank detection, placeholder exposure, and churn.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
@@ -320,11 +321,11 @@ Current execution state:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: optional perf tracing exposes enterprise virtualization metrics without changing default rendering behavior.
-- Tests to add/update:
+- Tests added/covered:
   - Unit tests for telemetry event shape and disabled-by-default behavior.
   - Browser benchmark extraction of rendered row/column count, overscan decision, blank viewport events, placeholder exposure, and long tasks.
   - Regression test that telemetry does not add reactive scroll writes when disabled.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand perf && node scripts/bench-datagrid-enterprise-browser-frames.mjs`
+- Validation command: `pnpm --filter @affino/datagrid-orchestration exec vitest run --config vitest.config.ts src/__tests__/useDataGridScrollPerfTelemetry.contract.spec.ts && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppViewport.contract.spec.ts --testNamePattern "telemetry|overscan|coalesces" && node scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Risk level: Medium
 - Suggested commit message: `feat(datagrid): report virtualization telemetry`
 
@@ -384,8 +385,8 @@ Current execution state:
 13. Slice 13: Grouped And Tree Row Virtualization Contract (completed)
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (completed)
 15. Slice 15: Virtualized Accessibility Mapping (completed)
-16. Slice 16: Telemetry Events For Virtualization (next)
-17. Slice 17: Perf Gates For Enterprise Virtualization
+16. Slice 16: Telemetry Events For Virtualization (completed)
+17. Slice 17: Perf Gates For Enterprise Virtualization (next)
 18. Slice 18: Documentation And Support Matrix
 
 ## Execution Notes

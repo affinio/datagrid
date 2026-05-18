@@ -10,9 +10,37 @@ export interface DataGridScrollPerfSnapshot {
   avgFrameMs: number
   fps: number
   quality: DataGridScrollPerfQuality
+  virtualizationEvents: readonly DataGridVirtualizationPerfEvent[]
+  latestVirtualizationEvent: DataGridVirtualizationPerfEvent | null
+}
+
+export type DataGridVirtualizationPerfEventType =
+  | "viewport"
+  | "overscan"
+  | "blank-viewport"
+  | "placeholder-exposure"
+  | "churn"
+
+export interface DataGridVirtualizationPerfEvent {
+  type: DataGridVirtualizationPerfEventType
+  timestamp: number
+  totalMs?: number
+  renderedRows?: number
+  renderedColumns?: number
+  rowStart?: number
+  rowEnd?: number
+  columnStart?: number
+  columnEnd?: number
+  rowOverscan?: number
+  columnOverscan?: number
+  placeholderRows?: number
+  blankViewport?: boolean
+  longTaskFrames?: number
 }
 
 export interface UseDataGridScrollPerfTelemetryOptions {
+  virtualizationTelemetryEnabled?: boolean
+  maxVirtualizationEvents?: number
   resolveIdleDelayMs?: () => number
   resolveDroppedFrameThresholdMs?: () => number
   resolveLongTaskThresholdMs?: () => number
@@ -28,6 +56,7 @@ export interface UseDataGridScrollPerfTelemetryOptions {
 
 export interface UseDataGridScrollPerfTelemetryResult {
   markScrollActivity: () => void
+  recordVirtualizationEvent: (event: DataGridVirtualizationPerfEvent) => void
   getSnapshot: () => DataGridScrollPerfSnapshot
   dispose: () => void
 }
@@ -38,6 +67,7 @@ const DEFAULT_LONG_TASK_THRESHOLD_MS = 50
 const DEFAULT_GOOD_FPS_THRESHOLD = 55
 const DEFAULT_MAX_DROP_RATE = 0.08
 const DEFAULT_MIN_FRAME_SAMPLE = 20
+const DEFAULT_MAX_VIRTUALIZATION_EVENTS = 80
 
 export function useDataGridScrollPerfTelemetry(
   options: UseDataGridScrollPerfTelemetryOptions = {},
@@ -63,6 +93,7 @@ export function useDataGridScrollPerfTelemetry(
   let droppedFrames = 0
   let longTaskFrames = 0
   let totalFrameMs = 0
+  let virtualizationEvents: DataGridVirtualizationPerfEvent[] = []
 
   let snapshot: DataGridScrollPerfSnapshot = {
     active: false,
@@ -72,6 +103,8 @@ export function useDataGridScrollPerfTelemetry(
     avgFrameMs: 0,
     fps: 0,
     quality: "unknown",
+    virtualizationEvents,
+    latestVirtualizationEvent: null,
   }
 
   function emitSnapshot(): void {
@@ -117,8 +150,28 @@ export function useDataGridScrollPerfTelemetry(
       avgFrameMs,
       fps,
       quality: computeQuality(frameCount, fps, droppedFrames, longTaskFrames),
+      virtualizationEvents,
+      latestVirtualizationEvent: virtualizationEvents[virtualizationEvents.length - 1] ?? null,
     }
     emitSnapshot()
+  }
+
+  function recordVirtualizationEvent(event: DataGridVirtualizationPerfEvent): void {
+    if (options.virtualizationTelemetryEnabled !== true) {
+      return
+    }
+    const maxEvents = Math.max(
+      1,
+      normalizeInt(options.maxVirtualizationEvents ?? DEFAULT_MAX_VIRTUALIZATION_EVENTS, DEFAULT_MAX_VIRTUALIZATION_EVENTS),
+    )
+    virtualizationEvents = [
+      ...virtualizationEvents,
+      {
+        ...event,
+        longTaskFrames: event.longTaskFrames ?? longTaskFrames,
+      },
+    ].slice(-maxEvents)
+    refreshSnapshot()
   }
 
   function clearIdleTimer(): void {
@@ -196,6 +249,7 @@ export function useDataGridScrollPerfTelemetry(
 
   return {
     markScrollActivity,
+    recordVirtualizationEvent,
     getSnapshot: () => snapshot,
     dispose,
   }

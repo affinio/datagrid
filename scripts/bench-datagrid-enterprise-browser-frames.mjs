@@ -1545,6 +1545,24 @@ async function runScenario(page, sessionIndex, scenario) {
             summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
           }
         : null
+      const viewportPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "viewportRaf")
+      verticalDiagnostics.virtualizationTelemetry = {
+        sampleCount: viewportPerfSamples.length,
+        latest: viewportPerfSamples[viewportPerfSamples.length - 1] ?? null,
+        renderedRows: summarizeNumbers(viewportPerfSamples.map(sample => sample.renderedRows)),
+        renderedColumns: summarizeNumbers(viewportPerfSamples.map(sample => sample.renderedColumns)),
+        rangeResolveMs: summarizeNumbers(viewportPerfSamples.map(sample => sample.rangeResolveMs)),
+        viewportUpdateMs: summarizeNumbers(viewportPerfSamples.map(sample => sample.totalMs)),
+        rowOverscan: summarizeNumbers(viewportPerfSamples.map(sample => sample.effectiveRowOverscan)),
+        columnOverscan: summarizeNumbers(viewportPerfSamples.map(sample => sample.columnOverscan)),
+        placeholderRows: summarizeNumbers(viewportPerfSamples.map(sample => sample.placeholderRows)),
+        blankViewportCount: viewportPerfSamples
+          .filter(sample => sample?.blankViewport === 1)
+          .length,
+        longTaskCount: longTaskEntries.length,
+        placeholderExposure: readDatasourcePlaceholderDiagnostics(),
+      }
       verticalDiagnostics.longTasks = longTaskEntries.map(entry => ({
         startTime: entry.startTime,
         duration: entry.duration,
@@ -1720,6 +1738,7 @@ async function runScenario(page, sessionIndex, scenario) {
 }
 
 function aggregateRuns(runs) {
+  const verticalDiagnosticsRuns = runs.map(run => run.verticalDiagnostics).filter(Boolean)
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
   const interactionDiagnosticsRuns = runs.map(run => run.interactionDiagnostics).filter(Boolean)
   const datasourcePlaceholderRuns = runs.map(run => run.datasourcePlaceholderDiagnostics).filter(Boolean)
@@ -1749,6 +1768,18 @@ function aggregateRuns(runs) {
     peakViewportCells: stats(runs.map(run => run.telemetry.peakViewportCells)),
     cellUpdatesAttempted: stats(runs.map(run => run.interactions.cellUpdatesAttempted)),
     cellUpdatesCommitted: stats(runs.map(run => run.interactions.cellUpdatesCommitted)),
+    virtualizationTelemetry: {
+      sampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.sampleCount)),
+      renderedRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.renderedRows?.p95)),
+      renderedColumns: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.renderedColumns?.p95)),
+      rangeResolveMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.rangeResolveMs?.p95)),
+      viewportUpdateMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.viewportUpdateMs?.p95)),
+      rowOverscan: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.rowOverscan?.max)),
+      columnOverscan: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.columnOverscan?.max)),
+      placeholderRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.placeholderRows?.max)),
+      blankViewportCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.blankViewportCount)),
+      longTaskCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.longTaskCount)),
+    },
     sortDiagnostics: {
       menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),
       menuOpenToPaintMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuOpenToPaintMs)),

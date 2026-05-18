@@ -151,6 +151,16 @@ function recordDataGridPerfSample(sample: DataGridPerfSample): void {
   resolveDataGridPerfStore()?.push(sample)
 }
 
+function countPlaceholderRows<TRow>(rows: readonly DataGridRowNode<TRow>[]): number {
+  let count = 0
+  for (const row of rows) {
+    if ((row as { __placeholder?: boolean }).__placeholder === true) {
+      count += 1
+    }
+  }
+  return count
+}
+
 function resolveMaybeRef<T>(value: MaybeRef<T>): T {
   if (typeof value === "object" && value !== null && "value" in value) {
     return value.value as T
@@ -515,6 +525,7 @@ export function useDataGridAppViewport<TRow>(
   let isApplyingRuntimeViewportPosition = false
   let isSyncingRuntimeViewportPosition = false
   let pendingRuntimeViewportPosition: DataGridViewportPositionSnapshot | null = null
+  let lastViewportRangeResolveMs = 0
   const horizontalScrollIdleRevision = ref(0)
   let cachedViewportElement: HTMLElement | null = null
   let cachedViewportDimensions: ViewportDimensions | null = null
@@ -1364,6 +1375,7 @@ export function useDataGridAppViewport<TRow>(
     snapshot: ViewportSnapshot,
     commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
   ): void => {
+    lastViewportRangeResolveMs = 0
     const previousScrollLeft = viewportScrollLeft.value
     const shouldForceColumnWindow = commitOptions.forceVisibleRows || commitOptions.measureVisibleRowHeights
     if (shouldForceColumnWindow) {
@@ -1384,7 +1396,12 @@ export function useDataGridAppViewport<TRow>(
         scrollTop: snapshot.scrollTop,
         clientHeight: snapshot.clientHeight,
       }
-      if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot))) {
+      const visibleRangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+      const visibleRange = resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot)
+      if (perfTraceEnabled) {
+        lastViewportRangeResolveMs += resolveDataGridPerfNow() - visibleRangeResolveStart
+      }
+      if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(visibleRange)) {
         if (perfTraceEnabled) {
           lastVisibleRowSyncPerf = {
             mode: "retained",
@@ -1401,7 +1418,12 @@ export function useDataGridAppViewport<TRow>(
         }
       }
       else {
-        syncVisibleRows(resolveViewportRangeFromSnapshot(nextViewportSnapshot), commitOptions.forceVisibleRows)
+        const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+        const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
+        if (perfTraceEnabled) {
+          lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
+        }
+        syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
       }
     }
 
@@ -1446,16 +1468,38 @@ export function useDataGridAppViewport<TRow>(
     })
     const commitMs = resolveDataGridPerfNow() - commitStart
     const visibleRowsPerf = lastVisibleRowSyncPerf
+    const rowCount = displayRows.value.length
+    const bodyRowCount = resolveScrollableBodyRowCount()
+    const viewportRange = lastSyncedRange
+    const columnMetrics = viewportColumnMetrics.value
+    const renderedColumnCount = columnMetrics.end >= columnMetrics.start
+      ? columnMetrics.end - columnMetrics.start + 1
+      : 0
+    const placeholderRows = countPlaceholderRows(displayRows.value)
+    const blankViewport = bodyRowCount > 0 && rowCount === 0 ? 1 : 0
     recordDataGridPerfSample({
       scope: "viewportRaf",
       ts: Date.now(),
       totalMs: resolveDataGridPerfNow() - rafStart,
       snapshotMs,
       commitMs,
-      rowCount: displayRows.value.length,
+      type: "viewport",
+      rowCount,
+      renderedRows: rowCount,
+      renderedColumns: renderedColumnCount,
+      totalRows: bodyRowCount,
+      totalColumns: options.visibleColumns.value.length,
+      rowStart: viewportRange?.start ?? -1,
+      rowEnd: viewportRange?.end ?? -1,
+      columnStart: columnMetrics.start,
+      columnEnd: columnMetrics.end,
+      rangeResolveMs: lastViewportRangeResolveMs,
       rowOverscan: rowOverscan.value,
+      columnOverscan: columnOverscan.value,
       adaptiveRowOverscan,
       effectiveRowOverscan: resolveEffectiveRowOverscan(),
+      placeholderRows,
+      blankViewport,
       forceVisibleRows: shouldForceVisibleRows ? 1 : 0,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights ? 1 : 0,
       visibleRowsMs: visibleRowsPerf?.totalMs ?? 0,

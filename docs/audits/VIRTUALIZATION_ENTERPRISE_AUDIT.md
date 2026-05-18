@@ -153,8 +153,8 @@ Orchestration, sandbox, tests, and benchmarks:
 2. **Accessibility mapping for virtualized app-stage DOM is covered at the attribute level.**
    `docs/datagrid-headless-a11y-contract.md` documents the virtualized stage DOM mapping, `a11yAttributesAdapter.ts` has adapter contract coverage, and the Vue app stage now exposes grid row/column counts plus one-based row/column indexes for virtualized center and pinned cells. Remaining gaps are screen-reader device validation and deeper grouped/server placeholder semantics.
 
-3. **Mount/unmount churn is not a first-class budget.**
-   The app path retains windows and uses stable row and cell keys, but CI does not enforce a churn budget for row/cell mount and unmount counts during fast scroll.
+3. **Virtualization telemetry is started but not yet a hard gate.**
+   `dgPerfTrace=1` viewport samples now expose rendered row/column counts, range resolve timing, row/column overscan, placeholder rows, and blank-viewport flags, and the enterprise browser-frame benchmark extracts those samples into `virtualizationTelemetry`. Remaining gaps are CI budget promotion and first-class mount/unmount churn limits.
 
 4. **Browser zoom, fractional pixels, and high DPI coverage is started.**
    Core range invariants now cover fractional row heights, fractional column widths, zoom, and near-max horizontal scroll. `e2e/sandbox-grid.spec.ts` covers high-DPI viewport resize while scrolled and server datasource resize while loading. Remaining gaps are explicit browser zoom coverage, device matrix execution, and fractional row/column resize gestures in the rendered app path.
@@ -189,14 +189,14 @@ Orchestration, sandbox, tests, and benchmarks:
 
 - Scroll handler hot-path design is mostly sound: rAF scheduling, cached layout, retained windows, and model bridge non-invalidation are already present. The remaining risk is enforcing budgets rather than redesigning the path.
 - Reactive writes during scroll exist in the app path for visible rows, columns, and scroll-state refs. They appear intentionally batched, but should be measured under custom renderers and wide grids.
-- DOM churn is bounded by virtualization and retained windows, but mount/unmount counts are not tracked as a gate.
+- DOM churn is bounded by virtualization and retained windows. Browser diagnostics track mutation-derived row/cell churn, but those values are not yet promoted to a hard gate.
 - Layout reads are mostly guarded by cached snapshots and rAF, but `useDataGridAppViewport.ts` can still fall back to DOM dimensions when cache data is missing. This should stay measured.
 - Memory retention and cache growth are controlled in server range caches and row entry caches, but large retained windows plus custom cells need heap benchmarks.
-- Overscan tradeoffs are currently adaptive and touch-aware. Enterprise hardening should record the chosen overscan reason and resulting row/column counts per frame.
+- Overscan tradeoffs are currently adaptive and touch-aware. `dgPerfTrace=1` viewport samples now record effective row overscan, column overscan, and rendered row/column counts for benchmark extraction.
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
 - Horizontal virtualization now has core 1k/10k-column stress gates with pinned columns and mutation coverage, core fractional-width range invariants, plus 1000-column and high-DPI resize Vue sandbox blank-band gates. Enterprise coverage still needs browser/device variants for 10k columns and resize/reorder/hide/show in the rendered app path.
 - Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output, with warning-only datasource churn budgets; the next gap is hard-fail promotion after baseline variance settles.
-- rAF frame budget and long tasks are already partially benchmarked by browser frame scripts, but the results should become required gates for enterprise scenarios.
+- rAF frame budget, viewport update samples, rendered counts, placeholder rows, blank-viewport flags, and long tasks are now extractable by the enterprise browser-frame benchmark, but the results should become required gates for enterprise scenarios.
 
 ## Server-Backed Virtualization Risks
 
@@ -252,10 +252,10 @@ What blocks the target:
 
 ### Phase 2: Scroll And Overscan Hardening
 
-- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection, 1000-column wide-grid horizontal detection, and server datasource visible-refresh detection are covered in `e2e/sandbox-grid.spec.ts`; adaptive overscan consistency is covered by `packages/datagrid-core/src/viewport/__tests__/verticalOverscan.contract.spec.ts` and `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`, with the Vue app path consuming the core overscan controller through the internal core surface. Remaining Phase 2 work is touch/latency variants, churn telemetry, and runtime telemetry.
+- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection, 1000-column wide-grid horizontal detection, and server datasource visible-refresh detection are covered in `e2e/sandbox-grid.spec.ts`; adaptive overscan consistency is covered by `packages/datagrid-core/src/viewport/__tests__/verticalOverscan.contract.spec.ts` and `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`, with the Vue app path consuming the core overscan controller through the internal core surface. Optional runtime telemetry now records viewport/range/overscan/rendered-count samples under `dgPerfTrace=1`. Remaining Phase 2 work is touch/latency variants and hard churn gates.
 - Add blank-viewport detection in browser tests and optional runtime telemetry.
-- Record overscan decisions: base overscan, adaptive overscan, velocity, direction, touch mode, rendered row count, and rendered column count.
-- Add mount/unmount churn telemetry for rows and cells.
+- Record overscan decisions: base overscan, adaptive overscan, velocity, direction, touch mode, rendered row count, and rendered column count. Status: viewport samples now include effective row overscan, column overscan, rendered rows, and rendered columns; velocity/direction classification remains benchmark-side or future telemetry work.
+- Add mount/unmount churn telemetry for rows and cells. Status: browser benchmark mutation diagnostics expose row/cell added/removed counts; hard churn budgets remain.
 - Validate fast wheel, scrollbar drag, programmatic scroll, scroll-to-row, scroll-to-column, and touch momentum.
 - Introduce or document lightweight rendering while scrolling for expensive custom renderers.
 
@@ -324,7 +324,7 @@ What blocks the target:
 - Visible range calculation p50/p95/p99.
 - rAF frame budget and dropped-frame percentage.
 - Long tasks during scroll.
-- Row/cell mount and unmount churn per second.
+- Row/cell mount and unmount churn per second. Status: mutation-derived churn is available in browser diagnostics; gate promotion remains.
 - Heap growth and retained row/cell object counts.
 - Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; warning-only budget gates are wired for controlled latency and can be promoted with `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`.
 - Custom renderer scroll cost with and without lightweight scroll rendering.
@@ -333,14 +333,14 @@ What blocks the target:
 
 ## Recommended Telemetry
 
-- Visible range calculation time.
-- Rendered row count and rendered column count.
+- Visible range calculation time. Status: `viewportRaf.rangeResolveMs` is recorded under `dgPerfTrace=1`.
+- Rendered row count and rendered column count. Status: `viewportRaf.renderedRows` and `viewportRaf.renderedColumns` are recorded and extracted by the enterprise browser-frame benchmark.
 - Row and cell mount/unmount churn.
-- Blank viewport detection.
+- Blank viewport detection. Status: `viewportRaf.blankViewport` is recorded under `dgPerfTrace=1`; e2e blank-band detectors remain the correctness gate.
 - Placeholder exposure time.
 - Scroll frame budget and frame delta distribution.
 - Long tasks during scroll.
-- Overscan decisions: reason, direction, velocity, touch mode, leading/trailing overscan, and resulting range size.
+- Overscan decisions: reason, direction, velocity, touch mode, leading/trailing overscan, and resulting range size. Status: effective row overscan and column overscan are recorded; reason/direction/velocity labels remain future work.
 - Cache hit/miss and stale retained row counts for server-backed grids.
 - Time from viewport range request to data availability.
 - Scroll-to-row/cell resolution time for loaded and unloaded targets.
@@ -351,7 +351,7 @@ What blocks the target:
 1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll. Status: started with Vue base-grid fast vertical/horizontal detector coverage and server datasource visible-refresh coverage in `e2e/sandbox-grid.spec.ts`; touch/device variants and broader server latency profiles remain.
 2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; controlled-latency warning budgets are wired, with hard-fail promotion still pending.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
-4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.
+4. Add mounted row/cell churn metrics and browser frame budgets to performance gates. Status: runtime viewport telemetry and browser benchmark extraction are in place; budget promotion remains.
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount. Status: started with active-cell focus remount, keyboard navigation beyond the rendered range, and variable row-height/horizontal visibility contracts.
 6. Add wide-grid horizontal virtualization gates for 1k and 10k columns. Status: core 1k/10k stress coverage and a Vue 1000-column browser smoke gate are in place; broader browser/device gates remain.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.

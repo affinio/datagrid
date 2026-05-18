@@ -5,6 +5,12 @@ import { createVerticalOverscanController } from "@affino/datagrid-core/internal
 import { useDataGridAppViewport } from "../useDataGridAppViewport"
 
 const originalMatchMedia = window.matchMedia
+const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
+
+type DataGridPerfStore = {
+  samples: Array<Record<string, string | number>>
+  clear: () => void
+}
 
 function createScrollEvent(target: HTMLElement): Event {
   return { target } as unknown as Event
@@ -169,6 +175,8 @@ describe("useDataGridAppViewport contract", () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+    window.history.replaceState({}, "", "/")
+    delete (window as typeof window & { [DATA_GRID_PERF_STORE_KEY]?: DataGridPerfStore })[DATA_GRID_PERF_STORE_KEY]
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       writable: true,
@@ -249,6 +257,90 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(secondFrame)
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(2)
+  })
+
+  it("records virtualized viewport telemetry only when perf tracing is enabled", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const visibleColumns = ref(makeColumns(10, 100) as readonly DataGridColumnSnapshot[])
+
+    const untracedViewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns,
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    const element = {
+      scrollTop: 40,
+      scrollLeft: 200,
+      clientHeight: 100,
+      clientWidth: 320,
+      parentElement: { clientWidth: 320 },
+    } as HTMLElement
+    untracedViewport.bodyViewportRef.value = element
+    untracedViewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect((window as typeof window & { [DATA_GRID_PERF_STORE_KEY]?: DataGridPerfStore })[DATA_GRID_PERF_STORE_KEY]).toBeUndefined()
+
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    const tracedViewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns,
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    tracedViewport.bodyViewportRef.value = element
+    tracedViewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    const store = (window as typeof window & { [DATA_GRID_PERF_STORE_KEY]?: DataGridPerfStore })[DATA_GRID_PERF_STORE_KEY]
+    const sample = store?.samples.find(candidate => candidate.scope === "viewportRaf")
+
+    expect(sample).toEqual(expect.objectContaining({
+      scope: "viewportRaf",
+      type: "viewport",
+      renderedRows: 7,
+      renderedColumns: 10,
+      totalRows: 100,
+      totalColumns: 10,
+      rowStart: 1,
+      rowEnd: 7,
+      columnStart: 0,
+      columnEnd: 9,
+      rowOverscan: 1,
+      columnOverscan: 2,
+      placeholderRows: 0,
+      blankViewport: 0,
+    }))
   })
 
   it("coalesces multiple scroll events into one visible-row sync per animation frame", () => {
