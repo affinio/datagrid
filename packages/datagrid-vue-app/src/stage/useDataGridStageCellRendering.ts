@@ -11,6 +11,10 @@ import type {
   DataGridAppRowSurfaceContext,
 } from "../config/dataGridFormulaOptions"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
+import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+} from "../perf/dataGridPerfTrace"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import type {
   DataGridTableMode,
@@ -38,6 +42,7 @@ export interface UseDataGridStageCellRenderingOptions {
   columnIndexByKey: (columnKey: string) => number
   suppressInlineEditStart?: Readonly<Ref<boolean>>
   preferLightweightCellRendering?: Readonly<Ref<boolean>>
+  perfTraceEnabled?: boolean
 }
 
 export interface UseDataGridStageCellRenderingResult {
@@ -280,9 +285,28 @@ export function useDataGridStageCellRendering(
         interactive,
       }
       if (typeof groupRenderer !== "function") {
-        return cellRenderer?.(baseContext) ?? displayValue
+        if (typeof cellRenderer !== "function") {
+          return displayValue
+        }
+        const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+        const rendered = cellRenderer(baseContext) ?? displayValue
+        if (options.perfTraceEnabled) {
+          const finishedAt = resolveDataGridPerfNow()
+          recordDataGridPerfSample({
+            scope: "cellRenderer",
+            ts: finishedAt,
+            totalMs: finishedAt - startedAt,
+            rowOffset,
+            columnIndex,
+            surfaceKind: surface.kind,
+            rowKind: "group",
+            columnKey: column.key,
+          })
+        }
+        return rendered
       }
-      return groupRenderer({
+      const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+      const rendered = groupRenderer({
         ...baseContext,
         group: {
           key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
@@ -301,6 +325,20 @@ export function useDataGridStageCellRendering(
           },
         },
       }) ?? displayValue
+      if (options.perfTraceEnabled) {
+        const finishedAt = resolveDataGridPerfNow()
+        recordDataGridPerfSample({
+          scope: "groupCellRenderer",
+          ts: finishedAt,
+          totalMs: finishedAt - startedAt,
+          rowOffset,
+          columnIndex,
+          surfaceKind: surface.kind,
+          rowKind: "group",
+          columnKey: column.key,
+        })
+      }
+      return rendered
     }
 
     const renderer = column.column.cellRenderer
@@ -308,7 +346,8 @@ export function useDataGridStageCellRendering(
       return displayValue
     }
 
-    return renderer({
+    const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+    const rendered = renderer({
       row: row.data,
       rowNode: row,
       surface,
@@ -319,6 +358,20 @@ export function useDataGridStageCellRendering(
       displayValue,
       interactive,
     }) ?? displayValue
+    if (options.perfTraceEnabled) {
+      const finishedAt = resolveDataGridPerfNow()
+      recordDataGridPerfSample({
+        scope: "cellRenderer",
+        ts: finishedAt,
+        totalMs: finishedAt - startedAt,
+        rowOffset,
+        columnIndex,
+        surfaceKind: surface.kind,
+        rowKind: "leaf",
+        columnKey: column.key,
+      })
+    }
+    return rendered
   }
 
   function resolveSelectEditorValue(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn): string {

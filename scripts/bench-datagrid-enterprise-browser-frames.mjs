@@ -1626,6 +1626,12 @@ async function runScenario(page, sessionIndex, scenario) {
         : null
       const viewportPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
         .filter(sample => sample?.scope === "viewportRaf")
+      const renderWindowPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "stageRenderWindow")
+      const cellRendererPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "cellRenderer")
+      const groupCellRendererPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "groupCellRenderer")
       verticalDiagnostics.virtualizationTelemetry = {
         sampleCount: viewportPerfSamples.length,
         latest: viewportPerfSamples[viewportPerfSamples.length - 1] ?? null,
@@ -1641,6 +1647,22 @@ async function runScenario(page, sessionIndex, scenario) {
           .length,
         longTaskCount: longTaskEntries.length,
         placeholderExposure: readDatasourcePlaceholderDiagnostics(),
+      }
+      verticalDiagnostics.renderTelemetry = {
+        renderWindowSampleCount: renderWindowPerfSamples.length,
+        latestRenderWindow: renderWindowPerfSamples[renderWindowPerfSamples.length - 1] ?? null,
+        rowNodeCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.rowNodeCount)),
+        cellNodeCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.cellNodeCount)),
+        cellSurfaceCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.cellSurfaceCount)),
+        centerColumnCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.centerColumnCount)),
+        pinnedColumnCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.pinnedColumnCount)),
+        placeholderRows: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.placeholderRowCount)),
+        selectionSegments: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.selectionSegmentCount)),
+        overlayLanes: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.overlayLaneCount)),
+        cellRendererInvocationCount: cellRendererPerfSamples.length,
+        groupCellRendererInvocationCount: groupCellRendererPerfSamples.length,
+        cellRendererDurationMs: summarizeNumbers(cellRendererPerfSamples.map(sample => sample.totalMs)),
+        groupCellRendererDurationMs: summarizeNumbers(groupCellRendererPerfSamples.map(sample => sample.totalMs)),
       }
       verticalDiagnostics.longTasks = longTaskEntries.map(entry => ({
         startTime: entry.startTime,
@@ -1858,6 +1880,21 @@ function aggregateRuns(runs) {
       placeholderRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.placeholderRows?.max)),
       blankViewportCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.blankViewportCount)),
       longTaskCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.longTaskCount)),
+    },
+    renderTelemetry: {
+      renderWindowSampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.renderWindowSampleCount)),
+      rowNodeCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.rowNodeCount?.p95)),
+      cellNodeCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellNodeCount?.p95)),
+      cellSurfaceCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellSurfaceCount?.p95)),
+      centerColumnCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.centerColumnCount?.p95)),
+      pinnedColumnCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.pinnedColumnCount?.p95)),
+      placeholderRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.placeholderRows?.max)),
+      selectionSegments: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.selectionSegments?.p95)),
+      overlayLanes: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.overlayLanes?.p95)),
+      cellRendererInvocationCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellRendererInvocationCount)),
+      groupCellRendererInvocationCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.groupCellRendererInvocationCount)),
+      cellRendererDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellRendererDurationMs?.p95)),
+      groupCellRendererDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.groupCellRendererDurationMs?.p95)),
     },
     sortDiagnostics: {
       menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),

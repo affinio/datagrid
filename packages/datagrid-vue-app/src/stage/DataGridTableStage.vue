@@ -66,6 +66,7 @@
         :pane="leftPinnedPane"
         :render-api="pinnedPaneRenderApi"
         :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
       >
         <template #chrome>
           <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -82,6 +83,7 @@
         :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
         :report-fill-plumbing-state="props.reportFillPlumbingState"
         :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+        :perf-trace-enabled="perfTraceEnabled"
         :handle-context-menu="onViewportContextMenu"
         :selection-overlay-segments="centerSelectionOverlaySegments"
         :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
@@ -94,6 +96,7 @@
         :pane="rightPinnedPane"
         :render-api="pinnedPaneRenderApi"
         :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
       >
         <template #chrome>
           <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -124,6 +127,7 @@
         :pane="leftPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
         :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
       >
         <template #chrome>
           <canvas ref="leftBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -139,6 +143,7 @@
         :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
         :report-fill-plumbing-state="props.reportFillPlumbingState"
         :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+        :perf-trace-enabled="perfTraceEnabled"
         :handle-scroll="handlePinnedBottomViewportScroll"
         :handle-wheel="handleBodyViewportWheel"
         :handle-keydown="handlePinnedBottomViewportKeydown"
@@ -154,6 +159,7 @@
         :pane="rightPinnedBottomPane"
         :render-api="pinnedPaneRenderApi"
         :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
       >
         <template #chrome>
           <canvas ref="rightBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
@@ -192,6 +198,7 @@ import {
 } from "./dataGridTableStageHelpers"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
+import { resolveDataGridPerfTraceEnabled } from "../perf/dataGridPerfTrace"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
 import { useDataGridStageCellState } from "./useDataGridStageCellState"
@@ -221,6 +228,7 @@ ensureDataGridAppStyles()
 const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 const TOUCH_LONG_PRESS_DELAY_MS = 520
+const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
 
 const props = defineProps({
   mode: {
@@ -1007,6 +1015,7 @@ useDataGridPerfTrace({
   viewport,
   displayRows,
   bodyViewportScrollTop,
+  perfTraceEnabled,
 })
 
 const {
@@ -1103,6 +1112,7 @@ const {
   columnIndexByKey,
   suppressInlineEditStart: isBodyViewportScrolling,
   preferLightweightCellRendering,
+  perfTraceEnabled,
 })
 
 const rowStateRuntime = useDataGridStageRowState({

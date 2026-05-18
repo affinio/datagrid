@@ -6,7 +6,8 @@ Current execution state:
 
 - Slice 1 is completed and should be treated as the center-pane diagnostics guard baseline.
 - Slice 2 is completed and should be treated as the renderer contract documentation baseline.
-- Slice 3 is the next implementation slice.
+- Slice 3 is completed and should be treated as the opt-in render telemetry baseline.
+- Slice 4 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -42,7 +43,7 @@ Current execution state:
 
 ## Slice 3: Render Telemetry Counters
 
-- Status: Planned.
+- Status: Completed. `dgPerfTrace=1` now records stage render-window composition samples plus custom `cellRenderer`/`groupCellRenderer` invocation duration samples, and the enterprise browser-frame benchmark extracts render telemetry aggregates from vertical diagnostics runs.
 - Objective: add opt-in render telemetry behind existing perf tracing for renderer invocation counts, DOM node counts, and render-window composition.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
@@ -51,9 +52,10 @@ Current execution state:
   - `packages/datagrid-vue-app/src/stage/dataGridPerfTrace.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: `dgPerfTrace=1` can observe render counts without adding default production overhead.
-- Tests to add/update:
-  - Unit/component tests for disabled-by-default telemetry.
-  - Browser benchmark extraction for render counts where practical.
+- Tests added/covered:
+  - Unit coverage for disabled-by-default custom renderer telemetry and enabled renderer samples.
+  - Component coverage for enabled render-window samples.
+  - Browser benchmark extraction for render-window and renderer invocation aggregates.
 - Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- dataGridPerfTrace useDataGridStageCellRendering`
 - Risk level: Medium
 - Suggested commit message: `feat(datagrid-vue-app): report render telemetry`
@@ -147,8 +149,8 @@ Current execution state:
 
 1. Slice 1: Center Pane Diagnostics Guard (completed)
 2. Slice 2: Renderer Contract Documentation (completed)
-3. Slice 3: Render Telemetry Counters (next)
-4. Slice 4: Custom Renderer Error Fallback
+3. Slice 3: Render Telemetry Counters (completed)
+4. Slice 4: Custom Renderer Error Fallback (next)
 5. Slice 5: Lightweight Scroll Rendering Policy
 6. Slice 6: Mount And Unmount Churn Benchmark
 7. Slice 7: Chrome And Overlay Duration Telemetry

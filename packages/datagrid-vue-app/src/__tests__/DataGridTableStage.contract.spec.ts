@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
 import type { DataGridTableStageCustomOverlay } from "../dataGridTableStage.types"
+import {
+  DATA_GRID_PERF_STORE_KEY,
+  resolveDataGridPerfStore,
+} from "../perf/dataGridPerfTrace"
 import DataGridTableStage from "../DataGridTableStage.vue"
 
 type DemoRow = Record<string, unknown>
@@ -428,6 +432,8 @@ async function applyViewportLayoutMetrics(
 afterEach(() => {
   vi.useRealTimers()
   document.body.innerHTML = ""
+  delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  window.history.replaceState({}, "", "/")
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
     writable: true,
@@ -527,6 +533,37 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     expect(regionGetter).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it("records render-window telemetry only when perf tracing is enabled", async () => {
+    window.history.replaceState({}, "", "/?dgPerfTrace=1")
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+      }),
+    })
+
+    await nextTick()
+
+    const samples = resolveDataGridPerfStore()?.samples.filter(sample => sample.scope === "stageRenderWindow") ?? []
+    expect(samples).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        scope: "stageRenderWindow",
+        surface: "center",
+        rowCount: 2,
+        centerColumnCount: 2,
+        cellSurfaceCount: 4,
+      }),
+      expect.objectContaining({
+        scope: "stageRenderWindow",
+        surface: "pinned-left",
+        rowCount: 2,
+        pinnedColumnCount: 1,
+      }),
+    ]))
 
     wrapper.unmount()
   })

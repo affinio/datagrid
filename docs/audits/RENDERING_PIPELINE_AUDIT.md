@@ -105,7 +105,7 @@ Vue app viewport and rendering:
    `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
 
 3. **Mount/unmount churn is not measured as a first-class budget.**
-   Virtualization limits DOM size, but center/pinned cells remount as `displayRows` and rendered columns change. `useDataGridAppViewport.ts` has retained row/column window behavior and incremental row reuse, which is good, but there is no mount/unmount telemetry or browser gate for fast vertical plus horizontal scroll.
+   Virtualization limits DOM size, but center/pinned cells remount as `displayRows` and rendered columns change. `dgPerfTrace=1` now reports render-window composition and custom renderer invocation samples, and the enterprise browser-frame benchmark extracts those aggregates. Dedicated row/cell mount/unmount churn counters and hard budgets remain open.
 
 4. **Center and pinned pane cell templates duplicate rendering logic.**
    `DataGridTableStageCenterPane.vue` and `DataGridTableStagePinnedPane.vue` both render row state classes, cell state classes, editors, checkbox cells, and `DataGridCellContentRenderer`. This is not broken, but it raises drift risk and makes renderer lifecycle changes harder to apply consistently.
@@ -250,8 +250,8 @@ Performance/benchmark tests:
 - `renderedCenterColumnCount`
 - `renderedPinnedLeftColumnCount`
 - `renderedPinnedRightColumnCount`
-- `cellRenderInvocationCount`
-- `customRendererDurationMs`
+- `cellRenderInvocationCount`. Status: custom `cellRenderer` and `groupCellRenderer` invocation samples are recorded under `dgPerfTrace=1`.
+- `customRendererDurationMs`. Status: custom renderer duration samples are recorded under `dgPerfTrace=1`.
 - `rowMountCount` and `rowUnmountCount`
 - `cellMountCount` and `cellUnmountCount`
 - `chromeDrawDurationMs`
@@ -267,7 +267,7 @@ Performance/benchmark tests:
 ## Prioritized Implementation Slices
 
 1. Guard center-pane diagnostics and add a regression test. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 1.
-2. Add render telemetry counters behind existing perf tracing.
+2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; dedicated mount/unmount churn counters remain.
 3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs are in place; runtime isolation remains.
 4. Add renderer error fallback or development-only error reporting.
 5. Add lightweight scroll rendering policy for expensive custom renderers.

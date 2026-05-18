@@ -1,6 +1,10 @@
 import { ref } from "vue"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useDataGridStageCellRendering } from "../useDataGridStageCellRendering"
+import {
+  DATA_GRID_PERF_STORE_KEY,
+  resolveDataGridPerfStore,
+} from "../../perf/dataGridPerfTrace"
 import type {
   DataGridTableMode,
   DataGridTableRow,
@@ -49,6 +53,10 @@ function createRow(
 }
 
 describe("useDataGridStageCellRendering", () => {
+  beforeEach(() => {
+    delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  })
+
   it("resolves editor modes, cached select options, and renderer output", async () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
@@ -229,5 +237,83 @@ describe("useDataGridStageCellRendering", () => {
 
     expect(suppressedInlineEditEvent.defaultPrevented).toBe(false)
     expect(editing.value.startInlineEdit).not.toHaveBeenCalled()
+    expect(resolveDataGridPerfStore()?.latest("cellRenderer")).toBeNull()
+  })
+
+  it("records custom renderer telemetry only when perf tracing is enabled", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
+      createColumn({ key: "stage" }),
+    ])
+    const rows = ref<Readonly<DataGridTableStageRowsSection<Record<string, unknown>>>>({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({
+      startInlineEdit: vi.fn(),
+      updateEditingCellValue: vi.fn(),
+      commitInlineEdit: vi.fn(),
+      cancelInlineEdit: vi.fn(),
+      handleEditorKeydown: vi.fn(),
+      handleEditorBlur: vi.fn(),
+    } as unknown as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: () => "planned",
+      readDisplayCell: () => "Planned",
+    })
+    const cellRenderer = vi.fn(({ displayValue }) => `cell:${displayValue}`)
+    const groupRenderer = vi.fn(({ displayValue }) => `group:${displayValue}`)
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+      perfTraceEnabled: true,
+    })
+
+    const column = {
+      ...visibleColumns.value[0]!,
+      column: {
+        ...visibleColumns.value[0]!.column,
+        cellRenderer,
+        groupCellRenderer: groupRenderer,
+      },
+    }
+    const dataRow = createRow({ data: { stage: "planned" }, row: { stage: "planned" }, rowId: "r1" })
+    const groupRow = createRow({
+      kind: "group",
+      rowId: "g1",
+      data: {},
+      row: {},
+      state: { expanded: false },
+      groupMeta: { groupKey: "g1", groupField: "group", groupValue: "Group 1", level: 0, childrenCount: 2 },
+    })
+
+    expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("cell:Planned")
+    expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("group:Planned")
+
+    expect(resolveDataGridPerfStore()?.latest("cellRenderer")).toMatchObject({
+      scope: "cellRenderer",
+      rowOffset: 0,
+      columnIndex: 0,
+      surfaceKind: "real",
+      rowKind: "leaf",
+      columnKey: "stage",
+    })
+    expect(resolveDataGridPerfStore()?.latest("groupCellRenderer")).toMatchObject({
+      scope: "groupCellRenderer",
+      rowOffset: 1,
+      columnIndex: 0,
+      surfaceKind: "real",
+      rowKind: "group",
+      columnKey: "stage",
+    })
   })
 })

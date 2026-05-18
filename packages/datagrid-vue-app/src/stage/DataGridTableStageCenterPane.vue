@@ -177,6 +177,10 @@
 <script setup lang="ts">
 import { computed, onMounted, toRefs, watch, type PropType } from "vue"
 import DataGridCellComboboxEditor from "../overlays/DataGridCellComboboxEditor.vue"
+import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+} from "../perf/dataGridPerfTrace"
 import DataGridCellContentRenderer from "./DataGridCellContentRenderer"
 import DataGridTableStageOverlayLayer from "./DataGridTableStageOverlayLayer.vue"
 import {
@@ -272,6 +276,10 @@ const props = defineProps({
   reportFillPlumbingDetail: {
     type: Function as PropType<((layer: string, value: string) => void) | undefined>,
     default: undefined,
+  },
+  perfTraceEnabled: {
+    type: Boolean,
+    default: false,
   },
   renderApi: {
     type: Object as PropType<DataGridTableStageCenterPaneRenderApi>,
@@ -446,6 +454,35 @@ function emitBodyDiagnostics(): void {
   })
 }
 
+function emitRenderWindowTelemetry(): void {
+  if (!props.perfTraceEnabled) {
+    return
+  }
+  const rowCount = displayRows.value.length
+  const centerColumnCount = columns.value.renderedColumns.length
+  recordDataGridPerfSample({
+    scope: "stageRenderWindow",
+    ts: resolveDataGridPerfNow(),
+    totalMs: 0,
+    surface: "center",
+    rowCount,
+    centerColumnCount,
+    pinnedColumnCount: 0,
+    cellSurfaceCount: rowCount * centerColumnCount,
+    rowNodeCount: rowCount,
+    cellNodeCount: rowCount * centerColumnCount,
+    placeholderRowCount: displayRows.value.filter(row => (row as { __placeholder?: boolean }).__placeholder === true).length,
+    topSpacerHeight: topSpacerHeight.value,
+    bottomSpacerHeight: bottomSpacerHeight.value,
+    leftColumnSpacerWidth: viewport.value.leftColumnSpacerWidth,
+    rightColumnSpacerWidth: viewport.value.rightColumnSpacerWidth,
+    selectionSegmentCount: props.selectionOverlaySegments.length,
+    fillPreviewSegmentCount: props.fillPreviewOverlaySegments.length,
+    movePreviewSegmentCount: props.movePreviewOverlaySegments.length,
+    overlayLaneCount: props.overlayLanes.length,
+  })
+}
+
 onMounted(() => {
   if (props.reportCenterPaneDiagnostics) {
     props.reportCenterPaneDiagnostics({ mounted: true })
@@ -472,6 +509,35 @@ watch(
   (signature) => {
     if (signature != null) {
       emitBodyDiagnostics()
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => {
+    if (!props.perfTraceEnabled) {
+      return null
+    }
+    return [
+      displayRows.value.length,
+      displayRows.value.map(row => String(row.rowId)).join("|"),
+      columns.value.renderedColumns.map(column => String(column.key)).join("|"),
+      String(props.runtimeRevision ?? "none"),
+      String(props.bodyRowsRevision ?? "none"),
+      String(topSpacerHeight.value),
+      String(bottomSpacerHeight.value),
+      String(viewport.value.leftColumnSpacerWidth),
+      String(viewport.value.rightColumnSpacerWidth),
+      String(props.selectionOverlaySegments.length),
+      String(props.fillPreviewOverlaySegments.length),
+      String(props.movePreviewOverlaySegments.length),
+      String(props.overlayLanes.length),
+    ].join("|")
+  },
+  (signature) => {
+    if (signature != null) {
+      emitRenderWindowTelemetry()
     }
   },
   { immediate: true },

@@ -211,8 +211,12 @@
 </template>
 
 <script setup lang="ts">
-import type { PropType } from "vue"
+import { watch, type PropType } from "vue"
 import DataGridCellComboboxEditor from "../overlays/DataGridCellComboboxEditor.vue"
+import {
+  recordDataGridPerfSample,
+  resolveDataGridPerfNow,
+} from "../perf/dataGridPerfTrace"
 import DataGridCellContentRenderer from "./DataGridCellContentRenderer"
 import DataGridTableStageOverlayLayer from "./DataGridTableStageOverlayLayer.vue"
 import {
@@ -240,6 +244,10 @@ const props = defineProps({
   handleContextMenu: {
     type: Function as PropType<(event: MouseEvent) => void>,
     default: undefined,
+  },
+  perfTraceEnabled: {
+    type: Boolean,
+    default: false,
   },
 })
 
@@ -314,4 +322,63 @@ function handleRowTouchResizeEnd(event: TouchEvent): void {
   event.preventDefault()
   window.dispatchEvent(createTouchRowResizeMouseEvent("mouseup", touch))
 }
+
+function emitRenderWindowTelemetry(): void {
+  if (!props.perfTraceEnabled) {
+    return
+  }
+  const rowCount = props.pane.displayRows.length
+  const pinnedColumnCount = props.pane.columns.length
+  const indexColumnCount = props.pane.showIndexColumn ? 1 : 0
+  recordDataGridPerfSample({
+    scope: "stageRenderWindow",
+    ts: resolveDataGridPerfNow(),
+    totalMs: 0,
+    surface: props.pane.side === "left" ? "pinned-left" : "pinned-right",
+    rowCount,
+    centerColumnCount: 0,
+    pinnedColumnCount,
+    cellSurfaceCount: rowCount * (pinnedColumnCount + indexColumnCount),
+    rowNodeCount: rowCount,
+    cellNodeCount: rowCount * (pinnedColumnCount + indexColumnCount),
+    placeholderRowCount: props.pane.displayRows.filter(row => (row as { __placeholder?: boolean }).__placeholder === true).length,
+    topSpacerHeight: props.pane.topSpacerHeight ?? viewport.value.topSpacerHeight,
+    bottomSpacerHeight: props.pane.bottomSpacerHeight ?? viewport.value.bottomSpacerHeight,
+    selectionSegmentCount: props.pane.selectionOverlaySegments.length + props.pane.selectionSeamOverlaySegments.length,
+    fillPreviewSegmentCount: props.pane.fillPreviewOverlaySegments.length + props.pane.fillPreviewSeamOverlaySegments.length,
+    movePreviewSegmentCount: props.pane.movePreviewOverlaySegments.length + props.pane.movePreviewSeamOverlaySegments.length,
+    overlayLaneCount: (props.pane.overlayLanes?.length ?? 0) + (props.pane.seamOverlayLanes?.length ?? 0),
+  })
+}
+
+watch(
+  () => {
+    if (!props.perfTraceEnabled) {
+      return null
+    }
+    return [
+      props.pane.side,
+      props.pane.displayRows.length,
+      props.pane.displayRows.map(row => String(row.rowId)).join("|"),
+      props.pane.columns.map(column => String(column.key)).join("|"),
+      String(props.pane.showIndexColumn),
+      String(props.pane.topSpacerHeight ?? viewport.value.topSpacerHeight),
+      String(props.pane.bottomSpacerHeight ?? viewport.value.bottomSpacerHeight),
+      String(props.pane.selectionOverlaySegments.length),
+      String(props.pane.selectionSeamOverlaySegments.length),
+      String(props.pane.fillPreviewOverlaySegments.length),
+      String(props.pane.fillPreviewSeamOverlaySegments.length),
+      String(props.pane.movePreviewOverlaySegments.length),
+      String(props.pane.movePreviewSeamOverlaySegments.length),
+      String(props.pane.overlayLanes?.length ?? 0),
+      String(props.pane.seamOverlayLanes?.length ?? 0),
+    ].join("|")
+  },
+  (signature) => {
+    if (signature != null) {
+      emitRenderWindowTelemetry()
+    }
+  },
+  { immediate: true },
+)
 </script>
