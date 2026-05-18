@@ -242,17 +242,36 @@ describe("WorldMapSvg", () => {
       },
     })
     const marker = wrapper.find('[data-marker-id="london"]')
+    vi.spyOn(marker.element, "getBoundingClientRect").mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 8,
+      height: 8,
+      top: 20,
+      right: 18,
+      bottom: 28,
+      left: 10,
+      toJSON: () => ({}),
+    } as DOMRect)
 
     await marker.trigger("mouseenter")
-    expect(wrapper.emitted("marker-hover")?.[0]?.[0]).toEqual(markers[0])
+    const hoverPayload = wrapper.emitted("marker-hover")?.[0]?.[0]
+    expect(hoverPayload?.marker).toEqual(markers[0])
+    expect(hoverPayload?.clientPoint).toEqual({ x: 14, y: 24 })
+    expect(hoverPayload?.anchorRect).toEqual({ x: 10, y: 20, width: 8, height: 8 })
 
     await marker.trigger("click")
-    expect(wrapper.emitted("marker-click")?.[0]?.[0]).toEqual(markers[0])
+    const clickPayload = wrapper.emitted("marker-click")?.[0]?.[0]
+    expect(clickPayload?.marker).toEqual(markers[0])
+    expect(clickPayload?.svgPoint.x).toBeCloseTo(479.65973333333336)
+    expect(clickPayload?.svgPoint.y).toBeCloseTo(102.64746666666666)
+    expect(clickPayload?.clientPoint).toEqual({ x: 14, y: 24 })
+    expect(clickPayload?.anchorRect).toEqual({ x: 10, y: 20, width: 8, height: 8 })
     expect(wrapper.emitted("update:selectedCountryId")).toBeUndefined()
     expect(latestSelectedMarkerEmission(wrapper)).toBe("london")
 
     await marker.trigger("mouseleave")
-    expect(wrapper.emitted("marker-leave")?.[0]?.[0]).toEqual(markers[0])
+    expect(wrapper.emitted("marker-leave")?.[0]?.[0]?.marker).toEqual(markers[0])
   })
 
   it("toggles selected marker and clears marker selection from background and Escape", async () => {

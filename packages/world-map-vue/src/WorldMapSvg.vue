@@ -69,11 +69,11 @@
             :cy="marker.y"
             :r="markerVisualRadius"
             tabindex="0"
-            @mouseenter="handleMarkerMouseEnter(marker.marker)"
-            @mouseleave="handleMarkerMouseLeave(marker.marker)"
-            @click.stop="handleMarkerClick($event, marker.marker)"
-            @keydown.enter.prevent="selectMarker(marker.marker)"
-            @keydown.space.prevent="selectMarker(marker.marker)"
+            @mouseenter="handleMarkerMouseEnter($event, marker)"
+            @mouseleave="handleMarkerMouseLeave($event, marker)"
+            @click.stop="handleMarkerClick($event, marker)"
+            @keydown.enter.prevent="handleMarkerKeyboardActivate($event, marker)"
+            @keydown.space.prevent="handleMarkerKeyboardActivate($event, marker)"
           />
         </g>
       </svg>
@@ -86,7 +86,13 @@ import { computed, onMounted, onUnmounted, ref } from "vue"
 import type { CSSProperties } from "vue"
 import { projectWorldMapPosition } from "@affino/world-map-core"
 import type { WorldMapCountryId, WorldMapPathFeature, WorldMapScreenPoint } from "@affino/world-map-core"
-import type { WorldMapMarker, WorldMapMarkerScaleMode, WorldMapMarkerVariant } from "./types"
+import type {
+  WorldMapAnchorRect,
+  WorldMapMarker,
+  WorldMapMarkerInteraction,
+  WorldMapMarkerScaleMode,
+  WorldMapMarkerVariant,
+} from "./types"
 
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 480
@@ -151,9 +157,9 @@ const emit = defineEmits<{
   "country-click": [feature: WorldMapPathFeature]
   "country-hover": [feature: WorldMapPathFeature]
   "country-leave": [feature: WorldMapPathFeature]
-  "marker-click": [marker: WorldMapMarker]
-  "marker-hover": [marker: WorldMapMarker]
-  "marker-leave": [marker: WorldMapMarker]
+  "marker-click": [interaction: WorldMapMarkerInteraction]
+  "marker-hover": [interaction: WorldMapMarkerInteraction]
+  "marker-leave": [interaction: WorldMapMarkerInteraction]
   "view-change": [state: WorldMapViewState]
 }>()
 
@@ -303,28 +309,33 @@ function getCountryStyle(feature: WorldMapPathFeature): CSSProperties | undefine
   } as CSSProperties
 }
 
-function handleMarkerMouseEnter(marker: WorldMapMarker): void {
-  hoveredMarkerId.value = marker.id
-  emit("marker-hover", marker)
+function handleMarkerMouseEnter(event: MouseEvent, marker: ProjectedWorldMapMarker): void {
+  hoveredMarkerId.value = marker.marker.id
+  emit("marker-hover", createMarkerInteraction(marker, event.currentTarget))
 }
 
-function handleMarkerMouseLeave(marker: WorldMapMarker): void {
+function handleMarkerMouseLeave(event: MouseEvent, marker: ProjectedWorldMapMarker): void {
   hoveredMarkerId.value = null
-  emit("marker-leave", marker)
+  emit("marker-leave", createMarkerInteraction(marker, event.currentTarget))
 }
 
-function handleMarkerClick(event: MouseEvent, marker: WorldMapMarker): void {
+function handleMarkerClick(event: MouseEvent, marker: ProjectedWorldMapMarker): void {
   if (consumeSuppressedClick()) {
     event.stopPropagation()
     return
   }
 
-  selectMarker(marker)
+  selectMarker(marker.marker)
+  emit("marker-click", createMarkerInteraction(marker, event.currentTarget))
 }
 
 function selectMarker(marker: WorldMapMarker): void {
   setSelectedMarkerId(resolvedSelectedMarkerId.value === marker.id ? null : marker.id)
-  emit("marker-click", marker)
+}
+
+function handleMarkerKeyboardActivate(event: KeyboardEvent, marker: ProjectedWorldMapMarker): void {
+  selectMarker(marker.marker)
+  emit("marker-click", createMarkerInteraction(marker, event.currentTarget))
 }
 
 function handleSvgClick(): void {
@@ -568,6 +579,44 @@ function isFiniteNumber(value: unknown): value is number {
 
 function markerVariant(marker: WorldMapMarker): WorldMapMarkerVariant {
   return marker.variant ?? "default"
+}
+
+function createMarkerInteraction(
+  marker: ProjectedWorldMapMarker,
+  currentTarget: EventTarget | null,
+): WorldMapMarkerInteraction {
+  const anchorRect = anchorRectFromTarget(currentTarget)
+  return {
+    marker: marker.marker,
+    svgPoint: {
+      x: panX.value + marker.x * zoom.value,
+      y: panY.value + marker.y * zoom.value,
+    },
+    clientPoint: {
+      x: anchorRect.x + anchorRect.width / 2,
+      y: anchorRect.y + anchorRect.height / 2,
+    },
+    anchorRect,
+  }
+}
+
+function anchorRectFromTarget(currentTarget: EventTarget | null): WorldMapAnchorRect {
+  if (!(currentTarget instanceof Element)) {
+    return {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    }
+  }
+
+  const rect = currentTarget.getBoundingClientRect()
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  }
 }
 </script>
 

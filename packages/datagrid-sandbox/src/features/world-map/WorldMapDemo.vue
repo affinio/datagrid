@@ -26,6 +26,8 @@
       :max-zoom="8"
       @country-hover="handleCountryHover"
       @country-leave="handleCountryLeave"
+      @marker-click="handleMarkerInteraction"
+      @marker-hover="handleMarkerInteraction"
       @view-change="viewState = $event"
     />
 
@@ -50,6 +52,10 @@
         <span>Pan</span>
         <strong>{{ panLabel }}</strong>
       </div>
+      <div>
+        <span>Anchor</span>
+        <strong>{{ markerAnchorLabel }}</strong>
+      </div>
     </aside>
   </article>
 </template>
@@ -64,7 +70,7 @@ import type {
   WorldMapViewport,
 } from "@affino/world-map-core"
 import { WorldMapSvg } from "@affino/world-map-vue"
-import type { WorldMapMarker } from "@affino/world-map-vue"
+import type { WorldMapMarker, WorldMapMarkerInteraction } from "@affino/world-map-vue"
 import { loadNormalizedWorldCountries110m } from "./loadWorldCountries"
 
 const VIEWPORT: WorldMapViewport = {
@@ -110,6 +116,7 @@ const pathFeatures = ref<WorldMapPathFeature[]>([])
 const hoveredCountryId = ref<WorldMapCountryId | null>(null)
 const selectedCountryId = ref<WorldMapCountryId | null>(null)
 const selectedMarkerId = ref<string | null>(null)
+const markerAnchor = ref<WorldMapMarkerInteraction | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref<string | null>(null)
 const viewState = ref({
@@ -130,6 +137,14 @@ const selectedLabel = computed(() => formatCountryLabel(countryById.value.get(se
 const selectedMarkerLabel = computed(() => formatMarkerLabel(markerById.value.get(selectedMarkerId.value ?? "")))
 const zoomLabel = computed(() => viewState.value.zoom.toFixed(2))
 const panLabel = computed(() => `${Math.round(viewState.value.panX)}, ${Math.round(viewState.value.panY)}`)
+const markerAnchorLabel = computed(() => {
+  if (markerAnchor.value === null) {
+    return "none"
+  }
+
+  const { marker, clientPoint, anchorRect } = markerAnchor.value
+  return `${marker.label ?? marker.id}: ${Math.round(clientPoint.x)}, ${Math.round(clientPoint.y)} (${Math.round(anchorRect.width)}x${Math.round(anchorRect.height)})`
+})
 
 onMounted(() => {
   void loadMap()
@@ -166,6 +181,10 @@ function handleCountryLeave(feature: WorldMapPathFeature): void {
   if (hoveredCountryId.value === feature.id) {
     hoveredCountryId.value = null
   }
+}
+
+function handleMarkerInteraction(interaction: WorldMapMarkerInteraction): void {
+  markerAnchor.value = interaction
 }
 
 function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
@@ -216,7 +235,7 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
 
 .world-map-demo__debug {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
 }
 

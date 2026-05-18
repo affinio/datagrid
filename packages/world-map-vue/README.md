@@ -8,7 +8,7 @@ Reusable Vue SVG world map components for Affino.
 
 ```ts
 import { WorldMapSvg } from "@affino/world-map-vue"
-import type { WorldMapMarker } from "@affino/world-map-vue"
+import type { WorldMapMarker, WorldMapMarkerInteraction } from "@affino/world-map-vue"
 ```
 
 `WorldMapSvg` renders `WorldMapPathFeature[]` as SVG country paths and provides local hover, selection, keyboard, zoom, and pan interactions.
@@ -54,7 +54,7 @@ const pathFeatures = computed(() => createWorldMapPaths(countries.value, {
     :width="960"
     :height="480"
     @country-click="feature => console.log(feature.name)"
-    @marker-click="marker => console.log(marker.label)"
+    @marker-click="interaction => console.log(interaction.marker.label, interaction.anchorRect)"
   />
 </template>
 ```
@@ -89,6 +89,19 @@ interface WorldMapMarker {
   properties?: Record<string, unknown>
 }
 ```
+
+Marker click, hover, and leave events emit an interaction payload:
+
+```ts
+interface WorldMapMarkerInteraction {
+  marker: WorldMapMarker
+  svgPoint: { x: number; y: number }
+  clientPoint: { x: number; y: number }
+  anchorRect: { x: number; y: number; width: number; height: number }
+}
+```
+
+`svgPoint` is the rendered SVG coordinate after the current zoom/pan transform. `clientPoint` is the center of the marker element in viewport coordinates. `anchorRect` is a plain object copied from the marker element bounding rect and can be used as a virtual anchor for application-owned popovers.
 
 Markers are projected with the same fixed equirectangular viewport as the country paths and render above countries inside the zoom/pan layer. The optional `variant` field provides generic visual states for dashboards, GPS tracking, analytics, auctions, and similar overlays without imposing a domain-specific schema.
 
@@ -128,6 +141,35 @@ const markers: WorldMapMarker[] = [
   },
 ]
 ```
+
+## External Popovers
+
+`WorldMapSvg` does not render popovers and does not own popover positioning. Use the marker interaction payload to connect to an application-level popover:
+
+```ts
+const activeMarker = ref<WorldMapMarkerInteraction | null>(null)
+
+function handleMarkerClick(interaction: WorldMapMarkerInteraction): void {
+  activeMarker.value = interaction
+}
+```
+
+```vue
+<WorldMapSvg
+  :paths="pathFeatures"
+  :markers="markers"
+  @marker-click="handleMarkerClick"
+/>
+
+<AppPopover
+  v-if="activeMarker"
+  :virtual-anchor="activeMarker.anchorRect"
+>
+  {{ activeMarker.marker.label }}
+</AppPopover>
+```
+
+The popover component is intentionally external. `@affino/world-map-vue` only reports the marker, rendered SVG point, viewport client point, and anchor rectangle.
 
 ## Choropleth Values
 
@@ -178,9 +220,9 @@ The v0.1 choropleth scale is a small dependency-free `color-mix()` interpolation
 | `country-click` | `WorldMapPathFeature` | Emitted after country click or keyboard activation. |
 | `country-hover` | `WorldMapPathFeature` | Emitted on country mouse enter. |
 | `country-leave` | `WorldMapPathFeature` | Emitted on country mouse leave. |
-| `marker-click` | `WorldMapMarker` | Emitted after marker click or keyboard activation. |
-| `marker-hover` | `WorldMapMarker` | Emitted on marker mouse enter. |
-| `marker-leave` | `WorldMapMarker` | Emitted on marker mouse leave. |
+| `marker-click` | `WorldMapMarkerInteraction` | Emitted after marker click or keyboard activation. |
+| `marker-hover` | `WorldMapMarkerInteraction` | Emitted on marker mouse enter. |
+| `marker-leave` | `WorldMapMarkerInteraction` | Emitted on marker mouse leave. |
 | `view-change` | `{ zoom: number; panX: number; panY: number }` | Emitted when zoom or pan state changes. |
 
 ## Interaction Behavior
@@ -250,6 +292,6 @@ This package intentionally does not include:
 
 - built-in map data
 - TopoJSON conversion
-- marker labels, popovers, clustering, heatmaps, or live transport protocols
+- marker labels, popover rendering/positioning, clustering, heatmaps, or live transport protocols
 - choropleth legends, tooltips, or advanced color scales
 - MapLibre, D3, Canvas, or WebGL dependencies
