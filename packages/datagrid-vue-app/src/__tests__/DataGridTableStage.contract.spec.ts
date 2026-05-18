@@ -163,6 +163,7 @@ function createStageProps(
       columnIndex: number,
     ) => void
     isEditingCell?: (row: DataGridTableRow<DemoRow>, columnKey: string) => boolean
+    editingCellValue?: string
     startInlineEdit?: (
       row: DataGridTableRow<DemoRow>,
       columnKey: string,
@@ -274,7 +275,7 @@ function createStageProps(
       startFillHandleDoubleClick: options?.startFillHandleDoubleClick ?? (() => undefined),
     },
     editing: {
-      editingCellValue: "",
+      editingCellValue: options?.editingCellValue ?? "",
       editingCellInitialFilter: "",
       editingCellOpenOnMount: false,
       isEditingCell: options?.isEditingCell ?? (() => false),
@@ -912,6 +913,54 @@ describe("DataGridTableStage contract", () => {
     expect(remountedAnchor.exists()).toBe(true)
     expect(remountedAnchor.classes()).toContain("grid-cell--selection-anchor")
     expect(remountedAnchor.find(".cell-fill-handle").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it("remounts an inline text editor with its draft after horizontal virtualization", async () => {
+    const baseProps = createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 2,
+      {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 2 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 2 },
+        editingCellValue: "draft-remount",
+        isEditingCell: (row, columnKey) => row.rowId === "r1" && columnKey === "centerB",
+      },
+    )
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        columns: {
+          ...baseProps.columns,
+          renderedColumns: baseProps.columns.renderedColumns.filter(column => column.key === "centerA"),
+        },
+        viewport: {
+          ...baseProps.viewport,
+          rightColumnSpacerWidth: 130,
+        },
+      },
+    })
+
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerB"]').exists()).toBe(false)
+    expect(wrapper.find(".grid-body-viewport .cell-editor-input").exists()).toBe(false)
+
+    await wrapper.setProps({
+      columns: {
+        ...baseProps.columns,
+        renderedColumns: baseProps.columns.renderedColumns,
+      },
+      viewport: {
+        ...baseProps.viewport,
+        rightColumnSpacerWidth: 0,
+      },
+    })
+
+    const remountedEditorCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerB"]')
+    const remountedEditor = remountedEditorCell.find<HTMLInputElement>(".cell-editor-input")
+    expect(remountedEditorCell.exists()).toBe(true)
+    expect(remountedEditor.exists()).toBe(true)
+    expect(remountedEditor.element.value).toBe("draft-remount")
 
     wrapper.unmount()
   })
