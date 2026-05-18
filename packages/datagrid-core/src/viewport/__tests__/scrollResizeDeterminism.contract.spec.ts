@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumn, DataGridColumnInput, VisibleRow } from "../../types"
 import { createClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
+import type { ImperativeRowUpdatePayload } from "../dataGridViewportTypes"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -157,6 +158,38 @@ function snapshotControllerState(harness: ReturnType<typeof createControllerHarn
   }
 }
 
+function latestRowsPayload(harness: ReturnType<typeof createControllerHarness>): ImperativeRowUpdatePayload {
+  const latestCall = harness.onRows.mock.calls[harness.onRows.mock.calls.length - 1]
+  expect(latestCall).toBeDefined()
+  return latestCall?.[0] as ImperativeRowUpdatePayload
+}
+
+function mapRowsByDisplayIndex(payload: ImperativeRowUpdatePayload): Map<number, VisibleRow> {
+  const rows = payload.visibleRows ?? []
+  return new Map(rows.map(row => [row.displayIndex, row]))
+}
+
+function expectRetainedRowsStable(
+  before: Map<number, VisibleRow>,
+  after: Map<number, VisibleRow>,
+  options: { requireObjectIdentity: boolean },
+) {
+  let retained = 0
+  for (const [displayIndex, row] of before.entries()) {
+    const next = after.get(displayIndex)
+    if (!next) {
+      continue
+    }
+    retained += 1
+    expect(next.rowId).toBe(row.rowId)
+    expect(next.displayIndex).toBe(row.displayIndex)
+    if (options.requireObjectIdentity) {
+      expect(next).toBe(row)
+    }
+  }
+  expect(retained).toBeGreaterThan(0)
+}
+
 function disposeHarness(harness: ReturnType<typeof createControllerHarness>) {
   harness.controller.dispose()
   harness.rowModel.dispose()
@@ -232,5 +265,93 @@ describe("scroll/resize determinism contract", () => {
     expect(firstReplay.visibleRangeEnd).toBeGreaterThan(firstReplay.visibleRangeStart)
     expect(firstReplay.columnRangeStart).toBeGreaterThanOrEqual(0)
     expect(firstReplay.columnRangeEnd).toBeGreaterThan(firstReplay.columnRangeStart)
+  })
+
+  it("preserves retained row identity across resize, reversal, and viewport-active model refresh", () => {
+    const harness = createControllerHarness()
+    harness.controller.refresh(true)
+
+    harness.containerMetrics.element.scrollLeft = 640
+    harness.containerMetrics.element.scrollTop = 4_200
+    harness.containerMetrics.element.dispatchEvent(new Event("scroll"))
+    harness.controller.refresh(true)
+
+    const beforeResizeRows = mapRowsByDisplayIndex(latestRowsPayload(harness))
+    const beforeResizeSnapshot = snapshotControllerState(harness)
+
+    harness.containerMetrics.state.clientWidth = 960
+    harness.containerMetrics.state.clientHeight = 560
+    harness.headerMetrics.state.clientWidth = 960
+    harness.headerMetrics.state.scrollWidth = 960
+    harness.controller.setViewportMetrics({
+      containerWidth: harness.containerMetrics.state.clientWidth,
+      containerHeight: harness.containerMetrics.state.clientHeight,
+      headerHeight: harness.headerMetrics.state.clientHeight,
+    })
+    harness.controller.refresh(true)
+
+    const afterResizeRows = mapRowsByDisplayIndex(latestRowsPayload(harness))
+    expectRetainedRowsStable(beforeResizeRows, afterResizeRows, { requireObjectIdentity: true })
+    expect(snapshotControllerState(harness).scrollLeft).toBe(beforeResizeSnapshot.scrollLeft)
+    expect(snapshotControllerState(harness).scrollTop).toBe(beforeResizeSnapshot.scrollTop)
+
+    const reverseTargetRow = Math.max(0, harness.controller.derived.rows.visibleRange.value.start - 2)
+    harness.controller.scrollToRow(reverseTargetRow)
+
+    const afterReverseRows = mapRowsByDisplayIndex(latestRowsPayload(harness))
+    expect(harness.controller.core.overscanLeading.value).toBeGreaterThan(
+      harness.controller.core.overscanTrailing.value,
+    )
+    expectRetainedRowsStable(afterResizeRows, afterReverseRows, { requireObjectIdentity: true })
+
+    const activeRange = harness.controller.derived.rows.visibleRange.value
+    harness.rowModel.setViewportRange(activeRange)
+    harness.rowModel.setRows(createRows(50_000))
+    harness.controller.refresh(true)
+
+    const afterRefreshRows = mapRowsByDisplayIndex(latestRowsPayload(harness))
+    expectRetainedRowsStable(afterReverseRows, afterRefreshRows, { requireObjectIdentity: false })
+    for (const row of afterRefreshRows.values()) {
+      expect(row.rowId).toBe(row.displayIndex)
+    }
+
+    disposeHarness(harness)
+  })
+
+  it("keeps adaptive overscan direction and range coverage deterministic on scroll reversal", () => {
+    const harness = createControllerHarness()
+    harness.controller.refresh(true)
+
+    harness.controller.scrollToRow(120)
+
+    const downwardPayload = latestRowsPayload(harness)
+    expect(harness.controller.core.overscanTrailing.value).toBeGreaterThan(
+      harness.controller.core.overscanLeading.value,
+    )
+    expect(downwardPayload.visibleRows?.map(row => row.displayIndex)).toEqual(
+      Array.from(
+        { length: downwardPayload.visibleRows?.length ?? 0 },
+        (_unused, index) => (downwardPayload.visibleRows?.[0]?.displayIndex ?? 0) + index,
+      ),
+    )
+
+    harness.controller.scrollToRow(64)
+
+    const upwardPayload = latestRowsPayload(harness)
+    expect(harness.controller.core.overscanLeading.value).toBeGreaterThan(
+      harness.controller.core.overscanTrailing.value,
+    )
+    expect(upwardPayload.visibleRows?.map(row => row.displayIndex)).toEqual(
+      Array.from(
+        { length: upwardPayload.visibleRows?.length ?? 0 },
+        (_unused, index) => (upwardPayload.visibleRows?.[0]?.displayIndex ?? 0) + index,
+      ),
+    )
+
+    const snapshot = snapshotControllerState(harness)
+    expect(snapshot.visibleRangeStart).toBeGreaterThanOrEqual(0)
+    expect(snapshot.visibleRangeEnd).toBeGreaterThan(snapshot.visibleRangeStart)
+
+    disposeHarness(harness)
   })
 })

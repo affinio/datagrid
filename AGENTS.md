@@ -90,6 +90,52 @@ After implementation, return only:
 3. Unresolved issues, if any
 4. Suggested commit message
 
+## Behavioral impact reporting
+
+When implementation affects interaction, rendering, virtualization, scrolling, selection, editing, layout, timing, or browser-visible behavior:
+
+- Explicitly state:
+  - what behavior changed
+  - what subsystem is affected
+  - what risks exist
+
+- Include a short "Visual verification" checklist when applicable.
+
+Use concise actionable bullets.
+
+Examples:
+- scroll smoothness
+- pinned pane synchronization
+- touch momentum
+- selection continuity
+- editor focus behavior
+- overlay alignment
+- resize handles
+- virtualization blank gaps
+- keyboard navigation
+- context menu positioning
+- column reorder behavior
+- row height alignment
+- horizontal scroll sync
+- hover suppression during scroll
+- autosize behavior
+- fill handle interaction
+- drag interaction conflicts
+
+Format:
+
+### Behavioral impact
+- ...
+- ...
+
+### Visual verification
+- [ ] Verify ...
+- [ ] Verify ...
+- [ ] Verify ...
+
+Only include this section when the slice affects browser-visible behavior or interaction semantics.
+Do not include it for purely internal refactors, docs, typing, or non-visible infrastructure work.
+
 ## Response limits
 - Keep final responses concise and result-oriented.
 - Prefer short bullet points over long prose.

@@ -7,6 +7,7 @@ import { createDataGridViewportController } from "../dataGridViewportController"
 import { resolveHorizontalSizing } from "../dataGridViewportMath"
 import { buildHorizontalMeta } from "../dataGridViewportHorizontalMeta"
 import { createFakeRafScheduler } from "./utils/fakeRafScheduler"
+import type { ImperativeRowUpdatePayload } from "../dataGridViewportTypes"
 
 interface MutableElementMetrics {
   clientWidth: number
@@ -73,6 +74,30 @@ function toColumnModelInputs(columns: readonly DataGridColumn[]): DataGridColumn
       width,
     },
   }))
+}
+
+function expectUniqueValues<T>(values: readonly T[]): void {
+  expect(new Set(values).size).toBe(values.length)
+}
+
+function expectRetainedCellKeys(
+  previousRows: readonly (string | number)[],
+  previousColumns: readonly string[],
+  nextRows: readonly (string | number)[],
+  nextColumns: readonly string[],
+): void {
+  const retainedRows = previousRows.filter(rowId => nextRows.includes(rowId))
+  const retainedColumns = previousColumns.filter(columnKey => nextColumns.includes(columnKey))
+  expect(retainedRows.length).toBeGreaterThan(0)
+  expect(retainedColumns.length).toBeGreaterThan(0)
+
+  const previousCells = new Set(
+    retainedRows.flatMap(rowId => retainedColumns.map(columnKey => `${String(rowId)}:${columnKey}`)),
+  )
+  const nextCells = new Set(
+    retainedRows.flatMap(rowId => retainedColumns.map(columnKey => `${String(rowId)}:${columnKey}`)),
+  )
+  expect(nextCells).toEqual(previousCells)
 }
 
 describe("viewport integration snapshot contract", () => {
@@ -1403,6 +1428,104 @@ describe("viewport integration snapshot contract", () => {
     expect(afterHorizontal.horizontalSizingRecomputeCount).toBeGreaterThanOrEqual(
       beforeHorizontal.horizontalSizingRecomputeCount,
     )
+
+    controller.dispose()
+    rowModel.dispose()
+    columnModel.dispose()
+  })
+
+  it("keeps row and cell identity stable through horizontal layout mutations", () => {
+    const columns: DataGridColumn[] = Array.from({ length: 28 }, (_unused, index) => ({
+      key: `c_${index}`,
+      label: `C${index}`,
+      pin: index === 0 ? "left" : index === 27 ? "right" : "none",
+      width: 92 + (index % 5) * 16,
+      minWidth: 72,
+      maxWidth: 280,
+      visible: true,
+    }))
+    const rowModel = createClientRowModel({ rows: createRows(1800) })
+    const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
+    const containerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 520,
+      scrollWidth: 8_800,
+      scrollHeight: 64_000,
+    })
+    const headerMetrics = createMeasuredElement({
+      clientWidth: 920,
+      clientHeight: 44,
+      scrollWidth: 920,
+      scrollHeight: 44,
+    })
+    const rowPayloads: ImperativeRowUpdatePayload[] = []
+
+    const controller = createDataGridViewportController({
+      resolvePinMode: column => (column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+      rowModel,
+      columnModel,
+      imperativeCallbacks: {
+        onRows(payload) {
+          rowPayloads.push(payload)
+        },
+      },
+    })
+
+    controller.attach(containerMetrics.element, headerMetrics.element)
+    controller.setViewportMetrics({
+      containerWidth: containerMetrics.state.clientWidth,
+      containerHeight: containerMetrics.state.clientHeight,
+      headerHeight: headerMetrics.state.clientHeight,
+    })
+    controller.refresh(true)
+
+    containerMetrics.element.scrollTop = 2_240
+    containerMetrics.element.scrollLeft = 760
+    containerMetrics.element.dispatchEvent(new Event("scroll"))
+    controller.refresh(true)
+
+    const captureIdentity = () => {
+      const latestRows = rowPayloads[rowPayloads.length - 1]?.visibleRows ?? []
+      const rowIds = latestRows.map(row => row.rowId)
+      const columnKeys = controller.derived.columns.visibleColumnEntries.value.map(entry => entry.column.key)
+      expect(rowIds.length).toBeGreaterThan(0)
+      expect(columnKeys.length).toBeGreaterThan(0)
+      expectUniqueValues(rowIds)
+      expectUniqueValues(columnKeys)
+      return {
+        rowRange: { ...controller.derived.rows.visibleRange.value },
+        rowIds,
+        columnKeys,
+        snapshot: controller.getIntegrationSnapshot(),
+      }
+    }
+
+    const beforeWidth = captureIdentity()
+    columnModel.setColumnWidth("c_8", 260)
+    controller.refresh(true)
+    const afterWidth = captureIdentity()
+    expect(afterWidth.rowRange).toEqual(beforeWidth.rowRange)
+    expectRetainedCellKeys(beforeWidth.rowIds, beforeWidth.columnKeys, afterWidth.rowIds, afterWidth.columnKeys)
+
+    columnModel.setColumnOrder(["c_12", "c_10", "c_8", "c_4", "c_2"])
+    controller.refresh(true)
+    const afterReorder = captureIdentity()
+    expect(afterReorder.rowRange).toEqual(afterWidth.rowRange)
+    expectRetainedCellKeys(afterWidth.rowIds, afterWidth.columnKeys, afterReorder.rowIds, afterReorder.columnKeys)
+
+    columnModel.setColumnVisibility("c_10", false)
+    controller.refresh(true)
+    const afterHide = captureIdentity()
+    expect(afterHide.rowRange).toEqual(afterReorder.rowRange)
+    expect(afterHide.columnKeys).not.toContain("c_10")
+    expectRetainedCellKeys(afterReorder.rowIds, afterReorder.columnKeys, afterHide.rowIds, afterHide.columnKeys)
+
+    columnModel.setColumnVisibility("c_10", true)
+    controller.refresh(true)
+    const afterShow = captureIdentity()
+    expect(afterShow.rowRange).toEqual(afterHide.rowRange)
+    expect(afterShow.snapshot.visibleColumnRange.end).toBeGreaterThan(afterShow.snapshot.visibleColumnRange.start)
+    expectRetainedCellKeys(afterHide.rowIds, afterHide.columnKeys, afterShow.rowIds, afterShow.columnKeys)
 
     controller.dispose()
     rowModel.dispose()

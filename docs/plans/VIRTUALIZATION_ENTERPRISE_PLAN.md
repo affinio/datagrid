@@ -5,7 +5,8 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 Current execution state:
 
 - Slice 1 is already completed and should be treated as the baseline.
-- Slice 2 is the next implementation slice.
+- Slice 2 is completed and should be treated as the controller integration baseline.
+- Slice 3 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -30,7 +31,7 @@ Current execution state:
 
 ## Slice 2: Viewport Controller Integration Invariants
 
-- Status: Planned.
+- Status: Completed. Controller integration coverage now includes retained row identity across resize/reversal/model refresh, adaptive overscan direction on reversal, and stable logical cell identity through horizontal width/order/visibility changes.
 - Objective: prove the core viewport controller preserves range and row identity through scroll, resize, row model updates, and horizontal layout changes.
 - Affected packages/files:
   - `packages/datagrid-core/src/viewport/dataGridViewportController.ts`

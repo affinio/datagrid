@@ -243,7 +243,7 @@ What blocks the target:
 
 ### Phase 1: Correctness And Invariant Audit
 
-- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; remaining Phase 1 work is controller/app-stage, lifecycle, and fractional/browser coverage.
+- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; core viewport controller integration invariants are covered by `packages/datagrid-core/src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts` and `packages/datagrid-core/src/viewport/__tests__/integrationSnapshot.contract.spec.ts`; remaining Phase 1 work is app-stage, lifecycle, and fractional/browser coverage.
 - Define the canonical virtualization contract for core and Vue app paths.
 - Add invariant tests for visible range math: no off-by-one gaps, no duplicates, no missing rows, stable start/end semantics, and deterministic range output.
 - Cover sort, filter, group, pivot, cache replacement, container resize, column resize, reorder, hide/show, pinned columns, pinned top rows, and pinned bottom rows.
