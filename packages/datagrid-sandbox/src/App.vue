@@ -23,6 +23,7 @@
       <RouterLink class="sandbox__link" to="/vue/typed-facade-grid">Vue Typed Facade</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/spreadsheet-workbook">Vue Spreadsheet</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/world-map">World Map</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/charts">Charts</RouterLink>
     </nav>
 
     <section class="sandbox__route">

@@ -185,6 +185,12 @@ importers:
 
   packages/datagrid-sandbox:
     dependencies:
+      '@affino/charts-core':
+        specifier: workspace:*
+        version: link:../charts-core
+      '@affino/charts-vue':
+        specifier: workspace:*
+        version: link:../charts-vue
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core

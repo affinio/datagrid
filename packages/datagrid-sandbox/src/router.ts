@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
+import ChartsDemo from "./features/charts/ChartsDemo.vue"
 import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
@@ -63,6 +64,10 @@ const routes = [
   {
     path: "/vue/world-map",
     component: WorldMapDemo,
+  },
+  {
+    path: "/vue/charts",
+    component: ChartsDemo,
   },
   {
     path: "/vue/base-grid-factory",

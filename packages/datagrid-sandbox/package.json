@@ -11,6 +11,8 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@affino/charts-core": "workspace:*",
+    "@affino/charts-vue": "workspace:*",
     "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-formula-engine": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*",
