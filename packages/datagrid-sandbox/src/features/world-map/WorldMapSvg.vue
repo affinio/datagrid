@@ -1,9 +1,15 @@
 <template>
-  <section class="world-map-svg" :class="{ 'world-map-svg--panning': isPanning }">
+  <section
+    class="world-map-svg"
+    :class="{
+      'world-map-svg--pan-enabled': enablePan,
+      'world-map-svg--panning': isPanning,
+    }"
+  >
     <div v-if="enableZoom" class="world-map-svg__controls" aria-label="World map view controls">
-      <button type="button" @click="zoomOut">Zoom out</button>
-      <button type="button" @click="zoomIn">Zoom in</button>
-      <button type="button" @click="resetView">Reset view</button>
+      <button type="button" :disabled="isZoomOutDisabled" @click="zoomOut">Zoom out</button>
+      <button type="button" :disabled="isZoomInDisabled" @click="zoomIn">Zoom in</button>
+      <button type="button" :disabled="isResetDisabled" @click="resetView">Reset view</button>
     </div>
 
     <div class="world-map-svg__stage">
@@ -120,6 +126,9 @@ const resolvedSelectedCountryId = computed(() => (
   props.selectedCountryId === undefined ? internalSelectedCountryId.value : props.selectedCountryId
 ))
 const mapTransform = computed(() => `translate(${panX.value} ${panY.value}) scale(${zoom.value})`)
+const isZoomOutDisabled = computed(() => zoom.value <= resolvedMinZoom.value)
+const isZoomInDisabled = computed(() => zoom.value >= resolvedMaxZoom.value)
+const isResetDisabled = computed(() => zoom.value === 1 && panX.value === 0 && panY.value === 0)
 
 onMounted(() => {
   window.addEventListener("keydown", handleWindowKeydown)
@@ -391,6 +400,15 @@ function clamp(value: number, min: number, max: number): number {
   background: #f8fafc;
 }
 
+.world-map-svg__controls button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.world-map-svg__controls button:disabled:hover {
+  background: #ffffff;
+}
+
 .world-map-svg__stage {
   position: relative;
   min-height: 0;
@@ -407,10 +425,14 @@ function clamp(value: number, min: number, max: number): number {
   min-width: 720px;
   height: auto;
   margin: 0 auto;
-  cursor: grab;
+  cursor: default;
   outline: none;
   touch-action: none;
   user-select: none;
+}
+
+.world-map-svg--pan-enabled .world-map-svg__svg {
+  cursor: grab;
 }
 
 .world-map-svg--panning .world-map-svg__svg {
@@ -451,6 +473,12 @@ function clamp(value: number, min: number, max: number): number {
 .world-map-svg__country:focus,
 .world-map-svg__country:focus-visible {
   outline: none;
+}
+
+.world-map-svg__country:focus-visible {
+  fill: #c4d0da;
+  stroke: #1f2937;
+  stroke-width: 1.2;
 }
 
 @media (max-width: 760px) {
