@@ -12,15 +12,16 @@ There are three distinct history paths today:
 
 These paths are compatible enough for current edit, paste, fill, toolbar, shortcut, placeholder, and server-demo workflows. The strongest enterprise pieces are rollback payload enforcement, batch-as-one-undo-unit semantics, redo invalidation, scoped server stack undo/redo, revision/datasetVersion integration, and focused tests.
 
-The remaining main gaps are operation serialization, memory limits by byte/cell count, selection/focus/edit restoration, undo failure compensation, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
+The remaining main gaps are operation serialization, memory limits by byte/cell count, selection/focus/edit restoration, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, undo compensation, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
+Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
 
 ## Implementation Progress
 
 - 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
 - 2026-05-18: Slice 2, Async History Action Serialization, is complete. Core `TransactionService` now rejects overlapping async `applyTransaction`, `commitBatch`, `undo`, and `redo` calls and blocks batch begin/rollback during an active async action. The orchestration history runner now ignores duplicate keyboard/control undo/redo triggers while the first action is pending.
-- Remaining runtime gaps: undo failure compensation, snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
+- 2026-05-18: Slice 3, Undo Failure Compensation, is complete. Core `TransactionService` now re-applies commands already rolled back inside a failed undo transaction and re-applies transactions already rolled back inside a failed undo batch, leaving undo/redo stacks unchanged when the action fails.
+- Remaining runtime gaps: snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
 
 ## Current Architecture Summary
 
@@ -141,6 +142,7 @@ Backend and sandbox:
 
 2. **Undo failure is not compensated the same way apply failure is.**
    Apply and redo use `applyCommittedBatch(...)`, which rolls back applied transactions if a later transaction fails. Undo uses `rollbackCommittedBatch(...)` and does not restore already-undone commands if a later rollback command fails. This is a concrete rollback consistency gap for multi-command or multi-transaction undo.
+   Status after Slice 3: core undo now compensates partial command and batch rollback failures and leaves stacks unchanged on failure.
 
 3. **Client snapshots can overwrite unrelated concurrent changes.**
    Partial row history restores entire captured row objects through `rows.applyEdits(...)`. If another workflow or server refresh changes another field on the same row after the snapshot is recorded, undo can revert more than the edited cells. This is acceptable for single-user local grids, but not enterprise collaborative or server-optimistic editing.

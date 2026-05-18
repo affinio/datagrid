@@ -281,6 +281,81 @@ describe("transaction service contracts", () => {
     expect(events).toEqual(["apply:tx-1:0:1", "undo:tx-1:0:0"])
   })
 
+  it("compensates commands already rolled back when undo fails within a transaction", async () => {
+    const state: Record<string, number> = { a: 0, b: 0 }
+    const events: string[] = []
+    const service = createDataGridTransactionService({
+      execute: async (command, context) => {
+        const payload = command.payload as CounterPayload
+        events.push(`${context.direction}:${context.transactionId}:${context.commandIndex}:${payload.key}:${payload.value}`)
+        if (context.direction === "undo" && payload.key === "a") {
+          throw new Error("undo a failed")
+        }
+        state[payload.key] = payload.value
+      },
+    })
+
+    await service.applyTransaction({
+      id: "tx-ab",
+      commands: [
+        { type: "set", payload: { key: "a", value: 1 }, rollbackPayload: { key: "a", value: 0 } },
+        { type: "set", payload: { key: "b", value: 2 }, rollbackPayload: { key: "b", value: 0 } },
+      ],
+    })
+
+    await expect(service.undo()).rejects.toThrow(/undo failed/i)
+
+    expect(state).toEqual({ a: 1, b: 2 })
+    expect(service.getSnapshot().undoDepth).toBe(1)
+    expect(service.getSnapshot().redoDepth).toBe(0)
+    expect(events).toEqual([
+      "apply:tx-ab:0:a:1",
+      "apply:tx-ab:1:b:2",
+      "undo:tx-ab:1:b:0",
+      "undo:tx-ab:0:a:0",
+      "redo:tx-ab:1:b:2",
+    ])
+  })
+
+  it("compensates transactions already rolled back when undo fails within a batch", async () => {
+    const state: Record<string, number> = { a: 0, b: 0 }
+    const events: string[] = []
+    const service = createDataGridTransactionService({
+      execute: async (command, context) => {
+        const payload = command.payload as CounterPayload
+        events.push(`${context.direction}:${context.transactionId}:${context.commandIndex}:${payload.key}:${payload.value}`)
+        if (context.direction === "undo" && payload.key === "a") {
+          throw new Error("undo a failed")
+        }
+        state[payload.key] = payload.value
+      },
+    })
+
+    const batchId = service.beginBatch("batch")
+    await service.applyTransaction({
+      id: "tx-a",
+      commands: [{ type: "set", payload: { key: "a", value: 1 }, rollbackPayload: { key: "a", value: 0 } }],
+    })
+    await service.applyTransaction({
+      id: "tx-b",
+      commands: [{ type: "set", payload: { key: "b", value: 2 }, rollbackPayload: { key: "b", value: 0 } }],
+    })
+    await service.commitBatch(batchId)
+
+    await expect(service.undo()).rejects.toThrow(/undo failed/i)
+
+    expect(state).toEqual({ a: 1, b: 2 })
+    expect(service.getSnapshot().undoDepth).toBe(1)
+    expect(service.getSnapshot().redoDepth).toBe(0)
+    expect(events).toEqual([
+      "apply:tx-a:0:a:1",
+      "apply:tx-b:0:b:2",
+      "undo:tx-b:0:b:0",
+      "undo:tx-a:0:a:0",
+      "redo:tx-b:0:b:2",
+    ])
+  })
+
   it("propagates normalized intent metadata for transaction and command events", async () => {
     const state: Record<string, number> = { score: 0 }
     const eventTransactions: Array<readonly string[]> = []

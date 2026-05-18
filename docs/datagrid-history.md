@@ -63,6 +63,7 @@ All built-in history paths follow these invariants:
 - Undo and redo are explicit user actions, not automatic retries.
 - Built-in transaction service actions are single-flight: `applyTransaction`, `commitBatch`, `undo`, and `redo` reject overlapping calls while an async history action is in progress.
 - Built-in keyboard/control history runners ignore a second undo/redo trigger while the first trigger is pending.
+- If undo fails after partially rolling back commands or transactions, the core transaction service re-applies the already-undone work and leaves the undo/redo stacks on the original side of the failed action.
 - A new committed operation after undo invalidates the redo branch for the same history owner and scope.
 - A grouped app intent, such as paste or cut-paste, is treated as one undo unit.
 - Server undo/redo are state-changing mutations and must return revision/dataset-version state when available.

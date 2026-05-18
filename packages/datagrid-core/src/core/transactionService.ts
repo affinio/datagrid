@@ -376,6 +376,25 @@ export function createDataGridTransactionService(
     }
   }
 
+  async function applyRolledBackCommands(
+    transaction: DataGridNormalizedTransaction,
+    rolledBackCommandIndexes: readonly number[],
+    direction: "apply" | "redo",
+    batchId: string | null,
+  ): Promise<void> {
+    const commandIndexes = [...rolledBackCommandIndexes].sort((left, right) => left - right)
+    for (const commandIndex of commandIndexes) {
+      const command = transaction.commands[commandIndex] as DataGridTransactionCommand
+      await runCommand(command, {
+        direction,
+        transactionId: transaction.id,
+        transactionLabel: transaction.label,
+        commandIndex,
+        batchId,
+      })
+    }
+  }
+
   async function applyOneTransaction(
     transaction: DataGridNormalizedTransaction,
     direction: "apply" | "redo",
@@ -415,22 +434,45 @@ export function createDataGridTransactionService(
     direction: "rollback" | "undo",
     batchId: string | null,
   ): Promise<void> {
+    const rolledBackCommandIndexes: number[] = []
     for (let commandIndex = transaction.commands.length - 1; commandIndex >= 0; commandIndex -= 1) {
       const command = transaction.commands[commandIndex] as DataGridTransactionCommand
-      await runCommand(
-        {
-          type: command.type,
-          payload: command.rollbackPayload,
-          rollbackPayload: command.payload,
-        },
-        {
-          direction,
-          transactionId: transaction.id,
-          transactionLabel: transaction.label,
-          commandIndex,
-          batchId,
-        },
-      )
+      try {
+        await runCommand(
+          {
+            type: command.type,
+            payload: command.rollbackPayload,
+            rollbackPayload: command.payload,
+          },
+          {
+            direction,
+            transactionId: transaction.id,
+            transactionLabel: transaction.label,
+            commandIndex,
+            batchId,
+          },
+        )
+        rolledBackCommandIndexes.push(commandIndex)
+      } catch (error) {
+        const compensationDirection = direction === "undo" ? "redo" : "apply"
+        try {
+          await applyRolledBackCommands(
+            transaction,
+            rolledBackCommandIndexes,
+            compensationDirection,
+            batchId,
+          )
+        } catch (compensationError) {
+          throw createError(
+            `[DataGridTransaction] ${direction} failed and compensation failed for transaction "${transaction.id}".`,
+            { rollbackError: error, compensationError },
+          )
+        }
+        throw createError(
+          `[DataGridTransaction] ${direction} failed for transaction "${transaction.id}".`,
+          error,
+        )
+      }
     }
   }
 
@@ -457,9 +499,27 @@ export function createDataGridTransactionService(
     committedBatch: DataGridCommittedBatch,
     direction: "rollback" | "undo",
   ): Promise<void> {
-    for (let index = committedBatch.transactions.length - 1; index >= 0; index -= 1) {
-      const transaction = committedBatch.transactions[index] as DataGridNormalizedTransaction
-      await rollbackOneTransaction(transaction, direction, committedBatch.batchId)
+    const rolledBackTransactions: DataGridNormalizedTransaction[] = []
+    try {
+      for (let index = committedBatch.transactions.length - 1; index >= 0; index -= 1) {
+        const transaction = committedBatch.transactions[index] as DataGridNormalizedTransaction
+        await rollbackOneTransaction(transaction, direction, committedBatch.batchId)
+        rolledBackTransactions.push(transaction)
+      }
+    } catch (error) {
+      const compensationDirection = direction === "undo" ? "redo" : "apply"
+      try {
+        for (let index = rolledBackTransactions.length - 1; index >= 0; index -= 1) {
+          const transaction = rolledBackTransactions[index] as DataGridNormalizedTransaction
+          await applyOneTransaction(transaction, compensationDirection, committedBatch.batchId)
+        }
+      } catch (compensationError) {
+        throw createError(
+          `[DataGridTransaction] ${direction} failed and compensation failed for committed batch "${committedBatch.committedId}".`,
+          { rollbackError: error, compensationError },
+        )
+      }
+      throw error
     }
   }
 

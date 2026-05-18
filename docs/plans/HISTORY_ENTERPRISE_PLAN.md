@@ -6,7 +6,8 @@ Current execution state:
 
 - Slice 1 is completed and should be treated as the enterprise history contract baseline.
 - Slice 2 is completed and should be treated as the async history single-flight baseline.
-- Slice 3 is next and should harden undo failure compensation.
+- Slice 3 is completed and should be treated as the undo failure compensation baseline.
+- Slice 4 is next and should bound client snapshot scope and memory growth.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -47,17 +48,17 @@ Current execution state:
 
 ## Slice 3: Undo Failure Compensation
 
-- Status: Planned.
+- Status: Completed. Core `TransactionService` now compensates failed undo paths by re-applying commands already rolled back inside the failing transaction and re-applying transactions already rolled back inside the failing committed batch. The undo/redo stacks remain on the original side of the failed action.
 - Objective: make failed undo paths as recoverable as failed apply paths, especially for multi-command transactions and batches.
 - Affected packages/files:
   - `packages/datagrid-core/src/core/transactionService.ts`
   - `packages/datagrid-core/src/core/__tests__/transactionService.contract.spec.ts`
   - `docs/datagrid-history.md`
-- Expected behavior change: if undo fails after partially rolling back a transaction, already-undone commands are compensated according to the documented order and the undo/redo stacks remain consistent.
-- Tests to add/update:
+- Expected behavior change: if undo fails after partially rolling back a transaction or committed batch, already-undone commands/transactions are compensated according to documented order and the undo/redo stacks remain consistent.
+- Tests added/covered:
   - Undo failure halfway through a multi-command transaction.
-  - Undo failure in a batch.
-  - Redo stack state after compensated undo failure.
+  - Undo failure after one transaction in a batch was already undone.
+  - Undo/redo stack state after compensated undo failure.
 - Validation command: `pnpm exec vitest run packages/datagrid-core/src/core/__tests__/transactionService.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid-core): compensate failed undo batches`
@@ -160,8 +161,8 @@ Current execution state:
 
 1. Slice 1: Enterprise History Contract
 2. Slice 2: Async History Action Serialization (completed)
-3. Slice 3: Undo Failure Compensation (next)
-4. Slice 4: Snapshot Scope And Memory Budget
+3. Slice 3: Undo Failure Compensation (completed)
+4. Slice 4: Snapshot Scope And Memory Budget (next)
 5. Slice 5: Restoration State Payload
 6. Slice 6: Versioned Operation Payloads
 7. Slice 7: Server History Idempotency Guard
