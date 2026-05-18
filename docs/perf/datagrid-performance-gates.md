@@ -120,6 +120,14 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_FILTER_BURST_P99_MS=40`
   - `PERF_BUDGET_MIN_PULL_COALESCED=1`
   - `PERF_BUDGET_MIN_PULL_DEFERRED=1`
+  - `BENCH_DS_CHURN_PLACEHOLDER_LATENCY_MS=4`
+  - `BENCH_DS_CHURN_PLACEHOLDER_ITERATIONS=12`
+  - `PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS=80`
+  - `PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS=100`
+  - `PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS=1`
+  - `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=false`
+  - Placeholder exposure gates are warning-only by default while baseline variance settles. Set `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true` to promote these warnings to hard failures.
+  - The controlled-latency placeholder scenario covers cold scroll, warm scroll, direction reversal, jump scroll, and retry after a failed pull.
 - Derived cache (stable cache + invalidation pressure):
   - `BENCH_DERIVED_CACHE_ROW_COUNT=50000`
   - `BENCH_DERIVED_CACHE_STABLE_ITERATIONS=180`

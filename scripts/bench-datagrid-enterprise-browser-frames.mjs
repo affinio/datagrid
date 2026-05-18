@@ -165,6 +165,18 @@ const SCENARIOS = [
     cellUpdates: true,
   },
   {
+    id: "server-datasource-placeholder-scroll",
+    route: "/vue/server-data-source-grid?datasource=fake",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    datasourcePlaceholderDiagnostics: true,
+    horizontalScroll: false,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
     id: "interaction-drag-selection",
     route: "/vue/base-grid",
     interaction: "drag-selection",
@@ -680,6 +692,26 @@ async function runScenario(page, sessionIndex, scenario) {
         scrollLeft: viewport.scrollLeft,
       })
     }
+    const readDatasourcePlaceholderDiagnostics = () => {
+      if (!input.scenario.datasourcePlaceholderDiagnostics) {
+        return null
+      }
+      const element = document.querySelector("[data-datagrid-server-placeholder-exposure]")
+      if (!(element instanceof HTMLElement)) {
+        return null
+      }
+      const readNumber = (name) => {
+        const value = Number(element.dataset[name] ?? "0")
+        return Number.isFinite(value) ? value : 0
+      }
+      return {
+        activeRows: readNumber("activeRows"),
+        events: readNumber("events"),
+        totalMs: readNumber("totalMs"),
+        maxMs: readNumber("maxMs"),
+        viewportAvailabilityMs: readNumber("viewportAvailabilityMs"),
+      }
+    }
     const captureScrollContainerDiagnostics = () => {
       if (!verticalDiagnostics) {
         return
@@ -742,6 +774,13 @@ async function runScenario(page, sessionIndex, scenario) {
       ? perfWindow.__AFFINO_DATAGRID_PERF__
       : null
     resolveDataGridPerfStore()?.clear?.()
+
+    if (input.scenario.datasourcePlaceholderDiagnostics) {
+      const slowBackendButton = Array.from(document.querySelectorAll("button"))
+        .find(button => button.textContent?.trim() === "Slow backend")
+      slowBackendButton?.click()
+      await waitForPaint()
+    }
 
     const recordMutationSummary = (summary, mutations) => {
       summary.callbackCount += 1
@@ -1633,6 +1672,7 @@ async function runScenario(page, sessionIndex, scenario) {
       verticalDiagnostics,
       sortDiagnostics,
       interactionDiagnostics,
+      datasourcePlaceholderDiagnostics: readDatasourcePlaceholderDiagnostics(),
     }
   }, {
     scenario,
@@ -1675,12 +1715,14 @@ async function runScenario(page, sessionIndex, scenario) {
     verticalDiagnostics: result.verticalDiagnostics,
     sortDiagnostics: result.sortDiagnostics,
     interactionDiagnostics: result.interactionDiagnostics,
+    datasourcePlaceholderDiagnostics: result.datasourcePlaceholderDiagnostics,
   }
 }
 
 function aggregateRuns(runs) {
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
   const interactionDiagnosticsRuns = runs.map(run => run.interactionDiagnostics).filter(Boolean)
+  const datasourcePlaceholderRuns = runs.map(run => run.datasourcePlaceholderDiagnostics).filter(Boolean)
   const interactionScopeStats = (scope) => stats(
     interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.[scope]?.totalMs?.p95),
   )
@@ -1741,6 +1783,11 @@ function aggregateRuns(runs) {
       preventDefaultCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionPreventDefault?.count ?? 0)),
       cancelCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionCancel?.count ?? 0)),
       scrollSyncDriftPx: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.scrollSyncDrift?.maxAbsPx)),
+    },
+    datasourcePlaceholderDiagnostics: {
+      events: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.events)),
+      maxMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.maxMs)),
+      viewportAvailabilityMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.viewportAvailabilityMs)),
     },
   }
 }

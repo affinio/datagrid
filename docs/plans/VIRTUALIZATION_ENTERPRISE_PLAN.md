@@ -11,7 +11,8 @@ Current execution state:
 - Slice 5 is completed and should be treated as the adaptive overscan consistency baseline.
 - Slice 6 is completed and should be treated as the datasource visible-row retention baseline.
 - Slice 7 is completed and should be treated as the datasource placeholder telemetry baseline.
-- Slice 8 is the next implementation slice.
+- Slice 8 is completed and should be treated as the datasource placeholder budget baseline.
+- Slice 9 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -151,7 +152,7 @@ Current execution state:
 
 ## Slice 8: Server Placeholder Exposure Budget
 
-- Status: Planned. This slice depends on Slice 7 telemetry or an equivalent benchmark signal.
+- Status: Completed. `scripts/bench-datagrid-datasource-churn.mjs` now includes a controlled-latency placeholder scenario for cold scroll, warm scroll, direction reversal, jump scroll, and retry, plus warning-only placeholder exposure and viewport data availability budgets. Harness/package budget wiring and `docs/perf/datagrid-performance-gates.md` document the thresholds and promotion flag.
 - Objective: convert placeholder telemetry into enforceable warning or failure budgets for enterprise scenarios.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`

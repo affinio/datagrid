@@ -122,8 +122,8 @@ Orchestration, sandbox, tests, and benchmarks:
 1. **Automated blank-viewport gating is started but not enterprise-complete.**
    `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal Vue base-grid detectors plus server datasource visible-refresh coverage for rendered viewport continuity, duplicate visual indexes, and uncovered viewport bands. Remaining enterprise gaps are touch momentum, broader server latency profiles, zoom, resize, and wider horizontal stress coverage.
 
-2. **No CI budget for placeholder exposure under server latency.**
-   `dataSourceBackedRowModel.ts` now reports placeholder exposure counts/durations and viewport data availability timing, and the datasource churn benchmark includes those values. The remaining gap is an enforced budget for fast scroll, cache refresh, and mobile latency profiles.
+2. **Placeholder exposure budgets are started but warning-only.**
+   `dataSourceBackedRowModel.ts` reports placeholder exposure counts/durations and viewport data availability timing, and the datasource churn benchmark now runs a controlled-latency placeholder scenario with warning-only budgets. Remaining gaps are hard-fail promotion, cache-refresh/browser-profile budgets, and mobile latency profiles.
 
 3. **Virtualization ownership is split between core and Vue app without a final contract.**
    Core docs say viewport math should live in core and the adapter should not duplicate it. In practice, `dataGridViewportController.ts` and `useDataGridAppViewport.ts` both compute visible ranges, overscan, retained windows, and scroll-driven updates. This is not currently proven broken, but it blocks enterprise confidence until the boundary is documented and covered by contract tests or shared primitives.
@@ -195,7 +195,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - Overscan tradeoffs are currently adaptive and touch-aware. Enterprise hardening should record the chosen overscan reason and resulting row/column counts per frame.
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
 - 100-column behavior is covered better than 1k/10k-column behavior. Horizontal virtualization needs wide-grid gates with pinned columns and column resizing.
-- Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output; the next gap is enforcing latency-profile budgets.
+- Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output, with warning-only datasource churn budgets; the next gap is hard-fail promotion after baseline variance settles.
 - rAF frame budget and long tasks are already partially benchmarked by browser frame scripts, but the results should become required gates for enterprise scenarios.
 
 ## Server-Backed Virtualization Risks
@@ -261,8 +261,8 @@ What blocks the target:
 
 ### Phase 3: Server-Backed Virtualization Hardening
 
-- Status: started. `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts` now covers partial replacement, direction reversal, failed replacement reload, manual refresh failure, retry while visible rows remain retained, and placeholder exposure start/stop telemetry. `scripts/bench-datagrid-datasource-churn.mjs` reports placeholder exposure and viewport data availability metrics.
-- Add placeholder exposure timing and CI budgets for cold scroll, warm scroll, jump scroll, direction reversal, and cache replacement.
+- Status: started. `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts` now covers partial replacement, direction reversal, failed replacement reload, manual refresh failure, retry while visible rows remain retained, and placeholder exposure start/stop telemetry. `scripts/bench-datagrid-datasource-churn.mjs` reports placeholder exposure and viewport data availability metrics and includes warning-only budgets for cold scroll, warm scroll, direction reversal, jump scroll, and retry.
+- Promote placeholder exposure warnings to hard failures after the controlled-latency baseline is stable, then extend coverage to cache replacement and browser/mobile latency profiles.
 - Test `dataSourceBackedRowModel.ts` under delayed, failed, retried, and partial responses.
 - Decide the enterprise status of `serverBackedRowModel.ts`: add placeholder parity or document it as a simple/non-enterprise path.
 - Add server-side rowId-to-index or scroll-target resolution for unloaded rows.
@@ -325,7 +325,7 @@ What blocks the target:
 - Long tasks during scroll.
 - Row/cell mount and unmount churn per second.
 - Heap growth and retained row/cell object counts.
-- Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; budget gates remain.
+- Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; warning-only budget gates are wired for controlled latency and can be promoted with `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`.
 - Custom renderer scroll cost with and without lightweight scroll rendering.
 - 10k, 100k, and 1M row benchmarks.
 - 100, 1k, and 10k column benchmarks.
@@ -348,7 +348,7 @@ What blocks the target:
 ## Prioritized Implementation Slices
 
 1. Add blank-viewport detection and Playwright coverage for fast vertical and horizontal scroll. Status: started with Vue base-grid fast vertical/horizontal detector coverage and server datasource visible-refresh coverage in `e2e/sandbox-grid.spec.ts`; touch/device variants and broader server latency profiles remain.
-2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; enforceable latency budgets remain for the next slice.
+2. Add placeholder exposure telemetry and datasource latency tests for `dataSourceBackedRowModel.ts`. Status: telemetry is implemented and surfaced in sandbox/benchmark output; controlled-latency warning budgets are wired, with hard-fail promotion still pending.
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
 4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount.

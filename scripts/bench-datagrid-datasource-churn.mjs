@@ -19,6 +19,8 @@ const RANGE_SIZE = Number.parseInt(process.env.BENCH_DS_CHURN_RANGE_SIZE ?? "160
 const SCROLL_BURST_ITERATIONS = Number.parseInt(process.env.BENCH_DS_CHURN_SCROLL_ITERATIONS ?? "240", 10)
 const FILTER_BURST_ITERATIONS = Number.parseInt(process.env.BENCH_DS_CHURN_FILTER_ITERATIONS ?? "180", 10)
 const ROW_CACHE_LIMIT = Number.parseInt(process.env.BENCH_DS_CHURN_ROW_CACHE_LIMIT ?? "4096", 10)
+const PLACEHOLDER_LATENCY_MS = Number.parseFloat(process.env.BENCH_DS_CHURN_PLACEHOLDER_LATENCY_MS ?? "4")
+const PLACEHOLDER_SCENARIO_ITERATIONS = Number.parseInt(process.env.BENCH_DS_CHURN_PLACEHOLDER_ITERATIONS ?? "12", 10)
 
 const PERF_BUDGET_TOTAL_MS = Number.parseFloat(process.env.PERF_BUDGET_TOTAL_MS ?? "Infinity")
 const PERF_BUDGET_MAX_SCROLL_BURST_P95_MS = Number.parseFloat(
@@ -39,6 +41,18 @@ const PERF_BUDGET_MAX_VARIANCE_PCT = Number.parseFloat(process.env.PERF_BUDGET_M
 const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDGET_VARIANCE_MIN_MEAN_MS ?? "0.5")
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = Number.parseFloat(process.env.PERF_BUDGET_MAX_HEAP_DELTA_MB ?? "Infinity")
 const PERF_BUDGET_HEAP_EPSILON_MB = Number.parseFloat(process.env.PERF_BUDGET_HEAP_EPSILON_MB ?? "1")
+const PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS ?? "Infinity",
+)
+const PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS = Number.parseFloat(
+  process.env.PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS ?? "0",
+)
+const PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS = (
+  process.env.PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS ?? "false"
+).trim().toLowerCase() === "true"
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON ? resolve(process.env.BENCH_OUTPUT_JSON) : null
 
 const OWNERS = ["NOC", "SRE", "Core", "Platform", "Payments", "Data"]
@@ -50,6 +64,8 @@ assertPositiveInteger(SCROLL_BURST_ITERATIONS, "BENCH_DS_CHURN_SCROLL_ITERATIONS
 assertPositiveInteger(FILTER_BURST_ITERATIONS, "BENCH_DS_CHURN_FILTER_ITERATIONS")
 assertPositiveInteger(ROW_CACHE_LIMIT, "BENCH_DS_CHURN_ROW_CACHE_LIMIT")
 assertPositiveInteger(BENCH_MEASUREMENT_BATCH_SIZE, "BENCH_DS_CHURN_MEASUREMENT_BATCH_SIZE")
+assertNonNegativeNumber(PLACEHOLDER_LATENCY_MS, "BENCH_DS_CHURN_PLACEHOLDER_LATENCY_MS")
+assertPositiveInteger(PLACEHOLDER_SCENARIO_ITERATIONS, "BENCH_DS_CHURN_PLACEHOLDER_ITERATIONS")
 assertNonNegativeInteger(BENCH_WARMUP_BATCHES, "BENCH_DS_CHURN_WARMUP_BATCHES")
 assertNonNegativeInteger(BENCH_WARMUP_RUNS, "BENCH_WARMUP_RUNS")
 if (!BENCH_SEEDS.length) {
@@ -65,6 +81,12 @@ function assertPositiveInteger(value, label) {
 function assertNonNegativeInteger(value, label) {
   if (!Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
     throw new Error(`${label} must be a non-negative integer`)
+  }
+}
+
+function assertNonNegativeNumber(value, label) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative number`)
   }
 }
 
@@ -109,6 +131,19 @@ function stats(values) {
 function diagnosticNumber(diagnostics, key) {
   const value = diagnostics?.[key]
   return Number.isFinite(value) ? value : 0
+}
+
+function sleep(ms, signal) {
+  if (ms <= 0) {
+    return Promise.resolve()
+  }
+  return new Promise((resolveSleep, rejectSleep) => {
+    const timer = setTimeout(resolveSleep, ms)
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer)
+      rejectSleep(toAbortError())
+    }, { once: true })
+  })
 }
 
 function createRng(seed) {
@@ -216,6 +251,61 @@ function createSyntheticDataSource(totalRows) {
       return () => {}
     },
   }
+}
+
+function createControlledLatencyDataSource(totalRows, latencyMs) {
+  let failNextPull = false
+  const dataSource = {
+    failNextPull() {
+      failNextPull = true
+    },
+    async pull(request) {
+      await sleep(latencyMs, request.signal)
+      if (request.signal.aborted) {
+        throw toAbortError()
+      }
+      if (failNextPull) {
+        failNextPull = false
+        throw new Error("controlled placeholder retry failure")
+      }
+      const start = Math.max(0, request.range.start)
+      const end = Math.max(start, Math.min(totalRows - 1, request.range.end))
+      const rows = []
+      for (let index = start; index <= end; index += 1) {
+        rows.push({
+          index,
+          rowId: index,
+          row: {
+            rowId: `placeholder-${index}`,
+            owner: OWNERS[index % OWNERS.length] ?? "NOC",
+            region: REGIONS[index % REGIONS.length] ?? "us-east",
+            status: index % 2 === 0 ? "ok" : "critical",
+            latency: latencyMs,
+          },
+        })
+      }
+      return {
+        rows,
+        total: totalRows,
+      }
+    },
+    subscribe() {
+      return () => {}
+    },
+  }
+  return dataSource
+}
+
+async function waitForViewportAvailable(model, timeoutMs = Math.max(250, PLACEHOLDER_LATENCY_MS * 20 + 100)) {
+  const startedAt = performance.now()
+  while (performance.now() - startedAt < timeoutMs) {
+    const diagnostics = model.getSparseRowModelDiagnostics()
+    if ((diagnostics.viewportLoadingRowCount ?? 0) === 0) {
+      return
+    }
+    await sleep(1)
+  }
+  throw new Error("Timed out waiting for datasource viewport availability")
 }
 
 async function loadFactory() {
@@ -345,8 +435,63 @@ async function runFilterBurstScenario(createDataSourceBackedRowModel, seed) {
   }
 }
 
+async function runPlaceholderExposureScenario(createDataSourceBackedRowModel, seed) {
+  const rng = createRng(seed + 15485863)
+  const dataSource = createControlledLatencyDataSource(ROW_COUNT, PLACEHOLDER_LATENCY_MS)
+  const model = createDataSourceBackedRowModel({
+    dataSource,
+    rowCacheLimit: ROW_CACHE_LIMIT,
+    initialTotal: ROW_COUNT,
+  })
+  const durations = []
+  const maxStart = Math.max(0, ROW_COUNT - RANGE_SIZE - 2)
+
+  const exposeRange = async (range) => {
+    model.setViewportRange(range)
+    model.getRowsInRange(range)
+    await waitForViewportAvailable(model)
+  }
+
+  const runOne = async () => {
+    const coldStart = randomInt(rng, 0, Math.max(1, Math.floor(maxStart * 0.2)))
+    const coldRange = normalizeRange(coldStart, RANGE_SIZE)
+    const forwardRange = normalizeRange(Math.min(maxStart, coldStart + RANGE_SIZE * 3), RANGE_SIZE)
+    const reverseRange = normalizeRange(Math.max(0, coldStart - RANGE_SIZE), RANGE_SIZE)
+    const jumpRange = normalizeRange(randomInt(rng, Math.floor(maxStart * 0.55), maxStart), RANGE_SIZE)
+    const retryRange = normalizeRange(randomInt(rng, Math.floor(maxStart * 0.25), Math.floor(maxStart * 0.45)), RANGE_SIZE)
+
+    await exposeRange(coldRange)
+    model.setViewportRange(coldRange)
+    model.getRowsInRange(coldRange)
+    await exposeRange(forwardRange)
+    await exposeRange(reverseRange)
+    await exposeRange(jumpRange)
+
+    model.setViewportRange(retryRange)
+    model.getRowsInRange(retryRange)
+    dataSource.failNextPull()
+    await Promise.resolve(model.refresh("manual")).catch(() => {})
+    model.getRowsInRange(retryRange)
+    await Promise.resolve(model.refresh("manual"))
+    await waitForViewportAvailable(model)
+  }
+
+  try {
+    for (let iteration = 0; iteration < PLACEHOLDER_SCENARIO_ITERATIONS; iteration += 1) {
+      const t0 = performance.now()
+      await runOne()
+      durations.push(performance.now() - t0)
+    }
+    const diagnostics = model.getBackpressureDiagnostics()
+    return { stat: stats(durations), diagnostics }
+  } finally {
+    model.dispose()
+  }
+}
+
 const createDataSourceBackedRowModel = await loadFactory()
 const runResults = []
+const budgetWarnings = []
 const budgetErrors = []
 const varianceSkippedChecks = []
 
@@ -360,12 +505,14 @@ for (const seed of BENCH_SEEDS) {
     const warmupSeed = seed + (warmup + 1) * 9901
     await runScrollBurstScenario(createDataSourceBackedRowModel, warmupSeed)
     await runFilterBurstScenario(createDataSourceBackedRowModel, warmupSeed)
+    await runPlaceholderExposureScenario(createDataSourceBackedRowModel, warmupSeed)
   }
 
   const heapStart = process.memoryUsage().heapUsed
   const startedAt = performance.now()
   const scrollBurst = await runScrollBurstScenario(createDataSourceBackedRowModel, seed)
   const filterBurst = await runFilterBurstScenario(createDataSourceBackedRowModel, seed)
+  const placeholderExposure = await runPlaceholderExposureScenario(createDataSourceBackedRowModel, seed)
   const elapsed = performance.now() - startedAt
   const heapDeltaMb = (process.memoryUsage().heapUsed - heapStart) / (1024 * 1024)
 
@@ -373,7 +520,7 @@ for (const seed of BENCH_SEEDS) {
     seed,
     elapsedMs: elapsed,
     heapDeltaMb,
-    scenarios: { scrollBurst, filterBurst },
+    scenarios: { scrollBurst, filterBurst, placeholderExposure },
   })
 
   console.log(`\nSeed ${seed}`)
@@ -401,6 +548,18 @@ for (const seed of BENCH_SEEDS) {
       placeholderEvents: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(filterBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
+    },
+    {
+      scenario: "placeholder-exposure",
+      p50Ms: placeholderExposure.stat.p50.toFixed(3),
+      p95Ms: placeholderExposure.stat.p95.toFixed(3),
+      p99Ms: placeholderExposure.stat.p99.toFixed(3),
+      cvPct: placeholderExposure.stat.cvPct.toFixed(2),
+      coalesced: placeholderExposure.diagnostics.pullCoalesced,
+      deferred: placeholderExposure.diagnostics.pullDeferred,
+      placeholderEvents: diagnosticNumber(placeholderExposure.diagnostics, "placeholderExposureEvents"),
+      placeholderMaxMs: diagnosticNumber(placeholderExposure.diagnostics, "placeholderExposureMaxMs").toFixed(3),
+      viewportDataMs: diagnosticNumber(placeholderExposure.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
     },
   ])
   console.log(`Total elapsed: ${elapsed.toFixed(2)}ms`)
@@ -457,7 +616,8 @@ const aggregateDeferred = stats(
 const aggregatePlaceholderExposureEvents = stats(
   runResults.map(
     run => diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "placeholderExposureEvents")
-      + diagnosticNumber(run.scenarios.filterBurst.diagnostics, "placeholderExposureEvents"),
+      + diagnosticNumber(run.scenarios.filterBurst.diagnostics, "placeholderExposureEvents")
+      + diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "placeholderExposureEvents"),
   ),
 )
 const aggregatePlaceholderExposureMaxMs = stats(
@@ -465,6 +625,7 @@ const aggregatePlaceholderExposureMaxMs = stats(
     run => Math.max(
       diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "placeholderExposureMaxMs"),
       diagnosticNumber(run.scenarios.filterBurst.diagnostics, "placeholderExposureMaxMs"),
+      diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "placeholderExposureMaxMs"),
     ),
   ),
 )
@@ -473,6 +634,7 @@ const aggregateViewportDataAvailabilityMaxMs = stats(
     run => Math.max(
       diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "viewportDataAvailabilityMaxMs"),
       diagnosticNumber(run.scenarios.filterBurst.diagnostics, "viewportDataAvailabilityMaxMs"),
+      diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "viewportDataAvailabilityMaxMs"),
     ),
   ),
 )
@@ -507,6 +669,24 @@ if (aggregateDeferred.mean < PERF_BUDGET_MIN_PULL_DEFERRED) {
     `aggregate pullDeferred mean ${aggregateDeferred.mean.toFixed(2)} is below PERF_BUDGET_MIN_PULL_DEFERRED=${PERF_BUDGET_MIN_PULL_DEFERRED}`,
   )
 }
+if (aggregatePlaceholderExposureEvents.mean < PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS) {
+  budgetWarnings.push(
+    `aggregate placeholder exposure events mean ${aggregatePlaceholderExposureEvents.mean.toFixed(2)} is below PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS=${PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS}`,
+  )
+}
+if (aggregatePlaceholderExposureMaxMs.max > PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS) {
+  budgetWarnings.push(
+    `aggregate placeholder exposure max ${aggregatePlaceholderExposureMaxMs.max.toFixed(3)}ms exceeds PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS=${PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS}ms`,
+  )
+}
+if (aggregateViewportDataAvailabilityMaxMs.max > PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS) {
+  budgetWarnings.push(
+    `aggregate viewport data availability max ${aggregateViewportDataAvailabilityMaxMs.max.toFixed(3)}ms exceeds PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS=${PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS}ms`,
+  )
+}
+if (PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS) {
+  budgetErrors.push(...budgetWarnings)
+}
 
 const summary = {
   benchmark: "datagrid-datasource-churn",
@@ -534,7 +714,12 @@ const summary = {
     varianceMinMeanMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
     maxHeapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
     heapEpsilonMb: PERF_BUDGET_HEAP_EPSILON_MB,
+    maxPlaceholderExposureMaxMs: PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS,
+    maxViewportDataAvailabilityMaxMs: PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS,
+    minPlaceholderExposureEvents: PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS,
+    placeholderFailOnWarnings: PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS,
   },
+  budgetWarnings,
   varianceSkippedChecks,
   aggregate: {
     elapsedMs: aggregateElapsed,
@@ -560,6 +745,12 @@ if (BENCH_OUTPUT_JSON) {
   console.log(`Benchmark summary written: ${BENCH_OUTPUT_JSON}`)
 }
 
+if (budgetWarnings.length > 0) {
+  console.warn("\nDataSource placeholder exposure budget warnings:")
+  for (const warning of budgetWarnings) {
+    console.warn(`- ${warning}`)
+  }
+}
 if (budgetErrors.length > 0) {
   console.error("\nDataSource churn benchmark budget check failed:")
   for (const error of budgetErrors) {
