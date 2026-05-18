@@ -9,7 +9,8 @@ Current execution state:
 - Slice 3 is completed and should be treated as the opt-in render telemetry baseline.
 - Slice 4 is completed and should be treated as the custom renderer error fallback baseline.
 - Slice 5 is completed and should be treated as the touch-scroll lightweight rendering baseline.
-- Slice 6 is the next implementation slice.
+- Slice 6 is completed and should be treated as the render churn benchmark baseline.
+- Slice 7 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -99,16 +100,18 @@ Current execution state:
 
 ## Slice 6: Mount And Unmount Churn Benchmark
 
-- Status: Planned.
+- Status: Completed. The enterprise browser-frame benchmark now promotes MutationObserver row/cell mount and unmount counts into `churnTelemetry`, aggregates per-scroll-write row/cell churn, and wires hard-budget env vars through the virtualization assert path.
 - Objective: convert row/cell mount and unmount churn into a repeatable benchmark signal for vertical and horizontal virtual scroll.
 - Affected packages/files:
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `scripts/bench-datagrid-harness.mjs`
+  - `package.json`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: local and CI benchmark artifacts can report warning or hard budgets for row/cell churn.
-- Tests to add/update:
-  - Vertical virtual scroll churn scenario.
-  - Horizontal virtual scroll churn scenario with pinned panes.
+- Tests added/covered:
+  - Vertical virtual scroll scenarios report row/cell mount and unmount churn.
+  - Horizontal virtual scroll with pinned panes reports the same churn aggregates through the wide-column virtualization assert path.
+  - `bench:datagrid:enterprise:virtualization:assert` enforces render churn budgets when virtualization warnings are hard-fail.
 - Validation command: `pnpm run bench:datagrid:enterprise:virtualization:assert`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): gate render churn during scroll`
@@ -156,8 +159,8 @@ Current execution state:
 3. Slice 3: Render Telemetry Counters (completed)
 4. Slice 4: Custom Renderer Error Fallback (completed)
 5. Slice 5: Lightweight Scroll Rendering Policy (completed)
-6. Slice 6: Mount And Unmount Churn Benchmark (next)
-7. Slice 7: Chrome And Overlay Duration Telemetry
+6. Slice 6: Mount And Unmount Churn Benchmark (completed)
+7. Slice 7: Chrome And Overlay Duration Telemetry (next)
 8. Slice 8: Enterprise Rendering Browser Gates
 
 ## Execution Notes

@@ -104,8 +104,8 @@ Vue app viewport and rendering:
 2. **Center pane diagnostics are guarded when disabled.**
    `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
 
-3. **Mount/unmount churn is not measured as a first-class budget.**
-   Virtualization limits DOM size, but center/pinned cells remount as `displayRows` and rendered columns change. `dgPerfTrace=1` now reports render-window composition and custom renderer invocation samples, and the enterprise browser-frame benchmark extracts those aggregates. Dedicated row/cell mount/unmount churn counters and hard budgets remain open.
+3. **Mount/unmount churn is measured in the virtualization browser gate.**
+   Virtualization limits DOM size, but center/pinned cells remount as `displayRows` and rendered columns change. `dgPerfTrace=1` now reports render-window composition and custom renderer invocation samples, and the enterprise browser-frame benchmark extracts those aggregates. The same browser-frame diagnostics now expose `churnTelemetry` with row/cell mount and unmount counts plus per-scroll-write rates, and `bench:datagrid:enterprise:virtualization:assert` wires hard budgets for row/cell churn.
 
 4. **Center and pinned pane cell templates duplicate rendering logic.**
    `DataGridTableStageCenterPane.vue` and `DataGridTableStagePinnedPane.vue` both render row state classes, cell state classes, editors, checkbox cells, and `DataGridCellContentRenderer`. This is not broken, but it raises drift risk and makes renderer lifecycle changes harder to apply consistently.
@@ -238,7 +238,7 @@ Playwright/e2e tests:
 Performance/benchmark tests:
 
 - Cell renderer invocation count per frame.
-- Row/cell mount and unmount count per 1,000 scroll steps.
+- Row/cell mount and unmount count per scroll write. Status: extracted under browser-frame `churnTelemetry` and gated in the virtualization assert profile.
 - Chrome canvas draw duration by redraw mode.
 - Overlay compute duration and segment count.
 - DOM node count for center plus pinned panes.
@@ -252,8 +252,8 @@ Performance/benchmark tests:
 - `renderedPinnedRightColumnCount`
 - `cellRenderInvocationCount`. Status: custom `cellRenderer` and `groupCellRenderer` invocation samples are recorded under `dgPerfTrace=1`.
 - `customRendererDurationMs`. Status: custom renderer duration samples are recorded under `dgPerfTrace=1`.
-- `rowMountCount` and `rowUnmountCount`
-- `cellMountCount` and `cellUnmountCount`
+- `rowMountCount` and `rowUnmountCount`. Status: extracted under `churnTelemetry`.
+- `cellMountCount` and `cellUnmountCount`. Status: extracted under `churnTelemetry`.
 - `chromeDrawDurationMs`
 - `chromeRedrawMode`
 - `overlayComputeDurationMs`
@@ -267,11 +267,11 @@ Performance/benchmark tests:
 ## Prioritized Implementation Slices
 
 1. Guard center-pane diagnostics and add a regression test. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 1.
-2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; dedicated mount/unmount churn counters remain.
+2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; browser-frame churn telemetry is in place.
 3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs and runtime error fallback are in place.
 4. Add renderer error fallback or development-only error reporting. Status: runtime error fallback is in place; development-only reporting remains optional.
 5. Add lightweight scroll rendering policy for expensive custom renderers. Status: completed for touch-mode active body scroll; browser-frame budgets remain planned.
-6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll.
+6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 6.
 7. Add chrome/overlay duration telemetry and gates.
 8. Add browser-frame scenarios for pinned panes, auto-height rows, custom renderers, and wide columns.
 

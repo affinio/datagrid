@@ -141,6 +141,22 @@ const PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS = floatEnv(
   "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS",
   220,
 )
+const PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE = floatEnv(
+  "PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE",
+  999999,
+)
+const PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE = floatEnv(
+  "PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE",
+  999999,
+)
+const PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE = floatEnv(
+  "PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE",
+  999999,
+)
+const PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE = floatEnv(
+  "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE",
+  999999,
+)
 
 const ALL_SCENARIOS = [
   {
@@ -292,6 +308,10 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95, "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95"],
   [PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS, "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS"],
   [PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS, "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS"],
+  [PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE"],
+  [PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE"],
+  [PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE"],
+  [PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE"],
 ]) {
   if (value < 0) {
     throw new Error(`${label} must be non-negative`)
@@ -1617,6 +1637,19 @@ async function runScenario(page, sessionIndex, scenario) {
           : 0,
         rangeSampleCount: verticalDiagnostics.rangeSampleCount,
       }
+      verticalDiagnostics.churnTelemetry = {
+        scrollWriteCount: verticalDiagnostics.scrollWrites.length,
+        mutationCallbackCount: verticalDiagnostics.mutationSummary.callbackCount,
+        childListMutationCount: verticalDiagnostics.mutationSummary.childListMutations,
+        rowMountCount: verticalDiagnostics.mutationSummary.addedRowNodes,
+        rowUnmountCount: verticalDiagnostics.mutationSummary.removedRowNodes,
+        cellMountCount: verticalDiagnostics.mutationSummary.addedCellNodes,
+        cellUnmountCount: verticalDiagnostics.mutationSummary.removedCellNodes,
+        rowMountsPerScrollWrite: verticalDiagnostics.summary.addedRowsPerWrite,
+        rowUnmountsPerScrollWrite: verticalDiagnostics.summary.removedRowsPerWrite,
+        cellMountsPerScrollWrite: verticalDiagnostics.summary.addedCellsPerWrite,
+        cellUnmountsPerScrollWrite: verticalDiagnostics.summary.removedCellsPerWrite,
+      }
       const dataGridPerfStore = resolveDataGridPerfStore()
       verticalDiagnostics.appPerf = dataGridPerfStore
         ? {
@@ -1896,6 +1929,19 @@ function aggregateRuns(runs) {
       cellRendererDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellRendererDurationMs?.p95)),
       groupCellRendererDurationMs: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.groupCellRendererDurationMs?.p95)),
     },
+    churnTelemetry: {
+      scrollWriteCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.scrollWriteCount)),
+      mutationCallbackCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.mutationCallbackCount)),
+      childListMutationCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.childListMutationCount)),
+      rowMountCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.rowMountCount)),
+      rowUnmountCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.rowUnmountCount)),
+      cellMountCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellMountCount)),
+      cellUnmountCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellUnmountCount)),
+      rowMountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.rowMountsPerScrollWrite)),
+      rowUnmountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.rowUnmountsPerScrollWrite)),
+      cellMountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellMountsPerScrollWrite)),
+      cellUnmountsPerScrollWrite: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.churnTelemetry?.cellUnmountsPerScrollWrite)),
+    },
     sortDiagnostics: {
       menuClickMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuClickMs)),
       menuOpenToPaintMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phases?.menuOpenToPaintMs)),
@@ -2067,6 +2113,41 @@ function buildVirtualizationBudgetWarnings(scenarioReports) {
   return warnings
 }
 
+function buildRenderChurnBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    const diagnostics = report.aggregate.churnTelemetry
+    if (!diagnostics || diagnostics.scrollWriteCount.max <= 0) {
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} render row mounts per scroll write`,
+      diagnostics.rowMountsPerScrollWrite.p95,
+      PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} render row unmounts per scroll write`,
+      diagnostics.rowUnmountsPerScrollWrite.p95,
+      PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} render cell mounts per scroll write`,
+      diagnostics.cellMountsPerScrollWrite.p95,
+      PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} render cell unmounts per scroll write`,
+      diagnostics.cellUnmountsPerScrollWrite.p95,
+      PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
+    )
+  }
+  return warnings
+}
+
 function buildBrowserResourceBudgetWarnings(aggregate) {
   const warnings = []
   addWarningIfAbove(warnings, "enterprise browser frame p95", aggregate.frameP95Ms.p95, PERF_BUDGET_MAX_FRAME_P95_MS)
@@ -2133,10 +2214,12 @@ const elapsedMs = performance.now() - startedAt
 const scenarioReports = buildScenarioSummary(sessions)
 const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
 const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
-const budgetWarnings = [...interactionBudgetWarnings, ...virtualizationBudgetWarnings]
+const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
+const budgetWarnings = [...interactionBudgetWarnings, ...virtualizationBudgetWarnings, ...renderChurnBudgetWarnings]
 const budgetErrors = [
   ...(BENCH_INTERACTION_FAIL_ON_WARNINGS ? interactionBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
+  ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
 ]
 const aggregate = {
   elapsedMs,
@@ -2192,6 +2275,12 @@ const summary = {
       blankViewportCount: PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
       placeholderRows: PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
     },
+    renderChurnBudgets: {
+      rowMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE,
+      rowUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE,
+      cellMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
+      cellUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
+    },
     resourceBudgets: {
       frameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
       droppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
@@ -2220,6 +2309,12 @@ const summary = {
       renderedColumnsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95,
       blankViewportCount: PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
       placeholderRows: PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
+    },
+    renderChurn: {
+      rowMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE,
+      rowUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE,
+      cellMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
+      cellUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
     },
   },
   setup,

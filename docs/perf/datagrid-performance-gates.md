@@ -118,12 +118,14 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - The CI harness includes `enterprise-browser-frames` with the same focused virtualization scenario set and row/column overrides.
   - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.
   - Hard budgets use `BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS=true` and cover `PERF_BUDGET_MAX_FRAME_P95_MS=120`, `PERF_BUDGET_MAX_DROPPED_FRAME_PCT=90`, `PERF_BUDGET_MAX_LONG_TASK_COUNT=600`, `PERF_BUDGET_MAX_HEAP_DELTA_MB=260`, `PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS=10`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95=160`, `PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS=0`, and `PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS=220`.
+  - The same hard-fail profile records render churn under `churnTelemetry` and gates per-scroll-write row/cell mounts and unmounts through `PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE=220`, `PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE=220`, `PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE=30000`, and `PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE=30000`.
 - Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Rendering contracts and future gates:
   - Public `cellRenderer` and `groupCellRenderer` callbacks run synchronously inside the Vue render pass for rendered center and pinned cells.
   - Renderer authoring expectations are documented in `packages/datagrid-vue-app/README.md`: pure output, no grid-state mutation during render, no synchronous layout reads, stable child VNode keys, bounded per-cell work, and placeholder-aware `surface.kind` handling.
   - Throwing authored renderers fall back to the resolved display value for the affected cell; with `dgPerfTrace=1`, failed renderer samples include `rendererError: 1`.
   - With `dgPerfTrace=1`, the app stage records `stageRenderWindow`, `cellRenderer`, and `groupCellRenderer` samples; `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts render-window and renderer-duration aggregates under `renderTelemetry`.
+  - Browser-frame vertical and horizontal diagnostics extract MutationObserver row/cell mount and unmount counts under `churnTelemetry`, so churn can be reviewed beside `renderTelemetry`.
   - Custom-renderer-heavy grids are not covered by a hard enterprise frame gate yet; planned rendering gates should reuse the enterprise browser-frame harness instead of adding a separate performance track.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
