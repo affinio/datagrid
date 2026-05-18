@@ -19,6 +19,11 @@ export type {
   LineChartGeometryOptions,
   LineChartPointGeometry,
   LineChartXScaleType,
+  MetricDeltaDirection,
+  MetricDeltaModel,
+  MetricFormat,
+  MetricModel,
+  MetricModelOptions,
   PieChartGeometry,
   PieChartGeometryOptions,
   PieChartSliceGeometry,
@@ -47,6 +52,7 @@ export { createLineChartGeometry } from "./lineGeometry"
 export { createPieChartGeometry } from "./pieGeometry"
 export { createScatterChartGeometry } from "./scatterGeometry"
 export { createAreaChartGeometry } from "./areaGeometry"
+export { createMetricModel } from "./metricModel"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

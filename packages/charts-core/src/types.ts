@@ -212,3 +212,43 @@ export interface AreaChartGeometry {
   xDomain: ChartNumericDomain
   yDomain: ChartNumericDomain
 }
+
+export type MetricFormat =
+  | "number"
+  | "percent"
+  | "currency"
+  | "compact"
+  | "raw"
+
+export type MetricDeltaDirection =
+  | "up"
+  | "down"
+  | "flat"
+
+export interface MetricModelOptions {
+  label: string
+  value: number | string | null
+  previousValue?: number | null
+  format?: MetricFormat
+  currency?: string
+  locale?: string
+  unit?: string
+  precision?: number
+  trend?: readonly number[]
+}
+
+export interface MetricDeltaModel {
+  value: number
+  percentage: number | null
+  direction: MetricDeltaDirection
+}
+
+export interface MetricModel {
+  label: string
+  value: number | string | null
+  displayValue: string
+  format: MetricFormat
+  unit?: string
+  delta: MetricDeltaModel | null
+  trend: number[]
+}
