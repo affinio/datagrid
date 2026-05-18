@@ -7,7 +7,8 @@ Current execution state:
 - Slice 1 is completed and should be treated as the enterprise datasource contract baseline.
 - Slice 2 is completed and should be treated as the idempotent read retry/backoff baseline.
 - Slice 3 is completed and should be treated as the datasource latency telemetry baseline.
-- Slice 4 is the next implementation slice.
+- Slice 4 is completed and should be treated as the invalidation matrix baseline.
+- Slice 5 is the next implementation slice.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -69,7 +70,7 @@ Current execution state:
 
 ## Slice 4: Invalidation Matrix Hardening
 
-- Status: Planned.
+- Status: Completed. Dataset invalidation now keeps active viewport rows visible while scheduling refresh, and the server client has explicit normalization coverage for cell, row, range, and dataset invalidation payloads.
 - Objective: make cell, row, range, and dataset invalidation behavior explicit and covered across client mapping, row model reconciliation, and backend change feed responses.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
@@ -77,12 +78,13 @@ Current execution state:
   - `packages/datagrid-server-client/src/invalidation.ts`
   - `backend/tests/test_server_demo_changes.py`
   - `docs/server-datasource/consistency.md`
-- Expected behavior change: all supported invalidation kinds have deterministic cache effects and tests.
+- Expected behavior change: all supported invalidation kinds have deterministic cache effects and tests; dataset invalidation no longer blanks the mounted viewport before the refresh response arrives.
 - Tests to add/update:
   - Cell invalidation maps to the smallest supported row-model refresh scope.
-  - Row snapshots apply before invalidation fallback.
+  - Row invalidation normalizes string and numeric row ids.
+  - Range and dataset invalidation normalize deterministically.
   - Dataset invalidation preserves mounted row model state while scheduling refresh.
-- Validation command: targeted core/client/backend invalidation tests.
+- Validation command: `pnpm exec vitest run packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts packages/datagrid-server-client/src/invalidation.spec.ts packages/datagrid-server-client/src/changeFeedMapping.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): harden server datasource invalidation`
 
@@ -142,8 +144,8 @@ Current execution state:
 1. Slice 1: Enterprise Datasource Contract (completed)
 2. Slice 2: Retry And Backoff For Idempotent Reads (completed)
 3. Slice 3: Placeholder And Blank Viewport Telemetry (completed)
-4. Slice 4: Invalidation Matrix Hardening (next)
-5. Slice 5: Server Projection Capability Contract
+4. Slice 4: Invalidation Matrix Hardening (completed)
+5. Slice 5: Server Projection Capability Contract (next)
 6. Slice 6: Live Update Transport Abstraction
 7. Slice 7: Offline And Reconnect Policy
 

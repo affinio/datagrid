@@ -231,6 +231,14 @@ Current mapping:
 - undo / redo -> invalidation for the original operation
 - fallback -> dataset invalidation
 
+Frontend handling:
+
+- cell invalidation maps to row invalidation at the client cache boundary
+- row invalidation refetches the active viewport only when affected rows are visible
+- visible range invalidation keeps currently rendered rows visible while the refresh is pending
+- dataset invalidation keeps the active viewport visible and schedules a refresh; non-visible cached rows may be dropped
+- malformed range invalidation falls back to dataset invalidation during change-feed mapping
+
 ## Revision And History Relationship
 
 Each committed operation that changes persisted state must:

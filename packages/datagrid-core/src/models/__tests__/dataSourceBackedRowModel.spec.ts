@@ -3270,6 +3270,49 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps visible rows during dataset invalidation refresh", async () => {
+    const invalidate = vi.fn()
+    let generation = 0
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
+      const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
+        const index = request.range.start + offset
+        return {
+          index,
+          row: { id: index, value: generation > 0 ? `row-${index}-fresh` : `row-${index}` },
+        }
+      })
+      return {
+        rows,
+        total: 1_000,
+      }
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource: { pull, invalidate },
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+    })
+
+    model.setViewportRange({ start: 70, end: 75 })
+    await flushMicrotasks()
+    expect(model.getRow(72)?.row.value).toBe("row-72")
+
+    generation = 1
+    model.invalidateAll()
+
+    expect(model.getRow(72)?.row.value).toBe("row-72")
+    expect(model.getSnapshot().refreshing).toBe(true)
+    expect(invalidate).toHaveBeenCalledWith({ kind: "all", reason: "model-all" })
+
+    await flushMicrotasks()
+
+    expect(pull).toHaveBeenCalledTimes(2)
+    expect(model.getRow(72)?.row.value).toBe("row-72-fresh")
+    expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
+
+    model.dispose()
+  })
+
   it("keeps active viewport rows cached under row-cache pressure from out-of-window pushes", async () => {
     let pushListener: DataGridDataSourcePushListener<{ id: number; value: string }> | null = null
     const emitPush = (event: Parameters<DataGridDataSourcePushListener<{ id: number; value: string }>>[0]) => {
@@ -3428,7 +3471,8 @@ describe("createDataSourceBackedRowModel", () => {
       type: "invalidate",
       invalidation: { kind: "all", reason: "stream-reset" },
     })
-    expect(model.getRow(1)).toBeUndefined()
+    expect(model.getRow(1)?.row.value).toBe("patched-1")
+    expect(model.getSnapshot().refreshing).toBe(true)
     await flushMicrotasks()
 
     expect(pull.mock.calls.length).toBeGreaterThanOrEqual(2)

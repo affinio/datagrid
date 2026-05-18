@@ -1,4 +1,4 @@
-import type { DataGridDataSourceInvalidation } from "@affino/datagrid-core"
+import type { DataGridDataSourceInvalidation, DataGridRowId } from "@affino/datagrid-core"
 
 type RecordLike = Record<string, unknown>
 
@@ -10,35 +10,50 @@ function normalizeReason(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined
 }
 
-function normalizeRowIds(value: unknown): string[] {
+function normalizeRowIds(value: unknown): DataGridRowId[] {
   if (!Array.isArray(value)) {
     return []
   }
   return value
-    .filter((rowId): rowId is string => typeof rowId === "string" && rowId.trim().length > 0)
-    .map(rowId => rowId.trim())
+    .map(rowId => {
+      if (typeof rowId === "number" && Number.isFinite(rowId)) {
+        return rowId
+      }
+      if (typeof rowId === "string" && rowId.trim().length > 0) {
+        return rowId.trim()
+      }
+      return null
+    })
+    .filter((rowId): rowId is DataGridRowId => rowId !== null)
 }
 
-function normalizeCellRowIds(value: unknown): string[] {
+function normalizeCellRowIds(value: unknown): DataGridRowId[] {
   if (!Array.isArray(value)) {
     return []
   }
-  const rowIds: string[] = []
-  const seen = new Set<string>()
+  const rowIds: DataGridRowId[] = []
+  const seen = new Set<DataGridRowId>()
   for (const cell of value) {
     if (!isRecord(cell)) {
       continue
     }
     const rowId = cell.rowId
     const columnId = cell.columnId
-    if (typeof rowId !== "string" || typeof columnId !== "string") {
+    if (
+      !(
+        typeof rowId === "number" && Number.isFinite(rowId)
+        || typeof rowId === "string" && rowId.trim().length > 0
+      )
+      || typeof columnId !== "string"
+    ) {
       continue
     }
-    if (seen.has(rowId)) {
+    const normalizedRowId = typeof rowId === "string" ? rowId.trim() : rowId
+    if (seen.has(normalizedRowId)) {
       continue
     }
-    seen.add(rowId)
-    rowIds.push(rowId)
+    seen.add(normalizedRowId)
+    rowIds.push(normalizedRowId)
   }
   return rowIds
 }

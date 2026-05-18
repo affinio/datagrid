@@ -1376,7 +1376,35 @@ export function createDataSourceBackedRowModel<T = unknown>(
     emit()
   }
 
-  function clearAll() {
+  function clearAll(options: { preserveRange?: DataGridViewportRange | null } = {}) {
+    const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
+    if (preserveRange) {
+      if (rowCache.size > 0) {
+        bumpRevision()
+      }
+      let removedRows = 0
+      for (const index of Array.from(activePlaceholderExposureRows.keys())) {
+        if (index < preserveRange.start || index > preserveRange.end) {
+          finishPlaceholderExposure(index)
+        }
+      }
+      for (const index of Array.from(rowCache.keys())) {
+        if (index >= preserveRange.start && index <= preserveRange.end) {
+          continue
+        }
+        if (rowCache.delete(index)) {
+          staleRetainedRowIndexes.delete(index)
+          rangeCache.deleteRow(index)
+          removedRows += 1
+        }
+      }
+      diagnostics.invalidatedRows += removedRows
+      diagnostics.rowCacheSize = rowCache.size
+      updateLoadingState()
+      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
+      return
+    }
+
     if (rowCache.size > 0) {
       bumpRevision()
     }
@@ -1981,7 +2009,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function applyPushInvalidation(invalidation: DataGridDataSourceInvalidation) {
     if (invalidation.kind === "all") {
-      clearAll()
+      clearAll({ preserveRange: toSourceRange(viewportRange) })
       clearBackgroundPrefetchState("stale")
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
@@ -2842,7 +2870,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     },
     invalidateAll() {
       ensureActive()
-      clearAll()
+      clearAll({ preserveRange: toSourceRange(viewportRange) })
       clearBackgroundPrefetchState("stale")
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate({ kind: "all", reason: "model-all" }))

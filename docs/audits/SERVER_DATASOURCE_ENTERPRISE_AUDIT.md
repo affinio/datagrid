@@ -220,23 +220,24 @@ Backend:
 - The strong path is `createDataSourceBackedRowModel`; using lower-level `createServerBackedRowModel` for enterprise server-backed grids risks weaker invalidation and mutation behavior.
 - Cache replacement keeps visible rows, and placeholder/blank viewport telemetry is observable; high-latency budgets still need hard gate promotion.
 - Critical/background lanes are useful, but their telemetry is internal diagnostics rather than a visible perf gate.
-- Server invalidation can force broad reloads when row snapshots are missing.
+- Server invalidation can still force broad reloads when row snapshots are missing, but dataset invalidation now preserves the active viewport while the refresh is pending.
 
 ## Cache Invalidation And Partial Refresh
 
 Current state:
 
 - Core supports invalidating all, ranges, and row ids.
-- Mutations apply returned row snapshots first, then invalidation.
+- Mutations and change-feed events apply returned row snapshots before falling back to invalidation.
 - Push events can upsert, remove, or invalidate.
-- Sort/filter/group refreshes preserve visible cache until success.
+- Sort/filter/group refreshes and dataset invalidation preserve visible cache until success.
 - Backend emits cell, range, row, or dataset invalidation and includes row snapshots when configured and small enough.
+- The server client normalizes cell invalidation to row invalidation at the row-model cache boundary and covers cell, row, range, and dataset payloads in focused tests.
 
 Risks:
 
 - The core row model cannot directly represent cell-level invalidation.
 - Dataset invalidation is the fallback for incomplete change-feed windows or unsupported invalidation shape.
-- There is no enterprise matrix proving each invalidation type preserves visible rows, selection, focus, and edit state.
+- Integration tests still need to cover selection, focus, and active edit continuity through invalidation refreshes.
 
 ## Optimistic Updates
 
@@ -361,7 +362,7 @@ What blocks the target:
 - mutation retry remains intentionally unsupported until operation-id idempotency is guaranteed
 - consistency tokens are documented as required for enterprise integrations but still optional at runtime
 - server grouping/tree/pivot projection is unsupported in the current backend demo path
-- placeholder exposure, blank viewport detection, and pull latency are not perf-gated
+- placeholder exposure, blank viewport detection, and pull latency are observable but not perf-gated
 - integration tests do not yet cover selection/focus/edit continuity through server invalidation and cache replacement
 
 ## Recommended Roadmap
@@ -377,14 +378,14 @@ What blocks the target:
 - Add retry/backoff policy for idempotent pulls and change-feed polling. Status: completed in `@affino/datagrid-server-client`.
 - Classify HTTP errors as retryable, conflict, validation, auth, or fatal. Status: completed for read retry policy.
 - Keep mutation retries disabled by default unless operation ids are durable and idempotent. Status: preserved.
-- Add user-visible error/retry state expectations. Status: change-feed diagnostics include retry attempt, retry delay, and consecutive failures; placeholder exposure telemetry remains planned.
+- Add user-visible error/retry state expectations. Status: change-feed diagnostics include retry attempt, retry delay, and consecutive failures; placeholder exposure and viewport latency telemetry are implemented.
 
 ### Phase 3: Cache And Placeholder Hardening
 
-- Add placeholder exposure telemetry.
-- Add blank viewport detection.
-- Add cache hit/miss and stale row retention diagnostics.
-- Add tests for row snapshots, range invalidation, row invalidation, and dataset invalidation with active viewport rows.
+- Add placeholder exposure telemetry. Status: completed in `createDataSourceBackedRowModel`.
+- Add blank viewport detection. Status: completed in sparse row-model diagnostics and browser artifacts.
+- Add cache hit/miss and stale row retention diagnostics. Status: cache hit/miss telemetry is implemented; stale-row continuity is covered by focused row-model tests.
+- Add tests for row snapshots, range invalidation, row invalidation, and dataset invalidation with active viewport rows. Status: invalidation matrix coverage is implemented for core row-model behavior and server-client normalization.
 
 ### Phase 4: Server Projection Expansion
 
@@ -487,10 +488,12 @@ Performance/benchmark tests:
 3. **Add placeholder and blank-viewport telemetry**
    - Files: `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`, performance docs/tests
    - Outcome: latency UX becomes observable and gateable.
+   - Status: completed. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 4. **Harden invalidation matrix**
    - Files: `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`, `packages/datagrid-server-client/src/changeFeedMapping.ts`, backend tests
    - Outcome: all invalidation kinds have explicit row model behavior and tests.
+   - Status: completed. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 5. **Clarify or implement server grouping/tree/pivot**
    - Files: backend schemas/projection/repository, adapter mapping, docs
