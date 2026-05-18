@@ -712,6 +712,7 @@ function anchorRectFromTarget(currentTarget: EventTarget | null): WorldMapAnchor
   margin: 0 auto;
   cursor: default;
   outline: none;
+  overflow: hidden;
   touch-action: none;
   user-select: none;
 }

@@ -1,6 +1,7 @@
 export type {
   CreateWorldMapPathOptions,
   ProjectWorldMapPositionOptions,
+  WorldMapAntimeridianStrategy,
   WorldMapCountryFeature,
   WorldMapCountryId,
   WorldMapGeometry,

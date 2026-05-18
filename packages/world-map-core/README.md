@@ -57,6 +57,7 @@ import { createWorldMapPath } from "@affino/world-map-core"
 const pathFeature = createWorldMapPath(feature, {
   viewport: { width: 360, height: 180 },
   precision: 2,
+  antimeridianStrategy: "break-lines",
 })
 
 // { id, name, iso2, iso3, path, properties }
@@ -64,10 +65,12 @@ const pathFeature = createWorldMapPath(feature, {
 
 `Polygon` and `MultiPolygon` rings are projected with the selected projection and emitted as SVG path data. Empty rings are skipped.
 
+By default, paths use `antimeridianStrategy: "break-lines"` to unwrap rings that cross the antimeridian and emit shifted copies at the map edges. This avoids long filled closing segments across the map while preserving local ring closure near the edge. Use `antimeridianStrategy: "none"` to preserve direct line commands across the antimeridian.
+
 ## Non-Goals For v0.1
 
 - No renderer components.
 - No DOM, SVG, Canvas, or WebGL integration.
 - No MapLibre, D3, topojson, or chart dependencies.
 - No Mercator projection yet.
-- No path generation, fit-to-bounds, zoom, pan, or topology processing yet.
+- No fit-to-bounds, zoom, pan, or topology processing yet.

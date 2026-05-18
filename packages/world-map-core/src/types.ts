@@ -17,6 +17,8 @@ export interface WorldMapScreenPoint {
 
 export type WorldMapProjectionType = "equirectangular"
 
+export type WorldMapAntimeridianStrategy = "break-lines" | "none"
+
 export interface ProjectWorldMapPositionOptions {
   viewport: WorldMapViewport
   projection?: WorldMapProjectionType
@@ -26,6 +28,7 @@ export interface CreateWorldMapPathOptions {
   viewport: WorldMapViewport
   projection?: WorldMapProjectionType
   precision?: number
+  antimeridianStrategy?: WorldMapAntimeridianStrategy
   breakOnAntimeridian?: boolean
 }
 

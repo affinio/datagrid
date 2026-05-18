@@ -255,7 +255,7 @@ describe("world-map-core", () => {
     })
   })
 
-  it("starts a new subpath when adjacent points jump across the antimeridian", () => {
+  it("unwraps and copies a ring when adjacent points jump across the antimeridian", () => {
     const feature: WorldMapCountryFeature = {
       id: "seam",
       name: "Seam",
@@ -272,7 +272,69 @@ describe("world-map-core", () => {
     expect(createWorldMapPath(feature, {
       viewport: { width: 360, height: 180 },
       precision: 0,
-    }).path).toBe("M 359 80 M 1 80 L 2 81 Z")
+    }).path).toBe("M -1 80 L 1 80 L 2 81 Z M 359 80 L 361 80 L 362 81 Z")
+  })
+
+  it("keeps antimeridian-crossing ring segments local to the map edge", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "seam-regression",
+      name: "Seam Regression",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 170, lat: 10 },
+          { lon: -170, lat: 10 },
+          { lon: -160, lat: 0 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+    }).path).toBe("M -10 80 L 10 80 L 20 90 Z M 350 80 L 370 80 L 380 90 Z")
+  })
+
+  it("does not create a filled diagonal closing segment across the map edge", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "seam-filled-diagonal",
+      name: "Seam Filled Diagonal",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 170, lat: 20 },
+          { lon: -170, lat: 20 },
+          { lon: -160, lat: 10 },
+          { lon: 170, lat: 20 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+    }).path).toBe("M -10 70 L 10 70 L 20 80 L -10 70 Z M 350 70 L 370 70 L 380 80 L 350 70 Z")
+  })
+
+  it("can preserve antimeridian-crossing line commands when antimeridian strategy is none", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "seam-none",
+      name: "Seam None",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 170, lat: 10 },
+          { lon: -170, lat: 10 },
+          { lon: -160, lat: 0 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+      antimeridianStrategy: "none",
+    }).path).toBe("M 350 80 L 10 80 L 20 90 Z")
   })
 
   it("keeps normal adjacent projected points connected with line commands", () => {
