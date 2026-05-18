@@ -34,3 +34,18 @@ export interface ChartLinearScale {
   range: { min: number; max: number }
   scale(value: number): number
 }
+
+export interface ChartBandScaleOptions {
+  categories: readonly string[]
+  range: { min: number; max: number }
+  paddingInner?: number
+  paddingOuter?: number
+}
+
+export interface ChartBandScale {
+  categories: readonly string[]
+  range: { min: number; max: number }
+  bandwidth: number
+  step: number
+  scale(category: string): number | null
+}

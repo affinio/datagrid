@@ -1,4 +1,6 @@
 export type {
+  ChartBandScale,
+  ChartBandScaleOptions,
   ChartDatum,
   ChartLinearScale,
   ChartMargin,
@@ -22,6 +24,7 @@ export {
   createChartLinearScale,
   normalizeChartValue,
 } from "./scale"
+export { createChartBandScale } from "./bandScale"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }
