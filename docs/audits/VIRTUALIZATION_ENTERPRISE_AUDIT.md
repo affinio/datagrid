@@ -170,8 +170,8 @@ Orchestration, sandbox, tests, and benchmarks:
 2. **Column virtualization defaults are conservative.**
    `dataGridVirtualization.ts` defaults row virtualization on and column virtualization off unless full virtualization is enabled. This is safe for compatibility but should be called out for wide-grid enterprise configurations.
 
-3. **Grouped/tree expansion behavior needs explicit documentation.**
-   Row model and selection paths can operate over row nodes, but grouped/tree expansion and collapse invalidation around virtual ranges was not documented as an enterprise invariant in the reviewed virtualization docs.
+3. **Grouped/tree expansion behavior is now documented for the row-model boundary.**
+   `docs/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, virtualized a11y mapping, and server/data-source grouped placeholder metadata.
 
 ## Correctness Risks
 
@@ -243,7 +243,7 @@ What blocks the target:
 
 ### Phase 1: Correctness And Invariant Audit
 
-- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; core viewport controller integration invariants are covered by `packages/datagrid-core/src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts` and `packages/datagrid-core/src/viewport/__tests__/integrationSnapshot.contract.spec.ts`; remaining Phase 1 work is app-stage, lifecycle, and fractional/browser coverage.
+- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; core viewport controller integration invariants are covered by `packages/datagrid-core/src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts` and `packages/datagrid-core/src/viewport/__tests__/integrationSnapshot.contract.spec.ts`; grouped/tree flattened row-model invalidation is covered by `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts`. Remaining Phase 1 work is app-stage, lifecycle, and fractional/browser coverage.
 - Define the canonical virtualization contract for core and Vue app paths.
 - Add invariant tests for visible range math: no off-by-one gaps, no duplicates, no missing rows, stable start/end semantics, and deterministic range output.
 - Cover sort, filter, group, pivot, cache replacement, container resize, column resize, reorder, hide/show, pinned columns, pinned top rows, and pinned bottom rows.
@@ -305,7 +305,7 @@ What blocks the target:
 - Placeholder rows in the rendered range with correct height and stable identity.
 - Active cell, editor, selection, fill handle, and clipboard behavior across virtual remount.
 - Column resize/reorder/hide/show while horizontal virtualization is active.
-- Group/tree expansion and collapse while the viewport intersects the changed range.
+- Group/tree expansion and collapse while the viewport intersects the changed range. Status: core row-model boundary coverage exists; app-stage browser coverage remains.
 - A11y attributes for virtualized rows and cells.
 
 ### Playwright/E2E Tests
@@ -367,5 +367,5 @@ What blocks the target:
 - If app-stage virtualization is aligned with core primitives, migrate in small slices behind existing behavior and compare range outputs before changing rendering.
 - If `serverBackedRowModel.ts` is downgraded to a simple path, document the limitation clearly and route enterprise examples to `dataSourceBackedRowModel.ts`.
 - If exact variable-height virtualization is only guaranteed in the Vue app path, document that support boundary before advertising it as a core feature.
-- Grouped/tree virtualization, pivoted rows, and massive virtual selection should be documented as unsupported or partial until covered by tests.
+- Grouped/tree virtualization is documented as a flattened row-model boundary and has core viewport coverage. Pivoted rows, server/data-source grouped placeholders, and massive virtual selection remain partial until covered by focused tests.
 - Any new performance gates should start as warning-only if current baselines are unknown, then become required after stable measurements are recorded.

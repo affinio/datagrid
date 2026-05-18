@@ -1311,7 +1311,9 @@ export function createDataGridViewportController<TRow = unknown>(
 						return
 					}
 
+					const previousRowCount = totalRowCount.value
 					const rowCount = getRowCountFromModel()
+					const rowCountDirty = previousRowCount !== rowCount
 					totalRowCount.value = rowCount
 
 					const virtualizationByProp = virtualizationFlag
@@ -1371,6 +1373,7 @@ export function createDataGridViewportController<TRow = unknown>(
 					const shouldFastPath =
 						columnWindowReady &&
 						!pendingColumnInvalidation &&
+						!rowCountDirty &&
 						!viewportMetricsDirty &&
 						!shouldForceAutoRowHeightMeasure &&
 						shouldUseFastPath({

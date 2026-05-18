@@ -3,11 +3,46 @@ import { createClientRowModel, createDataGridColumnModel, createServerBackedRowM
 import { createDataGridViewportController } from "../dataGridViewportController"
 import type { ServerRowModel } from "../../models/server/serverRowModel.js"
 import type { VisibleRow } from "../../types"
+import type { ImperativeRowUpdatePayload } from "../dataGridViewportTypes"
 
 function buildRows(count: number): VisibleRow<{ id: number; value: string }>[] {
   return Array.from({ length: count }, (_, index) => ({
     row: { id: index, value: `row-${index}` },
     rowId: index,
+    originalIndex: index,
+    displayIndex: index,
+  }))
+}
+
+function buildGroupedRows(groupCount: number, rowsPerGroup: number): VisibleRow<{ id: string; team: string; value: number }>[] {
+  const rows: VisibleRow<{ id: string; team: string; value: number }>[] = []
+  for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+    const team = `team-${groupIndex}`
+    for (let rowIndex = 0; rowIndex < rowsPerGroup; rowIndex += 1) {
+      const index = rows.length
+      const id = `${team}-row-${rowIndex}`
+      rows.push({
+        row: { id, team, value: index },
+        rowId: id,
+        originalIndex: index,
+        displayIndex: index,
+      })
+    }
+  }
+  return rows
+}
+
+function buildParentTreeRows(): VisibleRow<{ id: string; parentId: string | null; value: number }>[] {
+  const source = [
+    { id: "root-a", parentId: null, value: 1 },
+    { id: "child-a-1", parentId: "root-a", value: 2 },
+    { id: "child-a-2", parentId: "root-a", value: 3 },
+    { id: "root-b", parentId: null, value: 4 },
+    { id: "child-b-1", parentId: "root-b", value: 5 },
+  ]
+  return source.map((row, index) => ({
+    row,
+    rowId: row.id,
     originalIndex: index,
     displayIndex: index,
   }))
@@ -74,6 +109,12 @@ function createServerModelStub(rows: VisibleRow<{ id: number; value: string }>[]
   }
 
   return { source, fetchBlock }
+}
+
+function latestRowsPayload(onRows: ReturnType<typeof vi.fn>): ImperativeRowUpdatePayload {
+  const latestCall = onRows.mock.calls[onRows.mock.calls.length - 1]
+  expect(latestCall).toBeDefined()
+  return latestCall?.[0] as ImperativeRowUpdatePayload
 }
 
 describe("table viewport row-model boundary", () => {
@@ -191,6 +232,124 @@ describe("table viewport row-model boundary", () => {
     controller.dispose()
     columnModel.dispose()
     serverBackedModel.dispose()
+    cleanup()
+  })
+
+  it("clamps grouped visible range when collapse removes rows around the active viewport", () => {
+    const rowModel = createClientRowModel({
+      rows: buildGroupedRows(2, 48),
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
+    })
+    const onRows = vi.fn()
+    const { container, header, cleanup } = mountLayoutNodes()
+    const controller = createDataGridViewportController({
+      resolvePinMode: () => "none",
+      rowModel,
+      columnModel,
+      imperativeCallbacks: { onRows },
+    })
+
+    controller.setViewportMetrics({ containerWidth: 640, containerHeight: 360, headerHeight: 40 })
+    controller.attach(container, header)
+    controller.refresh(true)
+    controller.scrollToRow(rowModel.getRowCount() - 1)
+    controller.refresh(true)
+    expect(controller.derived.rows.visibleRange.value.start).toBeGreaterThan(0)
+
+    rowModel.collapseAllGroups()
+    controller.refresh(true)
+
+    const payload = latestRowsPayload(onRows)
+    const visibleRows = payload.visibleRows ?? []
+    const visibleRowIds = visibleRows.map(row => row.rowId)
+    const collapsedModelRows = rowModel.getRowsInRange({ start: 0, end: rowModel.getRowCount() })
+    expect(rowModel.getSnapshot().rowCount).toBe(2)
+    expect(controller.core.totalRowCount.value).toBe(2)
+    expect(controller.derived.rows.visibleRange.value.start).toBe(0)
+    expect(controller.derived.rows.visibleRange.value.end).toBeLessThanOrEqual(rowModel.getRowCount())
+    expect(collapsedModelRows.map(row => row.kind)).toEqual(["group", "group"])
+    expect(visibleRowIds).toEqual(collapsedModelRows.map(row => row.rowId))
+    expect(new Set(visibleRowIds).size).toBe(visibleRowIds.length)
+    expect(visibleRows.every(row => row.displayIndex >= 0 && row.displayIndex < rowModel.getRowCount())).toBe(true)
+
+    controller.detach()
+    controller.dispose()
+    columnModel.dispose()
+    rowModel.dispose()
+    cleanup()
+  })
+
+  it("rematerializes parent tree rows after collapse and re-expand near the viewport", () => {
+    const rowModel = createClientRowModel({
+      rows: buildParentTreeRows(),
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
+    })
+    const onRows = vi.fn()
+    const { container, header, cleanup } = mountLayoutNodes()
+    const controller = createDataGridViewportController({
+      resolvePinMode: () => "none",
+      rowModel,
+      columnModel,
+      imperativeCallbacks: { onRows },
+    })
+
+    controller.setViewportMetrics({ containerWidth: 640, containerHeight: 360, headerHeight: 40 })
+    controller.attach(container, header)
+    controller.refresh(true)
+
+    expect(rowModel.getRowsInRange({ start: 0, end: 10 }).map(row => row.rowId)).toEqual([
+      "root-a",
+      "child-a-1",
+      "child-a-2",
+      "root-b",
+      "child-b-1",
+    ])
+
+    controller.scrollToRow(4)
+    controller.refresh(true)
+    rowModel.collapseGroup("tree:parent:root-a")
+    controller.refresh(true)
+
+    const collapsedRows = latestRowsPayload(onRows).visibleRows ?? []
+    expect(rowModel.getSnapshot().rowCount).toBe(3)
+    expect(rowModel.getRowsInRange({ start: 0, end: 10 }).map(row => row.rowId)).toEqual([
+      "root-a",
+      "root-b",
+      "child-b-1",
+    ])
+    expect(controller.derived.rows.visibleRange.value.end).toBeLessThanOrEqual(rowModel.getRowCount())
+    expect(collapsedRows.map(row => row.rowId)).not.toContain("child-a-1")
+    expect(collapsedRows.map(row => row.rowId)).not.toContain("child-a-2")
+
+    rowModel.expandGroup("tree:parent:root-a")
+    controller.refresh(true)
+
+    const expandedRows = latestRowsPayload(onRows).visibleRows ?? []
+    expect(rowModel.getSnapshot().rowCount).toBe(5)
+    expect(rowModel.getRowsInRange({ start: 0, end: 10 }).map(row => row.rowId)).toEqual([
+      "root-a",
+      "child-a-1",
+      "child-a-2",
+      "root-b",
+      "child-b-1",
+    ])
+    expect(new Set(expandedRows.map(row => row.rowId)).size).toBe(expandedRows.length)
+    expect(expandedRows.every(row => row.displayIndex >= 0 && row.displayIndex < rowModel.getRowCount())).toBe(true)
+
+    controller.detach()
+    controller.dispose()
+    columnModel.dispose()
+    rowModel.dispose()
     cleanup()
   })
 })

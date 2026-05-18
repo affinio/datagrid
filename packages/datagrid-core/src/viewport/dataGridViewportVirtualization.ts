@@ -560,7 +560,7 @@ export function createDataGridViewportVirtualization(
       verticalOverscanController.reset(nowTs)
     }
 
-    const verticalState = verticalVirtualizer.update({
+    let verticalState = verticalVirtualizer.update({
       axis: "vertical",
       viewportSize: viewportHeightValue,
       scrollOffset: pendingScrollTop,
@@ -577,18 +577,36 @@ export function createDataGridViewportVirtualization(
       },
     })
 
-    let nextScrollTop = clampScrollOffset({
-      offset: verticalState.offset,
-      limit: computeVerticalScrollLimit({
+    const scrollLimit = computeVerticalScrollLimit({
+      estimatedItemSize: resolvedRowHeight,
+      totalCount: totalRows,
+      viewportSize: viewportHeightValue,
+      overscanTrailing: verticalState.overscanTrailing,
+      visibleCount: verticalState.visibleCount,
+      nativeScrollLimit: lastKnownNativeLimit,
+      trailingPadding: verticalConfig.edgePadding,
+    })
+    let nextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: scrollLimit })
+
+    if (Math.abs(nextScrollTop - verticalState.offset) > verticalConfig.scrollEpsilon) {
+      verticalState = verticalVirtualizer.update({
+        axis: "vertical",
+        viewportSize: viewportHeightValue,
+        scrollOffset: nextScrollTop,
+        virtualizationEnabled: virtualizationFlag,
         estimatedItemSize: resolvedRowHeight,
         totalCount: totalRows,
-        viewportSize: viewportHeightValue,
-        overscanTrailing: verticalState.overscanTrailing,
-        visibleCount: verticalState.visibleCount,
-        nativeScrollLimit: lastKnownNativeLimit,
-        trailingPadding: verticalConfig.edgePadding,
-      }),
-    })
+        overscan,
+        meta: {
+          zoom: zoomFactor,
+          scrollDirection: direction,
+          nativeScrollLimit: lastKnownNativeLimit,
+          debug: diagnostics.isDebugEnabled(),
+          debugNativeScrollLimit: diagnostics.isDebugEnabled() ? lastKnownNativeLimit : undefined,
+        },
+      })
+      nextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: scrollLimit })
+    }
 
     const needsScrollWrite =
       Math.abs(lastScrollTopSample - nextScrollTop) > verticalConfig.scrollEpsilon ||

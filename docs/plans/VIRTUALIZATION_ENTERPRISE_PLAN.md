@@ -16,7 +16,8 @@ Current execution state:
 - Slice 10 is completed and should be treated as the selection/clipboard virtual-target guard baseline.
 - Slice 11 is completed and should be treated as the edit lifecycle continuity baseline.
 - Slice 12 is completed and should be treated as the wide horizontal virtualization baseline.
-- Slice 13 is the next implementation slice.
+- Slice 13 is completed and should be treated as the grouped/tree row-model boundary baseline.
+- Slice 14 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -251,7 +252,7 @@ Current execution state:
 
 ## Slice 13: Grouped And Tree Row Virtualization Contract
 
-- Status: Planned.
+- Status: Completed. The viewport row-model boundary now documents grouped/tree flattened projection ownership, expansion/collapse invalidation, selection policy boundaries, and server/data-source limitations. Core viewport coverage now verifies grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows; the controller also treats row-count changes as structural invalidations instead of scroll-only fast-path updates.
 - Objective: define supported behavior for grouped/tree rows under virtualization before adding broad behavior.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/*`
@@ -259,14 +260,14 @@ Current execution state:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
   - `docs/datagrid-viewport-rowmodel-boundary.md`
   - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
-- Expected behavior change: grouped/tree expansion behavior is either implemented as a tested virtual row-model contract or documented as unsupported/partial.
-- Tests to add/update:
-  - Unit tests for expand/collapse invalidating ranges around the viewport.
-  - Selection/focus tests when expansion changes row indexes.
-  - Placeholder tests if grouped rows are server-backed.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand rowModel`
+- Expected behavior change: grouped/tree expansion behavior is implemented as a tested flattened row-model contract for client projections, with server/data-source grouped placeholders documented as partial until datasource metadata coverage is added.
+- Tests added/covered:
+  - Viewport row-model boundary tests for grouped collapse invalidating ranges around the viewport.
+  - Viewport row-model boundary tests for parent-tree collapse/re-expand near the active viewport.
+  - Existing grouped selection policy tests continue to cover collapsed flattened rows and descendant selection expansion.
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/viewport/__tests__/rowModelBoundary.contract.spec.ts src/selection/__tests__/selectionState.grouped.contract.spec.ts`
 - Risk level: High
-- Suggested commit message: `docs(datagrid): define grouped virtualization contract`
+- Suggested commit message: `fix(datagrid): clamp grouped viewport ranges`
 
 ## Slice 14: Resize, Zoom, And Fractional Pixel Cases
 
@@ -377,8 +378,8 @@ Current execution state:
 10. Slice 10: Selection And Clipboard Continuity (completed)
 11. Slice 11: Edit Lifecycle Continuity (completed)
 12. Slice 12: Wide Table Horizontal Virtualization Gate (completed)
-13. Slice 13: Grouped And Tree Row Virtualization Contract (next)
-14. Slice 14: Resize, Zoom, And Fractional Pixel Cases
+13. Slice 13: Grouped And Tree Row Virtualization Contract (completed)
+14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (next)
 15. Slice 15: Virtualized Accessibility Mapping
 16. Slice 16: Telemetry Events For Virtualization
 17. Slice 17: Perf Gates For Enterprise Virtualization
