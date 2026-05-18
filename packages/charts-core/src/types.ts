@@ -80,3 +80,33 @@ export interface BarChartGeometry {
   valueDomain: ChartNumericDomain
   categories: string[]
 }
+
+export type LineChartXScaleType = "index" | "number"
+
+export interface LineChartGeometryOptions {
+  rows: readonly ChartDatum[]
+  xField?: string
+  yField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  xScaleType?: LineChartXScaleType
+  includeZeroY?: boolean
+}
+
+export interface LineChartPointGeometry {
+  key: string
+  index: number
+  row: ChartDatum
+  xValue: number
+  yValue: number
+  x: number
+  y: number
+}
+
+export interface LineChartGeometry {
+  points: LineChartPointGeometry[]
+  path: string
+  plotArea: ChartRect
+  xDomain: ChartNumericDomain
+  yDomain: ChartNumericDomain
+}
