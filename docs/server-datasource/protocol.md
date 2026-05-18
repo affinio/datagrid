@@ -498,6 +498,13 @@ Behavior:
 - `sinceVersion < current` returns matching changes when the gap is complete.
 - if the window is incomplete or the gap is too large, the backend may return a dataset invalidation fallback.
 
+Client live-update lifecycle:
+
+- `@affino/datagrid-server-client` exposes a transport-neutral live-update boundary.
+- Polling remains the default implementation through `createPollingLiveUpdateTransport`.
+- `startLiveUpdates` / `stopLiveUpdates` are the neutral client lifecycle calls; `startChangeFeedPolling` / `stopChangeFeedPolling` remain compatibility aliases.
+- A future websocket/SSE transport must emit the same mapped row snapshots, invalidations, dataset-version updates, invalid-since-version recovery, and diagnostics path as polling.
+
 ## Retry And Backoff
 
 The server datasource client applies bounded retry/backoff only to idempotent reads:

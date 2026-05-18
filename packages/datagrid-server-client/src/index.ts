@@ -12,6 +12,12 @@ export {
   type ServerDatasourceChangeFeedPollerOptions,
 } from "./changeFeedPoller"
 export {
+  createPollingLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransportFactory,
+  type ServerDatasourceLiveUpdateTransportKind,
+} from "./liveUpdateTransport"
+export {
   normalizeRowSnapshots,
   type ServerRowSnapshotLike,
 } from "./rowSnapshot"

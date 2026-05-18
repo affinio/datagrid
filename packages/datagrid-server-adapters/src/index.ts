@@ -23,6 +23,7 @@ import {
   normalizeDatasourceInvalidation,
   normalizeRowSnapshots,
   type ServerDatasourceChangeFeedDiagnostics,
+  type ServerDatasourceLiveUpdateTransportFactory,
   type ServerRowSnapshotLike,
 } from "@affino/datagrid-server-client"
 
@@ -34,6 +35,7 @@ export interface AffinoDatasourceOptions {
   historyScope?: AffinoDatasourceHistoryScope
   histogram?: AffinoDatasourceHistogramOptions
   queryCodec?: DataGridServerQueryCodecOptions
+  liveUpdateTransportFactory?: ServerDatasourceLiveUpdateTransportFactory<unknown>
   mapQuery?: (query: DataGridServerQuery, request: DataGridDataSourcePullRequest) => unknown
   mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown
 }
@@ -478,6 +480,8 @@ export interface AffinoDatasourceExtras<TRow> {
 }
 
 export interface AffinoDatasource<TRow> extends DataGridDataSource<TRow>, AffinoDatasourceExtras<TRow> {
+  startLiveUpdates(options?: { intervalMs?: number }): void
+  stopLiveUpdates(): void
   startChangeFeedPolling(options?: { intervalMs?: number }): void
   stopChangeFeedPolling(): void
   getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics
@@ -1069,6 +1073,7 @@ export function createAffinoDatasource<TRow>(
       changesSinceVersion: sinceVersion => `/api/changes?tableId=${encodeURIComponent(tableId)}&sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
     },
     mapPullRequest: request => mapAffinoPullRequest(request, options),
+    liveUpdateTransportFactory: options.liveUpdateTransportFactory,
     mapHistogramRequest: request => ({
       columnId: request.columnId,
       filterModel: request.filterModel,

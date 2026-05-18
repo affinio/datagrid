@@ -3,7 +3,8 @@
 Framework-agnostic transport utilities for server-backed DataGrid:
 
 - HTTP datasource client factory
-- change feed polling
+- live update transport with polling fallback
+- change feed polling primitive
 - invalidation normalization
 - row snapshot mapping
 - dataset version handling
@@ -41,6 +42,10 @@ Use `createChangeFeedPoller()` to manage polling lifecycle concerns:
 - emit lightweight diagnostics
 - reset on invalid since-version responses
 
+### Live Update Transport
+
+Use `createPollingLiveUpdateTransport()` for the default polling-backed live-update transport. Custom websocket or server-sent-event transports can be supplied through `liveUpdateTransportFactory` as long as they feed the same response, invalid-since-version, diagnostics, and applied-change callbacks.
+
 ### Row Snapshots
 
 Use `normalizeRowSnapshots()` to normalize raw row payloads or row-entry payloads into `DataGridDataSourceRowEntry` values.
@@ -56,6 +61,7 @@ Use `createServerDatasourceHttpClient()` when you want a reusable low-level clie
 - viewport `pull`
 - column histogram reads
 - change-feed polling
+- transport-neutral live-update lifecycle
 - row snapshot application
 - diagnostics
 - bounded retry/backoff for idempotent reads
@@ -75,6 +81,7 @@ Set `retry: false` to disable read retries, or pass `retry` options to tune `max
 ```ts
 import {
   createChangeFeedPoller,
+  createPollingLiveUpdateTransport,
   createServerDatasourceHttpClient,
   mapServerChangeEvent,
   normalizeDatasetVersion,
@@ -88,6 +95,9 @@ Types:
 - `ServerDatasourceChangeFeedDiagnostics`
 - `ServerDatasourceChangeFeedPoller`
 - `ServerDatasourceChangeFeedPollerOptions`
+- `ServerDatasourceLiveUpdateTransport`
+- `ServerDatasourceLiveUpdateTransportFactory`
+- `ServerDatasourceLiveUpdateTransportKind`
 - `ServerDatasourceRetryOptions`
 - `ServerRowSnapshotLike`
 - `ServerChangeEventLike`
@@ -145,6 +155,8 @@ const client = createServerDatasourceHttpClient({
 
 client.startChangeFeedPolling()
 ```
+
+`startLiveUpdates()` and `stopLiveUpdates()` are transport-neutral aliases. `startChangeFeedPolling()` and `stopChangeFeedPolling()` remain available for existing polling integrations.
 
 If you need edits, fill, or history, build those in an adapter or host-specific wrapper that composes this client with backend write endpoints.
 

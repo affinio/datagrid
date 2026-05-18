@@ -9,7 +9,8 @@ Current execution state:
 - Slice 3 is completed and should be treated as the datasource latency telemetry baseline.
 - Slice 4 is completed and should be treated as the invalidation matrix baseline.
 - Slice 5 is completed and should be treated as the server-demo projection capability baseline.
-- Slice 6 is the next implementation slice.
+- Slice 6 is completed and should be treated as the live-update transport boundary baseline.
+- Slice 7 is the next implementation slice.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -108,20 +109,21 @@ Current execution state:
 
 ## Slice 6: Live Update Transport Abstraction
 
-- Status: Planned.
+- Status: Completed. `@affino/datagrid-server-client` now exposes a transport-neutral live-update interface, a polling-backed transport wrapper, `liveUpdateTransportFactory`, and `startLiveUpdates` / `stopLiveUpdates` aliases while preserving existing polling methods.
 - Objective: introduce a transport-neutral live-update lifecycle so polling and future websocket/SSE transports share cursor, reconnect, and gap recovery semantics.
 - Affected packages/files:
   - `packages/datagrid-server-client/src/changeFeedPoller.ts`
+  - `packages/datagrid-server-client/src/liveUpdateTransport.ts`
   - `packages/datagrid-server-client/src/client.ts`
   - `packages/datagrid-server-adapters/src/index.ts`
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/consistency.md`
-- Expected behavior change: polling remains the default; future push transports have a defined adapter boundary.
+- Expected behavior change: polling remains the default; future websocket/SSE transports have a defined adapter boundary that reuses the same dataset-version, invalidation, row snapshot, diagnostics, and invalid-cursor recovery semantics.
 - Tests to add/update:
-  - Start/stop lifecycle.
-  - Reconnect after transient transport failure.
-  - Invalid cursor and event-window gaps recover through dataset invalidation.
-- Validation command: targeted server-client and adapter tests.
+  - Transport-neutral start/stop delegates to the configured transport.
+  - Custom live-update transports feed the same row snapshot and dataset-version path as polling.
+  - Existing polling retry, abort, invalid cursor, and diagnostics behavior remains covered.
+- Validation command: `pnpm exec vitest run packages/datagrid-server-client/src/client.spec.ts packages/datagrid-server-client/src/changeFeedPoller.spec.ts packages/datagrid-server-adapters/src/index.spec.ts`
 - Risk level: High
 - Suggested commit message: `feat(datagrid-server-client): define live update transport`
 
@@ -147,8 +149,8 @@ Current execution state:
 3. Slice 3: Placeholder And Blank Viewport Telemetry (completed)
 4. Slice 4: Invalidation Matrix Hardening (completed)
 5. Slice 5: Server Projection Capability Contract (completed)
-6. Slice 6: Live Update Transport Abstraction (next)
-7. Slice 7: Offline And Reconnect Policy
+6. Slice 6: Live Update Transport Abstraction (completed)
+7. Slice 7: Offline And Reconnect Policy (next)
 
 ## Execution Notes
 

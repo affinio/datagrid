@@ -356,6 +356,87 @@ describe("createServerDatasourceHttpClient", () => {
     }
   })
 
+  it("supports a transport-neutral live update factory", () => {
+    const fetchImpl = vi.fn(async () => createResponse({ rows: [], total: 0 }))
+    const pushed: unknown[] = []
+    let transportOptions: Parameters<
+      NonNullable<Parameters<typeof createServerDatasourceHttpClient>[0]["liveUpdateTransportFactory"]>
+    >[0] | null = null
+    const transport = {
+      kind: "custom" as const,
+      start: vi.fn(),
+      stop: vi.fn(),
+      pollNow: vi.fn(async () => {}),
+      diagnostics: vi.fn(() => ({
+        currentDatasetVersion: null,
+        lastSeenVersion: null,
+        polling: true,
+        pending: false,
+        appliedChanges: 0,
+        intervalMs: null,
+        consecutiveFailures: 0,
+        retryAttempt: 0,
+        retryDelayMs: null,
+      })),
+      incrementAppliedChanges: vi.fn(),
+    }
+    const client = createServerDatasourceHttpClient({
+      fetchImpl,
+      endpoints: {
+        pull: "/pull",
+        histogram: "/histogram",
+        commitEdits: "/edits",
+        resolveFillBoundary: "/fill-boundary",
+        commitFillOperation: "/fill/commit",
+        undoOperation: operationId => `/operations/${operationId}/undo`,
+        redoOperation: operationId => `/operations/${operationId}/redo`,
+        historyStatus: "/history/status",
+        changesSinceVersion: sinceVersion => `/changes?sinceVersion=${sinceVersion}`,
+      },
+      mapPullResponse: () => ({ rows: [], total: 0, datasetVersion: null }),
+      liveUpdateTransportFactory: options => {
+        transportOptions = options
+        return transport
+      },
+    })
+    const unsubscribe = client.subscribe!(event => {
+      pushed.push(event)
+    })
+
+    client.startLiveUpdates({ intervalMs: 750 })
+    expect(transport.start).toHaveBeenCalledWith({ intervalMs: 750 })
+
+    transportOptions?.onResponse({
+      datasetVersion: 12,
+      changes: [
+        {
+          type: "row",
+          rows: [
+            { id: "row-live", index: 2, name: "Live Row" },
+          ],
+        },
+      ],
+    }, 11)
+
+    expect(transport.incrementAppliedChanges).toHaveBeenCalledWith(1)
+    expect(pushed).toContainEqual({
+      type: "upsert",
+      rows: [
+        {
+          index: 2,
+          rowId: "row-live",
+          row: { id: "row-live", index: 2, name: "Live Row" },
+        },
+      ],
+      datasetVersion: 12,
+    })
+    expect(client.latestDatasetVersion).toBe(12)
+
+    client.stopLiveUpdates()
+    expect(transport.stop).toHaveBeenCalled()
+    unsubscribe()
+  })
+
   it("stops polling by aborting the in-flight request and not scheduling overlaps", async () => {
     vi.useFakeTimers()
     const abortSignals: AbortSignal[] = []

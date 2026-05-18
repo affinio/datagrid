@@ -10,9 +10,7 @@ import type {
   DataGridDataSourceRowEntry,
 } from "@affino/datagrid-core"
 import {
-  createChangeFeedPoller,
   type ServerDatasourceChangeFeedDiagnostics,
-  type ServerDatasourceChangeFeedPoller,
 } from "./changeFeedPoller"
 import {
   DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS,
@@ -22,6 +20,11 @@ import {
   resolveEndpoint,
   type ServerDatasourceRetryOptions,
 } from "./http"
+import {
+  createPollingLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransportFactory,
+} from "./liveUpdateTransport"
 import { mapServerChangeEvent, type ServerChangeEventLike } from "./changeFeedMapping"
 import { normalizeDatasourceInvalidation } from "./invalidation"
 import { normalizeDatasetVersion } from "./normalize"
@@ -64,6 +67,7 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
   } | null
 
   isInvalidSinceVersionError?: (error: unknown) => boolean
+  liveUpdateTransportFactory?: ServerDatasourceLiveUpdateTransportFactory<unknown>
   retry?: ServerDatasourceRetryOptions | false
 }
 
@@ -85,6 +89,8 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
 export function createServerDatasourceHttpClient<TRow>(
   options: ServerDatasourceHttpClientOptions<TRow>,
 ): DataGridDataSource<TRow> & {
+  startLiveUpdates(options?: { intervalMs?: number }): void
+  stopLiveUpdates(): void
   startChangeFeedPolling(options?: { intervalMs?: number }): void
   stopChangeFeedPolling(): void
   getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics
@@ -169,7 +175,7 @@ export function createServerDatasourceHttpClient<TRow>(
 
   function dispatchChangeFeedChange(change: ServerChangeEventLike<TRow>): void {
     const mapped = mapServerChangeEvent(change, normalizeDatasourceInvalidation)
-    changeFeedPoller.incrementAppliedChanges(mapped.appliedCount)
+    liveUpdateTransport.incrementAppliedChanges(mapped.appliedCount)
     if (mapped.kind === "upsert") {
       emitPushEvent({
         type: "upsert",
@@ -196,7 +202,9 @@ export function createServerDatasourceHttpClient<TRow>(
     }
   }
 
-  const changeFeedPoller: ServerDatasourceChangeFeedPoller = createChangeFeedPoller<unknown>({
+  const liveUpdateTransport: ServerDatasourceLiveUpdateTransport = (
+    options.liveUpdateTransportFactory ?? createPollingLiveUpdateTransport
+  )({
     getSinceVersion: () => lastSeenVersion,
     loadSinceVersion: async (sinceVersion: number, signal?: AbortSignal) => {
       return await loadChangeFeedSinceVersion(sinceVersion, signal)
@@ -218,7 +226,7 @@ export function createServerDatasourceHttpClient<TRow>(
   })
 
   function getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics {
-    const diagnostics = changeFeedPoller.diagnostics()
+    const diagnostics = liveUpdateTransport.diagnostics()
     return {
       ...diagnostics,
       currentDatasetVersion: latestDatasetVersion,
@@ -265,12 +273,20 @@ export function createServerDatasourceHttpClient<TRow>(
     })
   }
 
+  function startLiveUpdates(startOptions: { intervalMs?: number } = {}): void {
+    liveUpdateTransport.start({ intervalMs: startOptions.intervalMs })
+  }
+
+  function stopLiveUpdates(): void {
+    liveUpdateTransport.stop()
+  }
+
   function startChangeFeedPolling(startOptions: { intervalMs?: number } = {}): void {
-    changeFeedPoller.start({ intervalMs: startOptions.intervalMs })
+    startLiveUpdates(startOptions)
   }
 
   function stopChangeFeedPolling(): void {
-    changeFeedPoller.stop()
+    stopLiveUpdates()
   }
 
   // The low-level client intentionally leaves request shaping to the caller.
@@ -339,6 +355,8 @@ export function createServerDatasourceHttpClient<TRow>(
     },
 
     getChangesSinceVersion,
+    startLiveUpdates,
+    stopLiveUpdates,
     startChangeFeedPolling,
     stopChangeFeedPolling,
     getChangeFeedDiagnostics,

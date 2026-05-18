@@ -317,6 +317,14 @@ Behavior:
 
 The frontend can use this as the fallback path when websocket transport is unavailable.
 
+`@affino/datagrid-server-client` exposes a transport-neutral live-update lifecycle:
+
+- `createPollingLiveUpdateTransport()` wraps the current polling implementation.
+- `createServerDatasourceHttpClient()` accepts `liveUpdateTransportFactory` for future websocket/SSE transports.
+- `startLiveUpdates()` / `stopLiveUpdates()` are the transport-neutral lifecycle calls.
+- existing `startChangeFeedPolling()` / `stopChangeFeedPolling()` calls remain polling-compatible aliases.
+- every transport must preserve the same `datasetVersion`, `lastSeenVersion`, invalid-since-version reset, row snapshot, invalidation, and diagnostics semantics.
+
 ## Read Retry Policy
 
 The client may retry idempotent reads with bounded backoff:
