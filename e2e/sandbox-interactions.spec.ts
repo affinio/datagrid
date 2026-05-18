@@ -327,6 +327,47 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(materializedAmountCell))
   })
 
+  test("server datasource loading placeholder replacement keeps selection anchor", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const stage = page.locator(".sandbox-server-data-source-grid .grid-stage:visible").first()
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    await page.getByRole("button", { name: "Slow backend" }).click()
+    await viewport.evaluate(element => {
+      const maxTop = Math.max(0, element.scrollHeight - element.clientHeight)
+      element.scrollTop = Math.round(maxTop * 0.55)
+      element.dispatchEvent(new Event("scroll", { bubbles: true }))
+    })
+
+    const loadingCell = page.locator(
+      '.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-id^="__affino_datagrid_data_source_loading__:"][data-column-key="name"]',
+    ).first()
+    await expect(loadingCell).toBeVisible({ timeout: 20_000 })
+    const rowIndex = await loadingCell.getAttribute("data-row-index")
+    const loadingRowId = await loadingCell.getAttribute("data-row-id")
+    expect(rowIndex).toBeTruthy()
+    expect(loadingRowId).toMatch(/^__affino_datagrid_data_source_loading__:\d+$/)
+    const sourceIndex = Number(loadingRowId?.split(":").at(-1))
+    expect(Number.isFinite(sourceIndex)).toBe(true)
+    const realRowId = `srv-${sourceIndex.toString().padStart(6, "0")}`
+
+    await loadingCell.click()
+    const loadingSignature = await cellSignature(loadingCell)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(loadingSignature)
+
+    const materializedCell = page.locator(
+      `.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-row-id="${realRowId}"][data-column-key="name"]`,
+    ).first()
+    await expect(materializedCell).toBeVisible({ timeout: 20_000 })
+    await expect(materializedCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(materializedCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(materializedCell))
+    await expect(materializedCell).toContainText(`Account ${sourceIndex.toString().padStart(5, "0")}`)
+  })
+
   test("fill drag with auto-scroll cleans up on mouseup outside the viewport", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
