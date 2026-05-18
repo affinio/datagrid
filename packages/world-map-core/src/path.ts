@@ -62,14 +62,26 @@ function createRingPath(
   const firstPosition = ring[0]!
   const firstPoint = projectWorldMapPosition(firstPosition, options)
   const commands = [`M ${formatCoordinate(firstPoint.x, options.precision)} ${formatCoordinate(firstPoint.y, options.precision)}`]
+  let previousPoint = firstPoint
 
   for (const position of ring.slice(1)) {
     const point = projectWorldMapPosition(position, options)
-    commands.push(`L ${formatCoordinate(point.x, options.precision)} ${formatCoordinate(point.y, options.precision)}`)
+    const command = shouldBreakPath(previousPoint.x, point.x, options) ? "M" : "L"
+    commands.push(`${command} ${formatCoordinate(point.x, options.precision)} ${formatCoordinate(point.y, options.precision)}`)
+    previousPoint = point
   }
 
   commands.push("Z")
   return commands.join(" ")
+}
+
+function shouldBreakPath(
+  previousX: number,
+  nextX: number,
+  options: CreateWorldMapPathOptions,
+): boolean {
+  return (options.breakOnAntimeridian ?? true) &&
+    Math.abs(nextX - previousX) > options.viewport.width / 2
 }
 
 function formatCoordinate(value: number, precision: number | undefined): string {

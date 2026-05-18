@@ -255,6 +255,46 @@ describe("world-map-core", () => {
     })
   })
 
+  it("starts a new subpath when adjacent points jump across the antimeridian", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "seam",
+      name: "Seam",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 179, lat: 10 },
+          { lon: -179, lat: 10 },
+          { lon: -178, lat: 9 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+    }).path).toBe("M 359 80 M 1 80 L 2 81 Z")
+  })
+
+  it("keeps normal adjacent projected points connected with line commands", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "adjacent",
+      name: "Adjacent",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 10, lat: 10 },
+          { lon: 20, lat: 10 },
+          { lon: 30, lat: 9 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+    }).path).toBe("M 190 80 L 200 80 L 210 81 Z")
+  })
+
   it("creates path features in input order", () => {
     const features: WorldMapCountryFeature[] = [
       {

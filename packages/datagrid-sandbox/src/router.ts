@@ -8,6 +8,7 @@ import VueServerDataSourceGridCard from "./components/VueServerDataSourceGridCar
 import VueShellGridCard from "./components/VueShellGridCard.vue"
 import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
 import VueTypedFacadeGridCard from "./components/VueTypedFacadeGridCard.vue"
+import WorldMapDemo from "./features/world-map/WorldMapDemo.vue"
 
 const routes = [
   {
@@ -58,6 +59,10 @@ const routes = [
   {
     path: "/vue/spreadsheet-workbook",
     component: VueSpreadsheetWorkbookCard,
+  },
+  {
+    path: "/vue/world-map",
+    component: WorldMapDemo,
   },
   {
     path: "/vue/base-grid-factory",

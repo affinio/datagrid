@@ -26,6 +26,7 @@ export interface CreateWorldMapPathOptions {
   viewport: WorldMapViewport
   projection?: WorldMapProjectionType
   precision?: number
+  breakOnAntimeridian?: boolean
 }
 
 export interface WorldMapPolygonGeometry {
