@@ -97,6 +97,17 @@ class ServerDemoRepository(ServerGridDataAdapter):
 
     async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
         settings = core_config.get_settings()
+        unsupported_projection_fields = request.unsupported_projection_fields()
+        if unsupported_projection_fields:
+            raise ApiException(
+                status_code=400,
+                code="unsupported-server-projection",
+                message=(
+                    "Server demo pull supports range, sort, and filter only; unsupported projection fields: "
+                    + ", ".join(unsupported_projection_fields)
+                ),
+            )
+
         requested_rows = request.range.end_row - request.range.start_row
         if requested_rows > settings.grid_max_pull_rows:
             raise ApiException(

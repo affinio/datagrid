@@ -43,6 +43,8 @@ Every server-backed projection must provide deterministic identity:
 
 Current `server_demo` pull supports range, sort, and filter. Server-side grouping, tree projection, and pivot projection are not implemented in the current backend path; their fields are only part of frontend/core request and fill consistency contracts until a dedicated backend projection slice implements them.
 
+When `groupBy`, `groupExpansion`, `treeData`, or `pivot` is sent to `POST /api/server-demo/pull` with a non-empty payload, the backend returns `400 unsupported-server-projection`. This is intentional: demo integrations should fail explicitly rather than returning flat rows for a grouped/tree/pivot request.
+
 ## Pull
 
 `POST /api/server-demo/pull`
@@ -92,6 +94,13 @@ Recommended fields:
 
 - `sortModel`
 - `filterModel`
+
+Unsupported in the current `server_demo` pull path:
+
+- `groupBy`
+- `groupExpansion`
+- `treeData`
+- `pivot`
 
 Backward compatibility:
 

@@ -8,7 +8,8 @@ Current execution state:
 - Slice 2 is completed and should be treated as the idempotent read retry/backoff baseline.
 - Slice 3 is completed and should be treated as the datasource latency telemetry baseline.
 - Slice 4 is completed and should be treated as the invalidation matrix baseline.
-- Slice 5 is the next implementation slice.
+- Slice 5 is completed and should be treated as the server-demo projection capability baseline.
+- Slice 6 is the next implementation slice.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -90,7 +91,7 @@ Current execution state:
 
 ## Slice 5: Server Projection Capability Contract
 
-- Status: Planned.
+- Status: Completed. The FastAPI `server_demo` pull path now accepts the frontend projection field names but returns a deterministic `400 unsupported-server-projection` for non-empty `groupBy`, `groupExpansion`, `treeData`, or `pivot` payloads. Docs now state that range/sort/filter are the only implemented server-demo pull projections.
 - Objective: decide and encode whether server grouping/tree/pivot are implemented in the demo backend or explicitly unsupported outside projection hashing.
 - Affected packages/files:
   - `backend/app/features/server_demo/schemas.py`
@@ -98,10 +99,10 @@ Current execution state:
   - `backend/tests/test_server_demo_read.py`
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/backend-fastapi.md`
-- Expected behavior change: integrations cannot misread accepted frontend query fields as implemented server-demo grouped/tree/pivot projections.
+- Expected behavior change: integrations cannot misread accepted frontend query fields as implemented server-demo grouped/tree/pivot projections; unsupported projection requests fail with an explicit capability error.
 - Tests to add/update:
-  - Unsupported projection fields produce deterministic capability errors, or implemented fields return stable grouped/tree/pivot row ids.
-- Validation command: targeted backend read tests.
+  - Unsupported projection fields produce deterministic capability errors.
+- Validation command: `cd backend && uv run pytest tests/test_server_demo_read.py`
 - Risk level: Medium
 - Suggested commit message: `docs(datagrid): clarify server projection capabilities`
 
@@ -145,8 +146,8 @@ Current execution state:
 2. Slice 2: Retry And Backoff For Idempotent Reads (completed)
 3. Slice 3: Placeholder And Blank Viewport Telemetry (completed)
 4. Slice 4: Invalidation Matrix Hardening (completed)
-5. Slice 5: Server Projection Capability Contract (next)
-6. Slice 6: Live Update Transport Abstraction
+5. Slice 5: Server Projection Capability Contract (completed)
+6. Slice 6: Live Update Transport Abstraction (next)
 7. Slice 7: Offline And Reconnect Policy
 
 ## Execution Notes

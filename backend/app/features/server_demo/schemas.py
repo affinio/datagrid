@@ -58,6 +58,35 @@ class ServerDemoPullRequest(BaseModel):
     range: ServerDemoPullRange
     sort_model: list[ServerDemoSortModelItem] = Field(default_factory=list, alias="sortModel")
     filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
+    group_by: dict[str, Any] | None = Field(default=None, alias="groupBy")
+    group_expansion: dict[str, Any] | None = Field(default=None, alias="groupExpansion")
+    tree_data: Any | None = Field(default=None, alias="treeData")
+    pivot: dict[str, Any] | None = None
+    pagination: dict[str, Any] | None = None
+
+    def unsupported_projection_fields(self) -> list[str]:
+        unsupported: list[str] = []
+        if _has_payload(self.group_by):
+            unsupported.append("groupBy")
+        if _has_payload(self.group_expansion):
+            unsupported.append("groupExpansion")
+        if _has_payload(self.tree_data):
+            unsupported.append("treeData")
+        if _has_payload(self.pivot):
+            unsupported.append("pivot")
+        return unsupported
+
+
+def _has_payload(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    if isinstance(value, list | tuple | set):
+        return any(_has_payload(item) for item in value)
+    if isinstance(value, dict):
+        return any(_has_payload(item) for item in value.values())
+    return True
 
 
 class ServerDemoRow(BaseModel):

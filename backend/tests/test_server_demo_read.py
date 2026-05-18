@@ -89,6 +89,29 @@ async def test_server_demo_pull_exceeding_limit_returns_400(client: AsyncClient)
     }
 
 
+async def test_server_demo_pull_rejects_unsupported_projection_fields(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "sortModel": [],
+            "filterModel": None,
+            "groupBy": {"fields": ["region"], "expandedByDefault": True},
+            "treeData": {"mode": "path"},
+            "pivot": {"pivotModel": {"rows": ["region"]}},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "unsupported-server-projection",
+        "message": (
+            "Server demo pull supports range, sort, and filter only; unsupported projection fields: "
+            "groupBy, treeData, pivot"
+        ),
+    }
+
+
 async def test_server_demo_pull_maps_row_shape(client: AsyncClient) -> None:
     response = await client.post("/api/server-demo/pull", json={"range": {"startRow": 0, "endRow": 1}})
 

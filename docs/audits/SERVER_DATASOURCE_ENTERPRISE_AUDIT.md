@@ -8,7 +8,7 @@ The server datasource architecture is production-shaped and should remain the fo
 - `createAffinoDatasource` in `packages/datagrid-server-adapters/src/index.ts`
 - the FastAPI/Postgres `server_demo` implementation under `backend/app/features/server_demo/`
 
-Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete, idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`, and datasource latency telemetry now covers placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and promotion of latency telemetry into CI/browser performance gates.
+Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete, idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`, datasource latency telemetry now covers placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration, and the `server_demo` backend now rejects unsupported grouping/tree/pivot pull projection with an explicit capability error. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, implemented server grouping/tree/pivot projection, and promotion of latency telemetry into CI/browser performance gates.
 
 Do not introduce a parallel datasource stack. Tighten the current protocol, row model, HTTP adapter, backend services, and tests in small slices.
 
@@ -143,10 +143,10 @@ Backend:
    - Impact: integrations can accidentally accept stale edit/fill commits and still appear protocol-compliant.
    - Required: add runtime enterprise mode or integration validation where `baseRevision` is required for edits/fill and fill commits require `projectionHash` + `boundaryToken`.
 
-3. **Server grouping/tree/pivot contracts are partially defined but not fully implemented in the demo backend.**
-   - Evidence: core datasource requests include `groupBy`, `treeData`, `pivot`, and aggregation context. Backend `ServerDemoPullRequest` accepts only `range`, `sortModel`, and `filterModel`; fill projection schemas carry group/tree/pivot only for consistency hashing.
-   - Impact: grouped/tree/pivot server-backed behavior is supported by the frontend contract but unsupported by the current FastAPI demo pull projection.
-   - Required: either implement server grouping/tree/pivot projection or explicitly mark those server-demo features unsupported outside consistency hashing.
+3. **Server grouping/tree/pivot projection remains unsupported in the demo backend.**
+   - Evidence: core datasource requests include `groupBy`, `treeData`, `pivot`, and aggregation context. Backend `ServerDemoPullRequest` accepts these field names only to reject non-empty payloads with `400 unsupported-server-projection`; fill projection schemas carry group/tree/pivot for consistency hashing.
+   - Impact: grouped/tree/pivot server-backed behavior remains unavailable in the FastAPI demo path, but integrations now get a deterministic capability error instead of a misleading flat projection.
+   - Required: implement server grouping/tree/pivot projection if enterprise grouped/tree/pivot server mode is in scope.
 
 4. **Placeholder exposure and blank-viewport resilience are observable but not hard-gated.**
    - Evidence: `createDataSourceBackedRowModel` exposes placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration diagnostics; the sandbox and browser-frame harness export these fields. The placeholder budget remains warning-only while baselines settle.
@@ -361,7 +361,7 @@ What blocks the target:
 - no offline/reconnect contract
 - mutation retry remains intentionally unsupported until operation-id idempotency is guaranteed
 - consistency tokens are documented as required for enterprise integrations but still optional at runtime
-- server grouping/tree/pivot projection is unsupported in the current backend demo path
+- server grouping/tree/pivot projection is explicitly unsupported in the current backend demo path
 - placeholder exposure, blank viewport detection, and pull latency are observable but not perf-gated
 - integration tests do not yet cover selection/focus/edit continuity through server invalidation and cache replacement
 
@@ -389,9 +389,9 @@ What blocks the target:
 
 ### Phase 4: Server Projection Expansion
 
-- Decide whether server grouping/tree/pivot are in scope for the demo backend.
+- Decide whether server grouping/tree/pivot are in scope for the demo backend. Status: completed for current scope; unsupported projection fields return `400 unsupported-server-projection`.
 - If yes, extend pull schemas and projection service.
-- If no, document unsupported behavior clearly in server datasource docs and adapter examples.
+- If no, keep the explicit capability error and docs aligned.
 
 ### Phase 5: Live Updates
 
@@ -498,6 +498,7 @@ Performance/benchmark tests:
 5. **Clarify or implement server grouping/tree/pivot**
    - Files: backend schemas/projection/repository, adapter mapping, docs
    - Outcome: current unsupported server-demo behavior is either implemented or impossible to misread.
+   - Status: completed for the unsupported server-demo contract. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 6. **Add live-update transport abstraction**
    - Files: `packages/datagrid-server-client`, `packages/datagrid-server-adapters`, docs
