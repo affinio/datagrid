@@ -2,6 +2,13 @@
 
 This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, separable implementation slices. The order is intentional: prove correctness first, then prevent blanking, then harden server-backed and interaction behavior, then broaden enterprise performance gates.
 
+Current execution state:
+
+- Slice 1 is already completed and should be treated as the baseline.
+- Slice 2 is the next implementation slice.
+- `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
+- Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
+
 ## Slice 1: Core Visible Range Invariants
 
 - Status: Completed. Core invariant coverage now lives in `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`.
@@ -23,6 +30,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 2: Viewport Controller Integration Invariants
 
+- Status: Planned.
 - Objective: prove the core viewport controller preserves range and row identity through scroll, resize, row model updates, and horizontal layout changes.
 - Affected packages/files:
   - `packages/datagrid-core/src/viewport/dataGridViewportController.ts`
@@ -44,6 +52,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 3: Blank Viewport Detection Harness
 
+- Status: Planned.
 - Objective: add an automated browser detector that fails when the rendered viewport has visible blank gaps during scroll.
 - Affected packages/files:
   - `e2e/sandbox-grid.spec.ts`
@@ -61,6 +70,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 4: Blank Viewport Prevention Fixes
 
+- Status: Planned. This slice should only make runtime fixes for failures proven by Slice 3 or by an equivalent focused regression.
 - Objective: fix any blank viewport failures found by Slice 3 without changing the public virtualization API.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
@@ -77,6 +87,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 5: Adaptive Overscan Consistency Contract
 
+- Status: Planned.
 - Objective: make adaptive overscan decisions consistent across core and Vue app paths without replacing the current architecture.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/dynamicOverscan.ts`
@@ -94,6 +105,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 6: Retained Rows During Cache Replacement
 
+- Status: Planned.
 - Objective: prove and harden retained visible rows while datasource cache replacement or refresh is in progress.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
@@ -112,6 +124,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 7: Server Placeholder Exposure Telemetry
 
+- Status: Planned.
 - Objective: measure how long placeholder rows remain visible for server-backed virtualization.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
@@ -130,6 +143,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 8: Server Placeholder Exposure Budget
 
+- Status: Planned. This slice depends on Slice 7 telemetry or an equivalent benchmark signal.
 - Objective: convert placeholder telemetry into enforceable warning or failure budgets for enterprise scenarios.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`
@@ -147,6 +161,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 9: Focus Continuity Across Virtual Unmounts
 
+- Status: Planned. Reuse completed selection remount coverage where possible and focus this slice on virtualization-owned focus/visibility invariants.
 - Objective: preserve active-cell and keyboard focus semantics when rows or cells leave and re-enter the virtual window.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
@@ -165,6 +180,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 10: Selection And Clipboard Continuity
 
+- Status: Planned. Selection plan slices already closed core selection continuity; this slice is only for virtualization-specific unloaded, placeholder, or remount gaps that remain.
 - Objective: make selection, copy, paste, and fill behavior explicit across unloaded, placeholder, and remounted rows.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
@@ -183,6 +199,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 11: Edit Lifecycle Continuity
 
+- Status: Planned.
 - Objective: define and test editor behavior when an edited cell is virtualized out and later remounted.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
@@ -200,6 +217,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 12: Wide Table Horizontal Virtualization Gate
 
+- Status: Planned.
 - Objective: validate horizontal virtualization for enterprise-wide tables.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/horizontalVirtualizer.ts`
@@ -220,6 +238,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 13: Grouped And Tree Row Virtualization Contract
 
+- Status: Planned.
 - Objective: define supported behavior for grouped/tree rows under virtualization before adding broad behavior.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/*`
@@ -238,6 +257,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 14: Resize, Zoom, And Fractional Pixel Cases
 
+- Status: Planned.
 - Objective: harden range math and rendering under container resize, browser zoom, fractional pixels, and high-DPI device scale factors.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/verticalVirtualizer.ts`
@@ -256,6 +276,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 15: Virtualized Accessibility Mapping
 
+- Status: Planned.
 - Objective: verify virtualized rows and cells expose correct accessibility metadata.
 - Affected packages/files:
   - `docs/datagrid-headless-a11y-contract.md`
@@ -273,6 +294,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 16: Telemetry Events For Virtualization
 
+- Status: Planned.
 - Objective: add low-overhead telemetry for range calculation, rendered counts, overscan, blank detection, placeholder exposure, and churn.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
@@ -291,6 +313,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 17: Perf Gates For Enterprise Virtualization
 
+- Status: Planned. This slice should consume telemetry/benchmarks from earlier slices instead of introducing a separate performance track.
 - Objective: turn telemetry and benchmarks into repeatable gates for large and wide grids.
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`
@@ -311,6 +334,7 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 
 ## Slice 18: Documentation And Support Matrix
 
+- Status: Planned.
 - Objective: keep enterprise virtualization behavior, limitations, and validation expectations explicit.
 - Affected packages/files:
   - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
@@ -346,3 +370,14 @@ This plan converts `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md` into small, 
 16. Slice 16: Telemetry Events For Virtualization
 17. Slice 17: Perf Gates For Enterprise Virtualization
 18. Slice 18: Documentation And Support Matrix
+
+## Execution Notes
+
+- Preserve existing desktop behavior unless a slice explicitly targets a proven virtualization defect.
+- Keep `datagrid-core` responsible for deterministic viewport math and reusable virtualizer contracts.
+- Keep `datagrid-vue` and `datagrid-vue-app` responsible for renderer integration, retained windows, DOM focus, pane synchronization, and user-visible placeholder behavior.
+- Do not introduce a parallel virtualization manager. Extend existing viewport, row-model, stage, telemetry, and benchmark paths.
+- Avoid public API changes unless a slice explicitly identifies and approves the API first.
+- Treat blank viewport prevention, placeholder exposure, stable row/cell identity, pinned pane synchronization, and frame-budget impact as first-class acceptance criteria.
+- Keep scroll-time work latency-sensitive: avoid reactive writes in hot paths, avoid layout read/write thrash, and prefer rAF-batched synchronization.
+- Keep docs and audit status aligned when a slice is completed.
