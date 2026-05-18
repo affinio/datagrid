@@ -91,6 +91,7 @@ import { computed } from "vue"
 import { createBarChartGeometry, createChartLinearScale } from "@affino/charts-core"
 import type { BarChartBarGeometry, ChartDatum, ChartMargin } from "@affino/charts-core"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
+import { createChartInteractionAnchor } from "./interaction"
 import type { AffinoBarChartBarEvent } from "./types"
 
 const DEFAULT_WIDTH = 640
@@ -177,23 +178,17 @@ function emitBarEvent(
   bar: BarChartBarGeometry,
   event: MouseEvent | KeyboardEvent,
 ): void {
+  const anchor = createChartInteractionAnchor(event.currentTarget instanceof Element ? event.currentTarget : null)
+
   emit(eventName, {
+    item: bar,
     bar,
     row: bar.row,
     index: bar.index,
     category: bar.category,
     value: bar.value,
-    clientPoint: isMouseEvent(event)
-      ? {
-          x: event.clientX,
-          y: event.clientY,
-        }
-      : undefined,
+    ...anchor,
   })
-}
-
-function isMouseEvent(event: MouseEvent | KeyboardEvent): event is MouseEvent {
-  return typeof MouseEvent !== "undefined" && event instanceof MouseEvent
 }
 </script>
 

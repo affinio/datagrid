@@ -22,11 +22,11 @@
           tabindex="0"
           role="button"
           :aria-label="`${slice.category}: ${slice.value} (${formatPercentage(slice.percentage)})`"
-          @click="emitSliceEvent('slice-click', slice)"
-          @mouseenter="emitSliceEvent('slice-hover', slice)"
-          @mouseleave="emitSliceEvent('slice-leave', slice)"
-          @keydown.enter.prevent="emitSliceEvent('slice-click', slice)"
-          @keydown.space.prevent="emitSliceEvent('slice-click', slice)"
+          @click="emitSliceEvent('slice-click', slice, $event)"
+          @mouseenter="emitSliceEvent('slice-hover', slice, $event)"
+          @mouseleave="emitSliceEvent('slice-leave', slice, $event)"
+          @keydown.enter.prevent="emitSliceEvent('slice-click', slice, $event)"
+          @keydown.space.prevent="emitSliceEvent('slice-click', slice, $event)"
         />
       </g>
 
@@ -35,21 +35,13 @@
       </template>
     </AffinoChartFrame>
 
-    <ol v-if="showLegend && geometry.slices.length > 0" class="affino-pie-chart__legend" aria-label="Pie chart legend">
-      <li
-        v-for="slice in geometry.slices"
-        :key="`legend-${slice.key}`"
-        class="affino-pie-chart__legend-item"
-      >
-        <span
-          class="affino-pie-chart__legend-swatch"
-          :style="{ backgroundColor: getSeriesColor(slice.index) }"
-          aria-hidden="true"
-        />
-        <span class="affino-pie-chart__legend-label">{{ slice.category }}</span>
-        <span class="affino-pie-chart__legend-value">{{ formatPercentage(slice.percentage) }}</span>
-      </li>
-    </ol>
+    <AffinoChartLegend
+      v-if="showLegend && legendItems.length > 0"
+      class="affino-pie-chart__legend"
+      :items="legendItems"
+      orientation="vertical"
+      aria-label="Pie chart legend"
+    />
   </div>
 </template>
 
@@ -58,7 +50,9 @@ import { computed } from "vue"
 import { createPieChartGeometry } from "@affino/charts-core"
 import type { ChartDatum, ChartMargin, PieChartSliceGeometry } from "@affino/charts-core"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
-import type { AffinoPieChartSliceEvent } from "./types"
+import AffinoChartLegend from "./AffinoChartLegend.vue"
+import { createChartInteractionAnchor } from "./interaction"
+import type { AffinoPieChartSliceEvent, ChartLegendItem } from "./types"
 
 const DEFAULT_WIDTH = 360
 const DEFAULT_HEIGHT = 360
@@ -105,6 +99,12 @@ const geometry = computed(() => createPieChartGeometry({
 }))
 
 const isEmpty = computed(() => geometry.value.slices.length === 0)
+const legendItems = computed<ChartLegendItem[]>(() => geometry.value.slices.map((slice) => ({
+  id: slice.key,
+  label: slice.category,
+  color: getSeriesColor(slice.index),
+  value: formatPercentage(slice.percentage),
+})))
 
 function getSeriesColor(index: number): string {
   return `var(--affino-chart-series-${index % SERIES_COLOR_COUNT + 1})`
@@ -117,14 +117,19 @@ function formatPercentage(value: number): string {
 function emitSliceEvent(
   eventName: "slice-click" | "slice-hover" | "slice-leave",
   slice: PieChartSliceGeometry,
+  event: MouseEvent | KeyboardEvent,
 ): void {
+  const anchor = createChartInteractionAnchor(event.currentTarget instanceof Element ? event.currentTarget : null)
+
   emit(eventName, {
+    item: slice,
     slice,
     row: slice.row,
     index: slice.index,
     category: slice.category,
     value: slice.value,
     percentage: slice.percentage,
+    ...anchor,
   })
 }
 </script>
@@ -156,41 +161,5 @@ function emitSliceEvent(
 .affino-pie-chart__slice:focus-visible {
   stroke: var(--affino-chart-text, #172033);
   stroke-width: 2;
-}
-
-.affino-pie-chart__legend {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.affino-pie-chart__legend-item {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  color: var(--affino-chart-text, #172033);
-  font-size: 13px;
-  line-height: 1.35;
-}
-
-.affino-pie-chart__legend-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-}
-
-.affino-pie-chart__legend-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.affino-pie-chart__legend-value {
-  color: var(--affino-chart-muted-text, #667085);
-  font-variant-numeric: tabular-nums;
 }
 </style>

@@ -80,11 +80,11 @@
         tabindex="0"
         role="button"
         :aria-label="`Point ${point.index + 1}: ${point.yValue}`"
-        @click="emitPointEvent('point-click', point)"
-        @mouseenter="emitPointEvent('point-hover', point)"
-        @mouseleave="emitPointEvent('point-leave', point)"
-        @keydown.enter.prevent="emitPointEvent('point-click', point)"
-        @keydown.space.prevent="emitPointEvent('point-click', point)"
+        @click="emitPointEvent('point-click', point, $event)"
+        @mouseenter="emitPointEvent('point-hover', point, $event)"
+        @mouseleave="emitPointEvent('point-leave', point, $event)"
+        @keydown.enter.prevent="emitPointEvent('point-click', point, $event)"
+        @keydown.space.prevent="emitPointEvent('point-click', point, $event)"
       />
     </g>
 
@@ -104,6 +104,7 @@ import type {
   LineChartXScaleType,
 } from "@affino/charts-core"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
+import { createChartInteractionAnchor } from "./interaction"
 import type { AffinoLineChartPointEvent } from "./types"
 
 const DEFAULT_WIDTH = 640
@@ -206,13 +207,18 @@ function formatTick(value: number): string {
 function emitPointEvent(
   eventName: "point-click" | "point-hover" | "point-leave",
   point: LineChartPointGeometry,
+  event: MouseEvent | KeyboardEvent,
 ): void {
+  const anchor = createChartInteractionAnchor(event.currentTarget instanceof Element ? event.currentTarget : null)
+
   emit(eventName, {
+    item: point,
     point,
     row: point.row,
     index: point.index,
     xValue: point.xValue,
     yValue: point.yValue,
+    ...anchor,
   })
 }
 </script>

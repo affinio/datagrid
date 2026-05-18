@@ -15,7 +15,14 @@ This package exposes the shared chart frame, initial chart-adjacent types, and r
 ## Public API
 
 ```ts
-import { AffinoBarChart, AffinoChartFrame, AffinoLineChart, AffinoPieChart, createChartsVue } from "@affino/charts-vue"
+import {
+  AffinoBarChart,
+  AffinoChartFrame,
+  AffinoChartLegend,
+  AffinoLineChart,
+  AffinoPieChart,
+  createChartsVue,
+} from "@affino/charts-vue"
 
 const chartsVue = createChartsVue()
 ```
@@ -61,7 +68,7 @@ Events:
 - `bar-hover`
 - `bar-leave`
 
-Each bar event includes the core bar geometry, source row, index, category, value, and a `clientPoint` for pointer events.
+Each bar event includes the core bar geometry as `item` and `bar`, source row, index, category, value, `clientPoint`, and `anchorRect`.
 
 ## Line Chart
 
@@ -102,7 +109,7 @@ Events:
 - `point-hover`
 - `point-leave`
 
-Each point event includes the core point geometry, source row, index, `xValue`, and `yValue`.
+Each point event includes the core point geometry as `item` and `point`, source row, index, `xValue`, `yValue`, `clientPoint`, and `anchorRect`.
 
 ## Pie Chart
 
@@ -153,7 +160,81 @@ Events:
 - `slice-hover`
 - `slice-leave`
 
-Each slice event includes the core slice geometry, source row, index, category, value, and percentage.
+Each slice event includes the core slice geometry as `item` and `slice`, source row, index, category, value, percentage, `clientPoint`, and `anchorRect`.
+
+## Legend
+
+`AffinoChartLegend` renders a semantic list of chart legend items. It can be used standalone or by chart components that need a shared legend surface.
+
+```vue
+<script setup lang="ts">
+import { AffinoChartLegend } from "@affino/charts-vue"
+
+const items = [
+  { id: "alpha", label: "Alpha", value: "42%" },
+  { id: "beta", label: "Beta", color: "#16a34a", value: "58%" },
+]
+</script>
+
+<template>
+  <AffinoChartLegend
+    :items="items"
+    orientation="vertical"
+    interactive
+    @item-click="handleLegendClick"
+  />
+</template>
+```
+
+Legend props:
+
+- `items`
+- `orientation`
+- `interactive`
+- `ariaLabel`
+
+Legend events:
+
+- `item-click`
+- `item-hover`
+- `item-leave`
+
+## Interaction Payloads
+
+Chart and legend interaction events include plain anchor data for external tooltips and popovers:
+
+- `clientPoint`: center point of the interacted SVG or legend element
+- `anchorRect`: plain `{ x, y, width, height }` copied from `getBoundingClientRect()`
+
+Charts do not render or position tooltips. Consumers should pass `anchorRect` or `clientPoint` into their own floating UI primitives.
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import { AffinoBarChart } from "@affino/charts-vue"
+import type { AffinoBarChartBarEvent, ChartAnchorRect } from "@affino/charts-vue"
+
+const tooltipAnchor = ref<ChartAnchorRect | null>(null)
+const tooltipText = ref("")
+
+function handleBarHover(event: AffinoBarChartBarEvent) {
+  tooltipAnchor.value = event.anchorRect
+  tooltipText.value = `${event.category}: ${event.value}`
+}
+</script>
+
+<template>
+  <AffinoBarChart
+    :rows="rows"
+    category-field="segment"
+    value-field="revenue"
+    @bar-hover="handleBarHover"
+    @bar-leave="tooltipAnchor = null"
+  />
+
+  <!-- Render and position the app-owned tooltip/popover with tooltipAnchor. -->
+</template>
+```
 
 ## Theme Tokens
 

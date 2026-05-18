@@ -19,27 +19,41 @@ export interface ChartAnchorRect {
   height: number
 }
 
-export interface AffinoBarChartBarEvent {
-  bar: BarChartBarGeometry
-  row: ChartDatum
-  index: number
-  category: string
-  value: number
-  clientPoint?: ChartInteractionPoint
+export interface ChartLegendItem {
+  id: string
+  label: string
+  color?: string
+  value?: string | number
+  disabled?: boolean
 }
 
-export interface AffinoLineChartPointEvent {
+export type ChartLegendOrientation = "horizontal" | "vertical"
+
+export interface AffinoChartInteractionPayload<TItem> {
+  item: TItem
+  row?: ChartDatum
+  index: number
+  clientPoint: ChartInteractionPoint
+  anchorRect: ChartAnchorRect
+}
+
+export interface AffinoBarChartBarEvent extends AffinoChartInteractionPayload<BarChartBarGeometry> {
+  bar: BarChartBarGeometry
+  row: ChartDatum
+  category: string
+  value: number
+}
+
+export interface AffinoLineChartPointEvent extends AffinoChartInteractionPayload<LineChartPointGeometry> {
   point: LineChartPointGeometry
   row: ChartDatum
-  index: number
   xValue: number
   yValue: number
 }
 
-export interface AffinoPieChartSliceEvent {
+export interface AffinoPieChartSliceEvent extends AffinoChartInteractionPayload<PieChartSliceGeometry> {
   slice: PieChartSliceGeometry
   row: ChartDatum
-  index: number
   category: string
   value: number
   percentage: number

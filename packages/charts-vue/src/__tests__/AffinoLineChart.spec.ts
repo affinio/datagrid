@@ -20,6 +20,13 @@ function mountChart(props: Partial<InstanceType<typeof AffinoLineChart>["$props"
   })
 }
 
+function mockElementRect(element: Element, rect = { x: 10, y: 20, width: 30, height: 40 }): void {
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: () => rect,
+  })
+}
+
 describe("AffinoLineChart", () => {
   it("renders a line path for valid rows", () => {
     const wrapper = mountChart()
@@ -60,15 +67,20 @@ describe("AffinoLineChart", () => {
 
   it("emits point-click with the expected payload", async () => {
     const wrapper = mountChart()
+    const firstPoint = wrapper.find(".affino-line-chart__point")
+    mockElementRect(firstPoint.element)
 
-    await wrapper.find(".affino-line-chart__point").trigger("click")
+    await firstPoint.trigger("click")
 
     const payload = wrapper.emitted<AffinoLineChartPointEvent[]>("point-click")?.[0]?.[0]
     expect(payload?.index).toBe(0)
     expect(payload?.xValue).toBe(0)
     expect(payload?.yValue).toBe(10)
     expect(payload?.row).toEqual(rows[0])
+    expect(payload?.item).toBe(payload?.point)
     expect(payload?.point.yValue).toBe(10)
+    expect(payload?.anchorRect).toEqual({ x: 10, y: 20, width: 30, height: 40 })
+    expect(payload?.clientPoint).toEqual({ x: 25, y: 40 })
   })
 
   it("passes xScaleType number through to core geometry", () => {
