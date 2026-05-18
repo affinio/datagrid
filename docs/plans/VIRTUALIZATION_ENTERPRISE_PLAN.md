@@ -18,7 +18,8 @@ Current execution state:
 - Slice 12 is completed and should be treated as the wide horizontal virtualization baseline.
 - Slice 13 is completed and should be treated as the grouped/tree row-model boundary baseline.
 - Slice 14 is completed and should be treated as the resize/fractional viewport baseline.
-- Slice 15 is the next implementation slice.
+- Slice 15 is completed and should be treated as the virtualized accessibility mapping baseline.
+- Slice 16 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -291,19 +292,20 @@ Current execution state:
 
 ## Slice 15: Virtualized Accessibility Mapping
 
-- Status: Planned.
+- Status: Completed. The Vue app stage now exposes grid-level row/column counts, one-based row and column indexes on virtualized rows/cells, deterministic selected state after remount, and placeholder `aria-disabled` metadata. Vue adapter, app component, and Playwright coverage verify the mapping after scroll and keyboard navigation.
 - Objective: verify virtualized rows and cells expose correct accessibility metadata.
 - Affected packages/files:
   - `docs/datagrid-headless-a11y-contract.md`
   - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: virtualized DOM exposes stable row/column counts and row/column indexes where supported.
-- Tests to add/update:
+- Tests added/covered:
   - Component tests for `aria-rowcount`, `aria-colcount`, `aria-rowindex`, and `aria-colindex`.
   - E2E focus navigation with screen-reader-relevant attributes present after scroll.
   - Placeholder row accessibility assertions.
-- Validation command: `pnpm --filter @affino/datagrid-vue test -- --runInBand a11y && pnpm e2e -- e2e/sandbox-interactions.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/adapters/__tests__/a11yAttributesAdapter.contract.spec.ts && pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts --testNamePattern "aria indexes|selection aria" && pnpm exec playwright test e2e/sandbox-interactions.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid): expose virtualized a11y indexes`
 
@@ -381,8 +383,8 @@ Current execution state:
 12. Slice 12: Wide Table Horizontal Virtualization Gate (completed)
 13. Slice 13: Grouped And Tree Row Virtualization Contract (completed)
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (completed)
-15. Slice 15: Virtualized Accessibility Mapping (next)
-16. Slice 16: Telemetry Events For Virtualization
+15. Slice 15: Virtualized Accessibility Mapping (completed)
+16. Slice 16: Telemetry Events For Virtualization (next)
 17. Slice 17: Perf Gates For Enterprise Virtualization
 18. Slice 18: Documentation And Support Matrix
 

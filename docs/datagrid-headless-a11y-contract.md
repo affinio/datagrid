@@ -56,6 +56,18 @@ The app stage mirrors the committed selection snapshot into rendered cell access
 - placeholder cells that cannot materialize into editable rows expose `aria-disabled="true"`;
 - DOM focus restoration may lag virtualization, but selected/disabled state must be derived from the logical selection snapshot and row surface state, not from focus alone.
 
+## Virtualized Stage DOM Mapping
+
+The table stage exposes screen-reader-relevant grid metadata on the rendered virtualized viewport:
+
+- the center body viewport exposes `role="grid"`, `aria-rowcount`, `aria-colcount`, and `aria-multiselectable="true"`;
+- `aria-rowcount` reflects the logical row count from selection or viewport state, not only the number of mounted rows;
+- `aria-colcount` reflects the rendered table-stage column model, including the internal row-selection column when present;
+- rendered body rows expose `role="row"` and one-based `aria-rowindex` derived from the absolute row index;
+- rendered center and pinned body cells expose one-based `aria-rowindex` and `aria-colindex`, with `role="gridcell"` unless an interactive cell role such as `checkbox` overrides it;
+- rendered cells keep deterministic `aria-selected` state after virtualized unmount/remount;
+- loading or placeholder cells that are not editable expose `aria-disabled="true"` while preserving their row/column index metadata.
+
 ## Contract Tests
 
 - Core state machine:
@@ -65,3 +77,6 @@ The app stage mirrors the committed selection snapshot into rendered cell access
 - Stage selection accessibility:
   - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
   - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellState.spec.ts`
+- Virtualized stage accessibility:
+  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `e2e/sandbox-interactions.spec.ts`

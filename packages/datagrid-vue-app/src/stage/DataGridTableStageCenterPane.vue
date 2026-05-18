@@ -2,6 +2,10 @@
   <div
     :ref="viewportRef ?? undefined"
     :class="resolvedViewportClass"
+    role="grid"
+    :aria-rowcount="gridAriaRowCount"
+    :aria-colcount="gridAriaColumnCount"
+    aria-multiselectable="true"
     tabindex="0"
     @scroll.passive="handleScroll"
     @wheel="handleWheel"
@@ -14,9 +18,11 @@
         v-for="(row, rowOffset) in displayRows"
         :key="String(row.rowId)"
         class="grid-row"
+        role="row"
         :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
         :style="[rows.rowStyle(row, renderApi.viewportRowOffset(row, rowOffset)), layout.mainTrackStyle]"
         :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
+        :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
         @click="renderApi.handleRowContainerClick(row)"
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >
@@ -45,9 +51,11 @@
           :data-column-key="column.key"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
           :data-column-index="columnIndex"
+          :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
+          :aria-colindex="columnIndex + 1"
           :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
           :aria-selected="renderApi.cellAriaSelected(renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
-          :role="renderApi.cellAriaRole(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
+          :role="renderApi.cellAriaRole(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex) ?? 'gridcell'"
           :aria-checked="renderApi.cellAriaChecked(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
           :aria-pressed="renderApi.cellAriaPressed(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
           :aria-label="renderApi.cellAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
@@ -178,6 +186,7 @@ import {
   useDataGridTableStageLayoutMode,
   useDataGridTableStageMode,
   useDataGridTableStageRowsSection,
+  useDataGridTableStageSelectionSection,
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
 import type {
@@ -276,6 +285,7 @@ const layout = useDataGridTableStageLayoutSection<Record<string, unknown>>()
 const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const columns = useDataGridTableStageColumnsSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
+const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const {
   displayRows,
@@ -304,6 +314,11 @@ const renderedColumnSlots = computed(() => columns.value.renderedColumns.map(col
   column,
   columnIndex: renderApi.value.columnIndexByKey(column.key),
 })))
+const gridAriaRowCount = computed(() => Math.max(
+  0,
+  selection.value.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length,
+))
+const gridAriaColumnCount = computed(() => Math.max(0, columns.value.visibleColumns.length))
 
 type CenterPaneDebugJson = {
   rowsLength: number

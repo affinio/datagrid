@@ -169,6 +169,37 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(nextCell))
   })
 
+  test("virtualized cells keep aria indexes after scroll and keyboard navigation", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toHaveAttribute("role", "grid")
+    await expect(viewport).toHaveAttribute("aria-rowcount", "10000")
+    await expect(viewport).toHaveAttribute("aria-colcount", "17")
+    await expect(sourceCell).toHaveAttribute("role", "gridcell")
+    await expect(sourceCell).toHaveAttribute("aria-rowindex", "3")
+    await expect(sourceCell).toHaveAttribute("aria-colindex", String(Number(await sourceCell.getAttribute("data-column-index")) + 1))
+
+    await sourceCell.click()
+    await page.keyboard.press("ArrowDown")
+    const nextCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="3"][data-column-key="amount"]').first()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(nextCell))
+    await expect(nextCell).toHaveAttribute("aria-selected", "true")
+    await expect(nextCell).toHaveAttribute("aria-rowindex", "4")
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    const remountedCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-column-key="amount"]').first()
+    await expect(remountedCell).toBeVisible({ timeout: 20_000 })
+    const rowIndex = Number(await remountedCell.getAttribute("data-row-index"))
+    expect(rowIndex).toBeGreaterThan(2)
+    await expect(remountedCell).toHaveAttribute("aria-rowindex", String(rowIndex + 1))
+    await expect(remountedCell).toHaveAttribute("aria-colindex", String(Number(await remountedCell.getAttribute("data-column-index")) + 1))
+  })
+
   test("right-pinned selection anchor remounts with overlay fill handle after vertical virtualization", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
@@ -399,6 +430,9 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const loadingRowId = await loadingCell.getAttribute("data-row-id")
     expect(rowIndex).toBeTruthy()
     expect(loadingRowId).toMatch(/^__affino_datagrid_data_source_loading__:\d+$/)
+    await expect(loadingCell).toHaveAttribute("aria-disabled", "true")
+    await expect(loadingCell).toHaveAttribute("aria-rowindex", String(Number(rowIndex) + 1))
+    await expect(loadingCell).toHaveAttribute("aria-colindex", String(Number(await loadingCell.getAttribute("data-column-index")) + 1))
     const sourceIndex = Number(loadingRowId?.split(":").at(-1))
     expect(Number.isFinite(sourceIndex)).toBe(true)
     const realRowId = `srv-${sourceIndex.toString().padStart(6, "0")}`
@@ -407,7 +441,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     ).first()
 
     const loadingSignature = await cellSignature(stableLoadingCell)
-    await stableLoadingCell.click()
+    await stableLoadingCell.click({ force: true })
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(loadingSignature)
 
     const materializedCell = page.locator(

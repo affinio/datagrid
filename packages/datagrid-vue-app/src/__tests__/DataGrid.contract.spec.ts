@@ -1490,6 +1490,32 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("exposes virtualized grid and cell aria indexes", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    const cell = queryBodyCell(wrapper, 1, 1)
+
+    expect(viewport.attributes("role")).toBe("grid")
+    expect(viewport.attributes("aria-rowcount")).toBe("3")
+    expect(viewport.attributes("aria-colcount")).toBe(String(COLUMNS.length + 1))
+    expect(viewport.attributes("aria-multiselectable")).toBe("true")
+    expect(cell.attributes("role")).toBe("gridcell")
+    expect(cell.attributes("aria-rowindex")).toBe("2")
+    expect(cell.attributes("aria-colindex")).toBe(String(Number(cell.attributes("data-column-index")) + 1))
+    expect(cell.attributes("aria-selected")).toBe("false")
+
+    wrapper.unmount()
+  })
+
   it("buffers a fast typed word into inline editing on a focused editable cell", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

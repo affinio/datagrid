@@ -4,7 +4,7 @@
 
 The current DataGrid virtualization design has strong foundations and does not need a parallel replacement architecture. The core package already separates viewport math, scroll IO, model bridging, row/column virtualization, and horizontal layout metadata. The Vue app layer also has practical stage-level virtualization for rows, columns, retained windows, variable row-height metrics, and touch-aware overscan.
 
-The main enterprise gaps are not basic virtualization primitives. They are validation coverage, ownership clarity between the core controller and the Vue app viewport path, server-backed blank/loading behavior under latency, interaction continuity across virtual unmount/remount, accessibility mapping for virtualized DOM, and CI gates that prove large and wide data behavior.
+The main enterprise gaps are not basic virtualization primitives. They are validation coverage, ownership clarity between the core controller and the Vue app viewport path, server-backed blank/loading behavior under latency, remaining interaction continuity across virtual unmount/remount, screen-reader device validation beyond attribute mapping, and CI gates that prove large and wide data behavior.
 
 Current enterprise readiness is **7/10**. A realistic target is **9/10** after hardening the existing architecture with invariant tests, blank-viewport and placeholder telemetry, server-side row model gates, interaction continuity tests, and browser/device performance gates.
 
@@ -150,8 +150,8 @@ Orchestration, sandbox, tests, and benchmarks:
 1. **Scroll-to-row by row id can be expensive for very large server-backed datasets.**
    `dataGridViewportCoreService.ts` resolves row ids through row model access/scanning patterns. For 1M server rows, enterprise behavior needs a rowId-to-index contract or server resolver rather than relying on local traversal.
 
-2. **Accessibility mapping for virtualized app-stage DOM is a verification gap.**
-   `docs/datagrid-headless-a11y-contract.md` and `a11yAttributesAdapter.ts` include virtualized row/column count and index attributes. The reviewed stage template in `DataGridTableStageCenterPane.vue` exposes roles and focus attributes, but the full row/column index mapping was not clearly visible there.
+2. **Accessibility mapping for virtualized app-stage DOM is covered at the attribute level.**
+   `docs/datagrid-headless-a11y-contract.md` documents the virtualized stage DOM mapping, `a11yAttributesAdapter.ts` has adapter contract coverage, and the Vue app stage now exposes grid row/column counts plus one-based row/column indexes for virtualized center and pinned cells. Remaining gaps are screen-reader device validation and deeper grouped/server placeholder semantics.
 
 3. **Mount/unmount churn is not a first-class budget.**
    The app path retains windows and uses stable row and cell keys, but CI does not enforce a churn budget for row/cell mount and unmount counts during fast scroll.
@@ -171,7 +171,7 @@ Orchestration, sandbox, tests, and benchmarks:
    `dataGridVirtualization.ts` defaults row virtualization on and column virtualization off unless full virtualization is enabled. This is safe for compatibility but should be called out for wide-grid enterprise configurations.
 
 3. **Grouped/tree expansion behavior is now documented for the row-model boundary.**
-   `docs/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, virtualized a11y mapping, and server/data-source grouped placeholder metadata.
+   `docs/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, grouped/tree-specific a11y semantics, and server/data-source grouped placeholder metadata.
 
 ## Correctness Risks
 
@@ -219,9 +219,9 @@ Orchestration, sandbox, tests, and benchmarks:
 ## Accessibility Risks
 
 - The headless a11y contract already defines the right direction: roving focus, active descendant behavior, and virtual row/column count/index attributes.
-- The Vue adapter has an a11y attributes adapter, but the app-stage rendered DOM needs verification that `aria-rowcount`, `aria-colcount`, `aria-rowindex`, and `aria-colindex` are applied consistently for virtualized rows and cells.
+- The Vue adapter has an a11y attributes adapter, and the app-stage rendered DOM now has focused verification for `aria-rowcount`, `aria-colcount`, `aria-rowindex`, and `aria-colindex` on virtualized rows and cells.
 - Virtualized DOM must preserve focus semantics when the active cell scrolls out, remounts, or is represented by a placeholder.
-- Screen reader behavior should be tested for server placeholders, pinned rows/columns, grouped/tree rows, and large row counts.
+- Screen reader behavior should still be tested on devices/browsers for server placeholders, pinned rows/columns, grouped/tree rows, and large row counts.
 - If grouped/tree rows are unsupported in virtualized a11y mode, document that as unsupported rather than leaving behavior implicit.
 
 ## Enterprise Readiness Score
@@ -235,7 +235,7 @@ What blocks the target:
 - No placeholder exposure budget for server-backed grids.
 - Core/app virtualization ownership is not finalized as a documented contract.
 - Interaction continuity across unloaded or remounted ranges is partially covered; active-cell focus and keyboard navigation are covered, while copy/paste/fill/edit lifecycle gaps remain.
-- Virtualized a11y mapping is not proven in the app-stage DOM.
+- Virtualized a11y attribute mapping is covered in the app-stage DOM; screen-reader device behavior and grouped/server semantics remain to be proven.
 - 1M-row behavior and 10k-column browser behavior are not covered by enterprise browser gates. 1k-column browser smoke coverage exists for the Vue base grid path.
 - Touch momentum and mobile server-backed loading behavior are not gated.
 
@@ -306,7 +306,7 @@ What blocks the target:
 - Active cell, editor, selection, fill handle, and clipboard behavior across virtual remount.
 - Column resize/reorder/hide/show while horizontal virtualization is active.
 - Group/tree expansion and collapse while the viewport intersects the changed range. Status: core row-model boundary coverage exists; app-stage browser coverage remains.
-- A11y attributes for virtualized rows and cells.
+- A11y attributes for virtualized rows and cells. Status: adapter, component, and Playwright coverage now verifies row/column counts and one-based indexes after virtualized scroll/navigation.
 
 ### Playwright/E2E Tests
 
@@ -355,7 +355,7 @@ What blocks the target:
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount. Status: started with active-cell focus remount, keyboard navigation beyond the rendered range, and variable row-height/horizontal visibility contracts.
 6. Add wide-grid horizontal virtualization gates for 1k and 10k columns. Status: core 1k/10k stress coverage and a Vue 1000-column browser smoke gate are in place; broader browser/device gates remain.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.
-8. Verify app-stage virtualized a11y attributes and add tests for row/column index mapping.
+8. Verify app-stage virtualized a11y attributes and add tests for row/column index mapping. Status: covered for virtualized center/pinned cells, selection state, and placeholder disabled metadata; screen-reader device validation remains.
 9. Decide the enterprise status of `serverBackedRowModel.ts` and either add placeholder parity or document it as a simple path.
 10. Add rowId-to-index or server scroll-target resolution for unloaded rows.
 
