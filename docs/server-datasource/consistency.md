@@ -309,6 +309,20 @@ Behavior:
 
 The frontend can use this as the fallback path when websocket transport is unavailable.
 
+## Read Retry Policy
+
+The client may retry idempotent reads with bounded backoff:
+
+- pull requests
+- histogram reads
+- change-feed reads
+
+Retries must preserve the original request body, range, filter/sort model, and `sinceVersion`. A retry does not imply a new projection or a mutation replay.
+
+Retryable failures are transport failures and transient HTTP statuses (`408`, `425`, `429`, `5xx`). Stale revision, projection mismatch, boundary mismatch, validation, auth, and abort failures are not retryable.
+
+Mutations are consistency boundaries. Edits, fill commits, undo, and redo must not be retried automatically unless the backend provides durable operation-id idempotency and duplicate-operation suppression for that mutation type.
+
 ## Deterministic Replay
 
 History operations must be replayable deterministically.

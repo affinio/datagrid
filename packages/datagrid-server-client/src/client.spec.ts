@@ -34,9 +34,11 @@ function createPullRequest(start = 0): DataGridDataSourcePullRequest {
 function createClient(
   fetchImpl: typeof fetch,
   mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown,
+  retry?: Parameters<typeof createServerDatasourceHttpClient>[0]["retry"],
 ) {
   return createServerDatasourceHttpClient({
     fetchImpl,
+    retry,
     endpoints: {
       pull: "/pull",
       histogram: "/histogram",
@@ -189,6 +191,58 @@ describe("createServerDatasourceHttpClient", () => {
         },
       },
     })
+  })
+
+  it("retries retryable pull failures within the configured budget", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (!resolvedUrl.includes("/pull")) {
+        throw new Error(`unexpected request: ${resolvedUrl}`)
+      }
+      if (fetchImpl.mock.calls.length === 1) {
+        return createResponse({ code: "temporary", message: "temporary" }, { status: 503 })
+      }
+      return createResponse({
+        rows: [
+          { id: "row-retry", index: 0, name: "Retry row" },
+        ],
+        total: 1,
+        revision: "11",
+        datasetVersion: 11,
+      })
+    })
+    const client = createClient(fetchImpl, undefined, {
+      maxRetries: 1,
+      initialDelayMs: 0,
+      maxDelayMs: 0,
+    })
+
+    const result = await client.pull(createPullRequest(0))
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(result.rows[0]?.rowId).toBe("row-retry")
+    expect(result.datasetVersion).toBe(11)
+  })
+
+  it("does not retry non-retryable pull conflicts", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (!resolvedUrl.includes("/pull")) {
+        throw new Error(`unexpected request: ${resolvedUrl}`)
+      }
+      return createResponse({ code: "stale-revision", message: "stale" }, { status: 409 })
+    })
+    const client = createClient(fetchImpl, undefined, {
+      maxRetries: 3,
+      initialDelayMs: 0,
+      maxDelayMs: 0,
+    })
+
+    await expect(client.pull(createPullRequest(0))).rejects.toMatchObject({
+      status: 409,
+      code: "stale-revision",
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
   it("serializes caller-provided normalized query DTO without interpreting filter semantics", async () => {
@@ -347,5 +401,32 @@ describe("createServerDatasourceHttpClient", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("retries manual change-feed reads on retryable failures", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      const resolvedUrl = String(url)
+      if (!resolvedUrl.includes("/changes")) {
+        throw new Error(`unexpected request: ${resolvedUrl}`)
+      }
+      if (fetchImpl.mock.calls.length === 1) {
+        return createResponse({ code: "temporary", message: "temporary" }, { status: 503 })
+      }
+      return createResponse({
+        datasetVersion: 12,
+        changes: [],
+      })
+    })
+    const client = createClient(fetchImpl, undefined, {
+      maxRetries: 1,
+      initialDelayMs: 0,
+      maxDelayMs: 0,
+    })
+
+    await client.getChangesSinceVersion({ sinceVersion: 11 })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(client.latestDatasetVersion).toBe(12)
+    expect(client.lastSeenVersion).toBe(12)
   })
 })

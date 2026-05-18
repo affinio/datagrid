@@ -16,6 +16,16 @@ export {
   type ServerRowSnapshotLike,
 } from "./rowSnapshot"
 export {
+  DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS,
+  HttpError,
+  isRetryableServerDatasourceReadError,
+  normalizeServerDatasourceRetryOptions,
+  runWithServerDatasourceRetry,
+  type ServerDatasourceResolvedRetryOptions,
+  type ServerDatasourceRetryEvent,
+  type ServerDatasourceRetryOptions,
+} from "./http"
+export {
   createServerDatasourceHttpClient,
   type ServerDatasourceHttpClientOptions,
 } from "./client"

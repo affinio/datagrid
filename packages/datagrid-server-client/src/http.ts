@@ -1,4 +1,4 @@
-class HttpError extends Error {
+export class HttpError extends Error {
   readonly status: number
   readonly code: string | null
   readonly details: unknown
@@ -10,6 +10,33 @@ class HttpError extends Error {
     this.code = code
     this.details = details
   }
+}
+
+export interface ServerDatasourceRetryOptions {
+  maxRetries?: number
+  initialDelayMs?: number
+  maxDelayMs?: number
+  backoffFactor?: number
+}
+
+export interface ServerDatasourceResolvedRetryOptions {
+  maxRetries: number
+  initialDelayMs: number
+  maxDelayMs: number
+  backoffFactor: number
+}
+
+export interface ServerDatasourceRetryEvent {
+  attempt: number
+  delayMs: number
+  error: unknown
+}
+
+export const DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS: ServerDatasourceResolvedRetryOptions = {
+  maxRetries: 2,
+  initialDelayMs: 100,
+  maxDelayMs: 1000,
+  backoffFactor: 2,
 }
 
 export function resolveEndpoint(baseUrl: string | undefined, path: string): string {
@@ -72,6 +99,101 @@ export function isFetchAbortLikeError(caught: unknown): boolean {
   return caught.name === "AbortError" || caught.message.toLowerCase().includes("abort")
 }
 
+export function normalizeServerDatasourceRetryOptions(
+  options: ServerDatasourceRetryOptions | false | undefined,
+  defaults: ServerDatasourceResolvedRetryOptions = DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS,
+): ServerDatasourceResolvedRetryOptions | null {
+  if (options === false) {
+    return null
+  }
+  const maxRetries = Math.max(0, Math.trunc(options?.maxRetries ?? defaults.maxRetries))
+  const initialDelayMs = Math.max(0, Math.trunc(options?.initialDelayMs ?? defaults.initialDelayMs))
+  const maxDelayMs = Math.max(initialDelayMs, Math.trunc(options?.maxDelayMs ?? defaults.maxDelayMs))
+  const backoffFactor = Number.isFinite(options?.backoffFactor)
+    ? Math.max(1, Number(options?.backoffFactor))
+    : defaults.backoffFactor
+  return {
+    maxRetries,
+    initialDelayMs,
+    maxDelayMs,
+    backoffFactor,
+  }
+}
+
+export function isRetryableServerDatasourceReadError(caught: unknown): boolean {
+  if (isFetchAbortLikeError(caught)) {
+    return false
+  }
+  if (isFetchTransportFailure(caught)) {
+    return true
+  }
+  if (!caught || typeof caught !== "object") {
+    return false
+  }
+  const status = Number((caught as { status?: unknown }).status)
+  if (!Number.isFinite(status)) {
+    return false
+  }
+  return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599)
+}
+
+function resolveRetryDelayMs(retry: ServerDatasourceResolvedRetryOptions, attempt: number): number {
+  const delay = retry.initialDelayMs * (retry.backoffFactor ** Math.max(0, attempt - 1))
+  return Math.min(retry.maxDelayMs, Math.max(0, Math.trunc(delay)))
+}
+
+function waitForRetryDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(toAbortError())
+  }
+  if (ms <= 0) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      cleanup()
+      resolve()
+    }, ms)
+    const cleanup = (): void => {
+      globalThis.clearTimeout(timeout)
+      signal?.removeEventListener("abort", abortListener)
+    }
+    const abortListener = (): void => {
+      cleanup()
+      reject(toAbortError())
+    }
+    signal?.addEventListener("abort", abortListener, { once: true })
+  })
+}
+
+export async function runWithServerDatasourceRetry<T>(
+  operation: () => Promise<T>,
+  options: {
+    retry?: ServerDatasourceRetryOptions | false
+    signal?: AbortSignal
+    onRetry?: (event: ServerDatasourceRetryEvent) => void
+  } = {},
+): Promise<T> {
+  const retry = options.retry === undefined ? null : normalizeServerDatasourceRetryOptions(options.retry)
+  let attempt = 0
+  for (;;) {
+    try {
+      return await operation()
+    } catch (caught) {
+      if (options.signal?.aborted || isFetchAbortLikeError(caught)) {
+        throw toAbortError()
+      }
+      if (!retry || attempt >= retry.maxRetries || !isRetryableServerDatasourceReadError(caught)) {
+        throw caught
+      }
+      attempt += 1
+      const delayMs = resolveRetryDelayMs(retry, attempt)
+      options.onRetry?.({ attempt, delayMs, error: caught })
+      await waitForRetryDelay(delayMs, options.signal)
+    }
+  }
+}
+
 export async function parseErrorResponse(response: Response): Promise<HttpError> {
   const fallbackMessage = `${response.status} ${response.statusText}`.trim()
   let parsedBody: unknown = null
@@ -109,80 +231,86 @@ export async function postJson<TResponse>(
   url: string,
   body: unknown,
   signal?: AbortSignal,
+  retry?: ServerDatasourceRetryOptions | false,
 ): Promise<TResponse> {
-  let response: Response
-  try {
-    response = await fetchImpl(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal,
-    })
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
-    }
-    throw caught
-  }
-
-  if (!response.ok) {
+  return await runWithServerDatasourceRetry(async () => {
+    let response: Response
     try {
-      throw await parseErrorResponse(response)
+      response = await fetchImpl(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal,
+      })
     } catch (caught) {
       if (signal?.aborted || isFetchAbortLikeError(caught)) {
         throw toAbortError()
       }
       throw caught
     }
-  }
 
-  try {
-    return (await response.json()) as TResponse
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
+    if (!response.ok) {
+      try {
+        throw await parseErrorResponse(response)
+      } catch (caught) {
+        if (signal?.aborted || isFetchAbortLikeError(caught)) {
+          throw toAbortError()
+        }
+        throw caught
+      }
     }
-    throw caught
-  }
+
+    try {
+      return (await response.json()) as TResponse
+    } catch (caught) {
+      if (signal?.aborted || isFetchAbortLikeError(caught)) {
+        throw toAbortError()
+      }
+      throw caught
+    }
+  }, { retry, signal })
 }
 
 export async function getJson<TResponse>(
   fetchImpl: typeof fetch,
   url: string,
   signal?: AbortSignal,
+  retry?: ServerDatasourceRetryOptions | false,
 ): Promise<TResponse> {
-  let response: Response
-  try {
-    response = await fetchImpl(url, {
-      method: "GET",
-      signal,
-    })
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
-    }
-    throw caught
-  }
-
-  if (!response.ok) {
+  return await runWithServerDatasourceRetry(async () => {
+    let response: Response
     try {
-      throw await parseErrorResponse(response)
+      response = await fetchImpl(url, {
+        method: "GET",
+        signal,
+      })
     } catch (caught) {
       if (signal?.aborted || isFetchAbortLikeError(caught)) {
         throw toAbortError()
       }
       throw caught
     }
-  }
 
-  try {
-    return (await response.json()) as TResponse
-  } catch (caught) {
-    if (signal?.aborted || isFetchAbortLikeError(caught)) {
-      throw toAbortError()
+    if (!response.ok) {
+      try {
+        throw await parseErrorResponse(response)
+      } catch (caught) {
+        if (signal?.aborted || isFetchAbortLikeError(caught)) {
+          throw toAbortError()
+        }
+        throw caught
+      }
     }
-    throw caught
-  }
+
+    try {
+      return (await response.json()) as TResponse
+    } catch (caught) {
+      if (signal?.aborted || isFetchAbortLikeError(caught)) {
+        throw toAbortError()
+      }
+      throw caught
+    }
+  }, { retry, signal })
 }

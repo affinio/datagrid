@@ -296,7 +296,7 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
     window.dispatchEvent(new Event("pageshow"))
 
     await expect(adapter.pull(createAbortablePullRequest())).rejects.toBeInstanceOf(TypeError)
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
   })
 
   it("polls the change feed and updates the latest dataset version", async () => {

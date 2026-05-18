@@ -489,6 +489,33 @@ Behavior:
 - `sinceVersion < current` returns matching changes when the gap is complete.
 - if the window is incomplete or the gap is too large, the backend may return a dataset invalidation fallback.
 
+## Retry And Backoff
+
+The server datasource client applies bounded retry/backoff only to idempotent reads:
+
+- viewport `pull`
+- column histogram reads
+- manual `getChangesSinceVersion`
+- change-feed polling
+
+Retryable failures are:
+
+- transport failures
+- `408`
+- `425`
+- `429`
+- `5xx`
+
+Non-retryable failures include:
+
+- aborts
+- validation errors
+- auth/permission errors
+- stale revision conflicts
+- projection or boundary mismatches
+
+Mutation retries remain disabled by default. Do not retry edits, fill commits, undo, or redo unless the backend operation-id contract guarantees duplicate suppression and deterministic replay.
+
 ## Error Response
 
 ```json

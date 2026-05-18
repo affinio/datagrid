@@ -983,6 +983,9 @@ export function createServerDemoDatasourceHttpAdapter(
       pending: false,
       appliedChanges: 0,
       intervalMs: null,
+      consecutiveFailures: 0,
+      retryAttempt: 0,
+      retryDelayMs: null,
     }
     return {
       currentDatasetVersion: latestDatasetVersion ?? diagnostics.currentDatasetVersion,
@@ -991,6 +994,9 @@ export function createServerDemoDatasourceHttpAdapter(
       pending: diagnostics.pending,
       appliedChanges: diagnostics.appliedChanges,
       intervalMs: diagnostics.intervalMs,
+      consecutiveFailures: diagnostics.consecutiveFailures,
+      retryAttempt: diagnostics.retryAttempt,
+      retryDelayMs: diagnostics.retryDelayMs,
     }
   }
 

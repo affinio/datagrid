@@ -14,7 +14,14 @@ import {
   type ServerDatasourceChangeFeedDiagnostics,
   type ServerDatasourceChangeFeedPoller,
 } from "./changeFeedPoller"
-import { getJson, postJson, resolveEndpoint } from "./http"
+import {
+  DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS,
+  getJson,
+  normalizeServerDatasourceRetryOptions,
+  postJson,
+  resolveEndpoint,
+  type ServerDatasourceRetryOptions,
+} from "./http"
 import { mapServerChangeEvent, type ServerChangeEventLike } from "./changeFeedMapping"
 import { normalizeDatasourceInvalidation } from "./invalidation"
 import { normalizeDatasetVersion } from "./normalize"
@@ -57,6 +64,7 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
   } | null
 
   isInvalidSinceVersionError?: (error: unknown) => boolean
+  retry?: ServerDatasourceRetryOptions | false
 }
 
 /**
@@ -91,6 +99,10 @@ export function createServerDatasourceHttpClient<TRow>(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis)
   const listeners = new Set<DataGridDataSourcePushListener<TRow>>()
   const diagnosticsListeners = new Set<(diagnostics: ServerDatasourceChangeFeedDiagnostics) => void>()
+  const readRetry = normalizeServerDatasourceRetryOptions(
+    options.retry,
+    DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS,
+  )
   let latestDatasetVersion: number | null = null
   let lastSeenVersion: number | null = null
 
@@ -202,17 +214,15 @@ export function createServerDatasourceHttpClient<TRow>(
     onInvalidSinceVersion: () => {
       resetChangeFeedCursor()
     },
+    retry: readRetry ?? false,
   })
 
   function getChangeFeedDiagnostics(): ServerDatasourceChangeFeedDiagnostics {
     const diagnostics = changeFeedPoller.diagnostics()
     return {
+      ...diagnostics,
       currentDatasetVersion: latestDatasetVersion,
       lastSeenVersion,
-      polling: diagnostics.polling,
-      pending: diagnostics.pending,
-      appliedChanges: diagnostics.appliedChanges,
-      intervalMs: diagnostics.intervalMs,
     }
   }
 
@@ -221,6 +231,7 @@ export function createServerDatasourceHttpClient<TRow>(
       fetchImpl,
       resolveEndpoint(options.baseUrl, options.endpoints.changesSinceVersion(sinceVersion)),
       signal,
+      readRetry ?? false,
     )
   }
 
@@ -289,6 +300,7 @@ export function createServerDatasourceHttpClient<TRow>(
         resolveEndpoint(options.baseUrl, options.endpoints.pull),
         mapPullBody(request),
         request.signal,
+        readRetry ?? false,
       )
       const mappedResponse = options.mapPullResponse(response)
       const startIndex = Math.max(0, Math.trunc(request.range.start))
@@ -310,6 +322,7 @@ export function createServerDatasourceHttpClient<TRow>(
         resolveEndpoint(options.baseUrl, options.endpoints.histogram),
         mapHistogramBody(request),
         request.signal,
+        readRetry ?? false,
       )
       return options.mapHistogramResponse?.(response) ?? (response as DataGridColumnHistogram)
     },

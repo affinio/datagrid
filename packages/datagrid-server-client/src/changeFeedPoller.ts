@@ -1,3 +1,9 @@
+import {
+  runWithServerDatasourceRetry,
+  type ServerDatasourceRetryEvent,
+  type ServerDatasourceRetryOptions,
+} from "./http"
+
 export interface ServerDatasourceChangeFeedDiagnostics {
   currentDatasetVersion: number | null
   lastSeenVersion: number | null
@@ -5,6 +11,9 @@ export interface ServerDatasourceChangeFeedDiagnostics {
   pending: boolean
   appliedChanges: number
   intervalMs: number | null
+  consecutiveFailures: number
+  retryAttempt: number
+  retryDelayMs: number | null
 }
 
 export interface ServerDatasourceChangeFeedPollerOptions<TResponse> {
@@ -15,6 +24,7 @@ export interface ServerDatasourceChangeFeedPollerOptions<TResponse> {
   onDiagnostics?: (diagnostics: ServerDatasourceChangeFeedDiagnostics) => void
   isInvalidSinceVersionError?: (error: unknown) => boolean
   onInvalidSinceVersion?: () => void
+  retry?: ServerDatasourceRetryOptions | false
   intervalMs?: number
 }
 
@@ -48,6 +58,9 @@ export function createChangeFeedPoller<TResponse>(
   let pollAbortCleanup: (() => void) | null = null
   let appliedChangeCount = 0
   let lastSeenVersion: number | null = null
+  let consecutiveFailureCount = 0
+  let retryAttempt = 0
+  let retryDelayMs: number | null = null
 
   function diagnostics(): ServerDatasourceChangeFeedDiagnostics {
     return {
@@ -57,6 +70,9 @@ export function createChangeFeedPoller<TResponse>(
       pending: pollInFlight,
       appliedChanges: appliedChangeCount,
       intervalMs: pollingIntervalMs,
+      consecutiveFailures: consecutiveFailureCount,
+      retryAttempt,
+      retryDelayMs,
     }
   }
 
@@ -93,6 +109,12 @@ export function createChangeFeedPoller<TResponse>(
     return controller.signal
   }
 
+  function handleRetry(event: ServerDatasourceRetryEvent): void {
+    retryAttempt = event.attempt
+    retryDelayMs = event.delayMs
+    emitDiagnostics()
+  }
+
   async function pollNow(signal?: AbortSignal): Promise<void> {
     if (!pollingActive || pollInFlight) {
       return
@@ -107,15 +129,31 @@ export function createChangeFeedPoller<TResponse>(
     emitDiagnostics()
 
     try {
-      const response = await options.loadSinceVersion(sinceVersion, requestSignal)
+      const response = await runWithServerDatasourceRetry(
+        () => options.loadSinceVersion(sinceVersion, requestSignal),
+        {
+          retry: options.retry,
+          signal: requestSignal,
+          onRetry: handleRetry,
+        },
+      )
       if (!pollingActive || requestGeneration !== pollGeneration) {
         return
       }
+      consecutiveFailureCount = 0
+      retryAttempt = 0
+      retryDelayMs = null
       options.onResponse(response, sinceVersion)
     } catch (caught) {
       if (options.isInvalidSinceVersionError?.(caught)) {
+        consecutiveFailureCount += 1
+        retryAttempt = 0
+        retryDelayMs = null
         options.onInvalidSinceVersion?.()
       } else if (!(caught instanceof DOMException && caught.name === "AbortError")) {
+        consecutiveFailureCount += 1
+        retryAttempt = 0
+        retryDelayMs = null
         options.onError?.(caught)
       }
     } finally {
@@ -143,6 +181,9 @@ export function createChangeFeedPoller<TResponse>(
     clearAbortCleanup()
     pollInFlight = false
     lastSeenVersion = null
+    consecutiveFailureCount = 0
+    retryAttempt = 0
+    retryDelayMs = null
     emitDiagnostics()
   }
 

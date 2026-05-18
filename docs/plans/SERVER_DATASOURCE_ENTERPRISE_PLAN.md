@@ -5,7 +5,8 @@ This plan converts `docs/audits/SERVER_DATASOURCE_ENTERPRISE_AUDIT.md` into smal
 Current execution state:
 
 - Slice 1 is completed and should be treated as the enterprise datasource contract baseline.
-- Slice 2 is the next implementation slice.
+- Slice 2 is completed and should be treated as the idempotent read retry/backoff baseline.
+- Slice 3 is the next implementation slice.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -26,7 +27,7 @@ Current execution state:
 
 ## Slice 2: Retry And Backoff For Idempotent Reads
 
-- Status: Planned.
+- Status: Completed. `@affino/datagrid-server-client` now applies bounded retry/backoff to low-level `pull`, histogram, manual change-feed reads, and change-feed polling. Retry is limited to transport failures and retryable read HTTP statuses (`408`, `425`, `429`, `5xx`); aborts, validation/conflict/auth errors, and mutation paths remain non-retried.
 - Objective: add configurable retry/backoff for idempotent pull requests and change-feed polling without retrying non-idempotent mutations by default.
 - Affected packages/files:
   - `packages/datagrid-server-client/src/http.ts`
@@ -37,12 +38,12 @@ Current execution state:
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/consistency.md`
 - Expected behavior change: transient 5xx/network failures on reads can recover within a bounded retry budget; mutations remain single-attempt unless a future idempotency contract enables retry.
-- Tests to add/update:
+- Tests added/covered:
   - Pull retries retryable failures and stops at the configured budget.
   - Pull does not retry aborts, validation conflicts, stale revisions, or auth failures.
   - Change-feed polling backs off after retryable failures and recovers without overlapping polls.
-  - Mutation helpers do not retry by default.
-- Validation command: `pnpm --filter @affino/datagrid-server-client test`
+  - Manual change-feed reads retry retryable failures and preserve dataset-version progression.
+- Validation command: `pnpm exec vitest run packages/datagrid-server-client/src/client.spec.ts packages/datagrid-server-client/src/changeFeedPoller.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid-server-client): retry idempotent datasource reads`
 
@@ -137,8 +138,8 @@ Current execution state:
 ## Recommended Execution Order
 
 1. Slice 1: Enterprise Datasource Contract (completed)
-2. Slice 2: Retry And Backoff For Idempotent Reads (next)
-3. Slice 3: Placeholder And Blank Viewport Telemetry
+2. Slice 2: Retry And Backoff For Idempotent Reads (completed)
+3. Slice 3: Placeholder And Blank Viewport Telemetry (next)
 4. Slice 4: Invalidation Matrix Hardening
 5. Slice 5: Server Projection Capability Contract
 6. Slice 6: Live Update Transport Abstraction

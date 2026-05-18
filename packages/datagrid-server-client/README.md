@@ -37,6 +37,7 @@ Use `createChangeFeedPoller()` to manage polling lifecycle concerns:
 - start and stop polling
 - prevent overlapping requests
 - abort in-flight requests on stop
+- bounded retry/backoff for retryable read failures when configured
 - emit lightweight diagnostics
 - reset on invalid since-version responses
 
@@ -57,8 +58,17 @@ Use `createServerDatasourceHttpClient()` when you want a reusable low-level clie
 - change-feed polling
 - row snapshot application
 - diagnostics
+- bounded retry/backoff for idempotent reads
 
 Write, fill, and history operations are backend and adapter-level concerns. If you want the full opinionated integration path, start with `@affino/datagrid-server-adapters`.
+
+### Retry Policy
+
+`createServerDatasourceHttpClient()` retries idempotent reads by default with a bounded policy. This covers `pull`, histogram reads, manual change-feed reads, and polling. Retryable failures are transport failures plus `408`, `425`, `429`, and `5xx` responses.
+
+Validation, auth, stale revision, projection mismatch, boundary mismatch, and abort failures are not retried. Mutations are not retried by this package.
+
+Set `retry: false` to disable read retries, or pass `retry` options to tune `maxRetries`, `initialDelayMs`, `maxDelayMs`, and `backoffFactor`.
 
 ## Public API
 
@@ -78,6 +88,7 @@ Types:
 - `ServerDatasourceChangeFeedDiagnostics`
 - `ServerDatasourceChangeFeedPoller`
 - `ServerDatasourceChangeFeedPollerOptions`
+- `ServerDatasourceRetryOptions`
 - `ServerRowSnapshotLike`
 - `ServerChangeEventLike`
 - `ServerChangeMappingResult`

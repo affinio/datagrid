@@ -164,6 +164,53 @@ describe("createChangeFeedPoller", () => {
     expect(onError).toHaveBeenCalledWith(error)
   })
 
+  it("retries retryable errors with backoff before reporting success", async () => {
+    const error = Object.assign(new Error("temporary"), { status: 503 })
+    const loadSinceVersion = vi.fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce({ ok: true })
+    const onResponse = vi.fn()
+    const diagnostics: Array<{ retryAttempt: number; retryDelayMs: number | null; consecutiveFailures: number }> = []
+    const poller = createChangeFeedPoller({
+      getSinceVersion: () => 5,
+      loadSinceVersion,
+      onResponse,
+      retry: {
+        maxRetries: 1,
+        initialDelayMs: 25,
+        maxDelayMs: 25,
+      },
+      onDiagnostics: state => {
+        diagnostics.push({
+          retryAttempt: state.retryAttempt,
+          retryDelayMs: state.retryDelayMs,
+          consecutiveFailures: state.consecutiveFailures,
+        })
+      },
+    })
+
+    poller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(loadSinceVersion).toHaveBeenCalledTimes(1)
+    expect(onResponse).not.toHaveBeenCalled()
+    expect(diagnostics).toContainEqual({
+      retryAttempt: 1,
+      retryDelayMs: 25,
+      consecutiveFailures: 0,
+    })
+
+    await vi.advanceTimersByTimeAsync(25)
+
+    expect(loadSinceVersion).toHaveBeenCalledTimes(2)
+    expect(onResponse).toHaveBeenCalledWith({ ok: true }, 5)
+    expect(poller.diagnostics()).toMatchObject({
+      consecutiveFailures: 0,
+      retryAttempt: 0,
+      retryDelayMs: null,
+    })
+    poller.stop()
+  })
+
   it("diagnostics track pending state", async () => {
     const deferred = createDeferred<{ ok: true }>()
     const poller = createChangeFeedPoller({

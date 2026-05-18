@@ -8,7 +8,7 @@ The server datasource architecture is production-shaped and should remain the fo
 - `createAffinoDatasource` in `packages/datagrid-server-adapters/src/index.ts`
 - the FastAPI/Postgres `server_demo` implementation under `backend/app/features/server_demo/`
 
-Current readiness is **7.5/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. The first contract-hardening slice is complete: docs now distinguish backward-compatible protocol behavior from the stricter enterprise integration profile. The main blockers to a 9/10 target are runtime hardening gaps: retry/backoff and offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and latency/placeholder performance gates.
+Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete and idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, websocket/live update transport, runtime enforcement or validation for enterprise consistency tokens, formal server grouping/tree/pivot contracts, and latency/placeholder performance gates.
 
 Do not introduce a parallel datasource stack. Tighten the current protocol, row model, HTTP adapter, backend services, and tests in small slices.
 
@@ -133,10 +133,10 @@ Backend:
 
 ### High
 
-1. **Retry/backoff is not a first-class datasource contract.**
-   - Evidence: `postJson` and `getJson` normalize abort-like errors but do not retry. `changeFeedPoller` avoids overlapping polls and reports errors, but it does not implement backoff/circuit breaking. `dataSourceBackedRowModel` marks failed viewport rows as `error` and retries when the viewport is requested again.
-   - Impact: transient network or 5xx failures expose placeholders/error rows until user or viewport activity retries.
-   - Required: add configurable retry/backoff for idempotent pulls and change feed; keep mutations non-retried unless operation idempotency is guaranteed.
+1. **Retry/backoff exists for idempotent reads; mutation retry remains intentionally unsupported.**
+   - Evidence: `@affino/datagrid-server-client` retries low-level pull, histogram, manual change-feed reads, and change-feed polling for transport failures plus `408`, `425`, `429`, and `5xx` responses. Aborts, validation/auth/conflict errors, stale revisions, projection mismatch, and boundary mismatch are non-retryable.
+   - Impact: transient read failures can recover without manual viewport movement; mutations still require explicit operation-id idempotency before retry.
+   - Required: keep mutation retry disabled until duplicate-operation behavior is guaranteed, and add placeholder/pull latency gates in the next slices.
 
 2. **Enterprise consistency tokens are documented as required but remain optional at runtime.**
    - Evidence: protocol marks `baseRevision`, `projectionHash`, and `boundaryToken` as optional/recommended. Backend enforces them only when present.
@@ -350,7 +350,7 @@ Required enterprise work if offline is in scope:
 
 ## Enterprise Readiness Score
 
-Current score: **7.5/10**
+Current score: **8/10**
 
 Target score: **9/10**
 
@@ -358,7 +358,7 @@ What blocks the target:
 
 - no websocket/live-update transport
 - no offline/reconnect contract
-- retry/backoff policy is not first-class
+- mutation retry remains intentionally unsupported until operation-id idempotency is guaranteed
 - consistency tokens are documented as required for enterprise integrations but still optional at runtime
 - server grouping/tree/pivot projection is unsupported in the current backend demo path
 - placeholder exposure, blank viewport detection, and pull latency are not perf-gated
@@ -374,10 +374,10 @@ What blocks the target:
 
 ### Phase 2: Retry And Failure Semantics
 
-- Add retry/backoff policy for idempotent pulls and change-feed polling.
-- Classify HTTP errors as retryable, conflict, validation, auth, or fatal.
-- Keep mutation retries disabled by default unless operation ids are durable and idempotent.
-- Add user-visible error/retry state expectations.
+- Add retry/backoff policy for idempotent pulls and change-feed polling. Status: completed in `@affino/datagrid-server-client`.
+- Classify HTTP errors as retryable, conflict, validation, auth, or fatal. Status: completed for read retry policy.
+- Keep mutation retries disabled by default unless operation ids are durable and idempotent. Status: preserved.
+- Add user-visible error/retry state expectations. Status: change-feed diagnostics include retry attempt, retry delay, and consecutive failures; placeholder exposure telemetry remains planned.
 
 ### Phase 3: Cache And Placeholder Hardening
 
@@ -482,6 +482,7 @@ Performance/benchmark tests:
 2. **Add retry/backoff for idempotent reads**
    - Files: `packages/datagrid-server-client/src/http.ts`, `packages/datagrid-server-client/src/client.ts`, `packages/datagrid-server-client/src/changeFeedPoller.ts`
    - Outcome: transient pull/poll failures recover without manual viewport movement.
+   - Status: completed. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 3. **Add placeholder and blank-viewport telemetry**
    - Files: `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`, performance docs/tests

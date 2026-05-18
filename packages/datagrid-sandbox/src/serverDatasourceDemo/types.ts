@@ -211,6 +211,9 @@ export interface ServerDemoChangeFeedDiagnostics {
   pending: boolean
   appliedChanges: number
   intervalMs: number | null
+  consecutiveFailures: number
+  retryAttempt: number
+  retryDelayMs: number | null
 }
 
 export interface ServerDemoFillProjectionContext {

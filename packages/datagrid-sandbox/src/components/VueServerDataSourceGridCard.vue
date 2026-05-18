@@ -704,6 +704,9 @@ const changeFeedDiagnostics = ref<ServerDemoChangeFeedDiagnostics>({
   pending: false,
   appliedChanges: 0,
   intervalMs: null,
+  consecutiveFailures: 0,
+  retryAttempt: 0,
+  retryDelayMs: null,
 })
 const serverDatasourceUnavailableMessage = "Server datasource is unavailable. Check backend and retry."
 const serverDatasourceUnavailable = ref(false)
