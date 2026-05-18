@@ -57,8 +57,15 @@ export interface AnalyticsFilter {
   value?: unknown
 }
 
+export interface AnalyticsSort {
+  field: string
+  direction?: "asc" | "desc"
+}
+
 export interface AnalyticsQuery {
   dimensions?: AnalyticsDimension[]
   filters?: AnalyticsFilter[]
+  limit?: number
   measures?: AnalyticsMeasure[]
+  sort?: AnalyticsSort[]
 }

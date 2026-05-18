@@ -9,9 +9,11 @@ export type {
   AnalyticsQuery,
   AnalyticsRow,
   AnalyticsSchema,
+  AnalyticsSort,
 } from "./types"
 export { aggregateRows } from "./aggregate"
 export { applyAnalyticsFilters } from "./filter"
+export { executeAnalyticsQuery } from "./query"
 export { inferAnalyticsSchema } from "./schema"
 
 export function createAnalyticsCore(): { version: string } {
