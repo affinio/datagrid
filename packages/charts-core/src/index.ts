@@ -18,6 +18,9 @@ export type {
   PieChartGeometry,
   PieChartGeometryOptions,
   PieChartSliceGeometry,
+  ScatterChartGeometry,
+  ScatterChartGeometryOptions,
+  ScatterChartPointGeometry,
 } from "./types"
 export {
   getChartNumberValue,
@@ -38,6 +41,7 @@ export { createChartBandScale } from "./bandScale"
 export { createBarChartGeometry } from "./barGeometry"
 export { createLineChartGeometry } from "./lineGeometry"
 export { createPieChartGeometry } from "./pieGeometry"
+export { createScatterChartGeometry } from "./scatterGeometry"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

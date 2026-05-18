@@ -145,3 +145,36 @@ export interface PieChartGeometry {
   innerRadius: number
   total: number
 }
+
+export interface ScatterChartGeometryOptions {
+  rows: readonly ChartDatum[]
+  xField: string
+  yField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  radiusField?: string
+  minRadius?: number
+  maxRadius?: number
+  includeZeroX?: boolean
+  includeZeroY?: boolean
+}
+
+export interface ScatterChartPointGeometry {
+  key: string
+  index: number
+  row: ChartDatum
+  xValue: number
+  yValue: number
+  radiusValue: number | null
+  x: number
+  y: number
+  radius: number
+}
+
+export interface ScatterChartGeometry {
+  points: ScatterChartPointGeometry[]
+  plotArea: ChartRect
+  xDomain: ChartNumericDomain
+  yDomain: ChartNumericDomain
+  radiusDomain: ChartNumericDomain | null
+}
