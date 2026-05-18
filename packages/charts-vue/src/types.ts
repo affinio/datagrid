@@ -1,4 +1,4 @@
-import type { BarChartBarGeometry, ChartDatum } from "@affino/charts-core"
+import type { BarChartBarGeometry, ChartDatum, LineChartPointGeometry } from "@affino/charts-core"
 
 export type ChartThemeVariant = "default" | "muted" | "success" | "warning" | "danger"
 
@@ -21,4 +21,12 @@ export interface AffinoBarChartBarEvent {
   category: string
   value: number
   clientPoint?: ChartInteractionPoint
+}
+
+export interface AffinoLineChartPointEvent {
+  point: LineChartPointGeometry
+  row: ChartDatum
+  index: number
+  xValue: number
+  yValue: number
 }

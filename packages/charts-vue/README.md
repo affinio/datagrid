@@ -15,7 +15,7 @@ This package exposes the shared chart frame, initial chart-adjacent types, and r
 ## Public API
 
 ```ts
-import { AffinoBarChart, AffinoChartFrame, createChartsVue } from "@affino/charts-vue"
+import { AffinoBarChart, AffinoChartFrame, AffinoLineChart, createChartsVue } from "@affino/charts-vue"
 
 const chartsVue = createChartsVue()
 ```
@@ -63,6 +63,47 @@ Events:
 
 Each bar event includes the core bar geometry, source row, index, category, value, and a `clientPoint` for pointer events.
 
+## Line Chart
+
+`AffinoLineChart` renders a single-series SVG line using `createLineChartGeometry()` from `@affino/charts-core`. The core package owns point and path geometry while Vue owns rendering, styling, interaction, and accessibility.
+
+```vue
+<script setup lang="ts">
+import { AffinoLineChart } from "@affino/charts-vue"
+
+const rows = [
+  { month: 1, revenue: 120 },
+  { month: 2, revenue: 180 },
+]
+</script>
+
+<template>
+  <AffinoLineChart
+    :rows="rows"
+    x-field="month"
+    y-field="revenue"
+    x-scale-type="number"
+    title="Revenue Trend"
+    @point-click="handlePointClick"
+  />
+</template>
+```
+
+Key props:
+
+- `rows`, `yField`, `xField`, `xScaleType`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `includeZeroY`, `showAxes`, `showGrid`, `showPoints`
+
+Events:
+
+- `point-click`
+- `point-hover`
+- `point-leave`
+
+Each point event includes the core point geometry, source row, index, `xValue`, and `yValue`.
+
 ## Theme Tokens
 
 Consumers can override chart styling by setting CSS custom properties on `AffinoChartFrame` or a wrapping class:
@@ -83,10 +124,14 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-success`
 - `--affino-chart-bar-fill`
 - `--affino-chart-bar-hover-fill`
+- `--affino-chart-line-stroke`
+- `--affino-chart-line-point-fill`
+- `--affino-chart-line-point-stroke`
+- `--affino-chart-line-point-hover-fill`
 
 ## Non-Goals
 
 - No D3, Chart.js, Recharts, ECharts, or external chart rendering libraries.
 - No `datagrid-sandbox` dependency.
 - No `analytics-core` dependency.
-- No stacked, grouped, horizontal, animated, or legend-backed charts yet.
+- No stacked, grouped, horizontal, animated, smoothed, multi-series, area-filled, or legend-backed charts yet.

@@ -1,12 +1,13 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
-import { AffinoBarChart, AffinoChartFrame, createChartsVue } from "../index"
+import { AffinoBarChart, AffinoChartFrame, AffinoLineChart, createChartsVue } from "../index"
 import type {
   AffinoBarChartBarEvent,
+  AffinoLineChartPointEvent,
   ChartAnchorRect,
   ChartInteractionPoint,
   ChartThemeVariant,
 } from "../index"
-import type { BarChartBarGeometry, ChartDatum } from "@affino/charts-core"
+import type { BarChartBarGeometry, ChartDatum, LineChartPointGeometry } from "@affino/charts-core"
 
 describe("@affino/charts-vue", () => {
   it("returns package metadata", () => {
@@ -25,14 +26,22 @@ describe("@affino/charts-vue", () => {
       value: number
       clientPoint?: ChartInteractionPoint
     }>()
+    expectTypeOf<AffinoLineChartPointEvent>().toEqualTypeOf<{
+      point: LineChartPointGeometry
+      row: ChartDatum
+      index: number
+      xValue: number
+      yValue: number
+    }>()
   })
 
   it("exports a clean package entrypoint", async () => {
     const entrypoint = await import("../index")
 
-    expect(Object.keys(entrypoint)).toEqual(["AffinoBarChart", "AffinoChartFrame", "createChartsVue"])
+    expect(Object.keys(entrypoint)).toEqual(["AffinoBarChart", "AffinoChartFrame", "AffinoLineChart", "createChartsVue"])
     expect(entrypoint.AffinoBarChart).toBe(AffinoBarChart)
     expect(entrypoint.AffinoChartFrame).toBe(AffinoChartFrame)
+    expect(entrypoint.AffinoLineChart).toBe(AffinoLineChart)
     expect(entrypoint.createChartsVue).toBe(createChartsVue)
   })
 })
