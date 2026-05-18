@@ -8,6 +8,7 @@ export type {
   AnalyticsRow,
   AnalyticsSchema,
 } from "./types"
+export { inferAnalyticsSchema } from "./schema"
 
 export function createAnalyticsCore(): { version: string } {
   return {

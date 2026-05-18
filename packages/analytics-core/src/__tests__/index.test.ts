@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createAnalyticsCore } from "../index"
+import { createAnalyticsCore, inferAnalyticsSchema } from "../index"
 import type {
   AnalyticsQuery,
   AnalyticsRow,
@@ -37,5 +37,57 @@ describe("analytics-core", () => {
     expect(row.region).toBe("North")
     expect(schema.fields).toHaveLength(3)
     expect(query.measures?.map((measure) => measure.op)).toEqual(["count", "sum"])
+  })
+
+  it("infers an empty schema for empty rows", () => {
+    expect(inferAnalyticsSchema([])).toEqual({ fields: [] })
+  })
+
+  it("infers field types and preserves first-seen field order", () => {
+    expect(inferAnalyticsSchema([
+      { region: "UK", amount: 100 },
+      { active: true, amount: 250, region: "EU", closedAt: new Date("2026-01-01") },
+    ])).toEqual({
+      fields: [
+        { id: "region", type: "string" },
+        { id: "amount", type: "number" },
+        { id: "active", type: "boolean" },
+        { id: "closedAt", type: "datetime" },
+      ],
+    })
+  })
+
+  it("ignores nullish values when a concrete type exists", () => {
+    expect(inferAnalyticsSchema([
+      { amount: null },
+      { amount: 100 },
+      { amount: undefined },
+    ])).toEqual({
+      fields: [
+        { id: "amount", type: "number" },
+      ],
+    })
+  })
+
+  it("infers unknown for fields with only nullish values", () => {
+    expect(inferAnalyticsSchema([
+      { amount: null },
+      { amount: undefined },
+    ])).toEqual({
+      fields: [
+        { id: "amount", type: "unknown" },
+      ],
+    })
+  })
+
+  it("infers unknown for mixed incompatible non-null values", () => {
+    expect(inferAnalyticsSchema([
+      { value: 100 },
+      { value: "100" },
+    ])).toEqual({
+      fields: [
+        { id: "value", type: "unknown" },
+      ],
+    })
   })
 })
