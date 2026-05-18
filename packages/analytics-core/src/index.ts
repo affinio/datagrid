@@ -1,6 +1,8 @@
 export type {
   AggregationOp,
   AnalyticsDimension,
+  AnalyticsFilter,
+  AnalyticsFilterOp,
   AnalyticsField,
   AnalyticsFieldType,
   AnalyticsMeasure,
@@ -9,6 +11,7 @@ export type {
   AnalyticsSchema,
 } from "./types"
 export { aggregateRows } from "./aggregate"
+export { applyAnalyticsFilters } from "./filter"
 export { inferAnalyticsSchema } from "./schema"
 
 export function createAnalyticsCore(): { version: string } {

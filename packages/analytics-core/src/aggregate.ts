@@ -4,6 +4,7 @@ import type {
   AnalyticsQuery,
   AnalyticsRow,
 } from "./types"
+import { applyAnalyticsFilters } from "./filter"
 
 interface MeasureState {
   count: number
@@ -19,7 +20,9 @@ interface GroupState {
 }
 
 export function aggregateRows(rows: AnalyticsRow[], query: AnalyticsQuery): AnalyticsRow[] {
-  if (rows.length === 0) {
+  const filteredRows = applyAnalyticsFilters(rows, query.filters)
+
+  if (filteredRows.length === 0) {
     return []
   }
 
@@ -27,7 +30,7 @@ export function aggregateRows(rows: AnalyticsRow[], query: AnalyticsQuery): Anal
   const measures = query.measures ?? []
   const groups = new Map<string, GroupState>()
 
-  for (const row of rows) {
+  for (const row of filteredRows) {
     const groupKey = createGroupKey(row, dimensions.map((dimension) => dimension.field))
     let group = groups.get(groupKey)
 

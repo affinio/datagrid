@@ -36,7 +36,29 @@ export interface AnalyticsMeasure {
   as?: string
 }
 
+export type AnalyticsFilterOp =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "startsWith"
+  | "endsWith"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "in"
+  | "notIn"
+  | "isEmpty"
+  | "isNotEmpty"
+
+export interface AnalyticsFilter {
+  field: string
+  op: AnalyticsFilterOp
+  value?: unknown
+}
+
 export interface AnalyticsQuery {
   dimensions?: AnalyticsDimension[]
+  filters?: AnalyticsFilter[]
   measures?: AnalyticsMeasure[]
 }
