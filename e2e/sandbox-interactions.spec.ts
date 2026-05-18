@@ -169,6 +169,37 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(nextCell))
   })
 
+  test("right-pinned selection anchor remounts with overlay fill handle after vertical virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await sourceCell.click()
+    const sourceSignature = await cellSignature(sourceCell)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect(sourceCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(sourceCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-stage:visible .grid-body-pane--right .grid-selection-overlay__segment").first()).toBeVisible({ timeout: 20_000 })
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    await expect(page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect(sourceCell).toHaveClass(/grid-cell--selection-anchor/)
+    await expect(sourceCell.locator(".cell-fill-handle")).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-stage:visible .grid-body-pane--right .grid-selection-overlay__segment").first()).toBeVisible({ timeout: 20_000 })
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+  })
+
   test("fill drag with auto-scroll cleans up on mouseup outside the viewport", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 

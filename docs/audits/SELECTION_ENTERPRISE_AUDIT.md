@@ -16,7 +16,7 @@ Target enterprise readiness: **9/10** after hardening invariants, large-range/se
 - `datagrid-vue-app` owns rendered selection state, row-selection UI, pinned-pane overlays, stage focus lookup, pointer routing, fill handles, and range-move hover affordances.
 - `datagrid-orchestration` owns reusable interaction composables for keyboard commands, drag selection, pointer routing, range move, fill handle start, overlay generation, row selection, and clipboard mutation helpers.
 
-This layering is compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, virtual stale marking, transient interaction cleanup on projection changes, a11y state, and performance gates. Remaining high-risk proof points are pinned/horizontal remount, editor remount state, server placeholder replacement, and real-device touch validation.
+This layering is compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, virtual stale marking, transient interaction cleanup on projection changes, a11y state, pinned vertical remount, and performance gates. Remaining high-risk proof points are horizontal remount, editor remount state, server placeholder replacement, and real-device touch validation.
 
 ## Exact Files Reviewed
 
@@ -119,10 +119,10 @@ Tests and benchmarks sampled:
 ### High
 
 1. **Active cell ownership is documented, but remount/server proof remains incomplete.**
-   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, edit-handoff coverage, vertical remount focus restoration, and stage a11y state coverage. It still needs pinned/horizontal remount, editor remount, broader keyboard move, and server placeholder replacement coverage.
+   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, edit-handoff coverage, vertical remount focus restoration, right-pinned vertical remount coverage, and stage a11y state coverage. It still needs horizontal remount, editor remount, broader keyboard move, and server placeholder replacement coverage.
 
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
-   Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. `DataGridTableStage.vue` now preserves grid focus ownership through virtualized cell unmount/remount and restores the visible selection anchor after scroll idle. E2E coverage proves vertical scroll-out/scroll-in preserves the anchor class, overlay segment, fill handle, and keyboard focus. Pinned/horizontal remount, editor state, and server placeholder replacement coverage remain open.
+   Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. `DataGridTableStage.vue` now preserves grid focus ownership through virtualized cell unmount/remount and restores the visible selection anchor after scroll idle. E2E coverage proves vertical scroll-out/scroll-in preserves the anchor class, overlay segment, fill handle, and keyboard focus, and now covers a right-pinned selected cell remounting with its overlay/fill handle after vertical virtualization. Horizontal remount, editor state, and server placeholder replacement coverage remain open.
 
 3. **Large-range summaries and aggregate labels are locally budgeted, but server summary delegation remains open.**
    `selectionSummary.ts` and `useDataGridAppSelection.ts` now cap local selected-cell summary work at 50,000 processed cells and use virtual missing-interval metadata to avoid probing unloaded rows. This protects app-local labels and summaries, but server-global summary over unloaded selections still needs datasource delegation.
@@ -175,7 +175,7 @@ Tests and benchmarks sampled:
 | Range selection | Strong core/app support with grouped/tree and vertical remount coverage | Need broader e2e around pinned/horizontal virtualization and server placeholders |
 | Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented; projected pinned/reordered cell-class mapping covered | Need header/row-index parity and horizontally virtualized browser cases |
 | Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
-| Virtualization remount continuity | Logical model is suitable | Needs browser tests for focus/classes/overlays/editors after remount |
+| Virtualization remount continuity | Logical model is suitable; vertical and right-pinned vertical remounts are browser-covered | Needs browser tests for horizontal remount, editors, and server placeholders after remount |
 | Keyboard navigation | Strong coverage through command and navigation routers | Need server/unloaded and pinned-pane e2e |
 | Shift selection | Implemented for keyboard and pointer; grouped/tree app contract covers flattened group rows | Need placeholder and remount coverage |
 | Ctrl/Cmd selection | Implemented for additive cell ranges | Need header/row parity and visual-overlay contract |
@@ -237,15 +237,15 @@ Blocks to target:
 
 - Huge virtual selection coverage has an interval path for summary/aggregate labels, but other large-range operations still need interval/server range descriptors.
 - Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
-- Active/focus/edit ownership is specified as one state machine, but pinned/horizontal remount, editor remount, and server placeholder proof are still incomplete.
+- Active/focus/edit ownership is specified as one state machine, but horizontal remount, editor remount, and server placeholder proof are still incomplete.
 - Touch selection has browser-covered long-press and explicit-handle behavior, but still needs real-device validation.
 - Large-range selection performance now has hard gates for overlay planning, enterprise smoke gates for clipboard planning, summary planning, and virtual coverage, and browser-frame coverage for pinned-pane drag selection. Server-delegated operation latency budgets remain future work until those handlers exist.
-- Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
+- Browser/e2e coverage now proves vertical selection remount focus continuity, right-pinned vertical remount continuity, and grouped/tree selection workflows, but not yet horizontal remount, server placeholders, or editor remount state.
 
 ## Recommended Next Work
 
 1. Implement server-backed copy/export, cut, clear/delete, paste, range move, and summary handlers according to the documented operation matrix.
-2. Add e2e tests for pinned/horizontal selection remount, server placeholders, and editor remount state.
+2. Add e2e tests for horizontal selection remount, server placeholders, and editor remount state.
 3. Execute the real-device touch selection matrix and tune hardware thresholds if the Chromium budgets do not match device traces.
 4. Add server-delegated operation latency gates after copy/export, cut, clear/delete, paste, range move, and summary handlers are implemented.
 
