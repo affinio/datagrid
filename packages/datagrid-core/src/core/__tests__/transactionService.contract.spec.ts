@@ -28,6 +28,16 @@ function createCounterExecutor(
   }
 }
 
+function createDeferred(): { promise: Promise<void>; resolve: () => void; reject: (error: unknown) => void } {
+  let resolve: () => void = () => undefined
+  let reject: (error: unknown) => void = () => undefined
+  const promise = new Promise<void>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+  return { promise, resolve, reject }
+}
+
 describe("transaction service contracts", () => {
   it("applies transaction atomically and supports undo/redo hooks", async () => {
     const state: Record<string, number> = { score: 0 }
@@ -191,6 +201,84 @@ describe("transaction service contracts", () => {
       "undo:tx-3:0:2",
       "undo:tx-2:0:1",
     ])
+  })
+
+  it("rejects concurrent history actions while an async apply is in flight", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const deferred = createDeferred()
+    let firstApplyBlocked = true
+    const service = createDataGridTransactionService({
+      execute: async (command, context) => {
+        const payload = command.payload as CounterPayload
+        events.push(`${context.direction}:${context.transactionId}:${context.commandIndex}:${payload.value}`)
+        if (context.direction === "apply" && firstApplyBlocked) {
+          firstApplyBlocked = false
+          await deferred.promise
+        }
+        state[payload.key] = payload.value
+      },
+    })
+
+    const applyPromise = service.applyTransaction({
+      id: "tx-1",
+      commands: [{ type: "set", payload: { key: "score", value: 1 }, rollbackPayload: { key: "score", value: 0 } }],
+    })
+
+    await expect(
+      service.applyTransaction({
+        id: "tx-2",
+        commands: [{ type: "set", payload: { key: "score", value: 2 }, rollbackPayload: { key: "score", value: 0 } }],
+      }),
+    ).rejects.toThrow(/apply transaction.*in progress/i)
+    await expect(service.commitBatch()).rejects.toThrow(/apply transaction.*in progress/i)
+    expect(() => service.beginBatch()).toThrow(/apply transaction.*in progress/i)
+
+    deferred.resolve()
+    await expect(applyPromise).resolves.toBe("tx-1")
+    expect(state.score).toBe(1)
+    expect(service.getSnapshot().undoDepth).toBe(1)
+    expect(events).toEqual(["apply:tx-1:0:1"])
+  })
+
+  it("rejects concurrent undo and redo while an async undo is in flight", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const deferred = createDeferred()
+    let undoBlocked = true
+    const service = createDataGridTransactionService({
+      execute: async (command, context) => {
+        const payload = command.payload as CounterPayload
+        events.push(`${context.direction}:${context.transactionId}:${context.commandIndex}:${payload.value}`)
+        if (context.direction === "undo" && undoBlocked) {
+          undoBlocked = false
+          await deferred.promise
+        }
+        state[payload.key] = payload.value
+      },
+    })
+
+    await service.applyTransaction({
+      id: "tx-1",
+      commands: [{ type: "set", payload: { key: "score", value: 1 }, rollbackPayload: { key: "score", value: 0 } }],
+    })
+
+    const undoPromise = service.undo()
+    await expect(service.undo()).rejects.toThrow(/undo.*in progress/i)
+    await expect(service.redo()).rejects.toThrow(/undo.*in progress/i)
+    await expect(
+      service.applyTransaction({
+        id: "tx-2",
+        commands: [{ type: "set", payload: { key: "score", value: 2 }, rollbackPayload: { key: "score", value: 1 } }],
+      }),
+    ).rejects.toThrow(/undo.*in progress/i)
+
+    deferred.resolve()
+    await expect(undoPromise).resolves.toBe("commit-1")
+    expect(state.score).toBe(0)
+    expect(service.getSnapshot().undoDepth).toBe(0)
+    expect(service.getSnapshot().redoDepth).toBe(1)
+    expect(events).toEqual(["apply:tx-1:0:1", "undo:tx-1:0:0"])
   })
 
   it("propagates normalized intent metadata for transaction and command events", async () => {

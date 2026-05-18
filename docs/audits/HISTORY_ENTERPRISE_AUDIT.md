@@ -12,14 +12,15 @@ There are three distinct history paths today:
 
 These paths are compatible enough for current edit, paste, fill, toolbar, shortcut, placeholder, and server-demo workflows. The strongest enterprise pieces are rollback payload enforcement, batch-as-one-undo-unit semantics, redo invalidation, scoped server stack undo/redo, revision/datasetVersion integration, and focused tests.
 
-The main gaps are operation serialization, memory limits by byte/cell count, selection/focus/edit restoration, concurrency guards for async history actions, structural row operation support, collaborative conflict semantics, and a unified public contract that explains when history is client snapshot-based versus server operation-based.
+The remaining main gaps are operation serialization, memory limits by byte/cell count, selection/focus/edit restoration, undo failure compensation, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, async locking, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
+Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, undo compensation, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
 
 ## Implementation Progress
 
 - 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
-- Remaining runtime gaps are unchanged: async action serialization, undo failure compensation, snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
+- 2026-05-18: Slice 2, Async History Action Serialization, is complete. Core `TransactionService` now rejects overlapping async `applyTransaction`, `commitBatch`, `undo`, and `redo` calls and blocks batch begin/rollback during an active async action. The orchestration history runner now ignores duplicate keyboard/control undo/redo triggers while the first action is pending.
+- Remaining runtime gaps: undo failure compensation, snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
 
 ## Current Architecture Summary
 
@@ -136,6 +137,7 @@ Backend and sandbox:
 
 1. **Async history actions are not guarded by a single-flight lock.**
    `transactionService.ts` supports async executors, and tests verify async snapshot replay waits before resolving. However, the service does not serialize concurrent `applyTransaction`, `undo`, `redo`, or `commitBatch` calls. Two simultaneous shortcut/toolbar/server actions can race stack state unless caller code prevents it.
+   Status after Slice 2: core transaction actions and keyboard/control history runner triggers are now single-flight. Direct external adapters and server datasource calls still own their backend idempotency/concurrency semantics.
 
 2. **Undo failure is not compensated the same way apply failure is.**
    Apply and redo use `applyCommittedBatch(...)`, which rolls back applied transactions if a later transaction fails. Undo uses `rollbackCommittedBatch(...)` and does not restore already-undone commands if a later rollback command fails. This is a concrete rollback consistency gap for multi-command or multi-transaction undo.

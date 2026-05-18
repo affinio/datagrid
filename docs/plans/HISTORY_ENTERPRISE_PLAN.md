@@ -5,7 +5,8 @@ This plan converts `docs/audits/HISTORY_ENTERPRISE_AUDIT.md` into small, separab
 Current execution state:
 
 - Slice 1 is completed and should be treated as the enterprise history contract baseline.
-- Slice 2 is next and should serialize async history actions before deeper failure-compensation work.
+- Slice 2 is completed and should be treated as the async history single-flight baseline.
+- Slice 3 is next and should harden undo failure compensation.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -28,19 +29,19 @@ Current execution state:
 
 ## Slice 2: Async History Action Serialization
 
-- Status: Planned.
+- Status: Completed. Core `TransactionService` now rejects overlapping `applyTransaction`, `commitBatch`, `undo`, and `redo` calls while an async action is in progress, and also blocks batch begin/rollback during an active async action. The orchestration history action runner now ignores a second keyboard/control undo/redo trigger while the first trigger is pending and exposes pending state for integration layers.
 - Objective: prevent overlapping undo, redo, apply, and batch actions from corrupting stack state or producing stale UI state.
 - Affected packages/files:
   - `packages/datagrid-core/src/core/transactionService.ts`
   - `packages/datagrid-core/src/core/__tests__/transactionService.contract.spec.ts`
   - `packages/datagrid-orchestration/src/history/useDataGridHistoryActionRunner.ts`
   - `packages/datagrid-vue/src/composables/useDataGridHistoryActionRunner.ts`
-- Expected behavior change: a pending history action becomes observable and concurrent history actions are rejected, ignored, or queued by an explicit policy selected in the slice implementation.
-- Tests to add/update:
-  - Concurrent undo/redo/apply calls cannot interleave stack mutation.
-  - Toolbar and shortcut actions respect pending history state.
+- Expected behavior change: core transaction callers get a deterministic rejection for overlapping async history actions; keyboard/control runner callers get `false` for duplicate triggers while the first action is pending.
+- Tests added/covered:
+  - Concurrent apply, commit, begin batch, undo, redo, and follow-up apply calls cannot interleave stack mutation.
+  - Keyboard/control runner ignores duplicate triggers before committing editor state twice.
   - Existing synchronous history behavior remains compatible.
-- Validation command: `pnpm exec vitest run packages/datagrid-core/src/core/__tests__/transactionService.contract.spec.ts packages/datagrid-orchestration/src/history/__tests__/useDataGridHistoryActionRunner.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/core/__tests__/transactionService.contract.spec.ts && pnpm --filter @affino/datagrid-orchestration exec vitest run --config vitest.config.ts src/__tests__/useDataGridHistoryActionRunner.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): serialize history actions`
 
@@ -158,8 +159,8 @@ Current execution state:
 ## Recommended Execution Order
 
 1. Slice 1: Enterprise History Contract
-2. Slice 2: Async History Action Serialization (next)
-3. Slice 3: Undo Failure Compensation
+2. Slice 2: Async History Action Serialization (completed)
+3. Slice 3: Undo Failure Compensation (next)
 4. Slice 4: Snapshot Scope And Memory Budget
 5. Slice 5: Restoration State Payload
 6. Slice 6: Versioned Operation Payloads

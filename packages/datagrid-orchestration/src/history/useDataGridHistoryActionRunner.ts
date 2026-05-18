@@ -14,15 +14,22 @@ export interface UseDataGridHistoryActionRunnerResult {
     direction: "undo" | "redo",
     trigger: "keyboard" | "control",
   ) => Promise<boolean>
+  isHistoryActionPending: () => boolean
 }
 
 export function useDataGridHistoryActionRunner(
   options: UseDataGridHistoryActionRunnerOptions,
 ): UseDataGridHistoryActionRunnerResult {
+  let pendingDirection: "undo" | "redo" | null = null
+
   async function runHistoryAction(
     direction: "undo" | "redo",
     trigger: "keyboard" | "control",
   ): Promise<boolean> {
+    if (pendingDirection) {
+      options.setLastAction("History action in progress")
+      return false
+    }
     if (options.hasInlineEditor()) {
       options.commitInlineEdit()
     }
@@ -36,6 +43,7 @@ export function useDataGridHistoryActionRunner(
       return false
     }
 
+    pendingDirection = direction
     try {
       const committedId = await options.runHistoryAction(direction)
       if (!committedId) {
@@ -52,11 +60,13 @@ export function useDataGridHistoryActionRunner(
       options.onError?.(direction, error)
       options.setLastAction(direction === "undo" ? "Undo failed" : "Redo failed")
       return false
+    } finally {
+      pendingDirection = null
     }
   }
 
   return {
     runHistoryAction,
+    isHistoryActionPending: () => pendingDirection !== null,
   }
 }
-

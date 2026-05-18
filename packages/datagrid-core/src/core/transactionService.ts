@@ -267,10 +267,31 @@ export function createDataGridTransactionService(
   let autoCommittedId = 1
   let lastCommittedId: string | null = null
   let pendingBatch: DataGridPendingBatch | null = null
+  let activeAction: string | null = null
 
   function ensureActive() {
     if (disposed) {
       throw new Error("DataGridTransactionService has been disposed")
+    }
+  }
+
+  function ensureNoActiveAction(nextAction: string) {
+    if (activeAction) {
+      throw new Error(
+        `[DataGridTransaction] cannot ${nextAction} while "${activeAction}" is in progress.`,
+      )
+    }
+  }
+
+  async function runExclusive<T>(action: string, callback: () => Promise<T>): Promise<T> {
+    ensureNoActiveAction(action)
+    activeAction = action
+    try {
+      return await callback()
+    } finally {
+      if (activeAction === action) {
+        activeAction = null
+      }
     }
   }
 
@@ -493,6 +514,7 @@ export function createDataGridTransactionService(
     },
     beginBatch(label?: string) {
       ensureActive()
+      ensureNoActiveAction("begin batch")
       if (pendingBatch) {
         throw new Error(
           `[DataGridTransaction] batch "${pendingBatch.id}" is already active. Commit or rollback it first.`,
@@ -510,53 +532,56 @@ export function createDataGridTransactionService(
     },
     async commitBatch(batchId?: string) {
       ensureActive()
-      if (!pendingBatch) {
-        return []
-      }
-      if (typeof batchId === "string" && batchId !== pendingBatch.id) {
-        throw new Error(
-          `[DataGridTransaction] cannot commit batch "${batchId}". Active batch is "${pendingBatch.id}".`,
-        )
-      }
+      return runExclusive("commit batch", async () => {
+        if (!pendingBatch) {
+          return []
+        }
+        if (typeof batchId === "string" && batchId !== pendingBatch.id) {
+          throw new Error(
+            `[DataGridTransaction] cannot commit batch "${batchId}". Active batch is "${pendingBatch.id}".`,
+          )
+        }
 
-      const batch = pendingBatch
-      pendingBatch = null
+        const batch = pendingBatch
+        pendingBatch = null
 
-      if (batch.transactions.length === 0) {
+        if (batch.transactions.length === 0) {
+          bumpRevision()
+          return []
+        }
+
+        const committedBatch = createCommittedBatch(batch.transactions, batch.id, batch.label)
+
+        try {
+          await applyCommittedBatch(committedBatch, "apply")
+        } catch (error) {
+          bumpRevision()
+          options.onRolledBack?.({
+            committedId: committedBatch.committedId,
+            batchId: committedBatch.batchId,
+            transactionIds: transactionIds(committedBatch),
+            transactions: transactionEntries(committedBatch),
+            error,
+          })
+          throw error
+        }
+
+        pushUndoBatch(committedBatch)
+        redoStack.length = 0
+        lastCommittedId = committedBatch.committedId
         bumpRevision()
-        return []
-      }
-
-      const committedBatch = createCommittedBatch(batch.transactions, batch.id, batch.label)
-
-      try {
-        await applyCommittedBatch(committedBatch, "apply")
-      } catch (error) {
-        bumpRevision()
-        options.onRolledBack?.({
+        options.onApplied?.({
           committedId: committedBatch.committedId,
           batchId: committedBatch.batchId,
           transactionIds: transactionIds(committedBatch),
           transactions: transactionEntries(committedBatch),
-          error,
         })
-        throw error
-      }
-
-      pushUndoBatch(committedBatch)
-      redoStack.length = 0
-      lastCommittedId = committedBatch.committedId
-      bumpRevision()
-      options.onApplied?.({
-        committedId: committedBatch.committedId,
-        batchId: committedBatch.batchId,
-        transactionIds: transactionIds(committedBatch),
-        transactions: transactionEntries(committedBatch),
+        return transactionIds(committedBatch)
       })
-      return transactionIds(committedBatch)
     },
     rollbackBatch(batchId?: string) {
       ensureActive()
+      ensureNoActiveAction("rollback batch")
       if (!pendingBatch) {
         return []
       }
@@ -572,6 +597,7 @@ export function createDataGridTransactionService(
     },
     async applyTransaction(transactionInput: DataGridTransactionInput) {
       ensureActive()
+      ensureNoActiveAction("apply transaction")
       const transaction = normalizeTransaction(transactionInput)
       if (pendingBatch) {
         pendingBatch.transactions.push(transaction)
@@ -580,30 +606,32 @@ export function createDataGridTransactionService(
       }
 
       const committedBatch = createCommittedBatch([transaction], null, transaction.label)
-      try {
-        await applyCommittedBatch(committedBatch, "apply")
-      } catch (error) {
-        options.onRolledBack?.({
+      return runExclusive("apply transaction", async () => {
+        try {
+          await applyCommittedBatch(committedBatch, "apply")
+        } catch (error) {
+          options.onRolledBack?.({
+            committedId: committedBatch.committedId,
+            batchId: committedBatch.batchId,
+            transactionIds: transactionIds(committedBatch),
+            transactions: transactionEntries(committedBatch),
+            error,
+          })
+          throw error
+        }
+
+        pushUndoBatch(committedBatch)
+        redoStack.length = 0
+        lastCommittedId = committedBatch.committedId
+        bumpRevision()
+        options.onApplied?.({
           committedId: committedBatch.committedId,
           batchId: committedBatch.batchId,
           transactionIds: transactionIds(committedBatch),
           transactions: transactionEntries(committedBatch),
-          error,
         })
-        throw error
-      }
-
-      pushUndoBatch(committedBatch)
-      redoStack.length = 0
-      lastCommittedId = committedBatch.committedId
-      bumpRevision()
-      options.onApplied?.({
-        committedId: committedBatch.committedId,
-        batchId: committedBatch.batchId,
-        transactionIds: transactionIds(committedBatch),
-        transactions: transactionEntries(committedBatch),
+        return transaction.id
       })
-      return transaction.id
     },
     canUndo() {
       return undoStack.length > 0
@@ -613,41 +641,45 @@ export function createDataGridTransactionService(
     },
     async undo() {
       ensureActive()
-      const committedBatch = undoStack[undoStack.length - 1]
-      if (!committedBatch) {
-        return null
-      }
-      await rollbackCommittedBatch(committedBatch, "undo")
-      undoStack.pop()
-      redoStack.push(committedBatch)
-      lastCommittedId = committedBatch.committedId
-      bumpRevision()
-      options.onUndone?.({
-        committedId: committedBatch.committedId,
-        batchId: committedBatch.batchId,
-        transactionIds: transactionIds(committedBatch),
-        transactions: transactionEntries(committedBatch),
+      return runExclusive("undo", async () => {
+        const committedBatch = undoStack[undoStack.length - 1]
+        if (!committedBatch) {
+          return null
+        }
+        await rollbackCommittedBatch(committedBatch, "undo")
+        undoStack.pop()
+        redoStack.push(committedBatch)
+        lastCommittedId = committedBatch.committedId
+        bumpRevision()
+        options.onUndone?.({
+          committedId: committedBatch.committedId,
+          batchId: committedBatch.batchId,
+          transactionIds: transactionIds(committedBatch),
+          transactions: transactionEntries(committedBatch),
+        })
+        return committedBatch.committedId
       })
-      return committedBatch.committedId
     },
     async redo() {
       ensureActive()
-      const committedBatch = redoStack[redoStack.length - 1]
-      if (!committedBatch) {
-        return null
-      }
-      await applyCommittedBatch(committedBatch, "redo")
-      redoStack.pop()
-      pushUndoBatch(committedBatch)
-      lastCommittedId = committedBatch.committedId
-      bumpRevision()
-      options.onRedone?.({
-        committedId: committedBatch.committedId,
-        batchId: committedBatch.batchId,
-        transactionIds: transactionIds(committedBatch),
-        transactions: transactionEntries(committedBatch),
+      return runExclusive("redo", async () => {
+        const committedBatch = redoStack[redoStack.length - 1]
+        if (!committedBatch) {
+          return null
+        }
+        await applyCommittedBatch(committedBatch, "redo")
+        redoStack.pop()
+        pushUndoBatch(committedBatch)
+        lastCommittedId = committedBatch.committedId
+        bumpRevision()
+        options.onRedone?.({
+          committedId: committedBatch.committedId,
+          batchId: committedBatch.batchId,
+          transactionIds: transactionIds(committedBatch),
+          transactions: transactionEntries(committedBatch),
+        })
+        return committedBatch.committedId
       })
-      return committedBatch.committedId
     },
     subscribe(listener: DataGridTransactionListener) {
       if (disposed) {
@@ -667,6 +699,7 @@ export function createDataGridTransactionService(
       undoStack.length = 0
       redoStack.length = 0
       pendingBatch = null
+      activeAction = null
       revision = 0
       lastCommittedId = null
     },
