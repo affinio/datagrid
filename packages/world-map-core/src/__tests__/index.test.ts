@@ -316,6 +316,28 @@ describe("world-map-core", () => {
     }).path).toBe("M -10 70 L 10 70 L 20 80 L -10 70 Z M 350 70 L 370 70 L 380 80 L 350 70 Z")
   })
 
+  it("does not duplicate large antimeridian-crossing mainland rings at the opposite edge", () => {
+    const feature: WorldMapCountryFeature = {
+      id: "mainland-seam",
+      name: "Mainland Seam",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          { lon: 25, lat: 70 },
+          { lon: 170, lat: 70 },
+          { lon: -170, lat: 60 },
+          { lon: -160, lat: 50 },
+          { lon: 25, lat: 70 },
+        ]],
+      },
+    }
+
+    expect(createWorldMapPath(feature, {
+      viewport: { width: 360, height: 180 },
+      precision: 0,
+    }).path).toBe("M 205 20 L 350 20 L 370 30 L 380 40 L 205 20 Z")
+  })
+
   it("can preserve antimeridian-crossing line commands when antimeridian strategy is none", () => {
     const feature: WorldMapCountryFeature = {
       id: "seam-none",

@@ -65,7 +65,7 @@ const pathFeature = createWorldMapPath(feature, {
 
 `Polygon` and `MultiPolygon` rings are projected with the selected projection and emitted as SVG path data. Empty rings are skipped.
 
-By default, paths use `antimeridianStrategy: "break-lines"` to unwrap rings that cross the antimeridian and emit shifted copies at the map edges. This avoids long filled closing segments across the map while preserving local ring closure near the edge. Use `antimeridianStrategy: "none"` to preserve direct line commands across the antimeridian.
+By default, paths use `antimeridianStrategy: "break-lines"` to unwrap rings that cross the antimeridian. Compact edge-crossing rings may emit shifted copies at the map edges to preserve local closure, while larger mainland rings keep the primary visible copy to avoid duplicating whole countries outside the viewport. Use `antimeridianStrategy: "none"` to preserve direct line commands across the antimeridian.
 
 ## Non-Goals For v0.1
 

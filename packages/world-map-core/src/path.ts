@@ -11,6 +11,8 @@ interface ProjectedPathPoint {
   y: number
 }
 
+const MAX_COPIED_UNWRAPPED_RING_SPAN_RATIO = 1 / 3
+
 export function createWorldMapPath(
   feature: WorldMapCountryFeature,
   options: CreateWorldMapPathOptions,
@@ -80,13 +82,53 @@ function createUnwrappedRingPath(
   const unwrappedPoints = unwrapProjectedRing(points, viewportWidth)
   const minX = Math.min(...unwrappedPoints.map((point) => point.x))
   const maxX = Math.max(...unwrappedPoints.map((point) => point.x))
+  const shifts = getVisibleRingShifts(minX, maxX, viewportWidth)
+  const unwrappedSpan = maxX - minX
+  const visibleShifts = unwrappedSpan <= viewportWidth * MAX_COPIED_UNWRAPPED_RING_SPAN_RATIO
+    ? shifts
+    : [getPrimaryVisibleRingShift(minX, maxX, viewportWidth, shifts)]
+
+  return visibleShifts
+    .map((shift) => createClosedRingPath(unwrappedPoints, options, shift * viewportWidth))
+    .join(" ")
+}
+
+function getVisibleRingShifts(
+  minX: number,
+  maxX: number,
+  viewportWidth: number,
+): number[] {
   const minShift = Math.floor((0 - maxX) / viewportWidth)
   const maxShift = Math.ceil((viewportWidth - minX) / viewportWidth)
 
   return Array.from({ length: maxShift - minShift + 1 }, (_, index) => minShift + index)
     .filter((shift) => maxX + shift * viewportWidth >= 0 && minX + shift * viewportWidth <= viewportWidth)
-    .map((shift) => createClosedRingPath(unwrappedPoints, options, shift * viewportWidth))
-    .join(" ")
+}
+
+function getPrimaryVisibleRingShift(
+  minX: number,
+  maxX: number,
+  viewportWidth: number,
+  shifts: number[],
+): number {
+  return shifts.reduce((bestShift, shift) => {
+    const bestOverlap = getViewportOverlap(minX, maxX, viewportWidth, bestShift)
+    const nextOverlap = getViewportOverlap(minX, maxX, viewportWidth, shift)
+    return nextOverlap > bestOverlap ? shift : bestShift
+  }, shifts[0] ?? 0)
+}
+
+function getViewportOverlap(
+  minX: number,
+  maxX: number,
+  viewportWidth: number,
+  shift: number,
+): number {
+  const offsetX = shift * viewportWidth
+  return Math.max(
+    0,
+    Math.min(maxX + offsetX, viewportWidth) - Math.max(minX + offsetX, 0),
+  )
 }
 
 function createClosedRingPath(
