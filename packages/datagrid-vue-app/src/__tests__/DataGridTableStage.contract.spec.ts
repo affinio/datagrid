@@ -134,6 +134,7 @@ function createStageProps(
     rowHover?: boolean
     stripedRows?: boolean
     rowCount?: number
+    totalRowCount?: number
     pinnedBottomRowCount?: number
     isCellOnSelectionEdge?: (rowOffset: number, columnIndex: number, edge: "top" | "right" | "bottom" | "left") => boolean
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
@@ -261,6 +262,7 @@ function createStageProps(
       selectionRange: options?.selectionRange ?? { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
       selectionRanges: options?.selectionRanges,
       selectionAnchorCell,
+      totalRowCount: options?.totalRowCount ?? rows.length + pinnedBottomRows.length,
       fillPreviewRange: options?.fillPreviewRange ?? null,
       rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
       fillHandleEnabled: options?.fillHandleEnabled ?? false,
@@ -865,6 +867,41 @@ describe("DataGridTableStage contract", () => {
     expect(reorderedCenterACell.classes()).toContain("grid-cell--selected")
     expect(rightAnchorCell.classes()).toContain("grid-cell--selection-anchor")
     expect(rightAnchorCell.classes()).not.toContain("grid-cell--selected")
+
+    wrapper.unmount()
+  })
+
+  it("marks additive full-row and full-column selections on row index and header cells", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 || rowOffset === 2 || columnIndex === 2,
+        {
+          rowCount: 3,
+          selectionRange: { startRow: 2, endRow: 2, startColumn: 0, endColumn: 3 },
+          selectionRanges: [
+            { startRow: 0, endRow: 0, startColumn: 0, endColumn: 3 },
+            { startRow: 0, endRow: 2, startColumn: 2, endColumn: 2 },
+            { startRow: 2, endRow: 2, startColumn: 0, endColumn: 3 },
+          ],
+          selectionAnchorCell: { rowIndex: 2, columnIndex: 3 },
+        },
+      ),
+    })
+
+    const firstRowIndexCell = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell[data-row-id="r1"]')
+    const middleRowIndexCell = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell[data-row-id="r2"]')
+    const lastRowIndexCell = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell[data-row-id="r3"]')
+    const selectedHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerB"]')
+    const unselectedHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+
+    expect(firstRowIndexCell.classes()).toContain("grid-cell--index-selected")
+    expect(firstRowIndexCell.classes()).toContain("grid-cell--index-selected-single")
+    expect(middleRowIndexCell.classes()).not.toContain("grid-cell--index-selected")
+    expect(lastRowIndexCell.classes()).toContain("grid-cell--index-selected")
+    expect(lastRowIndexCell.classes()).toContain("grid-cell--index-selected-single")
+    expect(selectedHeader.classes()).toContain("grid-cell--header-selected")
+    expect(unselectedHeader.classes()).not.toContain("grid-cell--header-selected")
 
     wrapper.unmount()
   })

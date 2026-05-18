@@ -15,6 +15,7 @@ export interface UseDataGridStageRowIndexOptions {
   layout: Readonly<Ref<DataGridTableStageLayoutSection>>
   viewportRowStart: Readonly<Ref<number>>
   selectionRange: Readonly<Ref<DataGridOverlayRange | null>>
+  selectionRanges?: Readonly<Ref<readonly DataGridOverlayRange[]>>
   visibleColumns: Readonly<Ref<readonly DataGridTableStageBodyColumn[]>>
   isHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
   isStripedRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
@@ -135,15 +136,18 @@ export function useDataGridStageRowIndex(
   }
 
   function isFullRowSelectionIndex(rowIndex: number): boolean {
-    const range = options.selectionRange.value
     const lastColumnIndex = options.visibleColumns.value.length - 1
-    if (!range || lastColumnIndex < 0) {
+    if (lastColumnIndex < 0) {
       return false
     }
-    return rowIndex >= range.startRow
-      && rowIndex <= range.endRow
-      && range.startColumn === 0
-      && range.endColumn >= lastColumnIndex
+    const ranges = options.selectionRanges?.value
+      ?? (options.selectionRange.value ? [options.selectionRange.value] : [])
+    return ranges.some(range => (
+      rowIndex >= Math.min(range.startRow, range.endRow)
+      && rowIndex <= Math.max(range.startRow, range.endRow)
+      && Math.min(range.startColumn, range.endColumn) === 0
+      && Math.max(range.startColumn, range.endColumn) >= lastColumnIndex
+    ))
   }
 
   function isFullRowSelectionSafe(rowOffset: number, row?: DataGridTableStageBodyRow): boolean {

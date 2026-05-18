@@ -161,6 +161,53 @@ describe("useDataGridStageRowIndex", () => {
     })
   })
 
+  it("marks row index cells from additive full-row selection ranges", () => {
+    const service = useDataGridStageRowIndex({
+      rows: ref({
+        showRowIndex: true,
+        indexColumnStyle: {},
+      } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>),
+      layout: ref({ indexColumnStyle: {} } as unknown as DataGridTableStageLayoutSection),
+      viewportRowStart: ref(0),
+      selectionRange: ref({
+        startRow: 2,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 1,
+      }),
+      selectionRanges: ref([
+        {
+          startRow: 0,
+          endRow: 0,
+          startColumn: 0,
+          endColumn: 1,
+        },
+        {
+          startRow: 2,
+          endRow: 2,
+          startColumn: 0,
+          endColumn: 1,
+        },
+      ]),
+      visibleColumns: ref([createColumn("a"), createColumn("b")]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+
+    expect(service.rowIndexCellClasses(createRow("r1"), 0)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-single": true,
+    })
+    expect(service.rowIndexCellClasses(createRow("r2"), 1)).not.toHaveProperty("grid-cell--index-selected")
+    expect(service.rowIndexCellClasses(createRow("r3"), 2)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-single": true,
+    })
+  })
+
   it("ignores touch-generated row index drag starts", () => {
     const rows = ref({
       showRowIndex: true,

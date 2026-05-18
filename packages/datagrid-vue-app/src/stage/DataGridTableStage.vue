@@ -955,6 +955,7 @@ const rowIndexState = useDataGridStageRowIndex({
   layout,
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   selectionRange,
+  selectionRanges,
   visibleColumns,
   isHoveredRow,
   isStripedRow,
