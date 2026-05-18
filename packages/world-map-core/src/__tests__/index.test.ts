@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { createWorldMapCore } from "@affino/world-map-core"
+import {
+  createWorldMapCore,
+  projectWorldMapPosition,
+} from "@affino/world-map-core"
 import type {
+  ProjectWorldMapPositionOptions,
   WorldMapCountryFeature,
   WorldMapCountryId,
   WorldMapGeometry,
@@ -49,5 +53,48 @@ describe("world-map-core", () => {
 
     expect(feature.geometry.type).toBe("MultiPolygon")
     expect(feature.properties?.region).toBe("North America")
+  })
+
+  it("projects the center point with equirectangular projection", () => {
+    expect(projectWorldMapPosition(
+      { lon: 0, lat: 0 },
+      { viewport: { width: 360, height: 180 }, projection: "equirectangular" },
+    )).toEqual({ x: 180, y: 90 })
+  })
+
+  it("projects top-left world bounds with equirectangular projection", () => {
+    expect(projectWorldMapPosition(
+      { lon: -180, lat: 90 },
+      { viewport: { width: 360, height: 180 }, projection: "equirectangular" },
+    )).toEqual({ x: 0, y: 0 })
+  })
+
+  it("projects bottom-right world bounds with equirectangular projection", () => {
+    expect(projectWorldMapPosition(
+      { lon: 180, lat: -90 },
+      { viewport: { width: 360, height: 180 }, projection: "equirectangular" },
+    )).toEqual({ x: 360, y: 180 })
+  })
+
+  it("defaults to equirectangular projection", () => {
+    expect(projectWorldMapPosition(
+      { lon: 0, lat: 0 },
+      { viewport: { width: 1024, height: 512 } },
+    )).toEqual({ x: 512, y: 256 })
+  })
+
+  it("does not mutate input position or options", () => {
+    const position = Object.freeze({ lon: 45, lat: -45 })
+    const options: ProjectWorldMapPositionOptions = Object.freeze({
+      viewport: Object.freeze({ width: 720, height: 360 }),
+      projection: "equirectangular",
+    })
+
+    expect(projectWorldMapPosition(position, options)).toEqual({ x: 450, y: 270 })
+    expect(position).toEqual({ lon: 45, lat: -45 })
+    expect(options).toEqual({
+      viewport: { width: 720, height: 360 },
+      projection: "equirectangular",
+    })
   })
 })

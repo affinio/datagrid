@@ -5,6 +5,23 @@ export interface WorldMapPosition {
   lat: number
 }
 
+export interface WorldMapViewport {
+  width: number
+  height: number
+}
+
+export interface WorldMapScreenPoint {
+  x: number
+  y: number
+}
+
+export type WorldMapProjectionType = "equirectangular"
+
+export interface ProjectWorldMapPositionOptions {
+  viewport: WorldMapViewport
+  projection?: WorldMapProjectionType
+}
+
 export interface WorldMapPolygonGeometry {
   type: "Polygon"
   coordinates: WorldMapPosition[][]

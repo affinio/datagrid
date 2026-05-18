@@ -34,9 +34,25 @@ const feature: WorldMapCountryFeature = {
 }
 ```
 
+## Projection
+
+```ts
+import { projectWorldMapPosition } from "@affino/world-map-core"
+
+const point = projectWorldMapPosition(
+  { lon: 0, lat: 0 },
+  { viewport: { width: 360, height: 180 } },
+)
+
+// { x: 180, y: 90 }
+```
+
+The default projection is `equirectangular`.
+
 ## Non-Goals For v0.1
 
 - No renderer components.
 - No DOM, SVG, Canvas, or WebGL integration.
 - No MapLibre, D3, topojson, or chart dependencies.
-- No projection or topology processing yet.
+- No Mercator projection yet.
+- No path generation, fit-to-bounds, zoom, pan, or topology processing yet.
