@@ -15,7 +15,8 @@ Current execution state:
 - Slice 9 is completed and should be treated as the focus continuity baseline.
 - Slice 10 is completed and should be treated as the selection/clipboard virtual-target guard baseline.
 - Slice 11 is completed and should be treated as the edit lifecycle continuity baseline.
-- Slice 12 is the next implementation slice.
+- Slice 12 is completed and should be treated as the wide horizontal virtualization baseline.
+- Slice 13 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -229,7 +230,7 @@ Current execution state:
 
 ## Slice 12: Wide Table Horizontal Virtualization Gate
 
-- Status: Planned.
+- Status: Completed. Core horizontal stress coverage now includes 1k and 10k column windows with pinned panes and mutation while horizontally scrolled; the Vue sandbox path exposes a 1000-column mode and has browser coverage for blank horizontal bands with a bounded rendered column window.
 - Objective: validate horizontal virtualization for enterprise-wide tables.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/horizontalVirtualizer.ts`
@@ -239,12 +240,12 @@ Current execution state:
   - `packages/datagrid-core/src/viewport/__tests__/horizontalVirtualization.stress.contract.spec.ts`
   - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: 1k and 10k column scenarios remain covered with stable pinned panes, no blank horizontal bands, and bounded rendered column counts.
-- Tests to add/update:
+- Tests added/covered:
   - Core stress tests for 1k and 10k columns.
-  - E2E horizontal fast scroll with column virtualization enabled.
+  - E2E horizontal fast scroll with column virtualization enabled on a 1000-column Vue base grid.
   - Column resize/reorder/hide/show while horizontally scrolled.
   - Pinned left/right columns near horizontal max scroll.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand horizontalVirtualization && pnpm e2e -- e2e/sandbox-grid.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/viewport/__tests__/horizontalVirtualization.stress.contract.spec.ts && pnpm exec playwright test e2e/sandbox-grid.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): gate wide horizontal virtualization`
 
@@ -375,8 +376,8 @@ Current execution state:
 9. Slice 9: Focus Continuity Across Virtual Unmounts
 10. Slice 10: Selection And Clipboard Continuity (completed)
 11. Slice 11: Edit Lifecycle Continuity (completed)
-12. Slice 12: Wide Table Horizontal Virtualization Gate (next)
-13. Slice 13: Grouped And Tree Row Virtualization Contract
+12. Slice 12: Wide Table Horizontal Virtualization Gate (completed)
+13. Slice 13: Grouped And Tree Row Virtualization Contract (next)
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases
 15. Slice 15: Virtualized Accessibility Mapping
 16. Slice 16: Telemetry Events For Virtualization

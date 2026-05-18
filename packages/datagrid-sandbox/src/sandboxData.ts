@@ -102,7 +102,7 @@ const SOURCES = ["api", "batch", "manual", "import"]
 const OWNERS = ["team-red", "team-blue", "team-green"]
 
 export const ROW_MODE_OPTIONS = [1000, 10000, 50000, 100000, 200000] as const
-export const COLUMN_MODE_OPTIONS = [8, 16, 32] as const
+export const COLUMN_MODE_OPTIONS = [8, 16, 32, 128, 1000] as const
 
 function formatSandboxUtcDate(dayOffset: number): string {
   return new Date(Date.UTC(2026, 2, 1 + dayOffset)).toISOString()

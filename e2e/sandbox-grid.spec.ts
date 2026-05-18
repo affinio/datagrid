@@ -41,6 +41,22 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await assertNoBlankHorizontalViewport(page)
   })
 
+  test("vue base grid keeps a bounded horizontal window on a 1000-column grid", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=1000")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1000)
+
+    await assertNoBlankHorizontalViewport(page)
+    expect(await renderedCenterCellsInFirstVisibleRow(page)).toBeLessThanOrEqual(80)
+
+    await runFastHorizontalDetectionSession(page, viewport)
+
+    await assertNoBlankHorizontalViewport(page)
+    expect(await renderedCenterCellsInFirstVisibleRow(page)).toBeLessThanOrEqual(80)
+  })
+
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
     await gotoSandboxRoute(page, "/core/base-grid")
 
@@ -1206,4 +1222,36 @@ async function assertNoBlankHorizontalViewport(page: Page): Promise<void> {
     gaps: [],
   })
   expect(result.renderedCells).toBeGreaterThan(0)
+}
+
+async function renderedCenterCellsInFirstVisibleRow(page: Page): Promise<number> {
+  return await page.evaluate(() => {
+    const findVisibleElement = (selector: string): HTMLElement | null => {
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        if (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== "hidden" &&
+          style.display !== "none"
+        ) {
+          return element
+        }
+      }
+      return null
+    }
+    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    if (!viewport) {
+      return 0
+    }
+    const viewportRect = viewport.getBoundingClientRect()
+    const row = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+      .find(candidate => {
+        const rect = candidate.getBoundingClientRect()
+        return rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1
+      })
+
+    return row?.querySelectorAll(".grid-cell[data-column-index]").length ?? 0
+  })
 }

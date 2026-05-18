@@ -120,7 +120,7 @@ Orchestration, sandbox, tests, and benchmarks:
 ### Blocker
 
 1. **Automated blank-viewport gating is started but not enterprise-complete.**
-   `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal Vue base-grid detectors plus server datasource visible-refresh coverage for rendered viewport continuity, duplicate visual indexes, and uncovered viewport bands. Remaining enterprise gaps are touch momentum, broader server latency profiles, zoom, resize, and wider horizontal stress coverage.
+   `e2e/sandbox-grid.spec.ts` now includes fast vertical and horizontal Vue base-grid detectors, a 1000-column wide-grid horizontal detector with bounded rendered column counts, and server datasource visible-refresh coverage for rendered viewport continuity, duplicate visual indexes, and uncovered viewport bands. Remaining enterprise gaps are touch momentum, broader server latency profiles, zoom, resize, and browser coverage beyond the 1000-column smoke path.
 
 2. **Placeholder exposure budgets are started but warning-only.**
    `dataSourceBackedRowModel.ts` reports placeholder exposure counts/durations and viewport data availability timing, and the datasource churn benchmark now runs a controlled-latency placeholder scenario with warning-only budgets. Remaining gaps are hard-fail promotion, cache-refresh/browser-profile budgets, and mobile latency profiles.
@@ -143,7 +143,7 @@ Orchestration, sandbox, tests, and benchmarks:
    The app runtime partitions pinned top and bottom rows, and the stage clearly renders pinned bottom shell behavior. A dedicated pinned-top render path was not clearly verified in the reviewed stage files. Treat this as a verification gap, not a confirmed bug.
 
 5. **Wide dataset validation is below enterprise target.**
-   Core stress coverage includes hundreds of columns, and the app path supports horizontal virtualization. There is no reviewed test proving behavior for 1k to 10k columns with resize, reorder, hide/show, pinned columns, and high-DPI fractional scroll positions.
+   Core stress coverage now includes 1k and 10k columns with pinned panes plus resize, reorder, visibility, and pin mutations while scrolled; the Vue sandbox has a 1000-column horizontal blank-band detector with a bounded rendered window. Remaining gaps are browser coverage beyond 1000 columns, high-DPI/fractional scroll positions, and resize/reorder/hide/show coverage in the rendered app path.
 
 ### Medium
 
@@ -183,7 +183,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - Cache replacement behavior in `dataSourceBackedRowModel.ts` preserves current viewport rows as stale rows, and focused coverage now proves partial replacement, direction reversal, failed reload, manual refresh failure, and retry retention. Eviction and broader latency-profile visual continuity still need gates.
 - Sort/filter/group/pivot/cache replacement invalidation is not covered by a single virtualization invariant suite. Current tests cover slices, not the full lifecycle.
 - Container resize is covered by core determinism tests, but app-stage browser coverage should include resize while scrolling and while server rows are loading.
-- Column resize/reorder/hide/show must be tested with horizontal virtualization enabled, pinned columns present, and fractional scroll positions.
+- Column resize/reorder/hide/show is now covered in the core horizontal virtualization stress contract with pinned columns present. App-stage browser coverage and fractional scroll positions remain to be added.
 
 ## Performance Risks
 
@@ -194,7 +194,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - Memory retention and cache growth are controlled in server range caches and row entry caches, but large retained windows plus custom cells need heap benchmarks.
 - Overscan tradeoffs are currently adaptive and touch-aware. Enterprise hardening should record the chosen overscan reason and resulting row/column counts per frame.
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
-- 100-column behavior is covered better than 1k/10k-column behavior. Horizontal virtualization needs wide-grid gates with pinned columns and column resizing.
+- Horizontal virtualization now has core 1k/10k-column stress gates with pinned columns and mutation coverage, plus a 1000-column Vue sandbox blank-band gate. Enterprise coverage still needs browser/device variants for 10k columns, fractional pixels, and resize/reorder/hide/show in the rendered app path.
 - Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output, with warning-only datasource churn budgets; the next gap is hard-fail promotion after baseline variance settles.
 - rAF frame budget and long tasks are already partially benchmarked by browser frame scripts, but the results should become required gates for enterprise scenarios.
 
@@ -236,7 +236,7 @@ What blocks the target:
 - Core/app virtualization ownership is not finalized as a documented contract.
 - Interaction continuity across unloaded or remounted ranges is partially covered; active-cell focus and keyboard navigation are covered, while copy/paste/fill/edit lifecycle gaps remain.
 - Virtualized a11y mapping is not proven in the app-stage DOM.
-- 1M-row and 1k/10k-column behavior is not covered by enterprise browser gates.
+- 1M-row behavior and 10k-column browser behavior are not covered by enterprise browser gates. 1k-column browser smoke coverage exists for the Vue base grid path.
 - Touch momentum and mobile server-backed loading behavior are not gated.
 
 ## Phased Roadmap
@@ -252,7 +252,7 @@ What blocks the target:
 
 ### Phase 2: Scroll And Overscan Hardening
 
-- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection and server datasource visible-refresh detection are covered in `e2e/sandbox-grid.spec.ts`; adaptive overscan consistency is covered by `packages/datagrid-core/src/viewport/__tests__/verticalOverscan.contract.spec.ts` and `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`, with the Vue app path consuming the core overscan controller through the internal core surface. Remaining Phase 2 work is touch/latency variants, churn telemetry, and runtime telemetry.
+- Status: started. Fast vertical and horizontal Vue base-grid blank-viewport detection, 1000-column wide-grid horizontal detection, and server datasource visible-refresh detection are covered in `e2e/sandbox-grid.spec.ts`; adaptive overscan consistency is covered by `packages/datagrid-core/src/viewport/__tests__/verticalOverscan.contract.spec.ts` and `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`, with the Vue app path consuming the core overscan controller through the internal core surface. Remaining Phase 2 work is touch/latency variants, churn telemetry, and runtime telemetry.
 - Add blank-viewport detection in browser tests and optional runtime telemetry.
 - Record overscan decisions: base overscan, adaptive overscan, velocity, direction, touch mode, rendered row count, and rendered column count.
 - Add mount/unmount churn telemetry for rows and cells.
@@ -281,7 +281,7 @@ What blocks the target:
 
 - Promote browser frame scripts and datasource churn scripts into required or scheduled gates for enterprise scenarios.
 - Add large dataset gates for 10k, 100k, and 1M rows.
-- Add wide dataset gates for 100, 1k, and 10k columns with horizontal virtualization enabled.
+- Continue broadening wide dataset gates beyond the covered core 1k/10k-column stress contract and Vue 1000-column browser smoke path.
 - Add server latency profiles with placeholder exposure budgets.
 - Add long-task, rAF frame budget, heap growth, mount churn, and blank-viewport budgets.
 - Add device or emulated-device Playwright coverage for touch momentum.
@@ -311,7 +311,7 @@ What blocks the target:
 ### Playwright/E2E Tests
 
 - Fast vertical scroll with blank-viewport detector.
-- Fast horizontal scroll with pinned columns and wide datasets.
+- Fast horizontal scroll with pinned columns and wide datasets. Status: 1000-column Vue base-grid browser coverage exists; 10k-column browser and device/fractional variants remain.
 - Scrollbar drag, wheel, trackpad-like scroll, programmatic scroll-to-row, and scroll-to-cell.
 - Browser zoom or device scale factor coverage with fractional pixels.
 - Container resize during scroll.
@@ -329,7 +329,7 @@ What blocks the target:
 - Placeholder exposure time under source latency profiles. Status: observable in datasource diagnostics and datasource churn benchmark output; warning-only budget gates are wired for controlled latency and can be promoted with `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`.
 - Custom renderer scroll cost with and without lightweight scroll rendering.
 - 10k, 100k, and 1M row benchmarks.
-- 100, 1k, and 10k column benchmarks.
+- 100, 1k, and 10k column benchmarks. Status: core stress coverage exists for 1k/10k columns; benchmark promotion remains.
 
 ## Recommended Telemetry
 
@@ -353,7 +353,7 @@ What blocks the target:
 3. Write the core/app virtualization ownership contract and add shared invariant tests for both paths.
 4. Add mounted row/cell churn metrics and browser frame budgets to performance gates.
 5. Add interaction continuity tests for active cell, edit lifecycle, keyboard navigation, selection, copy/paste, and fill across virtual remount. Status: started with active-cell focus remount, keyboard navigation beyond the rendered range, and variable row-height/horizontal visibility contracts.
-6. Add wide-grid horizontal virtualization gates for 1k and 10k columns.
+6. Add wide-grid horizontal virtualization gates for 1k and 10k columns. Status: core 1k/10k stress coverage and a Vue 1000-column browser smoke gate are in place; broader browser/device gates remain.
 7. Verify pinned top-row rendering and add tests or document unsupported behavior.
 8. Verify app-stage virtualized a11y attributes and add tests for row/column index mapping.
 9. Decide the enterprise status of `serverBackedRowModel.ts` and either add placeholder parity or document it as a simple path.

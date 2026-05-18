@@ -549,8 +549,20 @@ function resolveInitialRowCount(): number {
   return resolveNearestOption(parsed, ROW_MODE_OPTIONS)
 }
 
+function resolveInitialColumnCount(): number {
+  if (typeof window === "undefined") {
+    return 16
+  }
+  const raw = window.location.search ? new URLSearchParams(window.location.search).get("cols") : null
+  const parsed = raw == null ? Number.NaN : Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 16
+  }
+  return resolveNearestOption(parsed, COLUMN_MODE_OPTIONS)
+}
+
 const rowCount = ref<number>(resolveInitialRowCount())
-const columnCount = ref<number>(16)
+const columnCount = ref<number>(resolveInitialColumnCount())
 const VALUE_FILTER_LIMIT_OPTIONS = [
   { value: 0, label: "Off" },
   { value: 10_000, label: "Up to 10k" },

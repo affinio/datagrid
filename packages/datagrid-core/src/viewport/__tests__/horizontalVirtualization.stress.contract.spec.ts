@@ -84,6 +84,70 @@ function createRows(count: number): VisibleRow[] {
   return rows
 }
 
+function createWideControllerHarness(columnCount: number) {
+  const columns = createColumns(columnCount)
+  const rows = createRows(100_000)
+  const rowModel = createClientRowModel({ rows })
+  const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
+  const totalScrollableWidth = columns.reduce((sum, column) => sum + (column.width ?? 0), 0)
+  const containerMetrics = createMeasuredElement({
+    clientWidth: 1440,
+    clientHeight: 820,
+    scrollWidth: Math.max(1440, totalScrollableWidth),
+    scrollHeight: 4_000_000,
+  })
+  const headerMetrics = createMeasuredElement({
+    clientWidth: 1440,
+    clientHeight: 52,
+    scrollWidth: 1440,
+    scrollHeight: 52,
+  })
+  const controller = createDataGridViewportController({
+    resolvePinMode: column => (column.isSystem ? "left" : column.pin === "left" || column.pin === "right" ? column.pin : "none"),
+    rowModel,
+    columnModel,
+  })
+
+  controller.attach(containerMetrics.element, headerMetrics.element)
+  controller.setViewportMetrics({
+    containerWidth: containerMetrics.state.clientWidth,
+    containerHeight: containerMetrics.state.clientHeight,
+    headerHeight: headerMetrics.state.clientHeight,
+  })
+  controller.refresh(true)
+
+  return {
+    columns,
+    rowModel,
+    columnModel,
+    containerMetrics,
+    headerMetrics,
+    controller,
+    dispose: () => {
+      controller.dispose()
+      rowModel.dispose()
+      columnModel.dispose()
+    },
+  }
+}
+
+function assertBoundedScrollableWindow(
+  controller: ReturnType<typeof createDataGridViewportController<VisibleRow, unknown>>,
+  expectedScrollableColumns: number,
+): void {
+  const range = controller.derived.columns.scrollableRange.value
+  const visibleEntries = controller.derived.columns.visibleScrollableEntries.value
+  const visibleIndexes = visibleEntries.map(entry => entry.index)
+
+  expect(controller.derived.columns.columnVirtualState.value.totalCount).toBe(expectedScrollableColumns)
+  expect(range.start).toBeGreaterThanOrEqual(0)
+  expect(range.end).toBeLessThanOrEqual(expectedScrollableColumns)
+  expect(range.end).toBeGreaterThanOrEqual(range.start)
+  expect(visibleEntries.length).toBeGreaterThan(0)
+  expect(visibleEntries.length).toBeLessThan(240)
+  expect(new Set(visibleIndexes).size).toBe(visibleIndexes.length)
+}
+
 describe("horizontal virtualization stress contract", () => {
   it("keeps bounded windows for 100k rows and 500+ columns with pinned mix", () => {
     const columns = createColumns(520)
@@ -129,6 +193,52 @@ describe("horizontal virtualization stress contract", () => {
     controller.dispose()
     rowModel.dispose()
     columnModel.dispose()
+  })
+
+  it.each([1_000, 10_000])("keeps bounded windows for 100k rows and %i columns", columnCount => {
+    const harness = createWideControllerHarness(columnCount)
+    const expectedScrollableColumns = columnCount - 6
+
+    assertBoundedScrollableWindow(harness.controller, expectedScrollableColumns)
+    expect(harness.controller.derived.columns.pinnedLeftEntries.value.length).toBe(3)
+    expect(harness.controller.derived.columns.pinnedRightEntries.value.length).toBe(3)
+
+    const maxLeft = Math.max(0, harness.containerMetrics.state.scrollWidth - harness.containerMetrics.state.clientWidth)
+    for (const ratio of [0.2, 0.5, 0.9, 1]) {
+      harness.containerMetrics.element.scrollLeft = Math.round(maxLeft * ratio)
+      harness.containerMetrics.element.dispatchEvent(new Event("scroll"))
+      harness.controller.refresh(true)
+      assertBoundedScrollableWindow(harness.controller, expectedScrollableColumns)
+    }
+
+    expect(harness.controller.derived.columns.scrollableRange.value.end).toBeGreaterThan(expectedScrollableColumns - 80)
+
+    harness.dispose()
+  })
+
+  it("keeps a bounded 1k-column window after width, order, visibility, and pin changes while scrolled", () => {
+    const harness = createWideControllerHarness(1_000)
+
+    harness.containerMetrics.element.scrollLeft = Math.round(harness.containerMetrics.state.scrollWidth * 0.55)
+    harness.containerMetrics.element.dispatchEvent(new Event("scroll"))
+    harness.controller.refresh(true)
+
+    harness.columnModel.setColumnWidth("col_500", 240)
+    harness.columnModel.setColumnVisibility("col_600", false)
+    harness.columnModel.setColumnPin("col_700", "right")
+    harness.columnModel.setColumnOrder([
+      "col_800",
+      ...harness.columns.map(column => column.key).filter(key => key !== "col_800"),
+    ])
+    harness.controller.refresh(true)
+
+    assertBoundedScrollableWindow(harness.controller, 1_000 - 8)
+    expect(harness.controller.derived.columns.columnWidthMap.value.get("col_500")).toBe(240)
+    expect(harness.controller.derived.columns.visibleColumns.value.map(column => column.key)).not.toContain("col_600")
+    expect(harness.controller.derived.columns.pinnedRightColumns.value.map(column => column.key)).toContain("col_700")
+    expect(harness.controller.derived.columns.visibleColumns.value[0]?.key).toBe("col_0")
+
+    harness.dispose()
   })
 
   it("stays deterministic after teleport-like scroll and viewport resize", () => {
