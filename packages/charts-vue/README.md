@@ -10,17 +10,58 @@ Reusable Vue rendering package for Affino chart experiences.
 
 ## Current State
 
-This package exposes the shared chart frame and initial public chart-adjacent types. Concrete chart components will be added in later slices.
+This package exposes the shared chart frame, initial chart-adjacent types, and reusable SVG chart components.
 
 ## Public API
 
 ```ts
-import { AffinoChartFrame, createChartsVue } from "@affino/charts-vue"
+import { AffinoBarChart, AffinoChartFrame, createChartsVue } from "@affino/charts-vue"
 
 const chartsVue = createChartsVue()
 ```
 
 `AffinoChartFrame` provides the reusable SVG container for future chart components. It owns consistent sizing, title and description rendering, accessible SVG labels, and empty, loading, and error states. Chart content is passed through the default SVG slot.
+
+## Bar Chart
+
+`AffinoBarChart` renders vertical SVG bars using `createBarChartGeometry()` from `@affino/charts-core`. The Vue package owns rendering, styling, interaction, and accessibility; `@affino/charts-core` remains the geometry layer.
+
+```vue
+<script setup lang="ts">
+import { AffinoBarChart } from "@affino/charts-vue"
+
+const rows = [
+  { name: "Alpha", revenue: 120 },
+  { name: "Beta", revenue: 180 },
+]
+</script>
+
+<template>
+  <AffinoBarChart
+    :rows="rows"
+    category-field="name"
+    value-field="revenue"
+    title="Revenue"
+    description="Revenue by segment"
+    @bar-click="handleBarClick"
+  />
+</template>
+```
+
+Key props:
+
+- `rows`, `categoryField`, `valueField`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `maxBars`, `showAxes`, `showGrid`
+
+Events:
+
+- `bar-click`
+- `bar-hover`
+- `bar-leave`
+
+Each bar event includes the core bar geometry, source row, index, category, value, and a `clientPoint` for pointer events.
 
 ## Theme Tokens
 
@@ -40,10 +81,12 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-danger`
 - `--affino-chart-warning`
 - `--affino-chart-success`
+- `--affino-chart-bar-fill`
+- `--affino-chart-bar-hover-fill`
 
 ## Non-Goals
 
 - No D3, Chart.js, Recharts, ECharts, or external chart rendering libraries.
 - No `datagrid-sandbox` dependency.
 - No `analytics-core` dependency.
-- No chart components yet.
+- No stacked, grouped, horizontal, animated, or legend-backed charts yet.

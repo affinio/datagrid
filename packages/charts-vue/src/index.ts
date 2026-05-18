@@ -1,3 +1,4 @@
+export { default as AffinoBarChart } from "./AffinoBarChart.vue"
 export { default as AffinoChartFrame } from "./AffinoChartFrame.vue"
 
 export function createChartsVue(): { version: string } {
@@ -6,4 +7,9 @@ export function createChartsVue(): { version: string } {
   }
 }
 
-export type { ChartAnchorRect, ChartInteractionPoint, ChartThemeVariant } from "./types"
+export type {
+  AffinoBarChartBarEvent,
+  ChartAnchorRect,
+  ChartInteractionPoint,
+  ChartThemeVariant,
+} from "./types"
