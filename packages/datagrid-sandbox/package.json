@@ -23,6 +23,7 @@
     "@affino/datagrid-worker": "workspace:*",
     "@affino/popover-vue": "^1.1.0",
     "@affino/world-map-core": "workspace:*",
+    "@affino/world-map-vue": "workspace:*",
     "vue": "3.4.38",
     "vue-router": "^4.5.1"
   },

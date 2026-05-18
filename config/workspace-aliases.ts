@@ -53,6 +53,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-laravel/*": "packages/datagrid-laravel/resources/js/*",
   "@affino/world-map-core": "packages/world-map-core/src/index.ts",
   "@affino/world-map-core/*": "packages/world-map-core/src/*",
+  "@affino/world-map-vue": "packages/world-map-vue/src/index.ts",
+  "@affino/world-map-vue/*": "packages/world-map-vue/src/*",
 }
 
 export type AliasOverrides = Record<string, string>

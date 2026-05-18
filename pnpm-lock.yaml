@@ -206,6 +206,9 @@ importers:
       '@affino/world-map-core':
         specifier: workspace:*
         version: link:../world-map-core
+      '@affino/world-map-vue':
+        specifier: workspace:*
+        version: link:../world-map-vue
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
@@ -369,6 +372,15 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
+
+  packages/world-map-vue:
+    dependencies:
+      '@affino/world-map-core':
+        specifier: workspace:*
+        version: link:../world-map-core
+      vue:
+        specifier: 3.4.38
+        version: 3.4.38(typescript@5.9.3)
 
 packages:
 

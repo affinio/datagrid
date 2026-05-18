@@ -32,7 +32,9 @@
       "@affino/datagrid-worker": ["../datagrid-worker/src/index.ts"],
       "@affino/datagrid-worker/*": ["../datagrid-worker/src/*"],
       "@affino/world-map-core": ["../world-map-core/src/index.ts"],
-      "@affino/world-map-core/*": ["../world-map-core/src/*"]
+      "@affino/world-map-core/*": ["../world-map-core/src/*"],
+      "@affino/world-map-vue": ["../world-map-vue/src/index.ts"],
+      "@affino/world-map-vue/*": ["../world-map-vue/src/*"]
     }
   },
   "include": ["src/**/*", "vite.config.ts"]

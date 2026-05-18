@@ -1,0 +1,49 @@
+{
+  "name": "@affino/world-map-vue",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Reusable Vue SVG world map component for Affino",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "pnpm --filter @affino/world-map-core build && vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
+    "type-check": "pnpm --filter @affino/world-map-core build && vue-tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config ./vitest.config.ts"
+  },
+  "dependencies": {
+    "@affino/world-map-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/world-map-vue"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/world-map-vue#readme",
+  "license": "MIT",
+  "keywords": [
+    "affino",
+    "world-map",
+    "vue",
+    "svg"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  }
+}

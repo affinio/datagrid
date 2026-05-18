@@ -55,8 +55,8 @@ import type {
   WorldMapPathFeature,
   WorldMapViewport,
 } from "@affino/world-map-core"
+import { WorldMapSvg } from "@affino/world-map-vue"
 import { loadNormalizedWorldCountries110m } from "./loadWorldCountries"
-import WorldMapSvg from "./WorldMapSvg.vue"
 
 const VIEWPORT: WorldMapViewport = {
   width: 960,
