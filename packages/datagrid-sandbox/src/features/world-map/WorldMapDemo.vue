@@ -19,6 +19,7 @@
         :viewBox="`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`"
         role="img"
         aria-label="World map"
+        @click="clearSelectedCountry"
       >
         <rect
           class="world-map-demo__ocean"
@@ -41,9 +42,9 @@
           tabindex="0"
           @mouseenter="hoveredCountryId = feature.id"
           @mouseleave="hoveredCountryId = null"
-          @click="selectedCountryId = feature.id"
-          @keydown.enter.prevent="selectedCountryId = feature.id"
-          @keydown.space.prevent="selectedCountryId = feature.id"
+          @click.stop="toggleSelectedCountry(feature.id)"
+          @keydown.enter.prevent="toggleSelectedCountry(feature.id)"
+          @keydown.space.prevent="toggleSelectedCountry(feature.id)"
         />
       </svg>
     </section>
@@ -62,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, onUnmounted, ref } from "vue"
 import { createWorldMapPaths } from "@affino/world-map-core"
 import type {
   WorldMapCountryFeature,
@@ -90,7 +91,16 @@ const countryById = computed(() => {
 const hoveredLabel = computed(() => formatCountryLabel(countryById.value.get(hoveredCountryId.value ?? "")))
 const selectedLabel = computed(() => formatCountryLabel(countryById.value.get(selectedCountryId.value ?? "")))
 
-onMounted(async () => {
+onMounted(() => {
+  window.addEventListener("keydown", handleWindowKeydown)
+  void loadMap()
+})
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleWindowKeydown)
+})
+
+async function loadMap(): Promise<void> {
   try {
     countries.value = (await loadNormalizedWorldCountries110m()).filter(shouldRenderCountry)
     pathFeatures.value = createWorldMapPaths(countries.value, {
@@ -103,10 +113,24 @@ onMounted(async () => {
   } finally {
     isLoading.value = false
   }
-})
+}
 
 function formatCountryLabel(feature: WorldMapPathFeature | undefined): string {
-  return feature === undefined ? "None" : `${feature.name} (${feature.id})`
+  return feature === undefined ? "none" : `${feature.name} (${feature.id})`
+}
+
+function toggleSelectedCountry(countryId: string): void {
+  selectedCountryId.value = selectedCountryId.value === countryId ? null : countryId
+}
+
+function clearSelectedCountry(): void {
+  selectedCountryId.value = null
+}
+
+function handleWindowKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    clearSelectedCountry()
+  }
 }
 
 function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
@@ -170,6 +194,7 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
   min-width: 720px;
   height: auto;
   margin: 0 auto;
+  outline: none;
 }
 
 .world-map-demo__ocean {
@@ -181,6 +206,7 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
   fill: #d6d3c8;
   stroke: #ffffff;
   stroke-width: 0.7;
+  outline: none;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
   transition: fill 120ms ease, stroke 120ms ease;
@@ -196,10 +222,18 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
   stroke: #334155;
 }
 
+.world-map-demo__country--selected:hover,
+.world-map-demo__country--selected.world-map-demo__country--hovered {
+  fill: #587a96;
+  stroke: #1f2937;
+}
+
+.world-map-demo__country:focus {
+  outline: none;
+}
+
 .world-map-demo__country:focus-visible {
   outline: none;
-  stroke: #0f172a;
-  stroke-width: 1.4;
 }
 
 .world-map-demo__debug {

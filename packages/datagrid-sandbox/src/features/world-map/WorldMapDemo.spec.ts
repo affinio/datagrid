@@ -44,6 +44,17 @@ describe("WorldMapDemo", () => {
           ]],
         },
       },
+      {
+        id: "BB",
+        name: "Country B",
+        geometry: {
+          type: "Polygon",
+          coordinates: [[
+            { lon: -90, lat: 45 },
+            { lon: -80, lat: 40 },
+          ]],
+        },
+      },
     ]
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -54,17 +65,38 @@ describe("WorldMapDemo", () => {
     const wrapper = mount(WorldMapDemo)
     await flushUi()
 
-    const path = wrapper.find(".world-map-demo__country")
-    expect(path.exists()).toBe(true)
-    expect(wrapper.findAll(".world-map-demo__country")).toHaveLength(1)
-    expect(path.attributes("d")).toBe("M 0 0 L 480 240 L 960 480 Z")
+    const paths = wrapper.findAll(".world-map-demo__country")
+    const firstPath = wrapper.find('[data-country-id="AA"]')
+    const secondPath = wrapper.find('[data-country-id="BB"]')
 
-    await path.trigger("mouseenter")
+    expect(firstPath.exists()).toBe(true)
+    expect(paths).toHaveLength(2)
+    expect(firstPath.attributes("d")).toBe("M 0 0 L 480 240 L 960 480 Z")
+
+    await firstPath.trigger("mouseenter")
     expect(wrapper.text()).toContain("Hovered")
     expect(wrapper.text()).toContain("Country A (AA)")
 
-    await path.trigger("click")
+    await firstPath.trigger("click")
     expect(wrapper.text()).toContain("Selected")
     expect(wrapper.text()).toContain("Country A (AA)")
+
+    await firstPath.trigger("click")
+    expect(wrapper.text()).toContain("Selected")
+    expect(wrapper.text()).toContain("none")
+
+    await firstPath.trigger("click")
+    await secondPath.trigger("click")
+    expect(wrapper.text()).toContain("Country B (BB)")
+
+    await wrapper.find(".world-map-demo__svg").trigger("click")
+    expect(wrapper.text()).toContain("Selected")
+    expect(wrapper.text()).toContain("none")
+
+    await firstPath.trigger("click")
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+    await nextTick()
+    expect(wrapper.text()).toContain("Selected")
+    expect(wrapper.text()).toContain("none")
   })
 })
