@@ -49,6 +49,14 @@ function buildColumns(count: number): ColumnSizeLike[] {
   }))
 }
 
+function buildFractionalColumns(count: number): ColumnSizeLike[] {
+  return Array.from({ length: count }, (_unused, index) => ({
+    width: 88.25 + (index % 7) * 9.5,
+    minWidth: 63.5,
+    maxWidth: 220.75,
+  }))
+}
+
 function createHorizontalMeta(columns: readonly ColumnSizeLike[], options: {
   containerWidthForColumns?: number
   pinnedLeftWidth?: number
@@ -143,6 +151,34 @@ describe("core virtualization range invariants", () => {
     expect(state.overscanLeading).toBeGreaterThan(state.overscanTrailing)
   })
 
+  it("keeps vertical ranges covered with fractional row heights and zoom", () => {
+    const cases = [
+      { totalCount: 10_000, viewportSize: 433.5, scrollOffset: 12_345.75, rowHeight: 27.5, zoom: 1.25 },
+      { totalCount: 10_000, viewportSize: 517.25, scrollOffset: 241_002.4, rowHeight: 31.75, zoom: 0.8 },
+      { totalCount: 10_000, viewportSize: 389.5, scrollOffset: 999_999.9, rowHeight: 22.25, zoom: 1.5 },
+    ]
+
+    for (const entry of cases) {
+      const virtualizer = createVerticalAxisVirtualizer()
+      const state = virtualizer.update({
+        axis: "vertical",
+        viewportSize: entry.viewportSize,
+        scrollOffset: entry.scrollOffset,
+        virtualizationEnabled: true,
+        estimatedItemSize: entry.rowHeight,
+        totalCount: entry.totalCount,
+        overscan: 9,
+        meta: {
+          zoom: entry.zoom,
+          scrollDirection: 1,
+        },
+      })
+
+      expectRangeInvariants(state, entry.totalCount)
+      expectVerticalViewportCovered(state, entry.rowHeight)
+    }
+  })
+
   it("keeps horizontal ranges bounded, monotonic, and viewport-covering", () => {
     const cases = [
       { columnCount: 0, scrollOffset: 0, virtualizationEnabled: true },
@@ -202,6 +238,35 @@ describe("core virtualization range invariants", () => {
     expectRangeInvariants(state, columns.length)
     expectHorizontalViewportCovered(state)
     expect(state.payload.effectiveViewport).toBe(380)
+    expect(state.endIndex).toBe(columns.length)
+  })
+
+  it("keeps horizontal ranges covered with fractional widths, zoom, and max scroll", () => {
+    const columns = buildFractionalColumns(1_000)
+    const meta = createHorizontalMeta(columns, {
+      containerWidthForColumns: 913.5,
+      pinnedLeftWidth: 147.25,
+      pinnedRightWidth: 133.75,
+      nativeScrollLimit: 180_000.5,
+      zoom: 1.25,
+      scrollDirection: 1,
+      scrollVelocity: 3_200.5,
+    })
+    const virtualizer = createHorizontalAxisVirtualizer()
+    const state = virtualizer.update({
+      axis: "horizontal",
+      viewportSize: 913.5,
+      scrollOffset: meta.metrics.totalWidth + 999.4,
+      virtualizationEnabled: true,
+      estimatedItemSize: 118.5,
+      totalCount: columns.length,
+      overscan: 11,
+      meta,
+    })
+
+    expectRangeInvariants(state, columns.length)
+    expectHorizontalViewportCovered(state)
+    expect(state.payload.effectiveViewport).toBeCloseTo(632.5, 5)
     expect(state.endIndex).toBe(columns.length)
   })
 })

@@ -17,7 +17,8 @@ Current execution state:
 - Slice 11 is completed and should be treated as the edit lifecycle continuity baseline.
 - Slice 12 is completed and should be treated as the wide horizontal virtualization baseline.
 - Slice 13 is completed and should be treated as the grouped/tree row-model boundary baseline.
-- Slice 14 is the next implementation slice.
+- Slice 14 is completed and should be treated as the resize/fractional viewport baseline.
+- Slice 15 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -271,7 +272,7 @@ Current execution state:
 
 ## Slice 14: Resize, Zoom, And Fractional Pixel Cases
 
-- Status: Planned.
+- Status: Completed. Core range invariants now cover fractional row heights, fractional column widths, zoom, and near-max horizontal scroll. Browser coverage now exercises high-DPI viewport resize while scrolled on the Vue base grid and server datasource resize while loading.
 - Objective: harden range math and rendering under container resize, browser zoom, fractional pixels, and high-DPI device scale factors.
 - Affected packages/files:
   - `packages/datagrid-core/src/virtualization/verticalVirtualizer.ts`
@@ -280,11 +281,11 @@ Current execution state:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
   - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: no visible gaps, duplicate rows, or horizontal drift under fractional dimensions and resize.
-- Tests to add/update:
+- Tests added/covered:
   - Unit tests for fractional row heights, fractional column widths, and scroll positions near max.
   - Playwright tests with device scale factor and viewport resize.
   - E2E resize while scrolled and while server rows are loading.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand viewport && pnpm e2e -- e2e/sandbox-grid.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts src/viewport/__tests__/horizontalVirtualWindowMath.contract.spec.ts src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts && pnpm exec playwright test e2e/sandbox-grid.spec.ts --grep "high-DPI|resized during loading"`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): cover fractional viewport edge cases`
 
@@ -379,8 +380,8 @@ Current execution state:
 11. Slice 11: Edit Lifecycle Continuity (completed)
 12. Slice 12: Wide Table Horizontal Virtualization Gate (completed)
 13. Slice 13: Grouped And Tree Row Virtualization Contract (completed)
-14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (next)
-15. Slice 15: Virtualized Accessibility Mapping
+14. Slice 14: Resize, Zoom, And Fractional Pixel Cases (completed)
+15. Slice 15: Virtualized Accessibility Mapping (next)
 16. Slice 16: Telemetry Events For Virtualization
 17. Slice 17: Perf Gates For Enterprise Virtualization
 18. Slice 18: Documentation And Support Matrix

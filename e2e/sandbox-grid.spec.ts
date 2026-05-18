@@ -116,6 +116,52 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   })
 })
 
+test.describe("sandbox resize and fractional viewport contracts", () => {
+  test.use({
+    deviceScaleFactor: 1.25,
+    viewport: { width: 1025, height: 769 },
+  })
+
+  test("vue base grid stays covered after high-DPI viewport resize while scrolled", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=50000&cols=128")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(128)
+
+    await setViewportScroll(viewport, { top: 12_345.5, left: 2_407.5 })
+    await assertNoBlankVerticalViewport(page)
+    await assertNoBlankHorizontalViewport(page)
+
+    await page.setViewportSize({ width: 897, height: 673 })
+    await page.waitForTimeout(64)
+
+    await assertNoBlankVerticalViewport(page)
+    await assertNoBlankHorizontalViewport(page)
+    expect(await renderedCenterCellsInFirstVisibleRow(page)).toBeLessThanOrEqual(80)
+  })
+
+  test("server data source keeps viewport covered when resized during loading", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await page.getByRole("button", { name: "Slow backend" }).click()
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+
+    await setViewportScroll(viewport, { top: 8_800.5, left: 0 })
+    await page.setViewportSize({ width: 911, height: 707 })
+    await page.waitForTimeout(64)
+
+    await assertNoBlankVerticalViewport(page)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+  })
+})
+
 test.describe("sandbox touch scroll contracts", () => {
   test.use({
     hasTouch: true,

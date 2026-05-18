@@ -156,8 +156,8 @@ Orchestration, sandbox, tests, and benchmarks:
 3. **Mount/unmount churn is not a first-class budget.**
    The app path retains windows and uses stable row and cell keys, but CI does not enforce a churn budget for row/cell mount and unmount counts during fast scroll.
 
-4. **Browser zoom, fractional pixels, and high DPI need e2e coverage.**
-   Core virtualizers include clamping and zoom-aware behavior, but enterprise confidence requires browser tests at non-100 percent zoom or device scale factors with row/column resize and horizontal scrolling.
+4. **Browser zoom, fractional pixels, and high DPI coverage is started.**
+   Core range invariants now cover fractional row heights, fractional column widths, zoom, and near-max horizontal scroll. `e2e/sandbox-grid.spec.ts` covers high-DPI viewport resize while scrolled and server datasource resize while loading. Remaining gaps are explicit browser zoom coverage, device matrix execution, and fractional row/column resize gestures in the rendered app path.
 
 5. **Custom renderer cost is not isolated during scroll.**
    Current docs and audits mention lightweight rendering while scrolling as remaining work. Without a renderer budget or scroll-time degradation mode, custom renderers can consume the rAF frame budget even when virtualization range math is efficient.
@@ -182,8 +182,8 @@ Orchestration, sandbox, tests, and benchmarks:
 - Pinned columns are well represented in horizontal metadata and stage panes. Pinned top rows need explicit verification in the stage render contract.
 - Cache replacement behavior in `dataSourceBackedRowModel.ts` preserves current viewport rows as stale rows, and focused coverage now proves partial replacement, direction reversal, failed reload, manual refresh failure, and retry retention. Eviction and broader latency-profile visual continuity still need gates.
 - Sort/filter/group/pivot/cache replacement invalidation is not covered by a single virtualization invariant suite. Current tests cover slices, not the full lifecycle.
-- Container resize is covered by core determinism tests, but app-stage browser coverage should include resize while scrolling and while server rows are loading.
-- Column resize/reorder/hide/show is now covered in the core horizontal virtualization stress contract with pinned columns present. App-stage browser coverage and fractional scroll positions remain to be added.
+- Container resize is covered by core determinism tests and app-stage high-DPI browser coverage while scrolled and while server rows are loading.
+- Column resize/reorder/hide/show is now covered in the core horizontal virtualization stress contract with pinned columns present. App-stage browser coverage for resize gestures with fractional scroll positions remains to be added.
 
 ## Performance Risks
 
@@ -194,7 +194,7 @@ Orchestration, sandbox, tests, and benchmarks:
 - Memory retention and cache growth are controlled in server range caches and row entry caches, but large retained windows plus custom cells need heap benchmarks.
 - Overscan tradeoffs are currently adaptive and touch-aware. Enterprise hardening should record the chosen overscan reason and resulting row/column counts per frame.
 - 10k and 100k row behavior has partial coverage. 1M rows need explicit browser and row-model benchmarks, especially with server-backed data.
-- Horizontal virtualization now has core 1k/10k-column stress gates with pinned columns and mutation coverage, plus a 1000-column Vue sandbox blank-band gate. Enterprise coverage still needs browser/device variants for 10k columns, fractional pixels, and resize/reorder/hide/show in the rendered app path.
+- Horizontal virtualization now has core 1k/10k-column stress gates with pinned columns and mutation coverage, core fractional-width range invariants, plus 1000-column and high-DPI resize Vue sandbox blank-band gates. Enterprise coverage still needs browser/device variants for 10k columns and resize/reorder/hide/show in the rendered app path.
 - Server latency can shift cost from rendering to placeholder exposure and cache churn. Placeholder exposure is now observable in datasource diagnostics and benchmark output, with warning-only datasource churn budgets; the next gap is hard-fail promotion after baseline variance settles.
 - rAF frame budget and long tasks are already partially benchmarked by browser frame scripts, but the results should become required gates for enterprise scenarios.
 
@@ -243,11 +243,11 @@ What blocks the target:
 
 ### Phase 1: Correctness And Invariant Audit
 
-- Status: started. Core row/column range invariants are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; core viewport controller integration invariants are covered by `packages/datagrid-core/src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts` and `packages/datagrid-core/src/viewport/__tests__/integrationSnapshot.contract.spec.ts`; grouped/tree flattened row-model invalidation is covered by `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts`. Remaining Phase 1 work is app-stage, lifecycle, and fractional/browser coverage.
+- Status: started. Core row/column range invariants, including fractional row/column dimensions and zoom, are covered by `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`; core viewport controller integration invariants are covered by `packages/datagrid-core/src/viewport/__tests__/scrollResizeDeterminism.contract.spec.ts` and `packages/datagrid-core/src/viewport/__tests__/integrationSnapshot.contract.spec.ts`; grouped/tree flattened row-model invalidation is covered by `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts`. Remaining Phase 1 work is app-stage lifecycle, explicit browser zoom, and broader device coverage.
 - Define the canonical virtualization contract for core and Vue app paths.
 - Add invariant tests for visible range math: no off-by-one gaps, no duplicates, no missing rows, stable start/end semantics, and deterministic range output.
 - Cover sort, filter, group, pivot, cache replacement, container resize, column resize, reorder, hide/show, pinned columns, pinned top rows, and pinned bottom rows.
-- Add zoom/fractional-pixel/high-DPI test cases for vertical and horizontal ranges.
+- Add zoom/fractional-pixel/high-DPI test cases for vertical and horizontal ranges. Status: core range and high-DPI resize browser coverage exists; explicit browser zoom/device-matrix coverage remains.
 - Decide whether app-stage virtualization should share core primitives directly or be documented as a separate renderer contract using the same invariants.
 
 ### Phase 2: Scroll And Overscan Hardening
@@ -292,8 +292,8 @@ What blocks the target:
 
 - Core axis virtualizer range invariants for zero rows, one row, exact viewport fit, start/end edges, reverse direction, oversized overscan, disabled virtualization, and horizontal pinned-width max-scroll math are covered in `packages/datagrid-core/src/viewport/__tests__/virtualizationRangeInvariants.contract.spec.ts`.
 - Axis virtualizer range boundaries for zero rows, one row, exact viewport fit, partial fit, overscan over edges, reverse direction, and huge counts.
-- Vertical virtualizer with fixed heights, estimated heights, zoom adjustments, native scroll limit clamp, and virtual max clamp.
-- Horizontal virtualizer with pinned widths, fractional column widths, hidden columns, reordered columns, and scroll positions near max.
+- Vertical virtualizer with fixed heights, estimated heights, zoom adjustments, native scroll limit clamp, and virtual max clamp. Status: fractional row-height and zoom invariants are covered.
+- Horizontal virtualizer with pinned widths, fractional column widths, hidden columns, reordered columns, and scroll positions near max. Status: pinned/max-scroll and fractional-width invariants are covered; rendered resize/reorder/hide/show browser variants remain.
 - Dynamic overscan with wheel, touch, direction reversal, programmatic jumps, and disabled adaptive overscan.
 - Row-height metrics with sparse overrides, chunk boundaries, average estimate changes, and index-at-offset boundaries.
 - Server range cache eviction, stale retained rows, failed chunks, retry, and partial source responses.
@@ -313,8 +313,8 @@ What blocks the target:
 - Fast vertical scroll with blank-viewport detector.
 - Fast horizontal scroll with pinned columns and wide datasets. Status: 1000-column Vue base-grid browser coverage exists; 10k-column browser and device/fractional variants remain.
 - Scrollbar drag, wheel, trackpad-like scroll, programmatic scroll-to-row, and scroll-to-cell.
-- Browser zoom or device scale factor coverage with fractional pixels.
-- Container resize during scroll.
+- Browser zoom or device scale factor coverage with fractional pixels. Status: device-scale-factor resize coverage exists; explicit browser zoom remains.
+- Container resize during scroll. Status: covered for Vue base grid and server datasource resize while loading.
 - Server-backed visible refresh is covered by the blank-viewport detector; cold scroll, warm scroll, cache replacement, failed source, and retry still need broader e2e/benchmark gates.
 - Touch momentum and long-press interaction on mobile profiles.
 - Edit, focus, keyboard navigation, copy/paste, and fill across unloaded rows.
