@@ -157,7 +157,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 8: Multi-Range And Pinned Overlay Contract
 
-- Status: Partially completed on 2026-05-17. Additive multi-range rendering now has an explicit contract: all selected rendered cells stay highlighted, while active overlay lanes, pinned seam overlays, fill handle placement, range-move edge hover, clipboard target, and keyboard extension are owned by the active range. Unit coverage locks active-range-only overlay lanes across left, center, right, and pinned-bottom panes, and verifies inactive additive ranges do not expose active edge affordances. Header/row-index additive parity and hidden/reordered/horizontally virtualized column cases remain planned.
+- Status: Partially completed on 2026-05-18. Additive multi-range rendering now has an explicit contract: all selected rendered cells stay highlighted, while active overlay lanes, pinned seam overlays, fill handle placement, range-move edge hover, clipboard target, and keyboard extension are owned by the active range. Unit coverage locks active-range-only overlay lanes across left, center, right, and pinned-bottom panes, verifies inactive additive ranges do not expose active edge affordances, and proves additive cell classes stay mapped to projected pinned/reordered visible column indexes when hidden columns are omitted. Header/row-index additive parity and horizontally virtualized browser cases remain planned.
 - Objective: make multi-range rendering semantics explicit for active range overlays, inactive range classes, fill handles, pinned panes, hidden/reordered columns, and header/row selection parity.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`

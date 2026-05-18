@@ -823,6 +823,51 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps additive selection classes aligned with projected pinned and reordered columns", () => {
+    const visibleColumns = [
+      { key: "left", pin: "left", width: 80, column: { key: "left", label: "Left" } },
+      { key: "centerB", pin: "center", width: 130, column: { key: "centerB", label: "Center B" } },
+      { key: "centerA", pin: "center", width: 120, column: { key: "centerA", label: "Center A" } },
+      { key: "right", pin: "right", width: 90, column: { key: "right", label: "Right" } },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const selectedCells = new Set(["0:0", "0:1", "1:2", "0:3"])
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => selectedCells.has(`${rowOffset}:${columnIndex}`),
+        {
+          rowCount: 2,
+          visibleColumns,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 3, endColumn: 3 },
+          selectionRanges: [
+            { startRow: 0, endRow: 0, startColumn: 0, endColumn: 1 },
+            { startRow: 1, endRow: 1, startColumn: 2, endColumn: 2 },
+            { startRow: 0, endRow: 0, startColumn: 3, endColumn: 3 },
+          ],
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 3 },
+        },
+      ),
+    })
+
+    const leftCell = wrapper.find('.grid-body-pane--left .datagrid-stage__cell[data-row-index="0"][data-column-key="left"]')
+    const reorderedCenterBCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerB"]')
+    const reorderedCenterACell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="1"][data-column-key="centerA"]')
+    const rightAnchorCell = wrapper.find('.grid-body-pane--right .datagrid-stage__cell[data-row-index="0"][data-column-key="right"]')
+
+    expect(wrapper.find('[data-column-key="hidden"]').exists()).toBe(false)
+    expect(leftCell.attributes("data-column-index")).toBe("0")
+    expect(reorderedCenterBCell.attributes("data-column-index")).toBe("1")
+    expect(reorderedCenterACell.attributes("data-column-index")).toBe("2")
+    expect(rightAnchorCell.attributes("data-column-index")).toBe("3")
+    expect(leftCell.classes()).toContain("grid-cell--selected")
+    expect(reorderedCenterBCell.classes()).toContain("grid-cell--selected")
+    expect(reorderedCenterACell.classes()).toContain("grid-cell--selected")
+    expect(rightAnchorCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(rightAnchorCell.classes()).not.toContain("grid-cell--selected")
+
+    wrapper.unmount()
+  })
+
   it("renders a continuous move-preview overlay from center into pinned-right", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

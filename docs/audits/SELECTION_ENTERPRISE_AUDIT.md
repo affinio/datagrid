@@ -134,12 +134,12 @@ Tests and benchmarks sampled:
    `useDataGridAppInteractionController.ts` has a pending range-move start when the pointer begins inside the selected editable range. The stage has mouse hover edge affordances, and touch-generated mouse events are guarded, but the enterprise interaction contract should require explicit handles for touch and clearly separate edge-drag from body-drag behavior.
 
 6. **Pinned-pane selection is strong but still needs broader enterprise validation.**
-   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. The multi-range visual contract is now explicit: all additive ranges keep selected-cell highlighting, while active overlay lanes, pinned seams, fill handles, range-move edge hover, clipboard target, and keyboard extension belong to the active range. Unit tests cover active-range-only overlay lanes across left, center, right, and pinned-bottom panes. Header/row-index additive parity and hidden/reordered/horizontally virtualized column cases remain open.
+   Overlay code handles panes and seam segments, and tests cover pinned overlay geometry. The multi-range visual contract is now explicit: all additive ranges keep selected-cell highlighting, while active overlay lanes, pinned seams, fill handles, range-move edge hover, clipboard target, and keyboard extension belong to the active range. Unit tests cover active-range-only overlay lanes across left, center, right, and pinned-bottom panes, and additive cell classes are now locked against projected pinned/reordered visible column indexes when hidden columns are omitted. Header/row-index additive parity and horizontally virtualized browser cases remain open.
 
 ### Medium
 
 1. **Row selection and cell range selection are separate systems.**
-   Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is now documented in the selection state-machine contract; remaining work is parity coverage for row/header additive selection, hidden/reordered columns, and server-backed row-selection projection changes.
+   Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is now documented in the selection state-machine contract; remaining work is parity coverage for row/header additive selection and server-backed row-selection projection changes.
 
 2. **Grouped/tree selection is covered as a flattened-row app interaction surface.**
    `docs/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
@@ -151,7 +151,7 @@ Tests and benchmarks sampled:
    `dataGridFocusRestore.ts` retries focus after `nextTick` and rAF, which is pragmatic. Enterprise readiness needs tests proving this is enough for virtualization remounts, pinned panes, editor mount, server placeholder replacement, and horizontal virtualization.
 
 5. **Ctrl/Cmd additive selection exists for cells, but row/header parity needs explicit coverage.**
-   Cell additive ranges are tested. Header documentation says Ctrl/Cmd adds column ranges, but the audited coverage was stronger for cell and row-selection paths than for column-header additive selection with pinned/hidden/reordered columns.
+   Cell additive ranges are tested, including pinned/reordered visible column indexes with hidden columns omitted. Header documentation says Ctrl/Cmd adds column ranges, but the audited coverage remains stronger for cell and row-selection paths than for column-header additive selection.
 
 6. **Selection rendering and overlay planning now have local performance gates.**
    `useDataGridTableStageVisualSelection.ts` indexes sparse additive ranges by row for rendered-cell predicates and keeps tall/overflow ranges in a bounded fallback path. Interaction benchmarks gate multi-range lookup and selection overlay planning across pinned/center panes. Future server-delegated operation latency gates still depend on backend handlers.
@@ -173,7 +173,7 @@ Tests and benchmarks sampled:
 | --- | --- | --- |
 | Active cell ownership | Documented across snapshot, anchor, focus runtime, and editing with focused contracts | Add pinned/horizontal remount, editor remount, and server placeholder tests |
 | Range selection | Strong core/app support with grouped/tree and vertical remount coverage | Need broader e2e around pinned/horizontal virtualization and server placeholders |
-| Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented | Need header/row-index parity and hidden/reordered column cases |
+| Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented; projected pinned/reordered cell-class mapping covered | Need header/row-index parity and horizontally virtualized browser cases |
 | Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
 | Virtualization remount continuity | Logical model is suitable | Needs browser tests for focus/classes/overlays/editors after remount |
 | Keyboard navigation | Strong coverage through command and navigation routers | Need server/unloaded and pinned-pane e2e |
