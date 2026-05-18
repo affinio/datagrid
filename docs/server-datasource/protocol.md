@@ -532,6 +532,36 @@ Non-retryable failures include:
 
 Mutation retries remain disabled by default. Do not retry edits, fill commits, undo, or redo unless the backend operation-id contract guarantees duplicate suppression and deterministic replay.
 
+## Offline And Reconnect Policy
+
+Current policy: offline mutation replay is unsupported.
+
+Supported reconnect behavior is read/live recovery only:
+
+- keep the mounted row model and cached visible rows while connectivity is interrupted
+- abort in-flight reads when the page/app lifecycle requires it
+- on reconnect, issue a fresh pull for the active viewport
+- resume live updates from the last seen `datasetVersion`
+- recover with dataset invalidation when the change window is incomplete or the cursor is invalid
+
+Unsupported until a separate API is approved:
+
+- durable local mutation queue
+- automatic retry of edits, fill commits, undo, or redo
+- replay after browser reload or device restart
+- cross-tab pending mutation coordination
+- conflict-free merge after stale revision
+
+Required API shape before offline replay can be implemented:
+
+- durable `operationId` for every mutation
+- backend duplicate-operation detection for each operation id
+- deterministic response for duplicate operations
+- persisted mutation payload, projection state, `baseRevision`, workspace/table/user/session scope, and dependency tokens
+- explicit conflict policy for stale revision, projection mismatch, boundary mismatch, authorization loss, deleted rows, and unsupported fill modes
+
+Until those requirements exist, host apps must treat mutation failure while offline as a failed commit, preserve or rollback local optimistic UI according to the row-model result, refresh from the server on reconnect, and ask the user to retry manually.
+
 ## Error Response
 
 ```json
@@ -569,8 +599,8 @@ Current behavior:
 - stack history is the normal undo/redo path
 - full off-viewport materialization may be bounded
 - polling/change feed is available as the current fallback path
-- websocket transport is not implemented yet
-- offline mutation queue and reconnect replay are not implemented yet
+- concrete websocket/SSE transport is not implemented yet; the client transport boundary exists
+- offline mutation replay is not implemented; reconnect is read/live recovery only
 - operation-id undo/redo remains available as low-level diagnostics/manual replay
 - change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large
 - the workspace scope is header-driven, not auth-driven

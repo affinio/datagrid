@@ -339,6 +339,27 @@ Retryable failures are transport failures and transient HTTP statuses (`408`, `4
 
 Mutations are consistency boundaries. Edits, fill commits, undo, and redo must not be retried automatically unless the backend provides durable operation-id idempotency and duplicate-operation suppression for that mutation type.
 
+## Offline And Reconnect Consistency
+
+Offline mutation replay is not part of the current enterprise contract.
+
+Reconnect is limited to read/live-update recovery:
+
+- preserve the current cache while disconnected or while a reconnect pull is pending
+- resume polling or a custom live-update transport from the last seen `datasetVersion`
+- use dataset invalidation when the event window is incomplete, the cursor is invalid, or the backend cannot prove continuity
+- run a fresh viewport pull after reconnect before accepting the visible projection as current
+
+The client must not persist and replay mutations after connectivity loss unless a host app implements an explicit durable operation contract. That contract must include:
+
+- stable operation id allocation before the mutation leaves the client
+- duplicate-operation suppression on the backend
+- deterministic duplicate responses
+- persisted request body, `baseRevision`, projection hash, boundary token, and history scope
+- conflict handling for stale revision, projection mismatch, deleted rows, permission loss, and unsupported operations
+
+Without that contract, retries stop at idempotent reads. Failed edits, fill commits, undo, and redo remain failed mutations; the user must retry after the datasource refreshes from the server.
+
 ## Deterministic Replay
 
 History operations must be replayable deterministically.
@@ -368,7 +389,8 @@ the backend must:
 - server-side series fill is not implemented yet
 - the workspace scope is still demo/env/header driven unless the host app binds it to auth
 - the host app must still enforce authorization
-- websocket transport is not implemented yet
+- concrete websocket/SSE transport is not implemented yet; the client transport boundary exists
+- offline mutation replay is not implemented; reconnect is read/live recovery only
 - operation-id undo/redo remains available as low-level diagnostics/manual replay
 - full off-viewport materialization may be bounded
 - change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large

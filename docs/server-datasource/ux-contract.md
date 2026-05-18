@@ -56,12 +56,30 @@ The backend integration must provide:
 
 Current unsupported behavior:
 
-- websocket/SSE transport; use polling change feed today
-- offline mutation queue and reconnect replay
+- concrete websocket/SSE transport; use polling-backed live updates today
+- offline mutation queue and mutation replay after reconnect
 - server-side grouping/tree/pivot projection in the FastAPI demo pull path
 - server-side series fill
 
 If a host app needs one of those capabilities, treat it as a separate backend capability slice with protocol, tests, and UX recovery behavior. Do not imply support by passing frontend query fields through an unimplemented backend projection path.
+
+## Offline And Reconnect UX
+
+Current policy:
+
+- keep cached visible rows mounted while the network is interrupted
+- show loading/error/retry state from the datasource row model rather than remounting the grid
+- resume reads and live updates on reconnect
+- refresh the active viewport before treating visible data as current
+- recover incomplete change-feed replay through dataset invalidation
+
+Current non-goals:
+
+- no offline edit/fill/history queue
+- no automatic mutation replay after reconnect
+- no hidden retry of failed edits, fill commits, undo, or redo
+
+If a mutation fails while offline or during reconnect, keep the failure explicit. Optimistic local UI must either be reconciled by the row model response or rolled back; the user should retry only after the datasource has refreshed from the server.
 
 ## Required Host App Rules
 

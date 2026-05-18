@@ -10,7 +10,7 @@ Current execution state:
 - Slice 4 is completed and should be treated as the invalidation matrix baseline.
 - Slice 5 is completed and should be treated as the server-demo projection capability baseline.
 - Slice 6 is completed and should be treated as the live-update transport boundary baseline.
-- Slice 7 is the next implementation slice.
+- Slice 7 is completed and should be treated as the offline/reconnect policy baseline.
 - Rendering and virtualization enterprise tracks are closed as of 2026-05-18. Server datasource work should reuse their browser-frame and placeholder diagnostics where useful instead of creating duplicate performance tracks.
 
 ## Slice 1: Enterprise Datasource Contract
@@ -129,13 +129,13 @@ Current execution state:
 
 ## Slice 7: Offline And Reconnect Policy
 
-- Status: Planned docs-first slice.
+- Status: Completed docs-first slice. Offline mutation replay remains explicitly unsupported; reconnect is defined as read/live recovery through cached visible rows, fresh viewport pull, last-seen `datasetVersion`, and dataset invalidation fallback. Durable offline replay requires a future approved operation-id/idempotency API.
 - Objective: either keep offline explicitly unsupported or propose the public operation-id/idempotency contract required for durable offline replay.
 - Affected packages/files:
   - `docs/server-datasource/protocol.md`
   - `docs/server-datasource/consistency.md`
   - `docs/server-datasource/ux-contract.md`
-- Expected behavior change: no runtime behavior change until an API shape is approved.
+- Expected behavior change: no runtime behavior change; host apps now have an explicit offline/reconnect policy and must not imply durable mutation replay.
 - Tests to add/update:
   - Docs validation only unless the API is approved.
 - Validation command: `node ./scripts/check-datagrid-docs-framework-track.mjs`
@@ -150,7 +150,7 @@ Current execution state:
 4. Slice 4: Invalidation Matrix Hardening (completed)
 5. Slice 5: Server Projection Capability Contract (completed)
 6. Slice 6: Live Update Transport Abstraction (completed)
-7. Slice 7: Offline And Reconnect Policy (next)
+7. Slice 7: Offline And Reconnect Policy (completed)
 
 ## Execution Notes
 

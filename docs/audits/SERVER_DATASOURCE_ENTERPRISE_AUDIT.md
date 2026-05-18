@@ -8,7 +8,7 @@ The server datasource architecture is production-shaped and should remain the fo
 - `createAffinoDatasource` in `packages/datagrid-server-adapters/src/index.ts`
 - the FastAPI/Postgres `server_demo` implementation under `backend/app/features/server_demo/`
 
-Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete, idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`, datasource latency telemetry now covers placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration, the `server_demo` backend now rejects unsupported grouping/tree/pivot pull projection with an explicit capability error, and the server client has a transport-neutral live-update boundary around the polling fallback. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline semantics, concrete websocket/SSE implementation, runtime enforcement or validation for enterprise consistency tokens, implemented server grouping/tree/pivot projection, and promotion of latency telemetry into CI/browser performance gates.
+Current readiness is **8/10** for enterprise server-backed DataGrid usage. The design already has clear viewport pulls, stable row identity requirements, placeholders, stale-while-refresh behavior, optimistic edit reconciliation, revision/dataset-version contracts, scoped history, and a polling change feed. Contract hardening is complete, idempotent read retry/backoff is implemented in `@affino/datagrid-server-client`, datasource latency telemetry now covers placeholder exposure, blank viewport events, viewport cache hit/miss ratio, viewport data availability, and pull duration, the `server_demo` backend now rejects unsupported grouping/tree/pivot pull projection with an explicit capability error, the server client has a transport-neutral live-update boundary around the polling fallback, and offline mutation replay is explicitly unsupported until a durable idempotency API exists. The main blockers to a 9/10 target are the remaining runtime hardening gaps: offline mutation replay implementation, concrete websocket/SSE implementation, runtime enforcement or validation for enterprise consistency tokens, implemented server grouping/tree/pivot projection, and promotion of latency telemetry into CI/browser performance gates.
 
 Do not introduce a parallel datasource stack. Tighten the current protocol, row model, HTTP adapter, backend services, and tests in small slices.
 
@@ -126,10 +126,10 @@ Backend:
    - Impact: enterprise realtime/collaborative use cases cannot rely on low-latency push, connection lifecycle state, or reconnect replay.
    - Required: implement a websocket or server-sent-events transport behind the live-update boundary, with reconnect and version-gap recovery.
 
-2. **Offline/reconnect behavior is unsupported.**
-   - Evidence: reviewed datasource/client/backend code has abort handling, polling stop/start, stale-version fallback, and mutation rollback, but no offline mutation queue, reconnect handshake, durable local pending operations, or replay/idempotency contract for disconnected clients.
-   - Impact: enterprise deployments with intermittent connectivity cannot guarantee edit/fill/history recovery.
-   - Required: explicitly document unsupported offline mode now, then add reconnect contract and idempotent mutation replay if offline support is in scope.
+2. **Offline mutation replay is explicitly unsupported.**
+   - Evidence: reviewed datasource/client/backend code has abort handling, polling stop/start, stale-version fallback, mutation rollback, and documented reconnect read/live recovery, but no offline mutation queue, durable local pending operations, or replay/idempotency contract for disconnected clients.
+   - Impact: enterprise deployments with intermittent connectivity cannot guarantee edit/fill/history replay after disconnect, browser reload, or device restart.
+   - Required: implement durable operation-id idempotency, persisted mutation payloads, duplicate-operation responses, and conflict UX if offline mutation replay is in scope.
 
 ### High
 
@@ -252,8 +252,8 @@ Current state:
 Risks:
 
 - Optimistic support is focused on edits. Fill/history mostly rely on server response snapshots and invalidations.
-- There is no offline optimistic queue.
-- Retrying mutations safely requires operation idempotency and backend duplicate-operation behavior to be specified for every mutation type.
+- There is no offline optimistic queue; this is now an explicit unsupported mode.
+- Retrying or replaying mutations safely requires operation idempotency and backend duplicate-operation behavior to be specified for every mutation type.
 
 ## Latency, Retries, And Error Recovery
 
@@ -271,7 +271,7 @@ Gaps:
 - No retry budget.
 - No circuit breaker.
 - No user-visible retry state contract.
-- No offline queue or reconnect replay.
+- No offline queue or mutation replay.
 - No distinction between retryable and non-retryable HTTP errors in datasource policy.
 
 ## Sorting, Filtering, Grouping, And Pivoting
@@ -339,7 +339,8 @@ Required enterprise work:
 
 Current state:
 
-- Unsupported.
+- Offline mutation replay is explicitly unsupported.
+- Reconnect read/live recovery is supported through cached visible rows, fresh viewport pulls, last-seen `datasetVersion`, and dataset invalidation fallback.
 
 Required enterprise work if offline is in scope:
 
@@ -359,7 +360,7 @@ Target score: **9/10**
 What blocks the target:
 
 - no concrete websocket/SSE live-update transport
-- no offline/reconnect contract
+- no offline mutation replay implementation
 - mutation retry remains intentionally unsupported until operation-id idempotency is guaranteed
 - consistency tokens are documented as required for enterprise integrations but still optional at runtime
 - server grouping/tree/pivot projection is explicitly unsupported in the current backend demo path
@@ -510,6 +511,7 @@ Performance/benchmark tests:
 7. **Define offline/reconnect policy**
    - Files: docs first; client/backend only after API approval
    - Outcome: offline is either explicitly unsupported or implemented through durable idempotent operations.
+   - Status: completed as an explicit unsupported policy. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 
 ## Risks And Migration Notes
 
