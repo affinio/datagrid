@@ -109,9 +109,13 @@ export {
 } from "./useDataGridAppInlineEditing"
 
 export {
+  createDataGridAppHistoryOperationPayload,
   useDataGridAppIntentHistory,
   type DataGridAppHistorySnapshotBudget,
   type DataGridAppHistorySnapshotBudgetResult,
+  type DataGridAppHistoryOperationKind,
+  type DataGridAppHistoryOperationPayload,
+  type DataGridAppHistoryOperationScope,
   type DataGridAppHistoryRestorationCell,
   type DataGridAppHistoryRestorationState,
   type DataGridAppRowSnapshot,

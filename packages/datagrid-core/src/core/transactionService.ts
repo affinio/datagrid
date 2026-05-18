@@ -10,6 +10,7 @@ export interface DataGridTransactionAffectedRange {
 export interface DataGridTransactionMeta {
   intent?: string
   affectedRange?: DataGridTransactionAffectedRange | null
+  operation?: unknown
 }
 
 export interface DataGridTransactionCommand {
@@ -204,12 +205,14 @@ function normalizeTransactionMeta(meta: DataGridTransactionMeta | null | undefin
   }
   const intent = normalizeIntent(meta.intent)
   const affectedRange = normalizeAffectedRange(meta.affectedRange)
-  if (!intent && !affectedRange) {
+  const hasOperation = Object.prototype.hasOwnProperty.call(meta, "operation")
+  if (!intent && !affectedRange && !hasOperation) {
     return null
   }
   return {
     ...(intent ? { intent } : {}),
     ...(affectedRange ? { affectedRange } : {}),
+    ...(hasOperation ? { operation: clonePlainValue(meta.operation) } : {}),
   }
 }
 
@@ -230,6 +233,18 @@ function cloneTransactionMeta(meta: DataGridTransactionMeta | null | undefined):
           },
         }
       : {}),
+    ...(typeof normalized.operation !== "undefined" ? { operation: clonePlainValue(normalized.operation) } : {}),
+  }
+}
+
+function clonePlainValue<T>(value: T): T {
+  if (value == null) {
+    return value
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
   }
 }
 

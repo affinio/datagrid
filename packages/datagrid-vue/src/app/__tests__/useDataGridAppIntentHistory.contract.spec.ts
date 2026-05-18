@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  createDataGridAppHistoryOperationPayload,
   useDataGridAppIntentHistory,
   type DataGridAppHistorySnapshotBudget,
+  type DataGridAppHistoryOperationPayload,
   type DataGridAppHistoryRestorationState,
 } from "../useDataGridAppIntentHistory"
 
@@ -28,6 +30,7 @@ function createHistoryHarness(
     snapshotBudget?: DataGridAppHistorySnapshotBudget
     captureRestorationState?: () => DataGridAppHistoryRestorationState | null
     applyRestorationState?: (state: DataGridAppHistoryRestorationState) => void | Promise<void>
+    onOperationRecorded?: (operation: DataGridAppHistoryOperationPayload) => void
   } = {},
 ) {
   let rows = initialRows.map(row => ({
@@ -76,6 +79,7 @@ function createHistoryHarness(
     snapshotBudget: options.snapshotBudget,
     captureRestorationState: options.captureRestorationState,
     applyRestorationState: options.applyRestorationState,
+    onOperationRecorded: options.onOperationRecorded,
   })
 
   const setRowData = (rowId: string, patch: Partial<DemoRow>) => {
@@ -431,6 +435,91 @@ describe("useDataGridAppIntentHistory contract", () => {
       selectionSnapshot: {
         activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
       },
+    })
+  })
+
+  it("records versioned operation metadata while keeping snapshot replay", async () => {
+    const operations: DataGridAppHistoryOperationPayload[] = []
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+      { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
+    ], {
+      onOperationRecorded: operation => {
+        operations.push(operation)
+      },
+    })
+
+    const beforeSnapshot = harness.history.captureRowsSnapshotByIds(["r1", "r2"])
+    harness.setRowData("r1", { a: "P1" })
+    harness.setRowData("r2", { a: "P2" })
+    const afterSnapshot = harness.history.captureRowsSnapshotByIds(["r1", "r2"])
+
+    await harness.history.recordIntentTransaction(
+      {
+        intent: "paste",
+        label: "Paste cells",
+        affectedRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 0 },
+      },
+      beforeSnapshot,
+      afterSnapshot,
+    )
+
+    expect(operations).toEqual([{
+      version: 1,
+      kind: "paste",
+      intent: "paste",
+      scope: {
+        snapshotKind: "partial",
+        rowIds: ["r1", "r2"],
+        rowCount: 2,
+        affectedRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 0 },
+      },
+    }])
+
+    await harness.history.runHistoryAction("undo")
+    expect(harness.rows()[0]?.data.a).toBe("A1")
+    await harness.history.runHistoryAction("redo")
+    expect(harness.rows()[0]?.data.a).toBe("P1")
+  })
+
+  it("normalizes explicit versioned operation metadata", () => {
+    const beforeSnapshot: DemoSnapshot = {
+      kind: "partial",
+      rows: [{ rowId: "r1", row: { a: "A1", b: "B1", c: "C1" } }],
+    }
+    const afterSnapshot: DemoSnapshot = {
+      kind: "partial",
+      rows: [{ rowId: "r1", row: { a: "A2", b: "B1", c: "C1" } }],
+    }
+
+    const operation = createDataGridAppHistoryOperationPayload({
+      intent: "edit",
+      affectedRange: null,
+      operation: {
+        version: 1,
+        kind: "row-delete",
+        intent: "delete-row",
+        scope: {
+          snapshotKind: "snapshot-fallback",
+          rowIds: ["r1", null],
+          rowCount: 1.8,
+          affectedRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 2 },
+        },
+        metadata: { source: "context-menu" },
+      },
+    }, beforeSnapshot, afterSnapshot)
+
+    expect(operation).toEqual({
+      version: 1,
+      kind: "row-delete",
+      intent: "delete-row",
+      scope: {
+        snapshotKind: "snapshot-fallback",
+        rowIds: ["r1"],
+        rowCount: 1,
+        affectedRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 2 },
+      },
+      metadata: { source: "context-menu" },
     })
   })
 })

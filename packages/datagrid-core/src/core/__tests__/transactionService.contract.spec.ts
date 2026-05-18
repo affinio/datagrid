@@ -361,6 +361,7 @@ describe("transaction service contracts", () => {
     const eventTransactions: Array<readonly string[]> = []
     const eventIntents: Array<string | undefined> = []
     const eventRanges: Array<string | null> = []
+    const eventOperations: unknown[] = []
 
     const service = createDataGridTransactionService({
       execute: createCounterExecutor(state, []),
@@ -368,6 +369,7 @@ describe("transaction service contracts", () => {
         eventTransactions.push(event.transactions.map(entry => entry.id))
         const transactionMeta = event.transactions[0]?.meta
         eventIntents.push(transactionMeta?.intent)
+        eventOperations.push(transactionMeta?.operation)
         const range = transactionMeta?.affectedRange ?? null
         eventRanges.push(range ? `${range.startRow}:${range.endRow}:${range.startColumn}:${range.endColumn}` : null)
       },
@@ -384,6 +386,11 @@ describe("transaction service contracts", () => {
           startColumn: 7,
           endColumn: 5,
         },
+        operation: {
+          version: 1,
+          kind: "paste",
+          rowIds: ["r1"],
+        },
       },
       commands: [
         {
@@ -398,5 +405,6 @@ describe("transaction service contracts", () => {
     expect(eventTransactions).toEqual([["tx-meta"]])
     expect(eventIntents).toEqual(["paste"])
     expect(eventRanges).toEqual(["2:4:5:7"])
+    expect(eventOperations).toEqual([{ version: 1, kind: "paste", rowIds: ["r1"] }])
   })
 })

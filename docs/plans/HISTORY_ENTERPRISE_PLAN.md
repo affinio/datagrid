@@ -9,7 +9,8 @@ Current execution state:
 - Slice 3 is completed and should be treated as the undo failure compensation baseline.
 - Slice 4 is completed and should be treated as the client snapshot budget baseline.
 - Slice 5 is completed and should be treated as the client restoration payload baseline.
-- Slice 6 is next and should define versioned operation payloads.
+- Slice 6 is completed and should be treated as the versioned client operation metadata baseline.
+- Slice 7 is next and should enforce server operation idempotency at the storage boundary.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -104,19 +105,23 @@ Current execution state:
 
 ## Slice 6: Versioned Operation Payloads
 
-- Status: Planned.
+- Status: Completed. Core transaction metadata now preserves operation payloads, app intent descriptors can carry an optional operation, and built-in app history records normalized version-1 operation metadata beside snapshot payloads. Snapshot replay remains the compatibility fallback.
 - Objective: define a versioned operation shape for enterprise history while keeping snapshot history as a compatibility fallback.
 - Affected packages/files:
   - `packages/datagrid-core/src/core/transactionService.ts`
-  - `packages/datagrid-vue-app/src/dataGridHistory.ts`
-  - `packages/datagrid-vue-app/src/app/useDataGridAppIntentHistory.ts`
+  - `packages/datagrid-core/src/core/__tests__/transactionService.contract.spec.ts`
+  - `packages/datagrid-orchestration/src/history/useDataGridIntentHistory.ts`
+  - `packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts`
+  - `packages/datagrid-vue/src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
+  - `packages/datagrid-vue/src/app/index.ts`
   - `docs/datagrid-history.md`
-- Expected behavior change: edit, paste, cut-paste, fill, range move, row insert/delete, and placeholder materialization can be represented by serializable metadata before any persistence or recovery API is exposed.
-- Tests to add/update:
-  - Operation serialization round trips for supported intents.
-  - Snapshot fallback remains available for unsupported operations.
-  - Operation metadata includes intent, scope, affected rows/columns, and compatibility version.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- dataGridHistory DataGridApp.history`
+- Expected behavior change: edit, paste, cut-paste, fill, range move, row insert/delete, placeholder materialization, and snapshot fallback can be represented by serializable version-1 metadata before any persistence or recovery API is exposed.
+- Tests added/covered:
+  - Core transaction events preserve operation metadata.
+  - App history derives versioned operation metadata from intent descriptors and snapshot scope.
+  - Explicit version-1 operation metadata is normalized.
+  - Snapshot replay remains unchanged for undo/redo.
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/core/__tests__/transactionService.contract.spec.ts && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `feat(datagrid): define versioned history operations`
 
@@ -166,8 +171,8 @@ Current execution state:
 3. Slice 3: Undo Failure Compensation (completed)
 4. Slice 4: Snapshot Scope And Memory Budget (completed)
 5. Slice 5: Restoration State Payload (completed)
-6. Slice 6: Versioned Operation Payloads (next)
-7. Slice 7: Server History Idempotency Guard
+6. Slice 6: Versioned Operation Payloads (completed)
+7. Slice 7: Server History Idempotency Guard (next)
 8. Slice 8: Server Operation Coverage And Collaboration Policy
 
 ## Execution Notes

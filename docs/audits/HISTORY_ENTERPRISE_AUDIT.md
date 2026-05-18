@@ -12,9 +12,9 @@ There are three distinct history paths today:
 
 These paths are compatible enough for current edit, paste, fill, toolbar, shortcut, placeholder, and server-demo workflows. The strongest enterprise pieces are rollback payload enforcement, batch-as-one-undo-unit semantics, redo invalidation, scoped server stack undo/redo, revision/datasetVersion integration, and focused tests.
 
-The remaining main gaps are operation serialization, editor/formula restoration depth, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
+The remaining main gaps are persisted operation recovery, editor/formula restoration depth, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, deeper editor restoration, server-backed non-cell operation support, and collaborative revision semantics.
+Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding persisted operation recovery, deeper editor restoration, server-backed non-cell operation support, and collaborative revision semantics.
 
 ## Implementation Progress
 
@@ -23,7 +23,8 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - 2026-05-18: Slice 3, Undo Failure Compensation, is complete. Core `TransactionService` now re-applies commands already rolled back inside a failed undo transaction and re-applies transactions already rolled back inside a failed undo batch, leaving undo/redo stacks unchanged when the action fails.
 - 2026-05-18: Slice 4, Snapshot Scope And Memory Budget, is complete. Client app intent history now marks full/partial snapshots that exceed row, cell, or byte-estimate budgets and skips recording those over-budget intents instead of creating unbounded undo entries.
 - 2026-05-18: Slice 5, Restoration State Payload, is complete. Client app history snapshots now carry optional active-cell, selection snapshot, scroll anchor, focus target, and edit target metadata, and the Vue app stage restores selection/focus context through existing selection and active-cell viewport paths.
-- Remaining runtime gaps: versioned operation payloads, server storage idempotency, broader server operation coverage, collaborative conflict policy, and deeper inline/formula editor recovery.
+- 2026-05-18: Slice 6, Versioned Operation Payloads, is complete. Core transaction metadata now preserves operation payloads, app intent descriptors can carry optional operation metadata, and built-in app history derives normalized version-1 operation metadata beside snapshot replay payloads.
+- Remaining runtime gaps: persisted operation recovery, server storage idempotency, broader server operation coverage, collaborative conflict policy, and deeper inline/formula editor recovery.
 
 ## Current Architecture Summary
 
@@ -131,6 +132,7 @@ Backend and sandbox:
 
 1. **Client-side history is snapshot-based and not serializable as an operation log.**
    `useDataGridIntentHistory.ts` stores snapshot payloads inside in-memory transaction commands. `useDataGridAppIntentHistory.ts` records row snapshots, not normalized edit/fill/delete operations. This is fine for local undo/redo, but it blocks enterprise expectations for persisted client history, reload recovery, operation inspection, conflict replay, and collaborative editing.
+   Status after Slice 6: built-in client history now records version-1 operation metadata beside snapshots. Snapshot replay is still the source of undo/redo truth, and persisted recovery/conflict replay remains future work.
 
 2. **There is no unified history contract across client snapshot history and server operation history.**
    `docs/datagrid-history.md` documents the public prop/controller, while `docs/server-datasource/protocol.md` documents server stack history. The code supports both, but the boundary is implicit: client history restores snapshots, server history replays persisted operations. Enterprise consumers need a single contract that states which mode owns undo/redo, what is persisted, how redo invalidation works, and what restoration semantics are guaranteed.

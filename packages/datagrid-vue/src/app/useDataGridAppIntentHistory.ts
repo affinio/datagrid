@@ -7,6 +7,7 @@ export interface DataGridAppRowSnapshot<TRow> {
   rows: Array<{ rowId: string | number; row: TRow }>
   budget?: DataGridAppHistorySnapshotBudgetResult
   restoration?: DataGridAppHistoryRestorationState | null
+  operation?: DataGridAppHistoryOperationPayload | null
 }
 
 export interface DataGridAppHistorySnapshotBudget {
@@ -41,6 +42,37 @@ export interface DataGridAppHistoryRestorationState {
   editTarget?: DataGridAppHistoryRestorationCell | null
 }
 
+export type DataGridAppHistoryOperationKind =
+  | "edit"
+  | "paste"
+  | "cut-paste"
+  | "fill"
+  | "range-move"
+  | "row-insert"
+  | "row-delete"
+  | "placeholder-materialization"
+  | "snapshot-fallback"
+
+export interface DataGridAppHistoryOperationScope {
+  snapshotKind: DataGridAppRowSnapshot<unknown>["kind"] | "snapshot-fallback"
+  rowIds: readonly (string | number)[]
+  rowCount: number
+  affectedRange?: {
+    startRow: number
+    endRow: number
+    startColumn: number
+    endColumn: number
+  } | null
+}
+
+export interface DataGridAppHistoryOperationPayload {
+  version: 1
+  kind: DataGridAppHistoryOperationKind
+  intent: string
+  scope: DataGridAppHistoryOperationScope
+  metadata?: Record<string, unknown>
+}
+
 export interface UseDataGridAppIntentHistoryOptions<TRow> {
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
   cloneRowData: (row: TRow) => TRow
@@ -49,6 +81,7 @@ export interface UseDataGridAppIntentHistoryOptions<TRow> {
   snapshotBudget?: DataGridAppHistorySnapshotBudget
   captureRestorationState?: () => DataGridAppHistoryRestorationState | null
   applyRestorationState?: (state: DataGridAppHistoryRestorationState) => void | Promise<void>
+  onOperationRecorded?: (operation: DataGridAppHistoryOperationPayload) => void
 }
 
 export interface UseDataGridAppIntentHistoryResult<TRow> {
@@ -76,6 +109,7 @@ export function useDataGridAppIntentHistory<TRow>(
     })),
     ...(snapshot.budget ? { budget: { ...snapshot.budget } } : {}),
     ...(snapshot.restoration ? { restoration: cloneRestorationState(snapshot.restoration) } : {}),
+    ...(snapshot.operation ? { operation: cloneHistoryOperation(snapshot.operation) } : {}),
   })
 
   const captureRestorationState = (): DataGridAppHistoryRestorationState | null => {
@@ -267,10 +301,12 @@ export function useDataGridAppIntentHistory<TRow>(
     if (afterSnapshot.budget?.exceeded) {
       return Promise.resolve(null)
     }
+    const operation = resolveHistoryOperation(descriptor, beforeSnapshot, afterSnapshot)
+    options.onOperationRecorded?.(cloneHistoryOperation(operation))
     return intentHistory.recordIntentTransaction(
-      descriptor,
-      cloneSnapshot(beforeSnapshot),
-      cloneSnapshot(afterSnapshot),
+      { ...descriptor, operation },
+      withHistoryOperation(cloneSnapshot(beforeSnapshot), operation),
+      withHistoryOperation(cloneSnapshot(afterSnapshot), operation),
     )
   }
 
@@ -307,6 +343,137 @@ function estimateSnapshotByteSize(rowId: string | number, row: unknown): number 
     return JSON.stringify({ rowId, row }).length
   } catch {
     return 1024
+  }
+}
+
+export function createDataGridAppHistoryOperationPayload<TRow>(
+  descriptor: Pick<DataGridIntentTransactionDescriptor, "intent" | "affectedRange" | "operation">,
+  beforeSnapshot: DataGridAppRowSnapshot<TRow>,
+  afterSnapshot: DataGridAppRowSnapshot<TRow>,
+): DataGridAppHistoryOperationPayload {
+  const explicitOperation = normalizeHistoryOperation(descriptor.operation)
+  if (explicitOperation) {
+    return explicitOperation
+  }
+  const normalizedIntent = descriptor.intent.trim() || "intent"
+  return {
+    version: 1,
+    kind: resolveHistoryOperationKind(normalizedIntent),
+    intent: normalizedIntent,
+    scope: {
+      snapshotKind: beforeSnapshot.kind === afterSnapshot.kind ? beforeSnapshot.kind : "snapshot-fallback",
+      rowIds: collectHistoryOperationRowIds(beforeSnapshot, afterSnapshot),
+      rowCount: Math.max(beforeSnapshot.rows.length, afterSnapshot.rows.length),
+      affectedRange: cloneAffectedRange(descriptor.affectedRange ?? null),
+    },
+  }
+}
+
+function resolveHistoryOperation<TRow>(
+  descriptor: DataGridIntentTransactionDescriptor,
+  beforeSnapshot: DataGridAppRowSnapshot<TRow>,
+  afterSnapshot: DataGridAppRowSnapshot<TRow>,
+): DataGridAppHistoryOperationPayload {
+  return createDataGridAppHistoryOperationPayload(descriptor, beforeSnapshot, afterSnapshot)
+}
+
+function withHistoryOperation<TRow>(
+  snapshot: DataGridAppRowSnapshot<TRow>,
+  operation: DataGridAppHistoryOperationPayload,
+): DataGridAppRowSnapshot<TRow> {
+  return {
+    ...snapshot,
+    operation: cloneHistoryOperation(operation),
+  }
+}
+
+function normalizeHistoryOperation(value: unknown): DataGridAppHistoryOperationPayload | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const candidate = value as Partial<DataGridAppHistoryOperationPayload>
+  if (candidate.version !== 1 || typeof candidate.intent !== "string") {
+    return null
+  }
+  if (!candidate.scope || typeof candidate.scope !== "object") {
+    return null
+  }
+  return {
+    version: 1,
+    kind: resolveHistoryOperationKind(candidate.kind),
+    intent: candidate.intent.trim() || "intent",
+    scope: {
+      snapshotKind: candidate.scope.snapshotKind === "full"
+        ? "full"
+        : candidate.scope.snapshotKind === "snapshot-fallback"
+          ? "snapshot-fallback"
+          : "partial",
+      rowIds: Array.isArray(candidate.scope.rowIds)
+        ? candidate.scope.rowIds.filter((rowId): rowId is string | number => (
+          typeof rowId === "string" || typeof rowId === "number"
+        ))
+        : [],
+      rowCount: Number.isFinite(candidate.scope.rowCount)
+        ? Math.max(0, Math.trunc(candidate.scope.rowCount as number))
+        : 0,
+      affectedRange: cloneAffectedRange(candidate.scope.affectedRange ?? null),
+    },
+    ...(candidate.metadata && typeof candidate.metadata === "object"
+      ? { metadata: clonePlainValue(candidate.metadata as Record<string, unknown>) }
+      : {}),
+  }
+}
+
+function cloneHistoryOperation(
+  operation: DataGridAppHistoryOperationPayload,
+): DataGridAppHistoryOperationPayload {
+  return clonePlainValue(operation)
+}
+
+function resolveHistoryOperationKind(value: unknown): DataGridAppHistoryOperationKind {
+  switch (value) {
+    case "edit":
+    case "paste":
+    case "cut-paste":
+    case "fill":
+    case "range-move":
+    case "row-insert":
+    case "row-delete":
+    case "placeholder-materialization":
+    case "snapshot-fallback":
+      return value
+    case "move":
+      return "range-move"
+    default:
+      return "snapshot-fallback"
+  }
+}
+
+function collectHistoryOperationRowIds<TRow>(
+  beforeSnapshot: DataGridAppRowSnapshot<TRow>,
+  afterSnapshot: DataGridAppRowSnapshot<TRow>,
+): readonly (string | number)[] {
+  const rowIds = new Set<string | number>()
+  for (const entry of beforeSnapshot.rows) {
+    rowIds.add(entry.rowId)
+  }
+  for (const entry of afterSnapshot.rows) {
+    rowIds.add(entry.rowId)
+  }
+  return Array.from(rowIds)
+}
+
+function cloneAffectedRange(
+  range: DataGridIntentTransactionDescriptor["affectedRange"] | null,
+): DataGridAppHistoryOperationScope["affectedRange"] {
+  if (!range) {
+    return null
+  }
+  return {
+    startRow: range.startRow,
+    endRow: range.endRow,
+    startColumn: range.startColumn,
+    endColumn: range.endColumn,
   }
 }
 

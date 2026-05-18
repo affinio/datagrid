@@ -102,6 +102,23 @@ Client snapshot history restores captured row state, not normalized per-cell ope
 
 Enterprise integrations that need persisted client operations, reload recovery, conflict replay, or operation inspection should treat versioned operation payloads as planned work rather than current behavior.
 
+## Operation Metadata
+
+Built-in client history now records additive versioned operation metadata beside snapshot payloads. Snapshots remain the replay source for client undo/redo; operation metadata is for inspection, diagnostics, and future migration paths.
+
+Current operation payload shape:
+
+- `version: 1`
+- `kind`: `edit`, `paste`, `cut-paste`, `fill`, `range-move`, `row-insert`, `row-delete`, `placeholder-materialization`, or `snapshot-fallback`
+- `intent`: normalized app intent string
+- `scope.snapshotKind`: `partial`, `full`, or `snapshot-fallback`
+- `scope.rowIds`
+- `scope.rowCount`
+- optional `scope.affectedRange`
+- optional `metadata`
+
+If an app supplies an explicit version-1 operation payload, it is normalized and recorded. Otherwise the built-in app history derives operation metadata from the intent descriptor and captured before/after snapshots. Unsupported or broad structural operations continue to replay through snapshots and are marked as `snapshot-fallback`.
+
 ## Restoration Semantics
 
 History restores data first. Built-in client app history can also carry an optional restoration payload captured with each before/after row snapshot.

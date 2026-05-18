@@ -9,6 +9,7 @@ export interface DataGridIntentTransactionDescriptor {
   intent: string
   label: string
   affectedRange?: DataGridTransactionAffectedRange | null
+  operation?: unknown
 }
 
 export interface UseDataGridIntentHistoryOptions<TSnapshot> {
@@ -116,6 +117,9 @@ export function useDataGridIntentHistory<TSnapshot>(
     const meta = {
       intent: normalizedIntent,
       affectedRange: descriptor.affectedRange ?? null,
+      ...(Object.prototype.hasOwnProperty.call(descriptor, "operation")
+        ? { operation: descriptor.operation }
+        : {}),
     }
     try {
       return await service.applyTransaction({
