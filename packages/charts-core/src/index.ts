@@ -1,4 +1,7 @@
 export type {
+  BarChartBarGeometry,
+  BarChartGeometry,
+  BarChartGeometryOptions,
   ChartBandScale,
   ChartBandScaleOptions,
   ChartDatum,
@@ -25,6 +28,7 @@ export {
   normalizeChartValue,
 } from "./scale"
 export { createChartBandScale } from "./bandScale"
+export { createBarChartGeometry } from "./barGeometry"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

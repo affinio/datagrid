@@ -49,3 +49,34 @@ export interface ChartBandScale {
   step: number
   scale(category: string): number | null
 }
+
+export interface BarChartGeometryOptions {
+  rows: readonly ChartDatum[]
+  categoryField: string
+  valueField: string
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  maxBars?: number
+  includeZero?: boolean
+  paddingInner?: number
+  paddingOuter?: number
+}
+
+export interface BarChartBarGeometry {
+  key: string
+  index: number
+  row: ChartDatum
+  category: string
+  value: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface BarChartGeometry {
+  bars: BarChartBarGeometry[]
+  plotArea: ChartRect
+  valueDomain: ChartNumericDomain
+  categories: string[]
+}
