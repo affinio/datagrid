@@ -8,7 +8,7 @@ Affino DataGrid already has strong desktop scroll foundations: scroll work is mo
 
 The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
-The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17; automated Chromium desktop and touch-emulated interaction thresholds are hard-fail gates, while hardware-specific mobile risk is tracked as device execution and threshold review from real traces.
+The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17, and selection enterprise slices are closed as of 2026-05-18. Automated Chromium desktop and touch-emulated interaction thresholds are hard-fail gates, while hardware-specific mobile risk is tracked as device execution and threshold review from real traces.
 
 ## Implementation Status
 
@@ -53,7 +53,7 @@ Phase 3 status:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
 
 Interaction audit closure:
-- Interaction orchestration slices 1-14 are complete as of 2026-05-17. Browser e2e coverage and hard-fail Chromium frame profiles now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, and scroll-sync drift. The open mobile work remains real-device execution and hardware threshold review.
+- Interaction orchestration slices 1-14 are complete as of 2026-05-17, and selection enterprise slices 1-15 are complete as of 2026-05-18. Browser e2e coverage and hard-fail Chromium frame profiles now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, pinned-pane drag-selection diagnostics, and scroll-sync drift. The open mobile work remains real-device execution and hardware threshold review.
 
 ## Current Mobile Capability
 

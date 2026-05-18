@@ -10,6 +10,7 @@ Current implemented behavior:
 - Server fill has boundary and commit plumbing.
 - Row selection supports explicit selected rows and `all` with exclusions.
 - Virtual cell selection carries loaded coverage, missing intervals, projection identity, stale state, and operation decisions.
+- Local/smoke performance gates cover selection summary planning, virtual coverage, clipboard planning, overlay planning, and additive rendered-cell lookup. Delegated server operation latency gates remain future work until those handlers exist.
 
 ## Operation Modes
 
@@ -74,3 +75,4 @@ Responses should return:
 - Server fill exists, but series fill is not implemented.
 - Selection summaries remain loaded/local unless a server summary operation is added.
 - Group row operation semantics are blocked unless a backend explicitly defines group-to-children or group-summary behavior.
+- Performance gates currently cover local planning and safety checks; end-to-end backend latency budgets should be added with the delegated operation handlers.

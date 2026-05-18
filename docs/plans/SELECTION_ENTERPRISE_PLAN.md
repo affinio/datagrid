@@ -304,6 +304,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 15: Selection Audit Status Closure
 
+- Status: Completed on 2026-05-18. Audit, TODO, mobile touch, server datasource, interaction, and performance docs now distinguish closed selection slices from remaining server-delegation, real-device, and remount validation work.
 - Objective: keep the audit, plan, interaction docs, server datasource docs, mobile touch audit, and performance gates aligned after implementation slices land.
 - Affected packages/files:
   - `docs/audits/SELECTION_ENTERPRISE_AUDIT.md`

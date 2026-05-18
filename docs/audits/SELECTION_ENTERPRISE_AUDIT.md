@@ -4,9 +4,9 @@
 
 The DataGrid selection architecture is strong, but not yet enterprise-grade. It has a clear core snapshot shape, deterministic range helpers, multi-range support, virtual-selection metadata, row-selection APIs, keyboard routing, clipboard/fill/range-move plumbing, pinned-pane overlay support, and broad unit/contract coverage.
 
-The gaps are mostly at enterprise boundaries: active cell, selection snapshot, DOM focus, and editing now have a documented cross-package ownership contract and focused invariant coverage; projection changes stale-mark virtual selections and clear transient interaction/clipboard state, but broader remount/server placeholder validation remains; virtual selections can use row-model loaded interval metadata instead of row-by-row scans; server-backed selection operation semantics now have a documented operation matrix, but only fill has implementation plumbing today; summary/aggregate paths and rendered-cell additive range lookup are locally budgeted while clipboard still can do cell-by-cell work over very large ranges; touch selection now has a scroll-first long-press/explicit-handle model with browser coverage, but still needs real-device matrix validation; and e2e coverage does not yet prove selection continuity across pinned panes, horizontal remounts, editor remount state, and unloaded rows.
+The implementation slices for this audit are closed as of 2026-05-18. The largest remaining gaps are enterprise boundary work: server-backed selection operation handlers are still partial; real-device touch validation is still pending; and broader browser coverage is still needed for pinned/horizontal remounts, editor remount state, server placeholders, and unloaded rows. The completed slices documented the cross-package selection state machine, added focused focus/edit/virtualization/a11y contracts, made virtual coverage interval-aware, defined the server operation matrix, hardened grouped/touch/multi-range behavior, and added local performance gates for selection summaries, additive range lookup, overlays, clipboard planning, virtual coverage, and pinned-pane drag-selection diagnostics.
 
-Current enterprise readiness: **7.7/10**.
+Current enterprise readiness: **8.2/10**.
 Target enterprise readiness: **9/10** after hardening invariants, large-range/server semantics, real-device touch validation, virtualization continuity, and performance gates.
 
 ## Current Architecture Summary
@@ -16,7 +16,7 @@ Target enterprise readiness: **9/10** after hardening invariants, large-range/se
 - `datagrid-vue-app` owns rendered selection state, row-selection UI, pinned-pane overlays, stage focus lookup, pointer routing, fill handles, and range-move hover affordances.
 - `datagrid-orchestration` owns reusable interaction composables for keyboard commands, drag selection, pointer routing, range move, fill handle start, overlay generation, row selection, and clipboard mutation helpers.
 
-This layering is mostly compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, virtual stale marking, and transient interaction cleanup on projection changes. Remaining high-risk proof points are remount, broader keyboard move, and server placeholder replacement.
+This layering is compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, virtual stale marking, transient interaction cleanup on projection changes, a11y state, and performance gates. Remaining high-risk proof points are pinned/horizontal remount, editor remount state, server placeholder replacement, and real-device touch validation.
 
 ## Exact Files Reviewed
 
@@ -101,7 +101,7 @@ Tests and benchmarks sampled:
 - Pinned panes are first-class in stage overlay code. `useDataGridStageOverlays.ts` builds selection, fill-preview, and move-preview segments for left, center, right, pinned-bottom, and seam overlays.
 - Grouped row semantics are documented: selection operates on flattened rows, group rows are selectable as rows, and optional group-to-children policy exists in core helpers.
 - There is meaningful test coverage across core geometry, grouped ranges, virtual selection, app selection state, row selection, overlays, clipboard, fill, range move, and row-selection controlled state.
-- Interaction benchmarks exist for selection drag, fill apply, and multi-range rendered-cell lookup in `scripts/bench-datagrid-interactions.mjs`, and enterprise workload scripts include selection operations.
+- Interaction benchmarks hard-gate selection drag, fill apply, multi-range rendered-cell lookup, and selection overlay planning in `scripts/bench-datagrid-interactions.mjs`; enterprise workload smoke gates cover selection summary planning, virtual coverage, clipboard planning, and overlay planning.
 
 ## Findings By Severity
 
@@ -118,8 +118,8 @@ Tests and benchmarks sampled:
 
 ### High
 
-1. **Active cell ownership is split across selection snapshot, anchor ref, DOM focus, and editing state.**
-   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, edit-handoff coverage, and vertical remount focus restoration. It still needs broader keyboard move and server placeholder replacement coverage.
+1. **Active cell ownership is documented, but remount/server proof remains incomplete.**
+   `snapshot.ts` stores `activeCell`; `useDataGridAppSelection.ts` stores `selectionAnchor`; `useDataGridAppActiveCellViewport.ts` and `useDataGridStageFocusRuntime.ts` restore DOM focus; `useDataGridAppInteractionController.ts` starts/commits/cancels editing. This is now documented as one cross-package state-machine contract with focused active-range, focus fallback, edit-handoff coverage, vertical remount focus restoration, and stage a11y state coverage. It still needs pinned/horizontal remount, editor remount, broader keyboard move, and server placeholder replacement coverage.
 
 2. **Selection continuity across virtualization remounts is partially proven, not fully gated.**
    Logical selection uses absolute row indexes and row ids, and rendered cells are keyed by row id/column key in `DataGridTableStageCenterPane.vue`. `DataGridTableStage.vue` now preserves grid focus ownership through virtualized cell unmount/remount and restores the visible selection anchor after scroll idle. E2E coverage proves vertical scroll-out/scroll-in preserves the anchor class, overlay segment, fill handle, and keyboard focus. Pinned/horizontal remount, editor state, and server placeholder replacement coverage remain open.
@@ -139,7 +139,7 @@ Tests and benchmarks sampled:
 ### Medium
 
 1. **Row selection and cell range selection are separate systems.**
-   Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is good, but focus/selection precedence between checkbox row selection, row-index range selection, and cell selection needs a documented enterprise contract.
+   Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is now documented in the selection state-machine contract; remaining work is parity coverage for row/header additive selection, hidden/reordered columns, and server-backed row-selection projection changes.
 
 2. **Grouped/tree selection is covered as a flattened-row app interaction surface.**
    `docs/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
@@ -153,8 +153,8 @@ Tests and benchmarks sampled:
 5. **Ctrl/Cmd additive selection exists for cells, but row/header parity needs explicit coverage.**
    Cell additive ranges are tested. Header documentation says Ctrl/Cmd adds column ranges, but the audited coverage was stronger for cell and row-selection paths than for column-header additive selection with pinned/hidden/reordered columns.
 
-6. **Selection rendering predicates are row-bucketed, but overlay geometry still needs a large-range budget.**
-   `useDataGridTableStageVisualSelection.ts` now indexes sparse additive ranges by row for rendered-cell predicates and keeps tall/overflow ranges in a bounded fallback path. Overlay generation remains visible-metrics-based but still needs explicit large additive range benchmarks.
+6. **Selection rendering and overlay planning now have local performance gates.**
+   `useDataGridTableStageVisualSelection.ts` indexes sparse additive ranges by row for rendered-cell predicates and keeps tall/overflow ranges in a bounded fallback path. Interaction benchmarks gate multi-range lookup and selection overlay planning across pinned/center panes. Future server-delegated operation latency gates still depend on backend handlers.
 
 ### Low
 
@@ -171,8 +171,8 @@ Tests and benchmarks sampled:
 
 | Area | Current Assessment | Enterprise Gap |
 | --- | --- | --- |
-| Active cell ownership | Functional but split across snapshot, anchor, focus runtime, and editing | Document one state machine and add remount/edit/server tests |
-| Range selection | Strong core/app support | Need broader e2e around virtualization and grouped rows |
+| Active cell ownership | Documented across snapshot, anchor, focus runtime, and editing with focused contracts | Add pinned/horizontal remount, editor remount, and server placeholder tests |
+| Range selection | Strong core/app support with grouped/tree and vertical remount coverage | Need broader e2e around pinned/horizontal virtualization and server placeholders |
 | Multi-range support | Supported for cell selection and clipboard ranges; active-range visual affordance contract documented | Need header/row-index parity and hidden/reordered column cases |
 | Virtual selection over unloaded rows | Metadata and blocked/server decisions exist; datasource row models expose loaded intervals | Complete server operation contracts |
 | Virtualization remount continuity | Logical model is suitable | Needs browser tests for focus/classes/overlays/editors after remount |
@@ -184,10 +184,10 @@ Tests and benchmarks sampled:
 | Clipboard | Good local safety; blocks unloaded copy | Needs server-delegated copy/export/cut/clear/delete contract |
 | Fill/range move conflicts | Dedicated lifecycles stop conflicting interactions, and touch paths are explicit-handle only | Need server virtual range semantics |
 | Touch selection | Scroll-first long-press and explicit-handle model is implemented with browser e2e coverage | Need real-device matrix and hardware-threshold validation |
-| Focus synchronization | Pragmatic focus restore exists | Needs invariant tests around remount and editing |
-| Selection rendering performance | Rendered-cell additive range predicates use a row-bucketed lookup with benchmark budgets | Needs large-range overlay benchmarks |
+| Focus synchronization | Pragmatic focus restore exists with active/focus/edit handoff coverage | Needs invariant tests around pinned/horizontal remount, editor mount, and server placeholders |
+| Selection rendering performance | Rendered-cell additive range predicates and overlay planning have benchmark budgets | Need server-delegated operation latency gates after handlers exist |
 | Selection invalidation | Virtual stale marking and row selection reconcile exist | Need unified invalidation policy across all selection-related state |
-| Large-range performance | Some benchmarks exist | Summary, aggregates, clipboard, virtual coverage need interval/server paths |
+| Large-range performance | Summary, aggregate, clipboard planning, virtual coverage, additive lookup, and overlay planning have local/smoke gates | Server-global operations need delegated handlers and latency budgets |
 | Server-backed semantics | Operation matrix documented; implementation remains partial and safety-biased | Need backend delegation APIs for non-fill operations |
 
 ## Correctness Risks
@@ -203,7 +203,7 @@ Tests and benchmarks sampled:
 - `selectionSummary.ts` and app aggregate labels now cap local selected-cell iteration at 50,000 processed cells and use virtual missing-interval metadata when present. Server-global summaries over unloaded rows still need delegated backend operations.
 - `useDataGridAppClipboard.ts` builds local edit updates row-by-row. It is appropriate for materialized ranges but not for 100k-row server selections.
 - Rendered-cell selection predicates now use row-bucketed lookup for sparse additive ranges, with tall/overflow ranges kept in a fallback list and benchmark p95/p99 budgets.
-- Overlay geometry is generally efficient because it works from visible metrics, but large additive range lists still need overlay-specific budgets and tests.
+- Overlay geometry is generally efficient because it works from visible metrics, and selection overlay planning now has interaction benchmark p95/p99 budgets.
 - Row selection reconciliation in `useDataGridAppRowSelection.ts` can scan all current rows. This is fine for client rows; server/global all-selection paths should use mode/exclusions instead of enumerating all rows.
 
 ## Server-Backed Selection Risks
@@ -230,14 +230,14 @@ Tests and benchmarks sampled:
 
 ## Enterprise Readiness Score
 
-- Current score: **7.7/10**
+- Current score: **8.2/10**
 - Target score: **9/10**
 
 Blocks to target:
 
 - Huge virtual selection coverage has an interval path for summary/aggregate labels, but other large-range operations still need interval/server range descriptors.
 - Server-backed operation handlers are incomplete for copy/export, cut, clear/delete, range move, and summary.
-- Active cell/focus/edit ownership is not specified as one state machine.
+- Active/focus/edit ownership is specified as one state machine, but pinned/horizontal remount, editor remount, and server placeholder proof are still incomplete.
 - Touch selection has browser-covered long-press and explicit-handle behavior, but still needs real-device validation.
 - Large-range selection performance now has hard gates for overlay planning, enterprise smoke gates for clipboard planning, summary planning, and virtual coverage, and browser-frame coverage for pinned-pane drag selection. Server-delegated operation latency budgets remain future work until those handlers exist.
 - Browser/e2e coverage now proves vertical selection remount focus continuity and grouped/tree selection workflows, but not yet pinned/horizontal remount, server placeholders, or editor remount state.
@@ -258,4 +258,6 @@ Recommended validation for future implementation slices:
 - Stage selection/overlays: `pnpm --filter @affino/datagrid-vue-app test -- --runInBand selection`
 - Browser interaction: `pnpm e2e -- e2e/sandbox-interactions.spec.ts`
 - Performance: `node scripts/bench-datagrid-interactions.mjs`
+- Enterprise selection performance: `pnpm run bench:datagrid:interactions:assert && pnpm run bench:datagrid:enterprise:selection:assert`
+- Perf contracts: `node ./scripts/check-datagrid-perf-contracts.mjs`
 - Docs: `node ./scripts/check-datagrid-docs-framework-track.mjs`
