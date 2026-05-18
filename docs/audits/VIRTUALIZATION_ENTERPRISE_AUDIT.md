@@ -270,9 +270,9 @@ What blocks the target:
 
 ### Phase 4: Interaction Continuity Across Virtualization
 
-- Status: started. Active-cell focus and keyboard navigation across virtual unmount/remount are covered in `e2e/sandbox-interactions.spec.ts`; variable row-height and horizontal visibility contracts are covered in `packages/datagrid-vue/src/app/__tests__/useDataGridAppActiveCellViewport.contract.spec.ts` and `packages/datagrid-orchestration/src/__tests__/useDataGridCellVisibilityScroller.contract.spec.ts`.
+- Status: started. Active-cell focus and keyboard navigation across virtual unmount/remount are covered in `e2e/sandbox-interactions.spec.ts`; variable row-height and horizontal visibility contracts are covered in `packages/datagrid-vue/src/app/__tests__/useDataGridAppActiveCellViewport.contract.spec.ts` and `packages/datagrid-orchestration/src/__tests__/useDataGridCellVisibilityScroller.contract.spec.ts`. Clipboard copy/paste coverage now includes placeholder rows and virtual selection metadata blocking for unloaded paste targets in `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`.
 - Add tests for focus, active cell, edit lifecycle, selection, copy, paste, fill, keyboard navigation, and drag handles across virtual unmount/remount.
-- Include placeholder rows and unloaded rows in keyboard and clipboard tests.
+- Continue expanding placeholder and unloaded-row interaction tests beyond the covered keyboard delete, clipboard copy/paste, and fill-start guards.
 - Verify editor commit/cancel behavior when the edited row leaves and re-enters the rendered range.
 - Verify pinned panes remain synchronized with center pane focus and selection state.
 - Complete touch long-press and mobile interaction coverage called out in `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`.

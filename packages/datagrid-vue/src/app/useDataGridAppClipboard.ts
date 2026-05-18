@@ -686,6 +686,22 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (!normalizedTargetRange) {
       return false
     }
+    const virtualTargetGuard = targetRanges
+      .map(range => resolveDataGridVirtualSelectionOperationGuard(
+        "fill",
+        options.resolveSelectionSnapshot?.() ?? null,
+        normalizeClipboardRange,
+        {
+          range,
+          blockedMessage: "Paste target includes unloaded rows. Load rows or use server operation.",
+          serverUnavailableMessage: "Paste target requires a server operation. Server paste delegation is not configured.",
+        },
+      ))
+      .find(guard => guard.blocked)
+    if (virtualTargetGuard) {
+      options.setLastAction?.(virtualTargetGuard.message ?? "Paste target cannot be updated.")
+      return false
+    }
     const groupTargetRange = targetRanges.find(range => resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null)
     if (groupTargetRange) {
       options.setLastAction?.(

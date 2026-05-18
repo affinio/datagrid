@@ -13,7 +13,8 @@ Current execution state:
 - Slice 7 is completed and should be treated as the datasource placeholder telemetry baseline.
 - Slice 8 is completed and should be treated as the datasource placeholder budget baseline.
 - Slice 9 is completed and should be treated as the focus continuity baseline.
-- Slice 10 is the next implementation slice.
+- Slice 10 is completed and should be treated as the selection/clipboard virtual-target guard baseline.
+- Slice 11 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -190,7 +191,7 @@ Current execution state:
 
 ## Slice 10: Selection And Clipboard Continuity
 
-- Status: Planned. Selection plan slices already closed core selection continuity; this slice is only for virtualization-specific unloaded, placeholder, or remount gaps that remain.
+- Status: Completed. Selection plan slices already closed core selection continuity; this slice added paste-target guarding through virtual selection metadata so unloaded or stale virtual target ranges are blocked before local clipboard edits run. Existing loaded-interval coverage and placeholder copy/paste blocking remain the baseline for source ranges.
 - Objective: make selection, copy, paste, and fill behavior explicit across unloaded, placeholder, and remounted rows.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
@@ -198,12 +199,12 @@ Current execution state:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `packages/datagrid-orchestration/src/clipboard/*`
-- Expected behavior change: large virtual selections should either operate through documented loaded intervals/server materialization or fail with a clear blocked state.
+- Expected behavior change: large virtual selections either operate through documented loaded intervals/server materialization or fail with a clear blocked state; paste targets now honor virtual selection coverage before applying edits.
 - Tests to add/update:
   - Unit tests for loaded coverage intervals and placeholder blocking.
   - Component/e2e tests for copy/paste/fill across a range larger than the rendered window.
   - Server-backed tests for unloaded source and target rows.
-- Validation command: `pnpm --filter @affino/datagrid-core test -- --runInBand virtualSelection && pnpm --filter @affino/datagrid-vue test -- --runInBand clipboard`
+- Validation command: `pnpm --filter @affino/datagrid-core exec vitest run --config vitest.config.ts src/selection/__tests__/virtualSelection.spec.ts && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid): harden virtual selection operations`
 
@@ -371,8 +372,8 @@ Current execution state:
 7. Slice 7: Server Placeholder Exposure Telemetry
 8. Slice 8: Server Placeholder Exposure Budget
 9. Slice 9: Focus Continuity Across Virtual Unmounts
-10. Slice 10: Selection And Clipboard Continuity
-11. Slice 11: Edit Lifecycle Continuity
+10. Slice 10: Selection And Clipboard Continuity (completed)
+11. Slice 11: Edit Lifecycle Continuity (next)
 12. Slice 12: Wide Table Horizontal Virtualization Gate
 13. Slice 13: Grouped And Tree Row Virtualization Contract
 14. Slice 14: Resize, Zoom, And Fractional Pixel Cases

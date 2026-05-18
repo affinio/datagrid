@@ -963,4 +963,78 @@ describe("useDataGridAppClipboard contract", () => {
     expect(rows.value[0]).toEqual({ rowId: "r1", a: "A1", b: "B1", c: "C1" })
     expect(rows.value[1]).toEqual({ rowId: "r2", a: "A2", b: "B2", c: "C2" })
   })
+
+  it("blocks paste targets with unloaded virtual selection metadata before applying edits", async () => {
+    const selectionSnapshot: DataGridSelectionSnapshot = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 2,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r3",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 2, colIndex: 0, rowId: "r3" },
+        virtual: {
+          anchorCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focusCell: { rowIndex: 2, colIndex: 0, rowId: "r3" },
+          startRowIndex: 0,
+          endRowIndex: 2,
+          startColumnIndex: 0,
+          endColumnIndex: 0,
+          rowIds: [{ rowIndex: 0, rowId: "r1" }],
+          coverage: {
+            isFullyLoaded: false,
+            loadedRowCount: 1,
+            totalRowCount: 3,
+            missingIntervals: [{ startRow: 1, endRow: 2 }],
+            rowIds: [{ rowIndex: 0, rowId: "r1" }],
+            scanLimited: false,
+          },
+          projectionStale: false,
+          isVirtualSelection: true,
+        },
+      }],
+    }
+    const { clipboard, currentCell, lastAction, rows, selectionRange } = createClipboardHarness({
+      selectionSnapshot,
+    })
+    const readText = vi.fn<() => Promise<string>>().mockResolvedValue("X")
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined),
+        readText,
+      },
+    })
+
+    try {
+      selectionRange.value = {
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      }
+      currentCell.value = { rowIndex: 0, columnIndex: 0 }
+
+      const applied = await clipboard.pasteSelectedCells("keyboard")
+
+      expect(applied).toBe(false)
+      expect(lastAction.value).toBe("Paste target includes unloaded rows. Load rows or use server operation.")
+      expect(rows.value).toEqual([
+        { rowId: "r1", a: "A1", b: "B1", c: "C1" },
+        { rowId: "r2", a: "A2", b: "B2", c: "C2" },
+        { rowId: "r3", a: "A3", b: "B3", c: "C3" },
+      ])
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
 })
