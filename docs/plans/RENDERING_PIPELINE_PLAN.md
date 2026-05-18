@@ -7,7 +7,8 @@ Current execution state:
 - Slice 1 is completed and should be treated as the center-pane diagnostics guard baseline.
 - Slice 2 is completed and should be treated as the renderer contract documentation baseline.
 - Slice 3 is completed and should be treated as the opt-in render telemetry baseline.
-- Slice 4 is the next implementation slice.
+- Slice 4 is completed and should be treated as the custom renderer error fallback baseline.
+- Slice 5 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -62,16 +63,17 @@ Current execution state:
 
 ## Slice 4: Custom Renderer Error Fallback
 
-- Status: Planned.
+- Status: Completed. `cellRenderer` and `groupCellRenderer` calls now fall back to the resolved display value when authored renderer code throws, while preserving the surrounding cell wrapper, selection/focus ownership, and placeholder surface semantics; perf traces mark failed renderer samples with `rendererError: 1`.
 - Objective: isolate public renderer failures with a safe fallback path that preserves cell text, selection/focus state, and placeholder semantics.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
   - `packages/datagrid-vue-app/src/stage/DataGridCellContentRenderer.ts`
   - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellRendering.spec.ts`
 - Expected behavior change: a throwing custom renderer does not break the whole grid render tree.
-- Tests to add/update:
+- Tests added/covered:
   - Renderer throw fallback for leaf and group rows.
   - Placeholder row fallback context.
+  - Perf-trace renderer error marker for failed authored renderers.
 - Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/stage/__tests__/useDataGridStageCellRendering.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid-vue-app): isolate renderer failures`
@@ -150,8 +152,8 @@ Current execution state:
 1. Slice 1: Center Pane Diagnostics Guard (completed)
 2. Slice 2: Renderer Contract Documentation (completed)
 3. Slice 3: Render Telemetry Counters (completed)
-4. Slice 4: Custom Renderer Error Fallback (next)
-5. Slice 5: Lightweight Scroll Rendering Policy
+4. Slice 4: Custom Renderer Error Fallback (completed)
+5. Slice 5: Lightweight Scroll Rendering Policy (next)
 6. Slice 6: Mount And Unmount Churn Benchmark
 7. Slice 7: Chrome And Overlay Duration Telemetry
 8. Slice 8: Enterprise Rendering Browser Gates

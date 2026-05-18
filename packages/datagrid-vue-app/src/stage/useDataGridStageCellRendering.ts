@@ -92,6 +92,80 @@ function normalizeSelectEditorOption(option: unknown): DataGridTableStageSelectE
   }
 }
 
+type DataGridStageRendererScope = "cellRenderer" | "groupCellRenderer"
+type DataGridStageRendererRowKind = "leaf" | "group"
+
+interface InvokeDataGridStageRendererWithFallbackOptions<TContext> {
+  scope: DataGridStageRendererScope
+  rowKind: DataGridStageRendererRowKind
+  renderer: (context: TContext) => VNodeChild
+  context: TContext
+  displayValue: string
+  perfTraceEnabled?: boolean
+  rowOffset: number
+  columnIndex: number
+  surfaceKind: string
+  columnKey: string
+}
+
+function recordDataGridStageRendererInvocation(
+  options: Omit<InvokeDataGridStageRendererWithFallbackOptions<unknown>, "renderer" | "context" | "displayValue"> & {
+    startedAt: number
+    rendererError: boolean
+  },
+): void {
+  if (!options.perfTraceEnabled) {
+    return
+  }
+  const finishedAt = resolveDataGridPerfNow()
+  recordDataGridPerfSample({
+    scope: options.scope,
+    ts: finishedAt,
+    totalMs: finishedAt - options.startedAt,
+    rowOffset: options.rowOffset,
+    columnIndex: options.columnIndex,
+    surfaceKind: options.surfaceKind,
+    rowKind: options.rowKind,
+    columnKey: options.columnKey,
+    rendererError: options.rendererError ? 1 : 0,
+  })
+}
+
+function invokeDataGridStageRendererWithFallback<TContext>(
+  options: InvokeDataGridStageRendererWithFallbackOptions<TContext>,
+): VNodeChild {
+  const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
+  try {
+    const rendered = options.renderer(options.context) ?? options.displayValue
+    recordDataGridStageRendererInvocation({
+      scope: options.scope,
+      rowKind: options.rowKind,
+      perfTraceEnabled: options.perfTraceEnabled,
+      rowOffset: options.rowOffset,
+      columnIndex: options.columnIndex,
+      surfaceKind: options.surfaceKind,
+      columnKey: options.columnKey,
+      startedAt,
+      rendererError: false,
+    })
+    return rendered
+  }
+  catch {
+    recordDataGridStageRendererInvocation({
+      scope: options.scope,
+      rowKind: options.rowKind,
+      perfTraceEnabled: options.perfTraceEnabled,
+      rowOffset: options.rowOffset,
+      columnIndex: options.columnIndex,
+      surfaceKind: options.surfaceKind,
+      columnKey: options.columnKey,
+      startedAt,
+      rendererError: true,
+    })
+    return options.displayValue
+  }
+}
+
 export function useDataGridStageCellRendering(
   options: UseDataGridStageCellRenderingOptions,
 ): UseDataGridStageCellRenderingResult {
@@ -288,57 +362,49 @@ export function useDataGridStageCellRendering(
         if (typeof cellRenderer !== "function") {
           return displayValue
         }
-        const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        const rendered = cellRenderer(baseContext) ?? displayValue
-        if (options.perfTraceEnabled) {
-          const finishedAt = resolveDataGridPerfNow()
-          recordDataGridPerfSample({
-            scope: "cellRenderer",
-            ts: finishedAt,
-            totalMs: finishedAt - startedAt,
-            rowOffset,
-            columnIndex,
-            surfaceKind: surface.kind,
-            rowKind: "group",
-            columnKey: column.key,
-          })
-        }
-        return rendered
-      }
-      const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
-      const rendered = groupRenderer({
-        ...baseContext,
-        group: {
-          key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
-          field: String(row.groupMeta?.groupField ?? "group"),
-          value: String(row.groupMeta?.groupValue ?? row.rowId ?? ""),
-          childrenCount,
-          isLabelColumn: options.mode.value === "tree"
-            ? column.key === "name"
-            : column.key === (options.visibleColumns.value[0]?.key ?? "name"),
-          renderMeta: {
-            ...renderMeta,
-            isGroup: true,
-          },
-          toggle: () => {
-            options.rows.value.toggleGroupRow(row)
-          },
-        },
-      }) ?? displayValue
-      if (options.perfTraceEnabled) {
-        const finishedAt = resolveDataGridPerfNow()
-        recordDataGridPerfSample({
-          scope: "groupCellRenderer",
-          ts: finishedAt,
-          totalMs: finishedAt - startedAt,
+        return invokeDataGridStageRendererWithFallback({
+          scope: "cellRenderer",
+          rowKind: "group",
+          renderer: cellRenderer,
+          context: baseContext,
+          displayValue,
+          perfTraceEnabled: options.perfTraceEnabled,
           rowOffset,
           columnIndex,
           surfaceKind: surface.kind,
-          rowKind: "group",
           columnKey: column.key,
         })
       }
-      return rendered
+      return invokeDataGridStageRendererWithFallback({
+        scope: "groupCellRenderer",
+        rowKind: "group",
+        renderer: groupRenderer,
+        context: {
+          ...baseContext,
+          group: {
+            key: row.groupMeta?.groupKey ?? String(row.rowId ?? ""),
+            field: String(row.groupMeta?.groupField ?? "group"),
+            value: String(row.groupMeta?.groupValue ?? row.rowId ?? ""),
+            childrenCount,
+            isLabelColumn: options.mode.value === "tree"
+              ? column.key === "name"
+              : column.key === (options.visibleColumns.value[0]?.key ?? "name"),
+            renderMeta: {
+              ...renderMeta,
+              isGroup: true,
+            },
+            toggle: () => {
+              options.rows.value.toggleGroupRow(row)
+            },
+          },
+        },
+        displayValue,
+        perfTraceEnabled: options.perfTraceEnabled,
+        rowOffset,
+        columnIndex,
+        surfaceKind: surface.kind,
+        columnKey: column.key,
+      })
     }
 
     const renderer = column.column.cellRenderer
@@ -346,32 +412,28 @@ export function useDataGridStageCellRendering(
       return displayValue
     }
 
-    const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
-    const rendered = renderer({
-      row: row.data,
-      rowNode: row,
-      surface,
-      rowOffset,
-      column,
-      columnIndex,
-      value: options.cells.value.readCell(row, column.key),
-      displayValue,
-      interactive,
-    }) ?? displayValue
-    if (options.perfTraceEnabled) {
-      const finishedAt = resolveDataGridPerfNow()
-      recordDataGridPerfSample({
-        scope: "cellRenderer",
-        ts: finishedAt,
-        totalMs: finishedAt - startedAt,
+    return invokeDataGridStageRendererWithFallback({
+      scope: "cellRenderer",
+      rowKind: "leaf",
+      renderer,
+      context: {
+        row: row.data,
+        rowNode: row,
+        surface,
         rowOffset,
+        column,
         columnIndex,
-        surfaceKind: surface.kind,
-        rowKind: "leaf",
-        columnKey: column.key,
-      })
-    }
-    return rendered
+        value: options.cells.value.readCell(row, column.key),
+        displayValue,
+        interactive,
+      },
+      displayValue,
+      perfTraceEnabled: options.perfTraceEnabled,
+      rowOffset,
+      columnIndex,
+      surfaceKind: surface.kind,
+      columnKey: column.key,
+    })
   }
 
   function resolveSelectEditorValue(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn): string {

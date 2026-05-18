@@ -98,8 +98,8 @@ Vue app viewport and rendering:
 
 ### High
 
-1. **Custom renderer isolation is weak.**
-   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. Public renderer expectations now document pure output, no grid-state mutation during render, synchronous layout-read avoidance, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations. Remaining gaps are runtime error fallback, slow-render sampling, render telemetry, and browser-frame budgets.
+1. **Custom renderer isolation is partially hardened.**
+   `useDataGridStageCellRendering.ts` passes row, row node, surface, interaction handlers, display value, and group controls directly into user renderers. Public renderer expectations now document pure output, no grid-state mutation during render, synchronous layout-read avoidance, stable child VNode keys, bounded per-cell work, placeholder-aware `surface.kind`, and scroll-time cost expectations. Runtime error fallback is in place for `cellRenderer` and `groupCellRenderer`, so authored renderer exceptions fall back to the resolved display value without breaking the grid render tree. Remaining gaps are slow-render sampling and browser-frame budgets.
 
 2. **Center pane diagnostics are guarded when disabled.**
    `DataGridTableStageCenterPane.vue` now skips diagnostic dependency sampling and body/value debug construction unless `reportCenterPaneDiagnostics` is provided. Regression coverage verifies disabled diagnostics do not add custom renderer calls. Remaining render-pipeline cost work is custom renderer isolation, render churn telemetry, and browser gates.
@@ -187,7 +187,7 @@ What blocks the target:
 ### Phase 2: Renderer Contract And Isolation
 
 - Document public renderer expectations: no synchronous layout reads, no grid-state mutation during render, stable keys for returned VNodes, and bounded work per cell. Status: completed in `packages/datagrid-vue-app/README.md`.
-- Add renderer error handling or a safe fallback boundary.
+- Add renderer error handling or a safe fallback boundary. Status: completed for `cellRenderer` and `groupCellRenderer`; throwing renderers fall back to the resolved display value and perf traces mark failed samples.
 - Add optional slow-render sampling in development/perf mode.
 
 ### Phase 3: Lightweight Scroll Rendering
@@ -215,7 +215,7 @@ What blocks the target:
 
 Unit tests:
 
-- `useDataGridStageCellRendering`: renderer fallback/error path, placeholder surface context, renderer purity warning hook if added.
+- `useDataGridStageCellRendering`: renderer fallback/error path and placeholder surface context are covered; renderer purity warning hook remains optional future work.
 - `useDataGridStageRenderApis.grouped`: stable style/object behavior where practical, spacer and pane row styles.
 - `useDataGridStageChromeModel`: row metrics and signatures for auto-height, pinned bottom, hover, group/tree/pivot bands.
 - `useDataGridStageOverlays`: segment counts for large visible windows, pinned seams, custom overlays, and multi-range selection.
@@ -268,8 +268,8 @@ Performance/benchmark tests:
 
 1. Guard center-pane diagnostics and add a regression test. Status: completed in `docs/plans/RENDERING_PIPELINE_PLAN.md` Slice 1.
 2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; dedicated mount/unmount churn counters remain.
-3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs are in place; runtime isolation remains.
-4. Add renderer error fallback or development-only error reporting.
+3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs and runtime error fallback are in place.
+4. Add renderer error fallback or development-only error reporting. Status: runtime error fallback is in place; development-only reporting remains optional.
 5. Add lightweight scroll rendering policy for expensive custom renderers.
 6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll.
 7. Add chrome/overlay duration telemetry and gates.

@@ -122,6 +122,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Rendering contracts and future gates:
   - Public `cellRenderer` and `groupCellRenderer` callbacks run synchronously inside the Vue render pass for rendered center and pinned cells.
   - Renderer authoring expectations are documented in `packages/datagrid-vue-app/README.md`: pure output, no grid-state mutation during render, no synchronous layout reads, stable child VNode keys, bounded per-cell work, and placeholder-aware `surface.kind` handling.
+  - Throwing authored renderers fall back to the resolved display value for the affected cell; with `dgPerfTrace=1`, failed renderer samples include `rendererError: 1`.
   - With `dgPerfTrace=1`, the app stage records `stageRenderWindow`, `cellRenderer`, and `groupCellRenderer` samples; `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts render-window and renderer-duration aggregates under `renderTelemetry`.
   - Custom-renderer-heavy grids are not covered by a hard enterprise frame gate yet; planned rendering gates should reuse the enterprise browser-frame harness instead of adding a separate performance track.
 - Datasource churn (range pull churn + invalidation pressure):

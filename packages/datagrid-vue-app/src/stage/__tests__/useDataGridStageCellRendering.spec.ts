@@ -316,4 +316,98 @@ describe("useDataGridStageCellRendering", () => {
       columnKey: "stage",
     })
   })
+
+  it("falls back to display values when custom renderers throw", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
+      createColumn({ key: "stage" }),
+    ])
+    const rows = ref<Readonly<DataGridTableStageRowsSection<Record<string, unknown>>>>({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({
+      startInlineEdit: vi.fn(),
+      updateEditingCellValue: vi.fn(),
+      commitInlineEdit: vi.fn(),
+      cancelInlineEdit: vi.fn(),
+      handleEditorKeydown: vi.fn(),
+      handleEditorBlur: vi.fn(),
+    } as unknown as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: () => "planned",
+      readDisplayCell: () => "Planned",
+    })
+    const surfaceKinds: string[] = []
+    const throwingCellRenderer = vi.fn(({ surface }) => {
+      surfaceKinds.push(surface.kind)
+      throw new Error("cell renderer failed")
+    })
+    const throwingGroupRenderer = vi.fn(({ group, surface }) => {
+      surfaceKinds.push(surface.kind)
+      expect(group.isLabelColumn).toBe(true)
+      throw new Error("group renderer failed")
+    })
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+    })
+
+    const column = {
+      ...visibleColumns.value[0]!,
+      column: {
+        ...visibleColumns.value[0]!.column,
+        cellRenderer: throwingCellRenderer,
+        groupCellRenderer: throwingGroupRenderer,
+      },
+    }
+    const dataRow = createRow({ data: { stage: "planned" }, row: { stage: "planned" }, rowId: "r1" })
+    const groupRow = createRow({
+      kind: "group",
+      rowId: "g1",
+      data: {},
+      row: {},
+      state: { expanded: false },
+      groupMeta: { groupKey: "g1", groupField: "group", groupValue: "Group 1", level: 0, childrenCount: 2 },
+    })
+    const placeholderRow = createRow({
+      rowId: "__datagrid_placeholder__:2",
+      data: {},
+      row: {},
+      displayIndex: 2,
+    }) as DataGridTableRow<Record<string, unknown>> & { __placeholder: true }
+    placeholderRow.__placeholder = true
+
+    expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("Planned")
+    expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("Planned")
+    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("Planned")
+    expect(surfaceKinds).toEqual(["real", "real", "placeholder"])
+
+    const tracedRenderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+      perfTraceEnabled: true,
+    })
+    expect(String(tracedRenderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("Planned")
+    expect(resolveDataGridPerfStore()?.latest("cellRenderer")).toMatchObject({
+      scope: "cellRenderer",
+      rowKind: "leaf",
+      rendererError: 1,
+    })
+  })
 })

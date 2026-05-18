@@ -1268,6 +1268,7 @@ Object form:
 Columns can provide a `cellRenderer` callback that returns Vue content for the display layer.
 If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
 For grouped rows, prefer `groupCellRenderer` so you receive structured group metadata instead of reverse-engineering the formatted disclosure label.
+If an authored renderer throws, the stage preserves the cell wrapper and falls back to the resolved `displayValue` for that cell.
 
 ```vue
 <script setup lang="ts">
@@ -1400,6 +1401,7 @@ Performance expectations:
 
 - Renderers run in the same Vue render pass as virtualized row and column window updates.
 - Wide grids, pinned panes, and pinned-bottom rows multiply the number of rendered cell surfaces.
+- Renderer exceptions are isolated to the affected cell and fall back to `displayValue`; they are still application bugs and should be fixed rather than used as control flow.
 - The grid may use lightweight display-value rendering during active touch scroll; renderers must not be the only place where essential text, ARIA labels, selection state, or edit affordances exist.
 - Enterprise custom-renderer scenarios should be validated with the browser-frame/perf gates documented in `docs/perf/datagrid-performance-gates.md` before being treated as a performance baseline.
 
