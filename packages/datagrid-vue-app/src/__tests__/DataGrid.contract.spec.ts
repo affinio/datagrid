@@ -8165,6 +8165,53 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps selection anchor affordances when a placeholder row materializes", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: EDITABLE_COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        fillHandle: true,
+        placeholderRows: {
+          count: 1,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const placeholderCell = queryBodyCell(wrapper, 1, 0)
+    expect(placeholderCell.exists()).toBe(true)
+
+    await placeholderCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+
+    await editor.setValue("Created row")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    const materializedCell = queryBodyCell(wrapper, 1, 0)
+    expect(resolveRowAt<{ rowId: string; owner: string }>(wrapper, 1)).toMatchObject({
+      rowId: "ph-1",
+      owner: "Created row",
+    })
+    expect(materializedCell.classes()).toContain("grid-cell--selection-anchor")
+    expect(materializedCell.find(".cell-fill-handle").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("undoes placeholder materialization back to visual tail state", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
