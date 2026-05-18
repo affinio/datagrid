@@ -104,9 +104,19 @@ Enterprise integrations that need persisted client operations, reload recovery, 
 
 ## Restoration Semantics
 
-History restores data first. Active cell, selection ranges, scroll anchor, focus target, inline editor state, and formula-edit state are not first-class history payloads in the current implementation.
+History restores data first. Built-in client app history can also carry an optional restoration payload captured with each before/after row snapshot.
 
-Some workflows restore focus around the mutation path, and server-backed grids refresh visible rows after invalidation. That is not a general guarantee that undo/redo will restore the full spreadsheet interaction context after virtual remount, server refresh, or reload.
+Currently supported restoration payload fields:
+
+- active cell
+- selection snapshot/ranges
+- scroll anchor
+- focus target
+- edit target metadata
+
+The Vue app stage wires active cell, selection snapshot, scroll anchor, and focus target for built-in client history. After undo/redo, the stage restores the captured selection snapshot, then requests the captured focus target with `preventScroll` behavior through the existing active-cell viewport path.
+
+Inline editor content and formula-edit state are metadata only in the current payload; they are not reopened as editors after undo/redo. Server-backed grids still refresh visible rows after invalidation and do not use client restoration payloads as a persisted server history contract.
 
 ## Collaboration And Conflict Semantics
 

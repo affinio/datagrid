@@ -12,9 +12,9 @@ There are three distinct history paths today:
 
 These paths are compatible enough for current edit, paste, fill, toolbar, shortcut, placeholder, and server-demo workflows. The strongest enterprise pieces are rollback payload enforcement, batch-as-one-undo-unit semantics, redo invalidation, scoped server stack undo/redo, revision/datasetVersion integration, and focused tests.
 
-The remaining main gaps are operation serialization, selection/focus/edit restoration, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
+The remaining main gaps are operation serialization, editor/formula restoration depth, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, restoration state, server-backed non-cell operation support, and collaborative revision semantics.
+Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, deeper editor restoration, server-backed non-cell operation support, and collaborative revision semantics.
 
 ## Implementation Progress
 
@@ -22,7 +22,8 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - 2026-05-18: Slice 2, Async History Action Serialization, is complete. Core `TransactionService` now rejects overlapping async `applyTransaction`, `commitBatch`, `undo`, and `redo` calls and blocks batch begin/rollback during an active async action. The orchestration history runner now ignores duplicate keyboard/control undo/redo triggers while the first action is pending.
 - 2026-05-18: Slice 3, Undo Failure Compensation, is complete. Core `TransactionService` now re-applies commands already rolled back inside a failed undo transaction and re-applies transactions already rolled back inside a failed undo batch, leaving undo/redo stacks unchanged when the action fails.
 - 2026-05-18: Slice 4, Snapshot Scope And Memory Budget, is complete. Client app intent history now marks full/partial snapshots that exceed row, cell, or byte-estimate budgets and skips recording those over-budget intents instead of creating unbounded undo entries.
-- Remaining runtime gaps: first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
+- 2026-05-18: Slice 5, Restoration State Payload, is complete. Client app history snapshots now carry optional active-cell, selection snapshot, scroll anchor, focus target, and edit target metadata, and the Vue app stage restores selection/focus context through existing selection and active-cell viewport paths.
+- Remaining runtime gaps: versioned operation payloads, server storage idempotency, broader server operation coverage, collaborative conflict policy, and deeper inline/formula editor recovery.
 
 ## Current Architecture Summary
 
@@ -150,6 +151,7 @@ Backend and sandbox:
 
 4. **Selection, focus, and edit restoration are not first-class history payloads.**
    `useDataGridHistoryActionRunner.ts` commits active inline editors before history actions and closes context menus. Some edit/fill paths restore focus after mutation. But history snapshots do not include active cell, selection ranges, scroll anchor, editor state, or formula-edit state, so undo/redo can restore data without restoring spreadsheet context.
+   Status after Slice 5: built-in client history snapshots now include optional active-cell, selection snapshot, scroll anchor, focus target, and edit target metadata, and the Vue app stage restores selection/focus context. Reopening inline/formula editors remains future work.
 
 5. **Client history memory is bounded by entry count, not bytes/cells.**
    `maxHistoryDepth` caps stack depth, but a single transaction can store a full-grid snapshot when row ids are unavailable or a structural operation falls back to `captureRowsSnapshot()`. There is no byte budget, cell budget, compression, or large-range spill strategy.

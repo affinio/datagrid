@@ -1,4 +1,7 @@
-import type { DataGridAppRowSnapshot } from "@affino/datagrid-vue/app"
+import type {
+  DataGridAppHistoryRestorationState,
+  DataGridAppRowSnapshot,
+} from "@affino/datagrid-vue/app"
 import { useDataGridAppIntentHistory } from "@affino/datagrid-vue/app"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import type { DataGridHistoryController } from "../dataGridHistory"
@@ -36,6 +39,8 @@ export interface UseDataGridTableStageHistoryOptions<TRow extends Record<string,
   syncViewport: () => void
   enabled?: boolean
   maxHistoryDepth?: number
+  captureRestorationState?: () => DataGridAppHistoryRestorationState | null
+  applyRestorationState?: (state: DataGridAppHistoryRestorationState) => void | Promise<void>
   history?: DataGridTableStageHistoryAdapter
 }
 
@@ -73,6 +78,8 @@ export function useDataGridTableStageHistory<TRow extends Record<string, unknown
       cloneRowData: options.cloneRowData,
       syncViewport: options.syncViewport,
       maxHistoryDepth: options.maxHistoryDepth,
+      captureRestorationState: options.captureRestorationState,
+      applyRestorationState: options.applyRestorationState,
     })
 
   const captureHistorySnapshot = (): unknown => {

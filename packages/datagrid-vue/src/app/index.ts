@@ -112,6 +112,8 @@ export {
   useDataGridAppIntentHistory,
   type DataGridAppHistorySnapshotBudget,
   type DataGridAppHistorySnapshotBudgetResult,
+  type DataGridAppHistoryRestorationCell,
+  type DataGridAppHistoryRestorationState,
   type DataGridAppRowSnapshot,
   type UseDataGridAppIntentHistoryOptions,
   type UseDataGridAppIntentHistoryResult,

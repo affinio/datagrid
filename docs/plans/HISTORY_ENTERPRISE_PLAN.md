@@ -8,7 +8,8 @@ Current execution state:
 - Slice 2 is completed and should be treated as the async history single-flight baseline.
 - Slice 3 is completed and should be treated as the undo failure compensation baseline.
 - Slice 4 is completed and should be treated as the client snapshot budget baseline.
-- Slice 5 is next and should add first-class restoration state payloads.
+- Slice 5 is completed and should be treated as the client restoration payload baseline.
+- Slice 6 is next and should define versioned operation payloads.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -83,20 +84,21 @@ Current execution state:
 
 ## Slice 5: Restoration State Payload
 
-- Status: Planned.
+- Status: Completed. Client app history snapshots now carry optional restoration payloads for active cell, selection snapshot, scroll anchor, focus target, and edit target metadata. The Vue app stage captures/restores active selection snapshot and focus target through the existing selection and active-cell viewport paths.
 - Objective: add optional history restoration payloads for spreadsheet context: active cell, selection ranges, focus target, scroll anchor, and edit target where supported.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/app/useDataGridAppIntentHistory.ts`
+  - `packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts`
+  - `packages/datagrid-vue/src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
+  - `packages/datagrid-vue/src/app/index.ts`
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageHistory.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridApp.history.spec.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
   - `docs/datagrid-history.md`
-- Expected behavior change: supported undo/redo actions can restore user context after virtual remount, server refresh, and common edit/fill/paste flows without changing existing adapters that ignore restoration metadata.
-- Tests to add/update:
-  - Undo/redo restores active cell and selection after virtual remount.
-  - Inline edit commit followed by undo restores focus target where feasible.
-  - Scroll anchors use row ids and column keys, not volatile indexes, when available.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- DataGridApp.history DataGridTableStage`
+- Expected behavior change: supported built-in client undo/redo actions restore captured selection/focus context after data replay without changing public history props or external adapters.
+- Tests added/covered:
+  - Undo/redo restores captured active cell and selection restoration payloads.
+  - Restoration payloads are cloned so later selection mutations do not alter recorded history.
+  - Stage wiring type-checks against the app-level restoration payload contract.
+- Validation command: `pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `feat(datagrid-vue-app): restore history interaction state`
 
@@ -163,8 +165,8 @@ Current execution state:
 2. Slice 2: Async History Action Serialization (completed)
 3. Slice 3: Undo Failure Compensation (completed)
 4. Slice 4: Snapshot Scope And Memory Budget (completed)
-5. Slice 5: Restoration State Payload (next)
-6. Slice 6: Versioned Operation Payloads
+5. Slice 5: Restoration State Payload (completed)
+6. Slice 6: Versioned Operation Payloads (next)
 7. Slice 7: Server History Idempotency Guard
 8. Slice 8: Server Operation Coverage And Collaboration Policy
 

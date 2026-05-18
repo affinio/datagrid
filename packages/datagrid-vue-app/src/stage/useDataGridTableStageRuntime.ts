@@ -21,6 +21,7 @@ import {
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import {
   createDataGridAppRowHeightMetrics,
+  type DataGridAppHistoryRestorationState,
   type DataGridAppPasteOptions,
   useDataGridAppActiveCellViewport,
   useDataGridAppCellSelection,
@@ -659,6 +660,74 @@ export function useDataGridTableStageRuntime<
     ?? ((rowOffset: number, columnIndex: number) => isCommittedCellSelected(rowOffset, columnIndex))
   const isCommittedCellOnSelectionEdge = selectionController.isCellOnSelectionEdge
     ?? (() => false)
+
+  const cloneHistorySelectionSnapshot = (
+    snapshot: DataGridSelectionSnapshot | null,
+  ): DataGridSelectionSnapshot | null => {
+    if (!snapshot) {
+      return null
+    }
+    return JSON.parse(JSON.stringify(snapshot)) as DataGridSelectionSnapshot
+  }
+
+  const normalizeHistoryRestorationRowId = (value: unknown): string | number | null => (
+    typeof value === "string" || typeof value === "number" ? value : null
+  )
+
+  const captureHistoryRestorationState = (): DataGridAppHistoryRestorationState | null => {
+    const snapshot = cloneHistorySelectionSnapshot(options.selectionSnapshot.value)
+    const activeCell = snapshot?.activeCell
+    const activeCellRowId = normalizeHistoryRestorationRowId(activeCell?.rowId)
+    if (!snapshot && !activeCell) {
+      return null
+    }
+    return {
+      ...(activeCell
+        ? {
+            activeCell: {
+              rowIndex: activeCell.rowIndex,
+              columnIndex: activeCell.colIndex,
+              rowId: activeCellRowId,
+              columnKey: orderedVisibleColumns.value[activeCell.colIndex]?.key ?? null,
+            },
+            focusTarget: {
+              rowIndex: activeCell.rowIndex,
+              columnIndex: activeCell.colIndex,
+              rowId: activeCellRowId,
+              columnKey: orderedVisibleColumns.value[activeCell.colIndex]?.key ?? null,
+            },
+            scrollAnchor: {
+              rowIndex: activeCell.rowIndex,
+              columnIndex: activeCell.colIndex,
+              rowId: activeCellRowId,
+              columnKey: orderedVisibleColumns.value[activeCell.colIndex]?.key ?? null,
+            },
+          }
+        : {}),
+      ...(snapshot ? { selectionSnapshot: snapshot } : {}),
+    }
+  }
+
+  const applyHistoryRestorationState = async (
+    state: DataGridAppHistoryRestorationState,
+  ): Promise<void> => {
+    const selectionSnapshot = state.selectionSnapshot as DataGridSelectionSnapshot | null | undefined
+    if (selectionSnapshot) {
+      const clonedSnapshot = cloneHistorySelectionSnapshot(selectionSnapshot)
+      if (clonedSnapshot) {
+        options.selectionSnapshot.value = clonedSnapshot
+        if (selectableRuntime.api.selection.hasSupport()) {
+          selectableRuntime.api.selection.setSnapshot(clonedSnapshot)
+        }
+      }
+    }
+    const focusTarget = state.focusTarget ?? state.activeCell ?? state.scrollAnchor ?? null
+    if (focusTarget) {
+      await nextTick()
+      ensureKeyboardActiveCellVisible(focusTarget.rowIndex, focusTarget.columnIndex)
+    }
+  }
+
   const refreshVirtualSelectionCoverage = (): void => {
     const snapshot = options.selectionSnapshot.value
     if (!snapshot?.ranges.some(range => range.virtual)) {
@@ -876,6 +945,8 @@ export function useDataGridTableStageRuntime<
     syncViewport: () => syncViewportFromDom(),
     enabled: options.historyEnabled?.value !== false,
     maxHistoryDepth: options.historyMaxDepth?.value,
+    captureRestorationState: captureHistoryRestorationState,
+    applyRestorationState: applyHistoryRestorationState,
     history: options.history,
   })
   const {

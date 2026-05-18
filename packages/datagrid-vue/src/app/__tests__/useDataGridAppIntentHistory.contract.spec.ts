@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import {
   useDataGridAppIntentHistory,
   type DataGridAppHistorySnapshotBudget,
+  type DataGridAppHistoryRestorationState,
 } from "../useDataGridAppIntentHistory"
 
 type DemoRow = {
@@ -18,11 +19,16 @@ type DemoRowState = {
 type DemoSnapshot = {
   kind: "full" | "partial"
   rows: Array<{ rowId: string | number; row: DemoRow }>
+  restoration?: DataGridAppHistoryRestorationState | null
 }
 
 function createHistoryHarness(
   initialRows: DemoRowState[],
-  options: { snapshotBudget?: DataGridAppHistorySnapshotBudget } = {},
+  options: {
+    snapshotBudget?: DataGridAppHistorySnapshotBudget
+    captureRestorationState?: () => DataGridAppHistoryRestorationState | null
+    applyRestorationState?: (state: DataGridAppHistoryRestorationState) => void | Promise<void>
+  } = {},
 ) {
   let rows = initialRows.map(row => ({
     rowId: row.rowId,
@@ -68,6 +74,8 @@ function createHistoryHarness(
     cloneRowData: row => ({ ...row }),
     syncViewport,
     snapshotBudget: options.snapshotBudget,
+    captureRestorationState: options.captureRestorationState,
+    applyRestorationState: options.applyRestorationState,
   })
 
   const setRowData = (rowId: string, patch: Partial<DemoRow>) => {
@@ -347,5 +355,82 @@ describe("useDataGridAppIntentHistory contract", () => {
       ),
     ).resolves.toBeNull()
     expect(harness.history.canUndo.value).toBe(false)
+  })
+
+  it("restores captured interaction state on undo and redo", async () => {
+    let restorationState: DataGridAppHistoryRestorationState | null = {
+      activeCell: { rowIndex: 0, columnIndex: 0, rowId: "r1", columnKey: "a" },
+      selectionSnapshot: {
+        activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        activeRangeIndex: 0,
+        ranges: [{
+          startRow: 0,
+          endRow: 0,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "r1",
+          endRowId: "r1",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        }],
+      },
+    }
+    const appliedRestorationStates: DataGridAppHistoryRestorationState[] = []
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+      { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
+    ], {
+      captureRestorationState: () => restorationState,
+      applyRestorationState: state => {
+        appliedRestorationStates.push(state)
+      },
+    })
+
+    const beforeSnapshot = harness.history.captureRowsSnapshotByIds(["r1"])
+    restorationState = {
+      activeCell: { rowIndex: 1, columnIndex: 1, rowId: "r2", columnKey: "b" },
+      selectionSnapshot: {
+        activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        activeRangeIndex: 0,
+        ranges: [{
+          startRow: 1,
+          endRow: 1,
+          startCol: 1,
+          endCol: 1,
+          startRowId: "r2",
+          endRowId: "r2",
+          anchor: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        }],
+      },
+    }
+    harness.setRowData("r1", { a: "A1-edited" })
+    const afterSnapshot = harness.history.captureRowsSnapshotByIds(["r1"])
+
+    await harness.history.recordIntentTransaction(
+      { intent: "edit", label: "Cell edit" },
+      beforeSnapshot,
+      afterSnapshot,
+    )
+
+    restorationState.activeCell!.rowIndex = 9
+    ;(restorationState.selectionSnapshot as { activeCell: { rowIndex: number } }).activeCell.rowIndex = 9
+
+    await harness.history.runHistoryAction("undo")
+    await harness.history.runHistoryAction("redo")
+
+    expect(appliedRestorationStates).toHaveLength(2)
+    expect(appliedRestorationStates[0]).toMatchObject({
+      activeCell: { rowIndex: 0, columnIndex: 0, rowId: "r1", columnKey: "a" },
+      selectionSnapshot: {
+        activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      },
+    })
+    expect(appliedRestorationStates[1]).toMatchObject({
+      activeCell: { rowIndex: 1, columnIndex: 1, rowId: "r2", columnKey: "b" },
+      selectionSnapshot: {
+        activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      },
+    })
   })
 })

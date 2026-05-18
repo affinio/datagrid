@@ -6,6 +6,7 @@ export interface DataGridAppRowSnapshot<TRow> {
   kind: "full" | "partial"
   rows: Array<{ rowId: string | number; row: TRow }>
   budget?: DataGridAppHistorySnapshotBudgetResult
+  restoration?: DataGridAppHistoryRestorationState | null
 }
 
 export interface DataGridAppHistorySnapshotBudget {
@@ -25,12 +26,29 @@ export interface DataGridAppHistorySnapshotBudgetResult {
   maxBytes: number
 }
 
+export interface DataGridAppHistoryRestorationCell {
+  rowIndex: number
+  columnIndex: number
+  rowId?: string | number | null
+  columnKey?: string | null
+}
+
+export interface DataGridAppHistoryRestorationState {
+  activeCell?: DataGridAppHistoryRestorationCell | null
+  selectionSnapshot?: unknown
+  scrollAnchor?: DataGridAppHistoryRestorationCell | null
+  focusTarget?: DataGridAppHistoryRestorationCell | null
+  editTarget?: DataGridAppHistoryRestorationCell | null
+}
+
 export interface UseDataGridAppIntentHistoryOptions<TRow> {
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById">
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
   maxHistoryDepth?: number
   snapshotBudget?: DataGridAppHistorySnapshotBudget
+  captureRestorationState?: () => DataGridAppHistoryRestorationState | null
+  applyRestorationState?: (state: DataGridAppHistoryRestorationState) => void | Promise<void>
 }
 
 export interface UseDataGridAppIntentHistoryResult<TRow> {
@@ -57,7 +75,12 @@ export function useDataGridAppIntentHistory<TRow>(
       row: options.cloneRowData(entry.row),
     })),
     ...(snapshot.budget ? { budget: { ...snapshot.budget } } : {}),
+    ...(snapshot.restoration ? { restoration: cloneRestorationState(snapshot.restoration) } : {}),
   })
+
+  const captureRestorationState = (): DataGridAppHistoryRestorationState | null => {
+    return cloneRestorationState(options.captureRestorationState?.() ?? null)
+  }
 
   const createBudgetExceededSnapshot = (
     kind: DataGridAppRowSnapshot<TRow>["kind"],
@@ -68,6 +91,7 @@ export function useDataGridAppIntentHistory<TRow>(
   ): DataGridAppRowSnapshot<TRow> => ({
     kind,
     rows: [],
+    restoration: captureRestorationState(),
     budget: {
       exceeded: true,
       limit,
@@ -137,7 +161,7 @@ export function useDataGridAppIntentHistory<TRow>(
         return { ...budgetExceeded, kind: "full" }
       }
     }
-    return { kind: "full", rows: snapshotRows }
+    return { kind: "full", rows: snapshotRows, restoration: captureRestorationState() }
   }
 
   const captureRowsSnapshotByIds = (
@@ -163,50 +187,67 @@ export function useDataGridAppIntentHistory<TRow>(
         return budgetExceeded
       }
     }
-    return { kind: "partial", rows: snapshotRows }
+    return { kind: "partial", rows: snapshotRows, restoration: captureRestorationState() }
+  }
+
+  const applySnapshotRestoration = async (
+    snapshot: DataGridAppRowSnapshot<TRow>,
+  ): Promise<void> => {
+    if (!snapshot.restoration || typeof options.applyRestorationState !== "function") {
+      return
+    }
+    await options.applyRestorationState(cloneRestorationState(snapshot.restoration) as DataGridAppHistoryRestorationState)
+  }
+
+  const applyRowsSnapshot = async (
+    snapshot: DataGridAppRowSnapshot<TRow>,
+  ): Promise<void> => {
+    if (snapshot.budget?.exceeded) {
+      options.syncViewport()
+      return
+    }
+    if (snapshot.kind === "partial") {
+      if (snapshot.rows.length > 0) {
+        await options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
+          rowId: entry.rowId,
+          data: options.cloneRowData(entry.row) as Partial<TRow>,
+        })))
+        return
+      }
+      options.syncViewport()
+      return
+    }
+    const rowsApi = options.runtime.api.rows as {
+      hasDataMutationSupport?: () => boolean
+      applyEdits?: (updates: Array<{ rowId: string | number; data: Partial<TRow> }>) => void | Promise<void>
+      setData?: (rows: Array<{ rowId: string | number; originalIndex: number; row: TRow }>) => void
+    }
+    if (typeof rowsApi.hasDataMutationSupport === "function" && !rowsApi.hasDataMutationSupport()) {
+      const rowPatches = snapshot.rows.map(entry => ({
+        rowId: entry.rowId,
+        data: options.cloneRowData(entry.row) as Partial<TRow>,
+      }))
+      if (rowPatches.length > 0) {
+        await rowsApi.applyEdits?.(rowPatches)
+        options.syncViewport()
+        return
+      }
+      options.syncViewport()
+      return
+    }
+    rowsApi.setData?.(snapshot.rows.map((entry, index) => ({
+      rowId: entry.rowId,
+      originalIndex: index,
+      row: options.cloneRowData(entry.row),
+    })))
+    options.syncViewport()
   }
 
   const intentHistory = useDataGridIntentHistory<DataGridAppRowSnapshot<TRow>>({
     captureSnapshot: captureRowsSnapshot,
-    applySnapshot: snapshot => {
-      if (snapshot.budget?.exceeded) {
-        options.syncViewport()
-        return
-      }
-      if (snapshot.kind === "partial") {
-        if (snapshot.rows.length > 0) {
-          return options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
-            rowId: entry.rowId,
-            data: options.cloneRowData(entry.row) as Partial<TRow>,
-          })))
-        }
-        options.syncViewport()
-        return
-      }
-      const rowsApi = options.runtime.api.rows as {
-        hasDataMutationSupport?: () => boolean
-        applyEdits?: (updates: Array<{ rowId: string | number; data: Partial<TRow> }>) => void | Promise<void>
-        setData?: (rows: Array<{ rowId: string | number; originalIndex: number; row: TRow }>) => void
-      }
-      if (typeof rowsApi.hasDataMutationSupport === "function" && !rowsApi.hasDataMutationSupport()) {
-        const rowPatches = snapshot.rows.map(entry => ({
-          rowId: entry.rowId,
-          data: options.cloneRowData(entry.row) as Partial<TRow>,
-        }))
-        if (rowPatches.length > 0) {
-          return Promise.resolve(rowsApi.applyEdits?.(rowPatches)).then(() => {
-            options.syncViewport()
-          })
-        }
-        options.syncViewport()
-        return
-      }
-      rowsApi.setData?.(snapshot.rows.map((entry, index) => ({
-        rowId: entry.rowId,
-        originalIndex: index,
-        row: options.cloneRowData(entry.row),
-      })))
-      options.syncViewport()
+    applySnapshot: async snapshot => {
+      await applyRowsSnapshot(snapshot)
+      await applySnapshotRestoration(snapshot)
     },
     maxHistoryDepth: options.maxHistoryDepth,
   })
@@ -266,5 +307,33 @@ function estimateSnapshotByteSize(rowId: string | number, row: unknown): number 
     return JSON.stringify({ rowId, row }).length
   } catch {
     return 1024
+  }
+}
+
+function cloneRestorationState(
+  state: DataGridAppHistoryRestorationState | null | undefined,
+): DataGridAppHistoryRestorationState | null {
+  if (!state || typeof state !== "object") {
+    return null
+  }
+  return {
+    ...(state.activeCell ? { activeCell: { ...state.activeCell } } : {}),
+    ...(typeof state.selectionSnapshot !== "undefined"
+      ? { selectionSnapshot: clonePlainValue(state.selectionSnapshot) }
+      : {}),
+    ...(state.scrollAnchor ? { scrollAnchor: { ...state.scrollAnchor } } : {}),
+    ...(state.focusTarget ? { focusTarget: { ...state.focusTarget } } : {}),
+    ...(state.editTarget ? { editTarget: { ...state.editTarget } } : {}),
+  }
+}
+
+function clonePlainValue<T>(value: T): T {
+  if (value == null) {
+    return value
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
   }
 }
