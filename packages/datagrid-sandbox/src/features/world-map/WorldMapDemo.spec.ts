@@ -13,6 +13,22 @@ async function flushUi(): Promise<void> {
   await nextTick()
 }
 
+function findButtonByText(wrapper: ReturnType<typeof mount>, label: string) {
+  return wrapper.findAll("button").find((button) => button.text() === label)
+}
+
+function dispatchPointerLikeEvent(
+  element: Element,
+  type: string,
+  init: Pick<PointerEvent, "button" | "clientX" | "clientY" | "pointerId">,
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  for (const [key, value] of Object.entries(init)) {
+    Object.defineProperty(event, key, { value })
+  }
+  element.dispatchEvent(event)
+}
+
 describe("WorldMapDemo", () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -68,10 +84,50 @@ describe("WorldMapDemo", () => {
     const paths = wrapper.findAll(".world-map-demo__country")
     const firstPath = wrapper.find('[data-country-id="AA"]')
     const secondPath = wrapper.find('[data-country-id="BB"]')
+    const mapLayer = wrapper.find(".world-map-demo__map-layer")
 
     expect(firstPath.exists()).toBe(true)
     expect(paths).toHaveLength(2)
     expect(firstPath.attributes("d")).toBe("M 0 0 L 480 240 L 960 480 Z")
+    expect(mapLayer.attributes("transform")).toBe("translate(0 0) scale(1)")
+    expect(wrapper.text()).toContain("Zoom")
+    expect(wrapper.text()).toContain("1.00")
+    expect(wrapper.text()).toContain("Pan")
+    expect(wrapper.text()).toContain("0, 0")
+
+    await findButtonByText(wrapper, "Zoom in")?.trigger("click")
+    await nextTick()
+    expect(mapLayer.attributes("transform")).toBe("translate(-120 -60) scale(1.25)")
+    expect(wrapper.text()).toContain("1.25")
+
+    await findButtonByText(wrapper, "Zoom out")?.trigger("click")
+    await nextTick()
+    expect(mapLayer.attributes("transform")).toBe("translate(0 0) scale(1)")
+
+    await findButtonByText(wrapper, "Zoom in")?.trigger("click")
+    await findButtonByText(wrapper, "Reset view")?.trigger("click")
+    await nextTick()
+    expect(mapLayer.attributes("transform")).toBe("translate(0 0) scale(1)")
+
+    await findButtonByText(wrapper, "Zoom in")?.trigger("click")
+    dispatchPointerLikeEvent(firstPath.element, "pointerdown", {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    })
+    dispatchPointerLikeEvent(wrapper.find(".world-map-demo__svg").element, "pointerup", {
+      button: 0,
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    })
+    await nextTick()
+    expect(wrapper.text()).toContain("Selected")
+    expect(wrapper.text()).toContain("Country A (AA)")
+
+    await findButtonByText(wrapper, "Reset view")?.trigger("click")
+    await nextTick()
 
     await firstPath.trigger("mouseenter")
     expect(wrapper.text()).toContain("Hovered")
