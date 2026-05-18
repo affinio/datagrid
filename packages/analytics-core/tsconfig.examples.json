@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.core.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["examples/**/*.ts", "src/**/*.ts", "src/**/*.d.ts"],
+  "exclude": ["src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
+}
