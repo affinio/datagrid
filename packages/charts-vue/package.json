@@ -1,0 +1,49 @@
+{
+  "name": "@affino/charts-vue",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Reusable Vue SVG chart rendering package for Affino",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "pnpm --filter @affino/charts-core build && vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
+    "type-check": "pnpm --filter @affino/charts-core build && vue-tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --config ./vitest.config.ts"
+  },
+  "dependencies": {
+    "@affino/charts-core": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/charts-vue"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/charts-vue#readme",
+  "license": "MIT",
+  "keywords": [
+    "affino",
+    "charts",
+    "vue",
+    "svg"
+  ],
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  }
+}

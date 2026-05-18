@@ -85,6 +85,15 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
 
+  packages/charts-vue:
+    dependencies:
+      '@affino/charts-core':
+        specifier: workspace:*
+        version: link:../charts-core
+      vue:
+        specifier: 3.4.38
+        version: 3.4.38(typescript@5.9.3)
+
   packages/datagrid-chrome:
     devDependencies:
       vitest:
