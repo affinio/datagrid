@@ -59,9 +59,15 @@
             class="world-map-svg__marker"
             :data-marker-id="marker.marker.id"
             :data-marker-label="marker.marker.label"
+            :data-marker-variant="markerVariant(marker.marker)"
+            :class="{
+              'world-map-svg__marker--hovered': marker.marker.id === hoveredMarkerId,
+              'world-map-svg__marker--selected': marker.marker.id === resolvedSelectedMarkerId,
+              [`world-map-svg__marker--variant-${markerVariant(marker.marker)}`]: true,
+            }"
             :cx="marker.x"
             :cy="marker.y"
-            :r="markerRadius"
+            :r="markerVisualRadius"
             tabindex="0"
             @mouseenter="handleMarkerMouseEnter(marker.marker)"
             @mouseleave="handleMarkerMouseLeave(marker.marker)"
@@ -80,7 +86,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue"
 import type { CSSProperties } from "vue"
 import { projectWorldMapPosition } from "@affino/world-map-core"
 import type { WorldMapCountryId, WorldMapPathFeature, WorldMapScreenPoint } from "@affino/world-map-core"
-import type { WorldMapMarker } from "./types"
+import type { WorldMapMarker, WorldMapMarkerScaleMode, WorldMapMarkerVariant } from "./types"
 
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 480
@@ -111,6 +117,7 @@ const props = withDefaults(defineProps<{
   width?: number
   height?: number
   selectedCountryId?: WorldMapCountryId | null
+  selectedMarkerId?: string | null
   enableChoropleth?: boolean
   enableZoom?: boolean
   enableMarkers?: boolean
@@ -118,6 +125,7 @@ const props = withDefaults(defineProps<{
   countryValueMin?: number
   countryValueMax?: number
   markerRadius?: number
+  markerScaleMode?: WorldMapMarkerScaleMode
   minZoom?: number
   maxZoom?: number
 }>(), {
@@ -126,17 +134,20 @@ const props = withDefaults(defineProps<{
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
   selectedCountryId: undefined,
+  selectedMarkerId: undefined,
   enableChoropleth: false,
   enableZoom: true,
   enableMarkers: true,
   enablePan: true,
   markerRadius: 4,
+  markerScaleMode: "screen",
   minZoom: DEFAULT_MIN_ZOOM,
   maxZoom: DEFAULT_MAX_ZOOM,
 })
 
 const emit = defineEmits<{
   "update:selectedCountryId": [countryId: WorldMapCountryId | null]
+  "update:selectedMarkerId": [markerId: string | null]
   "country-click": [feature: WorldMapPathFeature]
   "country-hover": [feature: WorldMapPathFeature]
   "country-leave": [feature: WorldMapPathFeature]
@@ -147,7 +158,9 @@ const emit = defineEmits<{
 }>()
 
 const hoveredCountryId = ref<WorldMapCountryId | null>(null)
+const hoveredMarkerId = ref<string | null>(null)
 const internalSelectedCountryId = ref<WorldMapCountryId | null>(null)
+const internalSelectedMarkerId = ref<string | null>(null)
 const zoom = ref(1)
 const panX = ref(0)
 const panY = ref(0)
@@ -170,7 +183,13 @@ const resolvedMaxZoom = computed(() => Math.max(resolvedMinZoom.value, props.max
 const resolvedSelectedCountryId = computed(() => (
   props.selectedCountryId === undefined ? internalSelectedCountryId.value : props.selectedCountryId
 ))
+const resolvedSelectedMarkerId = computed(() => (
+  props.selectedMarkerId === undefined ? internalSelectedMarkerId.value : props.selectedMarkerId
+))
 const mapTransform = computed(() => `translate(${panX.value} ${panY.value}) scale(${zoom.value})`)
+const markerVisualRadius = computed(() => props.markerScaleMode === "screen"
+  ? props.markerRadius / zoom.value
+  : props.markerRadius)
 const isZoomOutDisabled = computed(() => zoom.value <= resolvedMinZoom.value)
 const isZoomInDisabled = computed(() => zoom.value >= resolvedMaxZoom.value)
 const isResetDisabled = computed(() => zoom.value === 1 && panX.value === 0 && panY.value === 0)
@@ -285,10 +304,12 @@ function getCountryStyle(feature: WorldMapPathFeature): CSSProperties | undefine
 }
 
 function handleMarkerMouseEnter(marker: WorldMapMarker): void {
+  hoveredMarkerId.value = marker.id
   emit("marker-hover", marker)
 }
 
 function handleMarkerMouseLeave(marker: WorldMapMarker): void {
+  hoveredMarkerId.value = null
   emit("marker-leave", marker)
 }
 
@@ -302,6 +323,7 @@ function handleMarkerClick(event: MouseEvent, marker: WorldMapMarker): void {
 }
 
 function selectMarker(marker: WorldMapMarker): void {
+  setSelectedMarkerId(resolvedSelectedMarkerId.value === marker.id ? null : marker.id)
   emit("marker-click", marker)
 }
 
@@ -310,11 +332,20 @@ function handleSvgClick(): void {
     return
   }
 
+  clearSelection()
+}
+
+function clearSelection(): void {
   clearSelectedCountry()
+  clearSelectedMarker()
 }
 
 function clearSelectedCountry(): void {
   setSelectedCountryId(null)
+}
+
+function clearSelectedMarker(): void {
+  setSelectedMarkerId(null)
 }
 
 function setSelectedCountryId(countryId: WorldMapCountryId | null): void {
@@ -324,9 +355,16 @@ function setSelectedCountryId(countryId: WorldMapCountryId | null): void {
   emit("update:selectedCountryId", countryId)
 }
 
+function setSelectedMarkerId(markerId: string | null): void {
+  if (props.selectedMarkerId === undefined) {
+    internalSelectedMarkerId.value = markerId
+  }
+  emit("update:selectedMarkerId", markerId)
+}
+
 function handleWindowKeydown(event: KeyboardEvent): void {
   if (event.key === "Escape") {
-    clearSelectedCountry()
+    clearSelection()
   }
 }
 
@@ -527,6 +565,10 @@ function formatPercent(value: number): string {
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
+
+function markerVariant(marker: WorldMapMarker): WorldMapMarkerVariant {
+  return marker.variant ?? "default"
+}
 </script>
 
 <style scoped>
@@ -555,6 +597,12 @@ function isFiniteNumber(value: unknown): value is number {
   --affino-world-map-marker-fill: #ef4444;
   --affino-world-map-marker-stroke: #ffffff;
   --affino-world-map-marker-hover-fill: #dc2626;
+  --affino-world-map-marker-selected-fill: #2563eb;
+  --affino-world-map-marker-selected-stroke: #1e3a8a;
+  --affino-world-map-marker-success-fill: #16a34a;
+  --affino-world-map-marker-warning-fill: #d97706;
+  --affino-world-map-marker-danger-fill: #dc2626;
+  --affino-world-map-marker-muted-fill: #64748b;
   --affino-world-map-marker-focus-stroke: #111827;
 }
 
@@ -686,8 +734,36 @@ function isFiniteNumber(value: unknown): value is number {
   transition: fill 120ms ease, stroke 120ms ease;
 }
 
-.world-map-svg__marker:hover {
+.world-map-svg__marker--variant-success {
+  fill: var(--affino-world-map-marker-success-fill);
+}
+
+.world-map-svg__marker--variant-warning {
+  fill: var(--affino-world-map-marker-warning-fill);
+}
+
+.world-map-svg__marker--variant-danger {
+  fill: var(--affino-world-map-marker-danger-fill);
+}
+
+.world-map-svg__marker--variant-muted {
+  fill: var(--affino-world-map-marker-muted-fill);
+}
+
+.world-map-svg__marker:hover,
+.world-map-svg__marker--hovered {
   fill: var(--affino-world-map-marker-hover-fill);
+}
+
+.world-map-svg__marker--selected {
+  fill: var(--affino-world-map-marker-selected-fill);
+  stroke: var(--affino-world-map-marker-selected-stroke);
+}
+
+.world-map-svg__marker--selected:hover,
+.world-map-svg__marker--selected.world-map-svg__marker--hovered {
+  fill: var(--affino-world-map-marker-selected-fill);
+  stroke: var(--affino-world-map-marker-selected-stroke);
 }
 
 .world-map-svg__marker:focus,

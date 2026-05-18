@@ -26,12 +26,14 @@ const markers: WorldMapMarker[] = [
     lon: -0.1276,
     lat: 51.5072,
     label: "London",
+    variant: "success",
   },
   {
     id: "paris",
     lon: 2.3522,
     lat: 48.8566,
     label: "Paris",
+    variant: "warning",
   },
 ]
 
@@ -54,6 +56,11 @@ function latestSelectedEmission(wrapper: ReturnType<typeof mount>): unknown {
 
 function selectedEmissionCount(wrapper: ReturnType<typeof mount>): number {
   return wrapper.emitted("update:selectedCountryId")?.length ?? 0
+}
+
+function latestSelectedMarkerEmission(wrapper: ReturnType<typeof mount>): unknown {
+  const emissions = wrapper.emitted("update:selectedMarkerId")
+  return emissions === undefined ? undefined : emissions[emissions.length - 1]?.[0]
 }
 
 function findButtonByText(wrapper: ReturnType<typeof mount>, label: string) {
@@ -208,6 +215,8 @@ describe("WorldMapSvg", () => {
     const markerElements = wrapper.findAll(".world-map-svg__marker")
     expect(markerElements).toHaveLength(2)
     expect(markerElements[0]?.attributes("data-marker-id")).toBe("london")
+    expect(markerElements[0]?.attributes("data-marker-variant")).toBe("success")
+    expect(markerElements[0]?.classes()).toContain("world-map-svg__marker--variant-success")
     expect(markerElements[0]?.attributes("cx")).toBe("179.8724")
     expect(markerElements[0]?.attributes("cy")).toBe("38.4928")
   })
@@ -240,9 +249,85 @@ describe("WorldMapSvg", () => {
     await marker.trigger("click")
     expect(wrapper.emitted("marker-click")?.[0]?.[0]).toEqual(markers[0])
     expect(wrapper.emitted("update:selectedCountryId")).toBeUndefined()
+    expect(latestSelectedMarkerEmission(wrapper)).toBe("london")
 
     await marker.trigger("mouseleave")
     expect(wrapper.emitted("marker-leave")?.[0]?.[0]).toEqual(markers[0])
+  })
+
+  it("toggles selected marker and clears marker selection from background and Escape", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        selectedMarkerId: null,
+      },
+    })
+    const marker = wrapper.find('[data-marker-id="london"]')
+
+    await marker.trigger("click")
+    expect(latestSelectedMarkerEmission(wrapper)).toBe("london")
+    await wrapper.setProps({ selectedMarkerId: "london" })
+
+    await marker.trigger("click")
+    expect(latestSelectedMarkerEmission(wrapper)).toBeNull()
+    await wrapper.setProps({ selectedMarkerId: "london" })
+
+    await wrapper.find(".world-map-svg__svg").trigger("click")
+    expect(latestSelectedMarkerEmission(wrapper)).toBeNull()
+    await wrapper.setProps({ selectedMarkerId: "london" })
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+    await nextTick()
+    expect(latestSelectedMarkerEmission(wrapper)).toBeNull()
+  })
+
+  it("marks selected markers with a selected class", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        selectedMarkerId: "london",
+      },
+    })
+
+    expect(wrapper.find('[data-marker-id="london"]').classes()).toContain("world-map-svg__marker--selected")
+  })
+
+  it("keeps marker radius stable in screen scale mode while zooming", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        markerRadius: 4,
+        markerScaleMode: "screen",
+      },
+    })
+    const marker = wrapper.find('[data-marker-id="london"]')
+
+    expect(marker.attributes("r")).toBe("4")
+
+    await findButtonByText(wrapper, "Zoom in")?.trigger("click")
+    await nextTick()
+
+    expect(marker.attributes("r")).toBe("3.2")
+  })
+
+  it("scales marker radius with the map in map scale mode", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        markerRadius: 4,
+        markerScaleMode: "map",
+      },
+    })
+    const marker = wrapper.find('[data-marker-id="london"]')
+
+    await findButtonByText(wrapper, "Zoom in")?.trigger("click")
+    await nextTick()
+
+    expect(marker.attributes("r")).toBe("4")
   })
 
   it("applies choropleth value fill only to countries with finite values", () => {

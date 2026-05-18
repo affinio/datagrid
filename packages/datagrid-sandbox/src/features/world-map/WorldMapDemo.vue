@@ -15,6 +15,7 @@
     <WorldMapSvg
       v-else
       v-model:selected-country-id="selectedCountryId"
+      v-model:selected-marker-id="selectedMarkerId"
       :paths="pathFeatures"
       :width="VIEWPORT.width"
       :height="VIEWPORT.height"
@@ -36,6 +37,10 @@
       <div>
         <span>Selected</span>
         <strong>{{ selectedLabel }}</strong>
+      </div>
+      <div>
+        <span>Marker</span>
+        <strong>{{ selectedMarkerLabel }}</strong>
       </div>
       <div>
         <span>Zoom</span>
@@ -73,18 +78,21 @@ const DEMO_MARKERS: WorldMapMarker[] = [
     lon: -0.1276,
     lat: 51.5072,
     label: "London",
+    variant: "success",
   },
   {
     id: "paris",
     lon: 2.3522,
     lat: 48.8566,
     label: "Paris",
+    variant: "warning",
   },
   {
     id: "new-york",
     lon: -74.006,
     lat: 40.7128,
     label: "New York",
+    variant: "muted",
   },
 ]
 
@@ -101,6 +109,7 @@ const countries = ref<WorldMapCountryFeature[]>([])
 const pathFeatures = ref<WorldMapPathFeature[]>([])
 const hoveredCountryId = ref<WorldMapCountryId | null>(null)
 const selectedCountryId = ref<WorldMapCountryId | null>(null)
+const selectedMarkerId = ref<string | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref<string | null>(null)
 const viewState = ref({
@@ -112,9 +121,13 @@ const viewState = ref({
 const countryById = computed(() => {
   return new Map(pathFeatures.value.map((feature) => [feature.id, feature]))
 })
+const markerById = computed(() => {
+  return new Map(DEMO_MARKERS.map((marker) => [marker.id, marker]))
+})
 
 const hoveredLabel = computed(() => formatCountryLabel(countryById.value.get(hoveredCountryId.value ?? "")))
 const selectedLabel = computed(() => formatCountryLabel(countryById.value.get(selectedCountryId.value ?? "")))
+const selectedMarkerLabel = computed(() => formatMarkerLabel(markerById.value.get(selectedMarkerId.value ?? "")))
 const zoomLabel = computed(() => viewState.value.zoom.toFixed(2))
 const panLabel = computed(() => `${Math.round(viewState.value.panX)}, ${Math.round(viewState.value.panY)}`)
 
@@ -139,6 +152,10 @@ async function loadMap(): Promise<void> {
 
 function formatCountryLabel(feature: WorldMapPathFeature | undefined): string {
   return feature === undefined ? "none" : `${feature.name} (${feature.id})`
+}
+
+function formatMarkerLabel(marker: WorldMapMarker | undefined): string {
+  return marker === undefined ? "none" : `${marker.label ?? marker.id} (${marker.id})`
 }
 
 function handleCountryHover(feature: WorldMapPathFeature): void {
@@ -199,7 +216,7 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
 
 .world-map-demo__debug {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
