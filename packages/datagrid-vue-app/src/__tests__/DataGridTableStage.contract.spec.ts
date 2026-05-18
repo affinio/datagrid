@@ -868,6 +868,54 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("restores selected anchor affordances when a horizontally virtualized column remounts", async () => {
+    const baseProps = createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 2,
+      {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 2 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 2 },
+        fillHandleEnabled: true,
+        isFillHandleCell: (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 2,
+      },
+    )
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        columns: {
+          ...baseProps.columns,
+          renderedColumns: baseProps.columns.renderedColumns.filter(column => column.key === "centerA"),
+        },
+        viewport: {
+          ...baseProps.viewport,
+          rightColumnSpacerWidth: 130,
+        },
+      },
+    })
+
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerB"]').exists()).toBe(false)
+    expect(wrapper.find(".grid-body-viewport .grid-cell--selection-anchor").exists()).toBe(false)
+    expect(wrapper.find(".grid-body-viewport .cell-fill-handle").exists()).toBe(false)
+
+    await wrapper.setProps({
+      columns: {
+        ...baseProps.columns,
+        renderedColumns: baseProps.columns.renderedColumns,
+      },
+      viewport: {
+        ...baseProps.viewport,
+        rightColumnSpacerWidth: 0,
+      },
+    })
+
+    const remountedAnchor = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="0"][data-column-key="centerB"]')
+    expect(remountedAnchor.exists()).toBe(true)
+    expect(remountedAnchor.classes()).toContain("grid-cell--selection-anchor")
+    expect(remountedAnchor.find(".cell-fill-handle").exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it("renders a continuous move-preview overlay from center into pinned-right", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
