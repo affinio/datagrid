@@ -69,6 +69,31 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     }).toBeLessThanOrEqual(0.05)
     await expect(page.locator(".grid-body-viewport .grid-cell[data-row-index]").nth(1)).toBeVisible()
   })
+
+  test("server data source does not expose blank viewport bands during visible refresh", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await page.getByRole("button", { name: "Slow backend" }).click()
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+
+    await runLongVerticalSession(viewport)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await assertNoBlankVerticalViewport(page)
+
+    await page.getByRole("button", { name: "Refresh visible range" }).click()
+    await assertNoBlankVerticalViewport(page)
+    await expect(page.locator(".grid-body-viewport .grid-cell[data-row-index]").nth(1)).toBeVisible()
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await assertNoBlankVerticalViewport(page)
+  })
 })
 
 test.describe("sandbox touch scroll contracts", () => {

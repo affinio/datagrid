@@ -9,7 +9,8 @@ Current execution state:
 - Slice 3 is completed and should be treated as the browser blank-viewport detection baseline.
 - Slice 4 is runtime-fix-only work and is not warranted until Slice 3 or an equivalent regression exposes a blanking failure.
 - Slice 5 is completed and should be treated as the adaptive overscan consistency baseline.
-- Slice 6 is the next implementation slice.
+- Slice 6 is completed and should be treated as the datasource visible-row retention baseline.
+- Slice 7 is the next implementation slice.
 - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` is a parent quality lens for this track, not the execution plan for the next slice. Pull in its browser-frame, server latency, placeholder exposure, wide-grid, and memory/churn expectations when they apply to a virtualization slice.
 - Selection-specific continuity work that was closed in `docs/plans/SELECTION_ENTERPRISE_PLAN.md` should be reused as existing coverage; do not duplicate that work unless a virtualization slice exposes a separate viewport or rendering invariant.
 
@@ -109,13 +110,14 @@ Current execution state:
 
 ## Slice 6: Retained Rows During Cache Replacement
 
-- Status: Planned.
+- Status: Completed. Core datasource coverage now proves visible-row retention through partial cache replacement, direction reversal, failed replacement reload, manual refresh failure, and retry. `e2e/sandbox-grid.spec.ts` also covers the server datasource visible-refresh path with the blank-viewport detector.
 - Objective: prove and harden retained visible rows while datasource cache replacement or refresh is in progress.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
   - `packages/datagrid-core/src/models/server/rangeCache.ts`
   - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
   - `packages/datagrid-sandbox/src/components/VueServerDataSourceGridCard.vue`
+  - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: visible rows should remain stable during cache replacement until replacement data or placeholders are available.
 - Tests to add/update:
   - Unit tests for `replaceCacheWithRows` while the viewport intersects stale rows.
