@@ -51,6 +51,8 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-spreadsheet-vue-app/*": "packages/datagrid-spreadsheet-vue-app/src/*",
   "@affino/datagrid-laravel": "packages/datagrid-laravel/resources/js/index.ts",
   "@affino/datagrid-laravel/*": "packages/datagrid-laravel/resources/js/*",
+  "@affino/charts-core": "packages/charts-core/src/index.ts",
+  "@affino/charts-core/*": "packages/charts-core/src/*",
   "@affino/world-map-core": "packages/world-map-core/src/index.ts",
   "@affino/world-map-core/*": "packages/world-map-core/src/*",
   "@affino/world-map-vue": "packages/world-map-vue/src/index.ts",

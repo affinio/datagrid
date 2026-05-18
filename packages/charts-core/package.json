@@ -1,0 +1,44 @@
+{
+  "name": "@affino/charts-core",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Headless chart core types and utilities for Affino chart features",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "type-check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run --config ./vitest.config.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/affinio/affinio.git",
+    "directory": "packages/charts-core"
+  },
+  "homepage": "https://github.com/affinio/affinio/tree/main/packages/charts-core#readme",
+  "license": "MIT",
+  "keywords": [
+    "affino",
+    "charts",
+    "headless",
+    "core"
+  ],
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "bugs": {
+    "url": "https://github.com/affinio/affinio/issues"
+  },
+  "module": "dist/index.js"
+}
