@@ -18,6 +18,20 @@ export interface AnalyticsSchema {
   fields: AnalyticsField[]
 }
 
+export interface AnalyticsDataset {
+  rows: AnalyticsRow[]
+  fields: AnalyticsField[]
+  meta: {
+    rowCount: number
+    sourceRowCount: number
+    generatedAt?: string
+  }
+}
+
+export interface CreateAnalyticsDatasetOptions {
+  generatedAt?: string
+}
+
 export type AggregationOp =
   | "count"
   | "sum"
