@@ -53,6 +53,7 @@ Phase 2 status:
 
 Phase 3 status:
 - Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
+- Focused renderer/stage coverage verifies that the lightweight path preserves display text, editor predicates, placeholder fallback, cell shell ARIA, and selection/focus ownership while bypassing authored content.
 
 Interaction audit closure:
 - Interaction orchestration slices 1-14 are complete as of 2026-05-17, and selection enterprise slices 1-15 are complete as of 2026-05-18. Browser e2e coverage and hard-fail Chromium frame profiles now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, pinned-pane drag-selection diagnostics, and scroll-sync drift. The open mobile work remains real-device execution and hardware threshold review.
@@ -461,7 +462,7 @@ Gap:
 - Done: add adaptive vertical overscan based on velocity in the app-stage path.
 - Done: add `isScrolling` and `scrollIdle` state to the stage viewport runtime, with a deferred idle callback hook.
 - Done: defer anchor focus restoration until body scroll idle and coalesce duplicate restore requests.
-- Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers.
+- Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers, with focused unit/component coverage for display text, editor predicates, placeholder fallback, and cell shell ARIA.
 - Mostly done for the stage path: minimize reactive writes during scroll events; keep final residual audits focused on newly added scroll work.
 - Mostly done for the stage path: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator; keep future work behind `stageScrollFrame` evidence.
 - In progress: improve server/data-source prefetch windows using real velocity and latency metrics; core sparse diagnostics now expose viewport loading ratio for measurement.

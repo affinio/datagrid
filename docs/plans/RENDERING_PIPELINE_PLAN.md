@@ -8,7 +8,8 @@ Current execution state:
 - Slice 2 is completed and should be treated as the renderer contract documentation baseline.
 - Slice 3 is completed and should be treated as the opt-in render telemetry baseline.
 - Slice 4 is completed and should be treated as the custom renderer error fallback baseline.
-- Slice 5 is the next implementation slice.
+- Slice 5 is completed and should be treated as the touch-scroll lightweight rendering baseline.
+- Slice 6 is the next implementation slice.
 - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md` is closed as of 2026-05-18. Rendering slices should reuse the virtualization telemetry and browser-frame harness where useful instead of creating a parallel performance track.
 - Selection and interaction slices already closed important overlay, active-cell, edit, and pointer ownership behavior. Do not duplicate those unless a rendering slice exposes a separate DOM/render invariant.
 
@@ -80,17 +81,18 @@ Current execution state:
 
 ## Slice 5: Lightweight Scroll Rendering Policy
 
-- Status: Planned.
+- Status: Completed. In touch mode during active body viewport scroll, custom `cellRenderer` and `groupCellRenderer` work is bypassed in favor of resolved display values; editor predicates, placeholder display fallback, cell shell ARIA, selection/focus ownership, and overlays remain outside the degraded renderer path.
 - Objective: make scroll-active lightweight rendering explicit for expensive custom renderers without hiding editors, active cell/focus, selection affordances, placeholders, or a11y labels.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
-- Expected behavior change: expensive authored renderers can be bypassed during active scroll according to a documented policy.
-- Tests to add/update:
-  - Scroll-active rendering preserves display values.
-  - Active editors and placeholder/a11y metadata are not degraded.
+- Expected behavior change: expensive authored renderers can be bypassed during active touch scroll according to a documented policy.
+- Tests added/covered:
+  - Scroll-active rendering preserves display values and bypasses custom renderers.
+  - Active editor predicates and placeholder display fallback are not degraded.
+  - Component coverage verifies the touch-scroll stage path preserves cell shell ARIA while bypassing authored content.
 - Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- useDataGridStageCellRendering DataGridTableStage`
 - Risk level: High
 - Suggested commit message: `perf(datagrid-vue-app): lighten cell rendering while scrolling`
@@ -153,8 +155,8 @@ Current execution state:
 2. Slice 2: Renderer Contract Documentation (completed)
 3. Slice 3: Render Telemetry Counters (completed)
 4. Slice 4: Custom Renderer Error Fallback (completed)
-5. Slice 5: Lightweight Scroll Rendering Policy (next)
-6. Slice 6: Mount And Unmount Churn Benchmark
+5. Slice 5: Lightweight Scroll Rendering Policy (completed)
+6. Slice 6: Mount And Unmount Churn Benchmark (next)
 7. Slice 7: Chrome And Overlay Duration Telemetry
 8. Slice 8: Enterprise Rendering Browser Gates
 

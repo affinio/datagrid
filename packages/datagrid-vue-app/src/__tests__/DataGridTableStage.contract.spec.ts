@@ -487,6 +487,54 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("bypasses custom renderers during active touch scroll", async () => {
+    mockCoarsePointer(true)
+    const cellRenderer = vi.fn(({ displayValue }) => h("span", {
+      class: "test-status-pill",
+    }, `Status: ${displayValue}`))
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [
+          {
+            key: "centerA",
+            pin: "center",
+            width: 140,
+            column: {
+              key: "centerA",
+              label: "Status",
+              cellRenderer,
+            },
+          },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.find(".test-status-pill").text()).toBe("Status: A1")
+    cellRenderer.mockClear()
+
+    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 31,
+    })
+    viewport.dispatchEvent(new Event("scroll"))
+    await nextTick()
+
+    const cell = wrapper.find('.grid-cell[data-row-id="r1"][data-column-key="centerA"]')
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--scrolling")
+    expect(wrapper.find(".test-status-pill").exists()).toBe(false)
+    expect(cell.text()).toBe("A1")
+    expect(cell.attributes("role")).toBe("gridcell")
+    expect(cell.attributes("aria-selected")).toBe("true")
+    expect(cellRenderer).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it("does not sample center-pane diagnostics when diagnostics are disabled", async () => {
     const regionGetter = vi.fn(() => "diagnostic-only")
     const rowData = { centerA: "Visible" } as Record<string, unknown>

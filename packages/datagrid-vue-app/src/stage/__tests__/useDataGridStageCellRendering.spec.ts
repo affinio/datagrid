@@ -317,6 +317,83 @@ describe("useDataGridStageCellRendering", () => {
     })
   })
 
+  it("uses lightweight display values without disabling editor or placeholder contracts", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
+      createColumn({
+        key: "stage",
+        column: {
+          cellType: "select",
+          capabilities: { editable: true },
+        },
+      }),
+    ])
+    const rows = ref<Readonly<DataGridTableStageRowsSection<Record<string, unknown>>>>({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({
+      startInlineEdit: vi.fn(),
+      updateEditingCellValue: vi.fn(),
+      commitInlineEdit: vi.fn(),
+      cancelInlineEdit: vi.fn(),
+      handleEditorKeydown: vi.fn(),
+      handleEditorBlur: vi.fn(),
+    } as unknown as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: () => "planned",
+      readDisplayCell: () => "Planned",
+    })
+    const cellRenderer = vi.fn(({ displayValue }) => `cell:${displayValue}`)
+    const groupRenderer = vi.fn(({ displayValue }) => `group:${displayValue}`)
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: (row, columnKey) => row.kind === "leaf" && columnKey === "stage",
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+      preferLightweightCellRendering: ref(true),
+    })
+
+    const column = {
+      ...visibleColumns.value[0]!,
+      column: {
+        ...visibleColumns.value[0]!.column,
+        cellRenderer,
+        groupCellRenderer: groupRenderer,
+      },
+    }
+    const dataRow = createRow({ data: { stage: "planned" }, row: { stage: "planned" }, rowId: "r1" })
+    const groupRow = createRow({
+      kind: "group",
+      rowId: "g1",
+      data: {},
+      row: {},
+      state: { expanded: false },
+      groupMeta: { groupKey: "g1", groupField: "group", groupValue: "Group 1", level: 0, childrenCount: 2 },
+    })
+    const placeholderRow = createRow({
+      rowId: "__datagrid_placeholder__:2",
+      data: {},
+      row: {},
+      displayIndex: 2,
+    }) as DataGridTableRow<Record<string, unknown>> & { __placeholder: true }
+    placeholderRow.__placeholder = true
+
+    expect(renderApi.isSelectEditorCell(dataRow, 0, column, 0)).toBe(true)
+    expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("Planned")
+    expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("Planned")
+    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("Planned")
+    expect(cellRenderer).not.toHaveBeenCalled()
+    expect(groupRenderer).not.toHaveBeenCalled()
+  })
+
   it("falls back to display values when custom renderers throw", () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([

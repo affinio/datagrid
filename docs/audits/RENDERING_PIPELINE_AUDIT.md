@@ -93,8 +93,8 @@ Vue app viewport and rendering:
 1. **No explicit enterprise render-frame gate for custom renderers.**
    `useDataGridStageCellRendering.ts` invokes public `cellRenderer` and `groupCellRenderer` synchronously during Vue render, and `DataGridCellContentRenderer.ts` is a direct VNode passthrough. Existing tests verify renderer output, not scroll-frame budget, slow renderer detection, error isolation, or mount churn. This blocks an enterprise performance claim for custom-renderer-heavy grids.
 
-2. **No lightweight scroll rendering mode is implemented.**
-   `docs/MOBILE_TOUCH_SCROLL_AUDIT.md` lists lightweight cell rendering while scrolling as remaining work. The current center and pinned pane templates still call `renderResolvedCellContent(...)` for rendered cells during scroll. Theoretical risk: expensive renderers can consume the same frame budget that virtualization and chrome redraw need.
+2. **No explicit enterprise render-frame gate for lightweight custom-renderer scroll.**
+   `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` now records touch scroll lightweight rendering as implemented: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderers are bypassed in favor of resolved display values. Remaining risk is budget enforcement for custom-renderer-heavy scroll scenarios, especially pinned panes, auto-height rows, and wide windows.
 
 ### High
 
@@ -170,8 +170,8 @@ Target score: **9/10**.
 
 What blocks the target:
 
-- Missing custom renderer budget, isolation, and failure handling.
-- Missing lightweight scroll rendering or documented renderer degradation policy.
+- Missing custom renderer budget and slow-render frame gates.
+- Missing real-device validation and hard budgets for the lightweight touch-scroll renderer degradation policy.
 - Missing render churn telemetry and DOM node budget gates.
 - Missing browser gates for custom renderers, auto-height rows, pinned panes, overlays, and wide horizontal virtualization.
 - Avoidable center-pane diagnostics work in normal rendering.
@@ -192,9 +192,9 @@ What blocks the target:
 
 ### Phase 3: Lightweight Scroll Rendering
 
-- Introduce a scroll-active rendering policy for expensive cells, aligned with `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`.
-- Preserve text/selection/focus readability while replacing expensive renderer output during active scroll.
-- Ensure editors, active cell, and accessibility labels do not degrade incorrectly.
+- Introduce a scroll-active rendering policy for expensive cells, aligned with `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`. Status: completed for touch-mode active body scroll.
+- Preserve text/selection/focus readability while replacing expensive renderer output during active scroll. Status: resolved display values, cell shell state, and overlay/focus ownership are preserved.
+- Ensure editors, active cell, and accessibility labels do not degrade incorrectly. Status: focused unit/component coverage protects editor predicates, placeholder display fallback, and cell ARIA shell behavior.
 
 ### Phase 4: Overlay And Chrome Frame Budgets
 
@@ -270,7 +270,7 @@ Performance/benchmark tests:
 2. Add render telemetry counters behind existing perf tracing. Status: render-window composition and custom renderer invocation/duration samples are in place; dedicated mount/unmount churn counters remain.
 3. Add custom renderer contract docs and tests for placeholder/interactive context stability. Status: renderer contract docs and runtime error fallback are in place.
 4. Add renderer error fallback or development-only error reporting. Status: runtime error fallback is in place; development-only reporting remains optional.
-5. Add lightweight scroll rendering policy for expensive custom renderers.
+5. Add lightweight scroll rendering policy for expensive custom renderers. Status: completed for touch-mode active body scroll; browser-frame budgets remain planned.
 6. Add mount/unmount churn benchmark for vertical and horizontal virtual scroll.
 7. Add chrome/overlay duration telemetry and gates.
 8. Add browser-frame scenarios for pinned panes, auto-height rows, custom renderers, and wide columns.
