@@ -18,6 +18,7 @@
       :paths="pathFeatures"
       :width="VIEWPORT.width"
       :height="VIEWPORT.height"
+      :markers="DEMO_MARKERS"
       :min-zoom="1"
       :max-zoom="8"
       @country-hover="handleCountryHover"
@@ -56,12 +57,34 @@ import type {
   WorldMapViewport,
 } from "@affino/world-map-core"
 import { WorldMapSvg } from "@affino/world-map-vue"
+import type { WorldMapMarker } from "@affino/world-map-vue"
 import { loadNormalizedWorldCountries110m } from "./loadWorldCountries"
 
 const VIEWPORT: WorldMapViewport = {
   width: 960,
   height: 480,
 }
+
+const DEMO_MARKERS: WorldMapMarker[] = [
+  {
+    id: "london",
+    lon: -0.1276,
+    lat: 51.5072,
+    label: "London",
+  },
+  {
+    id: "paris",
+    lon: 2.3522,
+    lat: 48.8566,
+    label: "Paris",
+  },
+  {
+    id: "new-york",
+    lon: -74.006,
+    lat: 40.7128,
+    label: "New York",
+  },
+]
 
 const countries = ref<WorldMapCountryFeature[]>([])
 const pathFeatures = ref<WorldMapPathFeature[]>([])

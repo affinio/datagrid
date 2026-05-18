@@ -4,6 +4,7 @@ import { mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { nextTick } from "vue"
 import { WorldMapSvg } from "../index"
+import type { WorldMapMarker } from "../index"
 import type { WorldMapPathFeature } from "@affino/world-map-core"
 
 const paths: WorldMapPathFeature[] = [
@@ -16,6 +17,21 @@ const paths: WorldMapPathFeature[] = [
     id: "BB",
     name: "Country B",
     path: "M 100 100 L 200 200 Z",
+  },
+]
+
+const markers: WorldMapMarker[] = [
+  {
+    id: "london",
+    lon: -0.1276,
+    lat: 51.5072,
+    label: "London",
+  },
+  {
+    id: "paris",
+    lon: 2.3522,
+    lat: 48.8566,
+    label: "Paris",
   },
 ]
 
@@ -177,5 +193,55 @@ describe("WorldMapSvg", () => {
     })
 
     expect(wrapper.classes()).not.toContain("world-map-svg--pan-enabled")
+  })
+
+  it("renders projected markers when provided", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        width: 360,
+        height: 180,
+      },
+    })
+
+    const markerElements = wrapper.findAll(".world-map-svg__marker")
+    expect(markerElements).toHaveLength(2)
+    expect(markerElements[0]?.attributes("data-marker-id")).toBe("london")
+    expect(markerElements[0]?.attributes("cx")).toBe("179.8724")
+    expect(markerElements[0]?.attributes("cy")).toBe("38.4928")
+  })
+
+  it("does not render markers when marker rendering is disabled", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        enableMarkers: false,
+      },
+    })
+
+    expect(wrapper.findAll(".world-map-svg__marker")).toHaveLength(0)
+  })
+
+  it("emits marker interaction events without clearing selected country", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers,
+        selectedCountryId: "AA",
+      },
+    })
+    const marker = wrapper.find('[data-marker-id="london"]')
+
+    await marker.trigger("mouseenter")
+    expect(wrapper.emitted("marker-hover")?.[0]?.[0]).toEqual(markers[0])
+
+    await marker.trigger("click")
+    expect(wrapper.emitted("marker-click")?.[0]?.[0]).toEqual(markers[0])
+    expect(wrapper.emitted("update:selectedCountryId")).toBeUndefined()
+
+    await marker.trigger("mouseleave")
+    expect(wrapper.emitted("marker-leave")?.[0]?.[0]).toEqual(markers[0])
   })
 })

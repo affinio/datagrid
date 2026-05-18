@@ -51,6 +51,22 @@
             @keydown.enter.prevent="selectCountry(feature)"
             @keydown.space.prevent="selectCountry(feature)"
           />
+          <circle
+            v-for="marker in projectedMarkers"
+            :key="marker.marker.id"
+            class="world-map-svg__marker"
+            :data-marker-id="marker.marker.id"
+            :data-marker-label="marker.marker.label"
+            :cx="marker.x"
+            :cy="marker.y"
+            :r="markerRadius"
+            tabindex="0"
+            @mouseenter="handleMarkerMouseEnter(marker.marker)"
+            @mouseleave="handleMarkerMouseLeave(marker.marker)"
+            @click.stop="handleMarkerClick($event, marker.marker)"
+            @keydown.enter.prevent="selectMarker(marker.marker)"
+            @keydown.space.prevent="selectMarker(marker.marker)"
+          />
         </g>
       </svg>
     </div>
@@ -59,7 +75,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue"
-import type { WorldMapCountryId, WorldMapPathFeature } from "@affino/world-map-core"
+import { projectWorldMapPosition } from "@affino/world-map-core"
+import type { WorldMapCountryId, WorldMapPathFeature, WorldMapScreenPoint } from "@affino/world-map-core"
+import type { WorldMapMarker } from "./types"
 
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 480
@@ -74,21 +92,31 @@ interface WorldMapViewState {
   panY: number
 }
 
+interface ProjectedWorldMapMarker extends WorldMapScreenPoint {
+  marker: WorldMapMarker
+}
+
 const props = withDefaults(defineProps<{
   paths: WorldMapPathFeature[]
+  markers?: WorldMapMarker[]
   width?: number
   height?: number
   selectedCountryId?: WorldMapCountryId | null
   enableZoom?: boolean
+  enableMarkers?: boolean
   enablePan?: boolean
+  markerRadius?: number
   minZoom?: number
   maxZoom?: number
 }>(), {
+  markers: () => [],
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
   selectedCountryId: undefined,
   enableZoom: true,
+  enableMarkers: true,
   enablePan: true,
+  markerRadius: 4,
   minZoom: DEFAULT_MIN_ZOOM,
   maxZoom: DEFAULT_MAX_ZOOM,
 })
@@ -98,6 +126,9 @@ const emit = defineEmits<{
   "country-click": [feature: WorldMapPathFeature]
   "country-hover": [feature: WorldMapPathFeature]
   "country-leave": [feature: WorldMapPathFeature]
+  "marker-click": [marker: WorldMapMarker]
+  "marker-hover": [marker: WorldMapMarker]
+  "marker-leave": [marker: WorldMapMarker]
   "view-change": [state: WorldMapViewState]
 }>()
 
@@ -129,6 +160,25 @@ const mapTransform = computed(() => `translate(${panX.value} ${panY.value}) scal
 const isZoomOutDisabled = computed(() => zoom.value <= resolvedMinZoom.value)
 const isZoomInDisabled = computed(() => zoom.value >= resolvedMaxZoom.value)
 const isResetDisabled = computed(() => zoom.value === 1 && panX.value === 0 && panY.value === 0)
+const projectedMarkers = computed<ProjectedWorldMapMarker[]>(() => {
+  if (!props.enableMarkers) {
+    return []
+  }
+
+  return props.markers.map((marker) => ({
+    ...projectWorldMapPosition({
+      lon: marker.lon,
+      lat: marker.lat,
+    }, {
+      viewport: {
+        width: resolvedWidth.value,
+        height: resolvedHeight.value,
+      },
+      projection: "equirectangular",
+    }),
+    marker,
+  }))
+})
 
 onMounted(() => {
   window.addEventListener("keydown", handleWindowKeydown)
@@ -160,6 +210,27 @@ function handleCountryClick(event: MouseEvent, feature: WorldMapPathFeature): vo
 function selectCountry(feature: WorldMapPathFeature): void {
   setSelectedCountryId(resolvedSelectedCountryId.value === feature.id ? null : feature.id)
   emit("country-click", feature)
+}
+
+function handleMarkerMouseEnter(marker: WorldMapMarker): void {
+  emit("marker-hover", marker)
+}
+
+function handleMarkerMouseLeave(marker: WorldMapMarker): void {
+  emit("marker-leave", marker)
+}
+
+function handleMarkerClick(event: MouseEvent, marker: WorldMapMarker): void {
+  if (consumeSuppressedClick()) {
+    event.stopPropagation()
+    return
+  }
+
+  selectMarker(marker)
+}
+
+function selectMarker(marker: WorldMapMarker): void {
+  emit("marker-click", marker)
 }
 
 function handleSvgClick(): void {
@@ -389,6 +460,10 @@ function clamp(value: number, min: number, max: number): number {
   --affino-world-map-country-selected-hover-stroke: #1f2937;
   --affino-world-map-country-focus-fill: #c4d0da;
   --affino-world-map-country-focus-stroke: #1f2937;
+  --affino-world-map-marker-fill: #ef4444;
+  --affino-world-map-marker-stroke: #ffffff;
+  --affino-world-map-marker-hover-fill: #dc2626;
+  --affino-world-map-marker-focus-stroke: #111827;
 }
 
 .world-map-svg {
@@ -500,6 +575,31 @@ function clamp(value: number, min: number, max: number): number {
   fill: var(--affino-world-map-country-focus-fill);
   stroke: var(--affino-world-map-country-focus-stroke);
   stroke-width: 1.2;
+}
+
+.world-map-svg__marker {
+  fill: var(--affino-world-map-marker-fill);
+  stroke: var(--affino-world-map-marker-stroke);
+  stroke-width: 1.5;
+  outline: none;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+  transition: fill 120ms ease, stroke 120ms ease;
+}
+
+.world-map-svg__marker:hover {
+  fill: var(--affino-world-map-marker-hover-fill);
+}
+
+.world-map-svg__marker:focus,
+.world-map-svg__marker:focus-visible {
+  outline: none;
+}
+
+.world-map-svg__marker:focus-visible {
+  fill: var(--affino-world-map-marker-hover-fill);
+  stroke: var(--affino-world-map-marker-focus-stroke);
+  stroke-width: 2;
 }
 
 @media (max-width: 760px) {
