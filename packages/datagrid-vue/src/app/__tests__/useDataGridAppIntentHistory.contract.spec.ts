@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
-import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
+import {
+  useDataGridAppIntentHistory,
+  type DataGridAppHistorySnapshotBudget,
+} from "../useDataGridAppIntentHistory"
 
 type DemoRow = {
   a: string
@@ -17,7 +20,10 @@ type DemoSnapshot = {
   rows: Array<{ rowId: string | number; row: DemoRow }>
 }
 
-function createHistoryHarness(initialRows: DemoRowState[]) {
+function createHistoryHarness(
+  initialRows: DemoRowState[],
+  options: { snapshotBudget?: DataGridAppHistorySnapshotBudget } = {},
+) {
   let rows = initialRows.map(row => ({
     rowId: row.rowId,
     data: { ...row.data },
@@ -61,6 +67,7 @@ function createHistoryHarness(initialRows: DemoRowState[]) {
     } as never,
     cloneRowData: row => ({ ...row }),
     syncViewport,
+    snapshotBudget: options.snapshotBudget,
   })
 
   const setRowData = (rowId: string, patch: Partial<DemoRow>) => {
@@ -249,5 +256,96 @@ describe("useDataGridAppIntentHistory contract", () => {
       { rowId: "r1", data: { a: "A1-edited", b: "B1", c: "C1" } },
       { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
     ])
+  })
+
+  it("marks full snapshots over the row budget and skips recording them", async () => {
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+      { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
+      { rowId: "r3", data: { a: "A3", b: "B3", c: "C3" } },
+    ], {
+      snapshotBudget: { maxRows: 2 },
+    })
+
+    const beforeSnapshot = harness.history.captureRowsSnapshot()
+    expect(beforeSnapshot).toMatchObject({
+      kind: "full",
+      rows: [],
+      budget: {
+        exceeded: true,
+        limit: "rows",
+        rowCount: 3,
+        maxRows: 2,
+      },
+    })
+
+    harness.setRowData("r1", { a: "A1-edited" })
+    await expect(
+      harness.history.recordIntentTransaction(
+        { intent: "bulk", label: "Bulk edit" },
+        beforeSnapshot,
+      ),
+    ).resolves.toBeNull()
+    expect(harness.history.canUndo.value).toBe(false)
+  })
+
+  it("marks partial snapshots over the cell budget and skips recording them", async () => {
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+      { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
+    ], {
+      snapshotBudget: { maxCells: 4 },
+    })
+
+    const beforeSnapshot = harness.history.captureRowsSnapshotByIds(["r1", "r2"])
+    expect(beforeSnapshot).toMatchObject({
+      kind: "partial",
+      rows: [],
+      budget: {
+        exceeded: true,
+        limit: "cells",
+        rowCount: 2,
+        cellCount: 6,
+        maxCells: 4,
+      },
+    })
+
+    harness.setRowData("r2", { a: "A2-edited" })
+    await expect(
+      harness.history.recordIntentTransaction(
+        { intent: "paste", label: "Paste cells" },
+        beforeSnapshot,
+      ),
+    ).resolves.toBeNull()
+    expect(harness.history.canUndo.value).toBe(false)
+  })
+
+  it("marks snapshots over the byte budget and keeps earlier history intact", async () => {
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+      { rowId: "r2", data: { a: "A2", b: "B2", c: "C2" } },
+    ], {
+      snapshotBudget: { maxBytes: 48 },
+    })
+
+    const beforeSnapshot = harness.history.captureRowsSnapshotByIds(["r1"])
+    expect(beforeSnapshot).toMatchObject({
+      kind: "partial",
+      rows: [],
+      budget: {
+        exceeded: true,
+        limit: "bytes",
+        maxBytes: 48,
+      },
+    })
+
+    harness.setRowData("r1", { a: "A1-edited" })
+    await expect(
+      harness.history.recordIntentTransaction(
+        { intent: "edit", label: "Edit cell" },
+        beforeSnapshot,
+      ),
+    ).resolves.toBeNull()
+    expect(harness.history.canUndo.value).toBe(false)
   })
 })

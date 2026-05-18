@@ -110,6 +110,8 @@ export {
 
 export {
   useDataGridAppIntentHistory,
+  type DataGridAppHistorySnapshotBudget,
+  type DataGridAppHistorySnapshotBudgetResult,
   type DataGridAppRowSnapshot,
   type UseDataGridAppIntentHistoryOptions,
   type UseDataGridAppIntentHistoryResult,

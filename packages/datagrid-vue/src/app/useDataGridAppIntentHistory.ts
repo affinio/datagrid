@@ -5,6 +5,24 @@ import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime
 export interface DataGridAppRowSnapshot<TRow> {
   kind: "full" | "partial"
   rows: Array<{ rowId: string | number; row: TRow }>
+  budget?: DataGridAppHistorySnapshotBudgetResult
+}
+
+export interface DataGridAppHistorySnapshotBudget {
+  maxRows?: number
+  maxCells?: number
+  maxBytes?: number
+}
+
+export interface DataGridAppHistorySnapshotBudgetResult {
+  exceeded: true
+  limit: "rows" | "cells" | "bytes"
+  rowCount: number
+  cellCount: number
+  byteEstimate: number
+  maxRows: number
+  maxCells: number
+  maxBytes: number
 }
 
 export interface UseDataGridAppIntentHistoryOptions<TRow> {
@@ -12,6 +30,7 @@ export interface UseDataGridAppIntentHistoryOptions<TRow> {
   cloneRowData: (row: TRow) => TRow
   syncViewport: () => void
   maxHistoryDepth?: number
+  snapshotBudget?: DataGridAppHistorySnapshotBudget
 }
 
 export interface UseDataGridAppIntentHistoryResult<TRow> {
@@ -27,13 +46,64 @@ export interface UseDataGridAppIntentHistoryResult<TRow> {
 export function useDataGridAppIntentHistory<TRow>(
   options: UseDataGridAppIntentHistoryOptions<TRow>,
 ): UseDataGridAppIntentHistoryResult<TRow> {
+  const maxSnapshotRows = normalizeBudgetLimit(options.snapshotBudget?.maxRows, 10_000)
+  const maxSnapshotCells = normalizeBudgetLimit(options.snapshotBudget?.maxCells, 250_000)
+  const maxSnapshotBytes = normalizeBudgetLimit(options.snapshotBudget?.maxBytes, 16 * 1024 * 1024)
+
   const cloneSnapshot = (snapshot: DataGridAppRowSnapshot<TRow>): DataGridAppRowSnapshot<TRow> => ({
     kind: snapshot.kind,
     rows: snapshot.rows.map(entry => ({
       rowId: entry.rowId,
       row: options.cloneRowData(entry.row),
     })),
+    ...(snapshot.budget ? { budget: { ...snapshot.budget } } : {}),
   })
+
+  const createBudgetExceededSnapshot = (
+    kind: DataGridAppRowSnapshot<TRow>["kind"],
+    limit: DataGridAppHistorySnapshotBudgetResult["limit"],
+    rowCount: number,
+    cellCount: number,
+    byteEstimate: number,
+  ): DataGridAppRowSnapshot<TRow> => ({
+    kind,
+    rows: [],
+    budget: {
+      exceeded: true,
+      limit,
+      rowCount,
+      cellCount,
+      byteEstimate,
+      maxRows: maxSnapshotRows,
+      maxCells: maxSnapshotCells,
+      maxBytes: maxSnapshotBytes,
+    },
+  })
+
+  const appendSnapshotRow = (
+    rows: Array<{ rowId: string | number; row: TRow }>,
+    rowId: string | number,
+    row: TRow,
+    metrics: { cellCount: number; byteEstimate: number },
+  ): DataGridAppRowSnapshot<TRow> | null => {
+    const clonedRow = options.cloneRowData(row)
+    const nextCellCount = metrics.cellCount + estimateSnapshotCellCount(clonedRow)
+    const nextByteEstimate = metrics.byteEstimate + estimateSnapshotByteSize(rowId, clonedRow)
+    const nextRowCount = rows.length + 1
+    if (nextRowCount > maxSnapshotRows) {
+      return createBudgetExceededSnapshot("partial", "rows", nextRowCount, nextCellCount, nextByteEstimate)
+    }
+    if (nextCellCount > maxSnapshotCells) {
+      return createBudgetExceededSnapshot("partial", "cells", nextRowCount, nextCellCount, nextByteEstimate)
+    }
+    if (nextByteEstimate > maxSnapshotBytes) {
+      return createBudgetExceededSnapshot("partial", "bytes", nextRowCount, nextCellCount, nextByteEstimate)
+    }
+    rows.push({ rowId, row: clonedRow })
+    metrics.cellCount = nextCellCount
+    metrics.byteEstimate = nextByteEstimate
+    return null
+  }
 
   const resolveRuntimeRowById = (rowId: string | number) => {
     const rowIndex = options.runtime.resolveBodyRowIndexById(rowId)
@@ -52,16 +122,20 @@ export function useDataGridAppIntentHistory<TRow>(
 
   const captureRowsSnapshot = (): DataGridAppRowSnapshot<TRow> => {
     const count = options.runtime.api.rows.getCount()
+    if (count > maxSnapshotRows) {
+      return createBudgetExceededSnapshot("full", "rows", count, 0, 0)
+    }
     const snapshotRows: Array<{ rowId: string | number; row: TRow }> = []
+    const metrics = { cellCount: 0, byteEstimate: 0 }
     for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
       const node = options.runtime.api.rows.get(rowIndex)
       if (!node || node.rowId == null || node.kind === "group") {
         continue
       }
-      snapshotRows.push({
-        rowId: node.rowId,
-        row: options.cloneRowData(node.data as TRow),
-      })
+      const budgetExceeded = appendSnapshotRow(snapshotRows, node.rowId, node.data as TRow, metrics)
+      if (budgetExceeded) {
+        return { ...budgetExceeded, kind: "full" }
+      }
     }
     return { kind: "full", rows: snapshotRows }
   }
@@ -71,19 +145,23 @@ export function useDataGridAppIntentHistory<TRow>(
   ): DataGridAppRowSnapshot<TRow> => {
     const snapshotRows: Array<{ rowId: string | number; row: TRow }> = []
     const seen = new Set<string | number>()
+    const metrics = { cellCount: 0, byteEstimate: 0 }
     for (const rowId of rowIds) {
       if (seen.has(rowId)) {
         continue
       }
       seen.add(rowId)
+      if (seen.size > maxSnapshotRows) {
+        return createBudgetExceededSnapshot("partial", "rows", seen.size, metrics.cellCount, metrics.byteEstimate)
+      }
       const node = resolveRuntimeRowById(rowId)
       if (!node || node.rowId == null || node.kind === "group") {
         continue
       }
-      snapshotRows.push({
-        rowId: node.rowId,
-        row: options.cloneRowData(node.data as TRow),
-      })
+      const budgetExceeded = appendSnapshotRow(snapshotRows, node.rowId, node.data as TRow, metrics)
+      if (budgetExceeded) {
+        return budgetExceeded
+      }
     }
     return { kind: "partial", rows: snapshotRows }
   }
@@ -91,6 +169,10 @@ export function useDataGridAppIntentHistory<TRow>(
   const intentHistory = useDataGridIntentHistory<DataGridAppRowSnapshot<TRow>>({
     captureSnapshot: captureRowsSnapshot,
     applySnapshot: snapshot => {
+      if (snapshot.budget?.exceeded) {
+        options.syncViewport()
+        return
+      }
       if (snapshot.kind === "partial") {
         if (snapshot.rows.length > 0) {
           return options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
@@ -134,10 +216,16 @@ export function useDataGridAppIntentHistory<TRow>(
     beforeSnapshot: DataGridAppRowSnapshot<TRow>,
     afterSnapshotOverride?: DataGridAppRowSnapshot<TRow>,
   ): Promise<string | null> => {
+    if (beforeSnapshot.budget?.exceeded) {
+      return Promise.resolve(null)
+    }
     const afterSnapshot = afterSnapshotOverride
       ?? (beforeSnapshot.kind === "partial"
         ? captureRowsSnapshotByIds(beforeSnapshot.rows.map(entry => entry.rowId))
         : captureRowsSnapshot())
+    if (afterSnapshot.budget?.exceeded) {
+      return Promise.resolve(null)
+    }
     return intentHistory.recordIntentTransaction(
       descriptor,
       cloneSnapshot(beforeSnapshot),
@@ -153,5 +241,30 @@ export function useDataGridAppIntentHistory<TRow>(
     runHistoryAction: intentHistory.runHistoryAction,
     recordIntentTransaction,
     dispose: intentHistory.dispose,
+  }
+}
+
+function normalizeBudgetLimit(value: number | undefined, fallback: number): number {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+  return Math.max(0, Math.trunc(value as number))
+}
+
+function estimateSnapshotCellCount(row: unknown): number {
+  if (Array.isArray(row)) {
+    return row.length
+  }
+  if (row && typeof row === "object") {
+    return Object.keys(row).length
+  }
+  return 1
+}
+
+function estimateSnapshotByteSize(rowId: string | number, row: unknown): number {
+  try {
+    return JSON.stringify({ rowId, row }).length
+  } catch {
+    return 1024
   }
 }

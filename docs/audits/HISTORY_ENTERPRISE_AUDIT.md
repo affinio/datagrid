@@ -12,16 +12,17 @@ There are three distinct history paths today:
 
 These paths are compatible enough for current edit, paste, fill, toolbar, shortcut, placeholder, and server-demo workflows. The strongest enterprise pieces are rollback payload enforcement, batch-as-one-undo-unit semantics, redo invalidation, scoped server stack undo/redo, revision/datasetVersion integration, and focused tests.
 
-The remaining main gaps are operation serialization, memory limits by byte/cell count, selection/focus/edit restoration, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
+The remaining main gaps are operation serialization, selection/focus/edit restoration, structural row operation support, collaborative conflict semantics, and direct external/server adapter concurrency semantics outside the built-in runner.
 
-Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, restoration state, memory budgets, server-backed non-cell operation support, and collaborative revision semantics.
+Current enterprise readiness is **7/10**. A realistic target is **9/10** after adding operation-level contracts, restoration state, server-backed non-cell operation support, and collaborative revision semantics.
 
 ## Implementation Progress
 
 - 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
 - 2026-05-18: Slice 2, Async History Action Serialization, is complete. Core `TransactionService` now rejects overlapping async `applyTransaction`, `commitBatch`, `undo`, and `redo` calls and blocks batch begin/rollback during an active async action. The orchestration history runner now ignores duplicate keyboard/control undo/redo triggers while the first action is pending.
 - 2026-05-18: Slice 3, Undo Failure Compensation, is complete. Core `TransactionService` now re-applies commands already rolled back inside a failed undo transaction and re-applies transactions already rolled back inside a failed undo batch, leaving undo/redo stacks unchanged when the action fails.
-- Remaining runtime gaps: snapshot memory budgets, first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
+- 2026-05-18: Slice 4, Snapshot Scope And Memory Budget, is complete. Client app intent history now marks full/partial snapshots that exceed row, cell, or byte-estimate budgets and skips recording those over-budget intents instead of creating unbounded undo entries.
+- Remaining runtime gaps: first-class restoration payloads, versioned operation payloads, server storage idempotency, broader server operation coverage, and collaborative conflict policy.
 
 ## Current Architecture Summary
 
@@ -152,6 +153,7 @@ Backend and sandbox:
 
 5. **Client history memory is bounded by entry count, not bytes/cells.**
    `maxHistoryDepth` caps stack depth, but a single transaction can store a full-grid snapshot when row ids are unavailable or a structural operation falls back to `captureRowsSnapshot()`. There is no byte budget, cell budget, compression, or large-range spill strategy.
+   Status after Slice 4: app intent snapshots now have row, cell, and byte-estimate budgets and over-budget intents are not recorded as undo entries. Compression/spill remains out of scope.
 
 6. **Server-backed history currently records cell events, not all DataGrid operations.**
    `GridHistoryServiceBase` replays `before_value` / `after_value` cell events. Backend edit/fill paths record cell events, but structural row insert/delete, column operations, selection state, formulas, grouping/tree expansion, pivot changes, and workbook-level operations are unsupported rather than broken.

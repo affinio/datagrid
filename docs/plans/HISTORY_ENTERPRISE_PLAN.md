@@ -7,7 +7,8 @@ Current execution state:
 - Slice 1 is completed and should be treated as the enterprise history contract baseline.
 - Slice 2 is completed and should be treated as the async history single-flight baseline.
 - Slice 3 is completed and should be treated as the undo failure compensation baseline.
-- Slice 4 is next and should bound client snapshot scope and memory growth.
+- Slice 4 is completed and should be treated as the client snapshot budget baseline.
+- Slice 5 is next and should add first-class restoration state payloads.
 - Server-backed grids should continue to prefer datasource stack undo/redo over client row snapshots.
 - Client history is currently snapshot-based and in-memory; server history is operation-backed and persistent within the server-demo datasource scope.
 - Virtualization, rendering, and server datasource enterprise tracks are closed as of 2026-05-18. History slices should reuse their diagnostics, datasource consistency language, and browser-frame expectations where useful instead of creating duplicate tracks.
@@ -65,19 +66,18 @@ Current execution state:
 
 ## Slice 4: Snapshot Scope And Memory Budget
 
-- Status: Planned.
+- Status: Completed. `useDataGridAppIntentHistory` now applies row, cell, and byte-estimate budgets to full and partial client snapshots. Over-budget before/after snapshots are marked with budget metadata and skipped instead of being recorded as undo entries.
 - Objective: bound client history snapshot size by row/cell/byte estimates and reduce unsafe full-model snapshot fallback for large grids.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/dataGridHistory.ts`
-  - `packages/datagrid-vue-app/src/app/useDataGridAppIntentHistory.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridApp.history.spec.ts`
+  - `packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts`
+  - `packages/datagrid-vue/src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
   - `docs/datagrid-history.md`
-- Expected behavior change: large or unscoped client history entries are guarded by explicit budgets and diagnostics instead of silently capturing unbounded snapshots.
-- Tests to add/update:
-  - Partial snapshot capture stays within configured row/cell budgets.
-  - Full snapshot fallback is rejected or downgraded when it exceeds the budget.
-  - Redo invalidation remains unchanged after budget rejection.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app test:unit -- DataGridApp.history`
+- Expected behavior change: large or unscoped client history entries are guarded by explicit budgets instead of silently capturing unbounded snapshots; when a snapshot exceeds budget, the data operation can still complete but no undo entry is recorded for that intent.
+- Tests added/covered:
+  - Full snapshot capture over row budget is marked and skipped.
+  - Partial snapshot capture over cell budget is marked and skipped.
+  - Snapshot capture over byte budget is marked and skipped without creating an undo entry.
+- Validation command: `pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid-vue-app): bound history snapshot size`
 
@@ -162,8 +162,8 @@ Current execution state:
 1. Slice 1: Enterprise History Contract
 2. Slice 2: Async History Action Serialization (completed)
 3. Slice 3: Undo Failure Compensation (completed)
-4. Slice 4: Snapshot Scope And Memory Budget (next)
-5. Slice 5: Restoration State Payload
+4. Slice 4: Snapshot Scope And Memory Budget (completed)
+5. Slice 5: Restoration State Payload (next)
 6. Slice 6: Versioned Operation Payloads
 7. Slice 7: Server History Idempotency Guard
 8. Slice 8: Server Operation Coverage And Collaboration Policy

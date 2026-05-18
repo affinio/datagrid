@@ -95,9 +95,10 @@ Reconnect is read/live recovery unless a host app implements an explicit durable
 Client snapshot history restores captured row state, not normalized per-cell operation payloads. For row-scoped edits this is practical, but it has limits:
 
 - A row snapshot can overwrite unrelated fields changed after the snapshot was captured.
-- Full-model fallback snapshots can be expensive on large client row models.
-- Snapshot size is currently bounded by history entry count, not by bytes or cell count.
-- Structural operations that cannot be scoped by stable row ids may require broad snapshots.
+- Full-model fallback snapshots are guarded by built-in row, cell, and byte-estimate budgets.
+- The built-in client budget defaults are 10,000 rows, 250,000 estimated cells, and 16 MiB estimated JSON payload per captured snapshot.
+- If a before or after snapshot exceeds budget, that intent is not recorded as a history entry.
+- Structural operations that cannot be scoped by stable row ids may be skipped by history when they exceed budget.
 
 Enterprise integrations that need persisted client operations, reload recovery, conflict replay, or operation inspection should treat versioned operation payloads as planned work rather than current behavior.
 
