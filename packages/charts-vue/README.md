@@ -10,7 +10,15 @@ Reusable Vue rendering package for Affino chart experiences.
 
 ## Current State
 
-This package exposes the shared chart frame, initial chart-adjacent types, and reusable SVG chart components.
+This package exposes the shared chart frame, chart legend, metric card, reusable SVG chart components, and chart interaction payload types.
+
+## Package Boundaries
+
+- `@affino/charts-core` owns headless geometry, scales, data access, and metric models.
+- `@affino/charts-vue` owns Vue components, SVG rendering, styling, interaction, accessibility, and theme tokens.
+- Charts expose `clientPoint` and `anchorRect` so applications can anchor their own tooltip or popover primitives.
+- This package does not render or position tooltips and does not depend on floating UI libraries.
+- This package does not depend on D3, Chart.js, Recharts, ECharts, Canvas, WebGL, `@affino/datagrid-sandbox`, or `@affino/analytics-core`.
 
 ## Public API
 
@@ -31,7 +39,7 @@ import {
 const chartsVue = createChartsVue()
 ```
 
-`AffinoChartFrame` provides the reusable SVG container for future chart components. It owns consistent sizing, title and description rendering, accessible SVG labels, and empty, loading, and error states. Chart content is passed through the default SVG slot.
+`AffinoChartFrame` provides the reusable SVG container for chart components. It owns consistent sizing, title and description rendering, accessible SVG labels, and empty, loading, and error states. Chart content is passed through the default SVG slot.
 
 ## Bar Chart
 

@@ -4,13 +4,13 @@ Headless chart geometry and model helpers for Affino chart features.
 
 `@affino/charts-core` turns chart-ready rows into plain TypeScript data structures: plot areas, scales, SVG path strings, chart geometry, and KPI models. It does not render anything and does not depend on Vue, React, the DOM, SVG components, Canvas, WebGL, D3, Chart.js, Recharts, ECharts, or application packages.
 
-The future `@affino/charts-vue` package should use this package as its calculation layer and own Vue rendering, interaction, styling, accessibility, and component state.
+`@affino/charts-vue` uses this package as its calculation layer and owns Vue rendering, interaction, styling, accessibility, and component state.
 
 ## Package Boundaries
 
 - `@affino/analytics-core` prepares, filters, groups, and aggregates datasets.
 - `@affino/charts-core` expects chart-ready rows and converts them into geometry or models.
-- Rendering packages, such as a future `@affino/charts-vue`, should consume these geometry/model outputs and render them for a specific UI framework.
+- Rendering packages, such as `@affino/charts-vue`, should consume these geometry/model outputs and render them for a specific UI framework.
 
 Current non-goals:
 
