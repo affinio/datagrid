@@ -422,26 +422,24 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
       element.dispatchEvent(new Event("scroll", { bubbles: true }))
     })
 
-    const loadingCell = page.locator(
-      '.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-id^="__affino_datagrid_data_source_loading__:"][data-column-key="name"]',
-    ).first()
-    await expect(loadingCell).toBeVisible({ timeout: 20_000 })
-    const rowIndex = await loadingCell.getAttribute("data-row-index")
-    const loadingRowId = await loadingCell.getAttribute("data-row-id")
+    let loadingSnapshot: ServerLoadingCellSnapshot | null = null
+    await expect.poll(async () => {
+      loadingSnapshot = await captureAndClickFirstServerLoadingCell(page)
+      return loadingSnapshot?.rowId ?? ""
+    }, { timeout: 20_000 }).toMatch(/^__affino_datagrid_data_source_loading__:\d+$/)
+    expect(loadingSnapshot).not.toBeNull()
+
+    const rowIndex = loadingSnapshot.rowIndex
+    const loadingRowId = loadingSnapshot.rowId
     expect(rowIndex).toBeTruthy()
-    expect(loadingRowId).toMatch(/^__affino_datagrid_data_source_loading__:\d+$/)
-    await expect(loadingCell).toHaveAttribute("aria-disabled", "true")
-    await expect(loadingCell).toHaveAttribute("aria-rowindex", String(Number(rowIndex) + 1))
-    await expect(loadingCell).toHaveAttribute("aria-colindex", String(Number(await loadingCell.getAttribute("data-column-index")) + 1))
+    expect(loadingSnapshot.ariaDisabled).toBe("true")
+    expect(loadingSnapshot.ariaRowIndex).toBe(String(Number(rowIndex) + 1))
+    expect(loadingSnapshot.ariaColIndex).toBe(String(Number(loadingSnapshot.columnIndex) + 1))
     const sourceIndex = Number(loadingRowId?.split(":").at(-1))
     expect(Number.isFinite(sourceIndex)).toBe(true)
     const realRowId = `srv-${sourceIndex.toString().padStart(6, "0")}`
-    const stableLoadingCell = page.locator(
-      `.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-index="${rowIndex}"][data-row-id="${loadingRowId}"][data-column-key="name"]`,
-    ).first()
 
-    const loadingSignature = await cellSignature(stableLoadingCell)
-    await stableLoadingCell.click({ force: true })
+    const loadingSignature = loadingSnapshot.signature
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(loadingSignature)
 
     const materializedCell = page.locator(
@@ -712,6 +710,50 @@ async function selectionAnchorSignature(page: Page): Promise<string> {
       anchorCell.getAttribute("data-column-index") ?? "",
       anchorCell.getAttribute("data-column-key") ?? "",
     ].join(":")
+  })
+}
+
+interface ServerLoadingCellSnapshot {
+  rowIndex: string
+  rowId: string
+  columnIndex: string
+  ariaDisabled: string | null
+  ariaRowIndex: string | null
+  ariaColIndex: string | null
+  signature: string
+}
+
+async function captureAndClickFirstServerLoadingCell(page: Page): Promise<ServerLoadingCellSnapshot | null> {
+  return await page.evaluate(() => {
+    const cell = document.querySelector<HTMLElement>(
+      '.sandbox-server-data-source-grid .grid-body-viewport .grid-cell[data-row-id^="__affino_datagrid_data_source_loading__:"][data-column-key="name"]',
+    )
+    if (!cell) {
+      return null
+    }
+    const rowIndex = cell.getAttribute("data-row-index") ?? ""
+    const rowId = cell.getAttribute("data-row-id") ?? ""
+    const columnIndex = cell.getAttribute("data-column-index") ?? ""
+    const rect = cell.getBoundingClientRect()
+    const eventInit: MouseEventInit = {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + Math.min(8, Math.max(1, rect.width / 2)),
+      clientY: rect.top + Math.min(8, Math.max(1, rect.height / 2)),
+      view: window,
+    }
+    cell.dispatchEvent(new MouseEvent("mousedown", eventInit))
+    cell.dispatchEvent(new MouseEvent("mouseup", eventInit))
+    cell.dispatchEvent(new MouseEvent("click", eventInit))
+    return {
+      rowIndex,
+      rowId,
+      columnIndex,
+      ariaDisabled: cell.getAttribute("aria-disabled"),
+      ariaRowIndex: cell.getAttribute("aria-rowindex"),
+      ariaColIndex: cell.getAttribute("aria-colindex"),
+      signature: [rowIndex, columnIndex, cell.getAttribute("data-column-key") ?? ""].join(":"),
+    }
   })
 }
 
