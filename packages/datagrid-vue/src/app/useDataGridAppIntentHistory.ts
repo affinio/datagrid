@@ -236,16 +236,63 @@ export function useDataGridAppIntentHistory<TRow>(
   const applyRowsSnapshot = async (
     snapshot: DataGridAppRowSnapshot<TRow>,
   ): Promise<void> => {
+    const resolveDerivedSnapshotFieldNames = (): ReadonlySet<string> => {
+      const rowsApi = options.runtime.api.rows as {
+        getComputedFields?: () => readonly { name?: string; field?: string }[]
+        getFormulaFields?: () => readonly { name?: string; field?: string }[]
+      }
+      const fieldNames = new Set<string>()
+      const appendField = (field: { name?: string; field?: string }) => {
+        if (typeof field.name === "string" && field.name.length > 0) {
+          fieldNames.add(field.name)
+        }
+        if (typeof field.field === "string" && field.field.length > 0) {
+          fieldNames.add(field.field)
+        }
+      }
+      rowsApi.getComputedFields?.().forEach(appendField)
+      rowsApi.getFormulaFields?.().forEach(appendField)
+      return fieldNames
+    }
+
+    const derivedSnapshotFieldNames = resolveDerivedSnapshotFieldNames()
+    const cloneReplayRowData = (row: TRow): TRow => {
+      const clonedRow = options.cloneRowData(row)
+      if (
+        derivedSnapshotFieldNames.size === 0
+        || !clonedRow
+        || typeof clonedRow !== "object"
+        || Array.isArray(clonedRow)
+      ) {
+        return clonedRow
+      }
+      const replayRow = { ...(clonedRow as Record<string, unknown>) }
+      for (const fieldName of derivedSnapshotFieldNames) {
+        delete replayRow[fieldName]
+      }
+      return replayRow as TRow
+    }
+
+    const refreshComputedSnapshotRows = (rowIds: readonly (string | number)[]) => {
+      const rowsApi = options.runtime.api.rows as {
+        recomputeComputedFields?: (rowIds?: readonly (string | number)[]) => number
+      }
+      rowsApi.recomputeComputedFields?.(rowIds)
+      options.syncViewport()
+    }
+
     if (snapshot.budget?.exceeded) {
       options.syncViewport()
       return
     }
     if (snapshot.kind === "partial") {
       if (snapshot.rows.length > 0) {
+        const rowIds = snapshot.rows.map(entry => entry.rowId)
         await options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
           rowId: entry.rowId,
-          data: options.cloneRowData(entry.row) as Partial<TRow>,
+          data: cloneReplayRowData(entry.row) as Partial<TRow>,
         })))
+        refreshComputedSnapshotRows(rowIds)
         return
       }
       options.syncViewport()
@@ -259,11 +306,11 @@ export function useDataGridAppIntentHistory<TRow>(
     if (typeof rowsApi.hasDataMutationSupport === "function" && !rowsApi.hasDataMutationSupport()) {
       const rowPatches = snapshot.rows.map(entry => ({
         rowId: entry.rowId,
-        data: options.cloneRowData(entry.row) as Partial<TRow>,
+        data: cloneReplayRowData(entry.row) as Partial<TRow>,
       }))
       if (rowPatches.length > 0) {
         await rowsApi.applyEdits?.(rowPatches)
-        options.syncViewport()
+        refreshComputedSnapshotRows(snapshot.rows.map(entry => entry.rowId))
         return
       }
       options.syncViewport()
@@ -272,9 +319,9 @@ export function useDataGridAppIntentHistory<TRow>(
     rowsApi.setData?.(snapshot.rows.map((entry, index) => ({
       rowId: entry.rowId,
       originalIndex: index,
-      row: options.cloneRowData(entry.row),
+      row: cloneReplayRowData(entry.row),
     })))
-    options.syncViewport()
+    refreshComputedSnapshotRows(snapshot.rows.map(entry => entry.rowId))
   }
 
   const intentHistory = useDataGridIntentHistory<DataGridAppRowSnapshot<TRow>>({

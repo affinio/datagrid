@@ -7873,6 +7873,58 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("recomputes declarative formula columns after undoing an inline edit dependency", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: FORMULA_ROWS,
+        columns: FORMULA_COLUMNS.map(column => (
+          column.key === "subtotal"
+            ? { ...column, formula: "price * qty" }
+            : column
+        )),
+        clientRowModelOptions: {
+          resolveRowId: row => (row as FormulaRow).id,
+        },
+        history: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const qtyCell = queryBodyCell(wrapper, 0, 2)
+    const subtotalCell = queryBodyCell(wrapper, 0, 3)
+    expect(subtotalCell.text()).toContain("36")
+
+    await qtyCell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+    await editor.setValue("0")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(qtyCell.text()).toContain("0")
+    expect(subtotalCell.text()).toContain("0")
+
+    await resolveVm(wrapper).history?.runHistoryAction?.("undo")
+    await flushRuntimeTasks()
+
+    const rowModel = resolveRowModel(wrapper) as unknown as {
+      getRow?: (index: number) => { row?: FormulaRow } | undefined
+    } | null
+
+    expect(rowModel?.getRow?.(0)?.row).toMatchObject({
+      qty: 3,
+      subtotal: 36,
+    })
+    expect(qtyCell.text()).toContain("3")
+    expect(subtotalCell.text()).toContain("36")
+
+    wrapper.unmount()
+  })
+
   it("applies advanced-filter predicates to declarative formula columns", async () => {
     await preloadAdvancedFilterPopover()
 
