@@ -35,6 +35,8 @@
       "@affino/charts-core/*": ["../charts-core/src/*"],
       "@affino/charts-vue": ["../charts-vue/src/index.ts"],
       "@affino/charts-vue/*": ["../charts-vue/src/*"],
+      "@affino/analytics-core": ["../analytics-core/src/index.ts"],
+      "@affino/analytics-core/*": ["../analytics-core/src/*"],
       "@affino/world-map-core": ["../world-map-core/src/index.ts"],
       "@affino/world-map-core/*": ["../world-map-core/src/*"],
       "@affino/world-map-vue": ["../world-map-vue/src/index.ts"],
