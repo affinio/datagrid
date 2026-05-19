@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
+import AnalyticsChartsDemo from "./features/charts/AnalyticsChartsDemo.vue"
 import ChartsDemo from "./features/charts/ChartsDemo.vue"
 import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
@@ -68,6 +69,10 @@ const routes = [
   {
     path: "/vue/charts",
     component: ChartsDemo,
+  },
+  {
+    path: "/vue/analytics-charts",
+    component: AnalyticsChartsDemo,
   },
   {
     path: "/vue/base-grid-factory",

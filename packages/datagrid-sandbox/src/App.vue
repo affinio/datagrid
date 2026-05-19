@@ -24,6 +24,7 @@
       <RouterLink class="sandbox__link" to="/vue/spreadsheet-workbook">Vue Spreadsheet</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/world-map">World Map</RouterLink>
       <RouterLink class="sandbox__link" to="/vue/charts">Charts</RouterLink>
+      <RouterLink class="sandbox__link" to="/vue/analytics-charts">Analytics Charts</RouterLink>
     </nav>
 
     <section class="sandbox__route">
