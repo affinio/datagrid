@@ -35,6 +35,7 @@ This folder separates user-facing documentation from internal planning material.
 ## Package And Architecture Notes
 
 - [Architecture](./datagrid-architecture.md)
+- [AI integration roadmap](./AI_INTEGRATION_ROADMAP.md)
 - [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)
 - [Theme ownership](./datagrid-theme-ownership.md)
