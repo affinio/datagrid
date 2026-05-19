@@ -1,8 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest"
 import {
+  AffinoAreaChart,
   AffinoBarChart,
   AffinoChartFrame,
   AffinoChartLegend,
+  AffinoHistogram,
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
@@ -10,8 +12,10 @@ import {
   createChartsVue,
 } from "../index"
 import type {
+  AffinoAreaChartPointEvent,
   AffinoBarChartBarEvent,
   AffinoChartInteractionPayload,
+  AffinoHistogramBinEvent,
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
   AffinoScatterChartPointEvent,
@@ -22,8 +26,10 @@ import type {
   ChartThemeVariant,
 } from "../index"
 import type {
+  AreaChartPointGeometry,
   BarChartBarGeometry,
   ChartDatum,
+  HistogramBinGeometry,
   LineChartPointGeometry,
   PieChartSliceGeometry,
   ScatterChartPointGeometry,
@@ -60,6 +66,28 @@ describe("@affino/charts-vue", () => {
       index: number
       category: string
       value: number
+      clientPoint: ChartInteractionPoint
+      anchorRect: ChartAnchorRect
+    }>()
+    expectTypeOf<AffinoAreaChartPointEvent>().toEqualTypeOf<{
+      item: AreaChartPointGeometry
+      point: AreaChartPointGeometry
+      row: ChartDatum
+      index: number
+      xValue: number
+      yValue: number
+      clientPoint: ChartInteractionPoint
+      anchorRect: ChartAnchorRect
+    }>()
+    expectTypeOf<AffinoHistogramBinEvent>().toEqualTypeOf<{
+      item: HistogramBinGeometry
+      row?: ChartDatum
+      bin: HistogramBinGeometry
+      index: number
+      min: number
+      max: number
+      count: number
+      values: number[]
       clientPoint: ChartInteractionPoint
       anchorRect: ChartAnchorRect
     }>()
@@ -101,18 +129,22 @@ describe("@affino/charts-vue", () => {
     const entrypoint = await import("../index")
 
     expect(Object.keys(entrypoint)).toEqual([
+      "AffinoAreaChart",
       "AffinoBarChart",
       "AffinoChartFrame",
       "AffinoChartLegend",
+      "AffinoHistogram",
       "AffinoLineChart",
       "AffinoMetricCard",
       "AffinoPieChart",
       "AffinoScatterChart",
       "createChartsVue",
     ])
+    expect(entrypoint.AffinoAreaChart).toBe(AffinoAreaChart)
     expect(entrypoint.AffinoBarChart).toBe(AffinoBarChart)
     expect(entrypoint.AffinoChartFrame).toBe(AffinoChartFrame)
     expect(entrypoint.AffinoChartLegend).toBe(AffinoChartLegend)
+    expect(entrypoint.AffinoHistogram).toBe(AffinoHistogram)
     expect(entrypoint.AffinoLineChart).toBe(AffinoLineChart)
     expect(entrypoint.AffinoMetricCard).toBe(AffinoMetricCard)
     expect(entrypoint.AffinoPieChart).toBe(AffinoPieChart)

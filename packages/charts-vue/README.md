@@ -16,9 +16,11 @@ This package exposes the shared chart frame, initial chart-adjacent types, and r
 
 ```ts
 import {
+  AffinoAreaChart,
   AffinoBarChart,
   AffinoChartFrame,
   AffinoChartLegend,
+  AffinoHistogram,
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
@@ -112,6 +114,88 @@ Events:
 - `point-leave`
 
 Each point event includes the core point geometry as `item` and `point`, source row, index, `xValue`, `yValue`, `clientPoint`, and `anchorRect`.
+
+## Area Chart
+
+`AffinoAreaChart` renders a single-series SVG area chart using `createAreaChartGeometry()` from `@affino/charts-core`. The core package owns point, line, area, and baseline geometry while Vue owns rendering, styling, interaction, and accessibility.
+
+```vue
+<script setup lang="ts">
+import { AffinoAreaChart } from "@affino/charts-vue"
+
+const rows = [
+  { week: 1, sessions: 1200 },
+  { week: 2, sessions: 2350 },
+]
+</script>
+
+<template>
+  <AffinoAreaChart
+    :rows="rows"
+    x-field="week"
+    y-field="sessions"
+    x-scale-type="number"
+    title="Cumulative Sessions"
+    @point-click="handlePointClick"
+  />
+</template>
+```
+
+Key props:
+
+- `rows`, `yField`, `xField`, `xScaleType`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `includeZeroY`, `baselineValue`, `showAxes`, `showGrid`, `showPoints`
+
+Events:
+
+- `point-click`
+- `point-hover`
+- `point-leave`
+
+Each area point event includes the core point geometry as `item` and `point`, source row, index, `xValue`, `yValue`, `clientPoint`, and `anchorRect`.
+
+## Histogram
+
+`AffinoHistogram` renders SVG histogram bins using `createHistogramGeometry()` from `@affino/charts-core`. The core package owns value filtering, binning, domains, and bin geometry while Vue owns rendering, styling, interaction, and accessibility.
+
+```vue
+<script setup lang="ts">
+import { AffinoHistogram } from "@affino/charts-vue"
+
+const rows = [
+  { loadTimeMs: 120 },
+  { loadTimeMs: 180 },
+  { loadTimeMs: 220 },
+]
+</script>
+
+<template>
+  <AffinoHistogram
+    :rows="rows"
+    value-field="loadTimeMs"
+    title="Load Time Distribution"
+    :bin-count="8"
+    @bin-click="handleBinClick"
+  />
+</template>
+```
+
+Key props:
+
+- `rows`, `valueField`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `binCount`, `valueMin`, `valueMax`, `includeOutOfRange`, `showAxes`, `showGrid`
+
+Events:
+
+- `bin-click`
+- `bin-hover`
+- `bin-leave`
+
+Each bin event includes the core bin geometry as `item` and `bin`, index, min, max, count, values, `clientPoint`, and `anchorRect`.
 
 ## Scatter Chart
 
@@ -354,6 +438,16 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-line-point-fill`
 - `--affino-chart-line-point-stroke`
 - `--affino-chart-line-point-hover-fill`
+- `--affino-chart-area-fill`
+- `--affino-chart-area-stroke`
+- `--affino-chart-area-point-fill`
+- `--affino-chart-area-point-stroke`
+- `--affino-chart-area-point-hover-fill`
+- `--affino-chart-area-focus-stroke`
+- `--affino-chart-histogram-bin-fill`
+- `--affino-chart-histogram-bin-hover-fill`
+- `--affino-chart-histogram-bin-stroke`
+- `--affino-chart-histogram-bin-focus-stroke`
 - `--affino-chart-scatter-fill`
 - `--affino-chart-scatter-stroke`
 - `--affino-chart-scatter-hover-fill`
@@ -375,4 +469,4 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - No D3, Chart.js, Recharts, ECharts, or external chart rendering libraries.
 - No `datagrid-sandbox` dependency.
 - No `analytics-core` dependency.
-- No stacked, grouped, horizontal, animated, smoothed, multi-series, area-filled, advanced-label, nested, or sunburst charts yet.
+- No stacked, grouped, horizontal, animated, smoothed, multi-series, advanced-label, nested, or sunburst charts yet.

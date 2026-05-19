@@ -1,6 +1,8 @@
 import type {
+  AreaChartPointGeometry,
   BarChartBarGeometry,
   ChartDatum,
+  HistogramBinGeometry,
   LineChartPointGeometry,
   PieChartSliceGeometry,
   ScatterChartPointGeometry,
@@ -66,4 +68,19 @@ export interface AffinoScatterChartPointEvent extends AffinoChartInteractionPayl
   xValue: number
   yValue: number
   radiusValue: number | null
+}
+
+export interface AffinoAreaChartPointEvent extends AffinoChartInteractionPayload<AreaChartPointGeometry> {
+  point: AreaChartPointGeometry
+  row: ChartDatum
+  xValue: number
+  yValue: number
+}
+
+export interface AffinoHistogramBinEvent extends AffinoChartInteractionPayload<HistogramBinGeometry> {
+  bin: HistogramBinGeometry
+  min: number
+  max: number
+  count: number
+  values: number[]
 }

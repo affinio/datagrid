@@ -49,6 +49,21 @@
         </div>
 
         <div class="charts-demo__chart-card charts-demo__chart-card--wide">
+          <AffinoAreaChart
+            :rows="CUMULATIVE_TRAFFIC"
+            x-field="week"
+            y-field="sessions"
+            x-scale-type="number"
+            title="Cumulative Sessions"
+            description="Weekly active session growth"
+            :height="320"
+            @point-click="recordAreaEvent('click', $event)"
+            @point-hover="recordAreaEvent('hover', $event)"
+            @point-leave="recordAreaEvent('leave', $event)"
+          />
+        </div>
+
+        <div class="charts-demo__chart-card charts-demo__chart-card--wide">
           <AffinoScatterChart
             :rows="DISCOUNT_VALUE"
             x-field="discount"
@@ -63,6 +78,22 @@
             @point-click="recordScatterEvent('click', $event)"
             @point-hover="recordScatterEvent('hover', $event)"
             @point-leave="recordScatterEvent('leave', $event)"
+          />
+        </div>
+
+        <div class="charts-demo__chart-card charts-demo__chart-card--wide">
+          <AffinoHistogram
+            :rows="LOAD_TIME_DISTRIBUTION"
+            value-field="loadTimeMs"
+            title="Load Time Distribution"
+            description="Synthetic endpoint latency in milliseconds"
+            :height="320"
+            :bin-count="8"
+            :value-min="0"
+            :value-max="800"
+            @bin-click="recordHistogramEvent('click', $event)"
+            @bin-hover="recordHistogramEvent('hover', $event)"
+            @bin-leave="recordHistogramEvent('leave', $event)"
           />
         </div>
 
@@ -127,16 +158,20 @@
 <script setup lang="ts">
 import { reactive } from "vue"
 import {
+  AffinoAreaChart,
   AffinoBarChart,
   AffinoChartLegend,
+  AffinoHistogram,
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
   AffinoScatterChart,
 } from "@affino/charts-vue"
 import type {
+  AffinoAreaChartPointEvent,
   AffinoBarChartBarEvent,
   AffinoChartInteractionPayload,
+  AffinoHistogramBinEvent,
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
   AffinoScatterChartPointEvent,
@@ -179,6 +214,16 @@ const MONTHLY_TREND: ChartDatum[] = [
   { month: "Jul", monthIndex: 7, revenue: 148 },
 ]
 
+const CUMULATIVE_TRAFFIC: ChartDatum[] = [
+  { week: 1, sessions: 1200 },
+  { week: 2, sessions: 2350 },
+  { week: 3, sessions: 3540 },
+  { week: 4, sessions: 4980 },
+  { week: 5, sessions: 6420 },
+  { week: 6, sessions: 8160 },
+  { week: 7, sessions: 9720 },
+]
+
 const CHANNEL_USERS: ChartDatum[] = [
   { channel: "Direct", users: 42 },
   { channel: "Search", users: 31 },
@@ -193,6 +238,25 @@ const DISCOUNT_VALUE: ChartDatum[] = [
   { segment: "Renewal", discount: 16, value: 166, lotCount: 10 },
   { segment: "Expansion", discount: 22, value: 208, lotCount: 15 },
   { segment: "Pilot", discount: 28, value: 96, lotCount: 5 },
+]
+
+const LOAD_TIME_DISTRIBUTION: ChartDatum[] = [
+  { loadTimeMs: 72 },
+  { loadTimeMs: 96 },
+  { loadTimeMs: 118 },
+  { loadTimeMs: 144 },
+  { loadTimeMs: 166 },
+  { loadTimeMs: 192 },
+  { loadTimeMs: 214 },
+  { loadTimeMs: 238 },
+  { loadTimeMs: 266 },
+  { loadTimeMs: 306 },
+  { loadTimeMs: 344 },
+  { loadTimeMs: 402 },
+  { loadTimeMs: 468 },
+  { loadTimeMs: 536 },
+  { loadTimeMs: 612 },
+  { loadTimeMs: 688 },
 ]
 
 const LEGEND_ITEMS: ChartLegendItem[] = [
@@ -278,6 +342,16 @@ function recordLineEvent(action: string, payload: AffinoLineChartPointEvent): vo
   })
 }
 
+function recordAreaEvent(action: string, payload: AffinoAreaChartPointEvent): void {
+  setDebugState({
+    source: `area:${action}`,
+    item: `week=${payload.xValue}`,
+    value: payload.yValue,
+    clientPoint: payload.clientPoint,
+    anchorRect: payload.anchorRect,
+  })
+}
+
 function recordPieEvent(action: string, payload: AffinoPieChartSliceEvent): void {
   setDebugState({
     source: `pie:${action}`,
@@ -293,6 +367,16 @@ function recordScatterEvent(action: string, payload: AffinoScatterChartPointEven
     source: `scatter:${action}`,
     item: String(payload.row.segment ?? `point ${payload.index + 1}`),
     value: `x=${payload.xValue}, y=${payload.yValue}, r=${payload.radiusValue ?? "none"}`,
+    clientPoint: payload.clientPoint,
+    anchorRect: payload.anchorRect,
+  })
+}
+
+function recordHistogramEvent(action: string, payload: AffinoHistogramBinEvent): void {
+  setDebugState({
+    source: `histogram:${action}`,
+    item: `${formatNumber(payload.min)}-${formatNumber(payload.max)}`,
+    value: `${payload.count} values`,
     clientPoint: payload.clientPoint,
     anchorRect: payload.anchorRect,
   })
@@ -341,6 +425,10 @@ function formatRect(rect: ChartAnchorRect): string {
 function formatPercent(value: number): string {
   return `${Number.parseFloat((value * 100).toFixed(1))}%`
 }
+
+function formatNumber(value: number): string {
+  return Number.parseFloat(value.toFixed(1)).toString()
+}
 </script>
 
 <style scoped>
@@ -388,7 +476,10 @@ function formatPercent(value: number): string {
   --charts-demo-series-3: #f59e0b;
   --charts-demo-bar-hover: #115e59;
   --charts-demo-line: #7c3aed;
+  --charts-demo-area: #0891b2;
   --charts-demo-scatter: #be123c;
+  --charts-demo-histogram: #4f46e5;
+  --charts-demo-histogram-hover: #3730a3;
 
   display: grid;
   gap: 14px;
@@ -405,9 +496,15 @@ function formatPercent(value: number): string {
   --affino-chart-bar-hover-fill: var(--charts-demo-bar-hover);
   --affino-chart-line-stroke: var(--charts-demo-line);
   --affino-chart-line-point-stroke: var(--charts-demo-line);
+  --affino-chart-area-fill: color-mix(in srgb, var(--charts-demo-area) 18%, transparent);
+  --affino-chart-area-stroke: var(--charts-demo-area);
+  --affino-chart-area-point-stroke: var(--charts-demo-area);
+  --affino-chart-area-point-hover-fill: var(--charts-demo-area);
   --affino-chart-scatter-fill: color-mix(in srgb, var(--charts-demo-scatter) 24%, transparent);
   --affino-chart-scatter-stroke: var(--charts-demo-scatter);
   --affino-chart-scatter-hover-fill: color-mix(in srgb, var(--charts-demo-scatter) 72%, transparent);
+  --affino-chart-histogram-bin-fill: var(--charts-demo-histogram);
+  --affino-chart-histogram-bin-hover-fill: var(--charts-demo-histogram-hover);
 }
 
 .charts-demo__metrics {
