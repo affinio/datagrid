@@ -4,6 +4,7 @@ import {
   AffinoChartFrame,
   AffinoChartLegend,
   AffinoLineChart,
+  AffinoMetricCard,
   AffinoPieChart,
   createChartsVue,
 } from "../index"
@@ -85,6 +86,7 @@ describe("@affino/charts-vue", () => {
       "AffinoChartFrame",
       "AffinoChartLegend",
       "AffinoLineChart",
+      "AffinoMetricCard",
       "AffinoPieChart",
       "createChartsVue",
     ])
@@ -92,6 +94,7 @@ describe("@affino/charts-vue", () => {
     expect(entrypoint.AffinoChartFrame).toBe(AffinoChartFrame)
     expect(entrypoint.AffinoChartLegend).toBe(AffinoChartLegend)
     expect(entrypoint.AffinoLineChart).toBe(AffinoLineChart)
+    expect(entrypoint.AffinoMetricCard).toBe(AffinoMetricCard)
     expect(entrypoint.AffinoPieChart).toBe(AffinoPieChart)
     expect(entrypoint.createChartsVue).toBe(createChartsVue)
   })

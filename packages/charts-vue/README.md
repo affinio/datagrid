@@ -20,6 +20,7 @@ import {
   AffinoChartFrame,
   AffinoChartLegend,
   AffinoLineChart,
+  AffinoMetricCard,
   AffinoPieChart,
   createChartsVue,
 } from "@affino/charts-vue"
@@ -162,6 +163,44 @@ Events:
 
 Each slice event includes the core slice geometry as `item` and `slice`, source row, index, category, value, percentage, `clientPoint`, and `anchorRect`.
 
+## Metric Card
+
+`AffinoMetricCard` renders a KPI card using `createMetricModel()` from `@affino/charts-core`. The core package owns value formatting, delta direction, and trend filtering while Vue owns rendering, styling, interaction, and the small inline sparkline.
+
+```vue
+<script setup lang="ts">
+import { AffinoMetricCard } from "@affino/charts-vue"
+</script>
+
+<template>
+  <AffinoMetricCard
+    label="Total Revenue"
+    :value="684000"
+    :previous-value="612000"
+    format="currency"
+    currency="USD"
+    :precision="0"
+    :trend="[520, 560, 590, 610, 640, 684]"
+    unit="QTD"
+    variant="success"
+    @metric-click="handleMetricClick"
+  />
+</template>
+```
+
+Key props:
+
+- `label`, `value`, `previousValue`
+- `format`, `currency`, `locale`, `unit`, `precision`
+- `trend`, `title`, `description`, `variant`
+- `showDelta`, `showTrend`
+
+Events:
+
+- `metric-click`
+
+The `metric-click` event includes the core `MetricModel`.
+
 ## Legend
 
 `AffinoChartLegend` renders a semantic list of chart legend items. It can be used standalone or by chart components that need a shared legend surface.
@@ -263,6 +302,15 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-line-point-hover-fill`
 - `--affino-chart-pie-slice-stroke`
 - `--affino-chart-pie-slice-hover-opacity`
+- `--affino-chart-metric-background`
+- `--affino-chart-metric-border`
+- `--affino-chart-metric-label`
+- `--affino-chart-metric-value`
+- `--affino-chart-metric-unit`
+- `--affino-chart-metric-delta-up`
+- `--affino-chart-metric-delta-down`
+- `--affino-chart-metric-delta-flat`
+- `--affino-chart-metric-sparkline`
 
 ## Non-Goals
 
