@@ -475,6 +475,19 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     return Array.from(updatesByRowId.entries(), ([rowId, data]) => ({ rowId, data }))
   }
 
+  const resolveUnmaterializableTargetRowIndexInRange = (range: DataGridCopyRange): number | null => {
+    for (let rowIndex = range.startRow; rowIndex <= range.endRow; rowIndex += 1) {
+      const row = getBodyRowAtIndex(rowIndex)
+      if (!row) {
+        return rowIndex
+      }
+      if (isDataGridRowMissingOrPlaceholder(row) && !options.ensureEditableRowAtIndex) {
+        return rowIndex
+      }
+    }
+    return null
+  }
+
   const applyClipboardEditsToRanges = async (
     ranges: readonly DataGridCopyRange[],
     matrix: string[][],
@@ -723,7 +736,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       )
       return false
     }
-    const missingTargetRange = targetRanges.find(range => resolveMissingRowIndexInRange(getBodyRowAtIndex, range) != null)
+    const missingTargetRange = targetRanges.find(range => resolveUnmaterializableTargetRowIndexInRange(range) != null)
     if (missingTargetRange) {
       options.setLastAction?.(
         "Paste target includes unloaded rows. Load rows or use server operation.",

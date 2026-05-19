@@ -695,6 +695,20 @@ const ROW_INDEX_MENU_ACTION_IDS_BY_ITEM = {
   selection: ["delete-selected-rows"],
 } satisfies Readonly<Record<string, readonly RendererContextMenuActionId[]>>
 
+const PLACEHOLDER_ROW_ID_PREFIX = "__datagrid_placeholder__:"
+
+function parsePlaceholderRowIndex(rowId: string): number {
+  if (!rowId.startsWith(PLACEHOLDER_ROW_ID_PREFIX)) {
+    return -1
+  }
+  const value = rowId.slice(PLACEHOLDER_ROW_ID_PREFIX.length)
+  if (!/^\d+$/.test(value)) {
+    return -1
+  }
+  const parsed = Number.parseInt(value, 10)
+  return Number.isSafeInteger(parsed) ? parsed : -1
+}
+
 const DEFAULT_CONTEXT_MENU_ACTION_LABELS: Readonly<Record<RendererContextMenuActionId, string>> = {
   cut: "Cut",
   copy: "Copy",
@@ -2312,6 +2326,10 @@ export default defineComponent({
         return document.activeElement === viewport
       }
 
+      if (focusViewport()) {
+        return
+      }
+
       const runAttempt = (attempt: number): void => {
         void nextTick(() => {
           if (focusViewport() || attempt >= 3) {
@@ -2365,6 +2383,10 @@ export default defineComponent({
       }
       if (resolveRuntimeRowById(rowId)) {
         return null
+      }
+      const parsedRowIndex = parsePlaceholderRowIndex(rowId)
+      if (parsedRowIndex >= props.runtime.api.rows.getCount()) {
+        return parsedRowIndex
       }
       const selector = `.datagrid-stage__row-index-cell[data-row-id="${escapeCssAttributeValue(rowId)}"]`
       const rowIndexCell = stageHostRef.value?.querySelector<HTMLElement>(selector)
@@ -2703,19 +2725,32 @@ export default defineComponent({
 
       const resolveCurrentFullRowRangeRowIds = (): readonly string[] => {
         const selectionRange = resolveCurrentSelectionRange()
+        const snapshot = props.selectionSnapshot.value
+        const activeSnapshotRange = snapshot?.ranges[snapshot.activeRangeIndex] ?? null
         const lastColumnIndex = resolveFullRowSelectionEndColumnIndex()
         if (!selectionRange || lastColumnIndex < 0) {
           return []
         }
+        if (
+          parsePlaceholderRowIndex(targetRowId) >= 0
+          && activeSnapshotRange?.startRowId === targetRowId
+          && activeSnapshotRange.endRowId === targetRowId
+        ) {
+          return []
+        }
         const startColumn = Math.min(selectionRange.startColumn, selectionRange.endColumn)
         const endColumn = Math.max(selectionRange.startColumn, selectionRange.endColumn)
+        const lastDataColumnIndex = Math.max(0, visibleColumns.value.length - 1)
         const startRow = Math.min(selectionRange.startRow, selectionRange.endRow)
         const endRow = Math.max(selectionRange.startRow, selectionRange.endRow)
-        const targetRowIndex = targetRowId.length > 0 ? props.runtime.resolveBodyRowIndexById(targetRowId) : -1
+        const targetRuntimeRowIndex = targetRowId.length > 0 ? props.runtime.resolveBodyRowIndexById(targetRowId) : -1
+        const targetVisualRowIndex = targetRuntimeRowIndex >= 0
+          ? targetRuntimeRowIndex
+          : (targetRowId.length > 0 ? resolvePlaceholderVisualRowIndex(targetRowId) ?? -1 : -1)
         if (
           startColumn !== 0
-          || endColumn !== lastColumnIndex
-          || (targetRowIndex >= 0 && (targetRowIndex < startRow || targetRowIndex > endRow))
+          || (endColumn !== lastColumnIndex && endColumn !== lastDataColumnIndex)
+          || (targetRowId.length > 0 && (targetVisualRowIndex < startRow || targetVisualRowIndex > endRow))
         ) {
           return []
         }

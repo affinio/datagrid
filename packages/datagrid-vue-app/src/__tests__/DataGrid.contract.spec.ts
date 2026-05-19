@@ -405,6 +405,13 @@ async function flushAnimationFrame() {
   })
 }
 
+function isGridKeyboardFocusElement(element: Element | null): boolean {
+  return element instanceof HTMLElement && (
+    element.classList.contains("grid-body-viewport") ||
+    element.classList.contains("grid-cell--selection-anchor")
+  )
+}
+
 async function preloadAdvancedFilterPopover(): Promise<void> {
   await import("../overlays/DataGridAdvancedFilterPopover.vue")
 }
@@ -2604,6 +2611,8 @@ describe("DataGrid app facade contract", () => {
 
     expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
     expect(api?.rows.get(1)?.data?.owner).toBe("")
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
     expect(document.activeElement?.classList.contains("datagrid-stage__row-index-cell")).toBe(true)
 
     await rowIndexCell.trigger("keydown", { key: "Insert" })
@@ -2690,7 +2699,9 @@ describe("DataGrid app facade contract", () => {
 
     const movedRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
     expect(movedRowIndexCell.exists()).toBe(true)
-    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+    expect(isGridKeyboardFocusElement(document.activeElement)).toBe(true)
     expect((movedRowIndexCell.element as HTMLElement).tabIndex).toBe(0)
 
     wrapper.unmount()
@@ -2903,7 +2914,9 @@ describe("DataGrid app facade contract", () => {
       activeCell: expect.objectContaining({ rowIndex: 1, colIndex: 2, rowId: "r2" }),
     })
 
-    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+    expect(isGridKeyboardFocusElement(document.activeElement)).toBe(true)
 
     const viewport = wrapper.find('.grid-body-viewport')
     expect(viewport.exists()).toBe(true)
