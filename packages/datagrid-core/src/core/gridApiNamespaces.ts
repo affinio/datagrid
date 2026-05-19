@@ -22,6 +22,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setSelectionSnapshot: DataGridApi<TRow>["selection"]["setSnapshot"]
   clearSelection: DataGridApi<TRow>["selection"]["clear"]
   summarizeSelection: DataGridApi<TRow>["selection"]["summarize"]
+  getRangeRowData: DataGridApi<TRow>["selection"]["getRangeRowData"]
   hasRowSelectionSupport: DataGridApi<TRow>["rowSelection"]["hasSupport"]
   getRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["getSnapshot"]
   setRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["setSnapshot"]
@@ -34,6 +35,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   selectRows: DataGridApi<TRow>["rowSelection"]["selectRows"]
   deselectRows: DataGridApi<TRow>["rowSelection"]["deselectRows"]
   clearSelectedRows: DataGridApi<TRow>["rowSelection"]["clearSelectedRows"]
+  getSelectedRowData: DataGridApi<TRow>["rowSelection"]["getSelectedRowData"]
   hasTransactionSupport: DataGridApi<TRow>["transaction"]["hasSupport"]
   getTransactionSnapshot: DataGridApi<TRow>["transaction"]["getSnapshot"]
   beginTransactionBatch: DataGridApi<TRow>["transaction"]["beginBatch"]
@@ -48,6 +50,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getRowCount: DataGridApi<TRow>["rows"]["getCount"]
   getRow: DataGridApi<TRow>["rows"]["get"]
   getRowsInRange: DataGridApi<TRow>["rows"]["getRange"]
+  getProjectedRows: DataGridApi<TRow>["rows"]["getProjectedRows"]
   hasDataMutationSupport: DataGridApi<TRow>["rows"]["hasDataMutationSupport"]
   hasInsertSupport: DataGridApi<TRow>["rows"]["hasInsertSupport"]
   setData: DataGridApi<TRow>["rows"]["setData"]
@@ -163,6 +166,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     getCount: methodSet.getRowCount,
     get: methodSet.getRow,
     getRange: methodSet.getRowsInRange,
+    getProjectedRows: methodSet.getProjectedRows,
     hasDataMutationSupport: methodSet.hasDataMutationSupport,
     hasInsertSupport: methodSet.hasInsertSupport,
     setData: methodSet.setData,
@@ -246,6 +250,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       setSnapshot: methodSet.setSelectionSnapshot,
       clear: methodSet.clearSelection,
       summarize: methodSet.summarizeSelection,
+      getRangeRowData: methodSet.getRangeRowData,
     },
     rowSelection: {
       hasSupport: methodSet.hasRowSelectionSupport,
@@ -260,6 +265,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       selectRows: methodSet.selectRows,
       deselectRows: methodSet.deselectRows,
       clearSelectedRows: methodSet.clearSelectedRows,
+      getSelectedRowData: methodSet.getSelectedRowData,
     },
     transaction: {
       hasSupport: methodSet.hasTransactionSupport,

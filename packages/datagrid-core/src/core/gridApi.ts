@@ -274,6 +274,7 @@ export function createDataGridApi<TRow = unknown>(
     onChanged: snapshot => eventsRuntime.emitTransactionChanged(snapshot),
   })
   const selectionMethods = createDataGridApiSelectionMethods<TRow>({
+    rowModel,
     getSelectionCapability,
     onChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
     summarize: (selectionSnapshot, options) =>
@@ -284,7 +285,8 @@ export function createDataGridApi<TRow = unknown>(
         options,
       }),
   })
-  const rowSelectionMethods = createDataGridApiRowSelectionMethods({
+  const rowSelectionMethods = createDataGridApiRowSelectionMethods<TRow>({
+    rowModel,
     getRowSelectionCapability,
     onChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
   })

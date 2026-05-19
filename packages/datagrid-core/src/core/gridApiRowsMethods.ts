@@ -50,6 +50,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   getRowCount: () => number
   getRow: (index: number) => ReturnType<DataGridRowModel<TRow>["getRow"]>
   getRowsInRange: (range: DataGridViewportRange) => ReturnType<DataGridRowModel<TRow>["getRowsInRange"]>
+  getProjectedRows: () => TRow[]
   getPaginationSnapshot: () => ReturnType<DataGridRowModel<TRow>["getSnapshot"]>["pagination"]
   setPagination: (pagination: DataGridPaginationInput | null) => void
   setPageSize: (pageSize: number | null) => void
@@ -159,6 +160,16 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     getRowsInRange(range: DataGridViewportRange) {
       return rowModel.getRowsInRange(range)
+    },
+    getProjectedRows() {
+      const rows: TRow[] = []
+      for (let index = 0; index < rowModel.getRowCount(); index += 1) {
+        const rowNode = rowModel.getRow(index)
+        if (rowNode?.kind === "leaf") {
+          rows.push(rowNode.data)
+        }
+      }
+      return rows
     },
     getPaginationSnapshot() {
       return rowModel.getSnapshot().pagination

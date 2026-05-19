@@ -1,10 +1,14 @@
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import type {
+  DataGridRowId,
+  DataGridRowModel,
+} from "../models/index.js"
 import {
   assertRowSelectionCapability,
   type DataGridRowSelectionCapability,
 } from "./gridApiCapabilities"
 
-export interface DataGridApiRowSelectionMethods {
+export interface DataGridApiRowSelectionMethods<TRow = unknown> {
   hasRowSelectionSupport: () => boolean
   getRowSelectionSnapshot: () => DataGridRowSelectionSnapshot | null
   setRowSelectionSnapshot: (snapshot: DataGridRowSelectionSnapshot) => void
@@ -17,17 +21,21 @@ export interface DataGridApiRowSelectionMethods {
   selectRows: (rowIds: Iterable<string | number>) => void
   deselectRows: (rowIds: Iterable<string | number>) => void
   clearSelectedRows: () => void
+  getSelectedRowData: () => TRow[]
 }
 
-export interface CreateDataGridApiRowSelectionMethodsInput {
+export interface CreateDataGridApiRowSelectionMethodsInput<TRow = unknown> {
+  rowModel: DataGridRowModel<TRow>
   getRowSelectionCapability: () => DataGridRowSelectionCapability | null
   onChanged?: (snapshot: DataGridRowSelectionSnapshot | null) => void
 }
 
-export function createDataGridApiRowSelectionMethods(
-  input: CreateDataGridApiRowSelectionMethodsInput,
-): DataGridApiRowSelectionMethods {
-  const { getRowSelectionCapability, onChanged } = input
+export function createDataGridApiRowSelectionMethods<TRow = unknown>(
+  input: CreateDataGridApiRowSelectionMethodsInput<TRow>,
+): DataGridApiRowSelectionMethods<TRow> {
+  const { rowModel, getRowSelectionCapability, onChanged } = input
+
+  const rowIdSignature = (rowId: DataGridRowId): string => `${typeof rowId}:${String(rowId)}`
 
   return {
     hasRowSelectionSupport() {
@@ -79,6 +87,40 @@ export function createDataGridApiRowSelectionMethods(
       const capability = assertRowSelectionCapability(getRowSelectionCapability())
       capability.clearSelectedRows()
       onChanged?.(capability.getRowSelectionSnapshot())
+    },
+    getSelectedRowData() {
+      const snapshot = getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null
+      if (!snapshot) {
+        return []
+      }
+
+      const rows: TRow[] = []
+      if (snapshot.mode === "all") {
+        const excluded = new Set(snapshot.excludedRows?.map(rowIdSignature) ?? [])
+        for (let index = 0; index < rowModel.getRowCount(); index += 1) {
+          const rowNode = rowModel.getRow(index)
+          if (rowNode?.kind === "leaf" && !excluded.has(rowIdSignature(rowNode.rowId))) {
+            rows.push(rowNode.data)
+          }
+        }
+        return rows
+      }
+
+      const selected = new Set(snapshot.selectedRows.map(rowIdSignature))
+      const emitted = new Set<string>()
+      for (let index = 0; index < rowModel.getRowCount(); index += 1) {
+        const rowNode = rowModel.getRow(index)
+        if (rowNode?.kind !== "leaf") {
+          continue
+        }
+        const signature = rowIdSignature(rowNode.rowId)
+        if (!selected.has(signature) || emitted.has(signature)) {
+          continue
+        }
+        emitted.add(signature)
+        rows.push(rowNode.data)
+      }
+      return rows
     },
   }
 }

@@ -6,6 +6,7 @@ import {
   serializeColumnValueToToken,
 } from "../../models"
 import type { DataGridRowModel } from "../../models"
+import type { DataGridRowSelectionSnapshot } from "../../selection/rowSelection"
 import type { DataGridSelectionSnapshot } from "../../selection/snapshot"
 import {
   DATAGRID_PUBLIC_PACKAGE_VERSION,
@@ -197,6 +198,44 @@ describe("data grid api facade contracts", () => {
     expect(api.columns.get("id")?.visible).toBe(false)
     expect(api.columns.get("name")?.pin).toBe("left")
     expect(api.columns.get("name")?.width).toBe(280)
+  })
+
+  it("returns projected leaf row data in current row order", () => {
+    const rowA = { id: "a", status: "keep", score: 2 }
+    const rowB = { id: "b", status: "drop", score: 5 }
+    const rowC = { id: "c", status: "keep", score: 1 }
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: rowA, rowId: "a", originalIndex: 0 },
+        { row: rowB, rowId: "b", originalIndex: 1 },
+        { row: rowC, rowId: "c", originalIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [
+        { key: "status", label: "Status" },
+        { key: "score", label: "Score" },
+      ],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setFilterModel({
+      columnFilters: { status: { kind: "valueSet", tokens: ["string:keep"] } },
+      advancedFilters: {},
+    })
+    api.rows.setSortModel([{ key: "score", direction: "asc" }])
+
+    const projectedRows = api.rows.getProjectedRows()
+    const nextProjectedRows = api.rows.getProjectedRows()
+    expect(projectedRows).toEqual([rowC, rowA])
+    expect(nextProjectedRows).toEqual([rowC, rowA])
+    expect(nextProjectedRows).not.toBe(projectedRows)
   })
 
   it("treats viewport position as an optional view capability", () => {
@@ -1880,6 +1919,236 @@ describe("data grid api facade contracts", () => {
     api.selection.clear()
     expect(clearCount).toBe(1)
     expect(api.selection.getSnapshot()).toBeNull()
+  })
+
+  it("resolves selected row data through the current projected row order", () => {
+    const rowA = { id: "a", score: 1 }
+    const rowB = { id: "b", score: 2 }
+    const rowC = { id: "c", score: 3 }
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: rowA, rowId: "a", originalIndex: 0 },
+        { row: rowB, rowId: "b", originalIndex: 1 },
+        { row: rowC, rowId: "c", originalIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    let rowSelectionSnapshot: DataGridRowSelectionSnapshot | null = {
+      focusedRow: null,
+      selectedRows: ["a", "c", "a"],
+    }
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getRowSelectionSnapshot() {
+            return rowSelectionSnapshot
+          },
+          setRowSelectionSnapshot(snapshot) {
+            rowSelectionSnapshot = snapshot
+          },
+          clearRowSelection() {
+            rowSelectionSnapshot = null
+          },
+          getFocusedRow() {
+            return rowSelectionSnapshot?.focusedRow ?? null
+          },
+          setFocusedRow(rowId) {
+            rowSelectionSnapshot = { focusedRow: rowId, selectedRows: rowSelectionSnapshot?.selectedRows ?? [] }
+          },
+          getSelectedRows() {
+            return rowSelectionSnapshot?.selectedRows ?? []
+          },
+          isRowSelected(rowId) {
+            return rowSelectionSnapshot?.selectedRows.includes(rowId) ?? false
+          },
+          setRowSelected(rowId, selected) {
+            const selectedRows = new Set(rowSelectionSnapshot?.selectedRows ?? [])
+            if (selected) {
+              selectedRows.add(rowId)
+            } else {
+              selectedRows.delete(rowId)
+            }
+            rowSelectionSnapshot = { focusedRow: rowSelectionSnapshot?.focusedRow ?? null, selectedRows: [...selectedRows] }
+          },
+          selectRows(rowIds) {
+            const selectedRows = new Set(rowSelectionSnapshot?.selectedRows ?? [])
+            for (const rowId of rowIds) {
+              selectedRows.add(rowId)
+            }
+            rowSelectionSnapshot = { focusedRow: rowSelectionSnapshot?.focusedRow ?? null, selectedRows: [...selectedRows] }
+          },
+          deselectRows(rowIds) {
+            const selectedRows = new Set(rowSelectionSnapshot?.selectedRows ?? [])
+            for (const rowId of rowIds) {
+              selectedRows.delete(rowId)
+            }
+            rowSelectionSnapshot = { focusedRow: rowSelectionSnapshot?.focusedRow ?? null, selectedRows: [...selectedRows] }
+          },
+          clearSelectedRows() {
+            rowSelectionSnapshot = { focusedRow: rowSelectionSnapshot?.focusedRow ?? null, selectedRows: [] }
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+
+    const selectedRows = api.rowSelection.getSelectedRowData()
+    const nextSelectedRows = api.rowSelection.getSelectedRowData()
+    expect(selectedRows).toEqual([rowC, rowA])
+    expect(nextSelectedRows).toEqual([rowC, rowA])
+    expect(nextSelectedRows).not.toBe(selectedRows)
+
+    rowSelectionSnapshot = { focusedRow: null, selectedRows: [] }
+    expect(api.rowSelection.getSelectedRowData()).toEqual([])
+  })
+
+  it("resolves all-mode row selection data with exclusions", () => {
+    const rowA = { id: "a", score: 1 }
+    const rowB = { id: "b", score: 2 }
+    const rowC = { id: "c", score: 3 }
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: rowA, rowId: "a", originalIndex: 0 },
+        { row: rowB, rowId: "b", originalIndex: 1 },
+        { row: rowC, rowId: "c", originalIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const rowSelectionSnapshot: DataGridRowSelectionSnapshot = {
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: ["b"],
+    }
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getRowSelectionSnapshot() {
+            return rowSelectionSnapshot
+          },
+          setRowSelectionSnapshot() {},
+          clearRowSelection() {},
+          getFocusedRow() {
+            return null
+          },
+          setFocusedRow() {},
+          getSelectedRows() {
+            return []
+          },
+          isRowSelected(rowId) {
+            return rowId !== "b"
+          },
+          setRowSelected() {},
+          selectRows() {},
+          deselectRows() {},
+          clearSelectedRows() {},
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+
+    expect(api.rowSelection.getSelectedRowData()).toEqual([rowC, rowA])
+  })
+
+  it("resolves material range row data in projected order and de-duplicates overlaps", () => {
+    const rowA = { id: "a", score: 1 }
+    const rowB = { id: "b", score: 2 }
+    const rowC = { id: "c", score: 3 }
+    const rowD = { id: "d", score: 4 }
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: rowA, rowId: "a", originalIndex: 0 },
+        { row: rowB, rowId: "b", originalIndex: 1 },
+        { row: rowC, rowId: "c", originalIndex: 2 },
+        { row: rowD, rowId: "d", originalIndex: 3 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = {
+      ranges: [
+        {
+          startRow: 1,
+          endRow: 2,
+          startCol: 0,
+          endCol: 1,
+          startRowId: "b",
+          endRowId: "c",
+          anchor: { rowIndex: 1, colIndex: 0, rowId: "b" },
+          focus: { rowIndex: 2, colIndex: 1, rowId: "c" },
+        },
+        {
+          startRow: 2,
+          endRow: 3,
+          startCol: 0,
+          endCol: 1,
+          startRowId: "c",
+          endRowId: "d",
+          anchor: { rowIndex: 2, colIndex: 0, rowId: "c" },
+          focus: { rowIndex: 3, colIndex: 1, rowId: "d" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 3, colIndex: 1, rowId: "d" },
+    }
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const rangeRows = api.selection.getRangeRowData()
+    const nextRangeRows = api.selection.getRangeRowData()
+    expect(rangeRows).toEqual([rowB, rowC, rowD])
+    expect(nextRangeRows).toEqual([rowB, rowC, rowD])
+    expect(nextRangeRows).not.toBe(rangeRows)
+
+    selectionSnapshot = {
+      ranges: [
+        {
+          startRow: 1,
+          endRow: 1,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "b",
+          endRowId: "b",
+          anchor: { rowIndex: 1, colIndex: 0, rowId: "b" },
+          focus: { rowIndex: 1, colIndex: 0, rowId: "b" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 0, rowId: "b" },
+    }
+    expect(api.selection.getRangeRowData()).toEqual([])
   })
 
   it("computes selection summary through api facade when selection capability is present", () => {

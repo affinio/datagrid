@@ -794,7 +794,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function readTelemetryNowMs(): number {
     const now = globalThis.performance?.now?.()
-    return Number.isFinite(now) ? now : Date.now()
+    return Number.isFinite(now) ? now : 0
   }
 
   function getPaginationSnapshot() {
