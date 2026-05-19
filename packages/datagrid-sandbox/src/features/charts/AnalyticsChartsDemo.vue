@@ -217,10 +217,6 @@ import type {
 import type {
   DataGridApiRowSelectionChangedEvent,
   DataGridApiSelectionChangedEvent,
-  DataGridRowId,
-  DataGridRowSelectionSnapshot,
-  DataGridSelectionSnapshot,
-  DataGridSelectionSnapshotRange,
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import {
@@ -579,19 +575,14 @@ function syncChartRowsFromPreviewGrid(): void {
     return
   }
 
-  const rows: BusinessRow[] = []
-  for (let index = 0; index < api.rows.getCount(); index += 1) {
-    const row = api.rows.get(index)?.data
-    if (isBusinessRow(row)) {
-      rows.push(cloneBusinessRow(row))
-    }
-  }
-  dataGridProjectedRows.value = rows
+  dataGridProjectedRows.value = api.rows.getProjectedRows()
+    .filter(isBusinessRow)
+    .map(cloneBusinessRow)
   syncChartSelectionStateFromPreviewGrid()
 }
 
-function handlePreviewSelectionChange(event: DataGridApiSelectionChangedEvent): void {
-  syncRangeChartRows(event.snapshot)
+function handlePreviewSelectionChange(_event: DataGridApiSelectionChangedEvent): void {
+  syncRangeChartRows()
   debugState.source = "grid:range"
   debugState.item = rangeChartRows.value.length > 0 ? "range rows" : "range cleared"
   debugState.value = `${rangeChartRows.value.length} rows`
@@ -600,8 +591,8 @@ function handlePreviewSelectionChange(event: DataGridApiSelectionChangedEvent): 
   debugState.anchorRect = "none"
 }
 
-function handlePreviewRowSelectionChange(event: DataGridApiRowSelectionChangedEvent): void {
-  syncSelectedChartRows(event.snapshot)
+function handlePreviewRowSelectionChange(_event: DataGridApiRowSelectionChangedEvent): void {
+  syncSelectedChartRows()
   debugState.source = "grid:selection"
   debugState.item = selectedChartRows.value.length > 0 ? "selected rows" : "selection cleared"
   debugState.value = `${selectedChartRows.value.length} rows`
@@ -610,10 +601,10 @@ function handlePreviewRowSelectionChange(event: DataGridApiRowSelectionChangedEv
   debugState.anchorRect = "none"
 }
 
-function handlePreviewStateUpdate(state: DataGridUnifiedState<Record<string, unknown>> | null): void {
+function handlePreviewStateUpdate(_state: DataGridUnifiedState<Record<string, unknown>> | null): void {
   scheduleChartRowsFromPreviewGridSync()
-  syncRangeChartRows(state?.selection ?? null)
-  syncSelectedChartRows(state?.rowSelection ?? null)
+  syncRangeChartRows()
+  syncSelectedChartRows()
 }
 
 function clearChartSelection(): void {
@@ -631,74 +622,21 @@ function clearChartSelection(): void {
 }
 
 function syncChartSelectionStateFromPreviewGrid(): void {
-  const api = previewGridRef.value?.getApi()
-  syncRangeChartRows(api?.selection.getSnapshot() ?? null)
-  syncSelectedChartRows(api?.rowSelection.getSnapshot() ?? null)
+  syncRangeChartRows()
+  syncSelectedChartRows()
 }
 
-function syncSelectedChartRows(snapshot: DataGridRowSelectionSnapshot | null): void {
-  if (!snapshot) {
-    selectedChartRows.value = []
-    return
-  }
-
-  if (snapshot.mode === "all") {
-    const excludedRowIds = new Set(snapshot.excludedRows?.map(createRowIdSignature) ?? [])
-    selectedChartRows.value = dataGridProjectedRows.value
-      .filter(row => !excludedRowIds.has(createRowIdSignature(row.id)))
-      .map(cloneBusinessRow)
-    return
-  }
-
-  selectedChartRows.value = resolveRowsByIds(snapshot.selectedRows)
+function syncSelectedChartRows(): void {
+  selectedChartRows.value = previewGridRef.value?.getApi()?.rowSelection.getSelectedRowData()
+    .filter(isBusinessRow)
+    .map(cloneBusinessRow) ?? []
 }
 
-function syncRangeChartRows(snapshot: DataGridSelectionSnapshot | null): void {
-  const ranges = snapshot?.ranges.filter(isMaterialSelectionRange) ?? []
-  if (ranges.length === 0) {
-    rangeChartRows.value = []
-    return
-  }
-
-  const rows: BusinessRow[] = []
-  const seenRowIds = new Set<string>()
-  const api = previewGridRef.value?.getApi()
-  for (const range of ranges) {
-    const startRow = Math.min(range.startRow, range.endRow)
-    const endRow = Math.max(range.startRow, range.endRow)
-    for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
-      const row = api?.rows.get(rowIndex)?.data ?? dataGridProjectedRows.value[rowIndex]
-      if (!isBusinessRow(row)) {
-        continue
-      }
-      const rowId = createRowIdSignature(row.id)
-      if (seenRowIds.has(rowId)) {
-        continue
-      }
-      seenRowIds.add(rowId)
-      rows.push(cloneBusinessRow(row))
-    }
-  }
-  rangeChartRows.value = rows
-}
-
-function resolveRowsByIds(rowIds: readonly DataGridRowId[]): BusinessRow[] {
-  if (rowIds.length === 0) {
-    return []
-  }
-
-  const selectedRowIds = new Set(rowIds.map(createRowIdSignature))
-  return dataGridProjectedRows.value
-    .filter(row => selectedRowIds.has(createRowIdSignature(row.id)))
+function syncRangeChartRows(): void {
+  rangeChartRows.value = previewGridRef.value?.getApi()?.selection.getRangeRowData()
+    .filter(isBusinessRow)
     .map(cloneBusinessRow)
-}
-
-function isMaterialSelectionRange(range: DataGridSelectionSnapshotRange): boolean {
-  return range.startRow !== range.endRow || range.startCol !== range.endCol
-}
-
-function createRowIdSignature(rowId: DataGridRowId): string {
-  return `${typeof rowId}:${String(rowId)}`
+    ?? []
 }
 
 function normalizeBusinessRow(row: BusinessRow): BusinessRow {
