@@ -1,6 +1,6 @@
 # DataGrid Unified Grid API
 
-Updated: `2026-05-10`
+Updated: `2026-05-19`
 
 `DataGridApi` is the semver-safe, namespace-based facade for model/service operations in `@affino/datagrid-core`.
 
@@ -60,6 +60,9 @@ Use it as guard before capability-dependent mutating calls.
 
 ## Key semantics
 
+- `rows.getProjectedRows()` returns a new array of current projected leaf row data in `api.rows` order.
+- `rowSelection.getSelectedRowData()` resolves selected row ids against current projected rows, preserving projected order and supporting all/excluded selection mode.
+- `selection.getRangeRowData()` resolves material cell ranges to de-duplicated projected leaf row data in projected row order; single-cell focus ranges return an empty array.
 - `rows.applyEdits(...)` mutates data (optionally with reapply policy).
 - `rows.batch(...)` is an explicit bulk mutation boundary with one coalesced facade event-cycle.
 - `view.reapply()` recomputes projection only.
