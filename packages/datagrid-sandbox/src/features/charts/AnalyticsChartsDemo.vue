@@ -34,6 +34,12 @@
       <div class="analytics-charts-demo__summary" aria-label="Dataset metadata">
         <span>Pipeline</span>
         <strong>raw rows -> Affino DataGrid projection -> analytics-core datasets -> charts-vue components</strong>
+        <div class="analytics-charts-demo__source-status">
+          <small>Charts source: {{ chartSourceLabel }}</small>
+          <button type="button" :disabled="chartSelectionMode === 'all'" @click="clearChartSelection">
+            Clear chart selection
+          </button>
+        </div>
         <small>{{ chartSourceRows.length }} DataGrid rows, {{ regionRevenueDataset.meta.rowCount }} region groups, {{ monthlyRevenueDataset.meta.rowCount }} month groups</small>
       </div>
     </section>
@@ -137,6 +143,10 @@
             <dd>{{ debugState.value }}</dd>
           </div>
           <div>
+            <dt>Rows</dt>
+            <dd>{{ debugState.rows }}</dd>
+          </div>
+          <div>
             <dt>Client point</dt>
             <dd>{{ debugState.clientPoint }}</dd>
           </div>
@@ -168,6 +178,7 @@
           column-reorder
           find-replace
           history
+          row-selection
           fill-handle
           range-move
           row-hover
@@ -180,7 +191,9 @@
           @ready="syncChartRowsFromPreviewGrid"
           @cell-change="scheduleChartRowsFromPreviewGridSync"
           @cell-edit="handlePreviewCellEdit"
-          @update:state="scheduleChartRowsFromPreviewGridSync"
+          @selection-change="handlePreviewSelectionChange"
+          @row-selection-change="handlePreviewRowSelectionChange"
+          @update:state="handlePreviewStateUpdate"
         />
       </div>
     </section>
@@ -201,6 +214,15 @@ import type {
   DataGridCellEditEvent,
   DataGridQuickFilterOptions,
 } from "@affino/datagrid-vue-app"
+import type {
+  DataGridApiRowSelectionChangedEvent,
+  DataGridApiSelectionChangedEvent,
+  DataGridRowId,
+  DataGridRowSelectionSnapshot,
+  DataGridSelectionSnapshot,
+  DataGridSelectionSnapshotRange,
+  DataGridUnifiedState,
+} from "@affino/datagrid-vue"
 import {
   AffinoBarChart,
   AffinoHistogram,
@@ -233,6 +255,8 @@ interface BusinessRow extends AnalyticsRow {
 }
 
 const AnalyticsPreviewDataGrid = defineDataGridComponent<BusinessRow>()
+
+type ChartSelectionMode = "all" | "selection" | "range"
 
 interface RevenueMetric {
   label: string
@@ -280,6 +304,8 @@ const selectedRegion = ref("")
 const selectedChannel = ref("")
 const previewGridRef = useDataGridRef<BusinessRow>()
 const dataGridProjectedRows = ref<BusinessRow[]>([])
+const selectedChartRows = ref<BusinessRow[]>([])
+const rangeChartRows = ref<BusinessRow[]>([])
 
 const regionOptions = computed(() => [...new Set(rawRows.value.map((row) => row.region))].sort())
 const channelOptions = computed(() => [...new Set(rawRows.value.map((row) => row.channel))].sort())
@@ -407,7 +433,34 @@ const filteredRowsDataset = computed(() => createTypedDataset(rawRows.value, {
   sort: [{ field: "monthIndex" }, { field: "id" }],
 }))
 
-const chartSourceRows = computed(() => dataGridProjectedRows.value)
+const chartSelectionMode = computed<ChartSelectionMode>(() => {
+  if (rangeChartRows.value.length > 0) {
+    return "range"
+  }
+  if (selectedChartRows.value.length > 0) {
+    return "selection"
+  }
+  return "all"
+})
+const chartSourceRows = computed(() => {
+  if (rangeChartRows.value.length > 0) {
+    return rangeChartRows.value
+  }
+  if (selectedChartRows.value.length > 0) {
+    return selectedChartRows.value
+  }
+  return dataGridProjectedRows.value
+})
+const chartSourceLabel = computed(() => {
+  switch (chartSelectionMode.value) {
+    case "range":
+      return `range rows (${chartSourceRows.value.length})`
+    case "selection":
+      return `selected rows (${chartSourceRows.value.length})`
+    default:
+      return `all projected rows (${chartSourceRows.value.length})`
+  }
+})
 
 const revenueDataset = computed(() => createTypedDataset(chartSourceRows.value, {
   measures: [{ field: "revenue", op: "sum", as: "revenue" }],
@@ -476,6 +529,7 @@ const debugState = reactive({
   source: "none",
   item: "none",
   value: "none",
+  rows: "none",
   clientPoint: "none",
   anchorRect: "none",
 })
@@ -508,6 +562,7 @@ function handlePreviewCellEdit(event: DataGridCellEditEvent<BusinessRow>): void 
     ? normalizeBusinessRow({ ...row, ...event.patch.data })
     : row)
   debugState.value = String(event.newValue ?? "")
+  debugState.rows = `${chartSourceRows.value.length} rows`
   scheduleChartRowsFromPreviewGridSync()
 }
 
@@ -532,6 +587,118 @@ function syncChartRowsFromPreviewGrid(): void {
     }
   }
   dataGridProjectedRows.value = rows
+  syncChartSelectionStateFromPreviewGrid()
+}
+
+function handlePreviewSelectionChange(event: DataGridApiSelectionChangedEvent): void {
+  syncRangeChartRows(event.snapshot)
+  debugState.source = "grid:range"
+  debugState.item = rangeChartRows.value.length > 0 ? "range rows" : "range cleared"
+  debugState.value = `${rangeChartRows.value.length} rows`
+  debugState.rows = `${rangeChartRows.value.length} ranged`
+  debugState.clientPoint = "none"
+  debugState.anchorRect = "none"
+}
+
+function handlePreviewRowSelectionChange(event: DataGridApiRowSelectionChangedEvent): void {
+  syncSelectedChartRows(event.snapshot)
+  debugState.source = "grid:selection"
+  debugState.item = selectedChartRows.value.length > 0 ? "selected rows" : "selection cleared"
+  debugState.value = `${selectedChartRows.value.length} rows`
+  debugState.rows = `${selectedChartRows.value.length} selected`
+  debugState.clientPoint = "none"
+  debugState.anchorRect = "none"
+}
+
+function handlePreviewStateUpdate(state: DataGridUnifiedState<Record<string, unknown>> | null): void {
+  scheduleChartRowsFromPreviewGridSync()
+  syncRangeChartRows(state?.selection ?? null)
+  syncSelectedChartRows(state?.rowSelection ?? null)
+}
+
+function clearChartSelection(): void {
+  const api = previewGridRef.value?.getApi()
+  api?.selection.clear()
+  api?.rowSelection.clear()
+  selectedChartRows.value = []
+  rangeChartRows.value = []
+  debugState.source = "grid:selection"
+  debugState.item = "selection cleared"
+  debugState.value = "0 rows"
+  debugState.rows = "0 selected / 0 ranged"
+  debugState.clientPoint = "none"
+  debugState.anchorRect = "none"
+}
+
+function syncChartSelectionStateFromPreviewGrid(): void {
+  const api = previewGridRef.value?.getApi()
+  syncRangeChartRows(api?.selection.getSnapshot() ?? null)
+  syncSelectedChartRows(api?.rowSelection.getSnapshot() ?? null)
+}
+
+function syncSelectedChartRows(snapshot: DataGridRowSelectionSnapshot | null): void {
+  if (!snapshot) {
+    selectedChartRows.value = []
+    return
+  }
+
+  if (snapshot.mode === "all") {
+    const excludedRowIds = new Set(snapshot.excludedRows?.map(createRowIdSignature) ?? [])
+    selectedChartRows.value = dataGridProjectedRows.value
+      .filter(row => !excludedRowIds.has(createRowIdSignature(row.id)))
+      .map(cloneBusinessRow)
+    return
+  }
+
+  selectedChartRows.value = resolveRowsByIds(snapshot.selectedRows)
+}
+
+function syncRangeChartRows(snapshot: DataGridSelectionSnapshot | null): void {
+  const ranges = snapshot?.ranges.filter(isMaterialSelectionRange) ?? []
+  if (ranges.length === 0) {
+    rangeChartRows.value = []
+    return
+  }
+
+  const rows: BusinessRow[] = []
+  const seenRowIds = new Set<string>()
+  const api = previewGridRef.value?.getApi()
+  for (const range of ranges) {
+    const startRow = Math.min(range.startRow, range.endRow)
+    const endRow = Math.max(range.startRow, range.endRow)
+    for (let rowIndex = startRow; rowIndex <= endRow; rowIndex += 1) {
+      const row = api?.rows.get(rowIndex)?.data ?? dataGridProjectedRows.value[rowIndex]
+      if (!isBusinessRow(row)) {
+        continue
+      }
+      const rowId = createRowIdSignature(row.id)
+      if (seenRowIds.has(rowId)) {
+        continue
+      }
+      seenRowIds.add(rowId)
+      rows.push(cloneBusinessRow(row))
+    }
+  }
+  rangeChartRows.value = rows
+}
+
+function resolveRowsByIds(rowIds: readonly DataGridRowId[]): BusinessRow[] {
+  if (rowIds.length === 0) {
+    return []
+  }
+
+  const selectedRowIds = new Set(rowIds.map(createRowIdSignature))
+  return dataGridProjectedRows.value
+    .filter(row => selectedRowIds.has(createRowIdSignature(row.id)))
+    .map(cloneBusinessRow)
+}
+
+function isMaterialSelectionRange(range: DataGridSelectionSnapshotRange): boolean {
+  return range.startRow !== range.endRow || range.startCol !== range.endCol
+}
+
+function createRowIdSignature(rowId: DataGridRowId): string {
+  return `${typeof rowId}:${String(rowId)}`
 }
 
 function normalizeBusinessRow(row: BusinessRow): BusinessRow {
@@ -574,6 +741,7 @@ function recordMetricEvent(payload: { model: { displayValue: string } }): void {
   debugState.source = "metric:click"
   debugState.item = "Total Revenue"
   debugState.value = payload.model.displayValue
+  debugState.rows = "none"
   debugState.clientPoint = "none"
   debugState.anchorRect = "none"
 }
@@ -638,6 +806,7 @@ function setDebugState(nextState: {
   debugState.source = nextState.source
   debugState.item = nextState.item
   debugState.value = String(nextState.value)
+  debugState.rows = "none"
   debugState.clientPoint = formatPoint(nextState.clientPoint)
   debugState.anchorRect = formatRect(nextState.anchorRect)
 }
@@ -769,6 +938,29 @@ function formatNumber(value: number): string {
   color: #0f172a;
   font-size: 15px;
   overflow-wrap: anywhere;
+}
+
+.analytics-charts-demo__source-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.analytics-charts-demo__source-status button {
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.analytics-charts-demo__source-status button:disabled {
+  color: #94a3b8;
+  cursor: default;
 }
 
 .analytics-charts-demo__grid {
