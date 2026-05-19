@@ -89,6 +89,17 @@ function registerConditionCheck(id, ok, description, message) {
   })
 }
 
+function extractWorkflowJobBlock(workflow, jobId) {
+  const start = workflow.indexOf(`  ${jobId}:`)
+  if (start < 0) {
+    return ""
+  }
+  const nextJob = workflow.slice(start + 1).search(/\n  [a-zA-Z0-9_-]+:/)
+  return nextJob >= 0
+    ? workflow.slice(start, start + 1 + nextJob)
+    : workflow.slice(start)
+}
+
 function extractEnvNumberFromScript(script, key) {
   if (typeof script !== "string" || script.length === 0) {
     return null
@@ -657,6 +668,33 @@ registerTokenCheck(
       wired,
       "bench:regression delegates to bench:datagrid:harness:ci:gate",
       `unexpected bench:regression script: '${regressionScript}'`,
+    )
+  }
+}
+
+{
+  const workflowPath = resolve(".github/workflows/ci.yml")
+  const benchmarkPlaywrightId = "benchmark-gates-install-playwright"
+  if (!existsSync(workflowPath)) {
+    registerConditionCheck(
+      benchmarkPlaywrightId,
+      false,
+      "CI benchmark-gates job installs Playwright browsers before bench:regression",
+      "ci workflow missing",
+    )
+  } else {
+    const workflow = readFileSync(workflowPath, "utf8")
+    const benchmarkGatesBlock = extractWorkflowJobBlock(workflow, "benchmark-gates")
+    const installIndex = benchmarkGatesBlock.indexOf("pnpm exec playwright install --with-deps chromium")
+    const regressionIndex = benchmarkGatesBlock.indexOf("pnpm run bench:regression")
+    const ordered = installIndex >= 0 && regressionIndex > installIndex
+    registerConditionCheck(
+      benchmarkPlaywrightId,
+      ordered,
+      "CI benchmark-gates job installs Playwright browsers before bench:regression",
+      ordered
+        ? "ok"
+        : "benchmark-gates block must include playwright install before bench:regression",
     )
   }
 }
