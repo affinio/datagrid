@@ -22,6 +22,7 @@ import {
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
+  AffinoScatterChart,
   createChartsVue,
 } from "@affino/charts-vue"
 
@@ -111,6 +112,59 @@ Events:
 - `point-leave`
 
 Each point event includes the core point geometry as `item` and `point`, source row, index, `xValue`, `yValue`, `clientPoint`, and `anchorRect`.
+
+## Scatter Chart
+
+`AffinoScatterChart` renders SVG scatter and bubble charts using `createScatterChartGeometry()` from `@affino/charts-core`. The core package owns x/y/radius geometry while Vue owns rendering, styling, interaction, and accessibility.
+
+```vue
+<script setup lang="ts">
+import { AffinoScatterChart } from "@affino/charts-vue"
+
+const rows = [
+  { discount: 4, value: 120, lotCount: 6 },
+  { discount: 12, value: 180, lotCount: 16 },
+]
+</script>
+
+<template>
+  <AffinoScatterChart
+    :rows="rows"
+    x-field="discount"
+    y-field="value"
+    title="Discount vs Value"
+    @point-click="handlePointClick"
+  />
+</template>
+```
+
+Use `radiusField` for bubble charts:
+
+```vue
+<AffinoScatterChart
+  :rows="rows"
+  x-field="discount"
+  y-field="value"
+  radius-field="lotCount"
+  :min-radius="4"
+  :max-radius="18"
+/>
+```
+
+Key props:
+
+- `rows`, `xField`, `yField`, `radiusField`
+- `width`, `height`, `margin`
+- `title`, `description`, `emptyText`
+- `minRadius`, `maxRadius`, `includeZeroX`, `includeZeroY`, `showAxes`, `showGrid`
+
+Events:
+
+- `point-click`
+- `point-hover`
+- `point-leave`
+
+Each scatter point event includes the core point geometry as `item` and `point`, source row, index, `xValue`, `yValue`, `radiusValue`, `clientPoint`, and `anchorRect`.
 
 ## Pie Chart
 
@@ -300,6 +354,10 @@ Consumers can override chart styling by setting CSS custom properties on `Affino
 - `--affino-chart-line-point-fill`
 - `--affino-chart-line-point-stroke`
 - `--affino-chart-line-point-hover-fill`
+- `--affino-chart-scatter-fill`
+- `--affino-chart-scatter-stroke`
+- `--affino-chart-scatter-hover-fill`
+- `--affino-chart-scatter-focus-stroke`
 - `--affino-chart-pie-slice-stroke`
 - `--affino-chart-pie-slice-hover-opacity`
 - `--affino-chart-metric-background`

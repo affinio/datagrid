@@ -3,6 +3,7 @@ import type {
   ChartDatum,
   LineChartPointGeometry,
   PieChartSliceGeometry,
+  ScatterChartPointGeometry,
 } from "@affino/charts-core"
 
 export type ChartThemeVariant = "default" | "muted" | "success" | "warning" | "danger"
@@ -57,4 +58,12 @@ export interface AffinoPieChartSliceEvent extends AffinoChartInteractionPayload<
   category: string
   value: number
   percentage: number
+}
+
+export interface AffinoScatterChartPointEvent extends AffinoChartInteractionPayload<ScatterChartPointGeometry> {
+  point: ScatterChartPointGeometry
+  row: ChartDatum
+  xValue: number
+  yValue: number
+  radiusValue: number | null
 }

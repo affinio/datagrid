@@ -4,6 +4,7 @@ export { default as AffinoChartLegend } from "./AffinoChartLegend.vue"
 export { default as AffinoLineChart } from "./AffinoLineChart.vue"
 export { default as AffinoMetricCard } from "./AffinoMetricCard.vue"
 export { default as AffinoPieChart } from "./AffinoPieChart.vue"
+export { default as AffinoScatterChart } from "./AffinoScatterChart.vue"
 
 export function createChartsVue(): { version: string } {
   return {
@@ -16,6 +17,7 @@ export type {
   AffinoChartInteractionPayload,
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
+  AffinoScatterChartPointEvent,
   ChartAnchorRect,
   ChartInteractionPoint,
   ChartLegendItem,

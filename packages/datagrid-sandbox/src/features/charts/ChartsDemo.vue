@@ -48,6 +48,24 @@
           />
         </div>
 
+        <div class="charts-demo__chart-card charts-demo__chart-card--wide">
+          <AffinoScatterChart
+            :rows="DISCOUNT_VALUE"
+            x-field="discount"
+            y-field="value"
+            radius-field="lotCount"
+            title="Discount vs Deal Value"
+            description="Bubble size represents lot count"
+            :height="320"
+            :min-radius="4"
+            :max-radius="18"
+            show-grid
+            @point-click="recordScatterEvent('click', $event)"
+            @point-hover="recordScatterEvent('hover', $event)"
+            @point-leave="recordScatterEvent('leave', $event)"
+          />
+        </div>
+
         <div class="charts-demo__chart-card">
           <AffinoPieChart
             :rows="CHANNEL_USERS"
@@ -114,12 +132,14 @@ import {
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
+  AffinoScatterChart,
 } from "@affino/charts-vue"
 import type {
   AffinoBarChartBarEvent,
   AffinoChartInteractionPayload,
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
+  AffinoScatterChartPointEvent,
   ChartAnchorRect,
   ChartInteractionPoint,
   ChartLegendItem,
@@ -164,6 +184,15 @@ const CHANNEL_USERS: ChartDatum[] = [
   { channel: "Search", users: 31 },
   { channel: "Partner", users: 18 },
   { channel: "Social", users: 9 },
+]
+
+const DISCOUNT_VALUE: ChartDatum[] = [
+  { segment: "Core", discount: 4, value: 118, lotCount: 8 },
+  { segment: "Growth", discount: 7, value: 142, lotCount: 12 },
+  { segment: "Enterprise", discount: 12, value: 228, lotCount: 18 },
+  { segment: "Renewal", discount: 16, value: 166, lotCount: 10 },
+  { segment: "Expansion", discount: 22, value: 208, lotCount: 15 },
+  { segment: "Pilot", discount: 28, value: 96, lotCount: 5 },
 ]
 
 const LEGEND_ITEMS: ChartLegendItem[] = [
@@ -259,6 +288,16 @@ function recordPieEvent(action: string, payload: AffinoPieChartSliceEvent): void
   })
 }
 
+function recordScatterEvent(action: string, payload: AffinoScatterChartPointEvent): void {
+  setDebugState({
+    source: `scatter:${action}`,
+    item: String(payload.row.segment ?? `point ${payload.index + 1}`),
+    value: `x=${payload.xValue}, y=${payload.yValue}, r=${payload.radiusValue ?? "none"}`,
+    clientPoint: payload.clientPoint,
+    anchorRect: payload.anchorRect,
+  })
+}
+
 function recordLegendEvent(action: string, payload: AffinoChartInteractionPayload<ChartLegendItem>): void {
   setDebugState({
     source: `legend:${action}`,
@@ -349,6 +388,7 @@ function formatPercent(value: number): string {
   --charts-demo-series-3: #f59e0b;
   --charts-demo-bar-hover: #115e59;
   --charts-demo-line: #7c3aed;
+  --charts-demo-scatter: #be123c;
 
   display: grid;
   gap: 14px;
@@ -365,6 +405,9 @@ function formatPercent(value: number): string {
   --affino-chart-bar-hover-fill: var(--charts-demo-bar-hover);
   --affino-chart-line-stroke: var(--charts-demo-line);
   --affino-chart-line-point-stroke: var(--charts-demo-line);
+  --affino-chart-scatter-fill: color-mix(in srgb, var(--charts-demo-scatter) 24%, transparent);
+  --affino-chart-scatter-stroke: var(--charts-demo-scatter);
+  --affino-chart-scatter-hover-fill: color-mix(in srgb, var(--charts-demo-scatter) 72%, transparent);
 }
 
 .charts-demo__metrics {

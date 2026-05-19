@@ -6,6 +6,7 @@ import {
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
+  AffinoScatterChart,
   createChartsVue,
 } from "../index"
 import type {
@@ -13,13 +14,20 @@ import type {
   AffinoChartInteractionPayload,
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
+  AffinoScatterChartPointEvent,
   ChartAnchorRect,
   ChartInteractionPoint,
   ChartLegendItem,
   ChartLegendOrientation,
   ChartThemeVariant,
 } from "../index"
-import type { BarChartBarGeometry, ChartDatum, LineChartPointGeometry, PieChartSliceGeometry } from "@affino/charts-core"
+import type {
+  BarChartBarGeometry,
+  ChartDatum,
+  LineChartPointGeometry,
+  PieChartSliceGeometry,
+  ScatterChartPointGeometry,
+} from "@affino/charts-core"
 
 describe("@affino/charts-vue", () => {
   it("returns package metadata", () => {
@@ -76,6 +84,17 @@ describe("@affino/charts-vue", () => {
       clientPoint: ChartInteractionPoint
       anchorRect: ChartAnchorRect
     }>()
+    expectTypeOf<AffinoScatterChartPointEvent>().toEqualTypeOf<{
+      item: ScatterChartPointGeometry
+      point: ScatterChartPointGeometry
+      row: ChartDatum
+      index: number
+      xValue: number
+      yValue: number
+      radiusValue: number | null
+      clientPoint: ChartInteractionPoint
+      anchorRect: ChartAnchorRect
+    }>()
   })
 
   it("exports a clean package entrypoint", async () => {
@@ -88,6 +107,7 @@ describe("@affino/charts-vue", () => {
       "AffinoLineChart",
       "AffinoMetricCard",
       "AffinoPieChart",
+      "AffinoScatterChart",
       "createChartsVue",
     ])
     expect(entrypoint.AffinoBarChart).toBe(AffinoBarChart)
@@ -96,6 +116,7 @@ describe("@affino/charts-vue", () => {
     expect(entrypoint.AffinoLineChart).toBe(AffinoLineChart)
     expect(entrypoint.AffinoMetricCard).toBe(AffinoMetricCard)
     expect(entrypoint.AffinoPieChart).toBe(AffinoPieChart)
+    expect(entrypoint.AffinoScatterChart).toBe(AffinoScatterChart)
     expect(entrypoint.createChartsVue).toBe(createChartsVue)
   })
 })
