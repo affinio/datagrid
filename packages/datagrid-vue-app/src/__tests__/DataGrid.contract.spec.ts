@@ -420,6 +420,10 @@ async function preloadFindReplacePopover(): Promise<void> {
   await import("../overlays/DataGridFindReplacePopover.vue")
 }
 
+async function preloadAggregationsPopover(): Promise<void> {
+  await import("../overlays/DataGridAggregationsPopover.vue")
+}
+
 async function findAdvancedFilterTrigger(wrapper: ReturnType<typeof mount>) {
   await flushRuntimeTasks()
   await flushRuntimeTasks()
@@ -6115,6 +6119,8 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("opens declarative aggregations and applies the runtime aggregation model", async () => {
+    await preloadAggregationsPopover()
+
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -6178,6 +6184,8 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("disables declarative aggregations when no groupBy model is active", async () => {
+    await preloadAggregationsPopover()
+
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {

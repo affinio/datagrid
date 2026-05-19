@@ -3312,6 +3312,13 @@ export function useDataGridAppInteractionController<
     : null
 
   const handleWindowContextMenuCapture = (event: MouseEvent): boolean => {
+    const target = event.target instanceof HTMLElement ? event.target : null
+    if (target?.closest(".cell-editor-input, .cell-editor-control, .datagrid-cell-combobox__input")) {
+      if (hasActivePointerInteractionState(false)) {
+        cancelPointerInteractions(false, "contextmenu")
+      }
+      return false
+    }
     if (!hasActivePointerInteractionState(false)) {
       return false
     }
