@@ -59,6 +59,7 @@ type CellRuntime = Readonly<Ref<{
   bodyCellPresentationStyle: (column: DataGridTableStageBodyColumn) => CSSProperties
   bodyCellSelectionStyle: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
+  cellDomId: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
   cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
   cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
@@ -196,6 +197,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     bodyCellSelectionStyle: options.cellRuntime.value.bodyCellSelectionStyle,
     resolveCellCustomStyle: options.cellRuntime.value.resolveCellCustomStyle,
     columnIndexByKey: options.rowRuntime.value.columnIndexByKey,
+    cellDomId: options.cellRuntime.value.cellDomId,
     cellTabIndex: options.cellRuntime.value.cellTabIndex,
     cellAriaSelected: options.cellRuntime.value.cellAriaSelected,
     cellAriaRole: options.cellRuntime.value.cellAriaRole,
@@ -266,6 +268,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     bodyCellSelectionStyle: options.cellRuntime.value.bodyCellSelectionStyle,
     resolveCellCustomStyle: options.cellRuntime.value.resolveCellCustomStyle,
     columnIndexByKey: options.rowRuntime.value.columnIndexByKey,
+    cellDomId: options.cellRuntime.value.cellDomId,
     cellTabIndex: options.cellRuntime.value.cellTabIndex,
     cellAriaSelected: options.cellRuntime.value.cellAriaSelected,
     cellAriaRole: options.cellRuntime.value.cellAriaRole,

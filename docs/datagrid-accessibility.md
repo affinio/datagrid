@@ -23,6 +23,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - normal body cells expose `role="gridcell"` unless an interactive role such as `checkbox` or `rowheader` overrides it;
 - rendered selected cells expose deterministic `aria-selected` state after virtualized unmount/remount;
 - leaf header cells expose `role="columnheader"`, one-based `aria-colindex`, sortable-column `aria-sort`, and contextual accessible names;
+- leaf header and body cells expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths;
 - header resize and text-filter controls include the target column in their accessible names;
 - normal-mode keyboard tabbing exposes one stage owner: focused row index first, visible selection anchor cell second, and body viewport fallback only when no visible focus target exists;
 - row-selection checkbox cells expose `role="checkbox"` and `aria-checked`;
@@ -34,11 +35,11 @@ This stage contract is covered by component tests in `packages/datagrid-vue-app/
 
 ## Focus Model
 
-The app stage currently uses stage-native DOM focus restoration and selection snapshot state as the mounted-grid owner. Normal browsing mode uses one tabbable stage target: focused row index, visible selection anchor cell, or body viewport fallback. The headless a11y state machine supports roving tabindex and `aria-activedescendant`, but the mounted stage has not yet adopted container focus plus active descendant as its canonical browser contract.
+The app stage currently uses stage-native DOM focus restoration and selection snapshot state as the mounted-grid owner. Normal browsing mode uses one tabbable stage target: focused row index, visible selection anchor cell, or body viewport fallback. The mounted stage keeps roving DOM focus and does not emit app-stage `aria-activedescendant`; stable cell ids are still rendered so browser tests and future relationships can resolve mounted cells deterministically.
 
-Until active-descendant integration is implemented:
+Under the current roving-focus model:
 
-- do not claim that app-stage `aria-activedescendant` is complete;
+- do not add app-stage `aria-activedescendant` without a deliberate focus-model change;
 - preserve existing keyboard navigation, editor focus takeover, and focus restoration behavior;
 - avoid adding additional tabbable descendants in body cells unless the interaction metadata explicitly requires it;
 - treat any change to normal-mode tab stops as browser-visible behavior requiring component and Playwright validation.
@@ -46,7 +47,6 @@ Until active-descendant integration is implemented:
 ## Known Gaps
 
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
-- Stable cell ids and active-cell semantics need to be finalized for virtualization remounts and pinned panes.
 - Grouped/tree projections need a documented `grid` versus `treegrid` policy, expansion state, and row hierarchy metadata.
 - Datasource loading/error placeholders need stronger screen-reader context and throttled announcements.
 - Editor inputs and custom interactive cells need consistent row/column contextual labels.

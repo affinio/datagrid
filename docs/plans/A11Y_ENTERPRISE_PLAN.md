@@ -4,11 +4,12 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-3 are implemented as of 2026-05-20.
+- Slices 1-4 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
 - Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
-- Remaining enterprise gaps are active-descendant/stable-id integration, grouped/tree semantics, pinned-pane reading order, editor/context labels, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
+- Header and body cells now expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths. The mounted stage keeps roving DOM focus and intentionally does not emit app-stage `aria-activedescendant`.
+- Remaining enterprise gaps are grouped/tree semantics, pinned-pane reading order, editor/context labels, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -66,21 +67,23 @@ Current execution state:
 
 ## Slice 4: Active Descendant And Stable Cell IDs
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: decide whether the app stage uses container focus plus `aria-activedescendant` or continues with roving DOM focus, then wire stable ids consistently for the approved model.
 - Affected packages/files:
-  - `packages/datagrid-orchestration/src/accessibility/useDataGridA11yCellIds.ts`
-  - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts`
-  - `packages/datagrid-vue-app/src/stage/*`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-  - `e2e/sandbox-interactions.spec.ts`
+  - `packages/datagrid-vue-app/src/stage/dataGridTableStageA11y.ts`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
+  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
-- Expected behavior change: active-cell semantics remain stable across virtualized unmount/remount and pinned panes; if `aria-activedescendant` is adopted, it resolves to a mounted id only when the active cell is rendered.
+- Expected behavior change: header and body cells now expose deterministic sanitized ids. Center, pinned-left, and pinned-right body ids are stable across virtualized remounts. App-stage `aria-activedescendant` remains absent because the approved mounted-stage model is still roving DOM focus.
 - Tests to add/update:
-  - Active cell id remains deterministic after scroll-out/scroll-in.
-  - Pinned left, center, right, and pinned-bottom cells use non-conflicting ids.
-  - `aria-activedescendant` is absent or valid according to the approved focus model.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts && pnpm exec playwright test e2e/sandbox-interactions.spec.ts --grep @a11y`
+  - Header/body ids sanitize row ids and column keys.
+  - Pinned left, center, and right cells use non-conflicting ids.
+  - Center cell id remains stable after horizontal unmount/remount.
+  - `aria-activedescendant` stays absent under the roving-focus model.
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGridTableStage.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid-vue-app): stabilize active cell accessibility ids`
 
@@ -184,7 +187,7 @@ Current execution state:
 1. Slice 1: Accessibility Contract Rebaseline (completed 2026-05-20)
 2. Slice 2: Header And Sort Semantics (completed 2026-05-20)
 3. Slice 3: Focus Ownership And Tab Stop Invariant (completed 2026-05-20)
-4. Slice 4: Active Descendant And Stable Cell IDs
+4. Slice 4: Active Descendant And Stable Cell IDs (completed 2026-05-20)
 5. Slice 5: Grouped, Tree, Placeholder, And Pinned-Pane Semantics
 6. Slice 6: Editor And Interactive Cell Labels
 7. Slice 7: Grid Live Region Coverage

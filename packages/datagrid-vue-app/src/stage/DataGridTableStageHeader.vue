@@ -37,6 +37,7 @@
           v-if="showIndexColumn"
           class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
           :style="rowIndexColumnStyle"
+          :id="DATA_GRID_STAGE_ROW_INDEX_HEADER_ID"
           role="columnheader"
           aria-colindex="1"
           aria-label="Row index"
@@ -53,6 +54,7 @@
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
             >
               <div class="col-head col-head--index">
@@ -114,6 +116,7 @@
                 :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
+                :id="headerCellId(column)"
                 v-bind="headerCellA11y(column)"
                 :draggable="isHeaderColumnDraggable(column)"
                 @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -180,6 +183,7 @@
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
             >
               <div class="col-head col-head--index">
@@ -206,6 +210,7 @@
               :class="resolveHeaderCellClasses(column)"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -342,6 +347,7 @@
               :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -415,6 +421,7 @@
             :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -536,6 +543,7 @@
               :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -609,6 +617,7 @@
             :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
@@ -676,6 +685,10 @@ import {
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
 import { shouldPrioritizeNativeScrollForMouseDown, shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
+import {
+  DATA_GRID_STAGE_ROW_INDEX_HEADER_ID,
+  resolveDataGridStageHeaderId,
+} from "./dataGridTableStageA11y"
 
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
@@ -1087,6 +1100,10 @@ function headerCellPresentationStyle(column: TableColumn): CSSProperties {
     column.column.presentation?.headerAlign ?? column.column.presentation?.align,
   )
   return textAlign ? { textAlign } : {}
+}
+
+function headerCellId(column: TableColumn): string {
+  return resolveDataGridStageHeaderId(column.key)
 }
 
 function resolveHeaderColumnIndex(column: TableColumn): number {

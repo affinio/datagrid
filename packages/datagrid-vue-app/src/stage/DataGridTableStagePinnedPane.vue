@@ -88,6 +88,7 @@
             renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
             renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
           ]"
+          :id="renderApi.cellDomId(row, column)"
           :data-row-id="String(row.rowId)"
           :data-column-key="column.key"
           :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"

@@ -224,6 +224,7 @@ import {
   resolveDataGridInteractionMode,
   shouldPrioritizeNativeScrollForMouseDown,
 } from "./dataGridMouseEventGuards"
+import { resolveDataGridStageCellId } from "./dataGridTableStageA11y"
 
 ensureDataGridAppStyles()
 
@@ -407,6 +408,10 @@ function cellTabIndex(rowOffset: number, columnIndex: number): number {
     return -1
   }
   return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true ? 0 : -1
+}
+
+function cellDomId(row: TableRow, column: TableColumn): string {
+  return resolveDataGridStageCellId(row.rowId, column.key)
 }
 
 function hasVisibleCellAnchorInRows(rowsList: readonly TableRow[]): boolean {
@@ -1596,6 +1601,7 @@ const cellRuntime = computed(() => ({
   bodyCellPresentationStyle,
   bodyCellSelectionStyle,
   resolveCellCustomStyle,
+  cellDomId,
   cellTabIndex,
   cellAriaSelected,
   cellAriaRole,

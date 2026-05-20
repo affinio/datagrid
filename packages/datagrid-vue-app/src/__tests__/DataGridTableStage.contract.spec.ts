@@ -1080,6 +1080,61 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders stable sanitized header and body cell ids across panes and remounts", async () => {
+    const visibleColumns = [
+      { key: "left%", pin: "left", width: 80, column: { key: "left%", label: "Left" } },
+      { key: "center A", pin: "center", width: 120, column: { key: "center A", label: "Center A" } },
+      { key: "right/1", pin: "right", width: 90, column: { key: "right/1", label: "Right" } },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const rows = [{
+      rowId: "row:5",
+      displayIndex: 4,
+      data: {
+        "left%": "L5",
+        "center A": "A5",
+        "right/1": "R5",
+      },
+    }] as unknown as readonly DataGridTableRow<DemoRow>[]
+    const baseProps = createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 4 && columnIndex === 1,
+      {
+        visibleColumns,
+        rows,
+        selectionRange: { startRow: 4, endRow: 4, startColumn: 1, endColumn: 1 },
+        selectionAnchorCell: { rowIndex: 4, columnIndex: 1 },
+      },
+    )
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: baseProps,
+    })
+
+    const centerCellId = "datagrid-stage-cell-row-5-center-A"
+
+    expect(wrapper.find(".grid-body-viewport").attributes("aria-activedescendant")).toBeUndefined()
+    expect(wrapper.find(".grid-header-pane--left .grid-cell--index-header").attributes("id")).toBe("datagrid-stage-header-row-index")
+    expect(wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="left%"]').attributes("id")).toBe("datagrid-stage-header-left-")
+    expect(wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="center A"]').attributes("id")).toBe("datagrid-stage-header-center-A")
+    expect(wrapper.find('.grid-header-pane--right .grid-cell--header[data-column-key="right/1"]').attributes("id")).toBe("datagrid-stage-header-right-1")
+    expect(wrapper.find('.grid-body-pane--left .datagrid-stage__cell[data-column-key="left%"]').attributes("id")).toBe("datagrid-stage-cell-row-5-left-")
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="center A"]').attributes("id")).toBe(centerCellId)
+    expect(wrapper.find('.grid-body-pane--right .datagrid-stage__cell[data-column-key="right/1"]').attributes("id")).toBe("datagrid-stage-cell-row-5-right-1")
+
+    await wrapper.setProps({
+      columns: {
+        ...baseProps.columns,
+        renderedColumns: [],
+      },
+    })
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="center A"]').exists()).toBe(false)
+
+    await wrapper.setProps({ columns: baseProps.columns })
+    await nextTick()
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="center A"]').attributes("id")).toBe(centerCellId)
+
+    wrapper.unmount()
+  })
+
   it("restores selected anchor affordances when a horizontally virtualized column remounts", async () => {
     const baseProps = createStageProps(
       (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 2,

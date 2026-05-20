@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, row-selection checkbox semantics, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage does not yet have active-descendant semantics, stable mounted active-cell ids across all panes, grouped/tree semantics, pinned-pane reading order validation, or browser-level accessibility gates.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs grouped/tree semantics, pinned-pane reading order validation, broader editor/context labels, and browser-level accessibility gates.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -95,17 +95,14 @@ Tests searched/reviewed:
 
 ### Blocker
 
-1. **`aria-activedescendant` is defined in core but not applied to the main stage.**
-   - Evidence: `headlessA11yStateMachine.ts` and `a11yAttributesAdapter.ts` support active descendant. Search found no usage of `createDataGridA11yStateMachine`, `mapDataGridA11yGridAttributes`, or `aria-activedescendant` in the main `DataGridTableStage` body; the only rendered `aria-activedescendant` found in app code is the filterable combobox.
-   - Impact: focus can live on a viewport or a remounted cell, but screen readers do not have a stable active descendant model across virtualization.
-   - Required: choose and document one focus model: roving DOM focus or container focus + active descendant. Then apply it consistently.
+None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has body/header roles, stable indexes, one normal-mode tab stop, and deterministic mounted cell/header ids. The remaining risks are high-priority completeness and validation gaps, not known blockers.
 
 ### High
 
 1. **Two accessibility architectures exist but are not unified.**
    - Evidence: `docs/datagrid-headless-a11y-contract.md` documents headless state machine guarantees. The app stage uses selection snapshot, DOM focus helpers, and interaction-controller keyboard routing instead.
-   - Impact: future fixes can improve the headless API without improving the real rendered DataGrid.
-   - Required: define whether the headless state machine is the canonical app-stage owner or a lower-level helper, then wire or retire the unused path.
+   - Impact: future fixes can improve the headless API without improving the real rendered DataGrid unless docs and tests stay explicit about the current mounted-stage owner.
+   - Required: keep the current roving DOM focus decision documented, and only migrate to `aria-activedescendant` through a dedicated focus-model proposal with browser validation.
 
 2. **Grouped/tree rows lack an enterprise ARIA contract.**
    - Evidence: group rows can be toggled by Space and group renderers receive `isGroup`, `childrenCount`, and `toggle`; no rendered `role="row"`, `aria-expanded`, `aria-level`, `aria-posinset`, or `aria-setsize` was found for stage group rows.
@@ -239,9 +236,9 @@ Target score: **9/10**
 
 What blocks the target:
 
-- rendered stage lacks complete grouped/tree, active-cell id, and pinned-pane ARIA semantics
+- rendered stage lacks complete grouped/tree and pinned-pane ARIA semantics
 - headless a11y state machine is not integrated into the main app stage
-- no active-descendant/stable-id contract across viewport/cells/editors/row index
+- app-stage `aria-activedescendant` is intentionally absent under the current roving-focus model
 - grouped/tree and pinned-pane semantics are not defined
 - no automated browser a11y gate or screen-reader smoke plan
 - no grid-level live region for common spreadsheet actions
@@ -265,8 +262,8 @@ What blocks the target:
 
 ### Phase 3: Virtualization And Pinned Panes
 
-- Use stable cell ids across remounts.
-- Preserve active descendant across scroll-out/scroll-in.
+- Stable body/header ids are implemented across remounts.
+- Preserve roving focus and mounted cell id resolution across scroll-out/scroll-in.
 - Define reading order for left/center/right pinned panes and pinned-bottom rows.
 - Ensure placeholder/loading rows expose loading/error state.
 
@@ -353,9 +350,9 @@ Performance/a11y gates:
    - Tests: normal-mode tab-stop priority across viewport, cells, and row index
    - Risk: high
 
-4. **Add active descendant, stable ids, and active-cell ARIA**
-   - Files: `useDataGridA11yCellIds`, stage cell/header rendering
-   - Tests: pinned/virtualized row index mapping and focus continuity across virtualization remount
+4. **Add stable ids and active-cell ARIA** (completed 2026-05-20)
+   - Files: `DataGridTableStage.vue`, `DataGridTableStageCenterPane.vue`, `DataGridTableStagePinnedPane.vue`, `DataGridTableStageHeader.vue`, `dataGridTableStageA11y.ts`
+   - Tests: sanitized header/body ids across pinned panes and virtualized remount; `aria-activedescendant` remains absent under roving focus
    - Risk: high
 
 5. **Define grouped/tree and pinned-pane semantics**

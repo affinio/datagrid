@@ -84,6 +84,7 @@ export interface UseDataGridStageRenderApisOptions {
   bodyCellPresentationStyle: (column: DataGridTableStageBodyColumn) => CSSProperties
   bodyCellSelectionStyle: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
   resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
+  cellDomId: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
   cellTabIndex: (rowOffset: number, columnIndex: number) => number
   cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
   cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
@@ -184,6 +185,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     bodyCellSelectionStyle: options.bodyCellSelectionStyle,
     resolveCellCustomStyle: options.resolveCellCustomStyle,
     columnIndexByKey: options.columnIndexByKey,
+    cellDomId: options.cellDomId,
     cellTabIndex: options.cellTabIndex,
     cellAriaSelected: options.cellAriaSelected,
     cellAriaRole: options.cellAriaRole,
@@ -254,6 +256,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     bodyCellSelectionStyle: options.bodyCellSelectionStyle,
     resolveCellCustomStyle: options.resolveCellCustomStyle,
     columnIndexByKey: options.columnIndexByKey,
+    cellDomId: options.cellDomId,
     cellTabIndex: options.cellTabIndex,
     cellAriaSelected: options.cellAriaSelected,
     cellAriaRole: options.cellAriaRole,
