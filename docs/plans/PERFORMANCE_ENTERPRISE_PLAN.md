@@ -4,13 +4,14 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-3e are implemented as of 2026-05-20.
+- Slices 1-4 are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
 - Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate with sort and edit-burst diagnostics.
 - Column-menu sort no longer races with large deferred value-histogram loading when the menu closes before the histogram starts.
 - Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort still has synchronous projection/sort work after the single-column fast path, and frozen inline-edit patches no longer force a full body-row partition rebuild.
-- Remaining blockers are deeper sort execution policy, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
+- Server-backed placeholder latency, viewport availability, cache miss, pull duration, retry, stale-retention, and browser placeholder diagnostics are now hard-gated.
+- Remaining blockers are deeper sort execution policy, datasource churn reduction, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
 ## Slice 1: Browser Frame Resource Hard Gates
@@ -130,18 +131,19 @@ Current execution state:
 
 ## Slice 4: Server-Backed Latency And Placeholder Gates
 
-- Status: Pending.
+- Status: Completed on 2026-05-20.
 - Objective: prove server-backed virtualization under latency, jitter, failures, stale retention, and cache replacement.
 - Affected packages/files:
   - `scripts/bench-datagrid-datasource-churn.mjs`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
-  - `packages/datagrid-core/src/datasource/*`
-  - `packages/datagrid-vue/src/app/*datasource*`
-- Expected behavior change: server-backed fast scroll keeps visible continuity without blank viewport gaps.
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+- Expected behavior change: no runtime grid behavior change; datasource/server-placeholder assert runs now hard-fail latency, cache, retry, stale-retention, and browser placeholder diagnostics.
 - Tests to add/update:
-  - Hard placeholder exposure, viewport availability, cache-hit/miss, pull duration, retry, and stale-retention gates.
+  - Hard placeholder exposure, viewport availability, cache-hit/miss, pull duration, retry, stale-retention, and browser server-placeholder gates.
 - Validation command: `pnpm run bench:datagrid:datasource-churn:assert && pnpm run bench:datagrid:enterprise:virtualization:assert`
-- Risk level: High
+- Risk level: Medium
 - Suggested commit message: `perf(datagrid): gate server placeholder latency`
 
 ## Slice 5: Datasource Churn Reduction
@@ -271,7 +273,7 @@ Current execution state:
 5. Slice 3c: Interaction Frame Artifact Triage And Edit Diagnostics (completed 2026-05-20)
 6. Slice 3d: Single-Column Sort Projection Cleanup (completed 2026-05-20)
 7. Slice 3e: Inline Edit Burst Runtime Cleanup (completed 2026-05-20)
-8. Slice 4: Server-Backed Latency And Placeholder Gates
+8. Slice 4: Server-Backed Latency And Placeholder Gates (completed 2026-05-20)
 9. Slice 5: Datasource Churn Reduction
 10. Slice 6: Long Memory Soak
 11. Slice 10: Wide-Table Horizontal Virtualization Matrix

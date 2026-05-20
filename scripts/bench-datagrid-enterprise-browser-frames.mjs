@@ -207,6 +207,30 @@ const PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS = floatEnv(
   "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS",
   220,
 )
+const PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS = floatEnv(
+  "PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS = floatEnv(
+  "PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS = floatEnv(
+  "PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS",
+  999999,
+)
+const PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO = floatEnv(
+  "PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO",
+  0,
+)
+const PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS = floatEnv(
+  "PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS",
+  999999,
+)
+const PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS = floatEnv(
+  "PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS",
+  999999,
+)
 const PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE = floatEnv(
   "PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE",
   999999,
@@ -483,6 +507,12 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95, "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95"],
   [PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS, "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS"],
   [PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS, "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS"],
+  [PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS, "PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS"],
+  [PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS, "PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS"],
+  [PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS, "PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS"],
+  [PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO, "PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO"],
+  [PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS, "PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS"],
+  [PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS, "PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS"],
   [PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE"],
@@ -2627,6 +2657,10 @@ function aggregateRuns(runs) {
       events: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.events)),
       maxMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.maxMs)),
       viewportAvailabilityMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.viewportAvailabilityMs)),
+      blankViewportEvents: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.blankViewportEvents)),
+      cacheHitRatio: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.cacheHitRatio)),
+      cacheMissRows: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.cacheMissRows)),
+      pullDurationMaxMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.pullDurationMaxMs)),
     },
     a11yDiagnostics: {
       sampleCount: stats(a11yDiagnosticsRuns.map(diagnostics => diagnostics.samples?.length ?? 0)),
@@ -2677,6 +2711,13 @@ function addWarningIfAbove(warnings, label, actual, budget) {
     return
   }
   warnings.push(`${label} ${actual.toFixed(3)} exceeds warning budget ${budget}`)
+}
+
+function addWarningIfBelow(warnings, label, actual, budget) {
+  if (!Number.isFinite(actual) || actual >= budget) {
+    return
+  }
+  warnings.push(`${label} ${actual.toFixed(3)} is below warning budget ${budget}`)
 }
 
 function buildInteractionBudgetWarnings(scenarioReports) {
@@ -2790,6 +2831,58 @@ function buildVirtualizationBudgetWarnings(scenarioReports) {
     if (!diagnostics || diagnostics.sampleCount.max <= 0) {
       warnings.push(`${scenario.id} virtualization telemetry produced no viewport samples`)
     }
+  }
+  return warnings
+}
+
+function buildDatasourcePlaceholderBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    const scenario = SCENARIOS.find(candidate => candidate.id === scenarioId)
+    if (!scenario?.datasourcePlaceholderDiagnostics) {
+      continue
+    }
+    const diagnostics = report.aggregate.datasourcePlaceholderDiagnostics
+    if (!diagnostics || diagnostics.events.max <= 0) {
+      warnings.push(`${scenarioId} datasource placeholder diagnostics produced no exposure samples`)
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} datasource placeholder exposure max`,
+      diagnostics.maxMs.max,
+      PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} datasource viewport availability max`,
+      diagnostics.viewportAvailabilityMs.max,
+      PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} datasource blank viewport events`,
+      diagnostics.blankViewportEvents.max,
+      PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS,
+    )
+    addWarningIfBelow(
+      warnings,
+      `${scenarioId} datasource cache hit ratio`,
+      diagnostics.cacheHitRatio.min,
+      PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} datasource cache miss rows`,
+      diagnostics.cacheMissRows.max,
+      PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} datasource pull duration max`,
+      diagnostics.pullDurationMaxMs.max,
+      PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS,
+    )
   }
   return warnings
 }
@@ -3095,6 +3188,7 @@ const elapsedMs = performance.now() - startedAt
 const scenarioReports = buildScenarioSummary(sessions)
 const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports)
 const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
+const datasourcePlaceholderBudgetWarnings = buildDatasourcePlaceholderBudgetWarnings(scenarioReports)
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
 const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
 const sortDiagnosticsBudgetWarnings = buildSortDiagnosticsBudgetWarnings(scenarioReports)
@@ -3103,6 +3197,7 @@ const a11yBudgetWarnings = buildA11yBudgetWarnings(scenarioReports)
 const budgetWarnings = [
   ...interactionBudgetWarnings,
   ...virtualizationBudgetWarnings,
+  ...datasourcePlaceholderBudgetWarnings,
   ...renderChurnBudgetWarnings,
   ...renderingTelemetryWarnings,
   ...sortDiagnosticsBudgetWarnings,
@@ -3112,6 +3207,7 @@ const budgetWarnings = [
 const budgetErrors = [
   ...(BENCH_INTERACTION_FAIL_ON_WARNINGS ? interactionBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
+  ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? datasourcePlaceholderBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
   ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
   ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? sortDiagnosticsBudgetWarnings : []),
@@ -3181,6 +3277,12 @@ const summary = {
       renderedColumnsP95: PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95,
       blankViewportCount: PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS,
       placeholderRows: PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS,
+      serverPlaceholderExposureMs: PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS,
+      serverViewportAvailabilityMs: PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS,
+      serverBlankViewportEvents: PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS,
+      serverCacheHitRatio: PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO,
+      serverCacheMissRows: PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS,
+      serverPullDurationMs: PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS,
     },
     renderChurnBudgets: {
       rowMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_MOUNTS_PER_SCROLL_WRITE,

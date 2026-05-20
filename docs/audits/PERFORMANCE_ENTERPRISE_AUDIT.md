@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slices 1-3e are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds.
+Update `2026-05-20`: Slices 1-4 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, and stale-retention regressions.
 
 ## Scope
 
@@ -304,8 +304,9 @@ What blocks the target:
    - Current interaction-frame artifact shows context-menu is not the active blocker; remaining deep cleanup should target deeper sort execution policy.
 
 4. **Server-backed latency and placeholder gates**
-   - Add latency/jitter/error profiles.
-   - Measure placeholder exposure time, stale row retention, cache replacement gaps, and request churn.
+   - Status: completed on 2026-05-20.
+   - Datasource churn assert now hard-fails placeholder exposure, viewport availability, cache-hit/miss, pull-duration, retry, and stale-retention budgets.
+   - Enterprise virtualization browser assert now hard-fails server placeholder exposure, viewport availability, blank viewport events, cache misses, and pull duration.
 
 5. **Datasource churn reduction**
    - Tune cache retention and coalescing.

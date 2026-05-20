@@ -508,7 +508,14 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95",
     "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS",
     "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS",
+    "PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS",
+    "PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS",
+    "PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS",
+    "PERF_BUDGET_MIN_SERVER_CACHE_HIT_RATIO",
+    "PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS",
+    "PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS",
     "buildVirtualizationBudgetWarnings",
+    "buildDatasourcePlaceholderBudgetWarnings",
     "waitForScrollStepFrame",
     "grid-selection-overlay__segment--fill-preview",
   ],
@@ -751,6 +758,15 @@ registerTokenCheck(
     const interactionsHeap = extractEnvNumberFromScript(interactionsAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const datasourceVariance = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const datasourceHeap = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const datasourcePlaceholderExposure = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS")
+    const datasourceViewportAvailability = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS")
+    const datasourcePlaceholderEvents = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS")
+    const datasourceBlankViewportEvents = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS")
+    const datasourceCacheHitRatio = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO")
+    const datasourceCacheMissRows = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS")
+    const datasourcePullDuration = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_PULL_DURATION_MAX_MS")
+    const datasourceRetrySuccesses = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES")
+    const datasourceStaleRetainedRows = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_STALE_RETAINED_ROWS")
     const derivedVariance = extractEnvNumberFromScript(derivedCacheAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const derivedHeap = extractEnvNumberFromScript(derivedCacheAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const pivotVariance = extractEnvNumberFromScript(pivotAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
@@ -768,6 +784,16 @@ registerTokenCheck(
       interactionsHeap != null &&
       datasourceVariance != null &&
       datasourceHeap != null &&
+      datasourcePlaceholderExposure != null &&
+      datasourceViewportAvailability != null &&
+      datasourcePlaceholderEvents != null &&
+      datasourceBlankViewportEvents != null &&
+      datasourceCacheHitRatio != null &&
+      datasourceCacheMissRows != null &&
+      datasourcePullDuration != null &&
+      datasourceRetrySuccesses != null &&
+      datasourceStaleRetainedRows != null &&
+      datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true") &&
       derivedVariance != null &&
       derivedHeap != null &&
       pivotVariance != null &&
@@ -784,7 +810,7 @@ registerTokenCheck(
       "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, and enterprise selection assert keeps finite selection budgets",
       ok
         ? "ok"
-        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
+        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
     )
   }
 }

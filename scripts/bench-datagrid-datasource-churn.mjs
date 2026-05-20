@@ -50,6 +50,24 @@ const PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS = Number.parseFloat(
 const PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS = Number.parseFloat(
   process.env.PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS ?? "0",
 )
+const PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS ?? "Infinity",
+)
+const PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO = Number.parseFloat(
+  process.env.PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO ?? "0",
+)
+const PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_PULL_DURATION_MAX_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_PULL_DURATION_MAX_MS ?? "Infinity",
+)
+const PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES = Number.parseFloat(
+  process.env.PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES ?? "0",
+)
+const PERF_BUDGET_MIN_STALE_RETAINED_ROWS = Number.parseFloat(
+  process.env.PERF_BUDGET_MIN_STALE_RETAINED_ROWS ?? "0",
+)
 const PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS = (
   process.env.PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS ?? "false"
 ).trim().toLowerCase() === "true"
@@ -131,6 +149,10 @@ function stats(values) {
 function diagnosticNumber(diagnostics, key) {
   const value = diagnostics?.[key]
   return Number.isFinite(value) ? value : 0
+}
+
+function countLoadedRows(rows) {
+  return rows.filter(row => row && row.__placeholder !== true).length
 }
 
 function sleep(ms, signal) {
@@ -445,6 +467,10 @@ async function runPlaceholderExposureScenario(createDataSourceBackedRowModel, se
   })
   const durations = []
   const maxStart = Math.max(0, ROW_COUNT - RANGE_SIZE - 2)
+  const scenarioDiagnostics = {
+    placeholderRetrySuccesses: 0,
+    staleRetainedRows: 0,
+  }
 
   const exposeRange = async (range) => {
     model.setViewportRange(range)
@@ -467,13 +493,21 @@ async function runPlaceholderExposureScenario(createDataSourceBackedRowModel, se
     await exposeRange(reverseRange)
     await exposeRange(jumpRange)
 
-    model.setViewportRange(retryRange)
-    model.getRowsInRange(retryRange)
+    await exposeRange(retryRange)
+    const retryRowsBeforeFailure = model.getRowsInRange(retryRange)
     dataSource.failNextPull()
     await Promise.resolve(model.refresh("manual")).catch(() => {})
-    model.getRowsInRange(retryRange)
+    const retryRowsAfterFailure = model.getRowsInRange(retryRange)
+    scenarioDiagnostics.staleRetainedRows += Math.min(
+      countLoadedRows(retryRowsBeforeFailure),
+      countLoadedRows(retryRowsAfterFailure),
+    )
     await Promise.resolve(model.refresh("manual"))
     await waitForViewportAvailable(model)
+    const retryRowsAfterSuccess = model.getRowsInRange(retryRange)
+    if (countLoadedRows(retryRowsAfterSuccess) >= Math.min(retryRowsBeforeFailure.length, RANGE_SIZE)) {
+      scenarioDiagnostics.placeholderRetrySuccesses += 1
+    }
   }
 
   try {
@@ -482,7 +516,10 @@ async function runPlaceholderExposureScenario(createDataSourceBackedRowModel, se
       await runOne()
       durations.push(performance.now() - t0)
     }
-    const diagnostics = model.getBackpressureDiagnostics()
+    const diagnostics = {
+      ...model.getBackpressureDiagnostics(),
+      ...scenarioDiagnostics,
+    }
     return { stat: stats(durations), diagnostics }
   } finally {
     model.dispose()
@@ -536,6 +573,9 @@ for (const seed of BENCH_SEEDS) {
       placeholderEvents: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(scrollBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
+      cacheHitRatio: diagnosticNumber(scrollBurst.diagnostics, "viewportCacheHitRatio").toFixed(3),
+      cacheMissRows: diagnosticNumber(scrollBurst.diagnostics, "viewportCacheMissRows"),
+      pullDurationMaxMs: diagnosticNumber(scrollBurst.diagnostics, "pullDurationMaxMs").toFixed(3),
     },
     {
       scenario: "filter-burst",
@@ -548,6 +588,9 @@ for (const seed of BENCH_SEEDS) {
       placeholderEvents: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(filterBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
+      cacheHitRatio: diagnosticNumber(filterBurst.diagnostics, "viewportCacheHitRatio").toFixed(3),
+      cacheMissRows: diagnosticNumber(filterBurst.diagnostics, "viewportCacheMissRows"),
+      pullDurationMaxMs: diagnosticNumber(filterBurst.diagnostics, "pullDurationMaxMs").toFixed(3),
     },
     {
       scenario: "placeholder-exposure",
@@ -560,6 +603,12 @@ for (const seed of BENCH_SEEDS) {
       placeholderEvents: diagnosticNumber(placeholderExposure.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(placeholderExposure.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(placeholderExposure.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
+      blankViewportEvents: diagnosticNumber(placeholderExposure.diagnostics, "blankViewportEvents"),
+      cacheHitRatio: diagnosticNumber(placeholderExposure.diagnostics, "viewportCacheHitRatio").toFixed(3),
+      cacheMissRows: diagnosticNumber(placeholderExposure.diagnostics, "viewportCacheMissRows"),
+      pullDurationMaxMs: diagnosticNumber(placeholderExposure.diagnostics, "pullDurationMaxMs").toFixed(3),
+      retrySuccesses: diagnosticNumber(placeholderExposure.diagnostics, "placeholderRetrySuccesses"),
+      staleRetainedRows: diagnosticNumber(placeholderExposure.diagnostics, "staleRetainedRows"),
     },
   ])
   console.log(`Total elapsed: ${elapsed.toFixed(2)}ms`)
@@ -638,6 +687,46 @@ const aggregateViewportDataAvailabilityMaxMs = stats(
     ),
   ),
 )
+const aggregateBlankViewportEvents = stats(
+  runResults.map(
+    run => diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "blankViewportEvents")
+      + diagnosticNumber(run.scenarios.filterBurst.diagnostics, "blankViewportEvents")
+      + diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "blankViewportEvents"),
+  ),
+)
+const aggregateViewportCacheHitRatio = stats(
+  runResults.map(
+    run => Math.min(
+      diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "viewportCacheHitRatio"),
+      diagnosticNumber(run.scenarios.filterBurst.diagnostics, "viewportCacheHitRatio"),
+      diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "viewportCacheHitRatio"),
+    ),
+  ),
+)
+const aggregateViewportCacheMissRows = stats(
+  runResults.map(
+    run => Math.max(
+      diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "viewportCacheMissRows"),
+      diagnosticNumber(run.scenarios.filterBurst.diagnostics, "viewportCacheMissRows"),
+      diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "viewportCacheMissRows"),
+    ),
+  ),
+)
+const aggregatePullDurationMaxMs = stats(
+  runResults.map(
+    run => Math.max(
+      diagnosticNumber(run.scenarios.scrollBurst.diagnostics, "pullDurationMaxMs"),
+      diagnosticNumber(run.scenarios.filterBurst.diagnostics, "pullDurationMaxMs"),
+      diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "pullDurationMaxMs"),
+    ),
+  ),
+)
+const aggregatePlaceholderRetrySuccesses = stats(
+  runResults.map(run => diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "placeholderRetrySuccesses")),
+)
+const aggregateStaleRetainedRows = stats(
+  runResults.map(run => diagnosticNumber(run.scenarios.placeholderExposure.diagnostics, "staleRetainedRows")),
+)
 
 for (const aggregate of [
   { name: "elapsed", stat: aggregateElapsed },
@@ -687,6 +776,36 @@ if (aggregateViewportDataAvailabilityMaxMs.max > PERF_BUDGET_MAX_VIEWPORT_DATA_A
 if (PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS) {
   budgetErrors.push(...budgetWarnings)
 }
+if (aggregateBlankViewportEvents.max > PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS) {
+  budgetErrors.push(
+    `aggregate blank viewport events ${aggregateBlankViewportEvents.max.toFixed(2)} exceeds PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS=${PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS}`,
+  )
+}
+if (aggregateViewportCacheHitRatio.min < PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO) {
+  budgetErrors.push(
+    `aggregate viewport cache hit ratio min ${aggregateViewportCacheHitRatio.min.toFixed(3)} is below PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO=${PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO}`,
+  )
+}
+if (aggregateViewportCacheMissRows.max > PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS) {
+  budgetErrors.push(
+    `aggregate viewport cache miss rows max ${aggregateViewportCacheMissRows.max.toFixed(2)} exceeds PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS=${PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS}`,
+  )
+}
+if (aggregatePullDurationMaxMs.max > PERF_BUDGET_MAX_PULL_DURATION_MAX_MS) {
+  budgetErrors.push(
+    `aggregate pull duration max ${aggregatePullDurationMaxMs.max.toFixed(3)}ms exceeds PERF_BUDGET_MAX_PULL_DURATION_MAX_MS=${PERF_BUDGET_MAX_PULL_DURATION_MAX_MS}ms`,
+  )
+}
+if (aggregatePlaceholderRetrySuccesses.min < PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES) {
+  budgetErrors.push(
+    `aggregate placeholder retry successes min ${aggregatePlaceholderRetrySuccesses.min.toFixed(2)} is below PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES=${PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES}`,
+  )
+}
+if (aggregateStaleRetainedRows.min < PERF_BUDGET_MIN_STALE_RETAINED_ROWS) {
+  budgetErrors.push(
+    `aggregate stale retained rows min ${aggregateStaleRetainedRows.min.toFixed(2)} is below PERF_BUDGET_MIN_STALE_RETAINED_ROWS=${PERF_BUDGET_MIN_STALE_RETAINED_ROWS}`,
+  )
+}
 
 const summary = {
   benchmark: "datagrid-datasource-churn",
@@ -717,6 +836,12 @@ const summary = {
     maxPlaceholderExposureMaxMs: PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS,
     maxViewportDataAvailabilityMaxMs: PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS,
     minPlaceholderExposureEvents: PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS,
+    maxPlaceholderBlankViewportEvents: PERF_BUDGET_MAX_PLACEHOLDER_BLANK_VIEWPORT_EVENTS,
+    minViewportCacheHitRatio: PERF_BUDGET_MIN_VIEWPORT_CACHE_HIT_RATIO,
+    maxViewportCacheMissRows: PERF_BUDGET_MAX_VIEWPORT_CACHE_MISS_ROWS,
+    maxPullDurationMaxMs: PERF_BUDGET_MAX_PULL_DURATION_MAX_MS,
+    minPlaceholderRetrySuccesses: PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES,
+    minStaleRetainedRows: PERF_BUDGET_MIN_STALE_RETAINED_ROWS,
     placeholderFailOnWarnings: PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS,
   },
   budgetWarnings,
@@ -733,6 +858,12 @@ const summary = {
     placeholderExposureEvents: aggregatePlaceholderExposureEvents,
     placeholderExposureMaxMs: aggregatePlaceholderExposureMaxMs,
     viewportDataAvailabilityMaxMs: aggregateViewportDataAvailabilityMaxMs,
+    blankViewportEvents: aggregateBlankViewportEvents,
+    viewportCacheHitRatio: aggregateViewportCacheHitRatio,
+    viewportCacheMissRows: aggregateViewportCacheMissRows,
+    pullDurationMaxMs: aggregatePullDurationMaxMs,
+    placeholderRetrySuccesses: aggregatePlaceholderRetrySuccesses,
+    staleRetainedRows: aggregateStaleRetainedRows,
   },
   runs: runResults,
   budgetErrors,
