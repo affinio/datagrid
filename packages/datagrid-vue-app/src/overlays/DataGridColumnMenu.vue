@@ -301,10 +301,6 @@
           {{ valuesWindowSummaryLabel }}
         </div>
 
-        <div v-if="effectiveValueFilterEnabled && appliedFilterTokens.length === 0" class="datagrid-column-menu__hint">
-          {{ selectAtLeastOneValueHintLabel }}
-        </div>
-
         <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
 
         <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__footer">
@@ -322,9 +318,9 @@
             type="button"
             class="datagrid-column-menu__button datagrid-column-menu__button--primary"
             data-datagrid-column-menu-action="apply-filter"
-            :data-disabled-reason="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter, 'filter')"
+            :data-disabled-reason="applyFilterDisabledTitle"
             :disabled="isActionDisabled('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter)"
-            :title="resolveActionDisabledTitle('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter, 'filter')"
+            :title="applyFilterDisabledTitle"
             @click="handleApplyFilter"
           >
             {{ applyFilterLabel }}
@@ -638,6 +634,21 @@ const canApplyFilter = computed(() => (
   && valueEntries.value.length > 0
   && appliedFilterTokens.value.length > 0
 ))
+
+const applyFilterDisabledTitle = computed(() => {
+  const disabledTitle = resolveActionDisabledTitle(
+    "applyFilter",
+    filterSectionDisabled.value || valueEntriesBusy.value || !canApplyFilter.value,
+    "filter",
+  )
+  if (disabledTitle) {
+    return disabledTitle
+  }
+  if (effectiveValueFilterEnabled.value && !valueEntriesBusy.value && appliedFilterTokens.value.length === 0) {
+    return selectAtLeastOneValueHintLabel.value
+  }
+  return undefined
+})
 
 const rootMenuOptions: MenuOptions = {
   mousePrediction: {},

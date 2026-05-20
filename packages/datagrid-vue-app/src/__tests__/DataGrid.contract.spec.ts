@@ -3789,6 +3789,62 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps value filter options selectable after clearing all selections", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+
+    queryColumnMenuAction("clear-all-values")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const menuRoot = queryColumnMenuRoot()
+    expect(menuRoot).toBeTruthy()
+    expect(queryColumnMenuAction("apply-filter")?.disabled).toBe(true)
+    expect(queryColumnMenuActionTitle("apply-filter")).toBe("Select at least one value to apply the filter.")
+    expect(Array.from(menuRoot!.querySelectorAll(".datagrid-column-menu__hint")).map(element => element.textContent?.trim()))
+      .not.toContain("Select at least one value to apply the filter.")
+
+    const valueRows = Array.from(menuRoot!.querySelectorAll<HTMLElement>(".datagrid-column-menu__value"))
+    const lastValueCheckbox = valueRows.at(-1)?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(lastValueCheckbox).toBeTruthy()
+    expect(lastValueCheckbox!.disabled).toBe(false)
+
+    lastValueCheckbox!.checked = true
+    lastValueCheckbox!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuAction("apply-filter")?.disabled).toBe(false)
+    queryColumnMenuAction("apply-filter")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            columnFilters: expect.objectContaining({
+              owner: expect.objectContaining({
+                kind: "valueSet",
+                tokens: ["string:gamma"],
+              }),
+            }),
+          }),
+          rowCount: 1,
+        }),
+      }),
+    })
+
+    wrapper.unmount()
+  })
+
   it("applies and clears quick filter through the controlled filterModel prop", async () => {
     const quickFilterModel = {
       columnFilters: {},
