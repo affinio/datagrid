@@ -4,13 +4,13 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-7 are implemented as of 2026-05-20.
+- Slices 1-8 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
 - Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
 - Header and body cells now expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths. The mounted stage keeps roving DOM focus and intentionally does not emit app-stage `aria-activedescendant`.
 - Group rows now expose grid-mode expansion and label context; placeholder rows expose row-level disabled/context metadata while preserving cell coordinates.
-- Remaining enterprise gaps are pinned-pane reading-order browser validation, browser a11y gates, and large-grid a11y performance validation.
+- Remaining enterprise gaps are large-grid a11y performance validation and manual assistive-technology validation.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -149,19 +149,19 @@ Current execution state:
 
 ## Slice 8: Browser Accessibility Gates
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: add browser-level accessibility validation for the mounted sandbox grid so component tests do not become the only protection.
 - Affected packages/files:
   - `e2e/sandbox-interactions.spec.ts`
   - `e2e/sandbox-grid.spec.ts`
   - `package.json`
   - `docs/datagrid-accessibility.md`
-- Expected behavior change: no runtime behavior change; CI/manual release validation gains mounted-grid a11y assertions.
+- Expected behavior change: no runtime behavior change; CI/manual release validation gains mounted-grid a11y assertions for default, pinned, grouped, editing, and server-placeholder states.
 - Tests to add/update:
   - Playwright assertions for grid roles/counts/indexes after scroll and remount.
   - Accessibility tree smoke checks for default, pinned, grouped, editing, and server-placeholder states where Playwright support is stable.
   - Optional axe smoke gate if dependency/runtime cost is approved.
-- Validation command: `pnpm exec playwright test e2e/sandbox-interactions.spec.ts e2e/sandbox-grid.spec.ts --grep @a11y`
+- Validation command: `pnpm run test:e2e:datagrid:a11y`
 - Risk level: Low
 - Suggested commit message: `test(datagrid): gate mounted grid accessibility`
 
@@ -192,7 +192,7 @@ Current execution state:
 5. Slice 5: Grouped, Tree, Placeholder, And Pinned-Pane Semantics (completed 2026-05-20)
 6. Slice 6: Editor And Interactive Cell Labels (completed 2026-05-20)
 7. Slice 7: Grid Live Region Coverage (completed 2026-05-20)
-8. Slice 8: Browser Accessibility Gates
+8. Slice 8: Browser Accessibility Gates (completed 2026-05-20)
 9. Slice 9: Large-Grid A11Y Performance Gate
 
 ## Execution Notes

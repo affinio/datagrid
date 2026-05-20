@@ -1,6 +1,42 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
 test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () => {
+  test("@a11y vue base grid exposes mounted grid semantics after scroll and pinning", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=32")
+
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole("grid").first()).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBeGreaterThanOrEqual(32)
+
+    const before = await mountedGridA11ySnapshot(page)
+    expect(before.grid.role).toBe("grid")
+    expect(before.grid.ariaMultiselectable).toBe("true")
+    expect(Number(before.grid.ariaRowCount)).toBeGreaterThan(0)
+    expect(Number(before.grid.ariaColCount)).toBeGreaterThanOrEqual(32)
+    expect(before.headers.length).toBeGreaterThan(0)
+    expect(before.headers.some(header => header.role === "columnheader")).toBe(true)
+    expect(before.firstCenterCell.role).toBe("gridcell")
+    expect(before.firstCenterCell.id).toBeTruthy()
+    expect(before.firstCenterCell.ariaRowIndex).toBe(String(Number(before.firstCenterCell.rowIndex) + 1))
+    expect(before.firstCenterCell.ariaColIndex).toBe(String(Number(before.firstCenterCell.columnIndex) + 1))
+
+    await pinColumnRight(page, "amount")
+    const start = await viewportRangeStart(page)
+    await runLongVerticalSession(viewport)
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(start)
+
+    const after = await mountedGridA11ySnapshot(page)
+    expect(after.firstCenterCell.id).toBeTruthy()
+    expect(after.firstCenterCell.ariaRowIndex).toBe(String(Number(after.firstCenterCell.rowIndex) + 1))
+    expect(after.firstCenterCell.ariaColIndex).toBe(String(Number(after.firstCenterCell.columnIndex) + 1))
+    expect(after.rightPinnedCell).toMatchObject({
+      role: "gridcell",
+      columnKey: "amount",
+    })
+    expect(after.rightPinnedCell?.ariaColIndex).toBe(String(Number(after.rightPinnedCell?.columnIndex) + 1))
+  })
+
   test("vue base grid updates viewport window on long vertical scroll", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -777,6 +813,89 @@ async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
   await page.locator('[data-datagrid-column-menu-action="pin-submenu"]').click()
   await page.locator('[data-datagrid-column-menu-action="pin-right"]').click()
   await expect(page.locator(`.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).first()).toBeVisible({ timeout: 20_000 })
+}
+
+interface MountedGridA11yCellSnapshot {
+  id: string
+  role: string | null
+  rowIndex: string
+  columnIndex: string
+  columnKey: string
+  ariaRowIndex: string | null
+  ariaColIndex: string | null
+  ariaSelected: string | null
+}
+
+interface MountedGridA11ySnapshot {
+  grid: {
+    role: string | null
+    ariaRowCount: string | null
+    ariaColCount: string | null
+    ariaMultiselectable: string | null
+  }
+  headers: Array<{
+    id: string
+    role: string | null
+    columnKey: string
+    ariaColIndex: string | null
+    ariaSort: string | null
+  }>
+  firstCenterCell: MountedGridA11yCellSnapshot
+  rightPinnedCell: MountedGridA11yCellSnapshot | null
+}
+
+async function mountedGridA11ySnapshot(page: Page): Promise<MountedGridA11ySnapshot> {
+  return await page.evaluate(() => {
+    const stage = Array.from(document.querySelectorAll<HTMLElement>(".grid-stage"))
+      .find(element => {
+        const rect = element.getBoundingClientRect()
+        const style = window.getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden"
+      })
+    if (!stage) {
+      throw new Error("missing visible grid stage")
+    }
+    const grid = stage.querySelector<HTMLElement>(".grid-body-viewport[role='grid']")
+    if (!grid) {
+      throw new Error("missing grid viewport")
+    }
+    const toCellSnapshot = (cell: HTMLElement): MountedGridA11yCellSnapshot => ({
+      id: cell.id,
+      role: cell.getAttribute("role"),
+      rowIndex: cell.getAttribute("data-row-index") ?? "",
+      columnIndex: cell.getAttribute("data-column-index") ?? "",
+      columnKey: cell.getAttribute("data-column-key") ?? "",
+      ariaRowIndex: cell.getAttribute("aria-rowindex"),
+      ariaColIndex: cell.getAttribute("aria-colindex"),
+      ariaSelected: cell.getAttribute("aria-selected"),
+    })
+    const firstCenterCell = grid.querySelector<HTMLElement>(
+      ".grid-body-content > .grid-row[data-row-index] .grid-cell[data-row-index][data-column-index]:not(.grid-cell--row-selection)",
+    )
+    if (!firstCenterCell) {
+      throw new Error("missing center body cell")
+    }
+    const rightPinnedCell = stage.querySelector<HTMLElement>(
+      ".grid-body-pane--right .grid-cell[data-row-index][data-column-index]:not(.grid-cell--row-selection)",
+    )
+    return {
+      grid: {
+        role: grid.getAttribute("role"),
+        ariaRowCount: grid.getAttribute("aria-rowcount"),
+        ariaColCount: grid.getAttribute("aria-colcount"),
+        ariaMultiselectable: grid.getAttribute("aria-multiselectable"),
+      },
+      headers: Array.from(stage.querySelectorAll<HTMLElement>(".grid-cell--header[data-column-key][aria-colindex]")).map(header => ({
+        id: header.id,
+        role: header.getAttribute("role"),
+        columnKey: header.getAttribute("data-column-key") ?? "",
+        ariaColIndex: header.getAttribute("aria-colindex"),
+        ariaSort: header.getAttribute("aria-sort"),
+      })),
+      firstCenterCell: toCellSnapshot(firstCenterCell),
+      rightPinnedCell: rightPinnedCell ? toCellSnapshot(rightPinnedCell) : null,
+    }
+  })
 }
 
 function readNumericPerfField(sample: Record<string, unknown> | null, field: string): number {

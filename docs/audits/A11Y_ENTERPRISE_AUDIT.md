@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, browser-level accessibility gates, and large-grid a11y performance validation.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, browser-level mounted-grid a11y gates, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs large-grid a11y performance validation plus manual assistive-technology validation.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -109,15 +109,10 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
    - Impact: grouped rows have basic expansion semantics, but deep tree hierarchy is not yet predictable enough to claim treegrid support.
    - Required: keep grouped mode under `grid` until a future treegrid proposal defines hierarchy metadata and browser validation.
 
-3. **Pinned panes can fragment screen-reader reading order.**
-   - Evidence: left, center, right, and pinned-bottom panes render separate DOM trees. Focus lookup searches all pane roots, but no ARIA ownership/reading-order contract was found.
-   - Impact: assistive tech may read pinned cells, center cells, and pinned-bottom cells as unrelated regions.
-   - Required: provide one logical grid tree with stable ids/indexes, or hide duplicate/non-primary structural wrappers while exposing cells in logical order.
-
-4. **No screen-reader or automated a11y gate was found.**
-   - Evidence: tests cover headless state, ids, keyboard, row checkboxes, and interaction ARIA attributes, but no reviewed axe/Playwright accessibility tree/screen-reader smoke gate was found.
-   - Impact: regressions in real browser semantics are likely.
-   - Required: add component and browser a11y assertions for the rendered stage.
+3. **Pinned panes still need manual screen-reader validation.**
+   - Evidence: browser `@a11y` tests now verify mounted grid roles, indexes, ids, and pinned-pane ARIA coordinates, but left, center, right, and pinned-bottom panes still render separate DOM trees.
+   - Impact: automated coverage protects ARIA contracts, but assistive-tech reading order needs manual validation before an enterprise readiness claim.
+   - Required: run manual screen-reader smoke checks and keep browser tests guarding pinned-pane indexes/ids.
 
 ### Medium
 
@@ -152,7 +147,7 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
 Current likely alignment:
 
 - **Keyboard access:** partial to strong for grid navigation and shortcuts.
-- **Focus visible:** mostly covered through visual focus/selection classes and direct focus calls, but not verified by a browser a11y gate.
+- **Focus visible:** mostly covered through visual focus/selection classes, direct focus calls, and browser `@a11y` smoke gates.
 - **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes, leaf header semantics, group expansion state, placeholder disabled/context metadata, and inline editor labels are implemented, but pinned-pane ownership still needs browser validation; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
 - **Status messages:** partial to strong; app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes, but browser and screen-reader validation is still required.
 - **Pointer/touch alternatives:** partial; keyboard alternatives exist for many actions, but resize/fill/range move/touch workflows need explicit accessible alternatives.
@@ -229,9 +224,8 @@ What blocks the target:
 - rendered stage lacks complete pinned-pane reading-order validation and future treegrid hierarchy semantics
 - headless a11y state machine is not integrated into the main app stage
 - app-stage `aria-activedescendant` is intentionally absent under the current roving-focus model
-- pinned-pane reading order and future treegrid hierarchy semantics are not browser-validated
-- no automated browser a11y gate or screen-reader smoke plan
-- no grid-level live region for common spreadsheet actions
+- pinned-pane reading order and future treegrid hierarchy semantics are not manually screen-reader validated
+- no documented manual screen-reader smoke plan
 - no large-grid a11y performance gate
 
 ## Recommended Roadmap
@@ -359,7 +353,7 @@ Performance/a11y gates:
    - Tests: action messages update live region once per command
    - Risk: medium
 
-8. **Add browser a11y validation**
+8. **Add browser a11y validation** (completed 2026-05-20)
    - Files: Playwright/e2e and component test harness
    - Tests: axe/a11y tree smoke checks
    - Risk: low

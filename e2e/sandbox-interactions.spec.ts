@@ -47,24 +47,29 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     expect(after.width).toBeGreaterThan(before.width + 30)
   })
 
-  test("tree group row click toggles expansion", async ({ page }) => {
+  test("@a11y tree group row exposes expansion state while click toggles expansion", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/tree-grid")
 
     const groupRow = page.locator(".grid-row.row--group").first()
     await expect(groupRow).toBeVisible({ timeout: 20_000 })
+    await expect(groupRow).toHaveAttribute("role", "row")
+    await expect(groupRow).toHaveAttribute("aria-expanded", /^(true|false)$/)
+    await expect(groupRow).toHaveAttribute("aria-label", /row/)
 
     const before = await rowsInModel(page)
+    const expandedBefore = await groupRow.getAttribute("aria-expanded")
     await groupRow.click()
 
     await expect
       .poll(async () => rowsInModel(page))
       .not.toBe(before)
+    await expect(groupRow).not.toHaveAttribute("aria-expanded", expandedBefore ?? "")
 
     await groupRow.click()
     await expect.poll(async () => rowsInModel(page)).toBe(before)
   })
 
-  test("inline editor Tab keeps focus inside grid and advances to the next editable cell", async ({ page }) => {
+  test("@a11y inline editor exposes context and Tab keeps focus inside grid", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/shell/base-grid")
 
     const editableCell = page.locator('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]').first()
@@ -77,6 +82,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
 
     const editor = editableCell.locator("input.cell-editor-input").first()
     await expect(editor).toBeVisible({ timeout: 20_000 })
+    await expect(editor).toHaveAttribute("aria-label", /Edit Amount, row \d+/)
     await editor.press("Tab")
 
     await expect.poll(async () => selectionAnchorMeta(page)).toMatchObject({
@@ -529,7 +535,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(materializedAmountCell))
   })
 
-  test("server datasource loading placeholder replacement keeps selection anchor", async ({ page }) => {
+  test("@a11y server datasource loading placeholder replacement keeps ARIA coordinates", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
     const stage = page.locator(".sandbox-server-data-source-grid .grid-stage:visible").first()

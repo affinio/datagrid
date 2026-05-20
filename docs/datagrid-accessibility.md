@@ -59,7 +59,7 @@ Under the current roving-focus model:
 Runtime accessibility slices should include the smallest relevant validation first:
 
 - component tests for rendered ARIA roles, counts, indexes, labels, focus ownership, and state;
-- Playwright tests for browser-mounted behavior across scroll, virtualization remount, pinned panes, editing, grouped rows, and datasource placeholders;
+- Playwright `@a11y` tests for browser-mounted behavior across scroll, virtualization remount, pinned panes, editing, grouped rows, and datasource placeholders;
 - performance validation for large-grid scroll paths when adding ARIA state to hot render surfaces;
 - manual screen-reader smoke testing before claiming WCAG conformance or enterprise screen-reader readiness.
 
