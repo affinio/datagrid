@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import * as stable from "../../public"
 import * as advanced from "../../advanced"
@@ -31,5 +33,16 @@ describe("entrypoint tier contract", () => {
     expect(typeof internal.normalizeRowNode).toBe("function")
     expect(typeof internal.normalizeViewportRange).toBe("function")
     expect(typeof internal.withResolvedRowIdentity).toBe("function")
+  })
+
+  it("blocks source-shaped package wildcard exports", () => {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
+    ) as { exports?: Record<string, unknown> }
+
+    expect(packageJson.exports).toHaveProperty(".")
+    expect(packageJson.exports).toHaveProperty("./advanced")
+    expect(packageJson.exports).toHaveProperty("./internal")
+    expect(packageJson.exports).not.toHaveProperty("./*")
   })
 })

@@ -6,11 +6,9 @@
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
       "version": "0.3.33",
-      "exportCount": 4,
+      "exportCount": 3,
       "unclassifiedExports": [],
-      "wildcardExports": [
-        "./*"
-      ],
+      "wildcardExports": [],
       "missingSourceFiles": [],
       "exports": [
         {
@@ -25,17 +23,6 @@
           "exportDeclarations": [
             "export * from \"./public.js\" "
           ]
-        },
-        {
-          "subpath": "./*",
-          "tier": "development-only-risk",
-          "types": "./src/*.ts",
-          "import": "./src/*.ts",
-          "sourceFile": "src/*.ts",
-          "sourceExists": true,
-          "wildcard": true,
-          "exportDeclarationCount": 0,
-          "exportDeclarations": []
         },
         {
           "subpath": "./advanced",

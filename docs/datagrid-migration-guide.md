@@ -71,6 +71,16 @@ Required move for authored columns:
 5. Remove direct dependency on legacy internal path aliases.
 6. Re-run quality/perf gates before release.
 
+## Core Deep Import Migration
+
+`@affino/datagrid-core` only exports the tiered entrypoints `.`, `./advanced`, and `./internal`. Source-shaped deep imports such as `@affino/datagrid-core/src/*` or `@affino/datagrid-core/viewport/*` are unsupported and blocked by the package export map.
+
+Migration rule:
+
+- Stable model, API, event, datasource, formula, spreadsheet, and selection helpers should import from `@affino/datagrid-core`.
+- Viewport controller, transaction service, adapter runtime, a11y state machine, and datasource-backed row model power-user APIs should import from `@affino/datagrid-core/advanced`.
+- Unsafe normalization helpers should import from `@affino/datagrid-core/internal` only in package-internal or explicitly advanced integration code.
+
 ## GridApi Namespace Migration (Flat -> Namespaced)
 
 Preferred API shape:

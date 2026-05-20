@@ -10,11 +10,11 @@ const writeBaseline = process.argv.includes("--write-baseline")
 const trackedPackages = [
   {
     packageDir: "packages/datagrid-core",
+    allowWildcardExports: false,
     tiers: {
       ".": "stable",
       "./advanced": "advanced",
       "./internal": "internal",
-      "./*": "development-only-risk",
     },
   },
   {
@@ -197,6 +197,10 @@ for (const packageReport of inventory.packages) {
   }
   for (const subpath of packageReport.missingSourceFiles) {
     report.violations.push(`${packageReport.packageName} export ${subpath} has no source file mapping`)
+  }
+  const config = trackedPackages.find(packageConfig => packageConfig.packageDir === packageReport.packageDir)
+  if (config?.allowWildcardExports === false && packageReport.wildcardExports.length > 0) {
+    report.violations.push(`${packageReport.packageName} must not expose wildcard package exports`)
   }
 }
 

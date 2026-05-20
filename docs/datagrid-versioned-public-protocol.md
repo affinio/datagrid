@@ -1,6 +1,6 @@
 # DataGrid Versioned Public Protocol
 
-Updated: `2026-02-11`
+Updated: `2026-05-20`
 
 This document defines semver-safe public protocol rules for:
 
@@ -40,6 +40,8 @@ Forbidden public integration paths:
 - `@affino/datagrid-vue/src/*`
 
 Rule: if an import path is outside tiered entrypoints above, it is not part of public contract.
+
+`@affino/datagrid-core` enforces this through its package export map: only `.`, `./advanced`, and `./internal` are exported. Source-shaped wildcard paths are intentionally not exported.
 
 ## Deprecation Windows
 
