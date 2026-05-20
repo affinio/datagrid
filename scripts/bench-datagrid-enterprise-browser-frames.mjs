@@ -103,6 +103,10 @@ const BENCH_RENDERING_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_RENDERING_FAIL_ON_WARNINGS",
   false,
 )
+const BENCH_A11Y_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_A11Y_FAIL_ON_WARNINGS",
+  false,
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = floatEnv("PERF_BUDGET_MAX_VARIANCE_PCT", 999999)
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = floatEnv("PERF_BUDGET_MAX_HEAP_DELTA_MB", 999999)
 const PERF_BUDGET_MAX_FRAME_P95_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P95_MS", 120)
@@ -176,6 +180,14 @@ const PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE = floatEnv(
   "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE",
   999999,
 )
+const PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS = floatEnv("PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS", 1)
+const PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS = floatEnv("PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS", 0)
+const PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES = floatEnv("PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES", 0)
+const PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS = floatEnv("PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS", 0)
+const PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS = floatEnv("PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS", 0)
+const PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES = floatEnv("PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES", 0)
+const PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT = floatEnv("PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT", 999999)
+const PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT = floatEnv("PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT", 999999)
 
 const ALL_SCENARIOS = [
   {
@@ -207,6 +219,18 @@ const ALL_SCENARIOS = [
     verticalSmoothScroll: false,
     verticalDiagnostics: true,
     virtualizationTelemetryRequired: true,
+    horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "a11y-large-grid-scroll",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    a11yDiagnostics: true,
     horizontalScroll: true,
     filter: false,
     sort: false,
@@ -412,6 +436,14 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE"],
+  [PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS, "PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS"],
+  [PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS, "PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS"],
+  [PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES, "PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES"],
+  [PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS, "PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS"],
+  [PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS, "PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS"],
+  [PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES, "PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES"],
+  [PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT, "PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT"],
+  [PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT, "PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT"],
 ]) {
   if (value < 0) {
     throw new Error(`${label} must be non-negative`)
@@ -536,7 +568,7 @@ function normalizeFrameDeltas(frameDeltas) {
 
 function buildScenarioUrl(scenario) {
   const url = new URL(scenario.route ?? BENCH_BROWSER_ROUTE, BENCH_BROWSER_BASE_URL)
-  if (scenario.verticalDiagnostics || scenario.sortDiagnostics || scenario.interactionDiagnostics) {
+  if (scenario.verticalDiagnostics || scenario.sortDiagnostics || scenario.interactionDiagnostics || scenario.a11yDiagnostics) {
     url.searchParams.set("dgPerfTrace", "1")
   }
   if (scenario.renderProfile) {
@@ -635,6 +667,7 @@ async function runScenario(page, sessionIndex, scenario) {
     const isVerticalDiagnosticsScenario = Boolean(input.scenario.verticalDiagnostics)
     const isSortDiagnosticsScenario = Boolean(input.scenario.sortDiagnostics)
     const isInteractionDiagnosticsScenario = Boolean(input.scenario.interactionDiagnostics)
+    const isA11yDiagnosticsScenario = Boolean(input.scenario.a11yDiagnostics)
     const createMutationSummary = () => ({
       callbackCount: 0,
       childListMutations: 0,
@@ -702,6 +735,13 @@ async function runScenario(page, sessionIndex, scenario) {
           traceSummary: {},
           appPerf: null,
           clipboard: null,
+        }
+      : null
+    const a11yDiagnostics = isA11yDiagnosticsScenario
+      ? {
+          enabled: true,
+          samples: [],
+          summary: null,
         }
       : null
 
@@ -905,6 +945,90 @@ async function runScenario(page, sessionIndex, scenario) {
         scrollLeft: viewport.scrollLeft,
       })
     }
+    const captureA11yDiagnostics = (label) => {
+      if (!a11yDiagnostics) {
+        return null
+      }
+      const root = stageRoot instanceof HTMLElement ? stageRoot : viewport
+      const elements = Array.from(root.querySelectorAll("*"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      const stageTabStops = Array.from(root.querySelectorAll(
+        ".grid-body-viewport[tabindex='0'], .datagrid-stage__cell[tabindex='0'], .datagrid-stage__row-index-cell[tabindex='0']",
+      )).filter(candidate => candidate instanceof HTMLElement)
+      const activeDescendantOwners = elements.filter(element => {
+        const value = element.getAttribute("aria-activedescendant")
+        return typeof value === "string" && value.trim().length > 0
+      })
+      const idCounts = new Map()
+      for (const element of elements) {
+        if (!element.id) {
+          continue
+        }
+        idCounts.set(element.id, (idCounts.get(element.id) ?? 0) + 1)
+      }
+      const duplicateIdCount = Array.from(idCounts.values())
+        .filter(count => count > 1)
+        .length
+      const unresolvedReferenceAttributes = ["aria-activedescendant", "aria-labelledby", "aria-describedby"]
+      let unresolvedReferenceCount = 0
+      for (const element of elements) {
+        for (const attribute of unresolvedReferenceAttributes) {
+          const rawValue = element.getAttribute(attribute)
+          if (!rawValue) {
+            continue
+          }
+          const referencedIds = rawValue.split(/\s+/).map(value => value.trim()).filter(Boolean)
+          for (const referencedId of referencedIds) {
+            if (!document.getElementById(referencedId)) {
+              unresolvedReferenceCount += 1
+            }
+          }
+        }
+      }
+      const cells = Array.from(root.querySelectorAll(".datagrid-stage__cell[data-row-id][data-column-key]"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      const headerCells = Array.from(root.querySelectorAll(".grid-cell--header[data-column-key][role='columnheader']"))
+        .filter(candidate => candidate instanceof HTMLElement)
+      const bodyCellsWithoutId = cells.filter(cell => !cell.id).length
+      const headerCellsWithoutId = headerCells.filter(header => !header.id).length
+      let ariaIndexMismatchCount = 0
+      for (const cell of cells) {
+        const rowIndex = Number(cell.getAttribute("data-row-index"))
+        const columnIndex = Number(cell.getAttribute("data-column-index"))
+        const ariaRowIndex = Number(cell.getAttribute("aria-rowindex"))
+        const ariaColIndex = Number(cell.getAttribute("aria-colindex"))
+        if (Number.isFinite(rowIndex) && Number.isFinite(ariaRowIndex) && ariaRowIndex !== rowIndex + 1) {
+          ariaIndexMismatchCount += 1
+        }
+        if (Number.isFinite(columnIndex) && Number.isFinite(ariaColIndex) && ariaColIndex !== columnIndex + 1) {
+          ariaIndexMismatchCount += 1
+        }
+      }
+      const ariaNodes = elements.filter(element => Array.from(element.attributes)
+        .some(attribute => attribute.name === "role" || attribute.name.startsWith("aria-")))
+      const ariaAttributeCount = ariaNodes.reduce((count, element) => {
+        return count + Array.from(element.attributes)
+          .filter(attribute => attribute.name === "role" || attribute.name.startsWith("aria-"))
+          .length
+      }, 0)
+      const sample = {
+        label,
+        stageTabStops: stageTabStops.length,
+        activeDescendantCount: activeDescendantOwners.length,
+        unresolvedReferenceCount,
+        duplicateIdCount,
+        bodyCellsWithoutId,
+        headerCellsWithoutId,
+        ariaIndexMismatchCount,
+        ariaNodeCount: ariaNodes.length,
+        ariaAttributeCount,
+        gridCount: root.querySelectorAll(".grid-body-viewport[role='grid']").length,
+        rowCount: root.querySelectorAll("[role='row']").length,
+        cellCount: root.querySelectorAll("[role='gridcell'], [role='checkbox'], [role='rowheader']").length,
+      }
+      a11yDiagnostics.samples.push(sample)
+      return sample
+    }
     const readDatasourcePlaceholderDiagnostics = () => {
       if (!input.scenario.datasourcePlaceholderDiagnostics) {
         return null
@@ -1105,6 +1229,7 @@ async function runScenario(page, sessionIndex, scenario) {
     captureScrollContainerDiagnostics()
     captureTelemetry("start")
     captureRenderedSnapshot("start")
+    captureA11yDiagnostics("start")
     await waitForPaint()
 
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
@@ -1865,6 +1990,21 @@ async function runScenario(page, sessionIndex, scenario) {
     await pause(Math.max(32, input.stepDelayMs * 2))
     captureTelemetry("settled")
     captureRenderedSnapshot("settled")
+    captureA11yDiagnostics("settled")
+    if (a11yDiagnostics) {
+      const summarizeA11y = key => summarizeNumbers(a11yDiagnostics.samples.map(sample => sample[key]))
+      a11yDiagnostics.summary = {
+        stageTabStops: summarizeA11y("stageTabStops"),
+        activeDescendantCount: summarizeA11y("activeDescendantCount"),
+        unresolvedReferenceCount: summarizeA11y("unresolvedReferenceCount"),
+        duplicateIdCount: summarizeA11y("duplicateIdCount"),
+        bodyCellsWithoutId: summarizeA11y("bodyCellsWithoutId"),
+        headerCellsWithoutId: summarizeA11y("headerCellsWithoutId"),
+        ariaIndexMismatchCount: summarizeA11y("ariaIndexMismatchCount"),
+        ariaNodeCount: summarizeA11y("ariaNodeCount"),
+        ariaAttributeCount: summarizeA11y("ariaAttributeCount"),
+      }
+    }
     const measuredElapsedMs = performance.now() - startedAt
     running = false
     await pause(24)
@@ -2141,6 +2281,7 @@ async function runScenario(page, sessionIndex, scenario) {
       verticalDiagnostics,
       sortDiagnostics,
       interactionDiagnostics,
+      a11yDiagnostics,
       datasourcePlaceholderDiagnostics: readDatasourcePlaceholderDiagnostics(),
     }
   }, {
@@ -2187,6 +2328,7 @@ async function runScenario(page, sessionIndex, scenario) {
     verticalDiagnostics: result.verticalDiagnostics,
     sortDiagnostics: result.sortDiagnostics,
     interactionDiagnostics: result.interactionDiagnostics,
+    a11yDiagnostics: result.a11yDiagnostics,
     datasourcePlaceholderDiagnostics: result.datasourcePlaceholderDiagnostics,
   }
 }
@@ -2195,6 +2337,8 @@ function aggregateRuns(runs) {
   const verticalDiagnosticsRuns = runs.map(run => run.verticalDiagnostics).filter(Boolean)
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
   const interactionDiagnosticsRuns = runs.map(run => run.interactionDiagnostics).filter(Boolean)
+  const a11yDiagnosticsRuns = runs.map(run => run.a11yDiagnostics).filter(Boolean)
+  const a11ySamples = a11yDiagnosticsRuns.flatMap(diagnostics => diagnostics.samples ?? [])
   const datasourcePlaceholderRuns = runs.map(run => run.datasourcePlaceholderDiagnostics).filter(Boolean)
   const interactionScopeStats = (scope) => stats(
     interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.[scope]?.totalMs?.p95),
@@ -2326,6 +2470,21 @@ function aggregateRuns(runs) {
       events: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.events)),
       maxMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.maxMs)),
       viewportAvailabilityMs: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.viewportAvailabilityMs)),
+    },
+    a11yDiagnostics: {
+      sampleCount: stats(a11yDiagnosticsRuns.map(diagnostics => diagnostics.samples?.length ?? 0)),
+      stageTabStops: stats(a11ySamples.map(sample => sample.stageTabStops)),
+      activeDescendantCount: stats(a11ySamples.map(sample => sample.activeDescendantCount)),
+      unresolvedReferenceCount: stats(a11ySamples.map(sample => sample.unresolvedReferenceCount)),
+      duplicateIdCount: stats(a11ySamples.map(sample => sample.duplicateIdCount)),
+      bodyCellsWithoutId: stats(a11ySamples.map(sample => sample.bodyCellsWithoutId)),
+      headerCellsWithoutId: stats(a11ySamples.map(sample => sample.headerCellsWithoutId)),
+      ariaIndexMismatchCount: stats(a11ySamples.map(sample => sample.ariaIndexMismatchCount)),
+      ariaNodeCount: stats(a11ySamples.map(sample => sample.ariaNodeCount)),
+      ariaAttributeCount: stats(a11ySamples.map(sample => sample.ariaAttributeCount)),
+      gridCount: stats(a11ySamples.map(sample => sample.gridCount)),
+      rowCount: stats(a11ySamples.map(sample => sample.rowCount)),
+      cellCount: stats(a11ySamples.map(sample => sample.cellCount)),
     },
   }
 }
@@ -2557,6 +2716,75 @@ function buildRenderingTelemetryWarnings(scenarioReports) {
   return warnings
 }
 
+function buildA11yBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const scenario of SCENARIOS) {
+    if (!scenario.a11yDiagnostics) {
+      continue
+    }
+    const diagnostics = scenarioReports[scenario.id]?.aggregate?.a11yDiagnostics
+    if (!diagnostics || diagnostics.sampleCount.max <= 0) {
+      warnings.push(`${scenario.id} a11y diagnostics produced no samples`)
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y stage tab stops max`,
+      diagnostics.stageTabStops.max,
+      PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y active descendant owners max`,
+      diagnostics.activeDescendantCount.max,
+      PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y unresolved references max`,
+      diagnostics.unresolvedReferenceCount.max,
+      PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y duplicate ids max`,
+      diagnostics.duplicateIdCount.max,
+      PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y body cells without ids max`,
+      diagnostics.bodyCellsWithoutId.max,
+      PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y header cells without ids max`,
+      diagnostics.headerCellsWithoutId.max,
+      PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y index mismatches max`,
+      diagnostics.ariaIndexMismatchCount.max,
+      PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y aria node count max`,
+      diagnostics.ariaNodeCount.max,
+      PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} a11y aria attribute count max`,
+      diagnostics.ariaAttributeCount.max,
+      PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT,
+    )
+  }
+  return warnings
+}
+
 function buildBrowserResourceBudgetWarnings(aggregate) {
   const warnings = []
   addWarningIfAbove(warnings, "enterprise browser frame p95", aggregate.frameP95Ms.p95, PERF_BUDGET_MAX_FRAME_P95_MS)
@@ -2629,17 +2857,20 @@ const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports
 const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
 const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
+const a11yBudgetWarnings = buildA11yBudgetWarnings(scenarioReports)
 const budgetWarnings = [
   ...interactionBudgetWarnings,
   ...virtualizationBudgetWarnings,
   ...renderChurnBudgetWarnings,
   ...renderingTelemetryWarnings,
+  ...a11yBudgetWarnings,
 ]
 const budgetErrors = [
   ...(BENCH_INTERACTION_FAIL_ON_WARNINGS ? interactionBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
   ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
+  ...(BENCH_A11Y_FAIL_ON_WARNINGS ? a11yBudgetWarnings : []),
 ]
 const aggregate = {
   elapsedMs,
@@ -2685,6 +2916,7 @@ const summary = {
     interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
     virtualizationFailOnWarnings: BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS,
     renderingFailOnWarnings: BENCH_RENDERING_FAIL_ON_WARNINGS,
+    a11yFailOnWarnings: BENCH_A11Y_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
@@ -2713,6 +2945,16 @@ const summary = {
       droppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
       longTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
       heapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
+    },
+    a11yBudgets: {
+      stageTabStops: PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,
+      activeDescendantCount: PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS,
+      unresolvedReferenceCount: PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES,
+      duplicateIdCount: PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS,
+      cellsWithoutIds: PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS,
+      indexMismatchCount: PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES,
+      ariaNodeCount: PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT,
+      ariaAttributeCount: PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT,
     },
     headless: BENCH_BROWSER_HEADLESS,
     scenarios: SCENARIOS.map(scenario => scenario.id),
@@ -2745,6 +2987,16 @@ const summary = {
       rowUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE,
       cellMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
       cellUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
+    },
+    a11y: {
+      stageTabStops: PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,
+      activeDescendantCount: PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS,
+      unresolvedReferenceCount: PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES,
+      duplicateIdCount: PERF_BUDGET_MAX_A11Y_DUPLICATE_IDS,
+      cellsWithoutIds: PERF_BUDGET_MAX_A11Y_CELLS_WITHOUT_IDS,
+      indexMismatchCount: PERF_BUDGET_MAX_A11Y_INDEX_MISMATCHES,
+      ariaNodeCount: PERF_BUDGET_MAX_A11Y_ARIA_NODE_COUNT,
+      ariaAttributeCount: PERF_BUDGET_MAX_A11Y_ARIA_ATTRIBUTE_COUNT,
     },
   },
   setup,

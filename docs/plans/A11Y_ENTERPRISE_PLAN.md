@@ -4,13 +4,13 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-8 are implemented as of 2026-05-20.
+- Slices 1-9 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
 - Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
 - Header and body cells now expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths. The mounted stage keeps roving DOM focus and intentionally does not emit app-stage `aria-activedescendant`.
 - Group rows now expose grid-mode expansion and label context; placeholder rows expose row-level disabled/context metadata while preserving cell coordinates.
-- Remaining enterprise gaps are large-grid a11y performance validation and manual assistive-technology validation.
+- Remaining enterprise gaps are manual assistive-technology validation and future treegrid/pinned reading-order depth.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -167,7 +167,7 @@ Current execution state:
 
 ## Slice 9: Large-Grid A11Y Performance Gate
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: prove accessibility attributes do not regress scroll/render latency or create excessive DOM/tab-stop churn on large virtualized grids.
 - Affected packages/files:
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
@@ -193,7 +193,7 @@ Current execution state:
 6. Slice 6: Editor And Interactive Cell Labels (completed 2026-05-20)
 7. Slice 7: Grid Live Region Coverage (completed 2026-05-20)
 8. Slice 8: Browser Accessibility Gates (completed 2026-05-20)
-9. Slice 9: Large-Grid A11Y Performance Gate
+9. Slice 9: Large-Grid A11Y Performance Gate (completed 2026-05-20)
 
 ## Execution Notes
 

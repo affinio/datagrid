@@ -6,11 +6,11 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, browser-level mounted-grid a11y gates, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs large-grid a11y performance validation plus manual assistive-technology validation.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, browser-level mounted-grid a11y gates, large-grid A11Y browser performance diagnostics, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs manual assistive-technology validation.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
-Target: **9/10** after wiring the existing headless contract into the virtualized stage, defining pinned/grouped/tree semantics, adding screen-reader-oriented browser tests, and adding a large-grid a11y performance gate.
+Target: **9/10** after wiring the existing headless contract into the virtualized stage, defining deeper pinned/tree semantics, and completing manual assistive-technology validation.
 
 ## Current Architecture Summary
 
@@ -211,7 +211,7 @@ The architecture should avoid per-cell heavy aria recomputation during scroll. R
 - keep overlays `aria-hidden`
 - use one throttled live region for high-level announcements
 - avoid updating `aria-activedescendant` more often than active-cell changes
-- add a benchmark for scroll with a11y attributes enabled
+- keep `pnpm run bench:datagrid:enterprise:a11y:browser:assert` in release validation for scroll with a11y attributes enabled
 
 ## Enterprise Readiness Score
 
@@ -226,7 +226,7 @@ What blocks the target:
 - app-stage `aria-activedescendant` is intentionally absent under the current roving-focus model
 - pinned-pane reading order and future treegrid hierarchy semantics are not manually screen-reader validated
 - no documented manual screen-reader smoke plan
-- no large-grid a11y performance gate
+- manual assistive-technology smoke validation is not documented or executed
 
 ## Recommended Roadmap
 
@@ -269,7 +269,7 @@ What blocks the target:
 - Add Playwright accessibility tree assertions for rendered grid, pinned panes, editors, and grouped rows.
 - Add axe checks for static violations.
 - Add manual screen-reader smoke checklist for NVDA/Firefox, JAWS/Chrome, and VoiceOver/Safari.
-- Add large-grid scroll benchmark with a11y attributes enabled.
+- Keep the large-grid A11Y browser benchmark in release validation.
 
 ## Recommended Tests
 
@@ -303,7 +303,7 @@ Performance/a11y gates:
 
 - axe smoke check on default grid, grouped grid, server-backed grid, and editing state
 - accessibility tree snapshot for first viewport before and after scroll
-- scroll benchmark with ARIA attributes enabled and no large layout regression
+- `bench:datagrid:enterprise:a11y:browser:assert` for ARIA-heavy large-grid scroll with tab-stop/id-resolution budgets
 
 ## Recommended Telemetry
 
@@ -358,7 +358,7 @@ Performance/a11y gates:
    - Tests: axe/a11y tree smoke checks
    - Risk: low
 
-9. **Add large-grid a11y performance gate**
+9. **Add large-grid a11y performance gate** (completed 2026-05-20)
    - Files: browser benchmark scripts, perf docs, package scripts
    - Tests: large-grid scroll and tab-stop/id-resolution budget
    - Risk: medium

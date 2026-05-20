@@ -34,7 +34,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
 - app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes.
 
-This stage contract is covered by component tests in `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts` and mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`.
+This stage contract is covered by component tests in `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`, mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`, and the focused large-grid A11Y browser benchmark `pnpm run bench:datagrid:enterprise:a11y:browser:assert`.
 
 ## Focus Model
 
@@ -52,7 +52,7 @@ Under the current roving-focus model:
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
 - A future treegrid proposal would be required before adding hierarchy-only row metadata such as full tree levels/positions.
 - Datasource loading/error placeholders need stronger per-row screen-reader context beyond the grid-level status message.
-- Browser accessibility tree, axe-style smoke checks, and large-grid a11y performance gates are not yet release-level gates.
+- Axe-style static checks and manual assistive-technology validation are still required before claiming enterprise screen-reader readiness.
 
 ## Validation Expectations
 
@@ -60,7 +60,7 @@ Runtime accessibility slices should include the smallest relevant validation fir
 
 - component tests for rendered ARIA roles, counts, indexes, labels, focus ownership, and state;
 - Playwright `@a11y` tests for browser-mounted behavior across scroll, virtualization remount, pinned panes, editing, grouped rows, and datasource placeholders;
-- performance validation for large-grid scroll paths when adding ARIA state to hot render surfaces;
+- `pnpm run bench:datagrid:enterprise:a11y:browser:assert` for large-grid scroll paths when adding ARIA state to hot render surfaces;
 - manual screen-reader smoke testing before claiming WCAG conformance or enterprise screen-reader readiness.
 
 Do not document WCAG conformance until browser and assistive-technology validation exists for the mounted app stage.
