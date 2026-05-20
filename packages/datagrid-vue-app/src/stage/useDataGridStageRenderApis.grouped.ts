@@ -10,6 +10,9 @@ type RowRuntime = Readonly<Ref<{
   }>>
   resolveAbsoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
   resolveViewportRowOffset: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  rowAriaExpanded: (row: DataGridTableStageBodyRow) => "true" | "false" | undefined
+  rowAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number) => string | undefined
+  rowAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number) => "true" | undefined
   rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
   setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
@@ -171,6 +174,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleLinkedViewportWheel: options.viewportRuntime.value.handleLinkedViewportWheel,
     absoluteRowIndex: options.rowRuntime.value.resolveAbsoluteRowIndex,
     viewportRowOffset: options.rowRuntime.value.resolveViewportRowOffset,
+    rowAriaExpanded: options.rowRuntime.value.rowAriaExpanded,
+    rowAriaLabel: options.rowRuntime.value.rowAriaLabel,
+    rowAriaDisabled: options.rowRuntime.value.rowAriaDisabled,
     rowStateClasses: options.rowRuntime.value.rowStateClasses,
     paneRowStyle,
     handleRowContainerClick: options.rowRuntime.value.handleRowContainerClick,
@@ -255,6 +261,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleBodyViewportWheel: options.viewportRuntime.value.handleBodyViewportWheel,
     absoluteRowIndex: options.rowRuntime.value.resolveAbsoluteRowIndex,
     viewportRowOffset: options.rowRuntime.value.resolveViewportRowOffset,
+    rowAriaExpanded: options.rowRuntime.value.rowAriaExpanded,
+    rowAriaLabel: options.rowRuntime.value.rowAriaLabel,
+    rowAriaDisabled: options.rowRuntime.value.rowAriaDisabled,
     handleViewportKeydown: options.viewportRuntime.value.handleViewportKeydown,
     rowStateClasses: options.rowRuntime.value.rowStateClasses,
     handleRowContainerClick: options.rowRuntime.value.handleRowContainerClick,

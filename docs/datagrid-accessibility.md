@@ -26,6 +26,8 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - leaf header and body cells expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths;
 - header resize and text-filter controls include the target column in their accessible names;
 - normal-mode keyboard tabbing exposes one stage owner: focused row index first, visible selection anchor cell second, and body viewport fallback only when no visible focus target exists;
+- grouped rows expose `aria-expanded` and a group label summary under the current `grid` role model;
+- placeholder rows expose row-level disabled/context metadata while cells preserve row/column coordinates;
 - row-selection checkbox cells expose `role="checkbox"` and `aria-checked`;
 - placeholder cells that cannot materialize into editable rows expose disabled state while preserving their row/column coordinates;
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
@@ -47,7 +49,7 @@ Under the current roving-focus model:
 ## Known Gaps
 
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
-- Grouped/tree projections need a documented `grid` versus `treegrid` policy, expansion state, and row hierarchy metadata.
+- A future treegrid proposal would be required before adding hierarchy-only row metadata such as full tree levels/positions.
 - Datasource loading/error placeholders need stronger screen-reader context and throttled announcements.
 - Editor inputs and custom interactive cells need consistent row/column contextual labels.
 - Live-region coverage needs to include clipboard, fill, edit, history, sort/filter, and server outcomes consistently.

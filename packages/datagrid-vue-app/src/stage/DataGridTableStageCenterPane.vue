@@ -23,6 +23,9 @@
         :style="[rows.rowStyle(row, renderApi.viewportRowOffset(row, rowOffset)), layout.mainTrackStyle]"
         :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
         :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
+        :aria-expanded="renderApi.rowAriaExpanded(row)"
+        :aria-label="renderApi.rowAriaLabel(row, rowOffset)"
+        :aria-disabled="renderApi.rowAriaDisabled(row, rowOffset)"
         @click="renderApi.handleRowContainerClick(row)"
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >

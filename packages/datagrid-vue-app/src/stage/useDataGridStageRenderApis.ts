@@ -61,6 +61,9 @@ export interface UseDataGridStageRenderApisOptions {
   isVisibleCellEditableByAbsoluteCoord: (rowIndex: number, columnIndex: number) => boolean
   resolveAbsoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
   resolveViewportRowOffset: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  rowAriaExpanded: (row: DataGridTableStageBodyRow) => "true" | "false" | undefined
+  rowAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number) => string | undefined
+  rowAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number) => "true" | undefined
   rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
   setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
@@ -159,6 +162,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleLinkedViewportWheel: options.handleLinkedViewportWheel,
     absoluteRowIndex: options.resolveAbsoluteRowIndex,
     viewportRowOffset: options.resolveViewportRowOffset,
+    rowAriaExpanded: options.rowAriaExpanded,
+    rowAriaLabel: options.rowAriaLabel,
+    rowAriaDisabled: options.rowAriaDisabled,
     rowStateClasses: options.rowStateClasses,
     paneRowStyle,
     handleRowContainerClick: options.handleRowContainerClick,
@@ -243,6 +249,9 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     handleBodyViewportWheel: options.handleBodyViewportWheel,
     absoluteRowIndex: options.resolveAbsoluteRowIndex,
     viewportRowOffset: options.resolveViewportRowOffset,
+    rowAriaExpanded: options.rowAriaExpanded,
+    rowAriaLabel: options.rowAriaLabel,
+    rowAriaDisabled: options.rowAriaDisabled,
     handleViewportKeydown: options.handleViewportKeydown,
     rowStateClasses: options.rowStateClasses,
     handleRowContainerClick: options.handleRowContainerClick,

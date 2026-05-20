@@ -990,6 +990,40 @@ function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
   return resolveAbsoluteRowIndex(row, rowOffset) - viewport.value.viewportRowStart
 }
 
+function rowAriaExpanded(row: TableRow): "true" | "false" | undefined {
+  if (row.kind !== "group") {
+    return undefined
+  }
+  return row.state.expanded === true ? "true" : "false"
+}
+
+function rowAriaLabel(row: TableRow, rowOffset: number): string | undefined {
+  if (row.kind === "group") {
+    const value = String(row.groupMeta?.groupValue ?? row.rowId ?? "group")
+    const field = String(row.groupMeta?.groupField ?? "group")
+    const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
+      ? Math.max(0, Math.trunc(Number(row.groupMeta?.childrenCount)))
+      : 0
+    const state = row.state.expanded === true ? "expanded" : "collapsed"
+    return `${field}: ${value}, ${state}, ${childrenCount} ${childrenCount === 1 ? "row" : "rows"}`
+  }
+  if (isDataGridPlaceholderSurfaceRow(row)) {
+    return `Placeholder row ${resolveAbsoluteRowIndex(row, rowOffset) + 1}`
+  }
+  return undefined
+}
+
+function rowAriaDisabled(row: TableRow, rowOffset: number): "true" | undefined {
+  if (!isDataGridPlaceholderSurfaceRow(row)) {
+    return undefined
+  }
+  const viewportRowOffset = resolveViewportRowOffset(row, rowOffset)
+  const hasEditableCell = visibleColumns.value.some((column, columnIndex) => (
+    isCellEditableSafeBase(row, viewportRowOffset, column, columnIndex)
+  ))
+  return hasEditableCell ? undefined : "true"
+}
+
 function setHoveredRow(row: TableRow, rowOffset: number): void {
   if (!rows.value.rowHover || suppressHoverInteractions.value) {
     return
@@ -1552,6 +1586,9 @@ const rowRuntime = computed(() => ({
   rows,
   resolveAbsoluteRowIndex,
   resolveViewportRowOffset,
+  rowAriaExpanded,
+  rowAriaLabel,
+  rowAriaDisabled,
   rowStateClasses,
   handleRowContainerClick,
   setHoveredRow,

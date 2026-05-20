@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs grouped/tree semantics, pinned-pane reading order validation, broader editor/context labels, and browser-level accessibility gates.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, broader editor/context labels, and browser-level accessibility gates.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -104,10 +104,10 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
    - Impact: future fixes can improve the headless API without improving the real rendered DataGrid unless docs and tests stay explicit about the current mounted-stage owner.
    - Required: keep the current roving DOM focus decision documented, and only migrate to `aria-activedescendant` through a dedicated focus-model proposal with browser validation.
 
-2. **Grouped/tree rows lack an enterprise ARIA contract.**
-   - Evidence: group rows can be toggled by Space and group renderers receive `isGroup`, `childrenCount`, and `toggle`; no rendered `role="row"`, `aria-expanded`, `aria-level`, `aria-posinset`, or `aria-setsize` was found for stage group rows.
-   - Impact: grouped/tree structure is not predictable for screen readers.
-   - Required: define grid vs treegrid semantics and expose expansion state/levels where supported.
+2. **Treegrid hierarchy semantics remain a future contract.**
+   - Evidence: grouped rows now stay under the mounted `grid` model and expose `aria-expanded` plus group label context. The stage does not expose tree-only metadata such as `aria-level`, `aria-posinset`, or `aria-setsize`.
+   - Impact: grouped rows have basic expansion semantics, but deep tree hierarchy is not yet predictable enough to claim treegrid support.
+   - Required: keep grouped mode under `grid` until a future treegrid proposal defines hierarchy metadata and browser validation.
 
 3. **Pinned panes can fragment screen-reader reading order.**
    - Evidence: left, center, right, and pinned-bottom panes render separate DOM trees. Focus lookup searches all pane roots, but no ARIA ownership/reading-order contract was found.
@@ -163,7 +163,7 @@ Current likely alignment:
 
 - **Keyboard access:** partial to strong for grid navigation and shortcuts.
 - **Focus visible:** mostly covered through visual focus/selection classes and direct focus calls, but not verified by a browser a11y gate.
-- **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes and leaf header semantics are implemented, but grouped/tree rows, editor context labels, pinned-pane ownership, and active-cell ids remain incomplete; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
+- **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes, leaf header semantics, group expansion state, and placeholder disabled/context metadata are implemented, but editor context labels and pinned-pane ownership still need browser validation; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
 - **Status messages:** partial; app status regions use polite live-region semantics, but clipboard/edit/fill/server row model messages are not yet consistently routed through one documented grid status channel.
 - **Pointer/touch alternatives:** partial; keyboard alternatives exist for many actions, but resize/fill/range move/touch workflows need explicit accessible alternatives.
 
@@ -236,10 +236,10 @@ Target score: **9/10**
 
 What blocks the target:
 
-- rendered stage lacks complete grouped/tree and pinned-pane ARIA semantics
+- rendered stage lacks complete pinned-pane reading-order validation and future treegrid hierarchy semantics
 - headless a11y state machine is not integrated into the main app stage
 - app-stage `aria-activedescendant` is intentionally absent under the current roving-focus model
-- grouped/tree and pinned-pane semantics are not defined
+- pinned-pane reading order and future treegrid hierarchy semantics are not browser-validated
 - no automated browser a11y gate or screen-reader smoke plan
 - no grid-level live region for common spreadsheet actions
 - no large-grid a11y performance gate
@@ -275,9 +275,8 @@ What blocks the target:
 
 ### Phase 5: Grouped/Tree Semantics
 
-- Define grouped row semantics under `grid` or migrate grouped mode to `treegrid`.
-- Add `aria-expanded` for expandable groups.
-- Add row level/position metadata if treegrid semantics are selected.
+- Current grouped rows stay under `role="grid"` and expose expansion plus label context.
+- Add row level/position metadata only if a future slice migrates grouped/tree mode to `treegrid`.
 - Cover server-backed placeholders inside grouped/tree projections.
 
 ### Phase 6: Validation And Gates
@@ -355,9 +354,9 @@ Performance/a11y gates:
    - Tests: sanitized header/body ids across pinned panes and virtualized remount; `aria-activedescendant` remains absent under roving focus
    - Risk: high
 
-5. **Define grouped/tree and pinned-pane semantics**
-   - Files: docs first, then grouped stage render APIs
-   - Tests: group expand/collapse ARIA state
+5. **Define grouped/tree and pinned-pane semantics** (completed 2026-05-20)
+   - Files: `DataGridTableStage.vue`, center/pinned pane templates, shared render APIs, docs
+   - Tests: group expand/collapse ARIA state and placeholder row disabled/context metadata
    - Risk: high
 
 6. **Add editor and interactive-cell labels**

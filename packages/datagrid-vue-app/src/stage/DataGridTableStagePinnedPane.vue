@@ -27,6 +27,9 @@
         :style="renderApi.paneRowStyle(row, rowOffset, pane.width)"
         :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
         :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
+        :aria-expanded="renderApi.rowAriaExpanded(row)"
+        :aria-label="renderApi.rowAriaLabel(row, rowOffset)"
+        :aria-disabled="renderApi.rowAriaDisabled(row, rowOffset)"
         @click="renderApi.handleRowContainerClick(row)"
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >

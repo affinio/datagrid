@@ -651,10 +651,44 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     expect(wrapper.find(".test-group-renderer").text()).toBe("closed:name:Group 1:1:label")
+    expect(wrapper.find('.grid-body-viewport .grid-row[data-row-index="0"]').attributes("aria-expanded")).toBe("false")
+    expect(wrapper.find('.grid-body-viewport .grid-row[data-row-index="0"]').attributes("aria-label")).toBe("name: Group 1, collapsed, 1 row")
 
     await wrapper.find(".test-group-renderer").trigger("click")
 
     expect(toggleGroupRow).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("exposes placeholder row disabled context while preserving cell coordinates", () => {
+    const placeholderRow = {
+      rowId: "__datagrid_placeholder__:2",
+      displayIndex: 2,
+      data: {},
+      __placeholder: true,
+    } as unknown as DataGridTableRow<DemoRow>
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        () => false,
+        {
+          rows: [placeholderRow],
+          selectionRange: { startRow: 2, endRow: 2, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 2, columnIndex: 1 },
+          isCellEditable: () => false,
+        },
+      ),
+    })
+
+    const row = wrapper.find('.grid-body-viewport .grid-row[data-row-index="2"]')
+    const cell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-index="2"][data-column-index="1"]')
+
+    expect(row.attributes("aria-label")).toBe("Placeholder row 3")
+    expect(row.attributes("aria-disabled")).toBe("true")
+    expect(cell.attributes("aria-rowindex")).toBe("3")
+    expect(cell.attributes("aria-colindex")).toBe("2")
+    expect(cell.attributes("aria-disabled")).toBe("true")
 
     wrapper.unmount()
   })

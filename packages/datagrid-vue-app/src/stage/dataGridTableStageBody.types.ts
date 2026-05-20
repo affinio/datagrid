@@ -49,6 +49,9 @@ export type DataGridTableStageSelectEditorOptionsLoader = (
 export interface DataGridTableStageBodyRenderApiBase {
   absoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
   viewportRowOffset: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  rowAriaExpanded: (row: DataGridTableStageBodyRow) => "true" | "false" | undefined
+  rowAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number) => string | undefined
+  rowAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number) => "true" | undefined
   rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
   handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
   setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
