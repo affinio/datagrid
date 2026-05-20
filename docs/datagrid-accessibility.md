@@ -29,6 +29,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - grouped rows expose `aria-expanded` and a group label summary under the current `grid` role model;
 - placeholder rows expose row-level disabled/context metadata while cells preserve row/column coordinates;
 - row-selection checkbox cells expose `role="checkbox"` and `aria-checked`;
+- active inline text, date/datetime, and select editors expose accessible names with column and row context while preserving invalid and pending state;
 - placeholder cells that cannot materialize into editable rows expose disabled state while preserving their row/column coordinates;
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
 - app status regions use polite live-region semantics for supported high-level messages.
@@ -51,7 +52,7 @@ Under the current roving-focus model:
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
 - A future treegrid proposal would be required before adding hierarchy-only row metadata such as full tree levels/positions.
 - Datasource loading/error placeholders need stronger screen-reader context and throttled announcements.
-- Editor inputs and custom interactive cells need consistent row/column contextual labels.
+- Edit commit/cancel/failure outcomes still need complete live-region coverage.
 - Live-region coverage needs to include clipboard, fill, edit, history, sort/filter, and server outcomes consistently.
 - Browser accessibility tree, axe-style smoke checks, and large-grid a11y performance gates are not yet release-level gates.
 

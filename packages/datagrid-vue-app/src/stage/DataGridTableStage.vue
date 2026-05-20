@@ -1024,6 +1024,19 @@ function rowAriaDisabled(row: TableRow, rowOffset: number): "true" | undefined {
   return hasEditableCell ? undefined : "true"
 }
 
+function columnAccessibleLabel(column: TableColumn): string {
+  const label = String(column.column.label ?? column.key).trim()
+  return label.length > 0 ? label : column.key
+}
+
+function cellEditorAriaLabel(row: TableRow, rowOffset: number, column: TableColumn, _columnIndex: number): string {
+  const absoluteRowNumber = resolveAbsoluteRowIndex(row, rowOffset) + 1
+  const rowLabel = isDataGridPlaceholderSurfaceRow(row)
+    ? `placeholder row ${absoluteRowNumber}`
+    : `row ${absoluteRowNumber}`
+  return `Edit ${columnAccessibleLabel(column)}, ${rowLabel}`
+}
+
 function setHoveredRow(row: TableRow, rowOffset: number): void {
   if (!rows.value.rowHover || suppressHoverInteractions.value) {
     return
@@ -1679,6 +1692,7 @@ const editorRuntime = computed(() => ({
   resolveCellEditorMode,
   resolveSelectEditorOptions,
   resolveSelectEditorOptionsLoader,
+  cellEditorAriaLabel,
   handleSelectEditorOptionsResolved,
   readResolvedDisplayCell,
   renderResolvedCellContent,

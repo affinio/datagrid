@@ -120,6 +120,7 @@
             :initial-filter="editing.editingCellInitialFilter"
             :open-on-mount="editing.editingCellOpenOnMount"
             :disabled="editing.editingCellPending"
+            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             @commit="renderApi.handleSelectEditorCommit"
             @cancel="renderApi.handleSelectEditorCancel"
@@ -132,6 +133,7 @@
             :type="renderApi.resolveDateEditorInputType(row, column)"
             :value="editing.editingCellValue"
             :disabled="editing.editingCellPending"
+            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             :aria-busy="editing.editingCellPending ? 'true' : undefined"
             autofocus
@@ -149,6 +151,7 @@
             :name="`datagrid-cell-editor-${column.key}`"
             :value="editing.editingCellValue"
             :disabled="editing.editingCellPending"
+            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             :aria-busy="editing.editingCellPending ? 'true' : undefined"
             autofocus

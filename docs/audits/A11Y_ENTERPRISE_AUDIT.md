@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, broader editor/context labels, and browser-level accessibility gates.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, edit outcome announcements, broader live-region coverage, and browser-level accessibility gates.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -86,7 +86,7 @@ Tests searched/reviewed:
 - **Keyboard-only cell navigation is strong.** `useDataGridCellNavigation` covers arrows, Home/End, PageUp/PageDown, Tab, Enter, Escape, shift extension, and ctrl/meta directional jumps.
 - **Keyboard command routing exists.** Undo/redo, copy/paste/cut, select-all, context menu, clear, and range-move cancel have keyboard paths.
 - **Focus restoration is pragmatic.** `restoreDataGridFocus` retries focus after `nextTick` and animation frame; active-cell viewport helpers scroll and refocus without forcing browser scroll jumps.
-- **Inline editor keyboard semantics exist.** Escape cancels, Enter commits, Tab/Shift+Tab commits and moves to the next editable target.
+- **Inline editor keyboard semantics and contextual labels exist.** Escape cancels, Enter commits, Tab/Shift+Tab commits and moves to the next editable target. Text, date/datetime, and select editors expose row/column context in their accessible names.
 - **Combobox editor follows a recognizable ARIA shape.** The input uses `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-autocomplete`, and `aria-activedescendant`; options use `role="option"` and `aria-selected`.
 - **Interactive cells can expose semantics.** Cell interactions can provide role, label, pressed/checked/disabled state; checkbox cells render `role="checkbox"` and `aria-checked`.
 - **Decorative chrome is hidden.** Canvas chrome and visual selection/fill/move overlays use `aria-hidden="true"`.
@@ -121,10 +121,10 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
 
 ### Medium
 
-1. **Editing accessibility is functional but under-specified.**
-   - Evidence: text/date editors are plain inputs with generated `name` and autofocus, but no explicit `aria-label` / `aria-labelledby` binding to row+column context was found. Select editor combobox semantics are better.
-   - Impact: active editor context may be unclear to screen readers.
-   - Required: label editors with column label and row/index context; announce commit/cancel validation outcomes.
+1. **Editing announcements remain incomplete.**
+   - Evidence: text/date/select editors now expose row+column context through accessible names and preserve invalid/pending state, but edit commit/cancel/validation outcomes are not yet routed through one complete grid live-region contract.
+   - Impact: active editor context is clearer, but edit outcomes may still be missed by screen readers.
+   - Required: announce edit commit/cancel/validation outcomes through the documented polite grid status channel.
 
 2. **Clipboard accessibility depends on internal status messages, not live-region guarantees.**
    - Evidence: app status regions now render with `role="status"` and polite live-region semantics, but clipboard/edit/fill/server actions are not yet documented and tested as one complete grid-status contract.
@@ -163,7 +163,7 @@ Current likely alignment:
 
 - **Keyboard access:** partial to strong for grid navigation and shortcuts.
 - **Focus visible:** mostly covered through visual focus/selection classes and direct focus calls, but not verified by a browser a11y gate.
-- **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes, leaf header semantics, group expansion state, and placeholder disabled/context metadata are implemented, but editor context labels and pinned-pane ownership still need browser validation; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
+- **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes, leaf header semantics, group expansion state, placeholder disabled/context metadata, and inline editor labels are implemented, but pinned-pane ownership still needs browser validation; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
 - **Status messages:** partial; app status regions use polite live-region semantics, but clipboard/edit/fill/server row model messages are not yet consistently routed through one documented grid status channel.
 - **Pointer/touch alternatives:** partial; keyboard alternatives exist for many actions, but resize/fill/range move/touch workflows need explicit accessible alternatives.
 
@@ -359,7 +359,7 @@ Performance/a11y gates:
    - Tests: group expand/collapse ARIA state and placeholder row disabled/context metadata
    - Risk: high
 
-6. **Add editor and interactive-cell labels**
+6. **Add editor and interactive-cell labels** (completed 2026-05-20)
    - Files: stage render APIs, editor overlays, interaction metadata
    - Tests: accessible names/state for editors and custom interactive cells
    - Risk: medium

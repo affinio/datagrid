@@ -4,13 +4,13 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-5 are implemented as of 2026-05-20.
+- Slices 1-6 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
 - Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
 - Header and body cells now expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths. The mounted stage keeps roving DOM focus and intentionally does not emit app-stage `aria-activedescendant`.
 - Group rows now expose grid-mode expansion and label context; placeholder rows expose row-level disabled/context metadata while preserving cell coordinates.
-- Remaining enterprise gaps are pinned-pane reading-order browser validation, editor/context labels, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
+- Remaining enterprise gaps are pinned-pane reading-order browser validation, edit outcome announcements, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -110,7 +110,7 @@ Current execution state:
 
 ## Slice 6: Editor And Interactive Cell Labels
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: ensure editors, checkbox cells, custom interactive renderers, filter comboboxes, menu controls, and resize controls expose contextual names and state.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
@@ -119,11 +119,11 @@ Current execution state:
   - `packages/datagrid-vue-app/src/overlays/DataGridColumnMenu.vue`
   - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
-- Expected behavior change: active editors and interactive cells expose column/row context, validation state, pending state, disabled state, and selected/checked/pressed state consistently.
+- Expected behavior change: active inline text, date/datetime, and select editors expose contextual accessible names with column and row context while preserving invalid and pending state. Existing checkbox and custom interactive cell role/state coverage remains under the shared cell interaction contract.
 - Tests to add/update:
   - Text, number, date, datetime, checkbox, select, async select, and custom interactive cells have stable accessible names/state.
   - Invalid/pending editor state remains visible to assistive technologies.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts src/overlays/__tests__/DataGridFilterableCombobox.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGridTableStage.contract.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid-vue-app): label editors and interactive cells`
 
@@ -190,7 +190,7 @@ Current execution state:
 3. Slice 3: Focus Ownership And Tab Stop Invariant (completed 2026-05-20)
 4. Slice 4: Active Descendant And Stable Cell IDs (completed 2026-05-20)
 5. Slice 5: Grouped, Tree, Placeholder, And Pinned-Pane Semantics (completed 2026-05-20)
-6. Slice 6: Editor And Interactive Cell Labels
+6. Slice 6: Editor And Interactive Cell Labels (completed 2026-05-20)
 7. Slice 7: Grid Live Region Coverage
 8. Slice 8: Browser Accessibility Gates
 9. Slice 9: Large-Grid A11Y Performance Gate

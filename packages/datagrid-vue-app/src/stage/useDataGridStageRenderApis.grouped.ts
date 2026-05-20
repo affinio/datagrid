@@ -121,6 +121,7 @@ type EditorRuntime = Readonly<Ref<{
   resolveCellEditorMode: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "none" | "text" | "select" | "date" | "datetime"
   resolveSelectEditorOptions: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]
   resolveSelectEditorOptionsLoader: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => DataGridTableStageSelectEditorOptionsLoader | undefined
+  cellEditorAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string
   handleSelectEditorOptionsResolved: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, options: ReadonlyArray<DataGridFilterableComboboxOption>) => void
   readResolvedDisplayCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
   renderResolvedCellContent: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => VNodeChild
@@ -239,6 +240,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     resolveSelectEditorValue: options.editorRuntime.value.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.editorRuntime.value.resolveSelectEditorOptions,
     resolveSelectEditorOptionsLoader: options.editorRuntime.value.resolveSelectEditorOptionsLoader,
+    cellEditorAriaLabel: options.editorRuntime.value.cellEditorAriaLabel,
     handleSelectEditorCommit: options.editorRuntime.value.handleSelectEditorCommit,
     handleSelectEditorCancel: options.editorRuntime.value.handleSelectEditorCancel,
     handleSelectEditorOptionsResolved: options.editorRuntime.value.handleSelectEditorOptionsResolved,
@@ -313,6 +315,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     resolveSelectEditorValue: options.editorRuntime.value.resolveSelectEditorValue,
     resolveSelectEditorOptions: options.editorRuntime.value.resolveSelectEditorOptions,
     resolveSelectEditorOptionsLoader: options.editorRuntime.value.resolveSelectEditorOptionsLoader,
+    cellEditorAriaLabel: options.editorRuntime.value.cellEditorAriaLabel,
     handleSelectEditorCommit: options.editorRuntime.value.handleSelectEditorCommit,
     handleSelectEditorCancel: options.editorRuntime.value.handleSelectEditorCancel,
     handleSelectEditorOptionsResolved: options.editorRuntime.value.handleSelectEditorOptionsResolved,

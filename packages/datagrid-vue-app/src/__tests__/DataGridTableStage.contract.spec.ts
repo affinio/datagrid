@@ -1265,6 +1265,56 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("labels inline editors with column and row context", async () => {
+    const textWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        editingCellValue: "draft-text",
+        isEditingCell: (row, columnKey) => row.rowId === "r1" && columnKey === "centerA",
+      }),
+    })
+
+    expect(
+      textWrapper.find<HTMLInputElement>('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"] .cell-editor-input')
+        .attributes("aria-label"),
+    ).toBe("Edit Center A, row 1")
+
+    textWrapper.unmount()
+
+    const editorColumns = createEditableAffordanceColumns()
+    const selectWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: editorColumns,
+        editingCellValue: "planned",
+        isEditingCell: (row, columnKey) => row.rowId === "r1" && columnKey === "stage",
+      }),
+    })
+
+    expect(
+      selectWrapper.find<HTMLInputElement>('.grid-body-viewport .datagrid-stage__cell[data-column-key="stage"] input[role="combobox"]')
+        .attributes("aria-label"),
+    ).toBe("Edit Stage, row 1")
+
+    selectWrapper.unmount()
+
+    const dateWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: editorColumns,
+        editingCellValue: "2026-05-20",
+        isEditingCell: (row, columnKey) => row.rowId === "r1" && columnKey === "createdAt",
+      }),
+    })
+
+    expect(
+      dateWrapper.find<HTMLInputElement>('.grid-body-viewport .datagrid-stage__cell[data-column-key="createdAt"] .cell-editor-input--date')
+        .attributes("aria-label"),
+    ).toBe("Edit Created, row 1")
+
+    dateWrapper.unmount()
+  })
+
   it("renders a continuous move-preview overlay from center into pinned-right", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
