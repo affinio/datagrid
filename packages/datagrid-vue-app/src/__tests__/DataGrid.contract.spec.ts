@@ -4747,9 +4747,9 @@ describe("DataGrid app facade contract", () => {
 
     expect(queryColumnMenuRoot()?.textContent).toContain("Loading values")
 
-    await flushAnimationFrame()
-    await flushAnimationFrame()
-    await flushAnimationFrame()
+    for (let index = 0; index < 6; index += 1) {
+      await flushAnimationFrame()
+    }
     await flushRuntimeTasks()
 
     expect(histogramRequests).toHaveLength(1)
@@ -4766,6 +4766,122 @@ describe("DataGrid app facade contract", () => {
       expect.stringContaining("NOC"),
       expect.stringContaining("Payments"),
     ])
+
+    wrapper.unmount()
+  })
+
+  it("cancels deferred columnMenu value histograms when sorting closes the menu first", async () => {
+    type HistogramRequest = {
+      request: { options: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string } }
+      resolve: (entries: readonly { token: string; value: string; count: number; text?: string }[]) => void
+      reject: (reason?: unknown) => void
+    }
+    const histogramRequests: HistogramRequest[] = []
+    const rowCount = 10_000
+    const sourceRows: readonly DemoRow[] = Array.from({ length: rowCount }, (_unused, index) => ({
+      rowId: `source-sort-lazy-${index + 1}`,
+      owner: index % 2 === 0 ? "NOC" : "Payments",
+      region: "eu-west",
+      amount: index + 1,
+    }))
+    const rowNodes = Array.from({ length: 40 }, (_unused, index) => {
+      const row: DemoRow = {
+        rowId: `sort-lazy-${index + 1}`,
+        owner: index % 2 === 0 ? "NOC" : "Payments",
+        region: "eu-west",
+        amount: index + 1,
+      }
+      return {
+        row,
+        data: row,
+        rowId: row.rowId,
+        originalIndex: index,
+        displayIndex: index,
+        kind: "leaf" as const,
+        state: { selected: false, group: false, pinned: "none" as const, expanded: false },
+      }
+    })
+    const rowModel = {
+      kind: "server",
+      getSnapshot: () => ({
+        revision: 0,
+        kind: "server",
+        rowCount,
+        loading: false,
+        error: null,
+        viewportRange: { start: 0, end: Math.max(0, rowNodes.length - 1) },
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        pagination: {
+          enabled: false,
+          pageSize: 0,
+          currentPage: 0,
+          pageCount: 1,
+          totalRowCount: rowCount,
+          startIndex: 0,
+          endIndex: Math.max(0, rowNodes.length - 1),
+        },
+      }),
+      getRowCount: () => rowCount,
+      getRow: (index: number) => rowNodes[index % rowNodes.length],
+      getRowsInRange: (start: number, end: number) => rowNodes.slice(start, Math.min(rowNodes.length, end + 1)),
+      setViewportRange: () => {},
+      setPagination: () => {},
+      setPageSize: () => {},
+      setCurrentPage: () => {},
+      setSortModel: () => {},
+      setFilterModel: () => {},
+      setSortAndFilterModel: () => {},
+      setGroupBy: () => {},
+      setPivotModel: () => {},
+      getPivotModel: () => null,
+      setAggregationModel: () => {},
+      getAggregationModel: () => null,
+      getColumnHistogram: (_columnKey: string, options?: { ignoreSelfFilter?: boolean; search?: string; limit?: number; orderBy?: string }) => {
+        const request = { options: options ?? {} }
+        return new Promise<readonly { token: string; value: string; count: number; text?: string }[]>((resolve, reject) => {
+          histogramRequests.push({ request, resolve, reject })
+        })
+      },
+      setGroupExpansion: () => {},
+      toggleGroup: () => {},
+      expandGroup: () => {},
+      collapseGroup: () => {},
+      expandAllGroups: () => {},
+      collapseAllGroups: () => {},
+      refresh: () => {},
+      subscribe: () => () => {},
+      dispose: () => {},
+    } as unknown as DataGridRowModel<DemoRow>
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: sourceRows,
+        columns: COLUMNS,
+        rowModel,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    wrapper
+      .find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]')
+      .element
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(histogramRequests).toHaveLength(0)
+    queryColumnMenuAction("sort-desc")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+
+    for (let index = 0; index < 8; index += 1) {
+      await flushAnimationFrame()
+    }
+    await flushRuntimeTasks()
+
+    expect(histogramRequests).toHaveLength(0)
 
     wrapper.unmount()
   })

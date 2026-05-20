@@ -4,10 +4,11 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-3 are implemented as of 2026-05-20.
+- Slices 1-3b are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
 - Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate.
+- Column-menu sort no longer races with large deferred value-histogram loading when the menu closes before the histogram starts.
 - Remaining blockers are long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
@@ -66,15 +67,31 @@ Current execution state:
 
 ## Slice 3b: Sort/Edit/Context Menu Frame Cleanup
 
+- Status: Completed on 2026-05-20.
+- Objective: reduce avoidable synchronous runtime work in the column-menu sort path before deeper projection/edit/context-menu cleanup.
+- Affected packages/files:
+  - `packages/datagrid-vue-app/src/overlays/DataGridColumnMenu.vue`
+  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `docs/perf/datagrid-browser-performance-next-slices.md`
+  - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
+- Expected behavior change: large column-menu value histograms stay deferred longer after menu open and are canceled/invalidated when a sort action closes the menu before the histogram starts.
+- Tests to add/update:
+  - Contract coverage for deferred histogram loading and cancellation when sorting closes the menu first.
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts --testNamePattern "columnMenu value histograms"`
+- Risk level: Medium
+- Suggested commit message: `perf(datagrid-vue-app): defer column menu histograms`
+
+## Slice 3c: Sort/Edit/Context Menu Deep Runtime Cleanup
+
 - Status: Pending.
-- Objective: split heavy synchronous runtime work in sort, inline edit bursts, and context-menu open/cleanup scenarios.
+- Objective: split remaining heavy synchronous runtime work in sort, inline edit bursts, and context-menu open/cleanup scenarios.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/*sort*`
   - `packages/datagrid-vue-app/src/stage/*editing*`
   - `packages/datagrid-orchestration/src/contextMenu/*`
-- Expected behavior change: sort/edit/menu interactions stop creating visible browser stalls.
+- Expected behavior change: remaining sort/edit/menu interaction stalls are reduced after reviewing `bench:datagrid:enterprise:interaction-frame:assert` artifacts.
 - Tests to add/update:
-  - Runtime-specific tests based on the hottest failing diagnostics from `bench:datagrid:enterprise:interaction-frame:assert`.
+  - Runtime-specific tests based on the hottest failing diagnostics from the interaction-frame artifact.
 - Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): reduce interaction frame stalls`
@@ -218,16 +235,17 @@ Current execution state:
 1. Slice 1: Browser Frame Resource Hard Gates (completed 2026-05-20)
 2. Slice 2: Scroll Hot-Path Guard And Focused Gate (completed 2026-05-20)
 3. Slice 3: Sort/Edit/Context Menu Frame Gate (completed 2026-05-20)
-4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup
-5. Slice 4: Server-Backed Latency And Placeholder Gates
-6. Slice 5: Datasource Churn Reduction
-7. Slice 6: Long Memory Soak
-8. Slice 10: Wide-Table Horizontal Virtualization Matrix
-9. Slice 11: Custom Renderer Performance Contract
-10. Slice 9: Quick-Filter Typing Latency
-11. Slice 7: Grouped/Tree/Pivot Interactivity
-12. Slice 8: Workbook Snapshot And Restore Slimming
-13. Slice 12: Worker Benchmark Canonicalization
+4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup (completed 2026-05-20)
+5. Slice 3c: Sort/Edit/Context Menu Deep Runtime Cleanup
+6. Slice 4: Server-Backed Latency And Placeholder Gates
+7. Slice 5: Datasource Churn Reduction
+8. Slice 6: Long Memory Soak
+9. Slice 10: Wide-Table Horizontal Virtualization Matrix
+10. Slice 11: Custom Renderer Performance Contract
+11. Slice 9: Quick-Filter Typing Latency
+12. Slice 7: Grouped/Tree/Pivot Interactivity
+13. Slice 8: Workbook Snapshot And Restore Slimming
+14. Slice 12: Worker Benchmark Canonicalization
 
 ## Execution Notes
 

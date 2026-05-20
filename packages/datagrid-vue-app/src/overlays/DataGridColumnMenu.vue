@@ -401,6 +401,7 @@ interface UiMenuRef {
 
 const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
 const DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_ROW_THRESHOLD = 10_000
+const DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_FRAME_COUNT = 6
 
 const props = defineProps<{
   rowCount: number
@@ -662,7 +663,7 @@ const menuCallbacks: MenuCallbacks = {
   },
   onClose: () => {
     open.value = false
-    cancelDeferredValueEntriesLoad()
+    cancelValueEntriesLoad({ resetLoading: true })
   },
 }
 
@@ -869,7 +870,7 @@ function resetFilterDraft(): void {
   addCurrentSelectionToFilter.value = false
   resetRenderedValueCount()
   resetValuesListScroll()
-  cancelDeferredValueEntriesLoad()
+  cancelValueEntriesLoad()
   if (!effectiveValueFilterEnabled.value) {
     valueEntries.value = []
     valueEntriesLoading.value = false
@@ -884,6 +885,14 @@ function resetFilterDraft(): void {
 function cancelDeferredValueEntriesLoad(): void {
   deferredValueEntriesLoadCancel?.()
   deferredValueEntriesLoadCancel = null
+}
+
+function cancelValueEntriesLoad(options: { resetLoading?: boolean } = {}): void {
+  cancelDeferredValueEntriesLoad()
+  valueEntriesRequestId += 1
+  if (options.resetLoading) {
+    valueEntriesLoading.value = false
+  }
 }
 
 function scheduleValueEntriesLoadFrame(callback: () => void): void {
@@ -925,7 +934,7 @@ function startValueEntriesLoad(resetSelection: boolean, options: { defer?: boole
       return
     }
     frameCount += 1
-    if (frameCount < 3) {
+    if (frameCount < DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_FRAME_COUNT) {
       scheduleValueEntriesLoadFrame(runAfterMenuPaint)
       return
     }
