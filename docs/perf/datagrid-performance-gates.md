@@ -117,6 +117,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - `BENCH_INTERACTION_FAIL_ON_WARNINGS` defaults to `true` for the built-in profiles. Set it to `false` only for exploratory local observation runs.
 - Hard-fail scripts: `pnpm run bench:datagrid:enterprise:browser-frames:assert` for desktop Chromium and `pnpm run bench:datagrid:enterprise:browser-frames:touch:assert` for tablet/coarse-pointer Chromium.
 - Enterprise browser-frame assert scripts set `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, so frame p95/p99, dropped-frame percentage, long-task count, long-task total, max long task, and heap resource warnings are blocking in addition to interaction warnings.
+- Focused scroll script: `pnpm run bench:datagrid:enterprise:scroll:assert` runs vertical, smooth vertical, horizontal, and combined browser scenarios with hard browser-resource budgets.
 - CI `benchmark-gates` must run `pnpm exec playwright install --with-deps chromium` before `pnpm run bench:regression`; `quality:perf:datagrid` statically verifies this wiring so browser-frame gates do not start without the Chromium runtime.
 - Browser-frame direct scroll scenarios write at most one scroll position per animation frame. `BENCH_BROWSER_STEP_DELAY_MS` adds delay above a frame, but must not busy-loop scroll writes faster than paint cadence because CI Chromium coalesces rAF and reports synthetic `150ms+` frame gaps that do not describe DataGrid render cost.
 - Virtualization browser gates:

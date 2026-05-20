@@ -4,8 +4,9 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slice 1 is implemented as of 2026-05-20.
+- Slices 1-2 are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
+- Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
 - Remaining blockers are long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
@@ -26,20 +27,23 @@ Current execution state:
 - Risk level: Low
 - Suggested commit message: `test(datagrid): harden browser frame resource gates`
 
-## Slice 2: Scroll And Combined Long-Task Reduction
+## Slice 2: Scroll Hot-Path Guard And Focused Gate
 
-- Status: Pending.
-- Objective: reduce main-thread work in vertical-scroll, smooth-scroll, horizontal-scroll, and combined browser scenarios.
+- Status: Completed on 2026-05-20.
+- Objective: reduce avoidable main-thread work in body scroll handling and isolate vertical-scroll, smooth-scroll, horizontal-scroll, and combined browser scenarios behind a focused hard gate.
 - Affected packages/files:
-  - `packages/datagrid-vue/src/app/*viewport*`
-  - `packages/datagrid-vue-app/src/stage/*`
-  - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
-- Expected behavior change: smoother browser scrolling with fewer long tasks and no blank viewport regressions.
+  - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
+  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+  - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
+- Expected behavior change: redundant body scroll events with unchanged offsets no longer schedule app viewport commits, linked-pane sync, pinned-bottom sync, chrome redraws, or scroll-active state changes.
 - Tests to add/update:
-  - Focused browser-frame scenario gate for vertical, smooth vertical, horizontal, and combined scroll paths.
-- Validation command: `pnpm run bench:datagrid:enterprise:virtualization:assert`
+  - Stage viewport runtime contract for unchanged-offset scroll events.
+  - Focused browser-frame scroll scenario gate for vertical, smooth vertical, horizontal, and combined scroll paths.
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts && pnpm run quality:perf:datagrid`
 - Risk level: High
-- Suggested commit message: `perf(datagrid): reduce browser scroll long tasks`
+- Suggested commit message: `perf(datagrid): guard redundant scroll work`
 
 ## Slice 3: Sort/Edit/Context Menu Frame Cleanup
 
@@ -194,7 +198,7 @@ Current execution state:
 ## Recommended Execution Order
 
 1. Slice 1: Browser Frame Resource Hard Gates (completed 2026-05-20)
-2. Slice 2: Scroll And Combined Long-Task Reduction
+2. Slice 2: Scroll Hot-Path Guard And Focused Gate (completed 2026-05-20)
 3. Slice 3: Sort/Edit/Context Menu Frame Cleanup
 4. Slice 4: Server-Backed Latency And Placeholder Gates
 5. Slice 5: Datasource Churn Reduction

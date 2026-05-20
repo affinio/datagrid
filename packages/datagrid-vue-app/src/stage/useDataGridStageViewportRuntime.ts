@@ -193,6 +193,12 @@ export function useDataGridStageViewportRuntime(
     observedBodyViewportScrollLeft = state.scrollLeft
   }
 
+  function hasBodyViewportScrollStateChanged(
+    state: Pick<BodyViewportScrollState, "scrollTop" | "scrollLeft">,
+  ): boolean {
+    return state.scrollTop !== observedBodyViewportScrollTop || state.scrollLeft !== observedBodyViewportScrollLeft
+  }
+
   function commitBodyViewportScrollState(state: BodyViewportScrollState): void {
     trackObservedBodyViewportScrollState(state)
     if (bodyViewportScrollTop.value !== state.scrollTop) {
@@ -328,15 +334,18 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleCenterViewportScroll(event: Event): void {
-    options.viewport.value.handleViewportScroll(event)
     const element = event.target as HTMLElement | null
     if (!element) {
       return
     }
-    markBodyViewportScrolling()
     const previousScrollTop = observedBodyViewportScrollTop
     const previousScrollLeft = observedBodyViewportScrollLeft
     const scrollState = readBodyViewportScrollState(element)
+    if (!hasBodyViewportScrollStateChanged(scrollState)) {
+      return
+    }
+    options.viewport.value.handleViewportScroll(event)
+    markBodyViewportScrolling()
     linkedPaneScrollSync.syncNow(scrollState.scrollTop)
     scheduleBodyViewportScrollStateSync(scrollState)
     if (scrollState.scrollLeft !== previousScrollLeft) {

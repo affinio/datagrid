@@ -383,6 +383,27 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("skips redundant body scroll events when offsets did not change", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    globalThis.cancelAnimationFrame = vi.fn()
+    const harness = createHarness()
+    const bodyViewport = createViewportElement({ scrollTop: 0, scrollLeft: 0 })
+
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
+    expect(harness.syncers.flushGridChromeRedraw).not.toHaveBeenCalled()
+    expect(frameCallbacks).toHaveLength(0)
+    expect(harness.runtime.isBodyViewportScrolling.value).toBe(false)
+
+    harness.unmount()
+  })
+
   it("batches window resize metric sync through requestAnimationFrame", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

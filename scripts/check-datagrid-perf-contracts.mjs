@@ -568,6 +568,7 @@ registerTokenCheck(
     "bench:datagrid:enterprise:browser-frames",
     "bench:datagrid:enterprise:browser-frames:assert",
     "bench:datagrid:enterprise:browser-frames:touch:assert",
+    "bench:datagrid:enterprise:scroll:assert",
     "bench:datagrid:enterprise:virtualization:assert",
     "enterprise-browser-frames",
     "bench:datagrid:tree",
@@ -843,6 +844,47 @@ registerTokenCheck(
       ok
         ? "ok"
         : `unexpected enterprise browser assert scripts or finite budgets: desktop='${desktopAssertScript}', touch='${touchAssertScript}', desktop budgets frameP95=${desktopFrameP95}, frameP99=${desktopFrameP99}, dropped=${desktopDroppedFramePct}, longTaskCount=${desktopLongTaskCount}, longTaskTotal=${desktopLongTaskTotal}, longTaskMax=${desktopLongTaskMax}, heap=${desktopHeap}, touch budgets frameP95=${touchFrameP95}, frameP99=${touchFrameP99}, dropped=${touchDroppedFramePct}, longTaskCount=${touchLongTaskCount}, longTaskTotal=${touchLongTaskTotal}, longTaskMax=${touchLongTaskMax}, heap=${touchHeap}`,
+    )
+  }
+}
+
+{
+  const packageJsonPath = resolve("package.json")
+  const enterpriseScrollAssertBudgetId = "enterprise-scroll-frame-assert-hard-budgets"
+  if (!existsSync(packageJsonPath)) {
+    registerConditionCheck(
+      enterpriseScrollAssertBudgetId,
+      false,
+      "Enterprise scroll assert script hard-fails resource budget warnings for scroll scenarios",
+      "package.json missing",
+    )
+  } else {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
+    const scrollAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:scroll:assert"] ?? "")
+    const frameP95 = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_FRAME_P95_MS")
+    const frameP99 = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_FRAME_P99_MS")
+    const droppedFramePct = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT")
+    const longTaskCount = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_LONG_TASK_COUNT")
+    const longTaskTotal = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS")
+    const longTaskMax = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS")
+    const heap = extractEnvNumberFromScript(scrollAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const ok =
+      scrollAssertScript.includes("BENCH_BROWSER_SCENARIOS=vertical-scroll-only,vertical-smooth-scroll,horizontal-scroll-only,combined") &&
+      scrollAssertScript.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
+      frameP95 != null &&
+      frameP99 != null &&
+      droppedFramePct != null &&
+      longTaskCount != null &&
+      longTaskTotal != null &&
+      longTaskMax != null &&
+      heap != null
+    registerConditionCheck(
+      enterpriseScrollAssertBudgetId,
+      ok,
+      "Enterprise scroll assert script hard-fails resource budget warnings for scroll scenarios",
+      ok
+        ? "ok"
+        : `unexpected enterprise scroll assert script or finite budgets: script='${scrollAssertScript}', frameP95=${frameP95}, frameP99=${frameP99}, dropped=${droppedFramePct}, longTaskCount=${longTaskCount}, longTaskTotal=${longTaskTotal}, longTaskMax=${longTaskMax}, heap=${heap}`,
     )
   }
 }

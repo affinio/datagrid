@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slice 1 is implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`.
+Update `2026-05-20`: Slices 1-2 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, and `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios.
 
 ## Scope
 
@@ -281,13 +281,17 @@ What blocks the target:
 ## Recommended Implementation Slices
 
 1. **Browser frame hard gates**
-   - Status: started on 2026-05-20.
+   - Status: completed on 2026-05-20.
    - Convert enterprise browser-frame desktop and touch metrics into hard budgets.
    - Track `frameP95`, `frameP99`, dropped frame percentage, long task count, total long task time, max long task, and heap delta.
 
 2. **Scroll and combined scenario long-task reduction**
+   - Status: started on 2026-05-20.
+   - App-stage body scroll now ignores redundant scroll events whose sampled offsets did not change.
+   - Focused scroll browser gate added for vertical, smooth vertical, horizontal, and combined scenarios.
    - Profile vertical-scroll and combined scenarios.
    - Remove heavy synchronous work from scroll frames and batch non-visible updates.
+   - Remaining work: profile current `bench:datagrid:enterprise:scroll:assert` artifacts and reduce actual long-task sources that still exceed the temporary budgets.
 
 3. **Sort/edit/context-menu frame cleanup**
    - Split projection/render/menu work so one interaction cannot create `60-1000ms` frame stalls.
