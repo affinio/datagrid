@@ -4,7 +4,7 @@
 
 The DataGrid clipboard architecture has a useful enterprise foundation, but it is not yet enterprise-grade. The canonical Vue app path supports range copy, paste, cut, multi-range scalar paste, pending clipboard outlines, system clipboard read/write with in-memory fallback, placeholder materialization on paste, row clipboard actions, fill integration, history capture, and blocked copy/cut over unloaded rows.
 
-The main gaps are interoperability and large-range/server semantics: TSV parsing is basic and does not support quoted CSV/TSV edge cases, copy serializes plain tab/newline text only, paste does not consistently share inline edit parsing/validation, large virtual ranges are safety-blocked instead of server-delegated, async paste has no pending/error UX, and browser clipboard permission failures are mostly silent. The implementation is safe-biased, but enterprise spreadsheet expectations require stronger format handling, failure reporting, server-side operations, and performance gates.
+The main gaps are interoperability breadth and large-range/server semantics: quoted TSV cells with tabs, newlines, quotes, and explicit blank rows are now handled, but CSV, multi-MIME payloads, richer structured clipboard metadata, large virtual server delegation, async paste pending/error UX, and browser clipboard permission reporting remain incomplete. Paste now shares the typed draft validation boundary for supported cell types, but enterprise spreadsheet expectations still require stronger failure reporting, server-side operations, and performance gates.
 
 Current enterprise readiness: **7/10**.
 Target enterprise readiness: **9/10** after hardening TSV/CSV interoperability, validation, server-backed virtual operations, async failure UX, accessibility, and large-range performance gates.
@@ -18,6 +18,14 @@ Target enterprise readiness: **9/10** after hardening TSV/CSV interoperability, 
 - Benchmark coverage exists for copy/paste/fill style workloads, but the canonical clipboard UI path is not yet covered by an enterprise browser clipboard performance SLA.
 
 The existing package split is sound. The architecture should be hardened in place rather than replaced.
+
+## Implementation Plan Status
+
+- `docs/plans/CLIPBOARD_ENTERPRISE_PLAN.md` now tracks slice-by-slice closure for this audit.
+- Slice 1, Enterprise Clipboard Contract, is completed as of 2026-05-20 in `docs/datagrid-clipboard.md`.
+- Slice 2, Clipboard Format Parser And Writer, is completed as of 2026-05-20 for quoted TSV fields with tabs, newlines, quotes, and explicit blank rows.
+- Current code already includes typed draft validation on the canonical app clipboard paste path; the remaining validation work is broader coverage and structured per-cell result reporting.
+- Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
 ## Exact Files Reviewed
 
@@ -90,14 +98,14 @@ Tests and benchmarks sampled:
 
 ### Blocker
 
-1. **TSV/CSV interoperability is too basic for enterprise spreadsheet compatibility.**
-   `parseClipboardMatrix` only normalizes line endings, drops empty rows, and splits on `\t`. `buildCopyPayload` joins raw string values with tabs and newlines. Values containing tabs, newlines, quotes, or CSV comma-separated payloads are not escaped or parsed according to Excel/Google Sheets conventions.
+1. **CSV, multi-MIME, and full spreadsheet clipboard interoperability are still incomplete.**
+   Slice 2 added quoted TSV parsing/writing for tabs, newlines, quotes, and explicit blank rows. CSV comma-separated payloads, multi-MIME payloads, HTML clipboard payloads, fixture coverage for external spreadsheet apps, and richer internal structured formats remain planned work.
 
 2. **Virtualized and unloaded large-range copy/cut are blocked rather than server-delegated.**
    `useDataGridAppClipboard.ts` blocks selected ranges with unloaded or placeholder rows and tells users to load rows or use server export. This is safe, but enterprise server-backed grids need a server copy/export/cut/clear contract for unloaded ranges. `virtualSelection.ts` has the operation-decision model, but the app clipboard path does not yet use it for server delegation.
 
-3. **Validation failures are not first-class during paste.**
-   `collectClipboardEdits` writes string matrix values directly into row patches after `isCellEditable` checks. It does not consistently reuse the cell runtime parser/validator used by inline editing. Invalid number/date/select/formula values can therefore diverge from inline edit behavior.
+3. **Validation failures are not fully first-class during paste.**
+   `collectClipboardEdits` now validates typed drafts through the shared cell runtime boundary before row mutation. The remaining gap is structured per-cell reporting for applied, skipped, invalid, blocked, materialized, and failed cells, plus broader validation coverage for every supported cell type and host paste policy.
 
 4. **Async paste failure handling is incomplete.**
    `pasteSelectedCells` awaits clipboard read and row edits, but there is no pending state, progress indicator, cancellation, rollback UX, retry surface, or clear rejected-cell feedback when `applyEdits` or a custom async `applyClipboardEdits` fails.
@@ -166,12 +174,12 @@ Tests and benchmarks sampled:
 
 | Area | Current Assessment | Enterprise Gap |
 | --- | --- | --- |
-| Copy semantics | Deterministic TSV over one resolved range | Needs escaping, multi-MIME, multi-range policy, unloaded server copy |
-| Paste semantics | Matrix-aware paste with repetition and history | Needs parser/validation parity and applied/blocked cell reporting |
+| Copy semantics | Deterministic quoted TSV over one resolved range | Needs multi-MIME, multi-range policy, unloaded server copy, and emitted-cell counts |
+| Paste semantics | Matrix-aware paste with repetition, typed draft validation, and history | Needs applied/blocked cell reporting, async failure UX, and server delegation |
 | Large-range operations | Works for materialized moderate ranges | Needs caps, chunking, server delegation, or bulk patch representation |
-| TSV interoperability | Basic tab/newline split/join | Needs quoted tabs/newlines and trailing blank handling |
+| TSV interoperability | Quoted tabs, newlines, quotes, and explicit blank rows are handled | Needs external spreadsheet fixture coverage and performance gates |
 | CSV interoperability | Unsupported | Add CSV parser or clearly document TSV-only support |
-| Excel/Google Sheets compatibility | Good for simple rectangular text | Weak for quoted values, formulas, formatted values, multi-MIME |
+| Excel/Google Sheets compatibility | Stronger for quoted TSV cells | Needs external fixtures for formulas, formatted values, CSV, and multi-MIME |
 | Virtualized ranges | Visuals are range/index based; unloaded copy is blocked | Need remount tests and server-delegated virtual operations |
 | Unloaded rows | Safe-blocked for copy/cut | Need server export/copy/cut contract |
 | Placeholders | Paste can materialize placeholders; copy/cut blocked | Need broader e2e for multi-row/multi-range placeholder paste |
@@ -187,11 +195,11 @@ Tests and benchmarks sampled:
 
 ## Interoperability Risks
 
-- Values containing tabs or newlines can corrupt copied TSV shape because copy does not escape fields.
+- Quoted TSV now protects values containing tabs, newlines, and quotes; remaining interoperability risk is external fixture coverage and unsupported CSV/multi-MIME payloads.
 - Comma-separated CSV from external tools is treated as a single-column TSV row.
-- Quoted Excel/Sheets TSV/CSV fields are not parsed.
+- Quoted TSV fields are parsed; quoted CSV fields are not parsed as CSV.
 - Formulas are copied as whichever string `readClipboardCell` provides, but formula/value paste modes beyond values are unsupported.
-- Date, number, currency, percent, and select paste can store raw strings rather than typed values unless custom `applyClipboardEdits` handles coercion.
+- Date, number, currency, percent, and select paste use shared draft validation where the canonical app path has column type metadata; remaining risk is incomplete structured rejection feedback and host-specific paste policies.
 - Row clipboard JSON is internal and not spreadsheet-interoperable.
 
 ## Performance Risks
@@ -235,7 +243,7 @@ Target score: **9/10**.
 
 What blocks the target score:
 
-- No robust TSV/CSV quoted-field parser or escaping writer.
+- No CSV parser/writer, multi-MIME clipboard strategy, or external spreadsheet fixture gate. Quoted TSV parser/writer support is implemented.
 - No multi-MIME clipboard payload strategy.
 - No server-delegated copy/cut/clear/paste contract for unloaded virtual ranges.
 - No paste validation result model.
@@ -297,8 +305,8 @@ Performance tests:
 
 ## Recommended Next Work
 
-1. Define the clipboard format contract: TSV-only with escaping, or TSV plus CSV plus internal structured MIME.
-2. Add a shared parser/writer utility with Excel/Google Sheets fixtures.
+1. Extend the clipboard format contract beyond implemented quoted TSV if CSV, HTML, or internal structured MIME are required.
+2. Add Excel/Google Sheets fixture gates for the quoted TSV parser/writer.
 3. Add a structured paste result: applied cells, blocked cells, skipped cells, validation failures, materialized rows, operation id.
 4. Reuse inline edit parse/validation for paste or document an explicit paste-specific policy.
 5. Wire virtual-selection operation decisions into copy/cut/clear and define server delegation APIs.

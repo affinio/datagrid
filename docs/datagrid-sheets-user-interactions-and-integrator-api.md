@@ -35,6 +35,7 @@ Scope: `/datagrid` demo baseline and `@affino/datagrid-core` integration contrac
 - `Ctrl/Cmd + V`: paste at active target (matrix-aware).
 - `Ctrl/Cmd + X`: cut (copy + clear editable cells).
 - Context menu (`Shift+F10` or mouse right click): copy/paste/cut/clear and header actions (sort/filter/auto-size).
+- The detailed mounted app clipboard contract lives in `docs/datagrid-clipboard.md`.
 
 ### History (Undo/Redo)
 

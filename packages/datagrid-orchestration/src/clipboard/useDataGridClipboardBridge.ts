@@ -38,12 +38,91 @@ export interface UseDataGridClipboardBridgeResult<
 }
 
 const DEFAULT_FLASH_MS = 1200
+const FIELD_SEPARATOR = "\t"
+const ROW_SEPARATOR = "\n"
 
 function normalizeClipboardValue(value: unknown): string {
   if (typeof value === "undefined" || value === null) {
     return ""
   }
   return String(value)
+}
+
+export function serializeDataGridClipboardTsvField(value: unknown): string {
+  const normalized = normalizeClipboardValue(value).replace(/\r\n/g, ROW_SEPARATOR).replace(/\r/g, ROW_SEPARATOR)
+  if (
+    normalized.includes(FIELD_SEPARATOR)
+    || normalized.includes(ROW_SEPARATOR)
+    || normalized.includes("\"")
+  ) {
+    return `"${normalized.replace(/"/g, "\"\"")}"`
+  }
+  return normalized
+}
+
+export function parseDataGridClipboardTsv(payload: string): string[][] {
+  const normalized = payload.replace(/\r\n/g, ROW_SEPARATOR).replace(/\r/g, ROW_SEPARATOR)
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ""
+  let inQuotedField = false
+  let atFieldStart = true
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index]
+    if (inQuotedField) {
+      if (char === "\"") {
+        const next = normalized[index + 1]
+        if (next === "\"") {
+          field += "\""
+          index += 1
+        } else {
+          inQuotedField = false
+          atFieldStart = false
+        }
+      } else {
+        field += char
+      }
+      continue
+    }
+
+    if (char === "\"" && atFieldStart) {
+      inQuotedField = true
+      atFieldStart = false
+      continue
+    }
+
+    if (char === FIELD_SEPARATOR) {
+      row.push(field)
+      field = ""
+      atFieldStart = true
+      continue
+    }
+
+    if (char === ROW_SEPARATOR) {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ""
+      atFieldStart = true
+      continue
+    }
+
+    field += char
+    atFieldStart = false
+  }
+
+  row.push(field)
+  rows.push(row)
+
+  if (normalized.endsWith(ROW_SEPARATOR) && rows.length > 1) {
+    const trailing = rows[rows.length - 1]
+    if (trailing?.length === 1 && trailing[0] === "") {
+      rows.pop()
+    }
+  }
+
+  return rows.length ? rows : [[]]
 }
 
 export function useDataGridClipboardBridge<
@@ -95,11 +174,11 @@ export function useDataGridClipboardBridge<
         if (!columnKey || !canCopyColumn(columnKey)) {
           continue
         }
-        cells.push(normalizeClipboardValue(options.getCellValue(row, columnKey)))
+        cells.push(serializeDataGridClipboardTsvField(options.getCellValue(row, columnKey)))
       }
-      rows.push(cells.join("\t"))
+      rows.push(cells.join(FIELD_SEPARATOR))
     }
-    return rows.join("\n")
+    return rows.join(ROW_SEPARATOR)
   }
 
   async function writeClipboardPayload(payload: string): Promise<void> {
@@ -148,12 +227,7 @@ export function useDataGridClipboardBridge<
   }
 
   function parseClipboardMatrix(payload: string): string[][] {
-    const normalized = payload.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-    const rows = normalized
-      .split("\n")
-      .filter(row => row.length > 0)
-      .map(row => row.split("\t"))
-    return rows.length ? rows : [[]]
+    return parseDataGridClipboardTsv(payload)
   }
 
   function dispose() {
