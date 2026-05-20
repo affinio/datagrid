@@ -283,19 +283,21 @@ async function runServerPivotInteropScenario(factories, seed) {
   const interopRowCounts = []
   const pivotColumnCounts = []
 
+  const serverBuilder = createClientRowModel({
+    rows: sourceRows,
+    resolveRowId: row => row.id,
+    isolateInputRows: false,
+  })
+
   const dataSource = {
     async pull(request) {
       const pullStart = performance.now()
-      const serverBuilder = createClientRowModel({
-        rows: sourceRows,
-        resolveRowId: row => row.id,
-        initialSortModel: request.sortModel,
-        initialFilterModel: request.filterModel,
-        initialGroupBy: request.groupBy,
-        initialGroupExpansion: request.groupExpansion,
-        initialPivotModel: request.pivot?.pivotModel ?? null,
-        initialAggregationModel: request.pivot?.aggregationModel ?? null,
-      })
+      serverBuilder.setSortModel(request.sortModel)
+      serverBuilder.setFilterModel(request.filterModel)
+      serverBuilder.setGroupBy(request.groupBy)
+      serverBuilder.setGroupExpansion(request.groupExpansion ?? null)
+      serverBuilder.setPivotModel(request.pivot?.pivotModel ?? null)
+      serverBuilder.setAggregationModel(request.pivot?.aggregationModel ?? null)
       serverBuilder.refresh("manual")
       const snapshot = serverBuilder.getSnapshot()
       const start = Math.max(0, request.range.start)
@@ -315,7 +317,6 @@ async function runServerPivotInteropScenario(factories, seed) {
         total: snapshot.rowCount,
         pivotColumns: snapshot.pivotColumns ?? [],
       }
-      serverBuilder.dispose()
       pullDurations.push(performance.now() - pullStart)
       return result
     },
@@ -411,6 +412,7 @@ async function runServerPivotInteropScenario(factories, seed) {
 
   core.dispose()
   rowModel.dispose()
+  serverBuilder.dispose()
 
   return result
 }
