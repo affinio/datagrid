@@ -90,15 +90,15 @@ Structured permission diagnostics beyond the user-facing status message remain p
 
 ## Accessibility And Mobile
 
-The current app exposes visual pending clipboard outlines and routes grid status messages through a polite `role="status"` live region. Clipboard fallback failures are covered at the app contract level; broader permission-denied browser cases, partial paste announcements, and deliberate coarse-pointer clipboard affordances remain planned validation work.
+The current app exposes visual pending clipboard outlines and routes grid status messages through a polite `role="status"` live region. Clipboard fallback failures are covered at the app contract level; broader permission-denied browser cases and partial paste announcements remain planned validation work.
 
-Touch selection remains scroll-first. Mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
+Touch selection remains scroll-first. Coarse-pointer browser coverage verifies long-press cell selection followed by keyboard copy/paste while body touch pan remains native-first. Real-device mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 
 Browser validation covers copied and cut clipboard outlines across vertical remounts, horizontal remounts, and right-pinned pane remounts.
 
 ## Performance Gates
 
-`bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency. `bench:datagrid:enterprise:clipboard:browser:assert` gates Chromium clipboard write/read/round-trip latency with granted clipboard permissions. Mobile/coarse-pointer clipboard workflows remain planned gates.
+`bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency. `bench:datagrid:enterprise:clipboard:browser:assert` gates Chromium clipboard write/read/round-trip latency with granted clipboard permissions. Real-device mobile clipboard workflows remain planned gates.
 
 ## Unsupported Or Planned Scope
 
@@ -111,4 +111,4 @@ The mounted table-stage DataGrid does not currently provide:
 - built-in HTTP routes for server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
 - rendered async paste retry/cancel UI
 - per-cell rejection UI and durable paste telemetry
-- mobile-specific clipboard UX beyond existing keyboard/context-menu paths
+- real-device mobile clipboard UX beyond existing keyboard/context-menu paths

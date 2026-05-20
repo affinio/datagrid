@@ -585,6 +585,44 @@ test.describe("sandbox touch scroll contracts", () => {
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
+  test("coarse pointer clipboard shortcuts use long-press selection without taking touch scroll", async ({ page }) => {
+    await forceCoarsePointer(page)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage").first()
+    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const sourceCell = firstEditableAmountCell(page)
+    const targetCell = amountCellByViewportRow(page, 1)
+    await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(targetCell).toBeVisible({ timeout: 20_000 })
+
+    const sourceText = (await sourceCell.textContent())?.trim() ?? ""
+    expect(sourceText).not.toBe("")
+
+    await dispatchLongPress(page, sourceCell, 650)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
+    await page.keyboard.press("Control+C")
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending/)
+
+    await dispatchLongPress(page, targetCell, 650)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(targetCell))
+    await page.keyboard.press("Control+V")
+    await expect.poll(async () => (await targetCell.textContent())?.trim() ?? "").toBe(sourceText)
+
+    const beforeTop = await viewportScrollTop(viewport)
+    const beforeSelection = await selectionAnchorSignature(page)
+    const pan = await dispatchRoutedTouchPan(viewport, { deltaY: 180 })
+    expect(pan.startPrevented).toBe(false)
+    expect(pan.movePrevented).toBe(false)
+    expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
+    await viewport.evaluate(element => {
+      element.scrollTop += 180
+    })
+    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+  })
+
   test("touch column resize drag starts from the explicit resize handle", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
