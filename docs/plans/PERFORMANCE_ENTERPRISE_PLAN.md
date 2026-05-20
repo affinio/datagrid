@@ -181,16 +181,20 @@ Current execution state:
 
 ## Slice 7: Grouped/Tree/Pivot Interactivity
 
-- Status: Pending.
+- Status: Completed on 2026-05-20.
 - Objective: move high-cardinality group/tree/pivot operations toward interactive budgets.
 - Affected packages/files:
-  - `packages/datagrid-core/src/projection/*`
   - `scripts/bench-datagrid-tree-workload.mjs`
   - `scripts/bench-datagrid-pivot-workload.mjs`
-- Expected behavior change: expand/collapse, filter/sort, and pivot rebuild paths avoid multi-second synchronous stalls where possible.
+  - `scripts/bench-datagrid-tree-workload-matrix.mjs`
+  - `scripts/bench-datagrid-pivot-server-interop.mjs`
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+- Expected behavior change: no runtime grid behavior change; grouped/tree/pivot quality gates now hard-cover 100k tree matrix runs and server pivot interop in addition to local pivot rebuild/patch budgets.
 - Tests to add/update:
   - Depth-5 group expand, 100k tree, and pivot server-interop gates.
-- Validation command: `pnpm run bench:datagrid:tree:matrix:assert:ci && pnpm run bench:datagrid:pivot:assert`
+- Validation command: `pnpm run bench:datagrid:tree:matrix:assert:ci && pnpm run bench:datagrid:pivot:assert && pnpm run bench:datagrid:pivot:server-interop:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): improve grouped tree pivot latency`
 

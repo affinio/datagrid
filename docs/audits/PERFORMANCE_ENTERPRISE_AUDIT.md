@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slices 1-6 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions; soak gates now cover heap slope, plateau drift, peak heap, server row-cache, renderer cache, listener, DOM-node, and scenario latency ceilings.
+Update `2026-05-20`: Slices 1-7 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions; soak gates now cover heap slope, plateau drift, peak heap, server row-cache, renderer cache, listener, DOM-node, and scenario latency ceilings; grouped/tree/pivot gates now include 100k tree matrix CI coverage and server pivot interop.
 
 ## Scope
 
@@ -156,7 +156,9 @@ Formula, spreadsheet, and protocol artifacts:
    - `bench-datagrid-tree-workload-100000.json`: workload elapsed `p95 ~4.78s`.
    - `bench-datagrid-pivot-server-interop.json`: elapsed `p95 ~17.5s`.
 
-   Required: chunked expand/collapse, partial tree materialization, stronger structural indexes, and hard gates for interactive operations in the `<16-33ms` range where possible.
+   Current gates now cover 100k tree matrix CI runs and server pivot interop. The latest local 100k tree run stayed around `3-4ms` expand p95 and `38-39ms` filter/sort p95, while server pivot interop stayed below the configured p95 budgets.
+
+   Required: continue reducing 100k tree filter/sort toward the `<16-33ms` interactive band and keep deeper chunking/partial materialization on the roadmap for larger or browser-bound workloads.
 
 3. **Spreadsheet workbook restore and snapshot size remain enterprise risks.**
 
@@ -319,8 +321,10 @@ What blocks the target:
    - 30-minute `bench:datagrid:soak:long:assert` profile tracks heap slope, plateau, retained DOM nodes, renderer caches, row caches, event listeners, and datasource cache growth.
 
 7. **Grouped/tree/pivot interactivity**
-   - Add chunked expand/collapse and partial materialization where needed.
-   - Gate depth-5 group expand and 100k tree workloads against interactive budgets.
+   - Status: completed on 2026-05-20.
+   - 100k tree matrix coverage is part of the CI assert profile.
+   - Pivot server interop assert is part of the grouped/tree quality gate.
+   - Remaining optimization work is 100k tree filter/sort tail reduction toward the `<16-33ms` interactive band.
 
 8. **Workbook snapshot and restore slimming**
    - Reduce snapshot payload size.

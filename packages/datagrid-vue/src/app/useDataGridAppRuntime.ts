@@ -138,7 +138,7 @@ export function useDataGridAppRuntime<TRow>(
   }
 
   const runtime = useDataGridRuntime<TRow>({
-    rows: options.rows,
+    rows: workerRowModel ? undefined : options.rows,
     columns: options.columns,
     services: options.services,
     rowModel: workerRowModel ?? undefined,

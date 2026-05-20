@@ -569,6 +569,7 @@ registerTokenCheck(
     "bench:datagrid:derived-cache:assert",
     "bench:datagrid:pivot",
     "bench:datagrid:pivot:assert",
+    "bench:datagrid:pivot:server-interop:assert",
     "bench:datagrid:dependency-graph",
     "bench:datagrid:dependency-graph:assert",
     "bench:datagrid:enterprise:selection:assert",
@@ -613,8 +614,9 @@ registerTokenCheck(
     "quality:lock:datagrid",
     "bench:datagrid:tree:assert",
     "bench:datagrid:tree:matrix:assert:ci",
+    "bench:datagrid:pivot:server-interop:assert",
   ],
-  "Quality lock includes explicit tree contracts/e2e/perf gate",
+  "Quality lock includes explicit tree contracts/e2e/perf gate and pivot server interop gate",
 )
 
 registerTokenCheck(
@@ -752,6 +754,7 @@ registerTokenCheck(
     const soakLongAssertScript = String(pkg?.scripts?.["bench:datagrid:soak:long:assert"] ?? "")
     const derivedCacheAssertScript = String(pkg?.scripts?.["bench:datagrid:derived-cache:assert"] ?? "")
     const pivotAssertScript = String(pkg?.scripts?.["bench:datagrid:pivot:assert"] ?? "")
+    const pivotServerInteropAssertScript = String(pkg?.scripts?.["bench:datagrid:pivot:server-interop:assert"] ?? "")
     const treeAssertScript = String(pkg?.scripts?.["bench:datagrid:tree:assert"] ?? "")
     const enterpriseSelectionAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:selection:assert"] ?? "")
     const rowmodelsVariance = extractEnvNumberFromScript(rowmodelsAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
@@ -812,6 +815,15 @@ registerTokenCheck(
     const derivedHeap = extractEnvNumberFromScript(derivedCacheAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const pivotVariance = extractEnvNumberFromScript(pivotAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const pivotHeap = extractEnvNumberFromScript(pivotAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const pivotServerInteropPull = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_SERVER_PIVOT_PULL_P95_MS")
+    const pivotServerInteropExport = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_EXPORT_INTEROP_P95_MS")
+    const pivotServerInteropImport = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_IMPORT_LAYOUT_P95_MS")
+    const pivotServerInteropDrilldown = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_DRILLDOWN_P95_MS")
+    const pivotServerInteropVariance = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
+    const pivotServerInteropHeap = extractEnvNumberFromScript(pivotServerInteropAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const pivotServerInteropOutputOk = pivotServerInteropAssertScript.includes(
+      "BENCH_OUTPUT_JSON=artifacts/performance/bench-datagrid-pivot-server-interop.assert.json",
+    )
     const treeVariance = extractEnvNumberFromScript(treeAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const treeHeap = extractEnvNumberFromScript(treeAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const selectionSummary = extractEnvNumberFromScript(enterpriseSelectionAssertScript, "PERF_BUDGET_MAX_SELECTION_SUMMARY_P95_MS")
@@ -851,6 +863,13 @@ registerTokenCheck(
       derivedHeap != null &&
       pivotVariance != null &&
       pivotHeap != null &&
+      pivotServerInteropPull != null &&
+      pivotServerInteropExport != null &&
+      pivotServerInteropImport != null &&
+      pivotServerInteropDrilldown != null &&
+      pivotServerInteropVariance != null &&
+      pivotServerInteropHeap != null &&
+      pivotServerInteropOutputOk &&
       treeVariance != null &&
       treeHeap != null &&
       selectionSummary != null &&
@@ -863,7 +882,7 @@ registerTokenCheck(
       "Rowmodel/interaction/datasource/soak/derived/pivot/tree assert scripts keep finite variance + heap budgets, datasource assert keeps churn budgets, soak assert keeps leak budgets, and enterprise selection assert keeps finite selection budgets",
       ok
         ? "ok"
-        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource scrollPullRequested=${datasourceScrollPullRequested}, datasource scrollPullAborted=${datasourceScrollPullAborted}, datasource scrollPullDropped=${datasourceScrollPullDropped}, datasource scrollRowCacheEvicted=${datasourceScrollRowCacheEvicted}, datasource filterPullRequested=${datasourceFilterPullRequested}, datasource filterPullAborted=${datasourceFilterPullAborted}, datasource filterPullDropped=${datasourceFilterPullDropped}, datasource filterRowCacheEvicted=${datasourceFilterRowCacheEvicted}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, soak missing=${missingSoakBudgets.join("|") || "none"}, longSoak missing=${missingLongSoakBudgets.join("|") || "none"}, soakProfile=${soakProfileOk}, longSoakProfile=${longSoakProfileOk}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
+        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource scrollPullRequested=${datasourceScrollPullRequested}, datasource scrollPullAborted=${datasourceScrollPullAborted}, datasource scrollPullDropped=${datasourceScrollPullDropped}, datasource scrollRowCacheEvicted=${datasourceScrollRowCacheEvicted}, datasource filterPullRequested=${datasourceFilterPullRequested}, datasource filterPullAborted=${datasourceFilterPullAborted}, datasource filterPullDropped=${datasourceFilterPullDropped}, datasource filterRowCacheEvicted=${datasourceFilterRowCacheEvicted}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, soak missing=${missingSoakBudgets.join("|") || "none"}, longSoak missing=${missingLongSoakBudgets.join("|") || "none"}, soakProfile=${soakProfileOk}, longSoakProfile=${longSoakProfileOk}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, pivotServer pull=${pivotServerInteropPull}, pivotServer export=${pivotServerInteropExport}, pivotServer import=${pivotServerInteropImport}, pivotServer drilldown=${pivotServerInteropDrilldown}, pivotServer variance=${pivotServerInteropVariance}, pivotServer heap=${pivotServerInteropHeap}, pivotServer output=${pivotServerInteropOutputOk}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
     )
   }
 }

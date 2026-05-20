@@ -203,6 +203,16 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_PIVOT_PATCH_REAPPLY_P95_MS=30`
   - `PERF_BUDGET_MAX_PIVOT_PATCH_REAPPLY_P99_MS=35`
   - `PERF_BUDGET_MIN_PIVOT_COLUMNS=2`
+- Pivot server interop (server pivot pull + export/import/drilldown pressure):
+  - `pnpm run bench:datagrid:pivot:server-interop:assert`
+  - `BENCH_SERVER_PIVOT_ROW_COUNT=30000`
+  - `BENCH_SERVER_PIVOT_ITERATIONS=80`
+  - `PERF_BUDGET_MAX_SERVER_PIVOT_PULL_P95_MS=500`
+  - `PERF_BUDGET_MAX_EXPORT_INTEROP_P95_MS=400`
+  - `PERF_BUDGET_MAX_IMPORT_LAYOUT_P95_MS=280`
+  - `PERF_BUDGET_MAX_DRILLDOWN_P95_MS=160`
+  - `PERF_BUDGET_MIN_INTEROP_ROWS=5`
+  - `PERF_BUDGET_MIN_PIVOT_COLUMNS=20`
 - Dependency graph (dense graph register/expand pressure; standalone assert command):
   - `PERF_BUDGET_MAX_REGISTER_MS=2500`
   - `PERF_BUDGET_MAX_STRUCTURAL_EXPAND_P95_MS=20`
@@ -222,7 +232,8 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 Tree workload matrix profiles:
 - CI blocking profile:
   - `pnpm run bench:datagrid:tree:matrix:assert:ci`
-  - row scales: `10k, 25k`
+  - row scales: `10k, 25k, 100k`
+  - 100k budgets: expand p95/p99 `12/18ms`, filter/sort p95/p99 `80/120ms`
 - Nightly/stress profile:
   - `pnpm run bench:datagrid:tree:matrix:assert:nightly`
   - row scales: `10k, 25k, 50k, 100k`
