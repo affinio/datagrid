@@ -509,8 +509,10 @@ registerTokenCheck(
     "PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS",
     "PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS",
     "buildVirtualizationBudgetWarnings",
+    "waitForScrollStepFrame",
+    "grid-selection-overlay__segment--fill-preview",
   ],
-  "Enterprise browser frame benchmark exposes calibrated interaction and virtualization budgets",
+  "Enterprise browser frame benchmark exposes calibrated interaction/virtualization budgets and paint-cadenced direct scroll sampling",
 )
 
 registerTokenCheck(

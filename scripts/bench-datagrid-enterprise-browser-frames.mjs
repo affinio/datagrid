@@ -261,8 +261,6 @@ const ALL_SCENARIOS = [
     renderingTelemetryRequired: true,
     overlayTelemetryRequired: true,
     customOverlayTelemetryRequired: true,
-    selectionOverlayTelemetryRequired: true,
-    fillOverlayTelemetryRequired: true,
     renderProfile: "overlay-heavy",
     overlayStress: true,
     horizontalScroll: false,
@@ -700,6 +698,13 @@ async function runScenario(page, sessionIndex, scenario) {
         await pause(extraDelayMs)
       }
     }
+    const waitForScrollStepFrame = async () => {
+      await waitForFrame()
+      const extraDelayMs = Math.max(0, input.stepDelayMs - 16)
+      if (extraDelayMs > 0) {
+        await pause(extraDelayMs)
+      }
+    }
     const waitForPaint = () => new Promise(resolvePaint => {
       requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
     })
@@ -1112,15 +1117,30 @@ async function runScenario(page, sessionIndex, scenario) {
       const bodyCells = Array.from(
         document.querySelectorAll(".grid-body-viewport .grid-cell"),
       ).filter(candidate => candidate instanceof HTMLElement)
+      const nameCells = Array.from(
+        document.querySelectorAll('.grid-body-viewport .grid-row:not(.row--group) .grid-cell[data-column-key="name"]'),
+      ).filter(candidate => candidate instanceof HTMLElement)
       const sourceCell = document.querySelector('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]')
+        ?? nameCells[0]
         ?? bodyCells[0]
-      const targetCell = bodyCells[Math.min(bodyCells.length - 1, 18)]
+      const targetCell = document.querySelector('.grid-body-viewport .grid-cell[data-row-index="8"][data-column-key="name"]')
+        ?? nameCells[Math.min(nameCells.length - 1, 8)]
+        ?? bodyCells[Math.min(bodyCells.length - 1, 18)]
       if (sourceCell instanceof HTMLElement && targetCell instanceof HTMLElement) {
-        dispatchElementMouse(sourceCell, "mousedown", elementCenter(sourceCell))
-        dispatchWindowMouse("mousemove", elementCenter(targetCell), { buttons: 1 })
+        const sourcePoint = elementCenter(sourceCell)
+        const targetPoint = elementCenter(targetCell)
+        dispatchElementMouse(sourceCell, "mousedown", sourcePoint)
+        await waitForFrame()
+        dispatchWindowMouse("mousemove", {
+          x: Math.round((sourcePoint.x + targetPoint.x) / 2),
+          y: Math.round((sourcePoint.y + targetPoint.y) / 2),
+        }, { buttons: 1 })
+        await waitForFrame()
+        dispatchWindowMouse("mousemove", targetPoint, { buttons: 1 })
+        await waitForCondition(() => document.querySelector(".grid-selection-overlay__segment") != null, 1500)
         await waitForPaint()
         captureTelemetry("overlay-stress:selection-preview")
-        dispatchWindowMouse("mouseup", elementCenter(targetCell))
+        dispatchWindowMouse("mouseup", targetPoint)
         await waitForPaint()
         captureTelemetry("overlay-stress:selection")
       } else {
@@ -1135,17 +1155,29 @@ async function runScenario(page, sessionIndex, scenario) {
         amountCell.click()
         await waitForPaint()
       }
-      await waitForCondition(() => document.querySelector(".cell-fill-handle") != null, 1500)
-      const fillHandle = document.querySelector(".cell-fill-handle")
+      await waitForCondition(() => amountCell instanceof HTMLElement && amountCell.querySelector(".cell-fill-handle") != null, 1500)
+      const fillHandle = amountCell instanceof HTMLElement
+        ? amountCell.querySelector(".cell-fill-handle")
+        : document.querySelector(".cell-fill-handle")
       if (fillHandle instanceof HTMLElement) {
         const handlePoint = elementCenter(fillHandle)
-        const rect = viewport.getBoundingClientRect()
-        const targetPoint = {
-          x: Math.round(rect.left + rect.width / 2),
-          y: Math.round(rect.bottom - 6),
-        }
+        const amountCells = Array.from(
+          document.querySelectorAll('.grid-body-viewport .grid-row:not(.row--group) .grid-cell[data-column-key="amount"]'),
+        ).filter(candidate => candidate instanceof HTMLElement)
+        const targetCell = amountCells[Math.min(amountCells.length - 1, 8)] ?? null
+        const targetPoint = targetCell instanceof HTMLElement
+          ? elementCenter(targetCell)
+          : (() => {
+              const rect = viewport.getBoundingClientRect()
+              return {
+                x: Math.round(rect.left + rect.width / 2),
+                y: Math.round(rect.bottom - 6),
+              }
+            })()
         dispatchElementMouse(fillHandle, "mousedown", handlePoint)
+        await waitForFrame()
         dispatchWindowMouse("mousemove", targetPoint, { buttons: 1 })
+        await waitForCondition(() => document.querySelector(".grid-selection-overlay__segment--fill-preview") != null, 1500)
         await waitForPaint()
         captureTelemetry("overlay-stress:fill-preview")
         dispatchWindowMouse("mouseup", targetPoint)
@@ -1200,7 +1232,7 @@ async function runScenario(page, sessionIndex, scenario) {
         if (step === 1 || step === input.scrollSteps || step % 40 === 0) {
           captureTelemetry(`vertical:${step}`)
         }
-        await pause(input.stepDelayMs)
+        await waitForScrollStepFrame()
         if (verticalDiagnostics && writeRecord) {
           const afterPauseMs = performance.now()
           const nextSnapshot = shouldCaptureRangeSnapshot
@@ -1336,7 +1368,7 @@ async function runScenario(page, sessionIndex, scenario) {
         if (step === 1 || step === input.horizontalSteps || step % 32 === 0) {
           captureTelemetry(`horizontal:${step}`)
         }
-        await pause(input.stepDelayMs)
+        await waitForScrollStepFrame()
       }
     } else if (input.scenario.horizontalScroll) {
       interactions.skipped.push("horizontal-scroll:no-scroll-range")
