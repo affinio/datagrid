@@ -5,7 +5,9 @@ This plan converts `docs/audits/FORMULA_ENGINE_ENTERPRISE_AUDIT.md` into small, 
 Current execution state:
 
 - Plan created on 2026-05-20.
-- All Formula enterprise slices are pending.
+- Formula enterprise slices 1-9, 11-12 are implemented with focused runtime/docs/tests/gates as of 2026-05-20.
+- Slice 10 remains a browser E2E gate follow-up because no Formula-specific Playwright scenario was added in this code slice.
+- Slice 13 is documented as an approval-ready contract proposal; public async/volatile/server formula APIs are intentionally not implemented yet.
 - The target is to raise Formula readiness from the audited `7.5/10` toward `9/10` without replacing the existing parser/compiler/runtime boundaries.
 - Async formulas, automatic volatile invalidation, and server-backed formula execution require explicit public contracts before implementation.
 - Formula editing boundary work in the Editing track is already closed; this plan focuses on formula runtime, workbook correctness, server/async/volatile semantics, diagnostics, performance gates, and UI validation.
@@ -13,7 +15,7 @@ Current execution state:
 
 ## Slice 1: Formula Surface Contract
 
-- Status: Pending.
+- Status: Completed.
 - Objective: document supported formula surfaces and limitations separately for row-model formulas, spreadsheet/workbook formulas, enterprise formula packs, worker-owned row models, and server-backed grids.
 - Affected packages/files:
   - `docs/datagrid-formula-engine-guide.md`
@@ -29,7 +31,7 @@ Current execution state:
 
 ## Slice 2: Unsupported Async And Volatile Invariants
 
-- Status: Pending.
+- Status: Completed.
 - Objective: make unsupported async formulas and automatic volatile invalidation deterministic and test-covered instead of relying only on documentation.
 - Affected packages/files:
   - `packages/datagrid-formula-engine/src/syntax/types.ts`
@@ -47,7 +49,7 @@ Current execution state:
 
 ## Slice 3: Formula Table Revision Contract
 
-- Status: Pending.
+- Status: Completed.
 - Objective: harden formula table invalidation by requiring immutable source updates or explicit revision changes for external table sources.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/compute/*`
@@ -65,7 +67,7 @@ Current execution state:
 
 ## Slice 4: Row-Model Formula Worker Parity
 
-- Status: Pending.
+- Status: Completed.
 - Objective: keep row-model formula registration, execution plans, cycles, diagnostics, and recompute results equivalent between main-thread and worker-owned row models.
 - Affected packages/files:
   - `packages/datagrid-worker/src/workerOwnedRowModel.ts`
@@ -84,7 +86,7 @@ Current execution state:
 
 ## Slice 5: Large DAG And Row-Aware Formula Gates
 
-- Status: Pending.
+- Status: Completed.
 - Objective: enforce enterprise budgets for dense formula DAGs, row-aware formulas, incremental recompute, and memory delta.
 - Affected packages/files:
   - `scripts/bench-datagrid-formula-engine.mjs`
@@ -104,7 +106,7 @@ Current execution state:
 
 ## Slice 6: Formula Cache And Churn Hardening
 
-- Status: Pending.
+- Status: Completed.
 - Objective: prevent unbounded memory growth under formula registration/removal churn and repeated spreadsheet formula analysis.
 - Affected packages/files:
   - `packages/datagrid-formula-engine/src/runtime/*`
@@ -122,7 +124,7 @@ Current execution state:
 
 ## Slice 7: Workbook Cross-Sheet Invalidation
 
-- Status: Pending.
+- Status: Completed.
 - Objective: harden workbook formula correctness across same-sheet refs, direct cross-sheet refs, table dependencies, derived sheets, row/column structural changes, and sheet rename rewrites.
 - Affected packages/files:
   - `packages/datagrid-core/src/spreadsheet/sheetModel.ts`
@@ -141,7 +143,7 @@ Current execution state:
 
 ## Slice 8: Workbook Scheduler Telemetry And Scale Policy
 
-- Status: Pending.
+- Status: Completed.
 - Objective: decide whether workbook formulas need a global cell-level dependency index now or a documented scale policy plus telemetry-backed limits.
 - Affected packages/files:
   - `packages/datagrid-core/src/spreadsheet/workbookModel.ts`
@@ -159,7 +161,7 @@ Current execution state:
 
 ## Slice 9: Formula Diagnostics Cost Controls
 
-- Status: Pending.
+- Status: Completed.
 - Objective: keep graph/runtime diagnostics useful without turning large formula workloads into broad recompute or memory pressure paths.
 - Affected packages/files:
   - `packages/datagrid-core/src/models/compute/*`
@@ -177,7 +179,7 @@ Current execution state:
 
 ## Slice 10: Formula UI Virtualization E2E
 
-- Status: Pending.
+- Status: Follow-up.
 - Objective: prove spreadsheet formula editing, reference decorations, diagnostics, focus, and displayed results survive row/column virtualization, pinned panes, resize, and sheet switches.
 - Affected packages/files:
   - `packages/datagrid-spreadsheet-vue-app/src/DataGridSpreadsheetWorkbookApp.vue`
@@ -195,7 +197,7 @@ Current execution state:
 
 ## Slice 11: Formula History Replay
 
-- Status: Pending.
+- Status: Completed.
 - Objective: validate undo/redo across formula edits, formula table updates, cross-sheet rewrites, derived-sheet recomputation, and virtualization remount.
 - Affected packages/files:
   - `packages/datagrid-spreadsheet-vue-app/src/useDataGridSpreadsheetWorkbookHistory.ts`
@@ -213,7 +215,7 @@ Current execution state:
 
 ## Slice 12: Enterprise Formula Wrapper Coverage
 
-- Status: Pending.
+- Status: Completed.
 - Objective: verify enterprise formula packs, runtime config, worker runtime, diagnostics, and `formulaHeavy` performance presets compose without changing community formula semantics.
 - Affected packages/files:
   - `packages/datagrid-formula-engine-enterprise/src/index.ts`
@@ -233,7 +235,7 @@ Current execution state:
 
 ## Slice 13: Async, Volatile, And Server Formula Contract Proposal
 
-- Status: Pending.
+- Status: Proposal completed; implementation pending API/protocol approval.
 - Objective: propose the public contracts needed for async formulas, automatic volatile invalidation, and server-backed formula evaluation before implementation.
 - Affected packages/files:
   - `docs/datagrid-formula-engine-guide.md`

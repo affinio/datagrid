@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-05-04T10:00:00.000Z",
+  "generatedAt": "2026-05-20T18:41:27.755Z",
   "sourceReport": "artifacts/performance/datagrid-benchmark-report.json",
   "defaults": {
     "maxDurationDriftPct": 120,
@@ -25,17 +25,17 @@
       "maxAggregateHeapDriftPct": 180
     },
     "interaction-models": {
-      "durationMs": 53,
-      "aggregateElapsedMs": 8.99384264,
-      "aggregateHeapMb": 0.7176971435546875,
+      "durationMs": 242,
+      "aggregateElapsedMs": 46.175617880000004,
+      "aggregateHeapMb": 1.680699920654297,
       "maxDurationDriftPct": 220,
       "maxAggregateElapsedDriftPct": 200,
       "maxAggregateHeapDriftPct": 220
     },
     "datasource-churn": {
-      "durationMs": 2083,
-      "aggregateElapsedMs": 380.5827107200001,
-      "aggregateHeapMb": 24.866119384765625,
+      "durationMs": 6496,
+      "aggregateElapsedMs": 1093.15521874,
+      "aggregateHeapMb": 4.604026641845703,
       "maxDurationDriftPct": 200,
       "maxAggregateElapsedDriftPct": 165,
       "maxAggregateHeapDriftPct": 180

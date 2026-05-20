@@ -60,6 +60,7 @@ interface BenchRow {
   team: string
   year: number
   revenue: number
+  formulaScore?: number
 }
 
 function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
@@ -96,13 +97,20 @@ function summarizeProjection(model: ClientRowModel<BenchRow>): Array<Record<stri
     team: (row.data as Partial<BenchRow>).team ?? null,
     year: (row.data as Partial<BenchRow>).year ?? null,
     revenue: (row.data as Partial<BenchRow>).revenue ?? null,
+    formulaScore: (row.data as Partial<BenchRow>).formulaScore ?? null,
   }))
 }
 
 describe("datagrid worker parity", () => {
   it("keeps projection deterministic between sync and worker-mode transport", async () => {
     const rows = buildRows(180)
-    const syncModel = createClientRowModel<BenchRow>({ rows })
+    const formulaFields = [
+      { name: "formulaScore", formula: "revenue * 2" },
+    ]
+    const syncModel = createClientRowModel<BenchRow>({
+      rows,
+      initialFormulaFields: formulaFields,
+    })
     const channel = createMessageChannelPair()
     const host = createDataGridWorkerMessageHost({
       source: channel.worker,
@@ -121,6 +129,7 @@ describe("datagrid worker parity", () => {
       rows,
       computeMode: "worker",
       computeTransport: transport,
+      initialFormulaFields: formulaFields,
     })
 
     const applyScenario = (model: ClientRowModel<BenchRow>): void => {
@@ -162,6 +171,12 @@ describe("datagrid worker parity", () => {
     await Promise.resolve()
 
     expect(summarizeProjection(workerModeModel)).toEqual(summarizeProjection(syncModel))
+    expect(workerModeModel.getFormulaExecutionPlan()).toEqual(syncModel.getFormulaExecutionPlan())
+    expect(workerModeModel.getFormulaComputeStageDiagnostics()).toEqual(
+      expect.objectContaining({
+        dirtyNodes: ["formulaScore"],
+      }),
+    )
     const transportStats = transport.getStats()
     expect(transportStats.dispatched).toBeGreaterThan(0)
     expect(transportStats.acked).toBeGreaterThan(0)

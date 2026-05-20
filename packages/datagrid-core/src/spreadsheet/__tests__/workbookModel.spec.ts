@@ -210,6 +210,71 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     workbook.dispose()
   })
 
+  it("recomputes formula-table dependents from source sheet edits while inactive", () => {
+    const workbook = createDataGridSpreadsheetWorkbookModel({
+      activeSheetId: "orders",
+      sheets: [
+        {
+          id: "orders",
+          name: "Orders",
+          sheetModelOptions: {
+            referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+            columns: [{ key: "total" }],
+            rows: [
+              { id: "order-1", cells: { total: 100 } },
+              { id: "order-2", cells: { total: 200 } },
+            ],
+          },
+        },
+        {
+          id: "summary",
+          name: "Summary",
+          sheetModelOptions: {
+            referenceParserOptions: SPREADSHEET_REFERENCE_OPTIONS,
+            columns: [{ key: "value" }],
+            rows: [
+              {
+                id: "summary-1",
+                cells: {
+                  value: "=SUM(TABLE('orders', 'total'))",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    const ordersSheet = workbook.getSheet("orders")?.sheetModel
+    const summarySheet = workbook.getSheet("summary")?.sheetModel
+    expect(workbook.getActiveSheetId()).toBe("orders")
+    expect(summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })?.displayValue).toBe(300)
+
+    expect(ordersSheet?.setCellInput({
+      sheetId: "orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "total",
+    }, 250)).toBe(true)
+
+    const syncSnapshot = workbook.getSnapshot().sync
+    expect(syncSnapshot.converged).toBe(true)
+    expect(syncSnapshot.passCount).toBeGreaterThan(0)
+    expect(summarySheet?.getCell({
+      sheetId: "summary",
+      rowId: "summary-1",
+      rowIndex: 0,
+      columnKey: "value",
+    })?.displayValue).toBe(350)
+
+    workbook.dispose()
+  })
+
   it("computes and rewrites sheet-qualified references across workbook renames", () => {
     const workbook = createDataGridSpreadsheetWorkbookModel({
       sheets: [

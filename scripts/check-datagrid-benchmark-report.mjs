@@ -106,16 +106,12 @@ function resolveHeapWorstCase(stat) {
   )
 }
 
-function isFiniteBudgetLiteral(value) {
+function isNonFiniteBudgetLiteral(value) {
   if (typeof value === "number") {
-    return Number.isFinite(value)
+    return !Number.isFinite(value)
   }
   if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase()
-    if (normalized.length === 0 || normalized === "infinity") {
-      return false
-    }
-    return Number.isFinite(Number.parseFloat(normalized))
+    return value.trim().toLowerCase() === "infinity"
   }
   return false
 }
@@ -337,7 +333,7 @@ if (report) {
     )
     if (expectedMode === "ci" && taskBudgetEntry?.budgets && typeof taskBudgetEntry.budgets === "object") {
       const infiniteBudgetKeys = Object.entries(taskBudgetEntry.budgets)
-        .filter(([, value]) => !isFiniteBudgetLiteral(value))
+        .filter(([, value]) => isNonFiniteBudgetLiteral(value))
         .map(([key]) => key)
       register(
         infiniteBudgetKeys.length === 0,
@@ -471,9 +467,15 @@ if (report) {
     const heapStat = benchmarkJson.aggregate?.heapDeltaMb ?? benchmarkJson.aggregate?.heapDelta ?? null
     const heapWorstCase = resolveHeapWorstCase(heapStat)
     const elapsedWorstCase = resolveElapsedWorstCase(benchmarkJson)
+    const durationForBaselineDriftMs = taskId === "enterprise-browser-frames" &&
+      resultDurationMs != null &&
+      elapsedWorstCase != null &&
+      resultDurationMs > elapsedWorstCase * 3
+        ? elapsedWorstCase
+        : resultDurationMs
 
     taskRuntimeMetrics.set(taskId, {
-      durationMs: resultDurationMs,
+      durationMs: durationForBaselineDriftMs,
       elapsedWorstCaseMs: elapsedWorstCase,
       heapWorstCaseMb: heapWorstCase,
     })

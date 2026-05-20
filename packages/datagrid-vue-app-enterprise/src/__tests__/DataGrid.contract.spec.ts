@@ -520,6 +520,47 @@ describe("DataGrid enterprise facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps community formula functions authoritative over enterprise packs", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: FINANCE_ROWS,
+        columns: FINANCE_COLUMNS,
+        clientRowModelOptions: {
+          resolveRowId: (row: FinanceRow) => row.id,
+        },
+        licenseKey: ALL_FEATURES_LICENSE,
+        formulaPacks: true,
+        formulaFunctions: {
+          SAFE_DIVIDE: {
+            arity: { min: 2, max: 3 },
+            compute: () => 99,
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const api = (wrapper.vm as unknown as {
+      getApi?: () => {
+        rows: {
+          get: (index: number) => { data?: FinanceRow } | undefined
+          getFormulaFunctionNames: () => readonly string[]
+        }
+      } | null
+    }).getApi?.()
+
+    expect(api?.rows.get(0)?.data).toMatchObject({
+      grossMargin: 99,
+    })
+    expect(api?.rows.getFormulaFunctionNames()).toEqual(expect.arrayContaining([
+      "SAFE_DIVIDE",
+      "WEIGHTED_AVG",
+    ]))
+
+    wrapper.unmount()
+  })
+
   it("does not register enterprise formula packs without a license key", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const wrapper = mount(DataGrid, {

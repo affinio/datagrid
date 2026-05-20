@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { performance } from "node:perf_hooks"
 import { resolve } from "node:path"
 import { spawn, spawnSync } from "node:child_process"
 
@@ -547,9 +548,9 @@ for (const task of tasks) {
         ? `sample ${sampleIndex + 1}/${sampleCount}${maxAttempts > 1 ? ` attempt ${attempt}/${maxAttempts}` : ""}`
         : `${maxAttempts > 1 ? `attempt ${attempt}/${maxAttempts}` : "sample"}`
       console.log(`\n[bench] running ${task.id} (${label})...`)
-      const startedAt = Date.now()
+      const startedAt = performance.now()
       proc = await runTask(task.command, task.args, sampleEnv)
-      durationMs = Date.now() - startedAt
+      durationMs = Math.round(performance.now() - startedAt)
       if (proc.status === 0) {
         break
       }

@@ -697,6 +697,45 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("keeps formula table invalidation tied to explicit replacement or patch", () => {
+    const model = createClientRowModel<{
+      id: number
+      openRevenue?: number
+    }>({
+      rows: [
+        {
+          row: { id: 1 },
+          rowId: "dashboard",
+          originalIndex: 0,
+          displayIndex: 0,
+        },
+      ],
+    })
+    const source: { rows: Array<{ status: string; amount: number }> } = {
+      rows: [{ status: "Open", amount: 10 }],
+    }
+
+    model.setFormulaTable("orders", source)
+    model.registerFormulaField({
+      name: "openRevenue",
+      formula: "SUMIF(TABLE('orders', 'status'), 'Open', TABLE('orders', 'amount'))",
+    })
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(10)
+
+    source.rows.push({ status: "Open", amount: 20 })
+    expect(model.patchFormulaTables({
+      set: [{ name: "orders", rows: source }],
+    })).toBe(false)
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(10)
+
+    expect(model.patchFormulaTables({
+      set: [{ name: "orders", rows: { rows: [...source.rows] } }],
+    })).toBe(true)
+    expect((model.getRow(0)?.row as { openRevenue?: number }).openRevenue).toBe(30)
+
+    model.dispose()
+  })
+
   it("supports formula chains that reference computed target fields", () => {
     const model = createClientRowModel<{
       id: number

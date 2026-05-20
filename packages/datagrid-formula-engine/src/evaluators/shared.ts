@@ -21,6 +21,7 @@ import {
   formulaNumberIsTruthy,
   isFormulaErrorValue,
   isFormulaValuePresent,
+  normalizeFormulaFunctionResult,
   normalizeFormulaValue,
 } from "../syntax/values.js"
 
@@ -319,7 +320,7 @@ export function createFormulaJitRuntimeHelpers(
       if (formulaError) {
         return formulaError
       }
-      return normalizeFormulaValue(functionDefinition.compute(args))
+      return normalizeFormulaFunctionResult(functionDefinition.compute(args))
     } catch (error) {
       throw new DataGridFormulaEvaluationError(
         createFormulaRuntimeError(

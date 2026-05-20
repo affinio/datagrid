@@ -33,6 +33,13 @@ Reserve for enterprise:
 - formula profiler / advanced explain tooling
 - collaboration / audit / high-scale snapshot tooling around formula execution
 
+Current enterprise boundary:
+
+- Enterprise formula packs and runtime configuration are additive over the community parser/compiler.
+- Worker-owned row-model formula execution is supported through DataGrid runtime integration, not by forking the formula language.
+- Async formulas, automatic volatile scheduling, and server-backed formula evaluation are planned contract work, not shipped runtime behavior.
+- Server-backed formula semantics must be defined with datasource revisions, pending/error states, and unloaded-range behavior before implementation.
+
 ## Boundary rules
 
 1. Community package must remain useful on its own.
@@ -40,3 +47,4 @@ Reserve for enterprise:
 3. `@affino/datagrid-formula-engine` must not import enterprise code.
 4. Base formula language and compile contracts stay community-safe.
 5. Monetization should focus on expensive runtime and tooling layers, not basic usability.
+6. Unsupported async/volatile/server formula behavior must be documented as unsupported until the public contract is approved.

@@ -214,6 +214,12 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_DRILLDOWN_P95_MS=160`
   - `PERF_BUDGET_MIN_INTEROP_ROWS=5`
   - `PERF_BUDGET_MIN_PIVOT_COLUMNS=20`
+- Formula engine:
+  - `pnpm run bench:datagrid:formula-engine:assert`
+  - `pnpm run bench:datagrid:formula-engine:worker:assert`
+  - `pnpm run bench:datagrid:formula-backends:assert`
+  - Formula asserts cover small/medium/large DAGs, full recompute, incremental patch recompute, compile iterations, heap delta, worker-owned parity, and backend comparisons.
+  - Async formulas, automatic volatile invalidation, and server-backed formula execution are not benchmarked as shipped behavior because they are unsupported until a public contract is approved.
 - Spreadsheet workbook snapshot/restore:
   - `pnpm run bench:datagrid:spreadsheet-workbook:assert`
   - `BENCH_SPREADSHEET_ORDERS_ROW_COUNT=16000`

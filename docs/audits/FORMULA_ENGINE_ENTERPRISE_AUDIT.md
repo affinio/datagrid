@@ -10,6 +10,14 @@ Current enterprise readiness score: **7.5/10**.
 
 Target score: **9/10** after async/volatile/server-backed contracts, global workbook invalidation hardening, large-DAG gates, and UI/runtime continuity tests are in place.
 
+Implementation update, 2026-05-20:
+
+- Unsupported async formula functions now fail deterministically in the synchronous runtime instead of being normalized as ordinary values.
+- Volatile date helpers remain explicit-recompute only and are covered as an invariant.
+- Formula-table invalidation is documented and tested as identity/revision based for row-model and workbook surfaces.
+- Worker formula parity, enterprise wrapper composition, workbook sync telemetry, and formula benchmark gate wiring have targeted regression coverage.
+- Async formulas, automatic volatile scheduling, server-backed formula protocols, and browser E2E formula virtualization remain contract/proposal work, not shipped behavior.
+
 ## Current architecture summary
 
 - Formula language and compile API live in `packages/datagrid-formula-engine`.

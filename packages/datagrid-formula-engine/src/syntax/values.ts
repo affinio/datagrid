@@ -85,6 +85,22 @@ function normalizeFormulaScalarValue(value: unknown): DataGridFormulaScalarValue
   return null
 }
 
+function isThenableFormulaResult(value: unknown): value is { then: unknown } {
+  return (typeof value === "object" || typeof value === "function")
+    && value !== null
+    && typeof (value as { then?: unknown }).then === "function"
+}
+
+export function normalizeFormulaFunctionResult(value: unknown): DataGridFormulaValue {
+  if (isThenableFormulaResult(value)) {
+    throw new DataGridFormulaEvaluationError({
+      code: "EVAL_ERROR",
+      message: "Async formula functions are not supported by the synchronous formula runtime.",
+    })
+  }
+  return normalizeFormulaValue(value)
+}
+
 function normalizeFormulaArrayValue(value: readonly unknown[]): DataGridFormulaArrayValue {
   const normalized: DataGridFormulaScalarValue[] = []
   for (const entry of value) {

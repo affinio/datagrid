@@ -67,6 +67,23 @@ Histogram `options.search` is scoped only to value-list search. It is independen
 
 Server-backed selection operation semantics are defined in `docs/server-datasource/selection-operations.md`. Current data-source row models expose enough loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, range move, and summary still require explicit backend capability wiring before they can run over unloaded rows.
 
+## Formula Boundary
+
+The current data-source protocol does not define server-backed formula evaluation.
+
+Formula results are client/model-owned unless a host builds an external formula layer. Do not infer server formula behavior from `pull()`, `subscribe()`, row edit, histogram, or invalidation messages.
+
+An approval-ready server formula protocol would need:
+
+- revisioned formula result payloads tied to row/data-source revisions
+- pending, error, canceled, and stale-result states
+- abort/cancel behavior for async formula evaluation
+- invalidation messages for formula dependencies and volatile domains
+- defined behavior for formulas over unloaded ranges and placeholder rows
+- history/undo semantics for server-calculated formula values after row edits
+
+Until that contract exists, server-backed grids may display formula columns only when the values are already part of the pulled row data or when the host performs client/model-side formula evaluation over loaded data.
+
 ## Diagnostics Contract
 
 `DataGridDataSourceBackpressureDiagnostics`:

@@ -8,6 +8,24 @@ Canonical package boundary:
 - grid/runtime integration: `@affino/datagrid-core`
 - enterprise boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](datagrid-formula-engine-community-vs-enterprise.md)
 
+## Enterprise Support Contract
+
+Formula support is split by surface:
+
+- Row-model formulas: supported through `createClientRowModel`, computed/formula fields, dependency tokens, dirty propagation, calculation snapshots, and worker-owned row-model parity.
+- Spreadsheet/workbook formulas: supported through `sheetModel` and `workbookModel` for sheet-local formulas, cross-sheet references, formula tables, derived sheets, and workbook snapshot restore.
+- Enterprise formula package: additive packs, runtime configuration, diagnostics, and performance presets; it does not replace the community parser/compiler.
+- Worker-owned row models: supported for row-model formula registration, recompute, execution-plan diagnostics, and formula state mirroring.
+- Server-backed grids: formula evaluation is client/model-owned unless a host implements its own server-side formula layer. There is no built-in server formula protocol yet.
+
+Unsupported until an explicit public contract is approved:
+
+- Promise-returning or delayed formula functions.
+- Automatic timer invalidation for volatile functions.
+- Server-evaluated formula result revisions, pending/error states, cancellation, and unloaded-range semantics.
+
+`TODAY()` and other time-sensitive helpers are synchronous functions. They update when the host triggers recomputation; the formula engine does not install timers or background invalidation.
+
 ## Why this engine is strong
 
 The engine is optimized for **deterministic behavior**, **incremental recompute**, and **production safety**:
@@ -58,6 +76,8 @@ Yes — formulas like `=price1+price4` are supported.
 - A1-style cell references (`A1`, `B2`) are not part of this engine contract.
 - Colon range syntax (`A1:B10`) is still not part of the language surface.
 - Reference segments normalize to a canonical path form internally (for example `metrics["tax.rate"]` => `metrics."tax.rate"`).
+- Async formula functions are not part of the synchronous runtime contract; promise-returning functions surface runtime errors instead of pending values.
+- Server-backed formula evaluation is not part of the current datasource protocol.
 
 ### Reference forms
 
@@ -121,6 +141,47 @@ Current boundary:
 - formula-engine level cross-table aggregation is supported
 - single-metric dashboard rows in `ClientRowModel` are supported
 - multi-metric same-level dashboard rows still need scheduler hardening before they are fully spreadsheet-class
+- formula table sources must be replaced or explicitly patched when their content changes; mutating an external table source in place without notifying the row model is unsupported
+
+Row-model and workbook table invalidation is identity/revision based:
+
+- `ClientRowModel.setFormulaTable()` and `patchFormulaTables()` recompute only when the table binding changes.
+- Spreadsheet workbook table sources are exported from sheets by sheet/table revision and then patched into dependent sheets.
+- Hosts must treat external formula-table rows as immutable snapshots. Mutating `source.rows` in place without calling a table patch is a host bug and may leave cached formula results unchanged.
+
+## Workbook Scale And Scheduler Policy
+
+Workbook formulas use sheet/component scheduling, not one global cell-level dependency graph across every sheet. The shipped contract is:
+
+- same-sheet formula dependencies are tracked at cell level inside each sheet model
+- workbook sync tracks sheet references, formula table dependencies, derived-sheet dependencies, and component convergence
+- sync diagnostics expose `passCount`, `converged`, and `maxPasses` through `workbook.getSnapshot().sync`
+- direct references into unstable derived views produce workbook diagnostics; use `TABLE(sheet, field)` for scans over derived output
+
+Large workbooks should keep cross-sheet formula components shallow and prefer table scans or rollups over many address-based cross-sheet references. A global workbook cell DAG remains a future contract decision.
+
+## Diagnostics And Cache Cost Policy
+
+Formula diagnostics are production-safe by default when read on demand:
+
+- row-model diagnostics expose execution plans, graph snapshots, compute-stage counters, dirty nodes, row causes, and runtime modes
+- enterprise diagnostics read snapshots from the public API and should not trigger broad recompute by themselves
+- formula benchmarks gate full recompute, patch recompute, worker-owned runtime, backend mode comparison, heap delta, and variance budgets
+- high-churn formula registration/removal must stay bounded by the registered formula set and by configured column-cache limits
+
+Use row-level recompute-cause capture for debugging and targeted tests. Do not enable always-on per-row cause collection in hot production workloads without benchmark evidence.
+
+## Async, Volatile, And Server Formula Proposal
+
+The public API/protocol work for async, automatic volatile invalidation, and server-backed formulas is intentionally not implemented yet. Approval is required before adding these contracts.
+
+Proposed shape:
+
+- async functions: explicit function metadata (`async: true`), pending/error/cancel states, abort signal propagation, and stale-result rejection by formula revision
+- volatile functions: explicit metadata (`volatile: "clock" | "context"`), host-owned scheduler policy, and deterministic invalidation context keys such as `clock:day`
+- server-backed formulas: revisioned formula result payloads, pending/error states, server invalidation messages, unloaded-range behavior, and conflict rules with row edits/history
+
+Until that proposal is approved, async function results are rejected by the synchronous runtime, volatile helpers update only on explicit recompute, and datasource-backed formulas remain host-owned.
 
 ## Type and coercion rules (design contract)
 

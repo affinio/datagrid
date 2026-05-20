@@ -16,6 +16,7 @@ import {
   formulaNumberIsTruthy,
   isFormulaErrorValue,
   isFormulaValuePresent,
+  normalizeFormulaFunctionResult,
   normalizeFormulaValue,
 } from "../syntax/values.js"
 import { ZERO_FORMULA_NODE } from "./shared.js"
@@ -89,7 +90,7 @@ function compileFormulaAstEvaluatorForToken<TKey>(
       const formulaError = findFormulaErrorValue(args)
       if (formulaError) return formulaError
       try {
-        return normalizeFormulaValue(functionDefinition.compute(args, getFunctionContext?.()))
+        return normalizeFormulaFunctionResult(functionDefinition.compute(args, getFunctionContext?.()))
       } catch (error) {
         throw new DataGridFormulaEvaluationError(
           createFormulaRuntimeError(

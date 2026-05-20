@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   areFormulaValuesEqual,
   coerceFormulaValueToBoolean,
@@ -21,6 +21,10 @@ import {
 } from "../formula/formulaEngine.js"
 
 describe("formulaEngine", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("freezes null, blank, missing and zero semantics", () => {
     expect(normalizeFormulaValue(undefined)).toBe(null)
     expect(normalizeFormulaValue({})).toBe(null)
@@ -82,6 +86,88 @@ describe("formulaEngine", () => {
         code: "DIV_ZERO",
       })
     }
+  })
+
+  it("surfaces async formula functions as unsupported runtime errors", () => {
+    for (const compileStrategy of ["ast", "jit"] as const) {
+      const throwing = compileDataGridFormulaFieldDefinition({
+        name: "asyncUnsupported",
+        formula: "REMOTE_LOOKUP(price)",
+      }, {
+        compileStrategy,
+        runtimeErrorPolicy: "throw",
+        functionRegistry: {
+          REMOTE_LOOKUP: {
+            arity: 1,
+            compute: () => Promise.resolve(42),
+          },
+        },
+      })
+
+      expect(() => throwing.compute({
+        row: {},
+        rowId: `r-async-throw-${compileStrategy}`,
+        sourceIndex: 0,
+        get: token => (token === "field:price" ? 10 : null),
+      })).toThrow("Async formula functions are not supported")
+
+      const errorValue = compileDataGridFormulaFieldDefinition({
+        name: "asyncUnsupportedErrorValue",
+        formula: "REMOTE_LOOKUP(price)",
+      }, {
+        compileStrategy,
+        runtimeErrorPolicy: "error-value",
+        functionRegistry: {
+          REMOTE_LOOKUP: {
+            arity: 1,
+            compute: () => Promise.resolve(42),
+          },
+        },
+      }).compute({
+        row: {},
+        rowId: `r-async-error-value-${compileStrategy}`,
+        sourceIndex: 0,
+        get: token => (token === "field:price" ? 10 : null),
+      })
+
+      expect(errorValue).toMatchObject({
+        kind: "error",
+        code: "EVAL_ERROR",
+        message: expect.stringContaining("Async formula functions are not supported"),
+      })
+    }
+  })
+
+  it("keeps volatile date functions explicit-recompute only", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-20T12:00:00.000Z"))
+
+    const compiled = compileDataGridFormulaFieldDefinition({
+      name: "today",
+      formula: "TODAY()",
+    }, {
+      compileStrategy: "ast",
+    })
+
+    const first = compiled.compute({
+      row: {},
+      rowId: "r-today-first",
+      sourceIndex: 0,
+      get: () => null,
+    })
+
+    vi.setSystemTime(new Date("2026-05-21T12:00:00.000Z"))
+
+    const second = compiled.compute({
+      row: {},
+      rowId: "r-today-second",
+      sourceIndex: 0,
+      get: () => null,
+    })
+
+    expect(first).toEqual(new Date("2026-05-20T00:00:00.000Z"))
+    expect(second).toEqual(new Date("2026-05-21T00:00:00.000Z"))
+    expect(compiled.contextKeys).toEqual([])
   })
 
   it("tracks source spans on parsed AST nodes", () => {
