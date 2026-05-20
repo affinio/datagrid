@@ -4,6 +4,7 @@ from typing import Any, Protocol
 
 from affino_grid_backend.core.contracts import GridDataAdapter
 from app.features.server_demo.schemas import (
+    ServerDemoCapabilitiesResponse,
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,
     ServerDemoFillBoundaryRequest,
@@ -18,6 +19,8 @@ from app.features.server_demo.schemas import (
 
 class ServerGridDataAdapter(GridDataAdapter, Protocol):
     async def health(self) -> None: ...
+
+    async def capabilities(self) -> ServerDemoCapabilitiesResponse: ...
 
     async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse: ...
 

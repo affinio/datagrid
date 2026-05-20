@@ -49,6 +49,95 @@ async def test_server_demo_health(client: AsyncClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+async def test_server_demo_allows_local_dev_origin_preflight(client: AsyncClient) -> None:
+    response = await client.options(
+        "/api/server-demo/pull",
+        headers={
+            "Origin": "http://localhost:5175",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5175"
+
+
+async def test_server_demo_capabilities(client: AsyncClient) -> None:
+    response = await client.get("/api/server-demo/capabilities")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "tableId": "server_demo",
+        "projection": {
+            "range": {
+                "supported": True,
+                "supportedFields": [],
+                "supportedOperations": [],
+                "maxDepth": None,
+                "rowShape": "row",
+                "groupRowIdPrefix": None,
+                "unsupportedReason": None,
+            },
+            "sort": {
+                "supported": True,
+                "supportedFields": [],
+                "supportedOperations": [],
+                "maxDepth": None,
+                "rowShape": "row",
+                "groupRowIdPrefix": None,
+                "unsupportedReason": None,
+            },
+            "filter": {
+                "supported": True,
+                "supportedFields": [],
+                "supportedOperations": [],
+                "maxDepth": None,
+                "rowShape": "row",
+                "groupRowIdPrefix": None,
+                "unsupportedReason": None,
+            },
+            "groupBy": {
+                "supported": True,
+                "supportedFields": [["region"]],
+                "supportedOperations": [],
+                "maxDepth": 1,
+                "rowShape": "entry",
+                "groupRowIdPrefix": "group:region:",
+                "unsupportedReason": None,
+            },
+            "treeData": {
+                "supported": True,
+                "supportedFields": [["region"]],
+                "supportedOperations": [
+                    "set-group-by",
+                    "set-group-expansion",
+                    "toggle-group",
+                    "expand-group",
+                    "collapse-group",
+                    "expand-all-groups",
+                    "collapse-all-groups",
+                ],
+                "maxDepth": 1,
+                "rowShape": "entry",
+                "groupRowIdPrefix": "group:region:",
+                "unsupportedReason": (
+                    "Only region group pull context is supported; hierarchical tree projection is not implemented."
+                ),
+            },
+            "pivot": {
+                "supported": False,
+                "supportedFields": [],
+                "supportedOperations": [],
+                "maxDepth": None,
+                "rowShape": None,
+                "groupRowIdPrefix": None,
+                "unsupportedReason": "Server demo does not implement backend pivot projection yet.",
+            },
+        },
+    }
+
+
 async def test_server_demo_pull_basic_range(client: AsyncClient) -> None:
     response = await client.post("/api/server-demo/pull", json={"range": {"startRow": 0, "endRow": 50}})
 
@@ -187,6 +276,32 @@ async def test_server_demo_pull_region_grouping_expanded_range(client: AsyncClie
     assert body["rows"][1]["row"]["region"] == "AMER"
     assert body["rows"][2]["kind"] == "leaf"
     assert body["rows"][2]["row"]["region"] == "AMER"
+
+
+async def test_server_demo_pull_region_grouping_accepts_tree_pull_context(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 2},
+            "sortModel": [],
+            "filterModel": None,
+            "groupBy": {"fields": ["region"], "expandedByDefault": False},
+            "groupExpansion": {"expandedByDefault": False, "toggledGroupKeys": ["group:region:AMER"]},
+            "treeData": {
+                "operation": "toggle-group",
+                "scope": "branch",
+                "groupKeys": ["group:region:AMER"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 25_004
+    assert body["rows"][0]["rowId"] == "group:region:AMER"
+    assert body["rows"][0]["state"] == {"expanded": True}
+    assert body["rows"][1]["kind"] == "leaf"
+    assert body["rows"][1]["row"]["region"] == "AMER"
 
 
 async def test_server_demo_pull_maps_row_shape(client: AsyncClient) -> None:

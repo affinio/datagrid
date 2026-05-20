@@ -42,7 +42,7 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 - [ ] Broader grouping/tree/pivot server projection
 - [ ] Server-side aggregation over unloaded ranges
 - [x] Column histograms for the current demo scope
-- Note: current `server_demo` supports single-level `groupBy.fields=["region"]` and intentionally rejects unsupported group fields, tree, and pivot pull projection with `400 unsupported-server-projection`.
+- Note: current `server_demo` supports single-level `groupBy.fields=["region"]`, including region group expand/collapse `treeData` pull context, and intentionally rejects unsupported group fields, arbitrary tree projection, and pivot pull projection with `400 unsupported-server-projection`.
 
 ## Server-Specific Behaviour
 - [x] Cache invalidation
@@ -58,6 +58,7 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 - [x] Confirm whether retry and push-update affordances belong in the public app layer: retry/polling diagnostics are exposed by server-client/adapters, while websocket/SSE remains future transport work.
 - [x] Confirm whether diagnostics should expose more server-specific cache/prefetch state: current diagnostics include placeholder/cache/pull metrics; CI promotion is covered by performance gates.
 - [ ] Define public capability contract for server grouping/tree/pivot/hierarchical stores.
+- [x] Expose current `server_demo` projection capability metadata for range/sort/filter/region grouping and unsupported tree/pivot modes.
 - [ ] Define durable mutation replay/idempotency API before offline mutation retry.
 
 ## Proposed Mutation API

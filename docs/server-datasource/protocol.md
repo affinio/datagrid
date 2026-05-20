@@ -45,6 +45,56 @@ Current `server_demo` pull supports range, sort, filter, and single-level `group
 
 When unsupported `groupBy` fields, `treeData`, or `pivot` are sent to `POST /api/server-demo/pull` with a non-empty payload, the backend returns `400 unsupported-server-projection`. This is intentional: demo integrations should fail explicitly rather than returning flat rows for an unsupported grouped/tree/pivot request.
 
+## Capabilities
+
+`GET /api/server-demo/capabilities`
+
+The reference backend exposes current projection support separately from `pull` so clients and diagnostics can distinguish supported, blocked, and not-yet-implemented modes before sending projection-heavy requests.
+
+Current response shape:
+
+```json
+{
+  "tableId": "server_demo",
+  "projection": {
+    "range": { "supported": true, "rowShape": "row" },
+    "sort": { "supported": true, "rowShape": "row" },
+    "filter": { "supported": true, "rowShape": "row" },
+    "groupBy": {
+      "supported": true,
+      "supportedFields": [["region"]],
+      "supportedOperations": [],
+      "maxDepth": 1,
+      "rowShape": "entry",
+      "groupRowIdPrefix": "group:region:"
+    },
+    "treeData": {
+      "supported": true,
+      "supportedFields": [["region"]],
+      "supportedOperations": [
+        "set-group-by",
+        "set-group-expansion",
+        "toggle-group",
+        "expand-group",
+        "collapse-group",
+        "expand-all-groups",
+        "collapse-all-groups"
+      ],
+      "maxDepth": 1,
+      "rowShape": "entry",
+      "groupRowIdPrefix": "group:region:",
+      "unsupportedReason": "Only region group pull context is supported; hierarchical tree projection is not implemented."
+    },
+    "pivot": {
+      "supported": false,
+      "unsupportedReason": "Server demo does not implement backend pivot projection yet."
+    }
+  }
+}
+```
+
+`treeData` here means the existing datasource tree pull context used by group expand/collapse operations. It does not mean arbitrary hierarchical tree projection. This endpoint is reference-backend metadata, not a new DataGrid core public API. Hosts can expose an equivalent endpoint if their app needs capability-driven UI or diagnostics.
+
 ## Pull
 
 `POST /api/server-demo/pull`
@@ -99,11 +149,12 @@ Supported projection in the current `server_demo` pull path:
 
 - `groupBy.fields = ["region"]`
 - `groupExpansion` for region group keys such as `group:region:AMER`
+- `treeData` pull context for region group expand/collapse operations
 
 Unsupported in the current `server_demo` pull path:
 
 - `groupBy` fields other than `region`
-- `treeData`
+- arbitrary `treeData` / hierarchical tree projection
 - `pivot`
 
 Backward compatibility:

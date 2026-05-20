@@ -6,6 +6,17 @@
 
 - ## Summary
 
+  Forwarded `groupExpansion` and datasource `treeData` pull context through the default server query codec when grouping is active.
+
+  ## User impact
+
+  Server-backed group expand/collapse triggers can now reach backends that rely on `groupExpansion` and tree pull operation metadata.
+
+  ## Validation
+  - focused server adapter codec tests passed
+
+- ## Summary
+
   Hardened JSON-safe normalization for server query codec values by stripping `undefined` object fields before validating advanced filter payloads and other JSON-like filter snapshots.
 
   ## User impact
@@ -22,7 +33,7 @@
 
 - ## Summary
 
-  Added a server query codec for normalizing DataGrid pull requests into a stable backend DTO. The codec covers range, sort, filter model, quick filter, advanced filter expression, groupBy, and pagination state through `normalizeDataGridServerQuery(request, options?)`.
+  Added a server query codec for normalizing DataGrid pull requests into a stable backend DTO. The codec covers range, sort, filter model, quick filter, advanced filter expression, groupBy, groupExpansion, datasource tree pull context, and pagination state through `normalizeDataGridServerQuery(request, options?)`.
 
   `createAffinoDatasource()` now uses the normalized DTO by default for row pulls, with `queryCodec`, `mapQuery`, and raw `mapPullRequest` escape hatches for backend-specific protocols.
 

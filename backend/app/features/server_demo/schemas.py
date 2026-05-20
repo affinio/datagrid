@@ -26,6 +26,36 @@ class ServerDemoHealthResponse(BaseModel):
     status: str
 
 
+class ServerDemoProjectionFeatureCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    supported: bool
+    supported_fields: list[list[str]] = Field(default_factory=list, alias="supportedFields")
+    supported_operations: list[str] = Field(default_factory=list, alias="supportedOperations")
+    max_depth: int | None = Field(default=None, ge=0, alias="maxDepth")
+    row_shape: Literal["row", "entry"] | None = Field(default=None, alias="rowShape")
+    group_row_id_prefix: str | None = Field(default=None, alias="groupRowIdPrefix")
+    unsupported_reason: str | None = Field(default=None, alias="unsupportedReason")
+
+
+class ServerDemoProjectionCapabilities(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    range: ServerDemoProjectionFeatureCapability
+    sort: ServerDemoProjectionFeatureCapability
+    filter: ServerDemoProjectionFeatureCapability
+    group_by: ServerDemoProjectionFeatureCapability = Field(alias="groupBy")
+    tree_data: ServerDemoProjectionFeatureCapability = Field(alias="treeData")
+    pivot: ServerDemoProjectionFeatureCapability
+
+
+class ServerDemoCapabilitiesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    table_id: str = Field(alias="tableId")
+    projection: ServerDemoProjectionCapabilities
+
+
 class ServerDemoSortModelItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -66,6 +96,19 @@ def _normalized_group_fields(value: Any) -> list[str]:
     return fields
 
 
+_SERVER_DEMO_TREE_PULL_OPERATIONS = {
+    "set-group-by",
+    "set-group-expansion",
+    "toggle-group",
+    "expand-group",
+    "collapse-group",
+    "expand-all-groups",
+    "collapse-all-groups",
+}
+
+_SERVER_DEMO_TREE_PULL_SCOPES = {"all", "branch"}
+
+
 class ServerDemoPullRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -84,6 +127,22 @@ class ServerDemoPullRequest(BaseModel):
     def supports_region_grouping(self) -> bool:
         return self.group_fields() == ["region"]
 
+    def supports_region_tree_pull_context(self) -> bool:
+        if not _has_payload(self.tree_data):
+            return True
+        if not self.supports_region_grouping() or not isinstance(self.tree_data, dict):
+            return False
+        operation = str(self.tree_data.get("operation") or "").strip()
+        scope = str(self.tree_data.get("scope") or "").strip()
+        raw_group_keys = self.tree_data.get("groupKeys")
+        if operation not in _SERVER_DEMO_TREE_PULL_OPERATIONS or scope not in _SERVER_DEMO_TREE_PULL_SCOPES:
+            return False
+        if raw_group_keys is None:
+            return True
+        if not isinstance(raw_group_keys, list | tuple):
+            return False
+        return all(str(group_key).startswith("group:region:") for group_key in raw_group_keys)
+
     def unsupported_projection_fields(self) -> list[str]:
         unsupported: list[str] = []
         supports_region_grouping = self.supports_region_grouping()
@@ -91,7 +150,7 @@ class ServerDemoPullRequest(BaseModel):
             unsupported.append("groupBy")
         if _has_payload(self.group_expansion) and not supports_region_grouping:
             unsupported.append("groupExpansion")
-        if _has_payload(self.tree_data):
+        if _has_payload(self.tree_data) and not self.supports_region_tree_pull_context():
             unsupported.append("treeData")
         if _has_payload(self.pivot):
             unsupported.append("pivot")

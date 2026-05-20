@@ -11,8 +11,8 @@ Goal: make backend-owned grids work with large projected datasets, not only flat
 Slices:
 
 1. [x] Add server-demo grouping projection for `groupBy: region` using the existing pull protocol.
-2. [ ] Add server projection capability metadata and docs for supported/unsupported group/tree/pivot modes.
-3. [ ] Add server tree projection contract and deterministic row ids for branch rows.
+2. [x] Add server projection capability metadata and docs for supported/unsupported group/tree/pivot modes.
+3. [x] Add server tree pull context contract and deterministic row ids for current branch rows.
 4. [ ] Add block-store cache semantics for hierarchical projections.
 5. [ ] Add partial refresh/invalidation per group branch/block.
 6. [ ] Add server pivot projection implementation or explicit enterprise adapter boundary.
@@ -68,4 +68,3 @@ Slices:
 4. [ ] Expand pivot patch tiers beyond value-only patch.
 5. [ ] Reduce pivot/tree allocation churn and duplicated materialized state.
 6. [ ] Promote sustained regression gates and memory budgets.
-

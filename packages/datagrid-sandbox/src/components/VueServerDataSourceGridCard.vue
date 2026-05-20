@@ -879,10 +879,40 @@ function jumpToRow(rowIndex: number): void {
   rowModel?.setViewportRange?.({ start: normalized, end: Math.min(ROW_COUNT - 1, normalized + 32) })
 }
 
+const SERVER_DEMO_SUPPORTED_TREE_PULL_OPERATIONS = new Set([
+  "set-group-by",
+  "set-group-expansion",
+  "toggle-group",
+  "expand-group",
+  "collapse-group",
+  "expand-all-groups",
+  "collapse-all-groups",
+])
+
+function supportsHttpRegionTreePullContext(treeData: DataGridDataSourcePullRequest["treeData"]): boolean {
+  if (treeData === null) {
+    return true
+  }
+  if (!SERVER_DEMO_SUPPORTED_TREE_PULL_OPERATIONS.has(treeData.operation)) {
+    return false
+  }
+  return treeData.groupKeys.every(groupKey => String(groupKey).startsWith("group:region:"))
+}
+
+function supportsHttpRegionGrouping(request: Pick<DataGridDataSourcePullRequest, "groupBy" | "treeData">): boolean {
+  if (request.groupBy === null) {
+    return request.treeData === null
+  }
+  return (
+    request.groupBy.fields.length === 1
+    && request.groupBy.fields[0] === "region"
+    && supportsHttpRegionTreePullContext(request.treeData)
+  )
+}
+
 function supportsHttpReadPath(request: Pick<DataGridDataSourcePullRequest, "groupBy" | "pivot" | "treeData">): boolean {
   return (
-    request.groupBy === null
-    && request.treeData === null
+    supportsHttpRegionGrouping(request)
     && request.pivot?.pivotModel === null
     && request.pivot?.aggregationModel === null
   )
@@ -935,6 +965,7 @@ function isHttpUnavailableError(caught: unknown): boolean {
 
 function markHttpDatasourceUnavailable(): void {
   serverDatasourceUnavailable.value = true
+  httpDatasource?.stopChangeFeedPolling()
   error.value = new Error(serverDatasourceUnavailableMessage)
 }
 
@@ -3075,8 +3106,18 @@ async function refreshHistoryStatus(): Promise<void> {
   if (!httpDatasource || typeof httpDatasource.getHistoryStatus !== "function") {
     return
   }
-  const status = await httpDatasource.getHistoryStatus()
-  applyServerHistoryStatus(status)
+  try {
+    const status = await httpDatasource.getHistoryStatus()
+    applyServerHistoryStatus(status)
+  } catch (caught) {
+    if (isHttpUnavailableError(caught)) {
+      markHttpDatasourceUnavailable()
+      lastHistoryActionText.value = "status:unavailable"
+      return
+    }
+    error.value = caught instanceof Error ? caught : new Error(String(caught))
+    lastHistoryActionText.value = "status:error"
+  }
 }
 
 async function runHistoryAction(direction: "undo" | "redo"): Promise<string | null> {
@@ -3245,12 +3286,18 @@ onMounted(() => {
   totalRows.value = ROW_COUNT
   handleStateUpdate(rowModel.getSnapshot())
   void refreshHistoryStatus()
-  void rowModel.refresh("mount").catch(() => {}).finally(() => {
-    if (serverDemoChangeFeedPollingEnabled) {
+  void rowModel.refresh("mount").then(() => {
+    if (serverDemoChangeFeedPollingEnabled && !serverDatasourceUnavailable.value) {
       httpDatasource?.startChangeFeedPolling({
         intervalMs: serverDemoChangeFeedPollingIntervalMs,
       })
     }
+  }).catch((caught: unknown) => {
+    if (isHttpUnavailableError(caught)) {
+      markHttpDatasourceUnavailable()
+      return
+    }
+    error.value = caught instanceof Error ? caught : new Error(String(caught))
   })
   reportFillPlumbingState("runtime_diagnostics_alive", true)
   reportFillPlumbingDetail("runtime_diagnostics_alive", "yes")

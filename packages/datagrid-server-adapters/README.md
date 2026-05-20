@@ -124,6 +124,8 @@ const datasource = createAffinoDatasource<AuctionRow>({
     sortModel: request.sortModel,
     filterModel: request.filterModel,
     groupBy: request.groupBy,
+    groupExpansion: request.groupExpansion,
+    treeData: request.treeData,
     pagination: request.pagination,
   }),
 })

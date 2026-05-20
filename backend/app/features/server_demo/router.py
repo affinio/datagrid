@@ -6,6 +6,7 @@ from app.core.workspace import WorkspaceContext, get_workspace_context
 from app.features.server_demo.adapter import ServerGridDataAdapter
 from app.features.server_demo.repository import ServerDemoRepository
 from app.features.server_demo.schemas import (
+    ServerDemoCapabilitiesResponse,
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,
     ServerDemoFillBoundaryRequest,
@@ -38,6 +39,13 @@ def get_server_demo_repository(
 async def health(repository: ServerGridDataAdapter = Depends(get_server_demo_repository)) -> ServerDemoHealthResponse:
     await repository.health()
     return ServerDemoHealthResponse(status="ok")
+
+
+@router.get("/capabilities", response_model=ServerDemoCapabilitiesResponse)
+async def capabilities(
+    repository: ServerGridDataAdapter = Depends(get_server_demo_repository),
+) -> ServerDemoCapabilitiesResponse:
+    return await repository.capabilities()
 
 
 @router.post("/pull", response_model=ServerDemoPullResponse)

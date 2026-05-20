@@ -10,7 +10,9 @@ import {
   type DataGridDataSourceInvalidation,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
+  type DataGridDataSourceTreePullContext,
   type DataGridFilterSnapshot,
+  type DataGridGroupExpansionSnapshot,
   type DataGridGroupBySpec,
   type DataGridPaginationInput,
   type DataGridQuickFilterSnapshot,
@@ -104,6 +106,17 @@ export interface DataGridServerGroupBy {
   expandedByDefault?: boolean
 }
 
+export interface DataGridServerGroupExpansion {
+  expandedByDefault: boolean
+  toggledGroupKeys: readonly string[]
+}
+
+export interface DataGridServerTreeData {
+  operation: string
+  scope: string
+  groupKeys: readonly string[]
+}
+
 export interface DataGridServerPagination {
   pageSize: number
   currentPage: number
@@ -114,6 +127,8 @@ export interface DataGridServerQuery {
   sortModel?: readonly DataGridServerSort[]
   filterModel?: DataGridServerFilterModel | null
   groupBy?: DataGridServerGroupBy | null
+  groupExpansion?: DataGridServerGroupExpansion | null
+  treeData?: DataGridServerTreeData | null
   pagination?: DataGridServerPagination | null
 }
 
@@ -417,6 +432,45 @@ export function normalizeDataGridServerGroupBy(
     : null
 }
 
+export function normalizeDataGridServerGroupExpansion(
+  input: DataGridGroupExpansionSnapshot | null | undefined,
+): DataGridServerGroupExpansion {
+  const toggledGroupKeys = Array.isArray(input?.toggledGroupKeys)
+    ? input.toggledGroupKeys.flatMap(groupKey => {
+        const normalized = typeof groupKey === "string" ? groupKey.trim() : ""
+        return normalized ? [normalized] : []
+      })
+    : []
+  return Object.freeze({
+    expandedByDefault: input?.expandedByDefault === true,
+    toggledGroupKeys: Object.freeze(toggledGroupKeys),
+  })
+}
+
+export function normalizeDataGridServerTreeData(
+  input: DataGridDataSourceTreePullContext | null | undefined,
+): DataGridServerTreeData | null {
+  if (!input) {
+    return null
+  }
+  const operation = typeof input.operation === "string" ? input.operation.trim() : ""
+  const scope = typeof input.scope === "string" ? input.scope.trim() : ""
+  if (!operation || !scope) {
+    return null
+  }
+  const groupKeys = Array.isArray(input.groupKeys)
+    ? input.groupKeys.flatMap(groupKey => {
+        const normalized = typeof groupKey === "string" ? groupKey.trim() : ""
+        return normalized ? [normalized] : []
+      })
+    : []
+  return Object.freeze({
+    operation,
+    scope,
+    groupKeys: Object.freeze(groupKeys),
+  })
+}
+
 function normalizeDataGridServerFilterModel(
   input: DataGridFilterSnapshot | null | undefined,
   options: DataGridServerQueryCodecOptions,
@@ -450,12 +504,16 @@ export function normalizeDataGridServerQuery(
   const sortModel = normalizeDataGridServerSortModel(request.sortModel, options)
   const filterModel = normalizeDataGridServerFilterModel(request.filterModel, options)
   const groupBy = normalizeDataGridServerGroupBy(request.groupBy, options)
+  const groupExpansion = groupBy ? normalizeDataGridServerGroupExpansion(request.groupExpansion) : null
+  const treeData = normalizeDataGridServerTreeData(request.treeData)
   const pagination = normalizeDataGridServerPagination(request.pagination.snapshot)
   return Object.freeze({
     range: normalizeDataGridServerRange(request.range),
     ...(sortModel ? { sortModel } : {}),
     filterModel,
     ...(groupBy ? { groupBy } : {}),
+    ...(groupExpansion ? { groupExpansion } : {}),
+    ...(treeData ? { treeData } : {}),
     ...(pagination ? { pagination } : {}),
   })
 }

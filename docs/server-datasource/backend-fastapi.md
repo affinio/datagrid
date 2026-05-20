@@ -17,6 +17,7 @@ This page uses the current `server_demo` implementation as the reference backend
 `router.py` defines the HTTP surface for the demo:
 
 - `GET /health`
+- `GET /capabilities`
 - `POST /pull`
 - `POST /histogram`
 - `POST /edits`
@@ -43,6 +44,7 @@ The request and response models live in [`backend/app/features/server_demo/schem
 
 Important groups:
 
+- `ServerDemoCapabilitiesResponse`
 - `ServerDemoPullRequest` and `ServerDemoPullResponse`
 - `ServerDemoHistogramRequest` and `ServerDemoHistogramResponse`
 - `ServerDemoCommitEditsRequest` and `ServerDemoCommitEditsResponse`
@@ -52,6 +54,8 @@ Important groups:
 These models are the source of truth for field names. The frontend adapter mirrors them closely, so keep them stable unless you want to change the transport contract.
 
 `ServerDemoPullRequest` accepts range, sort, filter, pagination metadata, and single-level region grouping. The current demo backend supports `groupBy.fields = ["region"]` with `groupExpansion` and does not implement server tree projection or pivot projection for pull responses. Unsupported `groupBy` fields, `treeData`, or `pivot` payloads return `400 unsupported-server-projection` instead of silently returning flat rows.
+
+`ServerDemoCapabilitiesResponse` exposes the current reference-backend projection support: range, sort, filter, single-level `region` grouping, and the region group expand/collapse `treeData` pull context are supported; arbitrary hierarchical tree projection and pivot projection are explicitly unsupported. This is backend metadata for diagnostics/UI gating, not a core DataGrid public API.
 
 ## Repository / Adapter
 

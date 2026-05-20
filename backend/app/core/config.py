@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     grid_max_change_feed_gap: int = Field(default=1000, ge=0)
     grid_max_filter_count_rows: int | None = Field(default=None, ge=0)
     grid_max_histogram_source_rows: int | None = Field(default=None, ge=0)
+    cors_allow_origin_regex: str | None = Field(default=r"https?://(localhost|127\.0\.0\.1):\d+")
     database_url: str = Field(
         default="postgresql+asyncpg://auctions_dev:auctions_dev_pass@db:5432/auctions_pg"
     )

@@ -5,12 +5,14 @@ import {
   normalizeDataGridServerAdvancedExpression,
   normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
+  normalizeDataGridServerGroupExpansion,
   normalizeDataGridServerGroupBy,
   normalizeDataGridServerPagination,
   normalizeDataGridServerQuickFilter,
   normalizeDataGridServerQuery,
   normalizeDataGridServerRange,
   normalizeDataGridServerSortModel,
+  normalizeDataGridServerTreeData,
 } from "./index"
 
 function createPullRequest(
@@ -350,6 +352,15 @@ describe("normalizeDataGridServerQuery", () => {
         fields: [" owner ", "service", "owner"],
         expandedByDefault: true,
       },
+      groupExpansion: {
+        expandedByDefault: false,
+        toggledGroupKeys: [" owner=alice ", "", "service=platform"],
+      },
+      treeData: {
+        operation: "toggle-group",
+        scope: "branch",
+        groupKeys: [" owner=alice "],
+      },
       pagination: {
         snapshot: {
           enabled: true,
@@ -368,7 +379,15 @@ describe("normalizeDataGridServerQuery", () => {
       columnIdMap: { owner: "owner_name", status: "status_code" },
     })
 
-    expect(Object.keys(normalized)).toEqual(["range", "sortModel", "filterModel", "groupBy", "pagination"])
+    expect(Object.keys(normalized)).toEqual([
+      "range",
+      "sortModel",
+      "filterModel",
+      "groupBy",
+      "groupExpansion",
+      "treeData",
+      "pagination",
+    ])
     expect(normalized).toEqual({
       range: { startRow: 10, endRow: 20 },
       sortModel: [
@@ -404,6 +423,15 @@ describe("normalizeDataGridServerQuery", () => {
         fields: ["owner_name", "service"],
         expandedByDefault: true,
       },
+      groupExpansion: {
+        expandedByDefault: false,
+        toggledGroupKeys: ["owner=alice", "service=platform"],
+      },
+      treeData: {
+        operation: "toggle-group",
+        scope: "branch",
+        groupKeys: ["owner=alice"],
+      },
       pagination: {
         pageSize: 25,
         currentPage: 2,
@@ -411,6 +439,26 @@ describe("normalizeDataGridServerQuery", () => {
     })
     expect(request.filterModel?.quickFilter?.query).toBe(" platform ")
     expect(request.groupBy?.fields).toEqual([" owner ", "service", "owner"])
+  })
+
+  it("normalizes group expansion and tree pull context", () => {
+    expect(normalizeDataGridServerGroupExpansion({
+      expandedByDefault: true,
+      toggledGroupKeys: [" group:a ", "", "group:b"],
+    })).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: ["group:a", "group:b"],
+    })
+    expect(normalizeDataGridServerTreeData({
+      operation: "expand-group",
+      scope: "branch",
+      groupKeys: [" group:a "],
+    })).toEqual({
+      operation: "expand-group",
+      scope: "branch",
+      groupKeys: ["group:a"],
+    })
+    expect(normalizeDataGridServerTreeData(null)).toBeNull()
   })
 
   it("prunes empty optional models while preserving explicit null filter state", () => {
@@ -458,6 +506,15 @@ describe("createAffinoDatasource query mapping", () => {
       groupBy: {
         fields: ["owner"],
       },
+      groupExpansion: {
+        expandedByDefault: false,
+        toggledGroupKeys: ["owner=alice"],
+      },
+      treeData: {
+        operation: "expand-group",
+        scope: "branch",
+        groupKeys: ["owner=alice"],
+      },
       pagination: {
         snapshot: {
           enabled: true,
@@ -484,6 +541,15 @@ describe("createAffinoDatasource query mapping", () => {
       },
       groupBy: {
         fields: ["owner_name"],
+      },
+      groupExpansion: {
+        expandedByDefault: false,
+        toggledGroupKeys: ["owner=alice"],
+      },
+      treeData: {
+        operation: "expand-group",
+        scope: "branch",
+        groupKeys: ["owner=alice"],
       },
       pagination: {
         pageSize: 50,

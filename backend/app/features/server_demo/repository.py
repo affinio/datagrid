@@ -18,6 +18,7 @@ from app.features.server_demo.projection import ServerDemoProjectionService
 from app.features.server_demo.table import SERVER_DEMO_TABLE
 from app.features.server_demo.workspace import workspace_scope_condition
 from app.features.server_demo.schemas import (
+    ServerDemoCapabilitiesResponse,
     ServerDemoCommitEditsRequest,
     ServerDemoCommitEditsResponse,
     ServerDemoCommittedEdit,
@@ -99,6 +100,44 @@ class ServerDemoRepository(ServerGridDataAdapter):
         if scope_condition is not None:
             stmt = stmt.where(scope_condition)
         await self._session.scalar(stmt)
+
+    async def capabilities(self) -> ServerDemoCapabilitiesResponse:
+        return ServerDemoCapabilitiesResponse(
+            tableId=SERVER_DEMO_TABLE.table_id,
+            projection={
+                "range": {"supported": True, "rowShape": "row"},
+                "sort": {"supported": True, "rowShape": "row"},
+                "filter": {"supported": True, "rowShape": "row"},
+                "groupBy": {
+                    "supported": True,
+                    "supportedFields": [["region"]],
+                    "maxDepth": 1,
+                    "rowShape": "entry",
+                    "groupRowIdPrefix": "group:region:",
+                },
+                "treeData": {
+                    "supported": True,
+                    "supportedFields": [["region"]],
+                    "supportedOperations": [
+                        "set-group-by",
+                        "set-group-expansion",
+                        "toggle-group",
+                        "expand-group",
+                        "collapse-group",
+                        "expand-all-groups",
+                        "collapse-all-groups",
+                    ],
+                    "maxDepth": 1,
+                    "rowShape": "entry",
+                    "groupRowIdPrefix": "group:region:",
+                    "unsupportedReason": "Only region group pull context is supported; hierarchical tree projection is not implemented.",
+                },
+                "pivot": {
+                    "supported": False,
+                    "unsupportedReason": "Server demo does not implement backend pivot projection yet.",
+                },
+            },
+        )
 
     async def pull(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
         settings = core_config.get_settings()
