@@ -76,6 +76,7 @@ export type DataGridVirtualSelectionOperation =
   | "navigate"
   | "copy"
   | "cut"
+  | "paste"
   | "clear"
   | "delete"
   | "fill"
@@ -85,6 +86,7 @@ export type DataGridVirtualSelectionOperation =
 export interface DataGridVirtualSelectionServerCapabilities {
   copy?: boolean
   cut?: boolean
+  paste?: boolean
   clear?: boolean
   delete?: boolean
   fill?: boolean
@@ -368,6 +370,7 @@ export function doesDataGridOperationRequireMaterializedValues(
   return (
     operation === "copy"
     || operation === "cut"
+    || operation === "paste"
     || operation === "clear"
     || operation === "delete"
     || operation === "fill"
@@ -384,6 +387,9 @@ export function canDataGridOperationDelegateToServer(
   }
   if (operation === "cut") {
     return capabilities.cut === true || (capabilities.copy === true && capabilities.clear === true)
+  }
+  if (operation === "paste") {
+    return capabilities.paste === true
   }
   if (operation === "clear") {
     return capabilities.clear === true
@@ -408,6 +414,9 @@ function getDataGridVirtualSelectionBlockedReason(
   }
   if (operation === "cut") {
     return "Selected range includes unloaded rows and cannot be cut without server support."
+  }
+  if (operation === "paste") {
+    return "Paste target includes unloaded rows and cannot be updated without server support."
   }
   if (operation === "clear" || operation === "delete") {
     return "Selected range includes unloaded rows and cannot be modified without server support."

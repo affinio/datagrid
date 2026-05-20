@@ -25,6 +25,39 @@ export interface DataGridAppPasteOptions {
   mode?: DataGridAppPasteMode
 }
 
+export interface DataGridAppServerClipboardOperationResult {
+  ok: boolean
+  message?: string | null
+  payload?: string | null
+}
+
+export interface DataGridAppServerClipboardSourceRequest {
+  operation: Exclude<DataGridAppPendingClipboardOperation, "none">
+  trigger: "keyboard" | "context-menu"
+  range: DataGridCopyRange
+  ranges: readonly DataGridCopyRange[]
+  columns: readonly string[]
+  selectionSnapshot: DataGridSelectionSnapshot | null
+}
+
+export interface DataGridAppServerClipboardPasteRequest {
+  trigger: "keyboard" | "context-menu"
+  mode: DataGridAppPasteMode
+  targetRanges: readonly DataGridCopyRange[]
+  columns: readonly string[]
+  matrix: readonly (readonly string[])[]
+  pendingOperation: DataGridAppPendingClipboardOperation
+  sourceRange: DataGridCopyRange | null
+  selectionSnapshot: DataGridSelectionSnapshot | null
+}
+
+export interface DataGridAppServerClipboardOperations {
+  capabilities?: DataGridVirtualSelectionServerCapabilities
+  copy?: (request: DataGridAppServerClipboardSourceRequest) => DataGridAppServerClipboardOperationResult | Promise<DataGridAppServerClipboardOperationResult>
+  cut?: (request: DataGridAppServerClipboardSourceRequest) => DataGridAppServerClipboardOperationResult | Promise<DataGridAppServerClipboardOperationResult>
+  paste?: (request: DataGridAppServerClipboardPasteRequest) => DataGridAppServerClipboardOperationResult | Promise<DataGridAppServerClipboardOperationResult>
+}
+
 interface DataGridClipboardEditSummary {
   targetCells: number
   appliedCells: number
@@ -68,6 +101,7 @@ export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
     matrix: string[][],
     options?: { recordHistory?: boolean; recordHistoryLabel?: string },
   ) => number | Promise<number>
+  serverClipboardOperations?: DataGridAppServerClipboardOperations
   buildFillMatrixFromRange?: (range: DataGridCopyRange) => string[][]
   buildPasteSpecialMatrixFromRange?: (
     range: DataGridCopyRange,
@@ -175,6 +209,20 @@ function formatClipboardEditSummary(summary: DataGridClipboardEditSummary): stri
   return `Pasted ${summary.appliedCells}/${summary.targetCells} cells; ${details.join(", ")}`
 }
 
+function resolveClipboardRangeColumnKeys(
+  range: DataGridCopyRange,
+  columns: readonly DataGridColumnSnapshot[],
+): readonly string[] {
+  const keys: string[] = []
+  for (let columnIndex = range.startColumn; columnIndex <= range.endColumn; columnIndex += 1) {
+    const key = columns[columnIndex]?.key
+    if (key) {
+      keys.push(key)
+    }
+  }
+  return keys
+}
+
 export function resolveMissingRowIndexInRange<TRow>(
   getBodyRowAtIndex: (rowIndex: number) => DataGridRowNode<TRow> | null | undefined,
   range: DataGridCopyRange,
@@ -199,11 +247,13 @@ export function resolveGroupRowIndexInRange<TRow>(
 export interface DataGridVirtualSelectionOperationGuardResult {
   blocked: boolean
   message: string | null
+  mode?: "materialized" | "server" | "virtual" | "blocked"
 }
 
 export interface ResolveDataGridVirtualSelectionOperationGuardOptions {
   range?: DataGridCopyRange | null
   capabilities?: DataGridVirtualSelectionServerCapabilities
+  allowServerDelegation?: boolean
   blockedMessage?: string
   serverUnavailableMessage?: string
   staleMessage?: string
@@ -237,7 +287,7 @@ export function resolveDataGridVirtualSelectionOperationGuard(
 ): DataGridVirtualSelectionOperationGuardResult {
   const ranges = snapshot?.ranges ?? []
   if (ranges.length === 0) {
-    return { blocked: false, message: null }
+    return { blocked: false, message: null, mode: "materialized" }
   }
   const expectedRange = options.range ? normalizeRange(options.range) : null
   const activeRangeIndex = Math.max(0, Math.min(ranges.length - 1, snapshot?.activeRangeIndex ?? 0))
@@ -274,18 +324,23 @@ export function resolveDataGridVirtualSelectionOperationGuard(
       return {
         blocked: true,
         message: options.blockedMessage ?? decision.reason,
+        mode: decision.mode,
       }
     }
     if (decision.mode === "server") {
+      if (options.allowServerDelegation) {
+        return { blocked: false, message: null, mode: "server" }
+      }
       return {
         blocked: true,
         message: options.serverUnavailableMessage ?? "Selected range requires a server operation.",
+        mode: decision.mode,
       }
     }
-    return { blocked: false, message: null }
+    return { blocked: false, message: null, mode: decision.mode }
   }
 
-  return { blocked: false, message: null }
+  return { blocked: false, message: null, mode: "materialized" }
 }
 
 export function useDataGridAppClipboard<TRow, TSnapshot>(
@@ -345,6 +400,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       options.setLastAction?.(message)
     },
     closeContextMenu: () => undefined,
+  })
+
+  const resolveServerClipboardCapabilities = (): DataGridVirtualSelectionServerCapabilities => ({
+    ...(options.serverClipboardOperations?.capabilities ?? {}),
+    copy: options.serverClipboardOperations?.capabilities?.copy ?? (typeof options.serverClipboardOperations?.copy === "function"),
+    cut: options.serverClipboardOperations?.capabilities?.cut ?? (typeof options.serverClipboardOperations?.cut === "function"),
+    paste: options.serverClipboardOperations?.capabilities?.paste ?? (typeof options.serverClipboardOperations?.paste === "function"),
   })
 
   const collectClipboardEdits = (
@@ -712,12 +774,15 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     const preflightRange = copyRangeHelpers.resolveCopyRange()
     if (preflightRange) {
+      const selectionSnapshot = options.resolveSelectionSnapshot?.() ?? null
       const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
         operation,
-        options.resolveSelectionSnapshot?.() ?? null,
+        selectionSnapshot,
         normalizeClipboardRange,
         {
           range: preflightRange,
+          capabilities: resolveServerClipboardCapabilities(),
+          allowServerDelegation: typeof options.serverClipboardOperations?.[operation] === "function",
           blockedMessage: "Selected range includes unloaded rows. Load rows or use server export.",
           serverUnavailableMessage: "Selected range requires server export. Server clipboard delegation is not configured.",
         },
@@ -725,6 +790,43 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       if (virtualGuard.blocked) {
         options.setLastAction?.(virtualGuard.message ?? "Selected range cannot be copied.")
         return false
+      }
+      if (virtualGuard.mode === "server") {
+        const sourceRange = normalizeClipboardRange(preflightRange)
+        const delegate = options.serverClipboardOperations?.[operation]
+        if (!sourceRange || !delegate) {
+          options.setLastAction?.("Selected range requires server export. Server clipboard delegation is not configured.")
+          return false
+        }
+        const sourceRanges = normalizeClipboardRanges([
+          ...(options.resolveSelectionRanges?.() ?? []),
+          sourceRange,
+        ])
+        const result = await delegate({
+          operation,
+          trigger,
+          range: sourceRange,
+          ranges: sourceRanges.length > 0 ? sourceRanges : [sourceRange],
+          columns: resolveClipboardRangeColumnKeys(sourceRange, options.visibleColumns.value),
+          selectionSnapshot,
+        })
+        if (!result.ok) {
+          options.setLastAction?.(result.message ?? "Server clipboard operation failed.")
+          return false
+        }
+        if (typeof result.payload === "string") {
+          lastCopiedPayload.value = result.payload
+        }
+        pendingClipboardOperation.value = operation
+        pendingClipboardRange.value = sourceRange
+        pendingClipboardRanges.value = sourceRanges.length > 0 ? sourceRanges : [sourceRange]
+        clipboardBridge.flashCopiedSelection(sourceRange)
+        options.setLastAction?.(result.message ?? (
+          operation === "copy"
+            ? "Server copied selected range"
+            : "Server staged selected range for cut"
+        ))
+        return true
       }
       const groupRowIndex = resolveGroupRowIndexInRange(getBodyRowAtIndex, preflightRange)
       if (groupRowIndex != null) {
@@ -801,21 +903,52 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     if (!normalizedTargetRange) {
       return false
     }
-    const virtualTargetGuard = targetRanges
-      .map(range => resolveDataGridVirtualSelectionOperationGuard(
-        "fill",
-        options.resolveSelectionSnapshot?.() ?? null,
-        normalizeClipboardRange,
-        {
-          range,
-          blockedMessage: "Paste target includes unloaded rows. Load rows or use server operation.",
-          serverUnavailableMessage: "Paste target requires a server operation. Server paste delegation is not configured.",
-        },
-      ))
-      .find(guard => guard.blocked)
+    const selectionSnapshot = options.resolveSelectionSnapshot?.() ?? null
+    const virtualTargetGuards = targetRanges.map(range => resolveDataGridVirtualSelectionOperationGuard(
+      "paste",
+      selectionSnapshot,
+      normalizeClipboardRange,
+      {
+        range,
+        capabilities: resolveServerClipboardCapabilities(),
+        allowServerDelegation: typeof options.serverClipboardOperations?.paste === "function",
+        blockedMessage: "Paste target includes unloaded rows. Load rows or use server operation.",
+        serverUnavailableMessage: "Paste target requires a server operation. Server paste delegation is not configured.",
+      },
+    ))
+    const virtualTargetGuard = virtualTargetGuards.find(guard => guard.blocked)
     if (virtualTargetGuard) {
       options.setLastAction?.(virtualTargetGuard.message ?? "Paste target cannot be updated.")
       return false
+    }
+    if (virtualTargetGuards.some(guard => guard.mode === "server")) {
+      const delegate = options.serverClipboardOperations?.paste
+      if (!delegate) {
+        options.setLastAction?.("Paste target requires a server operation. Server paste delegation is not configured.")
+        return false
+      }
+      const result = await delegate({
+        trigger,
+        mode: pasteMode,
+        targetRanges,
+        columns: resolveClipboardRangeColumnKeys(normalizedTargetRange, options.visibleColumns.value),
+        matrix,
+        pendingOperation,
+        sourceRange: pendingSourceRange,
+        selectionSnapshot,
+      })
+      if (!result.ok) {
+        options.setLastAction?.(result.message ?? "Server paste operation failed.")
+        return false
+      }
+      if (pendingOperation !== "none") {
+        clearPendingClipboardOperation(false)
+      }
+      options.applySelectionRange(normalizedTargetRange)
+      options.syncViewport()
+      options.setLastAction?.(result.message ?? "Server pasted selected range")
+      void trigger
+      return true
     }
     const groupTargetRange = targetRanges.find(range => resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null)
     if (groupTargetRange) {

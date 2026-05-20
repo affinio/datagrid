@@ -28,6 +28,7 @@ The existing package split is sound. The architecture should be hardened in plac
 - Slice 4, Structured Paste Result, is completed as of 2026-05-20 for local applied, blocked, skipped, invalid, and target cell status reporting while preserving the existing updated-row return value.
 - Slice 5, Clipboard Validation Completeness, is completed as of 2026-05-20 for built-in number, currency, percent, date, datetime, select, formula text, and empty clear value coverage.
 - Slice 6, Server Clipboard Operation Contract, is completed as of 2026-05-20 for planned copy/export, paste/import, cut, clear/delete, revision, projection, partial result, and history semantics.
+- Slice 7, Server Virtual Clipboard Delegation, is completed as of 2026-05-20 for opt-in app-level server copy/cut/paste delegates over unloaded virtual ranges.
 - Current code includes typed draft validation and local target/applied/blocked/skipped/invalid status on the canonical app clipboard paste path; the remaining validation work is custom/server result contracts, host paste policies, and per-cell rejection UI.
 - Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
@@ -105,8 +106,8 @@ Tests and benchmarks sampled:
 1. **CSV, multi-MIME, and full spreadsheet clipboard interoperability are still incomplete.**
    Slice 2 added quoted TSV parsing/writing for tabs, newlines, quotes, and explicit blank rows. CSV comma-separated payloads, multi-MIME payloads, HTML clipboard payloads, fixture coverage for external spreadsheet apps, and richer internal structured formats remain planned work.
 
-2. **Virtualized and unloaded large-range copy/cut are blocked rather than server-delegated.**
-   `useDataGridAppClipboard.ts` blocks selected ranges with unloaded or placeholder rows and tells users to load rows or use server export. This is safe, and Slice 6 now documents the planned server copy/export/cut/clear/paste contract for unloaded ranges. Runtime server delegation is still not implemented.
+2. **Virtualized and unloaded large-range copy/cut require explicit server delegates.**
+   `useDataGridAppClipboard.ts` blocks selected ranges with unloaded or placeholder rows unless an opt-in server clipboard delegate is configured. Slice 6 documents the planned server copy/export/cut/clear/paste contract, and Slice 7 adds the app-level delegate boundary for virtual copy/cut/paste. Built-in HTTP routes and adapter wiring are still not implemented.
 
 3. **Validation failures are first-class for built-in local paste status but not yet durable telemetry.**
    `collectClipboardEdits` validates built-in typed drafts through the shared cell runtime boundary before row mutation and reports applied, skipped, invalid, blocked, and target cell counts. The remaining gap is host paste policies, durable telemetry, custom/server validation results, and per-cell rejected UI.
@@ -249,7 +250,7 @@ What blocks the target score:
 
 - No CSV parser/writer, multi-MIME clipboard strategy, or external spreadsheet fixture gate. Quoted TSV parser/writer support is implemented.
 - No multi-MIME clipboard payload strategy.
-- No runtime server-delegated copy/cut/clear/paste implementation for unloaded virtual ranges. The planned contract is documented.
+- No built-in HTTP route or adapter implementation for server-delegated copy/cut/clear/paste over unloaded virtual ranges. The planned contract and app-level delegate boundary are documented/implemented.
 - No custom/server paste validation result contract. Built-in local paste validation and status reporting are implemented.
 - No async paste pending/failure/retry UX.
 - No structured partial paste result.

@@ -2,7 +2,10 @@ import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
-import { useDataGridAppClipboard } from "../useDataGridAppClipboard"
+import {
+  useDataGridAppClipboard,
+  type DataGridAppServerClipboardOperations,
+} from "../useDataGridAppClipboard"
 
 type DemoRow = {
   rowId: string
@@ -33,6 +36,7 @@ function createClipboardHarness(options: {
     endColumn: number
   }>
   selectionSnapshot?: DataGridSelectionSnapshot | null
+  serverClipboardOperations?: DataGridAppServerClipboardOperations
   rowNodes?: readonly (DemoRowNode | null)[]
   visibleColumns?: readonly unknown[]
 } = {}) {
@@ -106,6 +110,7 @@ function createClipboardHarness(options: {
       ) ?? true
     },
     syncViewport: () => undefined,
+    serverClipboardOperations: options.serverClipboardOperations,
   })
 
   return {
@@ -116,6 +121,57 @@ function createClipboardHarness(options: {
     lastAction,
     applySelectionRange,
     clearCellSelection,
+  }
+}
+
+function createVirtualClipboardSelectionSnapshot(options: {
+  startRow: number
+  endRow: number
+  startColumn?: number
+  endColumn?: number
+  isFullyLoaded?: boolean
+  missingIntervals?: readonly { startRow: number; endRow: number }[]
+}): DataGridSelectionSnapshot {
+  const startColumn = options.startColumn ?? 0
+  const endColumn = options.endColumn ?? startColumn
+  const loadedRows = options.isFullyLoaded === true
+    ? Array.from({ length: options.endRow - options.startRow + 1 }, (_, index) => {
+        const rowIndex = options.startRow + index
+        return { rowIndex, rowId: `r${rowIndex + 1}` }
+      })
+    : [{ rowIndex: options.startRow, rowId: `r${options.startRow + 1}` }]
+  return {
+    activeRangeIndex: 0,
+    activeCell: { rowIndex: options.startRow, colIndex: startColumn, rowId: `r${options.startRow + 1}` },
+    ranges: [{
+      startRow: options.startRow,
+      endRow: options.endRow,
+      startCol: startColumn,
+      endCol: endColumn,
+      startRowId: `r${options.startRow + 1}`,
+      endRowId: `r${options.endRow + 1}`,
+      anchor: { rowIndex: options.startRow, colIndex: startColumn, rowId: `r${options.startRow + 1}` },
+      focus: { rowIndex: options.endRow, colIndex: endColumn, rowId: `r${options.endRow + 1}` },
+      virtual: {
+        anchorCell: { rowIndex: options.startRow, colIndex: startColumn, rowId: `r${options.startRow + 1}` },
+        focusCell: { rowIndex: options.endRow, colIndex: endColumn, rowId: `r${options.endRow + 1}` },
+        startRowIndex: options.startRow,
+        endRowIndex: options.endRow,
+        startColumnIndex: startColumn,
+        endColumnIndex: endColumn,
+        rowIds: loadedRows,
+        coverage: {
+          isFullyLoaded: options.isFullyLoaded === true,
+          loadedRowCount: loadedRows.length,
+          totalRowCount: options.endRow - options.startRow + 1,
+          missingIntervals: options.missingIntervals ?? (options.isFullyLoaded === true ? [] : [{ startRow: options.startRow + 1, endRow: options.endRow }]),
+          rowIds: loadedRows,
+          scanLimited: false,
+        },
+        projectionStale: false,
+        isVirtualSelection: true,
+      },
+    }],
   }
 }
 
@@ -980,6 +1036,100 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(cut).toBe(false)
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
+  })
+
+  it("delegates virtual copy to the configured server clipboard handler", async () => {
+    const copy = vi.fn(async (_request: Parameters<NonNullable<DataGridAppServerClipboardOperations["copy"]>>[0]) => ({
+      ok: true,
+      payload: "A1\tB1\nA2\tB2",
+      message: "Server copied 4 cells",
+    }))
+    const { clipboard, lastAction } = createClipboardHarness({
+      selectionSnapshot: createVirtualClipboardSelectionSnapshot({
+        startRow: 0,
+        endRow: 1,
+        startColumn: 0,
+        endColumn: 1,
+        missingIntervals: [{ startRow: 1, endRow: 1 }],
+      }),
+      rowNodes: [
+        { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
+        null,
+        { rowId: "r3", kind: "leaf", data: { rowId: "r3", a: "A3", b: "B3", c: "C3" } },
+      ],
+      serverClipboardOperations: { copy },
+    })
+
+    const copied = await clipboard.copySelectedCells("keyboard")
+
+    expect(copied).toBe(true)
+    expect(copy).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "copy",
+      trigger: "keyboard",
+      range: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 },
+      columns: ["a", "b"],
+    }))
+    expect(lastAction.value).toBe("Server copied 4 cells")
+    expect(clipboard.isCellInPendingClipboardRange(0, 0)).toBe(true)
+  })
+
+  it("delegates virtual paste targets to the configured server clipboard handler", async () => {
+    const paste = vi.fn(async (_request: Parameters<NonNullable<DataGridAppServerClipboardOperations["paste"]>>[0]) => ({
+      ok: true,
+      message: "Server pasted 3 cells",
+    }))
+    const { clipboard, currentCell, lastAction, rows, selectionRange } = createClipboardHarness({
+      selectionSnapshot: createVirtualClipboardSelectionSnapshot({
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+        missingIntervals: [{ startRow: 1, endRow: 2 }],
+      }),
+      serverClipboardOperations: { paste },
+    })
+    const readText = vi.fn<() => Promise<string>>().mockResolvedValue("X")
+    const originalClipboard = navigator.clipboard
+
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined),
+        readText,
+      },
+    })
+
+    try {
+      selectionRange.value = {
+        startRow: 0,
+        endRow: 2,
+        startColumn: 0,
+        endColumn: 0,
+      }
+      currentCell.value = { rowIndex: 0, columnIndex: 0 }
+
+      const applied = await clipboard.pasteSelectedCells("context-menu")
+
+      expect(applied).toBe(true)
+      expect(paste).toHaveBeenCalledWith(expect.objectContaining({
+        trigger: "context-menu",
+        mode: "default",
+        targetRanges: [{ startRow: 0, endRow: 2, startColumn: 0, endColumn: 0 }],
+        columns: ["a"],
+        matrix: [["X"]],
+      }))
+      expect(lastAction.value).toBe("Server pasted 3 cells")
+      expect(rows.value).toEqual([
+        { rowId: "r1", a: "A1", b: "B1", c: "C1" },
+        { rowId: "r2", a: "A2", b: "B2", c: "C2" },
+        { rowId: "r3", a: "A3", b: "B3", c: "C3" },
+      ])
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
   })
 
   it("blocks paste targets that include grouped projection rows", async () => {

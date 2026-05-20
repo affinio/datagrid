@@ -70,7 +70,7 @@ Cut-paste rollback and rejected-state reporting for failures between source clea
 
 ## Server And Virtual Ranges
 
-Loaded materialized rows can use the local clipboard path. Stale, unloaded, placeholder, and grouped virtual ranges are blocked with a user-facing status unless a future server operation delegate is defined.
+Loaded materialized rows can use the local clipboard path. Stale virtual ranges remain blocked. Unloaded virtual copy, cut, and paste ranges can use explicit opt-in server clipboard delegates; without those delegates, they remain blocked with a user-facing status. Grouped virtual operation semantics stay backend-defined and should remain blocked unless a host documents group behavior.
 
 Future server clipboard operations should reuse the operation model in `docs/server-datasource/selection-operations.md` and the planned protocol shape in `docs/server-datasource/protocol.md`: operation id, base revision, projection identity, normalized ranges, stable column keys, payload format, invalidation, warnings, partial results, and server history state.
 
@@ -98,7 +98,7 @@ The mounted table-stage DataGrid does not currently provide:
 - multi-MIME clipboard payloads
 - rich HTML clipboard payloads
 - formula/format paste modes beyond values
-- server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
+- built-in HTTP routes for server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
 - async paste pending/retry/cancel UI
 - per-cell rejection UI and durable paste telemetry
 - mobile-specific clipboard UX beyond existing keyboard/context-menu paths

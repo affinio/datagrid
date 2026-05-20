@@ -245,6 +245,15 @@ describe("virtual selection helpers", () => {
       allowed: true,
       mode: "server",
     })
+    expect(evaluateDataGridVirtualSelectionOperation("paste", unloadedCoverage, { paste: true })).toMatchObject({
+      allowed: true,
+      mode: "server",
+    })
+    expect(evaluateDataGridVirtualSelectionOperation("paste", unloadedCoverage)).toMatchObject({
+      allowed: false,
+      mode: "blocked",
+      reason: "Paste target includes unloaded rows and cannot be updated without server support.",
+    })
     expect(evaluateDataGridVirtualSelectionOperation("fill", unloadedCoverage)).toMatchObject({
       allowed: false,
       mode: "blocked",

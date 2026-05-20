@@ -121,7 +121,7 @@ Current execution state:
 
 ## Slice 7: Server Virtual Clipboard Delegation
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: route unloaded virtual copy/export, cut, clear/delete, and paste/import through the approved server operation contract when a delegate exists, while preserving current blocking behavior when it does not.
 - Affected packages/files:
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
@@ -129,7 +129,7 @@ Current execution state:
   - `packages/datagrid-server-adapters/src/index.ts`
   - `packages/datagrid-sandbox/src/components/VueServerDataSourceGridCard.vue`
   - Relevant backend/server-demo files after API approval
-- Expected behavior change: server-backed grids can operate on unloaded ranges through explicit server delegation; local grids continue to block unsafe virtual operations.
+- Expected behavior change: app clipboard can delegate unloaded virtual copy/cut/paste through explicit opt-in handlers; local grids and server-backed grids without handlers continue to block unsafe virtual operations.
 - Tests to add/update:
   - Delegated copy/export over unloaded ranges returns operation id and payload/status.
   - Delegated paste/import handles accepted, rejected, and partial responses.
@@ -204,7 +204,7 @@ Current execution state:
 4. Slice 4: Structured Paste Result (completed 2026-05-20)
 5. Slice 5: Clipboard Validation Completeness (completed 2026-05-20)
 6. Slice 6: Server Clipboard Operation Contract (completed 2026-05-20)
-7. Slice 7: Server Virtual Clipboard Delegation
+7. Slice 7: Server Virtual Clipboard Delegation (completed 2026-05-20)
 8. Slice 8: Async Paste Pending And Recovery
 9. Slice 9: Cut-Paste Atomicity
 10. Slice 10: Clipboard Remount, A11y, Mobile, And Performance Gates
