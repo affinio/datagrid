@@ -4,7 +4,9 @@
 
 DataGrid has useful accessibility foundations, but the rendered enterprise grid is **not yet enterprise-grade for screen reader users**.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, row-selection checkbox semantics, interactive cell labels, editor keyboard handling, and a deterministic headless a11y state machine in core. The biggest gap is integration: the main virtualized `datagrid-vue-app` stage does not currently render a complete ARIA grid/table contract. The reviewed stage uses focusable `div` cells and viewport focus, but does not consistently apply `role="grid"`, `role="row"`, `role="gridcell"`, `role="columnheader"`, `aria-rowcount`, `aria-colcount`, `aria-rowindex`, `aria-colindex`, stable cell ids, or `aria-activedescendant`.
+Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
+
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, row-selection checkbox semantics, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage does not yet have one documented focus/active-descendant model, stable mounted active-cell ids across all panes, grouped/tree semantics, pinned-pane reading order validation, or browser-level accessibility gates.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -15,7 +17,7 @@ Target: **9/10** after wiring the existing headless contract into the virtualize
 - `packages/datagrid-core/src/a11y/headlessA11yStateMachine.ts` owns a deterministic headless accessibility state machine for focus, keyboard commands, roving tabindex, and ARIA state.
 - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts` maps headless grid/cell ARIA state to DOM-ready attributes.
 - `packages/datagrid-orchestration/src/accessibility/useDataGridA11yCellIds.ts` builds stable cell/header ids and 1-based ARIA row/column indexes.
-- `packages/datagrid-vue-app/src/stage/*` owns the rendered DataGrid stage, virtualized rows/cells, pinned panes, editors, overlays, keyboard routing, and focus restoration.
+- `packages/datagrid-vue-app/src/stage/*` owns the rendered DataGrid stage, virtualized rows/cells, baseline body ARIA roles/counts/indexes, pinned panes, editors, overlays, keyboard routing, and focus restoration.
 - Keyboard navigation and clipboard/edit/fill shortcuts are implemented through `datagrid-orchestration` and `datagrid-vue` interaction controllers rather than the headless a11y state machine.
 
 This layering is compatible with the project architecture, but the headless a11y path and rendered stage path are not yet one integrated accessibility contract.
@@ -93,20 +95,15 @@ Tests searched/reviewed:
 
 ### Blocker
 
-1. **Rendered virtualized stage is not wired as a complete ARIA grid.**
-   - Evidence: `DataGridTableStageCenterPane.vue` renders the body viewport as a `div` with `tabindex="0"` but no `role="grid"`, `aria-rowcount`, `aria-colcount`, or `aria-activedescendant`. Rows are `div.grid-row` without `role="row"`. Normal cells only receive a role when `cellAriaRole` returns an interactive role or checkbox role; normal data cells do not consistently receive `role="gridcell"`, `aria-rowindex`, or `aria-colindex`.
-   - Impact: screen readers cannot reliably understand the virtualized grid as a grid, know the total row/column count, or announce virtual positions.
-   - Required: integrate the headless a11y contract or an equivalent stage-native ARIA grid contract into `datagrid-vue-app`.
-
-2. **`aria-activedescendant` is defined in core but not applied to the main stage.**
+1. **`aria-activedescendant` is defined in core but not applied to the main stage.**
    - Evidence: `headlessA11yStateMachine.ts` and `a11yAttributesAdapter.ts` support active descendant. Search found no usage of `createDataGridA11yStateMachine`, `mapDataGridA11yGridAttributes`, or `aria-activedescendant` in the main `DataGridTableStage` body; the only rendered `aria-activedescendant` found in app code is the filterable combobox.
    - Impact: focus can live on a viewport or a remounted cell, but screen readers do not have a stable active descendant model across virtualization.
    - Required: choose and document one focus model: roving DOM focus or container focus + active descendant. Then apply it consistently.
 
-3. **Virtualized row/column indexes are not exposed to assistive tech.**
-   - Evidence: stage cells expose `data-row-index` and `data-column-index`, but no rendered `aria-rowindex` / `aria-colindex` was found in `datagrid-vue-app` stage cells.
-   - Impact: virtualized DOM rows appear as a partial DOM without reliable absolute row/column position.
-   - Required: add absolute ARIA indexes for body, pinned, grouped, placeholder, and pinned-bottom rows.
+2. **Focus ownership is not yet a complete enterprise contract.**
+   - Evidence: body viewport, selected cells, row-index cells, active editors, context menus, and pinned panes can all participate in focus. Current tests cover keyboard behavior and some stage ARIA state, but no single tab-stop invariant is documented or enforced across every mode.
+   - Impact: keyboard-only users and screen readers may encounter unexpected tab stops, especially with row selection, editing, pinned panes, and viewport focus fallback.
+   - Required: document and enforce one focus model across viewport, cells, row index, editors, menus, and pinned panes.
 
 ### High
 
@@ -115,27 +112,17 @@ Tests searched/reviewed:
    - Impact: future fixes can improve the headless API without improving the real rendered DataGrid.
    - Required: define whether the headless state machine is the canonical app-stage owner or a lower-level helper, then wire or retire the unused path.
 
-2. **Roving tabindex is partial and can produce multiple competing focus targets.**
-   - Evidence: body viewport has `tabindex="0"`, selected anchor cells get `tabindex="0"`, row-index cells can get `tabindex="0"` when a row is focused, and editor controls are focusable while editing.
-   - Impact: keyboard-only users and screen readers may encounter unexpected tab stops, especially with row selection, editing, pinned panes, and viewport focus fallback.
-   - Required: document one roving tabindex invariant and enforce it across viewport, body cells, row index cells, editors, and pinned panes.
-
-3. **Headers are visually rich but not semantically complete.**
-   - Evidence: header cells are `div.grid-cell--header`; column menu and resize buttons have labels, but header cells are not consistently rendered as `role="columnheader"` with sort state (`aria-sort`) or column indexes.
-   - Impact: screen readers may miss sortable/filterable column semantics and virtual column position.
-   - Required: add columnheader semantics, `aria-sort`, menu button relationships, and resize affordance semantics.
-
-4. **Grouped/tree rows lack an enterprise ARIA contract.**
+2. **Grouped/tree rows lack an enterprise ARIA contract.**
    - Evidence: group rows can be toggled by Space and group renderers receive `isGroup`, `childrenCount`, and `toggle`; no rendered `role="row"`, `aria-expanded`, `aria-level`, `aria-posinset`, or `aria-setsize` was found for stage group rows.
    - Impact: grouped/tree structure is not predictable for screen readers.
    - Required: define grid vs treegrid semantics and expose expansion state/levels where supported.
 
-5. **Pinned panes can fragment screen-reader reading order.**
+3. **Pinned panes can fragment screen-reader reading order.**
    - Evidence: left, center, right, and pinned-bottom panes render separate DOM trees. Focus lookup searches all pane roots, but no ARIA ownership/reading-order contract was found.
    - Impact: assistive tech may read pinned cells, center cells, and pinned-bottom cells as unrelated regions.
    - Required: provide one logical grid tree with stable ids/indexes, or hide duplicate/non-primary structural wrappers while exposing cells in logical order.
 
-6. **No screen-reader or automated a11y gate was found.**
+4. **No screen-reader or automated a11y gate was found.**
    - Evidence: tests cover headless state, ids, keyboard, row checkboxes, and interaction ARIA attributes, but no reviewed axe/Playwright accessibility tree/screen-reader smoke gate was found.
    - Impact: regressions in real browser semantics are likely.
    - Required: add component and browser a11y assertions for the rendered stage.
@@ -148,7 +135,7 @@ Tests searched/reviewed:
    - Required: label editors with column label and row/index context; announce commit/cancel validation outcomes.
 
 2. **Clipboard accessibility depends on internal status messages, not live-region guarantees.**
-   - Evidence: clipboard code sets `lastAction` messages such as copied/pasted/skipped, but in the reviewed app-stage path `setLastAction` routes through `reportFillWarning`; only sorting has an explicit `role="status"` live region in `DataGridDefaultRenderer.ts`.
+   - Evidence: app status regions now render with `role="status"` and polite live-region semantics, but clipboard/edit/fill/server actions are not yet documented and tested as one complete grid-status contract.
    - Impact: copy/paste/fill failures may not be announced reliably.
    - Required: add a grid-level polite live region for clipboard, fill, edit, history, filter, and server/placeholder actions.
 
@@ -173,9 +160,10 @@ Tests searched/reviewed:
    - Evidence: selection/fill/move overlays are `aria-hidden="true"`.
    - Impact: good for avoiding duplicate noise, but users need non-visual state announcements.
 
-2. **Headless a11y doc references a Vue adapter test path that was not found.**
-   - Evidence: `docs/datagrid-headless-a11y-contract.md` lists `packages/datagrid-vue/src/adapters/__tests__/a11yAttributesAdapter.contract.spec.ts`; `rg --files` found the adapter implementation and `useDataGridA11yCellIds` test, but not that adapter test file.
-   - Impact: minor doc/test alignment gap.
+2. **Headless and mounted-stage accessibility docs now need to stay in sync.**
+   - Evidence: `docs/datagrid-headless-a11y-contract.md` documents headless adapter behavior while `docs/datagrid-accessibility.md` documents mounted-stage current state.
+   - Impact: future runtime slices can accidentally update one contract but leave the other stale.
+   - Required: update both docs when a slice changes focus, ARIA mapping, ids, status regions, or mounted-stage semantics.
 
 ## WCAG Alignment
 
@@ -183,24 +171,23 @@ Current likely alignment:
 
 - **Keyboard access:** partial to strong for grid navigation and shortcuts.
 - **Focus visible:** mostly covered through visual focus/selection classes and direct focus calls, but not verified by a browser a11y gate.
-- **Name, role, value:** weak for the main grid because roles/counts/indexes are incomplete; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
-- **Status messages:** partial; sorting has `role="status"`, but clipboard/edit/fill/server row model messages are not consistently live-region-backed.
+- **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes and leaf header semantics are implemented, but grouped/tree rows, editor context labels, pinned-pane ownership, and active-cell ids remain incomplete; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
+- **Status messages:** partial; app status regions use polite live-region semantics, but clipboard/edit/fill/server row model messages are not yet consistently routed through one documented grid status channel.
 - **Pointer/touch alternatives:** partial; keyboard alternatives exist for many actions, but resize/fill/range move/touch workflows need explicit accessible alternatives.
 
 Do not claim WCAG conformance until the rendered stage has automated and manual assistive-tech validation.
 
 ## Virtualized DOM Accessibility
 
-The current virtualized DOM is visually and interactively strong, but assistive tech needs a logical grid abstraction over a partial DOM:
+The current virtualized DOM is visually and interactively strong. Assistive tech still needs a more complete logical grid abstraction over a partial DOM:
 
-- total row/column counts
-- absolute row/column indexes
+- validated pivot/header-group semantics
 - stable cell/header ids
 - active descendant or a single roving DOM focus target
 - clear loading/error placeholder semantics
 - a logical reading order across pinned panes and pinned bottom rows
 
-The code already has helpers for most of these pieces. The missing work is integration and validation.
+The code already has helpers for most of these pieces, and baseline body roles/counts/indexes are now integrated. The remaining work is focus/header/group/pinned integration and validation.
 
 ## Keyboard-Only Workflow Support
 
@@ -257,7 +244,7 @@ Target score: **9/10**
 
 What blocks the target:
 
-- rendered stage lacks complete ARIA grid semantics
+- rendered stage lacks complete grouped/tree, active-cell, and pinned-pane ARIA semantics
 - headless a11y state machine is not integrated into the main app stage
 - no consistent active-descendant or roving-tabindex invariant across viewport/cells/editors/row index
 - grouped/tree and pinned-pane semantics are not defined
@@ -269,12 +256,10 @@ What blocks the target:
 
 ### Phase 1: Rendered Grid Semantics
 
-- Choose `role="grid"` or `role="treegrid"` policy for the main stage.
-- Add `aria-rowcount`, `aria-colcount`, and a stable labelled name for the grid.
-- Add `role="row"` for rendered rows.
-- Add `role="gridcell"` for normal body cells.
-- Add `role="columnheader"` and `aria-sort` for headers.
-- Add `aria-rowindex` and `aria-colindex` for rendered cells.
+- Baseline body `role="grid"`, row/cell roles, row/column counts, and row/column indexes are implemented.
+- Leaf header `role="columnheader"`, `aria-colindex`, `aria-sort`, and contextual resize/filter labels are implemented.
+- Add a stable labelled name for the grid where hosts do not provide one.
+- Add pivot/header-group and pinned-pane reading-order validation where missing.
 
 ### Phase 2: Focus Model Unification
 
@@ -358,24 +343,24 @@ Performance/a11y gates:
 
 ## Prioritized Implementation Slices
 
-1. **Wire stage-level grid roles and counts**
-   - Files: `DataGridTableStageCenterPane.vue`, `DataGridTableStagePinnedPane.vue`, `DataGridTableStageHeader.vue`, stage render APIs
-   - Tests: component assertions for roles/counts/indexes
+1. **Rebaseline accessibility contract and plan**
+   - Files: `docs/datagrid-accessibility.md`, `docs/plans/A11Y_ENTERPRISE_PLAN.md`, this audit
+   - Tests: docs validation
+   - Risk: low
+
+2. **Add header and sort semantics** (completed 2026-05-20)
+   - Files: `DataGridTableStageHeader.vue`, default renderer/header render APIs
+   - Tests: component assertions for `columnheader`, column indexes, sort state, menu labels
    - Risk: medium
 
-2. **Unify focus and active descendant**
+3. **Unify focus and active descendant**
    - Files: `useDataGridStageFocusRuntime.ts`, `useDataGridTableStageViewportKeyboard.ts`, `useDataGridAppActiveCellViewport.ts`, a11y helpers
    - Tests: focus continuity across virtualization remount
    - Risk: high
 
-3. **Add stable ids and aria indexes**
+4. **Add stable ids and active-cell ARIA**
    - Files: `useDataGridA11yCellIds`, stage cell/header rendering
    - Tests: pinned/virtualized row index mapping
-   - Risk: medium
-
-4. **Add live-region announcements**
-   - Files: stage runtime, default renderer/status UI, clipboard/edit/fill/history integrations
-   - Tests: action messages update live region once per command
    - Risk: medium
 
 5. **Define grouped/tree and pinned-pane semantics**
@@ -383,10 +368,25 @@ Performance/a11y gates:
    - Tests: group expand/collapse ARIA state
    - Risk: high
 
-6. **Add browser a11y validation**
+6. **Add editor and interactive-cell labels**
+   - Files: stage render APIs, editor overlays, interaction metadata
+   - Tests: accessible names/state for editors and custom interactive cells
+   - Risk: medium
+
+7. **Add live-region announcements**
+   - Files: stage runtime, default renderer/status UI, clipboard/edit/fill/history integrations
+   - Tests: action messages update live region once per command
+   - Risk: medium
+
+8. **Add browser a11y validation**
    - Files: Playwright/e2e and component test harness
    - Tests: axe/a11y tree smoke checks
    - Risk: low
+
+9. **Add large-grid a11y performance gate**
+   - Files: browser benchmark scripts, perf docs, package scripts
+   - Tests: large-grid scroll and tab-stop/id-resolution budget
+   - Risk: medium
 
 ## Risks And Migration Notes
 

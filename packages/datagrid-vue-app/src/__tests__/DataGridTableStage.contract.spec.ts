@@ -1042,6 +1042,42 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders accessible header roles, logical indexes, labels, and sort state", () => {
+    const baseProps = createStageProps(() => false)
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: {
+        ...baseProps,
+        columns: {
+          ...baseProps.columns,
+          sortIndicator: (columnKey: string) => (columnKey === "centerB" ? "↓" : ""),
+          isColumnFilterActive: (columnKey: string) => columnKey === "centerA",
+        },
+      },
+    })
+
+    const rowIndexHeader = wrapper.find(".grid-header-pane--left .grid-cell--index-header")
+    const leftHeader = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="left"]')
+    const filteredHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+    const sortedHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerB"]')
+
+    expect(rowIndexHeader.attributes("role")).toBe("columnheader")
+    expect(rowIndexHeader.attributes("aria-colindex")).toBe("1")
+    expect(rowIndexHeader.attributes("aria-label")).toBe("Row index")
+    expect(leftHeader.attributes("role")).toBe("columnheader")
+    expect(leftHeader.attributes("aria-colindex")).toBe("1")
+    expect(leftHeader.attributes("aria-sort")).toBe("none")
+    expect(filteredHeader.attributes("aria-colindex")).toBe("2")
+    expect(filteredHeader.attributes("aria-label")).toBe("Center A, filtered")
+    expect(sortedHeader.attributes("aria-colindex")).toBe("3")
+    expect(sortedHeader.attributes("aria-sort")).toBe("descending")
+    expect(sortedHeader.attributes("aria-label")).toBe("Center B, sorted descending")
+    expect(sortedHeader.find(".col-resize").attributes("aria-label")).toBe("Resize Center B column")
+    expect(filteredHeader.find(".col-filter-input").attributes("aria-label")).toBe("Filter Center A column")
+
+    wrapper.unmount()
+  })
+
   it("restores selected anchor affordances when a horizontally virtualized column remounts", async () => {
     const baseProps = createStageProps(
       (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 2,

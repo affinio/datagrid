@@ -22,6 +22,8 @@ This folder separates user-facing documentation from internal planning material.
 - [History](./datagrid-history.md)
 - [Editing](./datagrid-editing.md)
 - [Clipboard](./datagrid-clipboard.md)
+- [Accessibility](./datagrid-accessibility.md)
+- [Headless accessibility contract](./datagrid-headless-a11y-contract.md)
 - [Data source protocol](./datagrid-data-source-protocol.md)
 
 ## Feature Guides

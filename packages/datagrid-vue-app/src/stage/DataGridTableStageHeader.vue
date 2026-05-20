@@ -33,7 +33,14 @@
         </div>
       </div>
       <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
-        <div v-if="showIndexColumn" class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header" :style="rowIndexColumnStyle">
+        <div
+          v-if="showIndexColumn"
+          class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
+          :style="rowIndexColumnStyle"
+          role="columnheader"
+          aria-colindex="1"
+          aria-label="Row index"
+        >
           <div class="col-head col-head--index">
             <span>#</span>
           </div>
@@ -46,6 +53,7 @@
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              v-bind="headerCellA11y(column)"
             >
               <div class="col-head col-head--index">
                 <button
@@ -106,6 +114,7 @@
                 :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
                 :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
                 :data-column-key="column.key"
+                v-bind="headerCellA11y(column)"
                 :draggable="isHeaderColumnDraggable(column)"
                 @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
                 @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -150,7 +159,7 @@
                   <button
                     type="button"
                     class="col-resize"
-                    aria-label="Resize column"
+                    :aria-label="resolveColumnResizeLabel(column)"
                     @mousedown.stop="startResize($event, column.key)"
                     @touchstart.stop.prevent="startTouchResize($event, column.key)"
                     @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -171,6 +180,7 @@
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              v-bind="headerCellA11y(column)"
             >
               <div class="col-head col-head--index">
                 <button
@@ -196,6 +206,7 @@
               :class="resolveHeaderCellClasses(column)"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -216,7 +227,7 @@
                 <button
                   type="button"
                   class="col-resize"
-                  aria-label="Resize column"
+                  :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
                   @touchstart.stop.prevent="startTouchResize($event, column.key)"
                   @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -230,6 +241,7 @@
                 <input
                   class="col-filter-input"
                   :name="`datagrid-header-filter-left-${column.key}`"
+                  :aria-label="resolveColumnFilterLabel(column)"
                   :value="columnFilterTextByKey[column.key] ?? ''"
                   :disabled="!isColumnFilterable(column)"
                   placeholder="Filter..."
@@ -330,6 +342,7 @@
               :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -381,7 +394,7 @@
                 <button
                   type="button"
                   class="col-resize"
-                  aria-label="Resize column"
+                  :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
                   @touchstart.stop.prevent="startTouchResize($event, column.key)"
                   @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -402,6 +415,7 @@
             :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -422,7 +436,7 @@
               <button
                 type="button"
                 class="col-resize"
-                aria-label="Resize column"
+                :aria-label="resolveColumnResizeLabel(column)"
                 @mousedown.stop="startResize($event, column.key)"
                 @touchstart.stop.prevent="startTouchResize($event, column.key)"
                 @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -436,6 +450,7 @@
               <input
                 class="col-filter-input"
                 :name="`datagrid-header-filter-center-${column.key}`"
+                :aria-label="resolveColumnFilterLabel(column)"
                 :value="columnFilterTextByKey[column.key] ?? ''"
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
@@ -521,6 +536,7 @@
               :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
               :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
               :data-column-key="column.key"
+              v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -572,7 +588,7 @@
                 <button
                   type="button"
                   class="col-resize"
-                  aria-label="Resize column"
+                  :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
                   @touchstart.stop.prevent="startTouchResize($event, column.key)"
                   @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -593,6 +609,7 @@
             :class="resolveHeaderCellClasses(column)"
             :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
             :data-column-key="column.key"
+            v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
@@ -606,7 +623,7 @@
               <button
                 type="button"
                 class="col-resize"
-                aria-label="Resize column"
+                :aria-label="resolveColumnResizeLabel(column)"
                 @mousedown.stop="startResize($event, column.key)"
                 @touchstart.stop.prevent="startTouchResize($event, column.key)"
                 @touchmove.stop.prevent="handleTouchResizeMove($event)"
@@ -620,6 +637,7 @@
               <input
                 class="col-filter-input"
                 :name="`datagrid-header-filter-right-${column.key}`"
+                :aria-label="resolveColumnFilterLabel(column)"
                 :value="columnFilterTextByKey[column.key] ?? ''"
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
@@ -670,6 +688,15 @@ interface DataGridHeaderGroup {
   label: string | null
   width: number
   columns: readonly TableColumn[]
+}
+
+type DataGridHeaderAriaSort = "ascending" | "descending" | "none"
+
+interface DataGridHeaderCellA11yAttributes {
+  role: "columnheader"
+  "aria-colindex": number
+  "aria-label": string
+  "aria-sort"?: DataGridHeaderAriaSort
 }
 
 const props = defineProps({
@@ -1060,6 +1087,75 @@ function headerCellPresentationStyle(column: TableColumn): CSSProperties {
     column.column.presentation?.headerAlign ?? column.column.presentation?.align,
   )
   return textAlign ? { textAlign } : {}
+}
+
+function resolveHeaderColumnIndex(column: TableColumn): number {
+  const index = visibleColumns.value.findIndex(entry => entry.key === column.key)
+  return Math.max(0, index) + 1
+}
+
+function resolveHeaderSortDirection(column: TableColumn): DataGridHeaderAriaSort | undefined {
+  if (!isColumnSortable(column)) {
+    return undefined
+  }
+  const menuDirection = resolveColumnMenuSortDirectionSafe(column.key)
+  if (menuDirection === "asc") {
+    return "ascending"
+  }
+  if (menuDirection === "desc") {
+    return "descending"
+  }
+  const indicator = sortIndicator(column.key)
+  if (indicator.startsWith("↑")) {
+    return "ascending"
+  }
+  if (indicator.startsWith("↓")) {
+    return "descending"
+  }
+  return "none"
+}
+
+function resolveColumnHeaderLabel(column: TableColumn): string {
+  if (isRowSelectionColumn(column)) {
+    return "Row selection"
+  }
+  const label = resolveHeaderDisplayLabel(column)
+  const states: string[] = []
+  const sortDirection = resolveHeaderSortDirection(column)
+  if (sortDirection === "ascending") {
+    states.push("sorted ascending")
+  } else if (sortDirection === "descending") {
+    states.push("sorted descending")
+  }
+  if (isColumnMenuFilterActive(column.key)) {
+    states.push("filtered")
+  }
+  if (isColumnGroupedSafe(column.key)) {
+    const order = resolveColumnGroupOrderSafe(column.key)
+    states.push(Number.isFinite(order) ? `grouped level ${Number(order) + 1}` : "grouped")
+  }
+  return states.length > 0 ? `${label}, ${states.join(", ")}` : label
+}
+
+function headerCellA11y(column: TableColumn): DataGridHeaderCellA11yAttributes {
+  const sortDirection = resolveHeaderSortDirection(column)
+  const attributes: DataGridHeaderCellA11yAttributes = {
+    role: "columnheader",
+    "aria-colindex": resolveHeaderColumnIndex(column),
+    "aria-label": resolveColumnHeaderLabel(column),
+  }
+  if (sortDirection) {
+    attributes["aria-sort"] = sortDirection
+  }
+  return attributes
+}
+
+function resolveColumnResizeLabel(column: TableColumn): string {
+  return `Resize ${resolveHeaderDisplayLabel(column)} column`
+}
+
+function resolveColumnFilterLabel(column: TableColumn): string {
+  return `Filter ${resolveHeaderDisplayLabel(column)} column`
 }
 
 function handleHeaderColumnClick(
