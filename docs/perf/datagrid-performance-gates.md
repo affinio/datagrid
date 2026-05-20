@@ -123,7 +123,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - Browser-frame direct scroll scenarios write at most one scroll position per animation frame. `BENCH_BROWSER_STEP_DELAY_MS` adds delay above a frame, but must not busy-loop scroll writes faster than paint cadence because CI Chromium coalesces rAF and reports synthetic `150ms+` frame gaps that do not describe DataGrid render cost.
 - Virtualization browser gates:
   - Current supported and partial virtualization guarantees are summarized in `docs/datagrid-virtualization-support-matrix.md`.
-  - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; the horizontal stress scenario uses `10k` rows and `1000` columns through `BENCH_BROWSER_WIDE_ROW_SCENARIOS=horizontal-scroll-only` and `BENCH_BROWSER_WIDE_COLUMN_SCENARIOS=horizontal-scroll-only`.
+  - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, explicit `wide-table-1k-pinned-horizontal` and `wide-table-10k-pinned-horizontal`, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; wide horizontal scenarios run with pinned panes and bounded rendered-column budgets.
   - The CI harness includes `enterprise-browser-frames` with the focused virtualization and rendering scenario sets plus row/column overrides.
   - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.
   - Hard budgets use `BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS=true` and cover `PERF_BUDGET_MAX_FRAME_P95_MS=180`, `PERF_BUDGET_MAX_DROPPED_FRAME_PCT=100`, `PERF_BUDGET_MAX_LONG_TASK_COUNT=600`, `PERF_BUDGET_MAX_HEAP_DELTA_MB=260`, `PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RANGE_RESOLVE_P95_MS=10`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_ROWS_P95=180`, `PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95=160`, `PERF_BUDGET_MAX_VIRTUALIZATION_BLANK_VIEWPORTS=0`, and `PERF_BUDGET_MAX_VIRTUALIZATION_PLACEHOLDER_ROWS=220`.
@@ -142,7 +142,8 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - Chrome canvas draw work is sampled as `chromeDraw` and extracted under `chromeTelemetry`; overlay segment/lane computation is sampled as `overlayCompute` and extracted under `overlayTelemetry`.
   - The enterprise browser-frame benchmark includes rendering scenarios for `rendering-plain-100k`, `rendering-slow-custom-renderers`, `rendering-wide-pinned-horizontal`, `rendering-auto-height-custom-renderers`, and `rendering-overlay-heavy-selection-fill`.
   - The rendering scenarios cover a 100k-row plain baseline, 100k-row slow custom renderers, 1000-column pinned horizontal scroll, auto-height custom renderers, and overlay-heavy custom overlays. Selection and fill pointer preview costs are covered by the interaction browser scenarios.
-  - CI harness mode sets `BENCH_RENDERING_FAIL_ON_WARNINGS=true`; missing render-window, chrome draw, renderer invocation, pinned-column, or overlay telemetry in those scenarios fails the enterprise browser-frame task.
+  - CI harness mode sets `BENCH_RENDERING_FAIL_ON_WARNINGS=true`; missing render-window, chrome draw, renderer invocation, pinned-column, overlay telemetry, or renderer-duration budgets fails the enterprise browser-frame task.
+  - Renderer duration budgets are controlled by `PERF_BUDGET_MAX_CELL_RENDERER_P95_MS` and `PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS`.
   - The sandbox benchmark route accepts perf-only query profiles (`renderProfile=slow-custom-renderers|overlay-heavy`, `pinnedProfile=wide-pinned`) so the gates exercise production DataGrid rendering paths without adding a separate benchmark app.
 - Datasource churn (range pull churn + invalidation pressure):
   - `PERF_BUDGET_TOTAL_MS=9000`
@@ -247,6 +248,17 @@ Tree workload matrix profiles:
 - Nightly/stress profile:
   - `pnpm run bench:datagrid:tree:matrix:assert:nightly`
   - row scales: `10k, 25k, 50k, 100k`
+
+Quick-filter typing gate:
+- `pnpm run bench:datagrid:quick-filter:assert`
+- The assert profile covers `10k`, `50k`, and `100k` rows with one and five searchable columns.
+- Aggregate budgets cover first apply, query change, clear, quick-filter plus sort, quick-filter plus column-filter, variance, and heap.
+- Typing-specific budgets hard-cover `100k/1col` and `100k/5col` first-apply and query-change p95 through `PERF_BUDGET_MAX_QUICK_FILTER_100K_*`.
+
+Worker canonical gate:
+- `pnpm run bench:datagrid:worker:canonical:assert`
+- Canonical release evidence is protocol correctness/payload timing, worker pressure, and worker browser frame parity via `bench:datagrid:worker:protocol:assert`, `bench:datagrid:worker:pressure:assert`, and `bench:datagrid:worker:frames:assert`.
+- Older worker artifact files remain historical references only; release review should use the canonical assert outputs unless a slice explicitly targets a retired artifact.
 
 Perf-contract fail-fast gate:
 - `pnpm run quality:perf:datagrid`

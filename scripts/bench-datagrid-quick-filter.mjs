@@ -38,6 +38,18 @@ const PERF_BUDGET_MAX_SORT_P95_MS = Number.parseFloat(
 const PERF_BUDGET_MAX_COLUMN_FILTER_P95_MS = Number.parseFloat(
   process.env.PERF_BUDGET_MAX_QUICK_FILTER_COLUMN_FILTER_P95_MS ?? "Infinity",
 )
+const PERF_BUDGET_MAX_100K_1COL_FIRST_APPLY_P95_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_QUICK_FILTER_100K_1COL_FIRST_APPLY_P95_MS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_100K_5COL_FIRST_APPLY_P95_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_QUICK_FILTER_100K_5COL_FIRST_APPLY_P95_MS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_100K_1COL_QUERY_CHANGE_P95_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_QUICK_FILTER_100K_1COL_QUERY_CHANGE_P95_MS ?? "Infinity",
+)
+const PERF_BUDGET_MAX_100K_5COL_QUERY_CHANGE_P95_MS = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_QUICK_FILTER_100K_5COL_QUERY_CHANGE_P95_MS ?? "Infinity",
+)
 
 if (ROW_COUNTS.length === 0) {
   throw new Error("BENCH_QUICK_FILTER_ROW_COUNTS must include at least one positive integer")
@@ -368,6 +380,20 @@ function collectOperationP95(results, operationName) {
   return stats(values)
 }
 
+function collectScenarioOperationP95(results, rowCount, searchableColumnCount, operationName) {
+  const values = []
+  for (const result of results) {
+    const rowCountResult = result.rowCounts.find(candidate => candidate.rowCount === rowCount)
+    const scenario = rowCountResult?.scenarios.find(candidate => (
+      candidate.searchableColumnCount === searchableColumnCount
+    ))
+    if (scenario) {
+      values.push(scenario.durationsMs[operationName].p95)
+    }
+  }
+  return stats(values)
+}
+
 function shouldEnforceVariance(stat) {
   return (
     PERF_BUDGET_MAX_VARIANCE_PCT !== Number.POSITIVE_INFINITY &&
@@ -406,6 +432,16 @@ const aggregate = {
   clearP95Ms: collectOperationP95(runResults, "clear"),
   quickFilterAndSortP95Ms: collectOperationP95(runResults, "quickFilterAndSort"),
   quickFilterAndColumnFilterP95Ms: collectOperationP95(runResults, "quickFilterAndColumnFilter"),
+  typingScenarios: {
+    "100k_1col": {
+      firstApplyP95Ms: collectScenarioOperationP95(runResults, 100000, 1, "firstApply"),
+      queryChangeP95Ms: collectScenarioOperationP95(runResults, 100000, 1, "queryChange"),
+    },
+    "100k_5col": {
+      firstApplyP95Ms: collectScenarioOperationP95(runResults, 100000, 5, "firstApply"),
+      queryChangeP95Ms: collectScenarioOperationP95(runResults, 100000, 5, "queryChange"),
+    },
+  },
 }
 
 const budgetErrors = []
@@ -417,6 +453,30 @@ checkBudget(
   "quickFilterAndColumnFilter",
   aggregate.quickFilterAndColumnFilterP95Ms,
   PERF_BUDGET_MAX_COLUMN_FILTER_P95_MS,
+  budgetErrors,
+)
+checkBudget(
+  "100k/1col firstApply",
+  aggregate.typingScenarios["100k_1col"].firstApplyP95Ms,
+  PERF_BUDGET_MAX_100K_1COL_FIRST_APPLY_P95_MS,
+  budgetErrors,
+)
+checkBudget(
+  "100k/5col firstApply",
+  aggregate.typingScenarios["100k_5col"].firstApplyP95Ms,
+  PERF_BUDGET_MAX_100K_5COL_FIRST_APPLY_P95_MS,
+  budgetErrors,
+)
+checkBudget(
+  "100k/1col queryChange",
+  aggregate.typingScenarios["100k_1col"].queryChangeP95Ms,
+  PERF_BUDGET_MAX_100K_1COL_QUERY_CHANGE_P95_MS,
+  budgetErrors,
+)
+checkBudget(
+  "100k/5col queryChange",
+  aggregate.typingScenarios["100k_5col"].queryChangeP95Ms,
+  PERF_BUDGET_MAX_100K_5COL_QUERY_CHANGE_P95_MS,
   budgetErrors,
 )
 if (Number.isFinite(PERF_BUDGET_TOTAL_MS) && aggregate.elapsedMs.p95 > PERF_BUDGET_TOTAL_MS) {
@@ -440,6 +500,23 @@ const summary = {
       { searchableColumnCount: 1, columns: QUICK_FILTER_COLUMNS_1 },
       { searchableColumnCount: 5, columns: QUICK_FILTER_COLUMNS_5 },
     ],
+  },
+  budgets: {
+    firstApplyP95Ms: PERF_BUDGET_MAX_FIRST_APPLY_P95_MS,
+    queryChangeP95Ms: PERF_BUDGET_MAX_QUERY_CHANGE_P95_MS,
+    clearP95Ms: PERF_BUDGET_MAX_CLEAR_P95_MS,
+    quickFilterAndSortP95Ms: PERF_BUDGET_MAX_SORT_P95_MS,
+    quickFilterAndColumnFilterP95Ms: PERF_BUDGET_MAX_COLUMN_FILTER_P95_MS,
+    typingScenarios: {
+      "100k_1col": {
+        firstApplyP95Ms: PERF_BUDGET_MAX_100K_1COL_FIRST_APPLY_P95_MS,
+        queryChangeP95Ms: PERF_BUDGET_MAX_100K_1COL_QUERY_CHANGE_P95_MS,
+      },
+      "100k_5col": {
+        firstApplyP95Ms: PERF_BUDGET_MAX_100K_5COL_FIRST_APPLY_P95_MS,
+        queryChangeP95Ms: PERF_BUDGET_MAX_100K_5COL_QUERY_CHANGE_P95_MS,
+      },
+    },
   },
   aggregate,
   runs: runResults,

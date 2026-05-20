@@ -59,6 +59,8 @@ Scope: `@affino/datagrid-vue-app` column `cellRenderer` and `groupCellRenderer` 
 - Keep expensive charts, popovers, observers, and network work behind explicit user intent.
 - Use stable Vue keys for repeated child VNodes when child identity matters.
 - Treat wide grids, pinned panes, and pinned-bottom rows as multipliers for renderer invocation cost.
+- Renderer callback p95 duration is part of the enterprise browser-frame gate through `PERF_BUDGET_MAX_CELL_RENDERER_P95_MS` and `PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS`.
+- Mount/unmount churn while scrolling is reviewed beside renderer duration through `churnTelemetry` row/cell mount budgets.
 
 ## Validation
 

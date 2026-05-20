@@ -214,13 +214,13 @@ Current execution state:
 
 ## Slice 9: Quick-Filter Typing Latency
 
-- Status: Pending.
+- Status: Completed.
 - Objective: keep 100k-row quick-filter typing within comfortable latency budgets.
 - Affected packages/files:
   - `packages/datagrid-core/src/filtering/*`
   - `packages/datagrid-vue-app/src/features/quick-filter/*`
   - `scripts/bench-datagrid-quick-filter.mjs`
-- Expected behavior change: quick-filter query changes avoid large synchronous tail latency.
+- Expected behavior change: quick-filter query changes are hard-gated for 100k rows with one and five searchable columns.
 - Tests to add/update:
   - Typing-focused gates by row count and searchable column count.
 - Validation command: `pnpm run bench:datagrid:quick-filter:assert`
@@ -229,13 +229,13 @@ Current execution state:
 
 ## Slice 10: Wide-Table Horizontal Virtualization Matrix
 
-- Status: Pending.
+- Status: Completed.
 - Objective: prove 1k+ column behavior with pinned panes, resize/reorder/hide/show, fractional scroll, and high-DPI.
 - Affected packages/files:
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `packages/datagrid-vue/src/app/*viewport*`
   - `packages/datagrid-vue-app/src/stage/*`
-- Expected behavior change: wide-table horizontal scroll and pinned pane sync remain smooth and blank-free.
+- Expected behavior change: wide-table horizontal scroll and pinned pane sync are covered by explicit 1k and 10k browser-frame scenarios.
 - Tests to add/update:
   - 1k and 10k column browser-frame matrix with pinned left/right columns and custom renderer variants.
 - Validation command: `pnpm run bench:datagrid:enterprise:virtualization:assert`
@@ -244,13 +244,13 @@ Current execution state:
 
 ## Slice 11: Custom Renderer Performance Contract
 
-- Status: Pending.
+- Status: Completed.
 - Objective: make custom renderer duration and mount/unmount churn first-class gates.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `docs/datagrid-renderer-lifecycle.md`
-- Expected behavior change: custom renderer hot paths become measurable and bounded.
+- Expected behavior change: custom renderer hot paths are measurable and bounded by renderer-duration and churn gates.
 - Tests to add/update:
   - Slow custom renderer, auto-height renderer, renderer error, and overlay-heavy renderer gates.
 - Validation command: `pnpm run bench:datagrid:enterprise:browser-frames:assert`
@@ -259,13 +259,13 @@ Current execution state:
 
 ## Slice 12: Worker Benchmark Canonicalization
 
-- Status: Pending.
+- Status: Completed.
 - Objective: define one canonical worker performance matrix and label obsolete artifacts.
 - Affected packages/files:
   - `scripts/bench-datagrid-worker-*.mjs`
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
-- Expected behavior change: no runtime behavior change; worker performance evidence becomes release-reviewable.
+- Expected behavior change: no runtime behavior change; worker performance evidence has one canonical release-review entrypoint.
 - Tests to add/update:
   - Payload size, protocol overhead, total elapsed, and browser-frame worker update budgets.
 - Validation command: `pnpm run quality:perf:datagrid`

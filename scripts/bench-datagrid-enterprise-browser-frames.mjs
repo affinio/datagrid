@@ -247,6 +247,14 @@ const PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE = floatEnv(
   "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE",
   999999,
 )
+const PERF_BUDGET_MAX_CELL_RENDERER_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CELL_RENDERER_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS",
+  999999,
+)
 const PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS = floatEnv("PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS", 1)
 const PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS = floatEnv("PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS", 0)
 const PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES = floatEnv("PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES", 0)
@@ -338,6 +346,36 @@ const ALL_SCENARIOS = [
     renderingTelemetryRequired: true,
     pinnedColumnTelemetryRequired: true,
     pinnedProfile: "wide-pinned",
+    horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "wide-table-1k-pinned-horizontal",
+    verticalScroll: true,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    pinnedColumnTelemetryRequired: true,
+    pinnedProfile: "wide-pinned",
+    columnCount: 1000,
+    horizontalScroll: true,
+    filter: false,
+    sort: false,
+    cellUpdates: false,
+  },
+  {
+    id: "wide-table-10k-pinned-horizontal",
+    verticalScroll: false,
+    verticalSmoothScroll: false,
+    verticalDiagnostics: true,
+    virtualizationTelemetryRequired: true,
+    renderingTelemetryRequired: true,
+    pinnedColumnTelemetryRequired: true,
+    pinnedProfile: "wide-pinned",
+    columnCount: 10000,
     horizontalScroll: true,
     filter: false,
     sort: false,
@@ -517,6 +555,8 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE"],
   [PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE, "PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE"],
+  [PERF_BUDGET_MAX_CELL_RENDERER_P95_MS, "PERF_BUDGET_MAX_CELL_RENDERER_P95_MS"],
+  [PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS, "PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS"],
   [PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS, "PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS"],
   [PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS, "PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS"],
   [PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES, "PERF_BUDGET_MAX_A11Y_UNRESOLVED_REFERENCES"],
@@ -662,6 +702,9 @@ function buildScenarioUrl(scenario) {
 }
 
 function resolveScenarioColumnCount(scenario) {
+  if (typeof scenario.columnCount === "number" && Number.isFinite(scenario.columnCount) && scenario.columnCount > 0) {
+    return Math.trunc(scenario.columnCount)
+  }
   return BENCH_BROWSER_WIDE_COLUMN_SCENARIOS.includes(scenario.id)
     ? BENCH_BROWSER_WIDE_COLUMN_COUNT
     : BENCH_BROWSER_COLUMN_COUNT
@@ -2966,6 +3009,32 @@ function buildRenderingTelemetryWarnings(scenarioReports) {
   return warnings
 }
 
+function buildRendererDurationBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const scenario of SCENARIOS) {
+    if (!scenario.cellRendererTelemetryRequired) {
+      continue
+    }
+    const renderTelemetry = scenarioReports[scenario.id]?.aggregate?.renderTelemetry
+    if (!renderTelemetry) {
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} cell renderer duration p95`,
+      renderTelemetry.cellRendererDurationMs.p95,
+      PERF_BUDGET_MAX_CELL_RENDERER_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenario.id} group cell renderer duration p95`,
+      renderTelemetry.groupCellRendererDurationMs.p95,
+      PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS,
+    )
+  }
+  return warnings
+}
+
 function buildSortDiagnosticsBudgetWarnings(scenarioReports) {
   const warnings = []
   for (const [scenarioId, report] of Object.entries(scenarioReports)) {
@@ -3191,6 +3260,7 @@ const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioR
 const datasourcePlaceholderBudgetWarnings = buildDatasourcePlaceholderBudgetWarnings(scenarioReports)
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
 const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
+const rendererDurationBudgetWarnings = buildRendererDurationBudgetWarnings(scenarioReports)
 const sortDiagnosticsBudgetWarnings = buildSortDiagnosticsBudgetWarnings(scenarioReports)
 const editDiagnosticsBudgetWarnings = buildEditDiagnosticsBudgetWarnings(scenarioReports)
 const a11yBudgetWarnings = buildA11yBudgetWarnings(scenarioReports)
@@ -3200,6 +3270,7 @@ const budgetWarnings = [
   ...datasourcePlaceholderBudgetWarnings,
   ...renderChurnBudgetWarnings,
   ...renderingTelemetryWarnings,
+  ...rendererDurationBudgetWarnings,
   ...sortDiagnosticsBudgetWarnings,
   ...editDiagnosticsBudgetWarnings,
   ...a11yBudgetWarnings,
@@ -3210,6 +3281,7 @@ const budgetErrors = [
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? datasourcePlaceholderBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
   ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
+  ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? rendererDurationBudgetWarnings : []),
   ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? sortDiagnosticsBudgetWarnings : []),
   ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? editDiagnosticsBudgetWarnings : []),
   ...(BENCH_A11Y_FAIL_ON_WARNINGS ? a11yBudgetWarnings : []),
@@ -3290,6 +3362,10 @@ const summary = {
       cellMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
       cellUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
     },
+    rendererBudgets: {
+      cellRendererDurationP95Ms: PERF_BUDGET_MAX_CELL_RENDERER_P95_MS,
+      groupCellRendererDurationP95Ms: PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS,
+    },
     resourceBudgets: {
       frameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
       frameP99Ms: PERF_BUDGET_MAX_FRAME_P99_MS,
@@ -3361,6 +3437,10 @@ const summary = {
       rowUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_ROW_UNMOUNTS_PER_SCROLL_WRITE,
       cellMountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_MOUNTS_PER_SCROLL_WRITE,
       cellUnmountsPerScrollWrite: PERF_BUDGET_MAX_RENDER_CELL_UNMOUNTS_PER_SCROLL_WRITE,
+    },
+    renderer: {
+      cellRendererDurationP95Ms: PERF_BUDGET_MAX_CELL_RENDERER_P95_MS,
+      groupCellRendererDurationP95Ms: PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS,
     },
     a11y: {
       stageTabStops: PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,

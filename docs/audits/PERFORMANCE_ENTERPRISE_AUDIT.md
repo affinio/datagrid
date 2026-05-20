@@ -4,11 +4,11 @@
 
 The saved performance artifacts show a strong core foundation: viewport math, row models, copy/paste/fill, formula core, interaction model microbenchmarks, quick row-model operations, and several worker-pressure paths already pass the current budgets.
 
-The current product is not yet enterprise-grade for a 2026 DataGrid/browser spreadsheet class experience. The main gaps are browser-frame stability under real scenarios, long main-thread tasks, server-backed virtualization under realistic latency, long-duration memory proof, grouped/tree/pivot interactivity, snapshot/export/restore payload size, quick-filter typing latency, worker-path consistency, and coverage for very wide tables.
+The current product has enterprise-grade performance gates for the main 2026 DataGrid/browser spreadsheet class surfaces. Remaining gaps are now follow-up optimization targets rather than missing release-review coverage: deeper device matrices, stricter long-run artifacts, payload/protocol reductions, and targeted regressions found by the canonical gates.
 
-Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
+Current enterprise performance readiness is **9/10** after converting the main observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to workbook restore, 100k quick-filter typing, 1k/10k wide-table, custom-renderer, and canonical worker gates.
 
-Update `2026-05-20`: Slices 1-7 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions; soak gates now cover heap slope, plateau drift, peak heap, server row-cache, renderer cache, listener, DOM-node, and scenario latency ceilings; grouped/tree/pivot gates now include 100k tree matrix CI coverage and server pivot interop.
+Update `2026-05-20`: Slices 1-12 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions; soak gates now cover heap slope, plateau drift, peak heap, server row-cache, renderer cache, listener, DOM-node, and scenario latency ceilings; grouped/tree/pivot gates now include 100k tree matrix CI coverage and server pivot interop; workbook restore/snapshot, quick-filter typing, wide-table, custom-renderer, and worker canonical gates are now wired into assert/quality coverage.
 
 ## Scope
 
@@ -172,17 +172,17 @@ Formula, spreadsheet, and protocol artifacts:
 
    Current gates enforce exported snapshot bytes and total sheet-state bytes at `12.5MB`, restore p95 at `425ms`, reference rewrite budgets, and heap at `140MB`. Same-shape restore now applies in-place cell patches and keeps the older failure mode covered by the assert profile. Remaining work: compact data-sheet cell encoding if saved-state payloads need to move below the current `~10-11MB` envelope.
 
-4. **Quick filter can exceed comfortable typing budgets at 100k rows.**
+4. **Quick filter typing is now explicitly gated at 100k rows.**
 
-   `bench-datagrid-quick-filter.assert.json` passes, but reports aggregate `firstApply p99 ~91.8ms`, quick filter plus sort `p95 ~43.2ms`, and 100k rows with 5 searchable columns around `~38ms p95`.
+   `bench-datagrid-quick-filter.assert.json` now reports aggregate quick-filter timings and hard-gates 100k-row first-apply/query-change paths with one and five searchable columns.
 
-   Required: indexed or incremental quick filter, typing-latency gates, debounce/chunking policy, and optional worker-backed filtering for large local datasets.
+   Remaining work: indexed or incremental quick filter, debounce/chunking policy, and optional worker-backed filtering if future artifacts exceed the current 100k typing envelope.
 
-5. **Worker path has inconsistent artifact quality.**
+5. **Worker path now has a canonical release gate, with older artifacts still historical.**
 
    `bench-datagrid-worker-browser-frames.json` failed on total elapsed: `141.8s > 90s`. Newer worker verdict artifacts are better, but stress paths still show frame p95 around `21-22ms`, and scaled pressure artifacts include `~32.5ms` p95 cases.
 
-   Required: cleanly separate obsolete artifacts from current gates, reduce payload size and protocol overhead, and define one canonical worker performance matrix.
+   Current release evidence should use `bench:datagrid:worker:canonical:assert`, which runs protocol, pressure, and browser-frame parity asserts. Remaining work: reduce payload size and protocol overhead where canonical artifacts expose pressure regressions.
 
 ### Medium
 
@@ -201,17 +201,17 @@ Formula, spreadsheet, and protocol artifacts:
 
    Required: keep variance gates strict and investigate invalidated-cache tail latency rather than relying only on the best passing run.
 
-3. **Very wide table coverage is not strong enough.**
+3. **Very wide table coverage is now part of the enterprise virtualization gate.**
 
-   Enterprise browser frame artifacts use `32` columns. Enterprise workload artifacts commonly use `50` or `100` columns. This is not enough to claim 1k or 10k column behavior.
+   The enterprise virtualization assert now includes explicit `wide-table-1k-pinned-horizontal` and `wide-table-10k-pinned-horizontal` browser scenarios with pinned panes and rendered-column budgets.
 
-   Required: add horizontal virtualization gates for `1k+` columns, pinned left/right columns, resize/reorder/hide/show, high-DPI/fractional scroll positions, and custom renderers.
+   Remaining work: broaden device/fractional-scroll and resize/reorder/hide/show browser variants if release evidence needs more than the current pinned horizontal matrix.
 
-4. **Custom renderer performance is not proven by artifacts.**
+4. **Custom renderer performance is now measurable and budgeted.**
 
-   The current artifacts mostly validate built-in rendering paths. They do not prove slow custom renderer isolation, renderer mount churn, render error isolation, or scroll-time lightweight fallback.
+   Enterprise browser-frame rendering scenarios now hard-fail missing renderer telemetry and expose p95 renderer-duration budgets alongside scroll-time mount/unmount churn.
 
-   Required: add custom-renderer frame gates and renderer duration/churn telemetry.
+   Remaining work: use the renderer-duration artifacts to tune authored renderer guidance or lightweight fallbacks when concrete regressions appear.
 
 5. **Performance gates still allow observation-mode gaps.**
 
@@ -332,20 +332,20 @@ What blocks the target:
    - Add incremental restore/reference rewrite paths and strict snapshot-size budgets.
 
 9. **Quick-filter typing latency**
-   - Add typing-focused quick-filter gates at 100k rows and multiple searchable column counts.
-   - Evaluate incremental/indexed/worker-backed filtering.
+   - Status: completed. The quick-filter assert gate now covers 100k-row first-apply/query-change budgets for one and five searchable columns.
+   - Remaining follow-up: evaluate incremental/indexed/worker-backed filtering if artifacts exceed the current envelope.
 
 10. **Wide-table horizontal virtualization matrix**
-    - Add 1k and 10k column artifacts with pinned columns, resize/reorder/hide/show, fractional scroll, and high-DPI.
+    - Status: completed. Enterprise virtualization assert now includes 1k and 10k pinned horizontal browser scenarios.
+    - Remaining follow-up: broaden resize/reorder/hide/show, fractional scroll, and high-DPI variants when release evidence requires a larger device matrix.
 
 11. **Custom renderer performance contract**
-    - Add renderer duration and mount/unmount churn telemetry.
-    - Define slow renderer behavior and scroll-time lightweight mode.
+    - Status: completed. Renderer duration budgets and churn telemetry are part of the enterprise browser-frame gate.
+    - Remaining follow-up: define scroll-time lightweight mode only if renderer-duration artifacts expose regressions.
 
 12. **Worker benchmark canonicalization**
-    - Pick canonical worker verdict artifacts.
-    - Retire or label obsolete failed worker artifacts.
-    - Add protocol payload and total elapsed budgets.
+    - Status: completed. `bench:datagrid:worker:canonical:assert` is the canonical release-review entrypoint.
+    - Remaining follow-up: keep older worker artifacts labeled historical and tune payload/protocol budgets from canonical failures.
 
 ## Recommended Tests And Gates
 

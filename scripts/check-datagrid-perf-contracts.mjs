@@ -560,10 +560,46 @@ registerTokenCheck(
 )
 
 registerTokenCheck(
+  "quick-filter-typing-scenario-budgets",
+  "scripts/bench-datagrid-quick-filter.mjs",
+  [
+    "PERF_BUDGET_MAX_QUICK_FILTER_100K_1COL_QUERY_CHANGE_P95_MS",
+    "PERF_BUDGET_MAX_QUICK_FILTER_100K_5COL_QUERY_CHANGE_P95_MS",
+    "collectScenarioOperationP95",
+    "100k/5col queryChange",
+  ],
+  "Quick-filter benchmark enforces 100k typing budgets by searchable column count",
+)
+
+registerTokenCheck(
+  "enterprise-wide-renderer-browser-scenarios",
+  "scripts/bench-datagrid-enterprise-browser-frames.mjs",
+  [
+    "wide-table-1k-pinned-horizontal",
+    "wide-table-10k-pinned-horizontal",
+    "PERF_BUDGET_MAX_CELL_RENDERER_P95_MS",
+    "buildRendererDurationBudgetWarnings",
+  ],
+  "Enterprise browser benchmark exposes explicit 1k/10k wide-table scenarios and renderer duration budgets",
+)
+
+registerTokenCheck(
   "quality-script-perf-contracts",
   "package.json",
   ["quality:perf:datagrid", "check-datagrid-perf-contracts.mjs"],
   "Root scripts include perf contract gate command",
+)
+
+registerTokenCheck(
+  "worker-canonical-assert-script",
+  "package.json",
+  [
+    "bench:datagrid:worker:canonical:assert",
+    "bench:datagrid:worker:protocol:assert",
+    "bench:datagrid:worker:pressure:assert",
+    "bench:datagrid:worker:frames:assert",
+  ],
+  "Package scripts expose one canonical worker performance assert entrypoint",
 )
 
 registerTokenCheck(
@@ -929,6 +965,8 @@ registerTokenCheck(
     const desktopLongTaskTotal = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS")
     const desktopLongTaskMax = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS")
     const desktopHeap = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const desktopCellRenderer = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_CELL_RENDERER_P95_MS")
+    const desktopGroupCellRenderer = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS")
     const touchFrameP95 = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_FRAME_P95_MS")
     const touchFrameP99 = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_FRAME_P99_MS")
     const touchDroppedFramePct = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT")
@@ -940,6 +978,7 @@ registerTokenCheck(
       desktopAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=desktop-ci") &&
       desktopAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
       desktopAssertScript.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
+      desktopAssertScript.includes("BENCH_RENDERING_FAIL_ON_WARNINGS=true") &&
       desktopFrameP95 != null &&
       desktopFrameP99 != null &&
       desktopDroppedFramePct != null &&
@@ -947,6 +986,8 @@ registerTokenCheck(
       desktopLongTaskTotal != null &&
       desktopLongTaskMax != null &&
       desktopHeap != null &&
+      desktopCellRenderer != null &&
+      desktopGroupCellRenderer != null &&
       touchAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=touch-tablet-ci") &&
       touchAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
       touchAssertScript.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
@@ -963,7 +1004,34 @@ registerTokenCheck(
       "Enterprise browser frame assert scripts hard-fail interaction and resource budget warnings",
       ok
         ? "ok"
-        : `unexpected enterprise browser assert scripts or finite budgets: desktop='${desktopAssertScript}', touch='${touchAssertScript}', desktop budgets frameP95=${desktopFrameP95}, frameP99=${desktopFrameP99}, dropped=${desktopDroppedFramePct}, longTaskCount=${desktopLongTaskCount}, longTaskTotal=${desktopLongTaskTotal}, longTaskMax=${desktopLongTaskMax}, heap=${desktopHeap}, touch budgets frameP95=${touchFrameP95}, frameP99=${touchFrameP99}, dropped=${touchDroppedFramePct}, longTaskCount=${touchLongTaskCount}, longTaskTotal=${touchLongTaskTotal}, longTaskMax=${touchLongTaskMax}, heap=${touchHeap}`,
+        : `unexpected enterprise browser assert scripts or finite budgets: desktop='${desktopAssertScript}', touch='${touchAssertScript}', desktop budgets frameP95=${desktopFrameP95}, frameP99=${desktopFrameP99}, dropped=${desktopDroppedFramePct}, longTaskCount=${desktopLongTaskCount}, longTaskTotal=${desktopLongTaskTotal}, longTaskMax=${desktopLongTaskMax}, heap=${desktopHeap}, cellRenderer=${desktopCellRenderer}, groupCellRenderer=${desktopGroupCellRenderer}, touch budgets frameP95=${touchFrameP95}, frameP99=${touchFrameP99}, dropped=${touchDroppedFramePct}, longTaskCount=${touchLongTaskCount}, longTaskTotal=${touchLongTaskTotal}, longTaskMax=${touchLongTaskMax}, heap=${touchHeap}`,
+    )
+  }
+}
+
+{
+  const packageJsonPath = resolve("package.json")
+  const enterpriseWideVirtualizationId = "enterprise-wide-virtualization-scenarios"
+  if (!existsSync(packageJsonPath)) {
+    registerConditionCheck(
+      enterpriseWideVirtualizationId,
+      false,
+      "Enterprise virtualization assert covers explicit 1k and 10k pinned horizontal scenarios",
+      "package.json missing",
+    )
+  } else {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
+    const script = String(pkg?.scripts?.["bench:datagrid:enterprise:virtualization:assert"] ?? "")
+    const ok =
+      script.includes("wide-table-1k-pinned-horizontal") &&
+      script.includes("wide-table-10k-pinned-horizontal") &&
+      script.includes("BENCH_BROWSER_WIDE_ROW_COUNT=10000") &&
+      script.includes("PERF_BUDGET_MAX_VIRTUALIZATION_RENDERED_COLUMNS_P95=160")
+    registerConditionCheck(
+      enterpriseWideVirtualizationId,
+      ok,
+      "Enterprise virtualization assert covers explicit 1k and 10k pinned horizontal scenarios",
+      ok ? "ok" : `unexpected enterprise virtualization assert script: '${script}'`,
     )
   }
 }
