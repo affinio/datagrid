@@ -152,6 +152,14 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_FILTER_BURST_P99_MS=40`
   - `PERF_BUDGET_MIN_PULL_COALESCED=1`
   - `PERF_BUDGET_MIN_PULL_DEFERRED=1`
+  - `PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED=3800`
+  - `PERF_BUDGET_MAX_SCROLL_PULL_ABORTED=1300`
+  - `PERF_BUDGET_MAX_SCROLL_PULL_DROPPED=1300`
+  - `PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED=330000`
+  - `PERF_BUDGET_MAX_FILTER_PULL_REQUESTED=3500`
+  - `PERF_BUDGET_MAX_FILTER_PULL_ABORTED=1450`
+  - `PERF_BUDGET_MAX_FILTER_PULL_DROPPED=750`
+  - `PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED=60000`
   - `BENCH_DS_CHURN_PLACEHOLDER_LATENCY_MS=4`
   - `BENCH_DS_CHURN_PLACEHOLDER_ITERATIONS=12`
   - `PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS=80`
@@ -164,7 +172,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES=12`
   - `PERF_BUDGET_MIN_STALE_RETAINED_ROWS=1900`
   - `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`
-  - Placeholder exposure, viewport availability, cache-hit/miss, pull-duration, retry, and stale-retention budgets are hard failures in `bench:datagrid:datasource-churn:assert`.
+  - Pull request, abort, dropped-pull, row-cache eviction, placeholder exposure, viewport availability, cache-hit/miss, pull-duration, retry, and stale-retention budgets are hard failures in `bench:datagrid:datasource-churn:assert`.
   - Server datasource browser artifacts include placeholder exposure, viewport data availability, blank viewport events, viewport cache hit/miss ratio, and pull duration. `bench:datagrid:enterprise:virtualization:assert` hard-fails the server placeholder subset with `PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS=450`, `PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS=550`, `PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS=4`, `PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS=600`, and `PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS=550`.
   - The controlled-latency placeholder scenario covers cold scroll, warm scroll, direction reversal, jump scroll, and retry after a failed pull.
 - Derived cache (stable cache + invalidation pressure):

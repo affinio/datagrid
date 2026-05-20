@@ -2829,6 +2829,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
           await dataSource.invalidate({ kind: "all", reason: "reset" })
         }
       }
+      if (reason === "viewport-change") {
+        await Promise.resolve()
+        await drainCriticalBackpressureQueue()
+        const sourceViewport = toSourceRange(viewportRange)
+        if (!isRangeFullyCached(sourceViewport)) {
+          await pullRange(sourceViewport, "viewport-change", "critical")
+        }
+        return
+      }
       await pullRange(toSourceRange(viewportRange), "refresh", "critical")
     },
     invalidateRange(range) {

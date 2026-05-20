@@ -37,6 +37,30 @@ const PERF_BUDGET_MAX_FILTER_BURST_P99_MS = Number.parseFloat(
 )
 const PERF_BUDGET_MIN_PULL_COALESCED = Number.parseFloat(process.env.PERF_BUDGET_MIN_PULL_COALESCED ?? "0")
 const PERF_BUDGET_MIN_PULL_DEFERRED = Number.parseFloat(process.env.PERF_BUDGET_MIN_PULL_DEFERRED ?? "0")
+const PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_SCROLL_PULL_ABORTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SCROLL_PULL_ABORTED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_SCROLL_PULL_DROPPED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SCROLL_PULL_DROPPED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_FILTER_PULL_REQUESTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_FILTER_PULL_REQUESTED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_FILTER_PULL_ABORTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_FILTER_PULL_ABORTED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_FILTER_PULL_DROPPED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_FILTER_PULL_DROPPED ?? "Infinity",
+)
+const PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED ?? "Infinity",
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_VARIANCE_PCT ?? "Infinity")
 const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDGET_VARIANCE_MIN_MEAN_MS ?? "0.5")
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = Number.parseFloat(process.env.PERF_BUDGET_MAX_HEAP_DELTA_MB ?? "Infinity")
@@ -570,6 +594,10 @@ for (const seed of BENCH_SEEDS) {
       cvPct: scrollBurst.stat.cvPct.toFixed(2),
       coalesced: scrollBurst.diagnostics.pullCoalesced,
       deferred: scrollBurst.diagnostics.pullDeferred,
+      requested: diagnosticNumber(scrollBurst.diagnostics, "pullRequested"),
+      aborted: diagnosticNumber(scrollBurst.diagnostics, "pullAborted"),
+      dropped: diagnosticNumber(scrollBurst.diagnostics, "pullDropped"),
+      evicted: diagnosticNumber(scrollBurst.diagnostics, "rowCacheEvicted"),
       placeholderEvents: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(scrollBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(scrollBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
@@ -585,6 +613,10 @@ for (const seed of BENCH_SEEDS) {
       cvPct: filterBurst.stat.cvPct.toFixed(2),
       coalesced: filterBurst.diagnostics.pullCoalesced,
       deferred: filterBurst.diagnostics.pullDeferred,
+      requested: diagnosticNumber(filterBurst.diagnostics, "pullRequested"),
+      aborted: diagnosticNumber(filterBurst.diagnostics, "pullAborted"),
+      dropped: diagnosticNumber(filterBurst.diagnostics, "pullDropped"),
+      evicted: diagnosticNumber(filterBurst.diagnostics, "rowCacheEvicted"),
       placeholderEvents: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureEvents"),
       placeholderMaxMs: diagnosticNumber(filterBurst.diagnostics, "placeholderExposureMaxMs").toFixed(3),
       viewportDataMs: diagnosticNumber(filterBurst.diagnostics, "viewportDataAvailabilityMaxMs").toFixed(3),
@@ -642,6 +674,46 @@ for (const seed of BENCH_SEEDS) {
   if (filterBurst.stat.p99 > PERF_BUDGET_MAX_FILTER_BURST_P99_MS) {
     budgetErrors.push(
       `seed ${seed}: filter-burst p99 ${filterBurst.stat.p99.toFixed(3)}ms exceeds PERF_BUDGET_MAX_FILTER_BURST_P99_MS=${PERF_BUDGET_MAX_FILTER_BURST_P99_MS}ms`,
+    )
+  }
+  if (diagnosticNumber(scrollBurst.diagnostics, "pullRequested") > PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED) {
+    budgetErrors.push(
+      `seed ${seed}: scroll-burst pullRequested ${diagnosticNumber(scrollBurst.diagnostics, "pullRequested")} exceeds PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED=${PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED}`,
+    )
+  }
+  if (diagnosticNumber(scrollBurst.diagnostics, "pullAborted") > PERF_BUDGET_MAX_SCROLL_PULL_ABORTED) {
+    budgetErrors.push(
+      `seed ${seed}: scroll-burst pullAborted ${diagnosticNumber(scrollBurst.diagnostics, "pullAborted")} exceeds PERF_BUDGET_MAX_SCROLL_PULL_ABORTED=${PERF_BUDGET_MAX_SCROLL_PULL_ABORTED}`,
+    )
+  }
+  if (diagnosticNumber(scrollBurst.diagnostics, "pullDropped") > PERF_BUDGET_MAX_SCROLL_PULL_DROPPED) {
+    budgetErrors.push(
+      `seed ${seed}: scroll-burst pullDropped ${diagnosticNumber(scrollBurst.diagnostics, "pullDropped")} exceeds PERF_BUDGET_MAX_SCROLL_PULL_DROPPED=${PERF_BUDGET_MAX_SCROLL_PULL_DROPPED}`,
+    )
+  }
+  if (diagnosticNumber(scrollBurst.diagnostics, "rowCacheEvicted") > PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED) {
+    budgetErrors.push(
+      `seed ${seed}: scroll-burst rowCacheEvicted ${diagnosticNumber(scrollBurst.diagnostics, "rowCacheEvicted")} exceeds PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED=${PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED}`,
+    )
+  }
+  if (diagnosticNumber(filterBurst.diagnostics, "pullRequested") > PERF_BUDGET_MAX_FILTER_PULL_REQUESTED) {
+    budgetErrors.push(
+      `seed ${seed}: filter-burst pullRequested ${diagnosticNumber(filterBurst.diagnostics, "pullRequested")} exceeds PERF_BUDGET_MAX_FILTER_PULL_REQUESTED=${PERF_BUDGET_MAX_FILTER_PULL_REQUESTED}`,
+    )
+  }
+  if (diagnosticNumber(filterBurst.diagnostics, "pullAborted") > PERF_BUDGET_MAX_FILTER_PULL_ABORTED) {
+    budgetErrors.push(
+      `seed ${seed}: filter-burst pullAborted ${diagnosticNumber(filterBurst.diagnostics, "pullAborted")} exceeds PERF_BUDGET_MAX_FILTER_PULL_ABORTED=${PERF_BUDGET_MAX_FILTER_PULL_ABORTED}`,
+    )
+  }
+  if (diagnosticNumber(filterBurst.diagnostics, "pullDropped") > PERF_BUDGET_MAX_FILTER_PULL_DROPPED) {
+    budgetErrors.push(
+      `seed ${seed}: filter-burst pullDropped ${diagnosticNumber(filterBurst.diagnostics, "pullDropped")} exceeds PERF_BUDGET_MAX_FILTER_PULL_DROPPED=${PERF_BUDGET_MAX_FILTER_PULL_DROPPED}`,
+    )
+  }
+  if (diagnosticNumber(filterBurst.diagnostics, "rowCacheEvicted") > PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED) {
+    budgetErrors.push(
+      `seed ${seed}: filter-burst rowCacheEvicted ${diagnosticNumber(filterBurst.diagnostics, "rowCacheEvicted")} exceeds PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED=${PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED}`,
     )
   }
 }
@@ -829,6 +901,14 @@ const summary = {
     maxFilterBurstP99Ms: PERF_BUDGET_MAX_FILTER_BURST_P99_MS,
     minPullCoalesced: PERF_BUDGET_MIN_PULL_COALESCED,
     minPullDeferred: PERF_BUDGET_MIN_PULL_DEFERRED,
+    maxScrollPullRequested: PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED,
+    maxScrollPullAborted: PERF_BUDGET_MAX_SCROLL_PULL_ABORTED,
+    maxScrollPullDropped: PERF_BUDGET_MAX_SCROLL_PULL_DROPPED,
+    maxScrollRowCacheEvicted: PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED,
+    maxFilterPullRequested: PERF_BUDGET_MAX_FILTER_PULL_REQUESTED,
+    maxFilterPullAborted: PERF_BUDGET_MAX_FILTER_PULL_ABORTED,
+    maxFilterPullDropped: PERF_BUDGET_MAX_FILTER_PULL_DROPPED,
+    maxFilterRowCacheEvicted: PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED,
     maxVariancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
     varianceMinMeanMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
     maxHeapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,

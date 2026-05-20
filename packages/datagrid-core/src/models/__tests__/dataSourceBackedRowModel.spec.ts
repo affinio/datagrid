@@ -2042,6 +2042,68 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("routes viewport-change refresh through pending viewport critical pulls", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          const call: PullCall<{ id: number; value: string }> = {
+            request,
+            resolve,
+            reject,
+          }
+          calls.push(call)
+          request.signal.addEventListener("abort", () => {
+            reject({ name: "AbortError" })
+          })
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 10_000,
+    })
+
+    model.setViewportRange({ start: 0, end: 10 })
+    model.setViewportRange({ start: 100, end: 110 })
+    const refreshA = model.refresh("viewport-change")
+    model.setViewportRange({ start: 200, end: 210 })
+    const refreshB = model.refresh("viewport-change")
+
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(calls[1]?.request.reason).toBe("viewport-change")
+    expect(calls[1]?.request.priority).toBe("critical")
+    expect(calls[1]?.request.range).toEqual({ start: 200, end: 210 })
+
+    calls[1]?.resolve({
+      rows: Array.from({ length: 11 }, (_, offset) => {
+        const index = 200 + offset
+        return {
+          index,
+          row: { id: index, value: `row-${index}` },
+        }
+      }),
+      total: 10_000,
+    })
+    await Promise.all([refreshA, refreshB])
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(model.getRow(200)?.row.value).toBe("row-200")
+
+    const diagnostics = model.getBackpressureDiagnostics()
+    expect(diagnostics.pullRequested).toBe(2)
+    expect(diagnostics.pullAborted).toBe(1)
+    expect(diagnostics.pullCompleted).toBe(1)
+
+    model.dispose()
+  })
+
   it("keeps the final viewport materialized with loading rows during rapid far jumps", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {

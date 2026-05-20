@@ -758,6 +758,14 @@ registerTokenCheck(
     const interactionsHeap = extractEnvNumberFromScript(interactionsAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const datasourceVariance = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const datasourceHeap = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const datasourceScrollPullRequested = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_SCROLL_PULL_REQUESTED")
+    const datasourceScrollPullAborted = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_SCROLL_PULL_ABORTED")
+    const datasourceScrollPullDropped = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_SCROLL_PULL_DROPPED")
+    const datasourceScrollRowCacheEvicted = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_SCROLL_ROW_CACHE_EVICTED")
+    const datasourceFilterPullRequested = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_FILTER_PULL_REQUESTED")
+    const datasourceFilterPullAborted = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_FILTER_PULL_ABORTED")
+    const datasourceFilterPullDropped = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_FILTER_PULL_DROPPED")
+    const datasourceFilterRowCacheEvicted = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_FILTER_ROW_CACHE_EVICTED")
     const datasourcePlaceholderExposure = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_PLACEHOLDER_EXPOSURE_MAX_MS")
     const datasourceViewportAvailability = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_VIEWPORT_DATA_AVAILABILITY_MAX_MS")
     const datasourcePlaceholderEvents = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_PLACEHOLDER_EXPOSURE_EVENTS")
@@ -784,6 +792,14 @@ registerTokenCheck(
       interactionsHeap != null &&
       datasourceVariance != null &&
       datasourceHeap != null &&
+      datasourceScrollPullRequested != null &&
+      datasourceScrollPullAborted != null &&
+      datasourceScrollPullDropped != null &&
+      datasourceScrollRowCacheEvicted != null &&
+      datasourceFilterPullRequested != null &&
+      datasourceFilterPullAborted != null &&
+      datasourceFilterPullDropped != null &&
+      datasourceFilterRowCacheEvicted != null &&
       datasourcePlaceholderExposure != null &&
       datasourceViewportAvailability != null &&
       datasourcePlaceholderEvents != null &&
@@ -807,10 +823,10 @@ registerTokenCheck(
     registerConditionCheck(
       assertBudgetId,
       ok,
-      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, and enterprise selection assert keeps finite selection budgets",
+      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, datasource assert keeps churn budgets, and enterprise selection assert keeps finite selection budgets",
       ok
         ? "ok"
-        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
+        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource scrollPullRequested=${datasourceScrollPullRequested}, datasource scrollPullAborted=${datasourceScrollPullAborted}, datasource scrollPullDropped=${datasourceScrollPullDropped}, datasource scrollRowCacheEvicted=${datasourceScrollRowCacheEvicted}, datasource filterPullRequested=${datasourceFilterPullRequested}, datasource filterPullAborted=${datasourceFilterPullAborted}, datasource filterPullDropped=${datasourceFilterPullDropped}, datasource filterRowCacheEvicted=${datasourceFilterRowCacheEvicted}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
     )
   }
 }

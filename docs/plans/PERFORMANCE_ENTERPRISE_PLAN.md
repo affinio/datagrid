@@ -148,15 +148,17 @@ Current execution state:
 
 ## Slice 5: Datasource Churn Reduction
 
-- Status: Pending.
+- Status: Completed on 2026-05-20.
 - Objective: reduce excessive pull counts and cache evictions during fast server-backed scroll.
 - Affected packages/files:
-  - `packages/datagrid-core/src/datasource/*`
-  - `packages/datagrid-server-client/src/*`
+  - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
   - `scripts/bench-datagrid-datasource-churn.mjs`
-- Expected behavior change: fewer redundant datasource pulls and evictions without increasing blank viewport exposure.
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+- Expected behavior change: `refresh("viewport-change")` now drains the pending critical viewport queue and skips a duplicate refresh pull when the current viewport is already cached; the assert benchmark hard-fails pull-count, abort, dropped-pull, and row-cache eviction regressions without increasing blank viewport exposure.
 - Tests to add/update:
-  - Pull count, eviction, coalescing, deferred pull, cache replacement, and stale coverage budgets.
+  - Pull count, abort, dropped-pull, eviction, coalescing, deferred pull, cache replacement, and stale coverage budgets.
 - Validation command: `pnpm run bench:datagrid:datasource-churn:assert`
 - Risk level: Medium
 - Suggested commit message: `perf(datagrid): reduce datasource scroll churn`

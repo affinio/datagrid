@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slices 1-4 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, and stale-retention regressions.
+Update `2026-05-20`: Slices 1-5 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions.
 
 ## Scope
 
@@ -185,9 +185,9 @@ Formula, spreadsheet, and protocol artifacts:
 
 1. **Datasource churn is high even when passing.**
 
-   `bench-datagrid-datasource-churn.json` passes, but scroll burst diagnostics show roughly `313k-319k` row cache evictions and around `6k` pull requests in the saved runs.
+   Historical `bench-datagrid-datasource-churn.json` saved runs showed roughly `313k-319k` row cache evictions and around `6k` pull requests in scroll bursts. The current assert gate keeps scroll pull requests under `3800`, scroll aborts/dropped pulls under `1300`, and scroll row-cache evictions under `330000`.
 
-   Required: tune cache windows, coalescing, prefetch, and retention so enterprise server-backed scrolling does not create excessive churn.
+   Required: keep tuning cache windows, prefetch, and retention so enterprise server-backed scrolling does not convert row-cache churn into backend load.
 
 2. **Derived-cache and row-model variance has historical failures.**
 
@@ -309,8 +309,9 @@ What blocks the target:
    - Enterprise virtualization browser assert now hard-fails server placeholder exposure, viewport availability, blank viewport events, cache misses, and pull duration.
 
 5. **Datasource churn reduction**
-   - Tune cache retention and coalescing.
-   - Add budgets for pull count, evictions, deferred/coalesced operations, and stale viewport coverage.
+   - Status: completed on 2026-05-20.
+   - `refresh("viewport-change")` now drains pending critical viewport work and skips duplicate refresh pulls when the viewport is already cached.
+   - Datasource churn assert now hard-fails pull count, abort, dropped-pull, row-cache eviction, deferred/coalesced operation, cache replacement, and stale viewport coverage budgets.
 
 6. **Long memory soak**
    - Add 30-60 minute soak profiles.
