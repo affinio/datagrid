@@ -139,6 +139,22 @@ const PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS = floatEnv(
   "PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS",
   999999,
 )
+const PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS = floatEnv(
+  "PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS",
+  999999,
+)
 const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
   interactionDeviceProfile.budgets.previewP95Ms,
@@ -352,6 +368,7 @@ const ALL_SCENARIOS = [
     filter: false,
     sort: false,
     cellUpdates: true,
+    editDiagnostics: true,
   },
   {
     id: "combined",
@@ -700,6 +717,7 @@ async function runScenario(page, sessionIndex, scenario) {
     const telemetrySamples = []
     const isVerticalDiagnosticsScenario = Boolean(input.scenario.verticalDiagnostics)
     const isSortDiagnosticsScenario = Boolean(input.scenario.sortDiagnostics)
+    const isEditDiagnosticsScenario = Boolean(input.scenario.editDiagnostics)
     const isInteractionDiagnosticsScenario = Boolean(input.scenario.interactionDiagnostics)
     const isA11yDiagnosticsScenario = Boolean(input.scenario.a11yDiagnostics)
     const createMutationSummary = () => ({
@@ -759,6 +777,17 @@ async function runScenario(page, sessionIndex, scenario) {
           sortAction: null,
           visibleRowsRefresh: null,
       }
+      : null
+    const editDiagnostics = isEditDiagnosticsScenario
+      ? {
+          enabled: true,
+          updates: [],
+          mutationSummary: createMutationSummary(),
+          frameWindow: null,
+          longTasks: [],
+          appPerf: null,
+          summary: null,
+        }
       : null
     const interactionDiagnostics = isInteractionDiagnosticsScenario
       ? {
@@ -1178,7 +1207,7 @@ async function runScenario(page, sessionIndex, scenario) {
       }
     }
     let mutationObserver = null
-    if ((verticalDiagnostics || sortDiagnostics) && typeof MutationObserver !== "undefined") {
+    if ((verticalDiagnostics || sortDiagnostics || editDiagnostics) && typeof MutationObserver !== "undefined") {
       mutationObserver = new MutationObserver((mutations) => {
         if (verticalDiagnostics) {
           recordMutationSummary(verticalDiagnostics.mutationSummary, mutations)
@@ -1186,8 +1215,11 @@ async function runScenario(page, sessionIndex, scenario) {
         if (sortDiagnostics) {
           recordMutationSummary(sortDiagnostics.mutationSummary, mutations)
         }
+        if (editDiagnostics) {
+          recordMutationSummary(editDiagnostics.mutationSummary, mutations)
+        }
       })
-      mutationObserver.observe(sortDiagnostics && document.body ? document.body : viewport, {
+      mutationObserver.observe((sortDiagnostics || editDiagnostics) && document.body ? document.body : viewport, {
         childList: true,
         subtree: true,
       })
@@ -1699,6 +1731,7 @@ async function runScenario(page, sessionIndex, scenario) {
 
     if (input.scenario.cellUpdates && input.enableCellUpdates && input.cellUpdateBurst > 0) {
       for (let index = 0; index < input.cellUpdateBurst; index += 1) {
+        const updateStartMs = performance.now()
         const cells = Array.from(
           document.querySelectorAll('.grid-row:not(.row--group) .grid-cell[data-column-key="amount"]'),
         ).filter(candidate => candidate instanceof HTMLElement)
@@ -1708,8 +1741,11 @@ async function runScenario(page, sessionIndex, scenario) {
           interactions.skipped.push("cell-update:no-editable-amount-cell")
           break
         }
+        const openStartMs = performance.now()
         cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, view: window }))
+        const openEndMs = performance.now()
         await waitForPaint()
+        const editorPaintEndMs = performance.now()
         const editor = cell.querySelector("input.cell-editor-input")
           ?? document.querySelector("input.cell-editor-input")
         if (!(editor instanceof HTMLInputElement)) {
@@ -1717,14 +1753,39 @@ async function runScenario(page, sessionIndex, scenario) {
           continue
         }
         interactions.cellEditorsOpened += 1
+        const inputStartMs = performance.now()
         editor.value = String(1000 + input.sessionIndex * 100 + index)
         editor.dispatchEvent(new Event("input", { bubbles: true }))
         editor.dispatchEvent(new Event("change", { bubbles: true }))
+        const inputEndMs = performance.now()
+        const keydownStartMs = performance.now()
         editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))
+        const keydownEndMs = performance.now()
+        const blurStartMs = performance.now()
         editor.blur()
+        const blurEndMs = performance.now()
         interactions.cellUpdatesCommitted += 1
         captureTelemetry(`cell-update:${index + 1}`)
         await waitForPaint()
+        const paintEndMs = performance.now()
+        if (editDiagnostics) {
+          editDiagnostics.updates.push({
+            index: index + 1,
+            updateMs: paintEndMs - updateStartMs,
+            openDispatchMs: openEndMs - openStartMs,
+            openToPaintMs: editorPaintEndMs - openStartMs,
+            inputDispatchMs: inputEndMs - inputStartMs,
+            keydownDispatchMs: keydownEndMs - keydownStartMs,
+            blurDispatchMs: blurEndMs - blurStartMs,
+            commitDispatchMs: blurEndMs - inputStartMs,
+            commitToPaintMs: paintEndMs - inputStartMs,
+            frameWindow: {
+              startMs: updateStartMs,
+              endMs: paintEndMs,
+              summary: summarizeFrameWindow(updateStartMs, paintEndMs),
+            },
+          })
+        }
       }
     } else if (input.scenario.cellUpdates && !input.enableCellUpdates) {
       interactions.skipped.push("cell-update:disabled-by-config")
@@ -2280,6 +2341,48 @@ async function runScenario(page, sessionIndex, scenario) {
         longTaskTotalMs: sortDiagnostics.longTasks.reduce((sum, entry) => sum + entry.duration, 0),
       }
     }
+    if (editDiagnostics) {
+      const firstUpdateStartMs = editDiagnostics.updates[0]?.frameWindow?.startMs ?? null
+      const lastUpdateEndMs = editDiagnostics.updates.at(-1)?.frameWindow?.endMs ?? null
+      if (typeof firstUpdateStartMs === "number" && typeof lastUpdateEndMs === "number") {
+        editDiagnostics.frameWindow = {
+          startMs: firstUpdateStartMs,
+          endMs: lastUpdateEndMs,
+          summary: summarizeFrameWindow(firstUpdateStartMs, lastUpdateEndMs),
+        }
+        editDiagnostics.longTasks = longTaskEntries
+          .filter(entry => entry.startTime >= firstUpdateStartMs && entry.startTime <= lastUpdateEndMs)
+          .map(entry => ({
+            startTime: entry.startTime,
+            duration: entry.duration,
+            name: entry.name,
+            attribution: entry.attribution,
+          }))
+      }
+      const dataGridPerfStore = resolveDataGridPerfStore()
+      editDiagnostics.appPerf = dataGridPerfStore
+        ? {
+            samples: Array.isArray(dataGridPerfStore.samples) ? dataGridPerfStore.samples.slice() : [],
+            summary: typeof dataGridPerfStore.summary === "function" ? dataGridPerfStore.summary() : [],
+          }
+        : null
+      editDiagnostics.summary = {
+        updatesAttempted: interactions.cellUpdatesAttempted,
+        editorsOpened: interactions.cellEditorsOpened,
+        updatesCommitted: interactions.cellUpdatesCommitted,
+        updateMs: summarizeNumbers(editDiagnostics.updates.map(update => update.updateMs)),
+        openToPaintMs: summarizeNumbers(editDiagnostics.updates.map(update => update.openToPaintMs)),
+        commitToPaintMs: summarizeNumbers(editDiagnostics.updates.map(update => update.commitToPaintMs)),
+        commitDispatchMs: summarizeNumbers(editDiagnostics.updates.map(update => update.commitDispatchMs)),
+        updateFrameP95Ms: summarizeNumbers(editDiagnostics.updates.map(update => update.frameWindow?.summary?.p95)),
+        addedRows: editDiagnostics.mutationSummary.addedRowNodes,
+        removedRows: editDiagnostics.mutationSummary.removedRowNodes,
+        addedCells: editDiagnostics.mutationSummary.addedCellNodes,
+        removedCells: editDiagnostics.mutationSummary.removedCellNodes,
+        longTaskCount: editDiagnostics.longTasks.length,
+        longTaskTotalMs: editDiagnostics.longTasks.reduce((sum, entry) => sum + entry.duration, 0),
+      }
+    }
 
     const heapValues = telemetrySamples
       .map(sample => sample.usedHeapMb)
@@ -2314,6 +2417,7 @@ async function runScenario(page, sessionIndex, scenario) {
       finalLeft: viewport.scrollLeft,
       verticalDiagnostics,
       sortDiagnostics,
+      editDiagnostics,
       interactionDiagnostics,
       a11yDiagnostics,
       datasourcePlaceholderDiagnostics: readDatasourcePlaceholderDiagnostics(),
@@ -2361,6 +2465,7 @@ async function runScenario(page, sessionIndex, scenario) {
     finalLeft: result.finalLeft,
     verticalDiagnostics: result.verticalDiagnostics,
     sortDiagnostics: result.sortDiagnostics,
+    editDiagnostics: result.editDiagnostics,
     interactionDiagnostics: result.interactionDiagnostics,
     a11yDiagnostics: result.a11yDiagnostics,
     datasourcePlaceholderDiagnostics: result.datasourcePlaceholderDiagnostics,
@@ -2370,6 +2475,7 @@ async function runScenario(page, sessionIndex, scenario) {
 function aggregateRuns(runs) {
   const verticalDiagnosticsRuns = runs.map(run => run.verticalDiagnostics).filter(Boolean)
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
+  const editDiagnosticsRuns = runs.map(run => run.editDiagnostics).filter(Boolean)
   const interactionDiagnosticsRuns = runs.map(run => run.interactionDiagnostics).filter(Boolean)
   const a11yDiagnosticsRuns = runs.map(run => run.a11yDiagnostics).filter(Boolean)
   const a11ySamples = a11yDiagnosticsRuns.flatMap(diagnostics => diagnostics.samples ?? [])
@@ -2487,6 +2593,23 @@ function aggregateRuns(runs) {
       viewportUpdateMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.viewportUpdateMs)),
       visibleRowsMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.visibleRowsMs)),
       firstPaintAfterSortMs: stats(sortDiagnosticsRuns.map(diagnostics => diagnostics.phaseBreakdown?.firstPaintAfterSortMs)),
+    },
+    editDiagnostics: {
+      updatesAttempted: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.updatesAttempted)),
+      editorsOpened: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.editorsOpened)),
+      updatesCommitted: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.updatesCommitted)),
+      updateP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.updateMs?.p95)),
+      openToPaintP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.openToPaintMs?.p95)),
+      commitToPaintP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.commitToPaintMs?.p95)),
+      commitDispatchP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.commitDispatchMs?.p95)),
+      updateFrameP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.updateFrameP95Ms?.p95)),
+      burstFrameP95Ms: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.frameWindow?.summary?.p95)),
+      addedRows: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.addedRows)),
+      removedRows: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.removedRows)),
+      addedCells: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.addedCells)),
+      removedCells: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.removedCells)),
+      editBurstLongTaskCount: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskCount)),
+      editBurstLongTaskTotalMs: stats(editDiagnosticsRuns.map(diagnostics => diagnostics.summary?.longTaskTotalMs)),
     },
     interactionDiagnostics: {
       previewP95Ms: interactionScopeStats("interactionPreview"),
@@ -2785,6 +2908,41 @@ function buildSortDiagnosticsBudgetWarnings(scenarioReports) {
   return warnings
 }
 
+function buildEditDiagnosticsBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    const diagnostics = report.aggregate.editDiagnostics
+    if (!diagnostics || diagnostics.updatesCommitted.count <= 0) {
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} edit update p95`,
+      diagnostics.updateP95Ms.p95,
+      PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} edit open-to-paint p95`,
+      diagnostics.openToPaintP95Ms.p95,
+      PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} edit commit-to-paint p95`,
+      diagnostics.commitToPaintP95Ms.p95,
+      PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} edit burst long task total p95`,
+      diagnostics.editBurstLongTaskTotalMs.p95,
+      PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS,
+    )
+  }
+  return warnings
+}
+
 function buildA11yBudgetWarnings(scenarioReports) {
   const warnings = []
   for (const scenario of SCENARIOS) {
@@ -2940,6 +3098,7 @@ const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioR
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
 const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
 const sortDiagnosticsBudgetWarnings = buildSortDiagnosticsBudgetWarnings(scenarioReports)
+const editDiagnosticsBudgetWarnings = buildEditDiagnosticsBudgetWarnings(scenarioReports)
 const a11yBudgetWarnings = buildA11yBudgetWarnings(scenarioReports)
 const budgetWarnings = [
   ...interactionBudgetWarnings,
@@ -2947,6 +3106,7 @@ const budgetWarnings = [
   ...renderChurnBudgetWarnings,
   ...renderingTelemetryWarnings,
   ...sortDiagnosticsBudgetWarnings,
+  ...editDiagnosticsBudgetWarnings,
   ...a11yBudgetWarnings,
 ]
 const budgetErrors = [
@@ -2955,6 +3115,7 @@ const budgetErrors = [
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
   ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
   ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? sortDiagnosticsBudgetWarnings : []),
+  ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? editDiagnosticsBudgetWarnings : []),
   ...(BENCH_A11Y_FAIL_ON_WARNINGS ? a11yBudgetWarnings : []),
 ]
 const aggregate = {
@@ -3041,6 +3202,10 @@ const summary = {
       sortClickToPaintMs: PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS,
       sortWindowFrameP95Ms: PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS,
       sortWindowLongTaskTotalMs: PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS,
+      editBurstUpdateP95Ms: PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS,
+      editBurstOpenToPaintP95Ms: PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS,
+      editBurstCommitToPaintP95Ms: PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS,
+      editBurstLongTaskTotalMs: PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS,
     },
     a11yBudgets: {
       stageTabStops: PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,
@@ -3068,6 +3233,10 @@ const summary = {
     maxSortClickToPaintMs: PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS,
     maxSortWindowFrameP95Ms: PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS,
     maxSortWindowLongTaskTotalMs: PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS,
+    maxEditBurstUpdateP95Ms: PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS,
+    maxEditBurstOpenToPaintP95Ms: PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS,
+    maxEditBurstCommitToPaintP95Ms: PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS,
+    maxEditBurstLongTaskTotalMs: PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS,
     interaction: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,

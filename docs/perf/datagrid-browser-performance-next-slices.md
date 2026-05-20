@@ -7,7 +7,7 @@ The enterprise browser frame benchmark on `/vue/shell/base-grid` with `100000` r
 - Smooth vertical scroll is effectively 60 FPS, so viewport RAF work and ordinary scroll rendering are not the current bottleneck.
 - `sort-only` still has main-thread spikes from column-menu value loading and synchronous full-table client sorting.
 
-The low-risk slice is started: large column-menu value-filter histograms are deferred until after the menu is visible, and pending deferred histogram loading is canceled/invalidated when a sort action closes the menu before the histogram starts. Remaining work is to use the focused interaction-frame artifact to decide whether sort projection itself needs progressive, worker-backed, or server-backed execution.
+The low-risk slice is started: large column-menu value-filter histograms are deferred until after the menu is visible, and pending deferred histogram loading is canceled/invalidated when a sort action closes the menu before the histogram starts. The focused interaction-frame artifact now adds edit-burst diagnostics and shows context-menu open/cleanup is not the active blocker. Remaining work is to decide whether local sort projection needs progressive, worker-backed, or server-backed execution, and to reduce inline-edit commit burst long tasks using the new update/open/commit diagnostics.
 
 ## Riskier Future Paths
 

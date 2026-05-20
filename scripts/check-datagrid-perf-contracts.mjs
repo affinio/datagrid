@@ -897,7 +897,7 @@ registerTokenCheck(
     registerConditionCheck(
       enterpriseInteractionFrameAssertBudgetId,
       false,
-      "Enterprise interaction-frame assert script hard-fails resource, interaction, and sort budget warnings",
+      "Enterprise interaction-frame assert script hard-fails resource, interaction, sort, and edit budget warnings",
       "package.json missing",
     )
   } else {
@@ -914,6 +914,10 @@ registerTokenCheck(
     const sortClickToPaint = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS")
     const sortWindowFrame = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS")
     const sortWindowLongTaskTotal = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS")
+    const editBurstUpdate = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_EDIT_BURST_UPDATE_P95_MS")
+    const editBurstOpenToPaint = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_EDIT_BURST_OPEN_TO_PAINT_P95_MS")
+    const editBurstCommitToPaint = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_EDIT_BURST_COMMIT_TO_PAINT_P95_MS")
+    const editBurstLongTaskTotal = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_EDIT_BURST_LONG_TASK_TOTAL_MS")
     const ok =
       script.includes("BENCH_BROWSER_SCENARIOS=sort-only,inline-edit-burst-only,interaction-context-menu") &&
       script.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
@@ -929,14 +933,18 @@ registerTokenCheck(
       sortMenuOpenToPaint != null &&
       sortClickToPaint != null &&
       sortWindowFrame != null &&
-      sortWindowLongTaskTotal != null
+      sortWindowLongTaskTotal != null &&
+      editBurstUpdate != null &&
+      editBurstOpenToPaint != null &&
+      editBurstCommitToPaint != null &&
+      editBurstLongTaskTotal != null
     registerConditionCheck(
       enterpriseInteractionFrameAssertBudgetId,
       ok,
-      "Enterprise interaction-frame assert script hard-fails resource, interaction, and sort budget warnings",
+      "Enterprise interaction-frame assert script hard-fails resource, interaction, sort, and edit budget warnings",
       ok
         ? "ok"
-        : `unexpected enterprise interaction-frame assert script or finite budgets: script='${script}', frameP95=${frameP95}, frameP99=${frameP99}, dropped=${droppedFramePct}, longTaskCount=${longTaskCount}, longTaskTotal=${longTaskTotal}, longTaskMax=${longTaskMax}, heap=${heap}, sortMenuOpenToPaint=${sortMenuOpenToPaint}, sortClickToPaint=${sortClickToPaint}, sortWindowFrame=${sortWindowFrame}, sortWindowLongTaskTotal=${sortWindowLongTaskTotal}`,
+        : `unexpected enterprise interaction-frame assert script or finite budgets: script='${script}', frameP95=${frameP95}, frameP99=${frameP99}, dropped=${droppedFramePct}, longTaskCount=${longTaskCount}, longTaskTotal=${longTaskTotal}, longTaskMax=${longTaskMax}, heap=${heap}, sortMenuOpenToPaint=${sortMenuOpenToPaint}, sortClickToPaint=${sortClickToPaint}, sortWindowFrame=${sortWindowFrame}, sortWindowLongTaskTotal=${sortWindowLongTaskTotal}, editBurstUpdate=${editBurstUpdate}, editBurstOpenToPaint=${editBurstOpenToPaint}, editBurstCommitToPaint=${editBurstCommitToPaint}, editBurstLongTaskTotal=${editBurstLongTaskTotal}`,
     )
   }
 }

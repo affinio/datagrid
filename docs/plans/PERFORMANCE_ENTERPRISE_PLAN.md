@@ -4,12 +4,13 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-3b are implemented as of 2026-05-20.
+- Slices 1-3c are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
-- Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate.
+- Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate with sort and edit-burst diagnostics.
 - Column-menu sort no longer races with large deferred value-histogram loading when the menu closes before the histogram starts.
-- Remaining blockers are long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
+- Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort is dominated by synchronous projection/sort work, and inline-edit bursts are now split into open, commit, paint, frame, mutation, and long-task diagnostics.
+- Remaining blockers are deep sort/edit long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
 ## Slice 1: Browser Frame Resource Hard Gates
@@ -81,17 +82,34 @@ Current execution state:
 - Risk level: Medium
 - Suggested commit message: `perf(datagrid-vue-app): defer column menu histograms`
 
-## Slice 3c: Sort/Edit/Context Menu Deep Runtime Cleanup
+## Slice 3c: Interaction Frame Artifact Triage And Edit Diagnostics
+
+- Status: Completed on 2026-05-20.
+- Objective: use the focused interaction-frame artifact to split the remaining runtime cleanup into measured sort/edit targets before changing execution policy.
+- Affected packages/files:
+  - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+  - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
+- Expected behavior change: no runtime grid behavior change; the interaction-frame artifact now reports inline-edit burst update/open/commit/frame/mutation/long-task diagnostics and hard-fails finite edit-burst budgets.
+- Tests to add/update:
+  - Static perf-contract check for finite edit-burst interaction-frame budgets.
+- Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
+- Risk level: Low
+- Suggested commit message: `test(datagrid): gate edit burst frame diagnostics`
+
+## Slice 3d: Sort/Edit Deep Runtime Cleanup
 
 - Status: Pending.
-- Objective: split remaining heavy synchronous runtime work in sort, inline edit bursts, and context-menu open/cleanup scenarios.
+- Objective: reduce measured long tasks in local sort projection and inline-edit commit bursts without changing public API.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/*sort*`
   - `packages/datagrid-vue-app/src/stage/*editing*`
-  - `packages/datagrid-orchestration/src/contextMenu/*`
-- Expected behavior change: remaining sort/edit/menu interaction stalls are reduced after reviewing `bench:datagrid:enterprise:interaction-frame:assert` artifacts.
+  - `packages/datagrid-core/src/models/*`
+- Expected behavior change: local sort and inline-edit burst interactions reduce synchronous frame stalls while preserving current sort/edit semantics.
 - Tests to add/update:
-  - Runtime-specific tests based on the hottest failing diagnostics from the interaction-frame artifact.
+  - Runtime-specific tests based on sort projection diagnostics and edit-burst phase diagnostics.
 - Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): reduce interaction frame stalls`
@@ -236,14 +254,15 @@ Current execution state:
 2. Slice 2: Scroll Hot-Path Guard And Focused Gate (completed 2026-05-20)
 3. Slice 3: Sort/Edit/Context Menu Frame Gate (completed 2026-05-20)
 4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup (completed 2026-05-20)
-5. Slice 3c: Sort/Edit/Context Menu Deep Runtime Cleanup
-6. Slice 4: Server-Backed Latency And Placeholder Gates
-7. Slice 5: Datasource Churn Reduction
-8. Slice 6: Long Memory Soak
-9. Slice 10: Wide-Table Horizontal Virtualization Matrix
-10. Slice 11: Custom Renderer Performance Contract
-11. Slice 9: Quick-Filter Typing Latency
-12. Slice 7: Grouped/Tree/Pivot Interactivity
+5. Slice 3c: Interaction Frame Artifact Triage And Edit Diagnostics (completed 2026-05-20)
+6. Slice 3d: Sort/Edit Deep Runtime Cleanup
+7. Slice 4: Server-Backed Latency And Placeholder Gates
+8. Slice 5: Datasource Churn Reduction
+9. Slice 6: Long Memory Soak
+10. Slice 10: Wide-Table Horizontal Virtualization Matrix
+11. Slice 11: Custom Renderer Performance Contract
+12. Slice 9: Quick-Filter Typing Latency
+13. Slice 7: Grouped/Tree/Pivot Interactivity
 13. Slice 8: Workbook Snapshot And Restore Slimming
 14. Slice 12: Worker Benchmark Canonicalization
 
