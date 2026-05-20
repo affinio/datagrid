@@ -24,6 +24,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - rendered selected cells expose deterministic `aria-selected` state after virtualized unmount/remount;
 - leaf header cells expose `role="columnheader"`, one-based `aria-colindex`, sortable-column `aria-sort`, and contextual accessible names;
 - header resize and text-filter controls include the target column in their accessible names;
+- normal-mode keyboard tabbing exposes one stage owner: focused row index first, visible selection anchor cell second, and body viewport fallback only when no visible focus target exists;
 - row-selection checkbox cells expose `role="checkbox"` and `aria-checked`;
 - placeholder cells that cannot materialize into editable rows expose disabled state while preserving their row/column coordinates;
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
@@ -33,9 +34,9 @@ This stage contract is covered by component tests in `packages/datagrid-vue-app/
 
 ## Focus Model
 
-The app stage currently uses stage-native DOM focus restoration and selection snapshot state as the mounted-grid owner. The headless a11y state machine supports roving tabindex and `aria-activedescendant`, but the mounted stage has not yet adopted container focus plus active descendant as its canonical browser contract.
+The app stage currently uses stage-native DOM focus restoration and selection snapshot state as the mounted-grid owner. Normal browsing mode uses one tabbable stage target: focused row index, visible selection anchor cell, or body viewport fallback. The headless a11y state machine supports roving tabindex and `aria-activedescendant`, but the mounted stage has not yet adopted container focus plus active descendant as its canonical browser contract.
 
-Until the focus slice is implemented:
+Until active-descendant integration is implemented:
 
 - do not claim that app-stage `aria-activedescendant` is complete;
 - preserve existing keyboard navigation, editor focus takeover, and focus restoration behavior;
@@ -45,7 +46,6 @@ Until the focus slice is implemented:
 ## Known Gaps
 
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
-- The mounted stage needs one documented normal-mode tab-stop invariant across viewport, cells, row index cells, pinned panes, editors, and menus.
 - Stable cell ids and active-cell semantics need to be finalized for virtualization remounts and pinned panes.
 - Grouped/tree projections need a documented `grid` versus `treegrid` policy, expansion state, and row hierarchy metadata.
 - Datasource loading/error placeholders need stronger screen-reader context and throttled announcements.

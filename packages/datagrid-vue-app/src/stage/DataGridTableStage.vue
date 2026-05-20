@@ -80,6 +80,7 @@
         :top-spacer-height="viewport.topSpacerHeight"
         :bottom-spacer-height="viewport.bottomSpacerHeight"
         :viewport-ref="captureBodyViewportRef"
+        :viewport-tab-index="bodyViewportTabIndex"
         :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
         :report-fill-plumbing-state="props.reportFillPlumbingState"
         :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
@@ -140,6 +141,7 @@
         :body-rows-revision="rows.displayRowsRevision"
         viewport-class="grid-body-viewport grid-body-viewport--pinned-bottom"
         :viewport-ref="capturePinnedBottomViewportRef"
+        :viewport-tab-index="pinnedBottomViewportTabIndex"
         :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
         :report-fill-plumbing-state="props.reportFillPlumbingState"
         :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
@@ -401,8 +403,48 @@ function resolveCellCustomStyle(
 }
 
 function cellTabIndex(rowOffset: number, columnIndex: number): number {
+  if (hasVisibleRowIndexFocusTarget.value) {
+    return -1
+  }
   return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true ? 0 : -1
 }
+
+function hasVisibleCellAnchorInRows(rowsList: readonly TableRow[]): boolean {
+  for (let rowOffset = 0; rowOffset < rowsList.length; rowOffset += 1) {
+    const row = rowsList[rowOffset]
+    if (!row) {
+      continue
+    }
+    const viewportRowOffset = resolveViewportRowOffset(row, rowOffset)
+    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
+      if (isSelectionAnchorCellSafe(viewportRowOffset, columnIndex)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function hasVisibleFocusedRowIndexInRows(rowsList: readonly TableRow[]): boolean {
+  if (!showRowIndex.value || typeof rows.value.isRowFocused !== "function") {
+    return false
+  }
+  return rowsList.some(row => rows.value.isRowFocused?.(row) === true)
+}
+
+const hasVisibleCellFocusTarget = computed(() => (
+  hasVisibleCellAnchorInRows(rows.value.displayRows) || hasVisibleCellAnchorInRows(rows.value.pinnedBottomRows ?? [])
+))
+
+const hasVisibleRowIndexFocusTarget = computed(() => (
+  hasVisibleFocusedRowIndexInRows(rows.value.displayRows) || hasVisibleFocusedRowIndexInRows(rows.value.pinnedBottomRows ?? [])
+))
+
+const bodyViewportTabIndex = computed(() => (
+  hasVisibleCellFocusTarget.value || hasVisibleRowIndexFocusTarget.value ? -1 : 0
+))
+
+const pinnedBottomViewportTabIndex = computed(() => -1)
 
 function resolveViewportRowStart(): number {
   return viewport.value?.viewportRowStart ?? 0

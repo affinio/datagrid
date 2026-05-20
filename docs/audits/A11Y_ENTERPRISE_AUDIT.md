@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, row-selection checkbox semantics, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage does not yet have one documented focus/active-descendant model, stable mounted active-cell ids across all panes, grouped/tree semantics, pinned-pane reading order validation, or browser-level accessibility gates.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, row-selection checkbox semantics, a stage-native normal-mode tab-stop invariant, interactive cell labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage does not yet have active-descendant semantics, stable mounted active-cell ids across all panes, grouped/tree semantics, pinned-pane reading order validation, or browser-level accessibility gates.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -99,11 +99,6 @@ Tests searched/reviewed:
    - Evidence: `headlessA11yStateMachine.ts` and `a11yAttributesAdapter.ts` support active descendant. Search found no usage of `createDataGridA11yStateMachine`, `mapDataGridA11yGridAttributes`, or `aria-activedescendant` in the main `DataGridTableStage` body; the only rendered `aria-activedescendant` found in app code is the filterable combobox.
    - Impact: focus can live on a viewport or a remounted cell, but screen readers do not have a stable active descendant model across virtualization.
    - Required: choose and document one focus model: roving DOM focus or container focus + active descendant. Then apply it consistently.
-
-2. **Focus ownership is not yet a complete enterprise contract.**
-   - Evidence: body viewport, selected cells, row-index cells, active editors, context menus, and pinned panes can all participate in focus. Current tests cover keyboard behavior and some stage ARIA state, but no single tab-stop invariant is documented or enforced across every mode.
-   - Impact: keyboard-only users and screen readers may encounter unexpected tab stops, especially with row selection, editing, pinned panes, and viewport focus fallback.
-   - Required: document and enforce one focus model across viewport, cells, row index, editors, menus, and pinned panes.
 
 ### High
 
@@ -244,9 +239,9 @@ Target score: **9/10**
 
 What blocks the target:
 
-- rendered stage lacks complete grouped/tree, active-cell, and pinned-pane ARIA semantics
+- rendered stage lacks complete grouped/tree, active-cell id, and pinned-pane ARIA semantics
 - headless a11y state machine is not integrated into the main app stage
-- no consistent active-descendant or roving-tabindex invariant across viewport/cells/editors/row index
+- no active-descendant/stable-id contract across viewport/cells/editors/row index
 - grouped/tree and pinned-pane semantics are not defined
 - no automated browser a11y gate or screen-reader smoke plan
 - no grid-level live region for common spreadsheet actions
@@ -263,9 +258,9 @@ What blocks the target:
 
 ### Phase 2: Focus Model Unification
 
-- Decide whether the app stage uses roving cell focus or container focus plus `aria-activedescendant`.
+- The app stage now enforces one normal-mode tab stop: focused row index, visible selection anchor cell, then viewport fallback.
+- Decide whether the app stage keeps stage-native roving focus or migrates to container focus plus `aria-activedescendant`.
 - Wire `createDataGridA11yStateMachine` or document why stage-native selection state is canonical.
-- Ensure only expected elements are tabbable in normal browsing mode.
 - Define editor focus takeover and focus restoration rules.
 
 ### Phase 3: Virtualization And Pinned Panes
@@ -353,15 +348,15 @@ Performance/a11y gates:
    - Tests: component assertions for `columnheader`, column indexes, sort state, menu labels
    - Risk: medium
 
-3. **Unify focus and active descendant**
-   - Files: `useDataGridStageFocusRuntime.ts`, `useDataGridTableStageViewportKeyboard.ts`, `useDataGridAppActiveCellViewport.ts`, a11y helpers
-   - Tests: focus continuity across virtualization remount
+3. **Unify normal-mode focus ownership** (completed 2026-05-20)
+   - Files: `DataGridTableStage.vue`, `DataGridTableStageCenterPane.vue`, stage focus tests
+   - Tests: normal-mode tab-stop priority across viewport, cells, and row index
    - Risk: high
 
-4. **Add stable ids and active-cell ARIA**
+4. **Add active descendant, stable ids, and active-cell ARIA**
    - Files: `useDataGridA11yCellIds`, stage cell/header rendering
-   - Tests: pinned/virtualized row index mapping
-   - Risk: medium
+   - Tests: pinned/virtualized row index mapping and focus continuity across virtualization remount
+   - Risk: high
 
 5. **Define grouped/tree and pinned-pane semantics**
    - Files: docs first, then grouped stage render APIs

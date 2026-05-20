@@ -182,6 +182,7 @@ function createStageProps(
     firstRowExpanded?: boolean
     firstRowGroupKey?: string
     toggleGroupRow?: (row: DataGridTableRow<DemoRow>) => void
+    isRowFocused?: (row: DataGridTableRow<DemoRow>) => boolean
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
@@ -261,6 +262,7 @@ function createStageProps(
       startRowResize: () => undefined,
       autosizeRow: () => undefined,
       consumeRecentRowResizeInteraction: () => false,
+      isRowFocused: options?.isRowFocused,
     },
     customOverlays: options?.customOverlays,
     selection: {
@@ -1525,6 +1527,81 @@ describe("DataGridTableStage contract", () => {
 
     expect(document.activeElement).toBe(anchorCell.element)
     expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("keeps one normal-mode tab stop across viewport, cells, and row index", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 0 },
+        },
+      ),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="0"]')
+    const inactiveCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="1"]')
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+
+    expect(viewport.attributes("tabindex")).toBe("-1")
+    expect(anchorCell.attributes("tabindex")).toBe("0")
+    expect(inactiveCell.attributes("tabindex")).toBe("-1")
+    expect(rowIndexCell.attributes("tabindex")).toBe("-1")
+
+    wrapper.unmount()
+  })
+
+  it("uses row-index focus as the normal-mode tab stop when row selection owns focus", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 0,
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 0 },
+          isRowFocused: row => row.rowId === "r1",
+        },
+      ),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="0"]')
+    const focusedRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+
+    expect(viewport.attributes("tabindex")).toBe("-1")
+    expect(anchorCell.attributes("tabindex")).toBe("-1")
+    expect(focusedRowIndexCell.attributes("tabindex")).toBe("0")
+
+    wrapper.unmount()
+  })
+
+  it("uses the body viewport as the fallback tab stop when the anchor is not mounted", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        () => false,
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 25, endRow: 25, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 25, columnIndex: 1 },
+        },
+      ),
+    })
+
+    const viewport = wrapper.find(".grid-body-viewport")
+    const tabbableCells = wrapper.findAll('.datagrid-stage__cell[tabindex="0"]')
+    const tabbableRowIndexes = wrapper.findAll('.datagrid-stage__row-index-cell[tabindex="0"]')
+
+    expect(viewport.attributes("tabindex")).toBe("0")
+    expect(tabbableCells).toHaveLength(0)
+    expect(tabbableRowIndexes).toHaveLength(0)
 
     wrapper.unmount()
   })

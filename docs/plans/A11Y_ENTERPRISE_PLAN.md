@@ -4,10 +4,11 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-2 are implemented as of 2026-05-20.
+- Slices 1-3 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
-- Remaining enterprise gaps are focus ownership, active-descendant/stable-id integration, grouped/tree semantics, pinned-pane reading order, editor/context labels, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
+- Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
+- Remaining enterprise gaps are active-descendant/stable-id integration, grouped/tree semantics, pinned-pane reading order, editor/context labels, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -45,7 +46,7 @@ Current execution state:
 
 ## Slice 3: Focus Ownership And Tab Stop Invariant
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: document and enforce one normal-mode focus invariant across viewport, body cells, row-index cells, pinned panes, editors, and context menus.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
@@ -54,12 +55,12 @@ Current execution state:
   - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
   - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
-- Expected behavior change: keyboard tabbing reaches only the documented grid owner in normal browsing mode; editor and menu focus take over only while active and restore deterministically.
+- Expected behavior change: keyboard tabbing reaches one normal-mode stage owner. A focused row index wins over cell focus, a visible selection anchor cell wins over viewport fallback, and the body viewport is tabbable only when no visible focus target exists.
 - Tests to add/update:
-  - Normal mode has the expected tabbable target count.
-  - Editor focus takeover and restore do not leave stale tabbable body cells.
-  - Pinned panes do not introduce competing tab stops.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGridTableStage.contract.spec.ts src/__tests__/DataGrid.contract.spec.ts`
+  - Normal mode has one expected tabbable owner across viewport, body cells, and row index.
+  - Row-index focus takes priority over cell focus.
+  - Body viewport remains the fallback when the active anchor is not mounted.
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGridTableStage.contract.spec.ts`
 - Risk level: High
 - Suggested commit message: `fix(datagrid-vue-app): enforce grid focus ownership`
 
@@ -182,7 +183,7 @@ Current execution state:
 
 1. Slice 1: Accessibility Contract Rebaseline (completed 2026-05-20)
 2. Slice 2: Header And Sort Semantics (completed 2026-05-20)
-3. Slice 3: Focus Ownership And Tab Stop Invariant
+3. Slice 3: Focus Ownership And Tab Stop Invariant (completed 2026-05-20)
 4. Slice 4: Active Descendant And Stable Cell IDs
 5. Slice 5: Grouped, Tree, Placeholder, And Pinned-Pane Semantics
 6. Slice 6: Editor And Interactive Cell Labels

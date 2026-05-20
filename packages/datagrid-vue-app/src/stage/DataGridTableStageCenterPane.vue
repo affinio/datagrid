@@ -6,7 +6,7 @@
     :aria-rowcount="gridAriaRowCount"
     :aria-colcount="gridAriaColumnCount"
     aria-multiselectable="true"
-    tabindex="0"
+    :tabindex="viewportTabIndex"
     @scroll.passive="handleScroll"
     @wheel="handleWheel"
     @contextmenu="handleContextMenu"
@@ -240,6 +240,10 @@ const props = defineProps({
   viewportClass: {
     type: String,
     default: "grid-body-viewport table-wrap",
+  },
+  viewportTabIndex: {
+    type: Number,
+    default: 0,
   },
   handleScroll: {
     type: Function as PropType<(event: Event) => void>,
