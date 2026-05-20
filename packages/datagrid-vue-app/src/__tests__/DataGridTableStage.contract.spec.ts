@@ -489,7 +489,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("bypasses custom renderers during active touch scroll", async () => {
+  it("keeps custom renderers mounted during active touch scroll", async () => {
     mockCoarsePointer(true)
     const cellRenderer = vi.fn(({ displayValue }) => h("span", {
       class: "test-status-pill",
@@ -528,11 +528,12 @@ describe("DataGridTableStage contract", () => {
 
     const cell = wrapper.find('.grid-cell[data-row-id="r1"][data-column-key="centerA"]')
     expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--scrolling")
-    expect(wrapper.find(".test-status-pill").exists()).toBe(false)
-    expect(cell.text()).toBe("A1")
+    expect(wrapper.find(".test-status-pill").exists()).toBe(true)
+    expect(wrapper.find(".test-status-pill").text()).toBe("Status: A1")
+    expect(cell.text()).toBe("Status: A1")
     expect(cell.attributes("role")).toBe("gridcell")
     expect(cell.attributes("aria-selected")).toBe("true")
-    expect(cellRenderer).not.toHaveBeenCalled()
+    expect(cellRenderer).toHaveBeenCalled()
 
     wrapper.unmount()
   })

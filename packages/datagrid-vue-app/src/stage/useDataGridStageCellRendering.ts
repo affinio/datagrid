@@ -41,7 +41,6 @@ export interface UseDataGridStageCellRenderingOptions {
   isEditingCellSafe: (row: DataGridTableRow<Record<string, unknown>>, columnKey: string) => boolean
   columnIndexByKey: (columnKey: string) => number
   suppressInlineEditStart?: Readonly<Ref<boolean>>
-  preferLightweightCellRendering?: Readonly<Ref<boolean>>
   perfTraceEnabled?: boolean
 }
 
@@ -304,9 +303,6 @@ export function useDataGridStageCellRendering(
     columnIndex: number,
   ): VNodeChild {
     const displayValue = readResolvedDisplayCell(row, column)
-    if (options.preferLightweightCellRendering?.value === true) {
-      return displayValue
-    }
     const surface = resolveRowSurfaceContext(row)
     const editable = options.isCellEditableSafe(row, rowOffset, column, columnIndex)
     const interaction = resolveDataGridCellInteraction({

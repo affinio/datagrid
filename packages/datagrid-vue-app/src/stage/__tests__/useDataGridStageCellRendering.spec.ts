@@ -164,28 +164,6 @@ describe("useDataGridStageCellRendering", () => {
     expect(String(renderedCell)).toBe("cell:Planned")
     expect(cellRenderer).toHaveBeenCalled()
 
-    const lightweightRenderApi = useDataGridStageCellRendering({
-      mode,
-      visibleColumns,
-      rows,
-      cells,
-      editing,
-      isCellEditableSafe: () => true,
-      isEditingCellSafe: () => false,
-      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
-      preferLightweightCellRendering: ref(true),
-    })
-    cellRenderer.mockClear()
-    const lightweightRenderedCell = lightweightRenderApi.renderResolvedCellContent(dataRow, 0, {
-      ...selectColumn,
-      column: {
-        ...selectColumn.column,
-        cellRenderer,
-      },
-    }, 0)
-    expect(String(lightweightRenderedCell)).toBe("Planned")
-    expect(cellRenderer).not.toHaveBeenCalled()
-
     const renderedGroupCell = renderApi.renderResolvedCellContent(groupRow, 0, {
       ...selectColumn,
       column: {
@@ -317,7 +295,7 @@ describe("useDataGridStageCellRendering", () => {
     })
   })
 
-  it("uses lightweight display values without disabling editor or placeholder contracts", () => {
+  it("keeps custom renderers active without disabling editor or placeholder contracts", () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
       createColumn({
@@ -358,7 +336,6 @@ describe("useDataGridStageCellRendering", () => {
       isCellEditableSafe: () => true,
       isEditingCellSafe: (row, columnKey) => row.kind === "leaf" && columnKey === "stage",
       columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
-      preferLightweightCellRendering: ref(true),
     })
 
     const column = {
@@ -387,11 +364,11 @@ describe("useDataGridStageCellRendering", () => {
     placeholderRow.__placeholder = true
 
     expect(renderApi.isSelectEditorCell(dataRow, 0, column, 0)).toBe(true)
-    expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("Planned")
-    expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("Planned")
-    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("Planned")
-    expect(cellRenderer).not.toHaveBeenCalled()
-    expect(groupRenderer).not.toHaveBeenCalled()
+    expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("cell:Planned")
+    expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("group:Planned")
+    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("cell:Planned")
+    expect(cellRenderer).toHaveBeenCalledTimes(2)
+    expect(groupRenderer).toHaveBeenCalledTimes(1)
   })
 
   it("falls back to display values when custom renderers throw", () => {

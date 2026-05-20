@@ -942,7 +942,6 @@ const interactionModeInput = computed(() => ({
 }))
 const interactionMode = computed(() => resolveDataGridInteractionMode(interactionModeInput.value))
 const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
-const preferLightweightCellRendering = computed(() => interactionMode.value === "touch" && isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 let teardownTouchPanGuard: (() => void) | null = null
@@ -1205,7 +1204,6 @@ const {
   isEditingCellSafe: isEditingCellSafeBase,
   columnIndexByKey,
   suppressInlineEditStart: isBodyViewportScrolling,
-  preferLightweightCellRendering,
   perfTraceEnabled,
 })
 
