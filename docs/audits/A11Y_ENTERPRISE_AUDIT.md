@@ -6,7 +6,7 @@ DataGrid has useful accessibility foundations, but the rendered enterprise grid 
 
 Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
 
-The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, app status regions, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, edit outcome announcements, broader live-region coverage, and browser-level accessibility gates.
+The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs pinned-pane reading order validation, browser-level accessibility gates, and large-grid a11y performance validation.
 
 Current enterprise accessibility readiness: **5.5/10**.
 
@@ -121,27 +121,17 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
 
 ### Medium
 
-1. **Editing announcements remain incomplete.**
-   - Evidence: text/date/select editors now expose row+column context through accessible names and preserve invalid/pending state, but edit commit/cancel/validation outcomes are not yet routed through one complete grid live-region contract.
-   - Impact: active editor context is clearer, but edit outcomes may still be missed by screen readers.
-   - Required: announce edit commit/cancel/validation outcomes through the documented polite grid status channel.
+1. **Placeholder/loading rows still need row-local context.**
+   - Evidence: row-model loading/error outcomes now update the polite grid status region, but individual datasource placeholder rows still need richer per-row loading/error context.
+   - Impact: server-backed loading is announced at the grid level, but row-local placeholder semantics can still be unclear.
+   - Required: expose loading/error placeholder state through row/cell labels without adding per-cell live updates.
 
-2. **Clipboard accessibility depends on internal status messages, not live-region guarantees.**
-   - Evidence: app status regions now render with `role="status"` and polite live-region semantics, but clipboard/edit/fill/server actions are not yet documented and tested as one complete grid-status contract.
-   - Impact: copy/paste/fill failures may not be announced reliably.
-   - Required: add a grid-level polite live region for clipboard, fill, edit, history, filter, and server/placeholder actions.
-
-3. **Touch accessibility is not defined beyond native-scroll protection.**
+2. **Touch accessibility is not defined beyond native-scroll protection.**
    - Evidence: touch handling preserves native scroll and supports long-press/context behavior, but no touch-specific accessibility contract for selection handles, fill handles, row resize, or context actions was found.
    - Impact: touch screen-reader and switch-control workflows are incomplete.
    - Required: define non-hover affordances, target sizes, labels, and alternatives for drag-only actions.
 
-4. **Placeholder/loading rows are not announced.**
-   - Evidence: datasource placeholder rows are visually represented and carry internal placeholder flags; stage cells do not expose a consistent `aria-busy`, loading label, or row status.
-   - Impact: server-backed virtualized loading can be silent or confusing to assistive tech.
-   - Required: expose loading/error placeholder state through row/cell labels and a live region with throttling.
-
-5. **Selection state announcements remain incomplete.**
+3. **Selection state announcements remain incomplete.**
    - Evidence: visual classes and overlays represent selection, and stage body cells now expose deterministic `aria-selected` for rendered selected/unselected cells. Checkbox row selection exposes checked state.
    - Impact: active-cell changes, multi-range summaries, fill preview, and range move state are still not predictably announced as higher-level changes.
    - Required: expose active cell and selection summary through ARIA and live-region messages without adding per-cell heavy DOM churn.
@@ -164,7 +154,7 @@ Current likely alignment:
 - **Keyboard access:** partial to strong for grid navigation and shortcuts.
 - **Focus visible:** mostly covered through visual focus/selection classes and direct focus calls, but not verified by a browser a11y gate.
 - **Name, role, value:** partial for the main grid because baseline body roles/counts/indexes, leaf header semantics, group expansion state, placeholder disabled/context metadata, and inline editor labels are implemented, but pinned-pane ownership still needs browser validation; stronger for checkbox cells, column menu buttons, comboboxes, and some interactive renderers.
-- **Status messages:** partial; app status regions use polite live-region semantics, but clipboard/edit/fill/server row model messages are not yet consistently routed through one documented grid status channel.
+- **Status messages:** partial to strong; app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes, but browser and screen-reader validation is still required.
 - **Pointer/touch alternatives:** partial; keyboard alternatives exist for many actions, but resize/fill/range move/touch workflows need explicit accessible alternatives.
 
 Do not claim WCAG conformance until the rendered stage has automated and manual assistive-tech validation.
@@ -364,7 +354,7 @@ Performance/a11y gates:
    - Tests: accessible names/state for editors and custom interactive cells
    - Risk: medium
 
-7. **Add live-region announcements**
+7. **Add live-region announcements** (completed 2026-05-20)
    - Files: stage runtime, default renderer/status UI, clipboard/edit/fill/history integrations
    - Tests: action messages update live region once per command
    - Risk: medium

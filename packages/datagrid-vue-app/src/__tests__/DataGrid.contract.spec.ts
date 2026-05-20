@@ -1343,6 +1343,7 @@ describe("DataGrid app facade contract", () => {
         },
       },
     })
+    expect(wrapper.find(".datagrid-app-status[role='status']").text()).toContain("Edited Owner, row 1")
 
     wrapper.unmount()
   })
@@ -1580,6 +1581,7 @@ describe("DataGrid app facade contract", () => {
     expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
     expect(queryBodyCell(wrapper, 0, 0).text()).toContain("NOC")
     expect(resolveRowAt<{ owner: string }>(wrapper, 0)).toMatchObject({ owner: "NOC" })
+    expect(wrapper.find(".datagrid-app-status[role='status']").text()).toContain("Edit canceled")
 
     wrapper.unmount()
   })
@@ -1782,6 +1784,7 @@ describe("DataGrid app facade contract", () => {
     expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
       sortModel: [{ key: "owner", direction: "desc" }],
     })
+    expect(wrapper.find(".datagrid-app-status[role='status']").text()).toContain("Owner sorted descending")
 
     await ownerMenuButton.trigger("click")
     await flushRuntimeTasks()

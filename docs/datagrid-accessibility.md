@@ -32,7 +32,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - active inline text, date/datetime, and select editors expose accessible names with column and row context while preserving invalid and pending state;
 - placeholder cells that cannot materialize into editable rows expose disabled state while preserving their row/column coordinates;
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
-- app status regions use polite live-region semantics for supported high-level messages.
+- app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes.
 
 This stage contract is covered by component tests in `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts` and mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`.
 
@@ -51,9 +51,7 @@ Under the current roving-focus model:
 
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
 - A future treegrid proposal would be required before adding hierarchy-only row metadata such as full tree levels/positions.
-- Datasource loading/error placeholders need stronger screen-reader context and throttled announcements.
-- Edit commit/cancel/failure outcomes still need complete live-region coverage.
-- Live-region coverage needs to include clipboard, fill, edit, history, sort/filter, and server outcomes consistently.
+- Datasource loading/error placeholders need stronger per-row screen-reader context beyond the grid-level status message.
 - Browser accessibility tree, axe-style smoke checks, and large-grid a11y performance gates are not yet release-level gates.
 
 ## Validation Expectations

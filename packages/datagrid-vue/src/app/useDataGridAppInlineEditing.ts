@@ -52,6 +52,7 @@ export interface UseDataGridAppInlineEditingOptions<TRow, TSnapshot> {
     afterSnapshotOverride?: TSnapshot,
     label?: string,
   ) => void
+  setLastAction?: (message: string) => void
   onCellEdit?: (payload: {
     rowId: string | number
     columnKey: string
@@ -287,6 +288,16 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     })
   }
 
+  const resolveColumnLabel = (columnKey: string): string => {
+    const column = options.visibleColumns.value.find(candidate => candidate.key === columnKey)
+    const label = String(column?.column.label ?? columnKey).trim()
+    return label.length > 0 ? label : columnKey
+  }
+
+  const reportInlineEditStatus = (message: string): void => {
+    options.setLastAction?.(message)
+  }
+
   const focusAfterInlineEdit = (
     rowId: string | number,
     columnKey: string,
@@ -492,6 +503,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       : { valid: true, value: editingCellValue.value }
     if (!validation.valid) {
       editingCellValidationMessage.value = validation.reason ?? "invalid-edit-draft"
+      reportInlineEditStatus(`Edit rejected: ${editingCellValidationMessage.value}`)
       focusInlineEditor()
       return
     }
@@ -529,6 +541,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     void commitPromise
       .then(() => {
         editingCellPending.value = false
+        const rowNumber = Math.max(0, rowIndex) + 1
+        reportInlineEditStatus(`Edited ${resolveColumnLabel(currentEditingCell.columnKey)}, row ${rowNumber}`)
         options.onCellEdit?.({
           rowId: resolvedRowId,
           columnKey: currentEditingCell.columnKey,
@@ -546,6 +560,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       .catch(error => {
         editingCellPending.value = false
         editingCellRejectedReason.value = error instanceof Error ? error.message : "edit-commit-failed"
+        reportInlineEditStatus(`Edit failed: ${editingCellRejectedReason.value}`)
       })
   }
 
@@ -556,6 +571,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     if (!currentEditingCell) {
       return
     }
+    reportInlineEditStatus("Edit canceled")
     focusAfterInlineEdit(currentEditingCell.rowId, currentEditingCell.columnKey, "stay", {
       restoreViewportFocus: true,
     })

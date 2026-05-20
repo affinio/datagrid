@@ -1137,6 +1137,9 @@ export function useDataGridTableStageRuntime<
         label: label ?? "Cell edit",
       }, beforeSnapshot, afterSnapshotOverride)
     },
+    setLastAction: message => {
+      options.reportFillWarning?.(message)
+    },
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "edit"),
     onCellEdit: options.onCellEdit,
   })
@@ -1414,23 +1417,26 @@ export function useDataGridTableStageRuntime<
     return typeof options.history?.recordServerFillTransaction === "function"
   }
 
-  const runStageHistoryAction = (direction: "undo" | "redo"): Promise<string | null> => {
-    if (lastServerFillOperation.value && (direction === "undo" || direction === "redo")) {
-      const stateMatchesDirection = (
-        (direction === "undo" && lastServerFillState.value === "committed")
-        || (direction === "redo" && lastServerFillState.value === "undone")
-      )
-      if (stateMatchesDirection) {
-        const operation = lastServerFillOperation.value
-        const rowModel = options.runtimeRowModel?.dataSource
-        const projection = buildFillProjectionContext()
-        const handler = direction === "undo" ? rowModel?.undoFillOperation : rowModel?.redoFillOperation
-        if (handler) {
-          return Promise.resolve(handler({
-            operationId: operation.operationId,
-            revision: operation.revision,
-            projection,
-          })).then(async result => {
+  const runStageHistoryAction = async (direction: "undo" | "redo"): Promise<string | null> => {
+    const actionLabel = direction === "undo" ? "Undo" : "Redo"
+    try {
+      let operationId: string | null = null
+      if (lastServerFillOperation.value && (direction === "undo" || direction === "redo")) {
+        const stateMatchesDirection = (
+          (direction === "undo" && lastServerFillState.value === "committed")
+          || (direction === "redo" && lastServerFillState.value === "undone")
+        )
+        if (stateMatchesDirection) {
+          const operation = lastServerFillOperation.value
+          const rowModel = options.runtimeRowModel?.dataSource
+          const projection = buildFillProjectionContext()
+          const handler = direction === "undo" ? rowModel?.undoFillOperation : rowModel?.redoFillOperation
+          if (handler) {
+            const result = await Promise.resolve(handler({
+              operationId: operation.operationId,
+              revision: operation.revision,
+              projection,
+            }))
             const refreshPayload = result?.invalidation ?? operation.affectedRange ?? null
             const invalidationRange = refreshPayload && !("kind" in refreshPayload)
               ? refreshPayload
@@ -1441,12 +1447,19 @@ export function useDataGridTableStageRuntime<
             options.reportFillPlumbingDetail?.("server_fill_visible_overlap", isVisibleViewportOverlap(invalidationRange) ? "yes" : "no")
             await refreshVisibleViewportAfterServerFill(refreshPayload)
             lastServerFillState.value = direction === "undo" ? "undone" : "committed"
-            return operation.operationId
-          })
+            operationId = operation.operationId
+          }
         }
       }
+      if (!operationId) {
+        operationId = await runIntentHistoryAction(direction)
+      }
+      options.reportFillWarning?.(operationId ? `${actionLabel} complete` : `Nothing to ${direction}`)
+      return operationId
+    } catch (error) {
+      options.reportFillWarning?.(`${actionLabel} failed: ${error instanceof Error ? error.message : String(error)}`)
+      throw error
     }
-    return runIntentHistoryAction(direction)
   }
 
   const applyStageRangeMove = async (

@@ -21,6 +21,7 @@ function createHarness() {
   const applyCellSelection = vi.fn()
   const ensureActiveCellVisible = vi.fn()
   const recordEditTransaction = vi.fn()
+  const lastAction = ref("")
   const api = useDataGridAppInlineEditing<DemoRow, readonly DemoRow[]>({
     mode: ref("base"),
     bodyViewportRef: ref(null),
@@ -45,6 +46,9 @@ function createHarness() {
     isCellEditable: (_row, _rowIndex, columnKey) => columnKey !== "status",
     captureRowsSnapshot: () => rows.map(row => (row.kind === "group" ? {} as DemoRow : { ...row.data })),
     recordEditTransaction,
+    setLastAction: message => {
+      lastAction.value = message
+    },
   })
 
   return {
@@ -53,6 +57,7 @@ function createHarness() {
     applyCellSelection,
     ensureActiveCellVisible,
     recordEditTransaction,
+    lastAction,
     api,
   }
 }
@@ -463,6 +468,28 @@ describe("useDataGridAppInlineEditing contract", () => {
     ])
     expect(harness.applyCellSelection).not.toHaveBeenCalled()
     expect(harness.ensureActiveCellVisible).not.toHaveBeenCalled()
+  })
+
+  it("reports inline edit commit, cancel, and validation outcomes", async () => {
+    const harness = createHarness()
+
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.editingCellValue.value = "Legacy"
+    harness.api.commitInlineEdit("none")
+    await Promise.resolve()
+
+    expect(harness.lastAction.value).toBe("Edited owner, row 1")
+
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.cancelInlineEdit()
+
+    expect(harness.lastAction.value).toBe("Edit canceled")
+
+    harness.api.startInlineEdit(harness.rows[0]!, "amount")
+    harness.api.editingCellValue.value = "not-a-number"
+    harness.api.commitInlineEdit("none")
+
+    expect(harness.lastAction.value).toContain("Edit rejected:")
   })
 
   it("records the committed cell value in the after snapshot for inline edits", async () => {

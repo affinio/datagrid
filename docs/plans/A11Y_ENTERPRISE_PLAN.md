@@ -4,13 +4,13 @@ This plan converts `docs/audits/A11Y_ENTERPRISE_AUDIT.md` into small, separable 
 
 Current execution state:
 
-- Slices 1-6 are implemented as of 2026-05-20.
+- Slices 1-7 are implemented as of 2026-05-20.
 - The original A11Y audit has been rebaselined against current code: the virtualized app stage now exposes baseline grid/row/gridcell roles, logical row/column counts, one-based ARIA row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions.
 - Header leaves now expose columnheader roles, logical column indexes, sort state, contextual labels, and contextual filter/resize labels.
 - Normal-mode tab stops now use a documented stage-native priority: focused row index, then visible selection anchor cell, then body viewport fallback.
 - Header and body cells now expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths. The mounted stage keeps roving DOM focus and intentionally does not emit app-stage `aria-activedescendant`.
 - Group rows now expose grid-mode expansion and label context; placeholder rows expose row-level disabled/context metadata while preserving cell coordinates.
-- Remaining enterprise gaps are pinned-pane reading-order browser validation, edit outcome announcements, broader live-region coverage, browser a11y gates, and large-grid a11y performance validation.
+- Remaining enterprise gaps are pinned-pane reading-order browser validation, browser a11y gates, and large-grid a11y performance validation.
 - Runtime slices must preserve the existing package boundaries: core owns headless a11y state, Vue owns adapters/app interaction state, orchestration owns shared id/navigation helpers, and `datagrid-vue-app` owns rendered stage semantics.
 
 ## Slice 1: Accessibility Contract Rebaseline
@@ -129,7 +129,7 @@ Current execution state:
 
 ## Slice 7: Grid Live Region Coverage
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: route high-level spreadsheet outcomes through one polite grid status channel without per-cell announcement noise.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
@@ -138,12 +138,12 @@ Current execution state:
   - `packages/datagrid-vue-app/src/stage/*`
   - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
-- Expected behavior change: copy, cut, paste, clear, edit commit/cancel/failure, fill, range move, undo/redo, sort/filter, and server loading/error outcomes update the documented polite status region with throttling where needed.
+- Expected behavior change: copy, cut, paste, clear, edit commit/cancel/failure, fill, range move, undo/redo, sort/filter, and row-model loading/error outcomes update the documented polite grid status region without per-cell live updates.
 - Tests to add/update:
   - Each command family emits one meaningful status update.
   - Rapid selection/scroll/fill preview does not spam the live region.
   - Clipboard and server errors remain announced after partial failures.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts && pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/app/__tests__/useDataGridAppClipboard.contract.spec.ts src/app/__tests__/useDataGridAppInlineEditing.contract.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `fix(datagrid-vue-app): announce grid command outcomes`
 
@@ -191,7 +191,7 @@ Current execution state:
 4. Slice 4: Active Descendant And Stable Cell IDs (completed 2026-05-20)
 5. Slice 5: Grouped, Tree, Placeholder, And Pinned-Pane Semantics (completed 2026-05-20)
 6. Slice 6: Editor And Interactive Cell Labels (completed 2026-05-20)
-7. Slice 7: Grid Live Region Coverage
+7. Slice 7: Grid Live Region Coverage (completed 2026-05-20)
 8. Slice 8: Browser Accessibility Gates
 9. Slice 9: Large-Grid A11Y Performance Gate
 

@@ -1102,6 +1102,8 @@ export default defineComponent({
     }
 
     let lastRowModelVersionKey = ""
+    let lastRowModelLoading = props.runtimeRowModel.getSnapshot().loading === true
+    let lastRowModelErrorMessage = props.runtimeRowModel.getSnapshot().error?.message ?? ""
     const resolveRowModelVersionKey = () => {
       const snapshot = props.runtimeRowModel.getSnapshot()
       return [
@@ -1109,6 +1111,7 @@ export default defineComponent({
         snapshot.revision ?? "",
         snapshot.rowCount,
         snapshot.loading ? 1 : 0,
+        snapshot.error?.message ?? "",
         snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
       ].join("|")
     }
@@ -1121,6 +1124,18 @@ export default defineComponent({
         return
       }
       lastRowModelVersionKey = nextVersionKey
+      const snapshot = props.runtimeRowModel.getSnapshot()
+      const nextLoading = snapshot.loading === true
+      const nextErrorMessage = snapshot.error?.message ?? ""
+      if (!lastRowModelLoading && nextLoading) {
+        reportGridStatus("Rows loading")
+      } else if (nextErrorMessage && nextErrorMessage !== lastRowModelErrorMessage) {
+        reportGridStatus(`Rows failed to load: ${nextErrorMessage}`)
+      } else if (lastRowModelLoading && !nextLoading && !nextErrorMessage) {
+        reportGridStatus("Rows loaded")
+      }
+      lastRowModelLoading = nextLoading
+      lastRowModelErrorMessage = nextErrorMessage
       rowVersion.value += 1
     })
 
@@ -1212,6 +1227,16 @@ export default defineComponent({
       }
       return map
     })
+    const resolveColumnStatusLabel = (columnKey: string): string => columnLabelByKey.value.get(columnKey) ?? columnKey
+    const formatColumnSortStatus = (columnKey: string, direction: "asc" | "desc" | null): string => {
+      if (direction === "asc") {
+        return `${resolveColumnStatusLabel(columnKey)} sorted ascending`
+      }
+      if (direction === "desc") {
+        return `${resolveColumnStatusLabel(columnKey)} sorted descending`
+      }
+      return `${resolveColumnStatusLabel(columnKey)} sort cleared`
+    }
     const {
       isColumnLayoutPanelOpen,
       columnLayoutPanelItems,
@@ -1667,6 +1692,7 @@ export default defineComponent({
         const nextEntry: SortToggleState = { key: columnKey, direction: "asc" }
         sortState.value = additive ? [...sortState.value, nextEntry] : [nextEntry]
         applySortAndFilter()
+        reportGridStatus(formatColumnSortStatus(columnKey, "asc"))
         return
       }
 
@@ -1680,6 +1706,7 @@ export default defineComponent({
           sortState.value = [nextEntry]
         }
         applySortAndFilter()
+        reportGridStatus(formatColumnSortStatus(columnKey, "desc"))
         return
       }
 
@@ -1687,6 +1714,7 @@ export default defineComponent({
         ? sortState.value.filter(entry => entry.key !== columnKey)
         : []
       applySortAndFilter()
+      reportGridStatus(formatColumnSortStatus(columnKey, null))
     }
 
     const sortIndicator = (columnKey: string): string => {
@@ -1718,6 +1746,9 @@ export default defineComponent({
       filterModelState.value = nextFilterModel
       filterModelStateNormalized.value = false
       applySortAndFilter()
+      reportGridStatus(normalizedValue
+        ? `${resolveColumnStatusLabel(columnKey)} filtered`
+        : `${resolveColumnStatusLabel(columnKey)} filter cleared`)
     }
 
     const applyRowHeightSettings = (): void => {
@@ -1863,9 +1894,11 @@ export default defineComponent({
       })
 
       if (!slowSort) {
+        reportGridStatus(formatColumnSortStatus(request.columnKey, request.direction))
         pendingColumnMenuSort.value = null
         return
       }
+      reportGridStatus(formatColumnSortStatus(request.columnKey, request.direction))
       pendingColumnMenuSortFrameId = requestDataGridAnimationFrame(() => {
         pendingColumnMenuSortFrameId = null
         if (requestId === pendingColumnMenuSortRequestId) {
