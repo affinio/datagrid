@@ -50,6 +50,8 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .grid-fill-action__trigger")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .row-resize-handle")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .col-resize")
+    expect(style?.textContent).toContain(".datagrid-app-status")
+    expect(style?.textContent).toContain("clip: rect(0 0 0 0)")
     expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--clipboard-pending::after")
     expect(style?.textContent).toContain("animation-play-state: paused")
   })

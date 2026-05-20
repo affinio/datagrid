@@ -90,7 +90,7 @@ Structured permission diagnostics beyond the user-facing status message remain p
 
 ## Accessibility And Mobile
 
-The current app exposes visual pending clipboard outlines and status messages. Enterprise live-region coverage, permission-denied announcements, partial paste announcements, and deliberate coarse-pointer clipboard affordances remain planned validation work.
+The current app exposes visual pending clipboard outlines and routes grid status messages through a polite `role="status"` live region. Clipboard fallback failures are covered at the app contract level; broader permission-denied browser cases, partial paste announcements, and deliberate coarse-pointer clipboard affordances remain planned validation work.
 
 Touch selection remains scroll-first. Mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 

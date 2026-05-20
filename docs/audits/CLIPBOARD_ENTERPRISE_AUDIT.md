@@ -31,7 +31,7 @@ The existing package split is sound. The architecture should be hardened in plac
 - Slice 7, Server Virtual Clipboard Delegation, is completed as of 2026-05-20 for opt-in app-level server copy/cut/paste delegates over unloaded virtual ranges.
 - Slice 8, Async Paste Pending And Recovery, is completed as of 2026-05-20 for app-level pending/rejected paste state, duplicate-paste blocking, and async rejection messages.
 - Slice 9, Cut-Paste Atomicity, is completed as of 2026-05-20 for local row-model cut-paste source clear and target write as one commit.
-- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage; browser/device/performance gates remain planned.
+- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage and clipboard fallback live-region coverage; browser/device/performance gates remain planned.
 - Current code includes typed draft validation and local target/applied/blocked/skipped/invalid status on the canonical app clipboard paste path; the remaining validation work is custom/server result contracts, host paste policies, and per-cell rejection UI.
 - Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
@@ -239,7 +239,7 @@ Tests and benchmarks sampled:
 ## Accessibility And Mobile Risks
 
 - Clipboard outlines are visual and animated; CSS disables animation while scrolling, which is good for performance, but there is no audited reduced-motion or screen-reader status contract.
-- `setLastAction`/`reportFillWarning` can carry messages, but no live-region guarantee was found in the reviewed clipboard path.
+- `reportFillWarning` now updates a mounted polite grid status live region for clipboard/fill status messages. Broader announcement coverage for permission-denied browser cases, partial paste results, and async retry/cancel UI remains planned.
 - Touch clipboard flows are not specified. Enterprise mobile behavior should define long-press selection, OS paste affordances, context-menu availability, and whether custom paste buttons are required.
 - Browser clipboard APIs require secure contexts and user gestures in real browsers. Tests mock `navigator.clipboard`, so Playwright coverage is needed for permission-denied and user-gesture cases.
 
@@ -257,7 +257,7 @@ What blocks the target score:
 - No custom/server paste validation result contract. Built-in local paste validation and status reporting are implemented.
 - No rendered async paste pending/failure/retry UX. App-level pending/rejected state is implemented.
 - No structured partial paste result.
-- No structured browser clipboard permission/a11y/mobile validation gate.
+- No structured browser clipboard permission/mobile validation gate. Basic clipboard fallback live-region coverage is implemented at the app contract level.
 
 ## Recommended Tests
 

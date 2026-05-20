@@ -1086,6 +1086,7 @@ export default defineComponent({
     const rowVersion = ref(0)
     const sortState = ref<SortToggleState[]>(resolveInitialSortState(props.sortModel))
     const pendingColumnMenuSort = ref<ColumnMenuSortRequest | null>(null)
+    const gridStatusMessage = ref("")
     let pendingColumnMenuSortFrameId: number | null = null
     let pendingColumnMenuSortRequestId = 0
     let quickFilterDebounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null
@@ -1094,6 +1095,11 @@ export default defineComponent({
     const columnFilterTextByKey = computed<Record<string, string>>(() => (
       resolveInitialFilterTexts(filterModelState.value)
     ))
+
+    const reportGridStatus = (message: string): void => {
+      gridStatusMessage.value = message
+      props.reportFillWarning?.(message)
+    }
 
     let lastRowModelVersionKey = ""
     const resolveRowModelVersionKey = () => {
@@ -3144,7 +3150,7 @@ export default defineComponent({
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,
       flushRowSelectionSnapshotUpdates: props.flushRowSelectionSnapshotUpdates,
       clearExternalPendingClipboardOperation: clearPendingRowClipboardOperation,
-      reportFillWarning: props.reportFillWarning,
+      reportFillWarning: reportGridStatus,
       reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
       reportFillPlumbingState: props.reportFillPlumbingState,
       reportFillPlumbingDetail: props.reportFillPlumbingDetail,
@@ -4115,6 +4121,14 @@ export default defineComponent({
       ])
     }
 
+    const renderGridStatus = (): ReturnType<typeof h> => h("div", {
+      class: "datagrid-app-status",
+      role: "status",
+      "aria-live": "polite",
+      "aria-atomic": "true",
+      "data-has-message": gridStatusMessage.value ? "true" : "false",
+    }, gridStatusMessage.value)
+
     watch(
       () => contextMenu.value.visible,
       (visible, _previous, onCleanup) => {
@@ -4407,8 +4421,9 @@ export default defineComponent({
                   ...stageProps.value,
                   stageContext: tableStageContext,
                   onViewportContextMenu: handleViewportContextMenu,
-                }),
+              }),
               renderSortingPending(),
+              renderGridStatus(),
               renderContextMenu(),
             ]),
           ])
@@ -4436,8 +4451,9 @@ export default defineComponent({
                 ...stageProps.value,
                 stageContext: tableStageContext,
                 onViewportContextMenu: handleViewportContextMenu,
-              }),
+            }),
             renderSortingPending(),
+            renderGridStatus(),
             renderContextMenu(),
           ]),
         props.inspectorPanel

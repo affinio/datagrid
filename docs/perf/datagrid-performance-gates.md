@@ -100,6 +100,7 @@ CI harness (`DATAGRID_BENCH_MODE=ci`) applies:
 - Enterprise selection operations:
   - `bench:datagrid:enterprise:selection:assert` runs the smoke enterprise workload with hard selection budgets for summary planning, virtual coverage, clipboard planning, and overlay planning.
   - The scenario artifact is `artifacts/performance/bench-datagrid-enterprise-selection-operations.json`; the combined assert artifact is `artifacts/performance/bench-datagrid-enterprise-selection.assert.json`.
+  - Clipboard enterprise gates currently cover planning budgets plus app remount/status contract coverage. Browser clipboard read/write latency, TSV parser cost, large paste patch creation, and mobile/coarse-pointer clipboard workflows remain planned gates.
 
 ## Pointer Preview Frame Budget
 

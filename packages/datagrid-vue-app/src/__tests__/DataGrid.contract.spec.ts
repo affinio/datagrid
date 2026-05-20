@@ -2412,6 +2412,46 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("announces clipboard fallback status through the grid live region", async () => {
+    const originalClipboard = navigator.clipboard
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: vi.fn<(_: string) => Promise<void>>().mockRejectedValue(new Error("denied")),
+        readText: vi.fn<() => Promise<string>>().mockResolvedValue(""),
+      },
+    })
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+      attachTo: document.body,
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const firstCell = queryBodyCell(wrapper, 0, 0)
+      expect(firstCell.exists()).toBe(true)
+
+      await firstCell.trigger("click")
+      await firstCell.trigger("keydown", { key: "c", ctrlKey: true })
+      await flushRuntimeTasks()
+
+      const status = wrapper.find(".datagrid-app-status[role='status']")
+      expect(status.exists()).toBe(true)
+      expect(status.attributes("aria-live")).toBe("polite")
+      expect(status.text()).toContain("system clipboard unavailable, using in-memory clipboard")
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("supports Paste special values from the native cellMenu", async () => {
     const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
     const readText = vi.fn<() => Promise<string>>().mockResolvedValue("clipboard-fallback")
