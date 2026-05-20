@@ -64,9 +64,13 @@ Paste and cut-paste participate in app intent history:
 
 - normal paste records one edit transaction when row patches are committed
 - multi-range scalar paste records one merged transaction where possible
-- cut-paste records source clear and target write as one transaction after both operations complete
+- local cut-paste applies source clear and target write as one row-model commit, then records one transaction
 
-Cut-paste rollback and rejected-state reporting for failures between source clear and target write are planned work.
+Custom/server cut-paste handlers must provide their own atomicity or reject before mutating. Local row-model cut-paste failures keep source cells intact and surface rejected paste state.
+
+## Async Paste State
+
+The app clipboard path exposes paste state as `idle`, `pending`, or `rejected`. While paste is pending, duplicate paste commands are blocked. If an async local, custom, or server paste handler rejects, the command returns `false`, a rejected state is retained for recovery UI, and a user-facing failure message is reported.
 
 ## Server And Virtual Ranges
 
@@ -99,6 +103,6 @@ The mounted table-stage DataGrid does not currently provide:
 - rich HTML clipboard payloads
 - formula/format paste modes beyond values
 - built-in HTTP routes for server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
-- async paste pending/retry/cancel UI
+- rendered async paste retry/cancel UI
 - per-cell rejection UI and durable paste telemetry
 - mobile-specific clipboard UX beyond existing keyboard/context-menu paths

@@ -140,7 +140,7 @@ Current execution state:
 
 ## Slice 8: Async Paste Pending And Recovery
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: expose pending, failure, retry, cancellation, and rollback semantics for async `applyClipboardEdits` and datasource-backed paste operations.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
@@ -148,7 +148,7 @@ Current execution state:
   - `packages/datagrid-vue-app/src/stage/*`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: async paste failures no longer look like silent no-ops; users get a deterministic pending/rejected/retry state and successful history is recorded only after commit.
+- Expected behavior change: async paste failures no longer look like silent no-ops; app state exposes pending and rejected paste status, duplicate paste while pending is blocked, and successful history is recorded only after commit.
 - Tests to add/update:
   - Pending state blocks duplicate paste of the same operation.
   - Rejected async paste reports failure and does not record success history.
@@ -159,13 +159,13 @@ Current execution state:
 
 ## Slice 9: Cut-Paste Atomicity
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: make cut source clear and target write behave as one recoverable operation with rollback or explicit rejected-state reporting if either side fails.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: failed cut-paste cannot silently clear source cells without a deterministic recovery state.
+- Expected behavior change: local cut-paste applies source clear and target write as one row-model commit, so a failed target write does not clear source cells. Async failure is surfaced through rejected paste state.
 - Tests to add/update:
   - Target write failure leaves source values intact or reports a recoverable rejected transaction.
   - Source clear failure blocks target write.
@@ -176,7 +176,7 @@ Current execution state:
 
 ## Slice 10: Clipboard Remount, A11y, Mobile, And Performance Gates
 
-- Status: Planned.
+- Status: Partially completed on 2026-05-20. App-level contract coverage now verifies pending clipboard ranges remain stable across viewport remount offsets; browser/device/performance gates remain planned.
 - Objective: add focused validation for pending clipboard outlines across virtualization remounts, live-region/status feedback, touch/mobile clipboard affordances, and large materialized copy/paste budgets.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/*`
@@ -186,7 +186,7 @@ Current execution state:
   - `scripts/bench-datagrid-interactions.mjs`
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: clipboard visual/status behavior is covered across pinned panes, virtual remounts, keyboard/context-menu paths, and coarse-pointer workflows; large local operations have explicit budgets or caps.
+- Expected behavior change: pending clipboard range logic is covered across viewport remount offsets. Broader pinned-pane browser coverage, coarse-pointer workflows, live-region UI coverage, and large-operation performance budgets remain planned.
 - Tests to add/update:
   - Pending copy/cut outlines reappear after vertical and horizontal remounts.
   - Clipboard denied, copied, pasted, partial, and blocked states are announced where status UI exists.
@@ -205,9 +205,9 @@ Current execution state:
 5. Slice 5: Clipboard Validation Completeness (completed 2026-05-20)
 6. Slice 6: Server Clipboard Operation Contract (completed 2026-05-20)
 7. Slice 7: Server Virtual Clipboard Delegation (completed 2026-05-20)
-8. Slice 8: Async Paste Pending And Recovery
-9. Slice 9: Cut-Paste Atomicity
-10. Slice 10: Clipboard Remount, A11y, Mobile, And Performance Gates
+8. Slice 8: Async Paste Pending And Recovery (completed 2026-05-20)
+9. Slice 9: Cut-Paste Atomicity (completed 2026-05-20)
+10. Slice 10: Clipboard Remount, A11y, Mobile, And Performance Gates (partially completed 2026-05-20)
 
 ## Execution Notes
 

@@ -29,6 +29,12 @@ function createClipboardHarness(options: {
     endColumn: number
   }, mode: "values") => string[][]
   isCellEditable?: (row: { data: DemoRow; rowId: string }, rowIndex: number, columnKey: string, columnIndex: number) => boolean
+  applyClipboardEdits?: (
+    range: { startRow: number; endRow: number; startColumn: number; endColumn: number },
+    matrix: string[][],
+    options?: { recordHistory?: boolean; recordHistoryLabel?: string },
+  ) => number | Promise<number>
+  applyRowsEdits?: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => void | Promise<void>
   resolveSelectionRanges?: () => ReadonlyArray<{
     startRow: number
     endRow: number
@@ -39,6 +45,7 @@ function createClipboardHarness(options: {
   serverClipboardOperations?: DataGridAppServerClipboardOperations
   rowNodes?: readonly (DemoRowNode | null)[]
   visibleColumns?: readonly unknown[]
+  viewportRowStart?: number
 } = {}) {
   const rows = ref<DemoRow[]>([
     { rowId: "r1", a: "A1", b: "B1", c: "C1" },
@@ -52,6 +59,7 @@ function createClipboardHarness(options: {
     endColumn: 1,
   })
   const currentCell = ref({ rowIndex: 0, columnIndex: 0 })
+  const viewportRowStart = ref(options.viewportRowStart ?? 0)
   const lastAction = ref("")
   const applySelectionRange = vi.fn((range: { startRow: number; endRow: number; startColumn: number; endColumn: number }) => {
     selectionRange.value = range
@@ -72,6 +80,9 @@ function createClipboardHarness(options: {
             return rowNodes[rowIndex] ?? null
           },
           applyEdits: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => {
+            if (options.applyRowsEdits) {
+              return options.applyRowsEdits(updates)
+            }
             rows.value = rows.value.map(row => {
               const update = updates.find(candidate => candidate.rowId === row.rowId)
               return update ? { ...row, ...update.data } : row
@@ -86,7 +97,7 @@ function createClipboardHarness(options: {
       { key: "b" },
       { key: "c" },
     ]) as readonly DataGridColumnSnapshot[]),
-    viewportRowStart: ref(0),
+    viewportRowStart,
     resolveSelectionRange: () => selectionRange.value,
     resolveSelectionRanges: options.resolveSelectionRanges,
     resolveSelectionSnapshot: () => options.selectionSnapshot ?? null,
@@ -110,6 +121,7 @@ function createClipboardHarness(options: {
       ) ?? true
     },
     syncViewport: () => undefined,
+    applyClipboardEdits: options.applyClipboardEdits,
     serverClipboardOperations: options.serverClipboardOperations,
   })
 
@@ -118,6 +130,7 @@ function createClipboardHarness(options: {
     rows,
     selectionRange,
     currentCell,
+    viewportRowStart,
     lastAction,
     applySelectionRange,
     clearCellSelection,
@@ -265,6 +278,30 @@ describe("useDataGridAppClipboard contract", () => {
       { rowId: "r1", a: "", b: "B1", c: "C1" },
       { rowId: "r2", a: "A2", b: "A1", c: "C2" },
     ])
+  })
+
+  it("does not clear cut source when the combined local cut-paste commit fails", async () => {
+    const { clipboard, currentCell, rows, lastAction } = createClipboardHarness({
+      applyRowsEdits: () => {
+        throw new Error("row model failed")
+      },
+    })
+
+    await clipboard.cutSelectedCells("keyboard")
+    currentCell.value = { rowIndex: 1, columnIndex: 1 }
+
+    await expect(clipboard.pasteSelectedCells("keyboard")).resolves.toBe(false)
+
+    expect(rows.value).toEqual([
+      { rowId: "r1", a: "A1", b: "B1", c: "C1" },
+      { rowId: "r2", a: "A2", b: "B2", c: "C2" },
+      { rowId: "r3", a: "A3", b: "B3", c: "C3" },
+    ])
+    expect(clipboard.clipboardPasteState.value).toMatchObject({
+      status: "rejected",
+      message: "row model failed",
+    })
+    expect(lastAction.value).toBe("Paste failed: row model failed")
   })
 
   it("replays cut-paste as one deterministic transaction through undo and redo", async () => {
@@ -591,6 +628,26 @@ describe("useDataGridAppClipboard contract", () => {
     expect(clipboard.isCellInPendingClipboardRange(0, 1)).toBe(false)
   })
 
+  it("keeps pending clipboard ranges stable across viewport remount offsets", async () => {
+    const { clipboard, selectionRange, viewportRowStart } = createClipboardHarness()
+    selectionRange.value = {
+      startRow: 1,
+      endRow: 2,
+      startColumn: 1,
+      endColumn: 1,
+    }
+
+    await clipboard.copySelectedCells("keyboard")
+
+    expect(clipboard.isCellInPendingClipboardRange(1, 1)).toBe(true)
+    viewportRowStart.value = 1
+    expect(clipboard.isCellInPendingClipboardRange(0, 1)).toBe(true)
+    expect(clipboard.isCellOnPendingClipboardEdge(0, 1, "top")).toBe(true)
+    viewportRowStart.value = 2
+    expect(clipboard.isCellInPendingClipboardRange(0, 1)).toBe(true)
+    expect(clipboard.isCellOnPendingClipboardEdge(0, 1, "bottom")).toBe(true)
+  })
+
   it("pastes a copied scalar into every committed selection range", async () => {
     const committedSelectionRanges = ref<ReadonlyArray<{
       startRow: number
@@ -620,6 +677,60 @@ describe("useDataGridAppClipboard contract", () => {
     expect(rows.value[1]).toMatchObject({ b: "A1" })
     expect(rows.value[2]).toMatchObject({ c: "A1" })
     expect(applySelectionRange).not.toHaveBeenCalled()
+  })
+
+  it("exposes pending paste state and blocks duplicate async paste", async () => {
+    let resolveApply: (value: number) => void = () => undefined
+    const applyClipboardEdits = vi.fn(() => new Promise<number>(resolve => {
+      resolveApply = resolve
+    }))
+    const { clipboard, currentCell, lastAction } = createClipboardHarness({
+      applyClipboardEdits,
+    })
+
+    await clipboard.copySelectedCells("keyboard")
+    currentCell.value = { rowIndex: 1, columnIndex: 1 }
+
+    const pastePromise = clipboard.pasteSelectedCells("keyboard")
+    await Promise.resolve()
+
+    expect(clipboard.clipboardPasteState.value).toMatchObject({
+      status: "pending",
+      trigger: "keyboard",
+      mode: "default",
+    })
+    await expect(clipboard.pasteSelectedCells("keyboard")).resolves.toBe(false)
+    expect(lastAction.value).toBe("Paste already in progress")
+
+    resolveApply(1)
+    await expect(pastePromise).resolves.toBe(true)
+    expect(clipboard.clipboardPasteState.value).toMatchObject({
+      status: "idle",
+      operationId: null,
+    })
+  })
+
+  it("surfaces rejected async paste state without throwing", async () => {
+    const applyClipboardEdits = vi.fn(async () => {
+      throw new Error("server rejected paste")
+    })
+    const { clipboard, currentCell, lastAction } = createClipboardHarness({
+      applyClipboardEdits,
+    })
+
+    await clipboard.copySelectedCells("keyboard")
+    currentCell.value = { rowIndex: 1, columnIndex: 1 }
+
+    await expect(clipboard.pasteSelectedCells("context-menu")).resolves.toBe(false)
+    expect(clipboard.clipboardPasteState.value).toMatchObject({
+      status: "rejected",
+      trigger: "context-menu",
+      mode: "default",
+      message: "server rejected paste",
+    })
+    expect(lastAction.value).toBe("Paste failed: server rejected paste")
+    expect(clipboard.clearRejectedClipboardPaste()).toBe(true)
+    expect(clipboard.clipboardPasteState.value).toMatchObject({ status: "idle" })
   })
 
   it("writes to and reads from the system clipboard when available", async () => {

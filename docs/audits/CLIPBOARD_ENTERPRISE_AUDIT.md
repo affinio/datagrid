@@ -29,6 +29,9 @@ The existing package split is sound. The architecture should be hardened in plac
 - Slice 5, Clipboard Validation Completeness, is completed as of 2026-05-20 for built-in number, currency, percent, date, datetime, select, formula text, and empty clear value coverage.
 - Slice 6, Server Clipboard Operation Contract, is completed as of 2026-05-20 for planned copy/export, paste/import, cut, clear/delete, revision, projection, partial result, and history semantics.
 - Slice 7, Server Virtual Clipboard Delegation, is completed as of 2026-05-20 for opt-in app-level server copy/cut/paste delegates over unloaded virtual ranges.
+- Slice 8, Async Paste Pending And Recovery, is completed as of 2026-05-20 for app-level pending/rejected paste state, duplicate-paste blocking, and async rejection messages.
+- Slice 9, Cut-Paste Atomicity, is completed as of 2026-05-20 for local row-model cut-paste source clear and target write as one commit.
+- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage; browser/device/performance gates remain planned.
 - Current code includes typed draft validation and local target/applied/blocked/skipped/invalid status on the canonical app clipboard paste path; the remaining validation work is custom/server result contracts, host paste policies, and per-cell rejection UI.
 - Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
@@ -112,8 +115,8 @@ Tests and benchmarks sampled:
 3. **Validation failures are first-class for built-in local paste status but not yet durable telemetry.**
    `collectClipboardEdits` validates built-in typed drafts through the shared cell runtime boundary before row mutation and reports applied, skipped, invalid, blocked, and target cell counts. The remaining gap is host paste policies, durable telemetry, custom/server validation results, and per-cell rejected UI.
 
-4. **Async paste failure handling is incomplete.**
-   `pasteSelectedCells` awaits clipboard read and row edits, but there is no pending state, progress indicator, cancellation, rollback UX, retry surface, or clear rejected-cell feedback when `applyEdits` or a custom async `applyClipboardEdits` fails.
+4. **Async paste has app-level state but not rendered recovery UI.**
+   `pasteSelectedCells` exposes pending and rejected state, blocks duplicate paste while pending, and reports async failures. Rendered retry/cancel UI, cancellation, rollback UX, and per-cell rejected feedback remain planned work.
 
 ### High
 
@@ -149,8 +152,8 @@ Tests and benchmarks sampled:
 3. **Copy counts can include skipped non-copyable columns.**
    `useDataGridClipboardBridge.ts` skips non-copyable columns such as `"select"` in the payload, but the last-action message reports range dimensions, not emitted cells. This can mislead users copying ranges that include selection/system columns.
 
-4. **Cut-paste is not atomic across source clear and target write.**
-   The app clears the source range and then applies target edits. It records one transaction after both steps, but if the second operation fails, the code path does not show a deterministic rollback before returning.
+4. **Cut-paste atomicity is local only.**
+   Local row-model cut-paste now applies source clear and target write as one commit and records one transaction. Custom/server handlers must still provide their own atomicity guarantees or reject before mutating.
 
 5. **Row clipboard JSON is useful internally but not interoperable with spreadsheets.**
    `DataGridDefaultRenderer.ts` serializes row copies as JSON and can paste that JSON into row-index actions. This is appropriate for internal row copy, but external apps will not treat it as spreadsheet rows.
@@ -189,7 +192,7 @@ Tests and benchmarks sampled:
 | Unloaded rows | Safe-blocked for copy/cut | Need server export/copy/cut contract |
 | Placeholders | Paste can materialize placeholders; copy/cut blocked | Need broader e2e for multi-row/multi-range placeholder paste |
 | Fill interaction | Reuses `applyClipboardEdits`; server fill exists separately | Need shared telemetry and partial failure semantics |
-| Async paste | Awaited but not surfaced | Need pending, cancel, failure, retry, rollback UX |
+| Async paste | App-level pending/rejected state is surfaced | Need rendered cancel/retry UI, rollback UX, and per-cell rejection feedback |
 | Validation failures | Editable check only in app path | Need type parse/validation result model |
 | Partial paste | Reports local target/applied/blocked/skipped/invalid counts | Need custom/server structured results and per-cell rejected UI |
 | Multi-range copy | Visuals track ranges; payload active-range-like | Need explicit policy and tests |
@@ -221,15 +224,15 @@ Tests and benchmarks sampled:
 - Local copy/cut correctly refuses unloaded rows, but enterprise server-backed grids need copy/export/cut/clear over unloaded ranges.
 - `virtualSelection.ts` can evaluate server capabilities for copy/cut/clear/fill/range-move, but app clipboard does not yet consume those decisions.
 - Placeholder paste is strong for editable placeholder tails, but placeholder copy/cut is blocked. That is correct unless a server/export path is added.
-- Pending clipboard outlines should remain stable across virtual remounts because they are range-based, but this needs e2e coverage with scroll-out/scroll-in and horizontal virtualization.
+- Pending clipboard outlines are covered at the app range/viewport-offset level; browser coverage for scroll-out/scroll-in, pinned panes, and horizontal virtualization remains planned.
 - Projection changes after copy/cut can make row indexes stale. Current pending range state is index-based; enterprise behavior needs a stale/rebase/clear policy using projection identity.
 
 ## Failure Handling Risks
 
 - Clipboard write failure stores the in-memory payload and reports fallback use; remaining gap is structured diagnostics.
 - Clipboard read failure reports in-memory fallback use; remaining gap is stale-payload age/source reporting.
-- Async `applyEdits` failure during paste has no visible rejected-state contract.
-- Cut-paste source clear and target paste are not guarded as one atomic row-model transaction.
+- Async `applyEdits` failure during paste has app-level rejected state; rendered recovery UI remains planned.
+- Local cut-paste source clear and target paste are guarded as one row-model transaction; custom/server handlers still own atomicity.
 - Partial paste reports blocked cells in the canonical local app path; custom/server paste paths still need structured responses.
 - Custom `applyClipboardEdits` can return a number but cannot return structured partial validation failures.
 
@@ -252,7 +255,7 @@ What blocks the target score:
 - No multi-MIME clipboard payload strategy.
 - No built-in HTTP route or adapter implementation for server-delegated copy/cut/clear/paste over unloaded virtual ranges. The planned contract and app-level delegate boundary are documented/implemented.
 - No custom/server paste validation result contract. Built-in local paste validation and status reporting are implemented.
-- No async paste pending/failure/retry UX.
+- No rendered async paste pending/failure/retry UX. App-level pending/rejected state is implemented.
 - No structured partial paste result.
 - No structured browser clipboard permission/a11y/mobile validation gate.
 

@@ -20,9 +20,18 @@ import type { DataGridAppMode } from "./useDataGridAppControls"
 export type DataGridAppPendingClipboardOperation = "none" | "copy" | "cut"
 export type DataGridAppPendingClipboardEdge = "top" | "right" | "bottom" | "left"
 export type DataGridAppPasteMode = "default" | "values"
+export type DataGridAppClipboardPasteStatus = "idle" | "pending" | "rejected"
 
 export interface DataGridAppPasteOptions {
   mode?: DataGridAppPasteMode
+}
+
+export interface DataGridAppClipboardPasteState {
+  status: DataGridAppClipboardPasteStatus
+  operationId: number | null
+  trigger: "keyboard" | "context-menu" | null
+  mode: DataGridAppPasteMode
+  message: string | null
 }
 
 export interface DataGridAppServerClipboardOperationResult {
@@ -113,6 +122,7 @@ export interface UseDataGridAppClipboardResult {
   pendingClipboardOperation: Ref<DataGridAppPendingClipboardOperation>
   pendingClipboardRange: Ref<DataGridCopyRange | null>
   pendingClipboardRanges: Ref<readonly DataGridCopyRange[]>
+  clipboardPasteState: Ref<DataGridAppClipboardPasteState>
   normalizeClipboardRange: (range: DataGridCopyRange) => DataGridCopyRange | null
   applyClipboardEdits: (
     range: DataGridCopyRange,
@@ -128,6 +138,7 @@ export interface UseDataGridAppClipboardResult {
     options?: DataGridAppPasteOptions,
   ) => Promise<boolean>
   cutSelectedCells: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  clearRejectedClipboardPaste: () => boolean
   isCellInPendingClipboardRange: (rowOffset: number, columnIndex: number) => boolean
   isCellOnPendingClipboardEdge: (
     rowOffset: number,
@@ -358,6 +369,14 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   const pendingClipboardOperation = ref<DataGridAppPendingClipboardOperation>("none")
   const pendingClipboardRange = ref<DataGridCopyRange | null>(null)
   const pendingClipboardRanges = ref<readonly DataGridCopyRange[]>([])
+  let nextClipboardPasteOperationId = 0
+  const clipboardPasteState = ref<DataGridAppClipboardPasteState>({
+    status: "idle",
+    operationId: null,
+    trigger: null,
+    mode: "default",
+    message: null,
+  })
 
   const normalizeClipboardRange = (range: DataGridCopyRange): DataGridCopyRange | null => {
     const rowCount = options.totalRows.value
@@ -408,6 +427,71 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     cut: options.serverClipboardOperations?.capabilities?.cut ?? (typeof options.serverClipboardOperations?.cut === "function"),
     paste: options.serverClipboardOperations?.capabilities?.paste ?? (typeof options.serverClipboardOperations?.paste === "function"),
   })
+
+  const beginClipboardPasteOperation = (
+    trigger: "keyboard" | "context-menu",
+    mode: DataGridAppPasteMode,
+  ): number | null => {
+    if (clipboardPasteState.value.status === "pending") {
+      options.setLastAction?.("Paste already in progress")
+      return null
+    }
+    nextClipboardPasteOperationId += 1
+    clipboardPasteState.value = {
+      status: "pending",
+      operationId: nextClipboardPasteOperationId,
+      trigger,
+      mode,
+      message: "Paste pending",
+    }
+    return nextClipboardPasteOperationId
+  }
+
+  const completeClipboardPasteOperation = (operationId: number): void => {
+    if (clipboardPasteState.value.operationId !== operationId) {
+      return
+    }
+    clipboardPasteState.value = {
+      status: "idle",
+      operationId: null,
+      trigger: null,
+      mode: "default",
+      message: null,
+    }
+  }
+
+  const rejectClipboardPasteOperation = (
+    operationId: number,
+    trigger: "keyboard" | "context-menu",
+    mode: DataGridAppPasteMode,
+    error: unknown,
+  ): void => {
+    const message = error instanceof Error && error.message.trim().length > 0
+      ? error.message
+      : "Paste failed"
+    clipboardPasteState.value = {
+      status: "rejected",
+      operationId,
+      trigger,
+      mode,
+      message,
+    }
+    options.setLastAction?.(`Paste failed: ${message}`)
+  }
+
+  const clearRejectedClipboardPaste = (): boolean => {
+    if (clipboardPasteState.value.status !== "rejected") {
+      return false
+    }
+    clipboardPasteState.value = {
+      status: "idle",
+      operationId: null,
+      trigger: null,
+      mode: "default",
+      message: null,
+    }
+    return true
+  }
 
   const collectClipboardEdits = (
     range: DataGridCopyRange,
@@ -883,135 +967,161 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const rawPendingSourceRange = pendingClipboardRange.value ?? copiedSelectionRange.value
     const pendingSourceRange = rawPendingSourceRange ? normalizeClipboardRange(rawPendingSourceRange) : null
     const pasteMode = pasteOptions.mode ?? "default"
-    let matrix: string[][] = []
-
-    if (pasteMode === "values" && pendingSourceRange) {
-      matrix = options.buildPasteSpecialMatrixFromRange?.(pendingSourceRange, "values")
-        ?? buildFillMatrixFromRange(pendingSourceRange)
-    } else {
-      const payload = await clipboardBridge.readClipboardPayload()
-      if (!payload.trim()) {
-        return false
-      }
-      matrix = clipboardBridge.parseClipboardMatrix(payload)
-    }
-
-    const matrixHeight = Math.max(1, matrix.length)
-    const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
-    const targetRanges = resolvePasteTargetRanges(activeCoord, matrixHeight, matrixWidth, pendingOperation)
-    const normalizedTargetRange = targetRanges[0] ?? null
-    if (!normalizedTargetRange) {
+    const operationId = beginClipboardPasteOperation(trigger, pasteMode)
+    if (operationId == null) {
       return false
     }
-    const selectionSnapshot = options.resolveSelectionSnapshot?.() ?? null
-    const virtualTargetGuards = targetRanges.map(range => resolveDataGridVirtualSelectionOperationGuard(
-      "paste",
-      selectionSnapshot,
-      normalizeClipboardRange,
-      {
-        range,
-        capabilities: resolveServerClipboardCapabilities(),
-        allowServerDelegation: typeof options.serverClipboardOperations?.paste === "function",
-        blockedMessage: "Paste target includes unloaded rows. Load rows or use server operation.",
-        serverUnavailableMessage: "Paste target requires a server operation. Server paste delegation is not configured.",
-      },
-    ))
-    const virtualTargetGuard = virtualTargetGuards.find(guard => guard.blocked)
-    if (virtualTargetGuard) {
-      options.setLastAction?.(virtualTargetGuard.message ?? "Paste target cannot be updated.")
-      return false
-    }
-    if (virtualTargetGuards.some(guard => guard.mode === "server")) {
-      const delegate = options.serverClipboardOperations?.paste
-      if (!delegate) {
-        options.setLastAction?.("Paste target requires a server operation. Server paste delegation is not configured.")
+    let rejected = false
+    try {
+      let matrix: string[][] = []
+
+      if (pasteMode === "values" && pendingSourceRange) {
+        matrix = options.buildPasteSpecialMatrixFromRange?.(pendingSourceRange, "values")
+          ?? buildFillMatrixFromRange(pendingSourceRange)
+      } else {
+        const payload = await clipboardBridge.readClipboardPayload()
+        if (!payload.trim()) {
+          return false
+        }
+        matrix = clipboardBridge.parseClipboardMatrix(payload)
+      }
+
+      const matrixHeight = Math.max(1, matrix.length)
+      const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
+      const targetRanges = resolvePasteTargetRanges(activeCoord, matrixHeight, matrixWidth, pendingOperation)
+      const normalizedTargetRange = targetRanges[0] ?? null
+      if (!normalizedTargetRange) {
         return false
       }
-      const result = await delegate({
-        trigger,
-        mode: pasteMode,
-        targetRanges,
-        columns: resolveClipboardRangeColumnKeys(normalizedTargetRange, options.visibleColumns.value),
-        matrix,
-        pendingOperation,
-        sourceRange: pendingSourceRange,
+      const selectionSnapshot = options.resolveSelectionSnapshot?.() ?? null
+      const virtualTargetGuards = targetRanges.map(range => resolveDataGridVirtualSelectionOperationGuard(
+        "paste",
         selectionSnapshot,
-      })
-      if (!result.ok) {
-        options.setLastAction?.(result.message ?? "Server paste operation failed.")
+        normalizeClipboardRange,
+        {
+          range,
+          capabilities: resolveServerClipboardCapabilities(),
+          allowServerDelegation: typeof options.serverClipboardOperations?.paste === "function",
+          blockedMessage: "Paste target includes unloaded rows. Load rows or use server operation.",
+          serverUnavailableMessage: "Paste target requires a server operation. Server paste delegation is not configured.",
+        },
+      ))
+      const virtualTargetGuard = virtualTargetGuards.find(guard => guard.blocked)
+      if (virtualTargetGuard) {
+        options.setLastAction?.(virtualTargetGuard.message ?? "Paste target cannot be updated.")
+        return false
+      }
+      if (virtualTargetGuards.some(guard => guard.mode === "server")) {
+        const delegate = options.serverClipboardOperations?.paste
+        if (!delegate) {
+          options.setLastAction?.("Paste target requires a server operation. Server paste delegation is not configured.")
+          return false
+        }
+        const result = await delegate({
+          trigger,
+          mode: pasteMode,
+          targetRanges,
+          columns: resolveClipboardRangeColumnKeys(normalizedTargetRange, options.visibleColumns.value),
+          matrix,
+          pendingOperation,
+          sourceRange: pendingSourceRange,
+          selectionSnapshot,
+        })
+        if (!result.ok) {
+          options.setLastAction?.(result.message ?? "Server paste operation failed.")
+          return false
+        }
+        if (pendingOperation !== "none") {
+          clearPendingClipboardOperation(false)
+        }
+        options.applySelectionRange(normalizedTargetRange)
+        options.syncViewport()
+        options.setLastAction?.(result.message ?? "Server pasted selected range")
+        void trigger
+        return true
+      }
+      const groupTargetRange = targetRanges.find(range => resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null)
+      if (groupTargetRange) {
+        options.setLastAction?.(
+          "Paste target includes group rows. Use leaf rows or server operation.",
+        )
+        return false
+      }
+      const missingTargetRange = targetRanges.find(range => resolveUnmaterializableTargetRowIndexInRange(range) != null)
+      if (missingTargetRange) {
+        options.setLastAction?.(
+          "Paste target includes unloaded rows. Load rows or use server operation.",
+        )
+        return false
+      }
+      if (pendingOperation === "cut" && pendingSourceRange && resolveGroupRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
+        options.setLastAction?.(
+          "Cut source includes group rows. Use leaf rows or server operation.",
+        )
+        return false
+      }
+      if (pendingOperation === "cut" && pendingSourceRange && resolveMissingRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
+        options.setLastAction?.(
+          "Cut source includes unloaded rows. Load rows or use server operation.",
+        )
+        return false
+      }
+      if (pendingOperation === "cut" && pendingSourceRange && rangesEqual(pendingSourceRange, normalizedTargetRange)) {
+        clearPendingClipboardOperation(false)
+        void trigger
+        return true
+      }
+      if (pendingOperation === "cut" && pendingSourceRange) {
+        const beforeSnapshot = captureBeforeEditSnapshot([pendingSourceRange, normalizedTargetRange])
+        const sourceClearCollection = collectClipboardEdits(pendingSourceRange, [[""]])
+        const targetCollection = collectClipboardEdits(normalizedTargetRange, matrix)
+        if (!customApplyClipboardEdits) {
+          const updates = mergeClipboardUpdates([
+            ...sourceClearCollection.updates,
+            ...targetCollection.updates,
+          ])
+          if (updates.length === 0 || targetCollection.summary.appliedCells <= 0) {
+            return false
+          }
+          await options.runtime.api.rows.applyEdits(updates)
+        } else {
+          const appliedRows = await applyClipboardEdits(normalizedTargetRange, matrix, { recordHistory: false })
+          if (appliedRows <= 0) {
+            return false
+          }
+          await applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
+        }
+        const afterSnapshot = buildAfterEditSnapshot(beforeSnapshot, [
+          ...sourceClearCollection.updates,
+          ...targetCollection.updates,
+        ])
+        options.recordEditTransaction(beforeSnapshot, afterSnapshot)
+        clearPendingClipboardOperation(false)
+        options.applySelectionRange(normalizedTargetRange)
+        options.syncViewport()
+        options.setLastAction?.(formatClipboardEditSummary(targetCollection.summary))
+        void trigger
+        return true
+      }
+      const appliedRows = await applyClipboardEditsToRanges(targetRanges, matrix, { recordHistory: true })
+      if (appliedRows <= 0) {
         return false
       }
       if (pendingOperation !== "none") {
         clearPendingClipboardOperation(false)
       }
-      options.applySelectionRange(normalizedTargetRange)
       options.syncViewport()
-      options.setLastAction?.(result.message ?? "Server pasted selected range")
       void trigger
       return true
-    }
-    const groupTargetRange = targetRanges.find(range => resolveGroupRowIndexInRange(getBodyRowAtIndex, range) != null)
-    if (groupTargetRange) {
-      options.setLastAction?.(
-        "Paste target includes group rows. Use leaf rows or server operation.",
-      )
+    } catch (error) {
+      rejected = true
+      rejectClipboardPasteOperation(operationId, trigger, pasteMode, error)
       return false
-    }
-    const missingTargetRange = targetRanges.find(range => resolveUnmaterializableTargetRowIndexInRange(range) != null)
-    if (missingTargetRange) {
-      options.setLastAction?.(
-        "Paste target includes unloaded rows. Load rows or use server operation.",
-      )
-      return false
-    }
-    if (pendingOperation === "cut" && pendingSourceRange && resolveGroupRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
-      options.setLastAction?.(
-        "Cut source includes group rows. Use leaf rows or server operation.",
-      )
-      return false
-    }
-    if (pendingOperation === "cut" && pendingSourceRange && resolveMissingRowIndexInRange(getBodyRowAtIndex, pendingSourceRange) != null) {
-      options.setLastAction?.(
-        "Cut source includes unloaded rows. Load rows or use server operation.",
-      )
-      return false
-    }
-    if (pendingOperation === "cut" && pendingSourceRange && rangesEqual(pendingSourceRange, normalizedTargetRange)) {
-      clearPendingClipboardOperation(false)
-      void trigger
-      return true
-    }
-    if (pendingOperation === "cut" && pendingSourceRange) {
-      const beforeSnapshot = captureBeforeEditSnapshot([pendingSourceRange, normalizedTargetRange])
-      const sourceClearCollection = collectClipboardEdits(pendingSourceRange, [[""]])
-      const targetCollection = collectClipboardEdits(normalizedTargetRange, matrix)
-      await applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
-      const appliedRows = await applyClipboardEdits(normalizedTargetRange, matrix, { recordHistory: false })
-      if (appliedRows <= 0) {
-        return false
+    } finally {
+      if (!rejected) {
+        completeClipboardPasteOperation(operationId)
       }
-      const afterSnapshot = buildAfterEditSnapshot(beforeSnapshot, [
-        ...sourceClearCollection.updates,
-        ...targetCollection.updates,
-      ])
-      options.recordEditTransaction(beforeSnapshot, afterSnapshot)
-      clearPendingClipboardOperation(false)
-      options.applySelectionRange(normalizedTargetRange)
-      options.syncViewport()
-      options.setLastAction?.(formatClipboardEditSummary(targetCollection.summary))
-      void trigger
-      return true
     }
-    const appliedRows = await applyClipboardEditsToRanges(targetRanges, matrix, { recordHistory: true })
-    if (appliedRows <= 0) {
-      return false
-    }
-    if (pendingOperation !== "none") {
-      clearPendingClipboardOperation(false)
-    }
-    options.syncViewport()
-    void trigger
-    return true
   }
 
   const cutSelectedCells = async (trigger: "keyboard" | "context-menu" = "keyboard"): Promise<boolean> => {
@@ -1069,6 +1179,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     pendingClipboardOperation,
     pendingClipboardRange,
     pendingClipboardRanges,
+    clipboardPasteState,
     normalizeClipboardRange,
     applyClipboardEdits,
     rangesEqual,
@@ -1077,6 +1188,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     copySelectedCells,
     pasteSelectedCells,
     cutSelectedCells,
+    clearRejectedClipboardPaste,
     isCellInPendingClipboardRange,
     isCellOnPendingClipboardEdge,
   }
