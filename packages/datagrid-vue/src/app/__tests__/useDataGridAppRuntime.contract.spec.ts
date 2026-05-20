@@ -73,9 +73,13 @@ describe("useDataGridAppRuntime worker contract", () => {
     expect(result).not.toBeNull()
     expect(result!.runtime.api.rows.getCount()).toBe(10_000)
     expect(result!.runtime.rowPartition.value.bodyRowCount).toBe(10_000)
+    const versionBeforeViewportRequest = result!.rowVersion.value
     result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 })
+    const versionAfterViewportRequest = result!.rowVersion.value
+    expect(versionAfterViewportRequest).toBeGreaterThan(versionBeforeViewportRequest)
     await waitForRuntimeRows(() => result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 }))
 
+    expect(result!.rowVersion.value).toBeGreaterThan(versionAfterViewportRequest)
     expect(result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 }).map(row => String(row.rowId))).toEqual([
       "r208",
       "r209",

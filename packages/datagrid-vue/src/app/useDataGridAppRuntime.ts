@@ -147,11 +147,13 @@ export function useDataGridAppRuntime<TRow>(
 
   const rowVersion = ref(0)
   const resolveRowModelVersionKey = (snapshot: DataGridRowModelSnapshot<TRow>): string => {
+    const sparseDiagnostics = runtime.rowModel.getSparseRowModelDiagnostics?.()
     return [
       snapshot.kind,
       snapshot.revision ?? "",
       snapshot.rowCount,
       snapshot.viewportRange.start + ":" + snapshot.viewportRange.end,
+      sparseDiagnostics ? (snapshot.loading ? "loading" : "idle") : "",
       snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
     ].join("|")
   }

@@ -172,6 +172,7 @@ export type DataGridAppBodyViewportRuntime<TRow> = Pick<
   UseDataGridRuntimeResult<TRow>,
   "virtualWindow" | "syncBodyRowsInRange" | "rowPartition"
 > & {
+  rowModel?: Pick<UseDataGridRuntimeResult<TRow>["rowModel"], "getSparseRowModelDiagnostics">
   setViewportRange?: UseDataGridRuntimeResult<TRow>["setViewportRange"]
   setVirtualWindowRange?: UseDataGridRuntimeResult<TRow>["setVirtualWindowRange"]
   getViewportPosition?: UseDataGridRuntimeResult<TRow>["getViewportPosition"]
@@ -526,6 +527,7 @@ export function useDataGridAppViewport<TRow>(
   let isApplyingRuntimeViewportPosition = false
   let isSyncingRuntimeViewportPosition = false
   let pendingRuntimeViewportPosition: DataGridViewportPositionSnapshot | null = null
+  let pendingRuntimeViewportPositionIdleSync = false
   let lastSyncedRuntimeViewportPositionKey: string | null = null
   let lastViewportRangeResolveMs = 0
   const horizontalScrollIdleRevision = ref(0)
@@ -575,6 +577,10 @@ export function useDataGridAppViewport<TRow>(
     globalThis.clearTimeout(handle)
   }
 
+  function isSparseViewportRuntime(): boolean {
+    return options.runtime.rowModel?.getSparseRowModelDiagnostics?.() != null
+  }
+
   const clearHorizontalScrollIdleTimer = (): void => {
     if (horizontalScrollIdleTimer == null) {
       return
@@ -596,6 +602,18 @@ export function useDataGridAppViewport<TRow>(
     verticalScrollIdleTimer = globalThis.setTimeout(() => {
       verticalScrollIdleTimer = null
       resetAdaptiveRowOverscan()
+      if (!pendingRuntimeViewportPositionIdleSync) {
+        return
+      }
+      pendingRuntimeViewportPositionIdleSync = false
+      const element = bodyViewportRef.value
+      if (!element) {
+        return
+      }
+      syncRuntimeViewportPosition(resolveQueuedViewportSnapshot(element, {
+        forceVisibleRows: false,
+        measureVisibleRowHeights: false,
+      }))
     }, DATA_GRID_VERTICAL_SCROLL_IDLE_MS)
     const maybeNodeTimer = verticalScrollIdleTimer as { unref?: () => void }
     maybeNodeTimer.unref?.()
@@ -1119,7 +1137,7 @@ export function useDataGridAppViewport<TRow>(
     const rowIndex = visibleRowRange.start
     const columnIndex = resolveVisibleColumnIndexFromScrollLeft(snapshot.scrollLeft)
     const column = columnIndex == null ? null : options.visibleColumns.value[columnIndex] ?? null
-    const row = typeof options.runtime.getBodyRowAtIndex === "function"
+    const row = !isSparseViewportRuntime() && typeof options.runtime.getBodyRowAtIndex === "function"
       ? options.runtime.getBodyRowAtIndex(rowIndex)
       : null
     const range = lastSyncedRange ?? resolveViewportRangeFromSnapshot({
@@ -1184,6 +1202,9 @@ export function useDataGridAppViewport<TRow>(
   const resolveIndexedVisibleRows = (
     range: DataGridViewportRange,
   ): { rows: readonly DataGridRowNode<TRow>[]; mode: "indexed" | "incremental" } | null => {
+    if (isSparseViewportRuntime()) {
+      return null
+    }
     const getBodyRowAtIndex = options.runtime.getBodyRowAtIndex
     if (typeof getBodyRowAtIndex !== "function" || !lastSyncedRange) {
       return null
@@ -1445,7 +1466,14 @@ export function useDataGridAppViewport<TRow>(
       options.measureVisibleRowHeights?.()
     }
 
-    if (commitOptions.syncRuntimePosition !== false) {
+    if (
+      commitOptions.syncRuntimePosition === true
+      && !commitOptions.forceVisibleRows
+      && isSparseViewportRuntime()
+    ) {
+      pendingRuntimeViewportPositionIdleSync = true
+    }
+    else if (commitOptions.syncRuntimePosition !== false) {
       syncRuntimeViewportPosition(snapshot)
     }
   }
@@ -1611,6 +1639,7 @@ export function useDataGridAppViewport<TRow>(
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
     pendingViewportSyncRuntimePosition = false
+    pendingRuntimeViewportPositionIdleSync = false
     clearHorizontalScrollIdleTimer()
     clearVerticalScrollIdleTimer()
     resetAdaptiveRowOverscan()

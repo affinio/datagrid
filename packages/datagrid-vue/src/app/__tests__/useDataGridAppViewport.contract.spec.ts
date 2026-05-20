@@ -625,6 +625,60 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
   })
 
+  it("avoids indexed row probes for sparse worker viewport shifts", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setVirtualWindowRange = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        setVirtualWindowRange,
+        getBodyRowAtIndex,
+        rowModel: {
+          getSparseRowModelDiagnostics: () => ({
+            kind: "worker",
+            rowCount: rows.length,
+            viewportRange: { start: 0, end: 4 },
+          }),
+        },
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 4 }),
+      } as never,
+      mode: computed(() => "worker" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+    viewport.syncViewportFromDom()
+
+    syncRowsInRange.mockClear()
+    getBodyRowAtIndex.mockClear()
+    element.scrollTop = 20
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(setVirtualWindowRange).not.toHaveBeenCalled()
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 1, end: 5 })
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r1", "r2", "r3", "r4", "r5"])
+  })
+
   it("uses indexed row lookup for non-overlapping virtual scroll jumps", () => {
     const raf = createRafHarness()
     const rows = makeRows(300)
@@ -1219,6 +1273,70 @@ describe("useDataGridAppViewport contract", () => {
 
     expect(setViewportPosition).not.toHaveBeenCalled()
     expect(viewport.displayRows.value.length).toBeGreaterThan(0)
+  })
+
+  it("defers sparse runtime viewport position writes until scroll idle", () => {
+    vi.useFakeTimers()
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const setViewportPosition = vi.fn()
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getBodyRowAtIndex,
+        rowModel: {
+          getSparseRowModelDiagnostics: () => ({
+            kind: "worker",
+            rowCount: rows.length,
+            viewportRange: { start: 0, end: 9 },
+          }),
+        },
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "worker" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(10, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = { scrollTop: 120, scrollLeft: 250, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(setViewportPosition).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(119)
+    expect(setViewportPosition).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(setViewportPosition).toHaveBeenCalledTimes(1)
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(setViewportPosition).toHaveBeenLastCalledWith({
+      version: 1,
+      range: { start: 5, end: 11 },
+      anchor: {
+        rowId: null,
+        rowIndex: 6,
+        columnKey: "col-2",
+        columnIndex: 2,
+      },
+      scroll: { top: 120, left: 250 },
+    })
   })
 
   it("restores DOM scroll from runtime viewport position after state import", () => {
