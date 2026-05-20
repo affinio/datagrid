@@ -25,6 +25,14 @@ export interface DataGridAppPasteOptions {
   mode?: DataGridAppPasteMode
 }
 
+interface DataGridClipboardEditSummary {
+  targetCells: number
+  appliedCells: number
+  blockedCells: number
+  invalidCells: number
+  skippedCells: number
+}
+
 export interface UseDataGridAppClipboardOptions<TRow, TSnapshot> {
   mode: Ref<DataGridAppMode>
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
@@ -101,6 +109,70 @@ export function isDataGridRowMissingOrPlaceholder<TRow>(
     return true
   }
   return (row as { __placeholder?: boolean }).__placeholder === true
+}
+
+function createClipboardEditSummary(): DataGridClipboardEditSummary {
+  return {
+    targetCells: 0,
+    appliedCells: 0,
+    blockedCells: 0,
+    invalidCells: 0,
+    skippedCells: 0,
+  }
+}
+
+function mergeClipboardEditSummaries(
+  summaries: readonly DataGridClipboardEditSummary[],
+): DataGridClipboardEditSummary {
+  const merged = createClipboardEditSummary()
+  for (const summary of summaries) {
+    merged.targetCells += summary.targetCells
+    merged.appliedCells += summary.appliedCells
+    merged.blockedCells += summary.blockedCells
+    merged.invalidCells += summary.invalidCells
+    merged.skippedCells += summary.skippedCells
+  }
+  return merged
+}
+
+function countClipboardRangeCells(range: DataGridCopyRange): number {
+  return Math.max(0, range.endRow - range.startRow + 1) * Math.max(0, range.endColumn - range.startColumn + 1)
+}
+
+function formatClipboardEditSummary(summary: DataGridClipboardEditSummary): string {
+  if (summary.targetCells <= 0) {
+    return "Paste skipped: no target cells"
+  }
+  const skippedTotal = summary.blockedCells + summary.invalidCells + summary.skippedCells
+  if (summary.appliedCells <= 0) {
+    const details: string[] = []
+    if (summary.blockedCells > 0) {
+      details.push(`${summary.blockedCells} blocked`)
+    }
+    if (summary.invalidCells > 0) {
+      details.push(`${summary.invalidCells} invalid`)
+    }
+    if (summary.skippedCells > 0) {
+      details.push(`${summary.skippedCells} skipped`)
+    }
+    return details.length > 0
+      ? `Paste skipped: ${details.join(", ")}`
+      : "Paste skipped: no editable cells"
+  }
+  if (skippedTotal <= 0) {
+    return `Pasted ${summary.appliedCells}/${summary.targetCells} cells`
+  }
+  const details: string[] = []
+  if (summary.blockedCells > 0) {
+    details.push(`${summary.blockedCells} blocked`)
+  }
+  if (summary.invalidCells > 0) {
+    details.push(`${summary.invalidCells} invalid`)
+  }
+  if (summary.skippedCells > 0) {
+    details.push(`${summary.skippedCells} skipped`)
+  }
+  return `Pasted ${summary.appliedCells}/${summary.targetCells} cells; ${details.join(", ")}`
 }
 
 export function resolveMissingRowIndexInRange<TRow>(
@@ -281,29 +353,37 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   ): {
     normalizedRange: DataGridCopyRange | null
     updates: DataGridClientRowPatch<TRow>[]
+    summary: DataGridClipboardEditSummary
   } => {
+    const summary = createClipboardEditSummary()
     const normalized = normalizeClipboardRange(range)
     if (!normalized) {
-      return { normalizedRange: null, updates: [] }
+      return { normalizedRange: null, updates: [], summary }
     }
+    summary.targetCells = countClipboardRangeCells(normalized)
     const matrixHeight = Math.max(1, matrix.length)
     const matrixWidth = Math.max(1, matrix[0]?.length ?? 1)
     const editsByRowId = new Map<string | number, Record<string, unknown>>()
+    const targetColumnCount = normalized.endColumn - normalized.startColumn + 1
     for (let rowIndex = normalized.startRow; rowIndex <= normalized.endRow; rowIndex += 1) {
       const row = options.ensureEditableRowAtIndex?.(rowIndex) ?? getBodyRowAtIndex(rowIndex)
       if (!row || row.rowId == null || row.kind === "group") {
+        summary.blockedCells += targetColumnCount
         continue
       }
       for (let columnIndex = normalized.startColumn; columnIndex <= normalized.endColumn; columnIndex += 1) {
         const columnKey = options.visibleColumns.value[columnIndex]?.key
         if (!columnKey) {
+          summary.skippedCells += 1
           continue
         }
         if (!options.isCellEditable(row, rowIndex, columnKey, columnIndex)) {
+          summary.blockedCells += 1
           continue
         }
         const column = options.visibleColumns.value[columnIndex]
         if (!column) {
+          summary.skippedCells += 1
           continue
         }
         const rowOffset = rowIndex - normalized.startRow
@@ -315,12 +395,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
           draft: value,
         })
         if (!validation.valid) {
-          options.setLastAction?.(`Paste skipped invalid ${columnKey}`)
+          summary.invalidCells += 1
           continue
         }
         const current = editsByRowId.get(row.rowId) ?? {}
         current[columnKey] = validation.value
         editsByRowId.set(row.rowId, current)
+        summary.appliedCells += 1
       }
     }
     return {
@@ -329,6 +410,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         rowId,
         data: data as Partial<TRow>,
       })),
+      summary,
     }
   }
 
@@ -339,11 +421,12 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     matrix: string[][],
     applyOptions: { recordHistory?: boolean; recordHistoryLabel?: string } = {},
   ): Promise<number> => {
-    const { normalizedRange: normalized, updates } = collectClipboardEdits(range, matrix)
+    const { normalizedRange: normalized, updates, summary } = collectClipboardEdits(range, matrix)
     if (!normalized) {
       return 0
     }
     if (updates.length === 0) {
+      options.setLastAction?.(formatClipboardEditSummary(summary))
       return 0
     }
 
@@ -363,6 +446,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         applyOptions.recordHistoryLabel,
       )
     }
+    options.setLastAction?.(formatClipboardEditSummary(summary))
     return updates.length
   })
 
@@ -525,8 +609,11 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       return appliedRows
     }
 
-    const updates = mergeClipboardUpdates(normalizedRanges.flatMap(range => collectClipboardEdits(range, matrix).updates))
+    const collections = normalizedRanges.map(range => collectClipboardEdits(range, matrix))
+    const summary = mergeClipboardEditSummaries(collections.map(collection => collection.summary))
+    const updates = mergeClipboardUpdates(collections.flatMap(collection => collection.updates))
     if (updates.length === 0) {
+      options.setLastAction?.(formatClipboardEditSummary(summary))
       return 0
     }
 
@@ -544,6 +631,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         applyOptions.recordHistoryLabel,
       )
     }
+    options.setLastAction?.(formatClipboardEditSummary(summary))
     return updates.length
   }
 
@@ -762,21 +850,22 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     }
     if (pendingOperation === "cut" && pendingSourceRange) {
       const beforeSnapshot = captureBeforeEditSnapshot([pendingSourceRange, normalizedTargetRange])
-      const sourceClearUpdates = collectClipboardEdits(pendingSourceRange, [[""]]).updates
-      const targetUpdates = collectClipboardEdits(normalizedTargetRange, matrix).updates
+      const sourceClearCollection = collectClipboardEdits(pendingSourceRange, [[""]])
+      const targetCollection = collectClipboardEdits(normalizedTargetRange, matrix)
       await applyClipboardEdits(pendingSourceRange, [[""]], { recordHistory: false })
       const appliedRows = await applyClipboardEdits(normalizedTargetRange, matrix, { recordHistory: false })
       if (appliedRows <= 0) {
         return false
       }
       const afterSnapshot = buildAfterEditSnapshot(beforeSnapshot, [
-        ...sourceClearUpdates,
-        ...targetUpdates,
+        ...sourceClearCollection.updates,
+        ...targetCollection.updates,
       ])
       options.recordEditTransaction(beforeSnapshot, afterSnapshot)
       clearPendingClipboardOperation(false)
       options.applySelectionRange(normalizedTargetRange)
       options.syncViewport()
+      options.setLastAction?.(formatClipboardEditSummary(targetCollection.summary))
       void trigger
       return true
     }

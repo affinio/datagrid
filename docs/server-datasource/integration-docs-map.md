@@ -25,7 +25,7 @@ This is the ordered reading path for package users and Codex agents integrating 
 13. [Backend template](./backend-template.md) - backend integration template.
 14. [Backend FastAPI reference](./backend-fastapi.md) - FastAPI reference implementation.
 15. [Consistency](./consistency.md) - `revision`, `datasetVersion`, invalidation, and conflict model.
-16. [Server selection operations](./selection-operations.md) - operation matrix for loaded, unloaded, placeholder, grouped, stale, local, blocked, and server-delegated selection work.
+16. [Server selection operations](./selection-operations.md) - operation matrix for loaded, unloaded, placeholder, grouped, stale, local, blocked, server-delegated selection work, and planned clipboard delegation.
 
 ## Codex Support
 

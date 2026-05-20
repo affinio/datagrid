@@ -8,7 +8,7 @@ Current execution state:
 - The canonical app-stage clipboard path is `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts` plus `packages/datagrid-orchestration/src/clipboard/useDataGridClipboardBridge.ts`.
 - `datagrid-vue-app` owns rendered keyboard/context-menu wiring, pending clipboard visuals, row-index clipboard actions, placeholder materialization, and stage status surfaces.
 - Current code already blocks stale, unloaded, placeholder, and grouped local clipboard operations before unsafe materialized mutation.
-- Current code already validates typed clipboard paste drafts through the shared cell draft validation boundary; richer structured paste result reporting remains planned work.
+- Current code validates typed clipboard paste drafts through the shared cell draft validation boundary and reports local target/applied/blocked/skipped/invalid paste counts; custom/server structured result contracts remain planned work.
 - Server-delegated clipboard operations are contract-level only; unloaded virtual ranges remain blocked unless a future server delegate is added.
 
 ## Slice 1: Enterprise Clipboard Contract
@@ -48,7 +48,7 @@ Current execution state:
 
 ## Slice 3: Clipboard Read/Write Feedback
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: make browser clipboard permission failures and in-memory fallback usage observable without breaking same-session fallback behavior.
 - Affected packages/files:
   - `packages/datagrid-orchestration/src/internal/browserClipboard.ts`
@@ -67,14 +67,14 @@ Current execution state:
 
 ## Slice 4: Structured Paste Result
 
-- Status: Planned.
-- Objective: replace row-count-only paste results with structured applied, blocked, skipped, invalid, materialized, and failed cell counts while preserving existing mutation boundaries.
+- Status: Completed on 2026-05-20.
+- Objective: replace row-count-only paste reporting with structured applied, blocked, skipped, invalid, materialized, and failed cell counts while preserving existing mutation boundaries.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-orchestration/src/clipboard/useDataGridClipboardMutations.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: partial paste outcomes are deterministic and user-facing; successful history records only committed patches.
+- Expected behavior change: partial paste outcomes are deterministic and user-facing for the canonical local app path; successful history records only committed patches. The public `applyClipboardEdits` return value remains the existing updated-row count for API stability.
 - Tests to add/update:
   - Mixed editable/non-editable/invalid paste reports applied and blocked cells.
   - Group, missing, and unloaded targets report blocked state before mutation.
@@ -85,7 +85,7 @@ Current execution state:
 
 ## Slice 5: Clipboard Validation Completeness
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: extend the existing shared draft validation path into complete clipboard validation coverage for number, currency, percent, date, datetime, select, formula text, clear values, and custom host paste policies.
 - Affected packages/files:
   - `packages/datagrid-core/src/cells/runtime.ts`
@@ -93,7 +93,7 @@ Current execution state:
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
   - `packages/datagrid-core/src/cells/__tests__/runtime.spec.ts`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: typed paste acceptance and rejection fully match inline edit semantics for supported cell types.
+- Expected behavior change: typed paste acceptance and rejection match inline edit semantics for supported built-in cell types covered by the shared validation runtime.
 - Tests to add/update:
   - Invalid number/date/datetime/select drafts do not mutate rows.
   - Empty clear values follow the same policy as inline editing.
@@ -104,7 +104,7 @@ Current execution state:
 
 ## Slice 6: Server Clipboard Operation Contract
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: define the server-backed copy/export, cut, clear/delete, paste/import, operation id, revision, projection identity, partial result, and history semantics before adding public runtime hooks.
 - Affected packages/files:
   - `docs/server-datasource/selection-operations.md`
@@ -112,7 +112,7 @@ Current execution state:
   - `docs/server-datasource/integration-docs-map.md`
   - `docs/datagrid-clipboard.md`
   - `docs/audits/CLIPBOARD_ENTERPRISE_AUDIT.md`
-- Expected behavior change: no runtime behavior change; server clipboard delegation has an approved contract aligned with datasource revisions and server history.
+- Expected behavior change: no runtime behavior change; server clipboard delegation has a documented planned contract aligned with datasource revisions and server history.
 - Tests to add/update:
   - Docs validation only.
 - Validation command: `node ./scripts/check-datagrid-docs-framework-track.mjs`
@@ -200,10 +200,10 @@ Current execution state:
 
 1. Slice 1: Enterprise Clipboard Contract (completed 2026-05-20)
 2. Slice 2: Clipboard Format Parser And Writer (completed 2026-05-20)
-3. Slice 3: Clipboard Read/Write Feedback
-4. Slice 4: Structured Paste Result
-5. Slice 5: Clipboard Validation Completeness
-6. Slice 6: Server Clipboard Operation Contract
+3. Slice 3: Clipboard Read/Write Feedback (completed 2026-05-20)
+4. Slice 4: Structured Paste Result (completed 2026-05-20)
+5. Slice 5: Clipboard Validation Completeness (completed 2026-05-20)
+6. Slice 6: Server Clipboard Operation Contract (completed 2026-05-20)
 7. Slice 7: Server Virtual Clipboard Delegation
 8. Slice 8: Async Paste Pending And Recovery
 9. Slice 9: Cut-Paste Atomicity

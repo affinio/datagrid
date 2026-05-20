@@ -50,11 +50,11 @@ Matrix semantics:
 - Ragged rows currently treat missing cells as empty strings.
 - A single terminal row separator is treated as a payload terminator; additional blank rows are preserved.
 
-Structured applied, blocked, skipped, invalid, and failed cell counts are planned work. The current canonical app path returns updated row count.
+The canonical local app path reports structured paste counts for target, applied, blocked, skipped, and invalid cells. The public `applyClipboardEdits` return value remains the existing updated-row count for API stability.
 
 ## Validation
 
-Clipboard paste uses the shared cell draft validation boundary for supported typed cells before row mutation. Invalid typed drafts are skipped and do not mutate their target cell. Supported validation follows the same core helpers used by inline editing for number-like, date-like, datetime-like, select, and basic formula text behavior.
+Clipboard paste uses the shared cell draft validation boundary for supported typed cells before row mutation. Invalid typed drafts are skipped and do not mutate their target cell. Supported validation follows the same core helpers used by inline editing for number, currency, percent, date, datetime, select, empty clear values, and basic formula text behavior.
 
 Mixed editable/non-editable or valid/invalid ranges apply only valid editable cells. History records only committed patches.
 
@@ -72,7 +72,7 @@ Cut-paste rollback and rejected-state reporting for failures between source clea
 
 Loaded materialized rows can use the local clipboard path. Stale, unloaded, placeholder, and grouped virtual ranges are blocked with a user-facing status unless a future server operation delegate is defined.
 
-Future server clipboard operations should reuse the operation model in `docs/server-datasource/selection-operations.md`: operation id, base revision, projection identity, normalized ranges, stable column keys, invalidation, warnings, and server history state.
+Future server clipboard operations should reuse the operation model in `docs/server-datasource/selection-operations.md` and the planned protocol shape in `docs/server-datasource/protocol.md`: operation id, base revision, projection identity, normalized ranges, stable column keys, payload format, invalidation, warnings, partial results, and server history state.
 
 ## Browser Clipboard Fallback
 
@@ -80,9 +80,9 @@ Browser clipboard APIs can fail because of permissions, secure-context rules, mi
 
 - copy write failures still keep an in-memory payload for same-session grid paste
 - paste read failures fall back to the in-memory payload
-- fallback state is not yet surfaced as a structured status
+- copy and paste report when the system clipboard is unavailable and an in-memory fallback is used
 
-Explicit permission/fallback status reporting is planned work.
+Structured permission diagnostics beyond the user-facing status message remain planned work.
 
 ## Accessibility And Mobile
 
@@ -100,5 +100,5 @@ The mounted table-stage DataGrid does not currently provide:
 - formula/format paste modes beyond values
 - server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
 - async paste pending/retry/cancel UI
-- structured paste telemetry and per-cell rejection UI
+- per-cell rejection UI and durable paste telemetry
 - mobile-specific clipboard UX beyond existing keyboard/context-menu paths

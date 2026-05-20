@@ -60,6 +60,42 @@ Responses should return:
 - `warnings` for downgraded behavior.
 - history state when the operation participates in undo/redo.
 
+## Clipboard Delegation Contract
+
+Server clipboard delegation is planned contract work. It should reuse the request and response conventions above instead of adding a clipboard-specific consistency model.
+
+Clipboard copy/export requests should carry:
+
+- `operationId`.
+- `baseRevision`.
+- `projectionHash` or equivalent projection identity.
+- `selection` as one or more normalized row/column ranges.
+- `columns` as stable column keys.
+- `format`: `tsv`, `csv`, or `internal-json` when a backend supports more than plain text.
+- `includeHeaders` when the host supports header export.
+- `projection` context for sort, filter, group/tree/pivot, expansion, and pagination.
+
+Clipboard mutation requests for cut, clear/delete, paste/import, and row move should carry:
+
+- `operationId`.
+- `baseRevision`.
+- `projectionHash` or equivalent projection identity.
+- source and/or target normalized ranges.
+- `columns` as stable column keys.
+- `payload` for paste/import operations, including format and text or structured cells.
+- `mode`, such as `values`, `copy`, or `clear`.
+- `expectedCounts` when the frontend can provide target row/cell counts.
+
+Responses should distinguish:
+
+- `status`: `committed`, `partial`, `rejected`, or `blocked`.
+- `payload` for copy/export responses.
+- `acceptedCells`, `rejectedCells`, `blockedCells`, `skippedCells`, and `materializedRows`.
+- `rejections` with stable row/column coordinates and reasons.
+- `revision`, `datasetVersion`, invalidation scope, and server history state for mutations.
+
+If the backend cannot prove projection or revision consistency, it must reject with `projection-mismatch` or `stale-revision` instead of applying a best-effort local interpretation.
+
 ## Consistency Rules
 
 - Stale projection identity blocks local materialized operations.

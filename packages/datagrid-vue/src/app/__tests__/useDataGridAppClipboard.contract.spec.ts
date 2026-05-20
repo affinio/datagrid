@@ -126,7 +126,9 @@ describe("useDataGridAppClipboard contract", () => {
     const copied = await clipboard.copySelectedCells("keyboard")
 
     expect(copied).toBe(true)
-    expect(lastAction.value).toBe("Copied 2x2 cells (keyboard)")
+    expect(lastAction.value).toBe(
+      "Copied 2x2 cells (keyboard); system clipboard unavailable, using in-memory clipboard",
+    )
   })
 
   it("keeps the pasted target range selected after paste", async () => {
@@ -673,8 +675,8 @@ describe("useDataGridAppClipboard contract", () => {
     }
   })
 
-  it("skips blocked cells when applying clipboard edits", async () => {
-    const { clipboard, rows } = createClipboardHarness({
+  it("reports blocked cells when applying clipboard edits", async () => {
+    const { clipboard, rows, lastAction } = createClipboardHarness({
       isCellEditable: (_row, rowIndex, columnKey) => !(rowIndex === 0 && columnKey === "b"),
     })
 
@@ -687,9 +689,10 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(applied).toBe(1)
     expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
+    expect(lastAction.value).toBe("Pasted 1/2 cells; 1 blocked")
   })
 
-  it("skips invalid typed paste drafts without mutating the target cell", async () => {
+  it("reports invalid typed paste drafts without mutating the target cell", async () => {
     const { clipboard, rows, lastAction } = createClipboardHarness({
       visibleColumns: [
         { key: "a" },
@@ -707,7 +710,93 @@ describe("useDataGridAppClipboard contract", () => {
 
     expect(applied).toBe(1)
     expect(rows.value[0]).toEqual({ rowId: "r1", a: "X", b: "B1", c: "C1" })
-    expect(lastAction.value).toBe("Paste skipped invalid b")
+    expect(lastAction.value).toBe("Pasted 1/2 cells; 1 invalid")
+  })
+
+  it("validates typed clipboard drafts across currency, percent, and select cells", async () => {
+    const { clipboard, rows, lastAction } = createClipboardHarness({
+      visibleColumns: [
+        { key: "a", column: { key: "a", cellType: "currency" } },
+        { key: "b", column: { key: "b", cellType: "percent" } },
+        {
+          key: "c",
+          column: {
+            key: "c",
+            cellType: "select",
+            presentation: {
+              options: [
+                { value: "approved", label: "Approved" },
+                { value: "rejected", label: "Rejected" },
+              ],
+            },
+          },
+        },
+      ],
+    })
+
+    const applied = await clipboard.applyClipboardEdits({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 2,
+    }, [["$1,234.50", "25%", "Approved"]])
+
+    expect(applied).toBe(1)
+    expect(rows.value[0] as unknown as Record<string, unknown>).toMatchObject({
+      a: 1234.5,
+      b: 0.25,
+      c: "approved",
+    })
+    expect(lastAction.value).toBe("Pasted 3/3 cells")
+  })
+
+  it("blocks invalid date, datetime, and select clipboard drafts", async () => {
+    const { clipboard, rows, lastAction } = createClipboardHarness({
+      visibleColumns: [
+        { key: "a", column: { key: "a", cellType: "date" } },
+        { key: "b", column: { key: "b", cellType: "datetime" } },
+        {
+          key: "c",
+          column: {
+            key: "c",
+            cellType: "select",
+            presentation: { options: ["Open", "Closed"] },
+          },
+        },
+      ],
+    })
+
+    const applied = await clipboard.applyClipboardEdits({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 2,
+    }, [["not-a-date", "still-not-a-date", "Archived"]])
+
+    expect(applied).toBe(0)
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "A1", b: "B1", c: "C1" })
+    expect(lastAction.value).toBe("Paste skipped: 3 invalid")
+  })
+
+  it("keeps formula clipboard drafts as basic text and allows empty typed clears", async () => {
+    const { clipboard, rows, lastAction } = createClipboardHarness({
+      visibleColumns: [
+        { key: "a", column: { key: "a", cellType: "number" } },
+        { key: "b", column: { key: "b", cellType: "date" } },
+        { key: "c", column: { key: "c", cellType: "formula" } },
+      ],
+    })
+
+    const applied = await clipboard.applyClipboardEdits({
+      startRow: 0,
+      endRow: 0,
+      startColumn: 0,
+      endColumn: 2,
+    }, [["", "", "=A1+B1"]])
+
+    expect(applied).toBe(1)
+    expect(rows.value[0]).toEqual({ rowId: "r1", a: "", b: "", c: "=A1+B1" })
+    expect(lastAction.value).toBe("Pasted 3/3 cells")
   })
 
   it("blocks copy when a selected row is missing from the loaded cache", async () => {
@@ -858,7 +947,9 @@ describe("useDataGridAppClipboard contract", () => {
     const copied = await clipboard.copySelectedCells("keyboard")
 
     expect(copied).toBe(true)
-    expect(lastAction.value).toBe("Copied 2x2 cells (keyboard)")
+    expect(lastAction.value).toBe(
+      "Copied 2x2 cells (keyboard); system clipboard unavailable, using in-memory clipboard",
+    )
   })
 
   it("blocks copy when the selected range includes detectable placeholder rows", async () => {

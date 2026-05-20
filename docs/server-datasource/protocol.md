@@ -374,6 +374,115 @@ Delegated selection operations should reuse the existing consistency vocabulary:
 - `revision` and `datasetVersion` in mutation responses
 - scoped `invalidation`
 
+### Planned Clipboard Operations
+
+The current protocol does not implement clipboard delegation routes. The contract below is the target shape for future server-backed copy/export, cut, clear/delete, and paste/import over unloaded selections.
+
+Clipboard copy/export planned route:
+
+`POST /api/server-demo/clipboard/copy`
+
+Request shape:
+
+```json
+{
+  "operationId": "clipboard-copy-123",
+  "baseRevision": "18",
+  "projectionHash": "projection-abc",
+  "selection": [
+    { "startRow": 20, "endRow": 120, "startColumn": 1, "endColumn": 4 }
+  ],
+  "columns": ["name", "status", "region", "value"],
+  "format": "tsv",
+  "includeHeaders": false,
+  "projection": {
+    "sortModel": [],
+    "filterModel": null,
+    "groupBy": null,
+    "groupExpansion": { "expandedByDefault": false, "toggledGroupKeys": [] },
+    "treeData": null,
+    "pivot": null,
+    "pagination": null
+  }
+}
+```
+
+Response shape:
+
+```json
+{
+  "operationId": "clipboard-copy-123",
+  "status": "committed",
+  "format": "tsv",
+  "payload": "Account 20\tActive\tEMEA\t970",
+  "affectedRows": 100,
+  "affectedCells": 400,
+  "revision": "18",
+  "datasetVersion": 18,
+  "warnings": []
+}
+```
+
+Clipboard paste/import planned route:
+
+`POST /api/server-demo/clipboard/paste`
+
+Request shape:
+
+```json
+{
+  "operationId": "clipboard-paste-123",
+  "baseRevision": "18",
+  "projectionHash": "projection-abc",
+  "target": { "startRow": 20, "endRow": 22, "startColumn": 1, "endColumn": 2 },
+  "columns": ["status", "region"],
+  "mode": "values",
+  "payload": {
+    "format": "tsv",
+    "text": "Active\tEMEA\nPaused\tAPAC"
+  },
+  "projection": {
+    "sortModel": [],
+    "filterModel": null,
+    "groupBy": null,
+    "groupExpansion": { "expandedByDefault": false, "toggledGroupKeys": [] },
+    "treeData": null,
+    "pivot": null,
+    "pagination": null
+  }
+}
+```
+
+Response shape:
+
+```json
+{
+  "operationId": "clipboard-paste-123",
+  "status": "committed",
+  "acceptedCells": 4,
+  "rejectedCells": [],
+  "blockedCells": 0,
+  "skippedCells": 0,
+  "materializedRows": 2,
+  "revision": "19",
+  "datasetVersion": 19,
+  "invalidation": {
+    "type": "range",
+    "range": { "startRow": 20, "endRow": 22 },
+    "rows": [],
+    "cells": []
+  },
+  "canUndo": true,
+  "canRedo": false,
+  "latestUndoOperationId": "clipboard-paste-123",
+  "latestRedoOperationId": null
+}
+```
+
+Clipboard mutation responses may use `status: "partial"` with `rejectedCells` when validation rejects only part of the request. They should use `status: "rejected"` and avoid mutation when `baseRevision` is stale, `projectionHash` does not match, target ranges include unsupported group rows, or authorization is lost.
+
+Cut and clear/delete should follow the same mutation response shape as paste/import. Cut requires source copy/export and source clear to be committed as one idempotent operation. If the backend cannot make that atomic, it should reject instead of clearing source cells after a failed export.
+
 ## History Stack
 
 Normal undo/redo uses stack history.

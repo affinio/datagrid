@@ -198,17 +198,22 @@ export function useDataGridClipboardBridge<
       options.setLastAction("Copy skipped: empty selection")
       return false
     }
+    let systemClipboardWritten = true
     try {
       await writeClipboardPayload(payload)
     } catch {
-      // Clipboard permissions can be unavailable in some environments.
+      systemClipboardWritten = false
     }
     options.lastCopiedPayload.value = payload
     flashCopiedSelection(range)
     options.closeContextMenu()
     const rows = range.endRow - range.startRow + 1
     const columns = range.endColumn - range.startColumn + 1
-    options.setLastAction(`Copied ${rows}x${columns} cells (${trigger})`)
+    options.setLastAction(
+      systemClipboardWritten
+        ? `Copied ${rows}x${columns} cells (${trigger})`
+        : `Copied ${rows}x${columns} cells (${trigger}); system clipboard unavailable, using in-memory clipboard`,
+    )
     return true
   }
 
@@ -221,7 +226,13 @@ export function useDataGridClipboardBridge<
         return payload
       }
     } catch {
-      // Fallback to in-memory payload.
+      const fallback = options.lastCopiedPayload.value
+      options.setLastAction(
+        fallback
+          ? "Paste using in-memory clipboard: system clipboard unavailable"
+          : "Paste skipped: system clipboard unavailable and no in-memory clipboard payload",
+      )
+      return fallback
     }
     return options.lastCopiedPayload.value
   }

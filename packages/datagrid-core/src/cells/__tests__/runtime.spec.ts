@@ -123,6 +123,36 @@ describe("data grid cell engine", () => {
       },
       draft: "Archived",
     })).toMatchObject({ valid: false, reason: "invalid-select-option" })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "price", cellType: "currency" },
+      draft: "$1,234.50",
+    })).toMatchObject({ valid: true, value: 1234.5 })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "ratio", cellType: "percent" },
+      draft: "25%",
+    })).toMatchObject({ valid: true, value: 0.25 })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "ratio", cellType: "percent" },
+      draft: "twenty",
+    })).toMatchObject({ valid: false, reason: "invalid-percent" })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "updated", cellType: "datetime" },
+      draft: "not-a-date",
+    })).toMatchObject({ valid: false, reason: "invalid-datetime" })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "formula", cellType: "formula" },
+      draft: "=A1+B1",
+    })).toMatchObject({ valid: true, value: "=A1+B1" })
+
+    expect(validateDataGridCellDraftValue({
+      column: { key: "amount", cellType: "number" },
+      draft: "",
+    })).toMatchObject({ valid: true, value: "" })
   })
 
   it("resolves keyboard and click behavior from the cell type", () => {

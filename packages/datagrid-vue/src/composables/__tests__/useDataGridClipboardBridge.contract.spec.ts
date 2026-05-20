@@ -70,6 +70,7 @@ describe("useDataGridClipboardBridge contract", () => {
   it("falls back to in-memory payload and parses matrix", async () => {
     const copiedSelectionRange = ref<DataGridClipboardRange | null>(null)
     const lastCopiedPayload = ref("alpha\tbeta\ngamma\tdelta")
+    const lastAction = ref("")
 
     const clipboard = useDataGridClipboardBridge<TestRow>({
       copiedSelectionRange,
@@ -86,7 +87,9 @@ describe("useDataGridClipboardBridge contract", () => {
       getCellValue() {
         return ""
       },
-      setLastAction: vi.fn(),
+      setLastAction(message) {
+        lastAction.value = message
+      },
       closeContextMenu: vi.fn(),
       readClipboardText: async () => {
         throw new Error("blocked")
@@ -99,6 +102,88 @@ describe("useDataGridClipboardBridge contract", () => {
       ["alpha", "beta"],
       ["gamma", "delta"],
     ])
+    expect(lastAction.value).toBe("Paste using in-memory clipboard: system clipboard unavailable")
+  })
+
+  it("reports clipboard write denial while preserving the in-memory copied payload", async () => {
+    const copiedSelectionRange = ref<DataGridClipboardRange | null>(null)
+    const lastCopiedPayload = ref("")
+    const lastAction = ref("")
+
+    const rows: TestRow[] = [
+      { rowId: "r-1", service: "api", owner: "alice" },
+    ]
+    const columnKeys = ["service", "owner"]
+
+    const clipboard = useDataGridClipboardBridge<TestRow>({
+      copiedSelectionRange,
+      lastCopiedPayload,
+      resolveCopyRange() {
+        return {
+          startRow: 0,
+          endRow: 0,
+          startColumn: 0,
+          endColumn: 1,
+        }
+      },
+      getRowAtIndex(rowIndex) {
+        return rows[rowIndex]
+      },
+      getColumnKeyAtIndex(columnIndex) {
+        return columnKeys[columnIndex] ?? null
+      },
+      getCellValue(row, columnKey) {
+        return row[columnKey as keyof TestRow]
+      },
+      setLastAction(message) {
+        lastAction.value = message
+      },
+      closeContextMenu: vi.fn(),
+      copiedSelectionFlashMs: 0,
+      writeClipboardText: async () => {
+        throw new Error("denied")
+      },
+    })
+
+    await expect(clipboard.copySelection("context-menu")).resolves.toBe(true)
+
+    expect(lastCopiedPayload.value).toBe("api\talice")
+    expect(lastAction.value).toBe(
+      "Copied 1x2 cells (context-menu); system clipboard unavailable, using in-memory clipboard",
+    )
+  })
+
+  it("reports clipboard read denial when no fallback payload exists", async () => {
+    const copiedSelectionRange = ref<DataGridClipboardRange | null>(null)
+    const lastCopiedPayload = ref("")
+    const lastAction = ref("")
+
+    const clipboard = useDataGridClipboardBridge<TestRow>({
+      copiedSelectionRange,
+      lastCopiedPayload,
+      resolveCopyRange() {
+        return null
+      },
+      getRowAtIndex() {
+        return undefined
+      },
+      getColumnKeyAtIndex() {
+        return null
+      },
+      getCellValue() {
+        return ""
+      },
+      setLastAction(message) {
+        lastAction.value = message
+      },
+      closeContextMenu: vi.fn(),
+      readClipboardText: async () => {
+        throw new Error("blocked")
+      },
+    })
+
+    await expect(clipboard.readClipboardPayload()).resolves.toBe("")
+    expect(lastAction.value).toBe("Paste skipped: system clipboard unavailable and no in-memory clipboard payload")
   })
 
   it("escapes spreadsheet tsv fields that contain tabs, newlines, and quotes", async () => {
