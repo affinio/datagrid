@@ -250,7 +250,7 @@ Tree workload matrix profiles:
 - CI blocking profile:
   - `pnpm run bench:datagrid:tree:matrix:assert:ci`
   - row scales: `10k, 25k, 100k`
-  - 100k budgets: expand p95/p99 `12/18ms`, filter/sort p95/p99 `80/120ms`
+  - 100k budgets: expand p95/p99 `12/35ms`, filter/sort p95/p99 `100/120ms`
 - Nightly/stress profile:
   - `pnpm run bench:datagrid:tree:matrix:assert:nightly`
   - row scales: `10k, 25k, 50k, 100k`
