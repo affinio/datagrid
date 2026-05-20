@@ -31,7 +31,7 @@ The existing package split is sound. The architecture should be hardened in plac
 - Slice 7, Server Virtual Clipboard Delegation, is completed as of 2026-05-20 for opt-in app-level server copy/cut/paste delegates over unloaded virtual ranges.
 - Slice 8, Async Paste Pending And Recovery, is completed as of 2026-05-20 for app-level pending/rejected paste state, duplicate-paste blocking, and async rejection messages.
 - Slice 9, Cut-Paste Atomicity, is completed as of 2026-05-20 for local row-model cut-paste source clear and target write as one commit.
-- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage, clipboard fallback live-region coverage, TSV parser cost, and materialized copy/paste enterprise benchmark budgets; browser/device gates remain planned.
+- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage, browser copied-outline remount coverage including right-pinned panes, clipboard fallback live-region coverage, TSV parser cost, and materialized copy/paste enterprise benchmark budgets; browser clipboard latency and mobile/device gates remain planned.
 - Current code includes typed draft validation and local target/applied/blocked/skipped/invalid status on the canonical app clipboard paste path; the remaining validation work is custom/server result contracts, host paste policies, and per-cell rejection UI.
 - Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
@@ -224,7 +224,7 @@ Tests and benchmarks sampled:
 - Local copy/cut correctly refuses unloaded rows, but enterprise server-backed grids need copy/export/cut/clear over unloaded ranges.
 - `virtualSelection.ts` can evaluate server capabilities for copy/cut/clear/fill/range-move, but app clipboard does not yet consume those decisions.
 - Placeholder paste is strong for editable placeholder tails, but placeholder copy/cut is blocked. That is correct unless a server/export path is added.
-- Pending clipboard outlines are covered at the app range/viewport-offset level; browser coverage for scroll-out/scroll-in, pinned panes, and horizontal virtualization remains planned.
+- Pending copied clipboard outlines are covered at the app range/viewport-offset level and by Playwright for vertical scroll-out/scroll-in, horizontal virtualization, and right-pinned pane remounts. Cut-outline browser coverage remains planned.
 - Projection changes after copy/cut can make row indexes stale. Current pending range state is index-based; enterprise behavior needs a stale/rebase/clear policy using projection identity.
 
 ## Failure Handling Risks
@@ -275,7 +275,7 @@ Unit and contract tests:
 Component tests:
 
 - Placeholder paste materializes shallow and deep placeholder rows with history.
-- Pending cell and row clipboard outlines reappear after virtualization remount and pinned-pane scroll.
+- Pending copied cell clipboard outlines reappear after vertical/horizontal virtualization remount and right-pinned pane scroll.
 - Partial paste reports applied and blocked cells.
 - Cut-paste failure rolls back or reports a deterministic recoverable state.
 - Paste-special values mode does not read system clipboard when an internal copied range exists.

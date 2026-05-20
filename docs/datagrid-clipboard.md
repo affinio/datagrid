@@ -94,6 +94,8 @@ The current app exposes visual pending clipboard outlines and routes grid status
 
 Touch selection remains scroll-first. Mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 
+Browser validation covers copied clipboard outlines across vertical remounts, horizontal remounts, and right-pinned pane remounts. Cut-outline browser remount coverage remains planned.
+
 ## Performance Gates
 
 `bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency. Browser clipboard read/write latency and mobile/coarse-pointer clipboard workflows remain planned gates.
