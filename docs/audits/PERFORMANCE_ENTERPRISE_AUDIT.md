@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slices 1-5 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions.
+Update `2026-05-20`: Slices 1-6 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort/edit-diagnostic budgets. Column-menu sort now cancels/invalidates deferred large value-histogram loading when sorting closes the menu first; inline-edit burst diagnostics now split update/open/commit/paint/frame/mutation/long-task costs; single-column local sorts now use scalar sort values instead of allocating one sort-value array per row; frozen inline-edit patches now avoid full body-row partition rebuilds; datasource/server-placeholder gates now hard-fail placeholder exposure, viewport availability, cache, pull-duration, retry, stale-retention, pull-count, abort, dropped-pull, and row-cache eviction regressions; soak gates now cover heap slope, plateau drift, peak heap, server row-cache, renderer cache, listener, DOM-node, and scenario latency ceilings.
 
 ## Scope
 
@@ -130,9 +130,9 @@ Formula, spreadsheet, and protocol artifacts:
 
 3. **Long-duration memory proof is insufficient.**
 
-   The latest enterprise memory soak artifact runs only `3s` and reports `heapDelta ~5.27MB` with a short-window slope around `104MB/min`. The older soak session runs about `125s` and reports `heapDelta ~21.8MB`. This is useful signal, but not enough for enterprise leak confidence.
+   Historical enterprise memory soak artifacts were short or weakly gated: one ran only `3s` and another ran about `125s` with only broad heap checks. The current soak assert adds mixed scroll/edit/filter/server-refresh/renderer coverage with heap slope, plateau drift, peak heap, server row-cache, renderer-cache, listener, DOM-node, and scenario-specific latency budgets. A 30-minute `bench:datagrid:soak:long:assert` profile is now available for release-confidence runs.
 
-   Required: add 30-60 minute soak gates with heap plateau checks, retained cache/listener/DOM diagnostics, and scenario-specific heap ceilings for scroll, edit, filter, server refresh, and custom renderer paths.
+   Required: collect and retain long-profile artifacts in release validation before treating leak confidence as fully proven.
 
 ### High
 
@@ -314,8 +314,9 @@ What blocks the target:
    - Datasource churn assert now hard-fails pull count, abort, dropped-pull, row-cache eviction, deferred/coalesced operation, cache replacement, and stale viewport coverage budgets.
 
 6. **Long memory soak**
-   - Add 30-60 minute soak profiles.
-   - Track heap slope, plateau, retained DOM nodes, renderer caches, row caches, event listeners, and datasource cache growth.
+   - Status: completed on 2026-05-20.
+   - CI soak assert now gates mixed scroll, edit, filter, server refresh, and renderer-cache paths.
+   - 30-minute `bench:datagrid:soak:long:assert` profile tracks heap slope, plateau, retained DOM nodes, renderer caches, row caches, event listeners, and datasource cache growth.
 
 7. **Grouped/tree/pivot interactivity**
    - Add chunked expand/collapse and partial materialization where needed.

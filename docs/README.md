@@ -7,6 +7,7 @@ This folder separates user-facing documentation from internal planning material.
 - [Codex reference map](./codex-reference-map.md) - focused reading path for code-review, quality, interaction, virtualization, and server datasource changes.
 - [Server datasource](./server-datasource/README.md) - production integration path for backend-owned tables.
 - [Server datasource integration map](./server-datasource/integration-docs-map.md) - ordered reading path for package users and Codex agents.
+- [Product report RU](./datagrid-product-report.ru.md) - simple product-oriented overview for engineers evaluating Affino DataGrid.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
 - [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.
 - [Troubleshooting runbook](./datagrid-troubleshooting-runbook.md) - operational debugging guide.

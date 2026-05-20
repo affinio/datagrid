@@ -270,6 +270,33 @@ Status in this local environment:
 Runtime perf-by-design contract reference:
 - `docs/perf/datagrid-perf-by-design-runtime.md`
 
+## Long Memory Soak
+
+Soak scripts:
+
+- CI/release smoke: `pnpm run bench:datagrid:soak:assert`
+- 30-minute release-confidence profile: `pnpm run bench:datagrid:soak:long:assert`
+
+The soak gate covers mixed scroll, edit patching, sort/filter/group/pivot reapply, server-backed viewport refresh, renderer-cache churn, listener churn, and retained DOM-node counters in one long-lived model session.
+
+Hard budgets in `bench:datagrid:soak:assert`:
+
+- `PERF_BUDGET_MAX_OPERATION_P95_MS=160`
+- `PERF_BUDGET_MAX_SCROLL_P95_MS=2`
+- `PERF_BUDGET_MAX_EDIT_P95_MS=80`
+- `PERF_BUDGET_MAX_FILTER_P95_MS=190`
+- `PERF_BUDGET_MAX_SERVER_REFRESH_P95_MS=5`
+- `PERF_BUDGET_MAX_RENDERER_P95_MS=2`
+- `PERF_BUDGET_MAX_HEAP_DELTA_MB=40`
+- `PERF_BUDGET_MAX_HEAP_GROWTH_PER_1K_OPS_MB=6.5`
+- `PERF_BUDGET_MAX_HEAP_PLATEAU_DRIFT_MB=45`
+- `PERF_BUDGET_MAX_PEAK_HEAP_MB=140`
+- `PERF_BUDGET_MAX_SERVER_ROW_CACHE_ENTRIES=2048`
+- `PERF_BUDGET_MAX_RENDERER_CACHE_ENTRIES=1024`
+- `PERF_BUDGET_MAX_LISTENER_COUNT=3`
+- `PERF_BUDGET_MAX_DOM_NODE_COUNT=0`
+- `PERF_BUDGET_MIN_SCENARIO_OPS=50`
+
 ## Optional Hardcore Stress Suite (Non-blocking)
 
 For deep local stress runs (not part of CI blocking harness by default):
@@ -278,6 +305,8 @@ For deep local stress runs (not part of CI blocking harness by default):
 - `pnpm run bench:datagrid:hardcore:assert`
 - `pnpm run bench:datagrid:soak`
 - `pnpm run bench:datagrid:soak:assert`
+- `pnpm run bench:datagrid:soak:long`
+- `pnpm run bench:datagrid:soak:long:assert`
 - `pnpm run bench:datagrid:group-depth`
 - `pnpm run bench:datagrid:group-depth:assert`
 - `pnpm run bench:datagrid:pivot:server-interop`

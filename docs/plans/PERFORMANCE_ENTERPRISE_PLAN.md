@@ -165,12 +165,14 @@ Current execution state:
 
 ## Slice 6: Long Memory Soak
 
-- Status: Pending.
+- Status: Completed on 2026-05-20.
 - Objective: add long-duration leak confidence for scroll, edit, filter, server refresh, and renderer paths.
 - Affected packages/files:
   - `scripts/bench-datagrid-soak-session.mjs`
   - `docs/perf/datagrid-performance-gates.md`
-- Expected behavior change: no runtime behavior change; long soak becomes a release-confidence artifact.
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+- Expected behavior change: no runtime grid behavior change; the soak benchmark now has CI and 30-minute long profiles with heap plateau, peak heap, server row-cache, renderer-cache, listener, DOM-node, and scenario-specific latency gates.
 - Tests to add/update:
   - 30-60 minute soak profile with heap slope, plateau, cache/listener/DOM diagnostics, and scenario-specific ceilings.
 - Validation command: `pnpm run bench:datagrid:soak:assert`

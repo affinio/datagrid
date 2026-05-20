@@ -748,6 +748,8 @@ registerTokenCheck(
     const rowmodelsAssertScript = String(pkg?.scripts?.["bench:datagrid:rowmodels:assert"] ?? "")
     const interactionsAssertScript = String(pkg?.scripts?.["bench:datagrid:interactions:assert"] ?? "")
     const datasourceAssertScript = String(pkg?.scripts?.["bench:datagrid:datasource-churn:assert"] ?? "")
+    const soakAssertScript = String(pkg?.scripts?.["bench:datagrid:soak:assert"] ?? "")
+    const soakLongAssertScript = String(pkg?.scripts?.["bench:datagrid:soak:long:assert"] ?? "")
     const derivedCacheAssertScript = String(pkg?.scripts?.["bench:datagrid:derived-cache:assert"] ?? "")
     const pivotAssertScript = String(pkg?.scripts?.["bench:datagrid:pivot:assert"] ?? "")
     const treeAssertScript = String(pkg?.scripts?.["bench:datagrid:tree:assert"] ?? "")
@@ -775,6 +777,37 @@ registerTokenCheck(
     const datasourcePullDuration = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MAX_PULL_DURATION_MAX_MS")
     const datasourceRetrySuccesses = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_PLACEHOLDER_RETRY_SUCCESSES")
     const datasourceStaleRetainedRows = extractEnvNumberFromScript(datasourceAssertScript, "PERF_BUDGET_MIN_STALE_RETAINED_ROWS")
+    const soakRequiredBudgets = [
+      "PERF_BUDGET_MAX_OPERATION_P95_MS",
+      "PERF_BUDGET_MAX_SCROLL_P95_MS",
+      "PERF_BUDGET_MAX_EDIT_P95_MS",
+      "PERF_BUDGET_MAX_FILTER_P95_MS",
+      "PERF_BUDGET_MAX_SERVER_REFRESH_P95_MS",
+      "PERF_BUDGET_MAX_RENDERER_P95_MS",
+      "PERF_BUDGET_MAX_HEAP_DELTA_MB",
+      "PERF_BUDGET_MAX_HEAP_GROWTH_PER_1K_OPS_MB",
+      "PERF_BUDGET_MAX_HEAP_PLATEAU_DRIFT_MB",
+      "PERF_BUDGET_MAX_PEAK_HEAP_MB",
+      "PERF_BUDGET_MAX_SERVER_ROW_CACHE_ENTRIES",
+      "PERF_BUDGET_MAX_RENDERER_CACHE_ENTRIES",
+      "PERF_BUDGET_MAX_LISTENER_COUNT",
+      "PERF_BUDGET_MAX_DOM_NODE_COUNT",
+      "PERF_BUDGET_MIN_SCENARIO_OPS",
+      "PERF_BUDGET_MAX_VARIANCE_PCT",
+    ]
+    const missingSoakBudgets = soakRequiredBudgets.filter(
+      budget => extractEnvNumberFromScript(soakAssertScript, budget) == null,
+    )
+    const missingLongSoakBudgets = soakRequiredBudgets.filter(
+      budget => extractEnvNumberFromScript(soakLongAssertScript, budget) == null,
+    )
+    const soakProfileOk =
+      soakAssertScript.includes("BENCH_SOAK_PROFILE=ci") &&
+      soakAssertScript.includes("BENCH_OUTPUT_JSON=artifacts/performance/bench-datagrid-soak-session.assert.json")
+    const longSoakProfileOk =
+      soakLongAssertScript.includes("BENCH_SOAK_PROFILE=long") &&
+      extractEnvNumberFromScript(soakLongAssertScript, "BENCH_SOAK_MIN_DURATION_MS") != null &&
+      soakLongAssertScript.includes("BENCH_OUTPUT_JSON=artifacts/performance/bench-datagrid-soak-session.long.assert.json")
     const derivedVariance = extractEnvNumberFromScript(derivedCacheAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
     const derivedHeap = extractEnvNumberFromScript(derivedCacheAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const pivotVariance = extractEnvNumberFromScript(pivotAssertScript, "PERF_BUDGET_MAX_VARIANCE_PCT")
@@ -810,6 +843,10 @@ registerTokenCheck(
       datasourceRetrySuccesses != null &&
       datasourceStaleRetainedRows != null &&
       datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true") &&
+      missingSoakBudgets.length === 0 &&
+      missingLongSoakBudgets.length === 0 &&
+      soakProfileOk &&
+      longSoakProfileOk &&
       derivedVariance != null &&
       derivedHeap != null &&
       pivotVariance != null &&
@@ -823,10 +860,10 @@ registerTokenCheck(
     registerConditionCheck(
       assertBudgetId,
       ok,
-      "Rowmodel/interaction/datasource/derived/pivot/tree assert scripts keep finite variance + heap budgets, datasource assert keeps churn budgets, and enterprise selection assert keeps finite selection budgets",
+      "Rowmodel/interaction/datasource/soak/derived/pivot/tree assert scripts keep finite variance + heap budgets, datasource assert keeps churn budgets, soak assert keeps leak budgets, and enterprise selection assert keeps finite selection budgets",
       ok
         ? "ok"
-        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource scrollPullRequested=${datasourceScrollPullRequested}, datasource scrollPullAborted=${datasourceScrollPullAborted}, datasource scrollPullDropped=${datasourceScrollPullDropped}, datasource scrollRowCacheEvicted=${datasourceScrollRowCacheEvicted}, datasource filterPullRequested=${datasourceFilterPullRequested}, datasource filterPullAborted=${datasourceFilterPullAborted}, datasource filterPullDropped=${datasourceFilterPullDropped}, datasource filterRowCacheEvicted=${datasourceFilterRowCacheEvicted}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
+        : `missing finite budget(s): rowmodels variance=${rowmodelsVariance}, rowmodels heap=${rowmodelsHeap}, interactions variance=${interactionsVariance}, interactions heap=${interactionsHeap}, datasource variance=${datasourceVariance}, datasource heap=${datasourceHeap}, datasource scrollPullRequested=${datasourceScrollPullRequested}, datasource scrollPullAborted=${datasourceScrollPullAborted}, datasource scrollPullDropped=${datasourceScrollPullDropped}, datasource scrollRowCacheEvicted=${datasourceScrollRowCacheEvicted}, datasource filterPullRequested=${datasourceFilterPullRequested}, datasource filterPullAborted=${datasourceFilterPullAborted}, datasource filterPullDropped=${datasourceFilterPullDropped}, datasource filterRowCacheEvicted=${datasourceFilterRowCacheEvicted}, datasource placeholderExposure=${datasourcePlaceholderExposure}, datasource viewportAvailability=${datasourceViewportAvailability}, datasource placeholderEvents=${datasourcePlaceholderEvents}, datasource blankViewportEvents=${datasourceBlankViewportEvents}, datasource cacheHitRatio=${datasourceCacheHitRatio}, datasource cacheMissRows=${datasourceCacheMissRows}, datasource pullDuration=${datasourcePullDuration}, datasource retrySuccesses=${datasourceRetrySuccesses}, datasource staleRetainedRows=${datasourceStaleRetainedRows}, datasource placeholderFail=${datasourceAssertScript.includes("PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true")}, soak missing=${missingSoakBudgets.join("|") || "none"}, longSoak missing=${missingLongSoakBudgets.join("|") || "none"}, soakProfile=${soakProfileOk}, longSoakProfile=${longSoakProfileOk}, derived variance=${derivedVariance}, derived heap=${derivedHeap}, pivot variance=${pivotVariance}, pivot heap=${pivotHeap}, tree variance=${treeVariance}, tree heap=${treeHeap}, selection summary=${selectionSummary}, selection virtualCoverage=${selectionVirtualCoverage}, selection clipboardPlanning=${selectionClipboardPlanning}, selection overlayPlanning=${selectionOverlayPlanning}`,
     )
   }
 }
