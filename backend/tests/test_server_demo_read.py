@@ -96,7 +96,6 @@ async def test_server_demo_pull_rejects_unsupported_projection_fields(client: As
             "range": {"startRow": 0, "endRow": 50},
             "sortModel": [],
             "filterModel": None,
-            "groupBy": {"fields": ["region"], "expandedByDefault": True},
             "treeData": {"mode": "path"},
             "pivot": {"pivotModel": {"rows": ["region"]}},
         },
@@ -106,10 +105,88 @@ async def test_server_demo_pull_rejects_unsupported_projection_fields(client: As
     assert response.json() == {
         "code": "unsupported-server-projection",
         "message": (
-            "Server demo pull supports range, sort, and filter only; unsupported projection fields: "
-            "groupBy, treeData, pivot"
+            "Server demo pull supports range, sort, filter, and region grouping only; unsupported projection fields: "
+            "treeData, pivot"
         ),
     }
+
+
+async def test_server_demo_pull_rejects_unsupported_group_field(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 50},
+            "sortModel": [],
+            "filterModel": None,
+            "groupBy": {"fields": ["segment"], "expandedByDefault": True},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "code": "unsupported-server-projection",
+        "message": (
+            "Server demo pull supports range, sort, filter, and region grouping only; unsupported projection fields: "
+            "groupBy"
+        ),
+    }
+
+
+async def test_server_demo_pull_region_grouping_collapsed(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 4},
+            "sortModel": [],
+            "filterModel": None,
+            "groupBy": {"fields": ["region"], "expandedByDefault": False},
+            "groupExpansion": {"expandedByDefault": False, "toggledGroupKeys": []},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 4
+    assert [row["rowId"] for row in body["rows"]] == [
+        "group:region:AMER",
+        "group:region:EMEA",
+        "group:region:APAC",
+        "group:region:LATAM",
+    ]
+    assert body["rows"][0]["kind"] == "group"
+    assert body["rows"][0]["state"] == {"expanded": False}
+    assert body["rows"][0]["groupMeta"] == {
+        "groupKey": "group:region:AMER",
+        "groupField": "region",
+        "groupValue": "AMER",
+        "level": 0,
+        "childrenCount": 25_000,
+    }
+    assert body["rows"][0]["row"]["name"] == "Region: AMER"
+
+
+async def test_server_demo_pull_region_grouping_expanded_range(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/pull",
+        json={
+            "range": {"startRow": 0, "endRow": 3},
+            "sortModel": [],
+            "filterModel": None,
+            "groupBy": {"fields": ["region"], "expandedByDefault": True},
+            "groupExpansion": {"expandedByDefault": True, "toggledGroupKeys": []},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 100_004
+    assert body["rows"][0]["rowId"] == "group:region:AMER"
+    assert body["rows"][0]["kind"] == "group"
+    assert body["rows"][0]["state"] == {"expanded": True}
+    assert body["rows"][1]["kind"] == "leaf"
+    assert body["rows"][1]["row"]["region"] == "AMER"
+    assert body["rows"][2]["kind"] == "leaf"
+    assert body["rows"][2]["row"]["region"] == "AMER"
 
 
 async def test_server_demo_pull_maps_row_shape(client: AsyncClient) -> None:

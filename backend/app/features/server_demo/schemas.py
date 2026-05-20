@@ -52,6 +52,20 @@ class ServerDemoPullRange(BaseModel):
             raise ValueError("endRow must be greater than or equal to startRow")
 
 
+def _normalized_group_fields(value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    raw_fields = value.get("fields")
+    if not isinstance(raw_fields, list | tuple):
+        return []
+    fields: list[str] = []
+    for raw_field in raw_fields:
+        field = str(raw_field).strip()
+        if field:
+            fields.append(field)
+    return fields
+
+
 class ServerDemoPullRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -64,11 +78,18 @@ class ServerDemoPullRequest(BaseModel):
     pivot: dict[str, Any] | None = None
     pagination: dict[str, Any] | None = None
 
+    def group_fields(self) -> list[str]:
+        return _normalized_group_fields(self.group_by)
+
+    def supports_region_grouping(self) -> bool:
+        return self.group_fields() == ["region"]
+
     def unsupported_projection_fields(self) -> list[str]:
         unsupported: list[str] = []
-        if _has_payload(self.group_by):
+        supports_region_grouping = self.supports_region_grouping()
+        if _has_payload(self.group_by) and not supports_region_grouping:
             unsupported.append("groupBy")
-        if _has_payload(self.group_expansion):
+        if _has_payload(self.group_expansion) and not supports_region_grouping:
             unsupported.append("groupExpansion")
         if _has_payload(self.tree_data):
             unsupported.append("treeData")
@@ -102,10 +123,37 @@ class ServerDemoRow(BaseModel):
     updated_at: datetime = Field(alias="updatedAt")
 
 
+class ServerDemoRowGroupMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    group_key: str = Field(alias="groupKey")
+    group_field: str = Field(alias="groupField")
+    group_value: str = Field(alias="groupValue")
+    level: int = Field(ge=0)
+    children_count: int = Field(ge=0, alias="childrenCount")
+
+
+class ServerDemoRowState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expanded: bool | None = None
+
+
+class ServerDemoRowEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_id: str = Field(alias="rowId")
+    index: int = Field(ge=0)
+    row: ServerDemoRow
+    kind: Literal["group", "leaf"]
+    group_meta: ServerDemoRowGroupMeta | None = Field(default=None, alias="groupMeta")
+    state: ServerDemoRowState | None = None
+
+
 class ServerDemoPullResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    rows: list[ServerDemoRow] = Field(default_factory=list, exclude_if=lambda value: not value)
+    rows: list[ServerDemoRow | ServerDemoRowEntry] = Field(default_factory=list, exclude_if=lambda value: not value)
     total: int
     revision: str | None = None
     dataset_version: int = Field(alias="datasetVersion")

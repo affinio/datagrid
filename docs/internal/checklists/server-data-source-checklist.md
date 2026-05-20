@@ -1,6 +1,6 @@
 # Server Data Source Parity Checklist
 
-Status: flat server datasource path is production-shaped for the current demo scope. Filtering, histograms, optimistic editing, server fill, history, retry/backoff, invalidation, polling change feed, loading placeholders, and latency/cache diagnostics are implemented. Remaining gaps are enterprise projection/live/offline capabilities and unloaded-row operations.
+Status: flat server datasource path is production-shaped for the current demo scope. Filtering, histograms, optimistic editing, server fill, history, retry/backoff, invalidation, polling change feed, loading placeholders, latency/cache diagnostics, and backend `region` grouping are implemented. Remaining gaps are enterprise projection/live/offline capabilities, broader grouping, and unloaded-row operations.
 
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
@@ -39,10 +39,10 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
 - [ ] Copy/paste across unloaded rows
-- [ ] Grouping/tree/pivot server projection
+- [ ] Broader grouping/tree/pivot server projection
 - [ ] Server-side aggregation over unloaded ranges
 - [x] Column histograms for the current demo scope
-- Note: current `server_demo` intentionally rejects unsupported grouping/tree/pivot pull projection with `400 unsupported-server-projection`.
+- Note: current `server_demo` supports single-level `groupBy.fields=["region"]` and intentionally rejects unsupported group fields, tree, and pivot pull projection with `400 unsupported-server-projection`.
 
 ## Server-Specific Behaviour
 - [x] Cache invalidation

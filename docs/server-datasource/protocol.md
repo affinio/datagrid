@@ -41,9 +41,9 @@ Every server-backed projection must provide deterministic identity:
 - Placeholder/loading row ids are owned by the client row model and must not be returned by the backend as real row ids.
 - Sort ties must use a stable tie-breaker such as row id or source index.
 
-Current `server_demo` pull supports range, sort, and filter. Server-side grouping, tree projection, and pivot projection are not implemented in the current backend path; their fields are only part of frontend/core request and fill consistency contracts until a dedicated backend projection slice implements them.
+Current `server_demo` pull supports range, sort, filter, and single-level `groupBy.fields = ["region"]` projection. Server-side tree projection and pivot projection are not implemented in the current backend path; their fields are only part of frontend/core request and fill consistency contracts until a dedicated backend projection slice implements them.
 
-When `groupBy`, `groupExpansion`, `treeData`, or `pivot` is sent to `POST /api/server-demo/pull` with a non-empty payload, the backend returns `400 unsupported-server-projection`. This is intentional: demo integrations should fail explicitly rather than returning flat rows for a grouped/tree/pivot request.
+When unsupported `groupBy` fields, `treeData`, or `pivot` are sent to `POST /api/server-demo/pull` with a non-empty payload, the backend returns `400 unsupported-server-projection`. This is intentional: demo integrations should fail explicitly rather than returning flat rows for an unsupported grouped/tree/pivot request.
 
 ## Pull
 
@@ -95,10 +95,14 @@ Recommended fields:
 - `sortModel`
 - `filterModel`
 
+Supported projection in the current `server_demo` pull path:
+
+- `groupBy.fields = ["region"]`
+- `groupExpansion` for region group keys such as `group:region:AMER`
+
 Unsupported in the current `server_demo` pull path:
 
-- `groupBy`
-- `groupExpansion`
+- `groupBy` fields other than `region`
 - `treeData`
 - `pivot`
 

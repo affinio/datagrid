@@ -51,7 +51,7 @@ Important groups:
 
 These models are the source of truth for field names. The frontend adapter mirrors them closely, so keep them stable unless you want to change the transport contract.
 
-`ServerDemoPullRequest` accepts range, sort, filter, and pagination metadata. The current demo backend does not implement server grouping, tree projection, or pivot projection for pull responses. Non-empty `groupBy`, `groupExpansion`, `treeData`, or `pivot` payloads return `400 unsupported-server-projection` instead of silently returning flat rows.
+`ServerDemoPullRequest` accepts range, sort, filter, pagination metadata, and single-level region grouping. The current demo backend supports `groupBy.fields = ["region"]` with `groupExpansion` and does not implement server tree projection or pivot projection for pull responses. Unsupported `groupBy` fields, `treeData`, or `pivot` payloads return `400 unsupported-server-projection` instead of silently returning flat rows.
 
 ## Repository / Adapter
 
@@ -138,7 +138,7 @@ This means two different workspace ids can mutate the same logical table without
 - use stack-based history for normal UX; keep operation-id replay for diagnostics/manual tools
 - return `409` for stale or mismatched fill commits
 - return the current invalidation shape from mutations
-- return `400 unsupported-server-projection` for unsupported pull projection fields until server grouping/tree/pivot are implemented
+- return `400 unsupported-server-projection` for unsupported pull projection fields until server tree/pivot and broader grouping are implemented
 
 ## Related Files
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -29,6 +30,7 @@ from app.features.server_demo.schemas import (
     ServerDemoHistoryStatusRequest,
     ServerDemoHistoryStatusResponse,
     ServerDemoHistogramResponse,
+    ServerDemoRowEntry,
     ServerDemoChangeFeedChange,
     ServerDemoChangeFeedResponse,
     ServerDemoMutationCellInvalidation,
@@ -50,6 +52,9 @@ from affino_grid_backend.core.revision import GridRevisionService
 from app.infrastructure.db.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
+
+SERVER_DEMO_REGION_ORDER = ("AMER", "EMEA", "APAC", "LATAM")
+SERVER_DEMO_GROUP_UPDATED_AT = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 class ServerDemoRepository(ServerGridDataAdapter):
@@ -103,7 +108,7 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 status_code=400,
                 code="unsupported-server-projection",
                 message=(
-                    "Server demo pull supports range, sort, and filter only; unsupported projection fields: "
+                    "Server demo pull supports range, sort, filter, and region grouping only; unsupported projection fields: "
                     + ", ".join(unsupported_projection_fields)
                 ),
             )
@@ -115,6 +120,9 @@ class ServerDemoRepository(ServerGridDataAdapter):
                 code="pull-range-too-large",
                 message="Requested range exceeds maximum allowed size",
             )
+
+        if request.supports_region_grouping():
+            return await self._pull_region_grouped(request)
 
         conditions = self._projection.build_filter_conditions(request.filter_model)
         total = await self._count_rows_with_policy(conditions, settings.grid_max_filter_count_rows)
@@ -129,6 +137,145 @@ class ServerDemoRepository(ServerGridDataAdapter):
             total=total,
             revision=revision,
             dataset_version=self._dataset_version(revision),
+        )
+
+    async def _pull_region_grouped(self, request: ServerDemoPullRequest) -> ServerDemoPullResponse:
+        conditions = self._projection.build_filter_conditions(request.filter_model)
+        counts_by_region = await self._region_counts(conditions)
+        expanded_by_default = bool((request.group_expansion or {}).get("expandedByDefault"))
+        toggled_group_keys = {
+            str(value)
+            for value in (request.group_expansion or {}).get("toggledGroupKeys", [])
+            if str(value).strip()
+        }
+
+        entries: list[ServerDemoRowEntry] = []
+        requested_start = request.range.start_row
+        requested_end = request.range.end_row
+        projection_index = 0
+
+        for region in SERVER_DEMO_REGION_ORDER:
+            child_count = counts_by_region.get(region, 0)
+            if child_count <= 0:
+                continue
+
+            group_key = self._region_group_key(region)
+            expanded = self._is_group_expanded(
+                group_key=group_key,
+                expanded_by_default=expanded_by_default,
+                toggled_group_keys=toggled_group_keys,
+            )
+            if requested_start <= projection_index < requested_end:
+                entries.append(self._region_group_entry(region, child_count, projection_index, expanded))
+            projection_index += 1
+
+            if not expanded:
+                continue
+
+            child_projection_start = projection_index
+            child_projection_end = projection_index + child_count
+            overlap_start = max(requested_start, child_projection_start)
+            overlap_end = min(requested_end, child_projection_end)
+            if overlap_start < overlap_end:
+                child_offset = overlap_start - child_projection_start
+                child_limit = overlap_end - overlap_start
+                child_rows = await self._region_child_rows(
+                    conditions=conditions,
+                    region=region,
+                    sort_model=request.sort_model,
+                    offset=child_offset,
+                    limit=child_limit,
+                )
+                for offset, row in enumerate(child_rows):
+                    projection_row_index = overlap_start + offset
+                    entries.append(ServerDemoRowEntry(
+                        row_id=row.id,
+                        index=projection_row_index,
+                        row=self._to_row(row),
+                        kind="leaf",
+                    ))
+            projection_index = child_projection_end
+
+        revision = await self._revision.get_revision(self._session)
+        return ServerDemoPullResponse(
+            rows=entries,
+            total=projection_index,
+            revision=revision,
+            dataset_version=self._dataset_version(revision),
+        )
+
+    async def _region_counts(self, conditions: list[Any]) -> dict[str, int]:
+        scoped_conditions = [*conditions]
+        scope_condition = workspace_scope_condition(SERVER_DEMO_TABLE, self._workspace_id)
+        if scope_condition is not None:
+            scoped_conditions.append(scope_condition)
+        stmt = (
+            select(GridDemoRowModel.region, func.count())
+            .where(*scoped_conditions)
+            .group_by(GridDemoRowModel.region)
+        )
+        result = await self._session.execute(stmt)
+        return {str(region): int(count) for region, count in result.all()}
+
+    async def _region_child_rows(
+        self,
+        *,
+        conditions: list[Any],
+        region: str,
+        sort_model: list[Any],
+        offset: int,
+        limit: int,
+    ) -> list[GridDemoRowModel]:
+        stmt = self._projection.build_row_query([*conditions, GridDemoRowModel.region == region])
+        stmt = stmt.order_by(*self._projection.build_order_by(sort_model))
+        stmt = stmt.offset(max(0, offset)).limit(max(0, limit))
+        return list((await self._session.scalars(stmt)).all())
+
+    @staticmethod
+    def _region_group_key(region: str) -> str:
+        return f"group:region:{region}"
+
+    @staticmethod
+    def _is_group_expanded(
+        *,
+        group_key: str,
+        expanded_by_default: bool,
+        toggled_group_keys: set[str],
+    ) -> bool:
+        if expanded_by_default:
+            return group_key not in toggled_group_keys
+        return group_key in toggled_group_keys
+
+    def _region_group_entry(
+        self,
+        region: str,
+        child_count: int,
+        projection_index: int,
+        expanded: bool,
+    ) -> ServerDemoRowEntry:
+        group_key = self._region_group_key(region)
+        return ServerDemoRowEntry(
+            row_id=group_key,
+            index=projection_index,
+            kind="group",
+            state={"expanded": expanded},
+            group_meta={
+                "groupKey": group_key,
+                "groupField": "region",
+                "groupValue": region,
+                "level": 0,
+                "childrenCount": child_count,
+            },
+            row=ServerDemoRowSchema(
+                id=group_key,
+                index=projection_index,
+                name=f"Region: {region}",
+                segment="Group",
+                status="Grouped",
+                region=region,
+                value=child_count,
+                updatedAt=SERVER_DEMO_GROUP_UPDATED_AT,
+            ),
         )
 
     async def histogram(self, column_id: str, filter_model: dict[str, Any] | None) -> ServerDemoHistogramResponse:
