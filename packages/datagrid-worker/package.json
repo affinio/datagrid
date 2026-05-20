@@ -26,10 +26,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/affinio/affinio.git",
+    "url": "git+https://github.com/affinio/datagrid.git",
     "directory": "packages/datagrid-worker"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-worker#readme",
+  "homepage": "https://github.com/affinio/datagrid/tree/main/packages/datagrid-worker#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",
@@ -39,7 +39,7 @@
     "transport"
   ],
   "bugs": {
-    "url": "https://github.com/affinio/affinio/issues"
+    "url": "https://github.com/affinio/datagrid/issues"
   },
   "module": "dist/index.js"
 }

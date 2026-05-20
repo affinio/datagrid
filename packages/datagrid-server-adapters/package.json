@@ -23,10 +23,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/affinio/affinio.git",
+    "url": "git+https://github.com/affinio/datagrid.git",
     "directory": "packages/datagrid-server-adapters"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-server-adapters#readme",
+  "homepage": "https://github.com/affinio/datagrid/tree/main/packages/datagrid-server-adapters#readme",
   "license": "MIT",
   "keywords": [
     "datagrid",
@@ -35,7 +35,7 @@
     "adapter"
   ],
   "bugs": {
-    "url": "https://github.com/affinio/affinio/issues"
+    "url": "https://github.com/affinio/datagrid/issues"
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",

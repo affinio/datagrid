@@ -45,7 +45,7 @@ This keeps adapter-facing imports reviewable while allowing the internal orchest
 
 Single source of truth for platform capabilities:
 
-- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+- [DataGrid Feature Catalog](https://github.com/affinio/datagrid/blob/main/docs/datagrid-feature-catalog.md)
 
 ## Layer role
 

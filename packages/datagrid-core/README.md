@@ -6,14 +6,14 @@ Framework-agnostic data grid core.
 
 Single source of truth for platform capabilities:
 
-- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+- [DataGrid Feature Catalog](https://github.com/affinio/datagrid/blob/main/docs/datagrid-feature-catalog.md)
 
 ## Formula engine boundary
 
 Base formula APIs now have a dedicated package boundary:
 
-- community: [@affino/datagrid-formula-engine](https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine#readme)
-- boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-formula-engine-community-vs-enterprise.md)
+- community: [@affino/datagrid-formula-engine](https://github.com/affinio/datagrid/tree/main/packages/datagrid-formula-engine#readme)
+- boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-formula-engine-community-vs-enterprise.md)
 
 Keep row-model orchestration and formula integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
@@ -22,8 +22,8 @@ Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
 
 Base pivot APIs now also have a dedicated package boundary:
 
-- community: [@affino/datagrid-pivot](https://github.com/affinio/affinio/tree/main/packages/datagrid-pivot#readme)
-- boundary doc: [datagrid-pivot-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-pivot-community-vs-enterprise.md)
+- community: [@affino/datagrid-pivot](https://github.com/affinio/datagrid/tree/main/packages/datagrid-pivot#readme)
+- boundary doc: [datagrid-pivot-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-pivot-community-vs-enterprise.md)
 
 Keep row-model orchestration and pivot runtime integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-pivot` for pivot contracts and pure pivot helper APIs.
@@ -103,7 +103,7 @@ Client projection is internally modeled as a stage graph:
 
 - `filter -> sort -> group -> pivot -> aggregate -> paginate -> visible`
 
-Quick filter is part of the filter model, not a separate global service. Use `filterModel.quickFilter` for grid-wide text filtering; it runs inside the filter stage and therefore invalidates sort/group/pivot/aggregate/pagination/visible results through the normal projection dependency chain. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
+Quick filter is part of the filter model, not a separate global service. Use `filterModel.quickFilter` for grid-wide text filtering; it runs inside the filter stage and therefore invalidates sort/group/pivot/aggregate/pagination/visible results through the normal projection dependency chain. See [DataGrid Quick Filter](https://github.com/affinio/datagrid/blob/main/docs/datagrid-quick-filter.md).
 
 Stage dirty state is propagated through dependencies, and snapshot includes `projection` diagnostics (`version`, `staleStages`) for devtools/integration debugging.
 `patchRows` uses field-aware invalidation internally: only stages whose dependency fields intersect patched fields are invalidated.
@@ -239,4 +239,4 @@ Horizontal virtualization now uses a deterministic clamp/update path:
 ## Roadmap
 
 Execution and quality hardening are tracked in:
-[datagrid-ag-architecture-acceptance-checklist.md](https://github.com/affinio/affinio/blob/main/docs/internal/checklists/datagrid-ag-architecture-acceptance-checklist.md).
+[datagrid-ag-architecture-acceptance-checklist.md](https://github.com/affinio/datagrid/blob/main/docs/internal/checklists/datagrid-ag-architecture-acceptance-checklist.md).

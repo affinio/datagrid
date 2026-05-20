@@ -25,10 +25,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/affinio/affinio.git",
+    "url": "git+https://github.com/affinio/datagrid.git",
     "directory": "packages/datagrid-formula-engine-enterprise"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine-enterprise#readme",
+  "homepage": "https://github.com/affinio/datagrid/tree/main/packages/datagrid-formula-engine-enterprise#readme",
   "license": "UNLICENSED",
   "keywords": [
     "datagrid",
@@ -38,7 +38,7 @@
     "engine"
   ],
   "bugs": {
-    "url": "https://github.com/affinio/affinio/issues"
+    "url": "https://github.com/affinio/datagrid/issues"
   },
   "module": "dist/index.js"
 }

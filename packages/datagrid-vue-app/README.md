@@ -7,11 +7,11 @@
 Declarative Vue component layer for Affino DataGrid.
 
 `@affino/datagrid-vue-app` is the app-facing package.
-It depends on [`@affino/datagrid-vue`](https://github.com/affinio/affinio/tree/main/packages/datagrid-vue#readme), which remains the adapter and headless foundation between Vue and the grid engine.
+It depends on [`@affino/datagrid-vue`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-vue#readme), which remains the adapter and headless foundation between Vue and the grid engine.
 
 Boundary doc:
 
-- [datagrid-vue-app-community-vs-enterprise.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-vue-app-community-vs-enterprise.md)
+- [datagrid-vue-app-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-vue-app-community-vs-enterprise.md)
 
 Public export:
 
@@ -945,11 +945,11 @@ Current gantt capabilities:
 
 Reference:
 
-- [datagrid-gantt.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-gantt.md)
+- [datagrid-gantt.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-gantt.md)
 
 ## Table Chrome Engine
 
-The default table renderer uses [`@affino/datagrid-chrome`](https://github.com/affinio/affinio/tree/main/packages/datagrid-chrome#readme) for shared headless table chrome geometry.
+The default table renderer uses [`@affino/datagrid-chrome`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-chrome#readme) for shared headless table chrome geometry.
 
 That engine derives:
 
@@ -1526,7 +1526,7 @@ Controlled consumers can still manage quick filter directly through the same `fi
 />
 ```
 
-The app facade remains `filterModel`-first. `quick-filter` only drives the existing filter snapshot, so quick filter stays serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/affinio/blob/main/docs/datagrid-quick-filter.md).
+The app facade remains `filterModel`-first. `quick-filter` only drives the existing filter snapshot, so quick filter stays serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/datagrid/blob/main/docs/datagrid-quick-filter.md).
 
 Controlled state:
 

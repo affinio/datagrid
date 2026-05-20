@@ -6,19 +6,19 @@ Vue adapter and headless foundation for `@affino/datagrid-core`.
 `@affino/datagrid-core` and `@affino/datagrid-orchestration` remain internal dependencies of this package.
 
 If you want a declarative app-facing component, use
-[`@affino/datagrid-vue-app`](https://github.com/affinio/affinio/tree/main/packages/datagrid-vue-app#readme).
+[`@affino/datagrid-vue-app`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-vue-app#readme).
 
 ## Canonical Feature Catalog
 
 Single source of truth for platform capabilities:
 
-- [DataGrid Feature Catalog](https://github.com/affinio/affinio/blob/main/docs/datagrid-feature-catalog.md)
+- [DataGrid Feature Catalog](https://github.com/affinio/datagrid/blob/main/docs/datagrid-feature-catalog.md)
 
 ## Formula engine boundary
 
 If a Vue app needs direct formula-engine APIs, import them from:
 
-- [@affino/datagrid-formula-engine](https://github.com/affinio/affinio/tree/main/packages/datagrid-formula-engine#readme)
+- [@affino/datagrid-formula-engine](https://github.com/affinio/datagrid/tree/main/packages/datagrid-formula-engine#readme)
 
 Do not import formula compile/graph helpers from `@affino/datagrid-core` directly in new integrations.
 
@@ -26,7 +26,7 @@ Do not import formula compile/graph helpers from `@affino/datagrid-core` directl
 
 If a Vue app needs direct pivot contracts, import them from:
 
-- [@affino/datagrid-pivot](https://github.com/affinio/affinio/tree/main/packages/datagrid-pivot#readme)
+- [@affino/datagrid-pivot](https://github.com/affinio/datagrid/tree/main/packages/datagrid-pivot#readme)
 
 Do not import pivot contracts from `@affino/datagrid-core` directly in new integrations.
 
@@ -425,5 +425,5 @@ For new integrations:
 
 For end-to-end UI behavior and spreadsheet interaction contracts, use:
 
-- [datagrid-vue-stable-entrypoint.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-vue-stable-entrypoint.md)
-- [datagrid-sheets-user-interactions-and-integrator-api.md](https://github.com/affinio/affinio/blob/main/docs/datagrid-sheets-user-interactions-and-integrator-api.md)
+- [datagrid-vue-stable-entrypoint.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-vue-stable-entrypoint.md)
+- [datagrid-sheets-user-interactions-and-integrator-api.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-sheets-user-interactions-and-integrator-api.md)

@@ -30,12 +30,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/affinio/affinio.git",
+    "url": "git+https://github.com/affinio/datagrid.git",
     "directory": "packages/datagrid-laravel"
   },
-  "homepage": "https://github.com/affinio/affinio/tree/main/packages/datagrid-laravel#readme",
+  "homepage": "https://github.com/affinio/datagrid/tree/main/packages/datagrid-laravel#readme",
   "bugs": {
-    "url": "https://github.com/affinio/affinio/issues"
+    "url": "https://github.com/affinio/datagrid/issues"
   },
   "keywords": [
     "affino",
