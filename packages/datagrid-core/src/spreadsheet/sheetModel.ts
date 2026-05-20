@@ -1215,6 +1215,117 @@ export function createDataGridSpreadsheetSheetModel(
     return ""
   }
 
+  function areCurrentColumnsEquivalent(
+    nextColumns: readonly DataGridSpreadsheetColumnSnapshot[],
+  ): boolean {
+    if (columns.length !== nextColumns.length) {
+      return false
+    }
+    for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
+      const currentColumn = columns[columnIndex]
+      const nextColumn = nextColumns[columnIndex]
+      if (
+        !currentColumn
+        || !nextColumn
+        || currentColumn.key !== nextColumn.key
+        || currentColumn.title !== nextColumn.title
+        || currentColumn.formulaAlias !== nextColumn.formulaAlias
+        || !areSpreadsheetStylesEqual(currentColumn.style, nextColumn.style)
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+
+  function areCurrentRowsSameShape(
+    nextRows: readonly DataGridSpreadsheetSheetStateRow[],
+  ): boolean {
+    if (rows.length !== nextRows.length) {
+      return false
+    }
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const currentRow = rows[rowIndex]
+      const nextRow = nextRows[rowIndex]
+      if (
+        !currentRow
+        || !nextRow
+        || currentRow.id !== nextRow.id
+        || !areSpreadsheetStylesEqual(currentRow.style, nextRow.style)
+      ) {
+        return false
+      }
+    }
+    return true
+  }
+
+  function areCurrentFormulaTablesEquivalent(
+    nextFormulaTables: readonly DataGridSpreadsheetFormulaTableBinding[],
+  ): boolean {
+    const currentFormulaTables = Object.freeze(
+      [...formulaTablesByContextKey.entries()]
+        .map(([contextKey, source]) => ({
+          name: resolveFormulaTableBindingName(contextKey),
+          source,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    )
+    return areSpreadsheetFormulaTableBindingsEqual(currentFormulaTables, nextFormulaTables)
+  }
+
+  function tryRestoreSameShapeState(
+    nextState: DataGridSpreadsheetSheetState,
+  ): boolean | null {
+    if (
+      !areCurrentColumnsEquivalent(nextState.columns)
+      || !areCurrentRowsSameShape(nextState.rows)
+      || !areSpreadsheetStylesEqual(sheetStyle, nextState.sheetStyle)
+      || !areCurrentFormulaTablesEquivalent(nextState.formulaTables)
+    ) {
+      return null
+    }
+
+    const patches: DataGridSpreadsheetCellInputPatch[] = []
+    for (let rowIndex = 0; rowIndex < nextState.rows.length; rowIndex += 1) {
+      const row = rows[rowIndex]
+      const nextRow = nextState.rows[rowIndex]
+      if (!row || !nextRow) {
+        return null
+      }
+
+      const expectedCellKeys = new Set<string>()
+      for (const cell of nextRow.cells) {
+        if (!columnIndexByKey.has(cell.columnKey) || expectedCellKeys.has(cell.columnKey)) {
+          return null
+        }
+        expectedCellKeys.add(cell.columnKey)
+        const cellKey = makeCellKey(rowIndex, cell.columnKey)
+        const currentCellStyle = getStoredCellStyle(rowIndex, cell.columnKey) ?? null
+        if (!areSpreadsheetStylesEqual(currentCellStyle, cell.style)) {
+          return null
+        }
+        if (getRawInput(cellKey) !== cell.rawInput) {
+          patches.push({
+            cell: createCellAddress(sheetId, row, cell.columnKey),
+            rawInput: cell.rawInput,
+          })
+        }
+      }
+
+      for (const column of columns) {
+        if (expectedCellKeys.has(column.key)) {
+          continue
+        }
+        const cellKey = makeCellKey(rowIndex, column.key)
+        if (getRawInput(cellKey).length > 0 || getStoredCellStyle(rowIndex, column.key) != null) {
+          return null
+        }
+      }
+    }
+
+    return setCellInputs(patches)
+  }
+
   function getAnalysis(cellKey: string, rowIndex: number): DataGridSpreadsheetCellInputAnalysis {
     const cached = analysisByCellKey.get(cellKey)
     if (cached) {
@@ -3408,6 +3519,11 @@ export function createDataGridSpreadsheetSheetModel(
 
       if (nextState.columns.length === 0) {
         throw new Error("[DataGridSpreadsheetSheet] columns must be non-empty.")
+      }
+
+      const sameShapeRestored = tryRestoreSameShapeState(nextState)
+      if (sameShapeRestored != null) {
+        return sameShapeRestored
       }
 
       if (!isTypedPlainSpreadsheetSheetState(nextState)) {

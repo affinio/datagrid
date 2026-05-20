@@ -160,16 +160,17 @@ Formula, spreadsheet, and protocol artifacts:
 
    Required: continue reducing 100k tree filter/sort toward the `<16-33ms` interactive band and keep deeper chunking/partial materialization on the roadmap for larger or browser-bound workloads.
 
-3. **Spreadsheet workbook restore and snapshot size remain enterprise risks.**
+3. **Spreadsheet workbook restore and snapshot size are now gated, with compact data-sheet encoding still a follow-up.**
 
-   The best current workbook assert artifact passes, but still reports:
+   The current workbook assert artifact passes and now reports:
 
-   - export/restore `p95 ~399.7ms`.
-   - snapshot size `~10.86MB`.
+   - restore `p95 ~403.2ms`.
+   - export `p95 ~26.6ms`.
+   - snapshot size `~10.87MB`.
 
    The older failed workbook artifact reached `~47.9MB` snapshots, multi-second direct reference rewrites/restores, and heap budget failure around `592MB`.
 
-   Required: reduce snapshot payload, add incremental restore/reference rewrite paths, enforce snapshot-size budgets, and keep the older failure mode covered by regression tests.
+   Current gates enforce exported snapshot bytes and total sheet-state bytes at `12.5MB`, restore p95 at `425ms`, reference rewrite budgets, and heap at `140MB`. Same-shape restore now applies in-place cell patches and keeps the older failure mode covered by the assert profile. Remaining work: compact data-sheet cell encoding if saved-state payloads need to move below the current `~10-11MB` envelope.
 
 4. **Quick filter can exceed comfortable typing budgets at 100k rows.**
 

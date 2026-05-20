@@ -213,6 +213,16 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_DRILLDOWN_P95_MS=160`
   - `PERF_BUDGET_MIN_INTEROP_ROWS=5`
   - `PERF_BUDGET_MIN_PIVOT_COLUMNS=20`
+- Spreadsheet workbook snapshot/restore:
+  - `pnpm run bench:datagrid:spreadsheet-workbook:assert`
+  - `BENCH_SPREADSHEET_ORDERS_ROW_COUNT=16000`
+  - `BENCH_SPREADSHEET_CUSTOMER_COUNT=4000`
+  - `BENCH_SPREADSHEET_JOIN_FANOUT=3`
+  - `PERF_BUDGET_MAX_EXPORT_P95_MS=50`
+  - `PERF_BUDGET_MAX_RESTORE_P95_MS=425`
+  - `PERF_BUDGET_MAX_SNAPSHOT_BYTES=12500000`
+  - `PERF_BUDGET_MAX_SHEET_STATE_BYTES=12500000`
+  - Same-shape restore reuses the existing workbook structure and applies in-place cell input patches; structural restores still fall back to full rebuild.
 - Dependency graph (dense graph register/expand pressure; standalone assert command):
   - `PERF_BUDGET_MAX_REGISTER_MS=2500`
   - `PERF_BUDGET_MAX_STRUCTURAL_EXPAND_P95_MS=20`

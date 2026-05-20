@@ -46,6 +46,12 @@ const PERF_BUDGET_MAX_EXPORT_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_
 const PERF_BUDGET_MAX_RESTORE_P95_MS = Number.parseFloat(
   process.env.PERF_BUDGET_MAX_RESTORE_P95_MS ?? "Infinity",
 )
+const PERF_BUDGET_MAX_SNAPSHOT_BYTES = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SNAPSHOT_BYTES ?? "Infinity",
+)
+const PERF_BUDGET_MAX_SHEET_STATE_BYTES = Number.parseFloat(
+  process.env.PERF_BUDGET_MAX_SHEET_STATE_BYTES ?? "Infinity",
+)
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = Number.parseFloat(process.env.PERF_BUDGET_MAX_HEAP_DELTA_MB ?? "Infinity")
 const PERF_BUDGET_MAX_VARIANCE_PCT = Number.parseFloat(process.env.PERF_BUDGET_MAX_VARIANCE_PCT ?? "Infinity")
 const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDGET_VARIANCE_MIN_MEAN_MS ?? "0.5")
@@ -144,6 +150,9 @@ function formatMb(value) {
 
 function formatBytes(value) {
   const numeric = Number(value) || 0
+  if (!Number.isFinite(numeric)) {
+    return "unbounded"
+  }
   return `${formatCount(numeric)} B (${(numeric / (1024 * 1024)).toFixed(3)} MB)`
 }
 
@@ -1139,6 +1148,16 @@ function checkBudgetErrors(summary) {
       `exportRestore.restoreMs.p95 exceeded budget: ${summary.aggregate.exportRestore.restoreMs.p95.toFixed(3)}ms > ${PERF_BUDGET_MAX_RESTORE_P95_MS.toFixed(3)}ms`,
     )
   }
+  if (summary.aggregate.exportRestore.snapshotBytes.p95 > PERF_BUDGET_MAX_SNAPSHOT_BYTES) {
+    errors.push(
+      `exportRestore.snapshotBytes.p95 exceeded budget: ${summary.aggregate.exportRestore.snapshotBytes.p95.toFixed(3)} bytes > ${PERF_BUDGET_MAX_SNAPSHOT_BYTES.toFixed(3)} bytes`,
+    )
+  }
+  if (summary.aggregate.workbookSync.totalSheetStateBytes.p95 > PERF_BUDGET_MAX_SHEET_STATE_BYTES) {
+    errors.push(
+      `workbookSync.totalSheetStateBytes.p95 exceeded budget: ${summary.aggregate.workbookSync.totalSheetStateBytes.p95.toFixed(3)} bytes > ${PERF_BUDGET_MAX_SHEET_STATE_BYTES.toFixed(3)} bytes`,
+    )
+  }
   if (summary.aggregate.workbookSync.heapDeltaMb.p95 > PERF_BUDGET_MAX_HEAP_DELTA_MB) {
     errors.push(
       `workbookSync.heapDeltaMb.p95 exceeded budget: ${summary.aggregate.workbookSync.heapDeltaMb.p95.toFixed(3)}MB > ${PERF_BUDGET_MAX_HEAP_DELTA_MB.toFixed(3)}MB`,
@@ -1174,6 +1193,7 @@ function createMarkdownSummary(summary) {
     `- cross-sheet recompute p95: ${formatMs(summary.aggregate.crossSheet.elapsedMs.p95)} | scope p95 ${formatCount(summary.aggregate.crossSheet.scope.p95)} sheets`,
     `- insert rewrite p95: ${formatMs(summary.aggregate.directRefRewrite.insertElapsedMs.p95)} | remove rewrite p95: ${formatMs(summary.aggregate.directRefRewrite.removeElapsedMs.p95)}`,
     `- export p95: ${formatMs(summary.aggregate.exportRestore.exportMs.p95)} | restore p95: ${formatMs(summary.aggregate.exportRestore.restoreMs.p95)} | snapshot bytes p95 ${formatBytes(summary.aggregate.exportRestore.snapshotBytes.p95)}`,
+    `- snapshot budgets: exported state <= ${formatBytes(summary.budgets.snapshotBytes)} | sheet states <= ${formatBytes(summary.budgets.sheetStateBytes)}`,
     `- generated pivot columns p95: ${formatCount(summary.aggregate.workbookSync.generatedPivotColumns.p95)} | explode rows p95: ${formatCount(summary.aggregate.workbookSync.explodeRowCount.p95)}`,
     "",
     "## Top Sheets",
@@ -1238,6 +1258,8 @@ const summary = {
     rewriteRemoveP95Ms: PERF_BUDGET_MAX_REWRITE_REMOVE_P95_MS,
     exportP95Ms: PERF_BUDGET_MAX_EXPORT_P95_MS,
     restoreP95Ms: PERF_BUDGET_MAX_RESTORE_P95_MS,
+    snapshotBytes: PERF_BUDGET_MAX_SNAPSHOT_BYTES,
+    sheetStateBytes: PERF_BUDGET_MAX_SHEET_STATE_BYTES,
     heapDeltaP95Mb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
     variancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
     varianceMinMeanMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
@@ -1266,6 +1288,7 @@ console.log(
     `rewriteRemove.p95=${summary.aggregate.directRefRewrite.removeElapsedMs.p95.toFixed(3)}ms`,
     `export.p95=${summary.aggregate.exportRestore.exportMs.p95.toFixed(3)}ms`,
     `restore.p95=${summary.aggregate.exportRestore.restoreMs.p95.toFixed(3)}ms`,
+    `snapshot.p95=${Math.round(summary.aggregate.exportRestore.snapshotBytes.p95)}B`,
     `heap.p95=${summary.aggregate.workbookSync.heapDeltaMb.p95.toFixed(3)}MB`,
   ].join(" "),
 )

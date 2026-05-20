@@ -1471,7 +1471,15 @@ describe("createDataGridSpreadsheetWorkbookModel", () => {
     expect(workbook.restoreState(exportedState)).toBe(true)
 
     const restoredViewSheet = workbook.getSheet("orders-by-customer")
+    const restoredOrdersSheet = workbook.getSheet("orders")?.sheetModel
 
+    expect(restoredOrdersSheet).toBe(ordersSheet)
+    expect(restoredOrdersSheet?.getCell({
+      sheetId: "orders",
+      rowId: "order-2",
+      rowIndex: 1,
+      columnKey: "total",
+    })?.displayValue).toBe(200)
     expect(restoredViewSheet?.kind).toBe("view")
     expect(restoredViewSheet?.viewDefinition?.sourceSheetId).toBe("orders")
     expect(restoredViewSheet?.sheetModel.getCell({

@@ -11,10 +11,17 @@ interface RuntimeRow {
 
 const COLUMNS = [{ key: "name", label: "Name" }] as const
 
-function buildRows(count: number): DataGridRowNodeInput<RuntimeRow>[] {
+function buildRows(count: number): RuntimeRow[] {
   return Array.from({ length: count }, (_, index) => ({
-    row: { rowId: `r${index}`, name: `Row ${index}` },
     rowId: `r${index}`,
+    name: `Row ${index}`,
+  }))
+}
+
+function buildRowInputs(count: number): DataGridRowNodeInput<RuntimeRow>[] {
+  return buildRows(count).map((row, index) => ({
+    row,
+    rowId: row.rowId,
     originalIndex: index,
     displayIndex: index,
   }))
@@ -27,9 +34,20 @@ async function flushRuntimeTasks(): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
 
+async function waitForRuntimeRows(
+  readRows: () => readonly unknown[],
+): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (readRows().length > 0) {
+      return
+    }
+    await flushRuntimeTasks()
+  }
+}
+
 describe("useDataGridAppRuntime worker contract", () => {
   it("does not replace worker-owned rows with the app-layer rows ref", async () => {
-    const appRows = ref<RuntimeRow[]>(buildRows(512).map(input => input.row))
+    const appRows = ref<RuntimeRow[]>(buildRows(512))
 
     let result: ReturnType<typeof useDataGridAppRuntime<RuntimeRow>> | null = null
     const Host = defineComponent({
@@ -40,7 +58,7 @@ describe("useDataGridAppRuntime worker contract", () => {
           rows: appRows,
           columns: ref(COLUMNS),
           worker: {
-            resolveRowInputsOnDemand: () => buildRows(10_000),
+            resolveRowInputsOnDemand: () => buildRowInputs(10_000),
             rowInputsUpdateKey: ref("initial"),
           },
         })
@@ -55,6 +73,9 @@ describe("useDataGridAppRuntime worker contract", () => {
     expect(result).not.toBeNull()
     expect(result!.runtime.api.rows.getCount()).toBe(10_000)
     expect(result!.runtime.rowPartition.value.bodyRowCount).toBe(10_000)
+    result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 })
+    await waitForRuntimeRows(() => result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 }))
+
     expect(result!.runtime.syncBodyRowsInRange({ start: 208, end: 212 }).map(row => String(row.rowId))).toEqual([
       "r208",
       "r209",
@@ -63,7 +84,7 @@ describe("useDataGridAppRuntime worker contract", () => {
       "r212",
     ])
 
-    appRows.value = buildRows(128).map(input => input.row)
+    appRows.value = buildRows(128)
     await flushRuntimeTasks()
 
     expect(result!.runtime.api.rows.getCount()).toBe(10_000)

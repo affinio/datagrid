@@ -151,7 +151,7 @@ export function useDataGridAppRuntime<TRow>(
       snapshot.kind,
       snapshot.revision ?? "",
       snapshot.rowCount,
-      snapshot.loading ? 1 : 0,
+      snapshot.viewportRange.start + ":" + snapshot.viewportRange.end,
       snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? "",
     ].join("|")
   }

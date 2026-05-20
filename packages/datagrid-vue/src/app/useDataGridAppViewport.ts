@@ -502,6 +502,7 @@ export function useDataGridAppViewport<TRow>(
   let viewportSyncRafHandle: number | null = null
   let pendingViewportSyncForce = false
   let pendingViewportSyncMeasureVisibleRowHeights = false
+  let pendingViewportSyncRuntimePosition = false
   let lastVisibleRowSyncPerf:
     | {
       mode: string
@@ -525,6 +526,7 @@ export function useDataGridAppViewport<TRow>(
   let isApplyingRuntimeViewportPosition = false
   let isSyncingRuntimeViewportPosition = false
   let pendingRuntimeViewportPosition: DataGridViewportPositionSnapshot | null = null
+  let lastSyncedRuntimeViewportPositionKey: string | null = null
   let lastViewportRangeResolveMs = 0
   const horizontalScrollIdleRevision = ref(0)
   let cachedViewportElement: HTMLElement | null = null
@@ -644,7 +646,7 @@ export function useDataGridAppViewport<TRow>(
 
   const resolveQueuedViewportSnapshot = (
     element: HTMLElement,
-    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
+    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean; syncRuntimePosition?: boolean },
   ): ViewportSnapshot => {
     if (
       commitOptions.forceVisibleRows
@@ -1141,6 +1143,12 @@ export function useDataGridAppViewport<TRow>(
     }
   }
 
+  const serializeViewportPositionSnapshot = (position: DataGridViewportPositionSnapshot): string => JSON.stringify({
+    range: position.range,
+    anchor: position.anchor,
+    scroll: position.scroll,
+  })
+
   const syncRuntimeViewportPosition = (snapshot: ViewportSnapshot): void => {
     if (
       isApplyingRuntimeViewportPosition
@@ -1151,7 +1159,13 @@ export function useDataGridAppViewport<TRow>(
     }
     isSyncingRuntimeViewportPosition = true
     try {
-      options.runtime.setViewportPosition(buildViewportPositionSnapshot(snapshot))
+      const position = buildViewportPositionSnapshot(snapshot)
+      const positionKey = serializeViewportPositionSnapshot(position)
+      if (positionKey === lastSyncedRuntimeViewportPositionKey) {
+        return
+      }
+      lastSyncedRuntimeViewportPositionKey = positionKey
+      options.runtime.setViewportPosition(position)
     }
     finally {
       isSyncingRuntimeViewportPosition = false
@@ -1373,7 +1387,7 @@ export function useDataGridAppViewport<TRow>(
 
   const commitViewportSnapshot = (
     snapshot: ViewportSnapshot,
-    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean },
+    commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean; syncRuntimePosition?: boolean },
   ): void => {
     lastViewportRangeResolveMs = 0
     const previousScrollLeft = viewportScrollLeft.value
@@ -1431,7 +1445,9 @@ export function useDataGridAppViewport<TRow>(
       options.measureVisibleRowHeights?.()
     }
 
-    syncRuntimeViewportPosition(snapshot)
+    if (commitOptions.syncRuntimePosition !== false) {
+      syncRuntimeViewportPosition(snapshot)
+    }
   }
 
   const flushPendingViewportSync = (): void => {
@@ -1439,8 +1455,10 @@ export function useDataGridAppViewport<TRow>(
     const element = bodyViewportRef.value
     const shouldForceVisibleRows = pendingViewportSyncForce
     const shouldMeasureVisibleRowHeights = pendingViewportSyncMeasureVisibleRowHeights
+    const shouldSyncRuntimePosition = pendingViewportSyncRuntimePosition
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
+    pendingViewportSyncRuntimePosition = false
     if (!element) {
       return
     }
@@ -1448,9 +1466,11 @@ export function useDataGridAppViewport<TRow>(
       commitViewportSnapshot(resolveQueuedViewportSnapshot(element, {
         forceVisibleRows: shouldForceVisibleRows,
         measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+        syncRuntimePosition: shouldSyncRuntimePosition,
       }), {
         forceVisibleRows: shouldForceVisibleRows,
         measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+        syncRuntimePosition: shouldSyncRuntimePosition,
       })
       return
     }
@@ -1459,12 +1479,14 @@ export function useDataGridAppViewport<TRow>(
     const snapshot = resolveQueuedViewportSnapshot(element, {
       forceVisibleRows: shouldForceVisibleRows,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+      syncRuntimePosition: shouldSyncRuntimePosition,
     })
     const snapshotMs = resolveDataGridPerfNow() - snapshotStart
     const commitStart = resolveDataGridPerfNow()
     commitViewportSnapshot(snapshot, {
       forceVisibleRows: shouldForceVisibleRows,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights,
+      syncRuntimePosition: shouldSyncRuntimePosition,
     })
     const commitMs = resolveDataGridPerfNow() - commitStart
     const visibleRowsPerf = lastVisibleRowSyncPerf
@@ -1502,6 +1524,7 @@ export function useDataGridAppViewport<TRow>(
       blankViewport,
       forceVisibleRows: shouldForceVisibleRows ? 1 : 0,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights ? 1 : 0,
+      syncRuntimePosition: shouldSyncRuntimePosition ? 1 : 0,
       visibleRowsMs: visibleRowsPerf?.totalMs ?? 0,
       visibleRowsMode: visibleRowsPerf?.mode ?? "none",
       visibleRowsIncrementalResolveMs: visibleRowsPerf?.incrementalResolveMs ?? 0,
@@ -1515,10 +1538,11 @@ export function useDataGridAppViewport<TRow>(
     })
   }
 
-  const scheduleViewportCommit = (nextOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean }): void => {
+  const scheduleViewportCommit = (nextOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean; syncRuntimePosition?: boolean }): void => {
     // Keep native scroll IO light and collapse reactive viewport work into one frame commit.
     pendingViewportSyncForce = pendingViewportSyncForce || nextOptions.forceVisibleRows
     pendingViewportSyncMeasureVisibleRowHeights = pendingViewportSyncMeasureVisibleRowHeights || nextOptions.measureVisibleRowHeights
+    pendingViewportSyncRuntimePosition = pendingViewportSyncRuntimePosition || nextOptions.syncRuntimePosition === true
     if (viewportSyncRafHandle !== null) {
       return
     }
@@ -1552,6 +1576,7 @@ export function useDataGridAppViewport<TRow>(
     scheduleViewportCommit({
       forceVisibleRows: false,
       measureVisibleRowHeights: false,
+      syncRuntimePosition: true,
     })
   }
 
@@ -1570,19 +1595,22 @@ export function useDataGridAppViewport<TRow>(
     commitViewportSnapshot(captureViewportSnapshot(element), {
       forceVisibleRows: true,
       measureVisibleRowHeights: true,
+      syncRuntimePosition: true,
     })
   }
 
   const scheduleViewportSync = (): void => {
     scheduleViewportCommit({
       forceVisibleRows: true,
-      measureVisibleRowHeights: true,
+      measureVisibleRowHeights: false,
+      syncRuntimePosition: false,
     })
   }
 
   const cancelScheduledViewportSync = (): void => {
     pendingViewportSyncForce = false
     pendingViewportSyncMeasureVisibleRowHeights = false
+    pendingViewportSyncRuntimePosition = false
     clearHorizontalScrollIdleTimer()
     clearVerticalScrollIdleTimer()
     resetAdaptiveRowOverscan()
@@ -1603,6 +1631,7 @@ export function useDataGridAppViewport<TRow>(
       pendingRuntimeViewportPosition = position
       return
     }
+    lastSyncedRuntimeViewportPositionKey = serializeViewportPositionSnapshot(position)
     const nextScrollTop = resolveViewportPositionScrollTop(position)
     const nextScrollLeft = resolveViewportPositionScrollLeft(position)
     if (nextScrollTop == null && nextScrollLeft == null) {

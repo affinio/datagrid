@@ -1151,6 +1151,76 @@ describe("useDataGridAppViewport contract", () => {
     })
   })
 
+  it("skips redundant runtime viewport position writes for unchanged DOM state", () => {
+    const rows = makeRows(100)
+    const setViewportPosition = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(10, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const element = { scrollTop: 120, scrollLeft: 250, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+    viewport.syncViewportFromDom()
+
+    expect(setViewportPosition).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not write runtime viewport position during internal scheduled row refresh", () => {
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const setViewportPosition = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(10, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = { scrollTop: 120, scrollLeft: 250, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.scheduleViewportSync()
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(setViewportPosition).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.length).toBeGreaterThan(0)
+  })
+
   it("restores DOM scroll from runtime viewport position after state import", () => {
     const rows = makeRows(100)
     const events = createEventHarness()

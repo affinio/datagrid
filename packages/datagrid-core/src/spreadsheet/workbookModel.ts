@@ -8,6 +8,7 @@ import {
   mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
   rewriteDataGridSpreadsheetFormulaReferences,
   rewriteDataGridSpreadsheetFormulaStringLiterals,
+  type DataGridSpreadsheetCellInputPatch,
   type CreateDataGridSpreadsheetSheetModelOptions,
   type DataGridSpreadsheetFormulaStructuralPatch,
   type DataGridSpreadsheetSheetColumnMutation,
@@ -42,6 +43,7 @@ import {
   createSpreadsheetWorkbookSheetStateExport,
   normalizeSpreadsheetWorkbookViewSheetModelOptions,
   resolveSpreadsheetWorkbookViewSheetModelOptionsFromState,
+  type SpreadsheetWorkbookRestoreDescriptor,
   type SpreadsheetWorkbookSheetStateExportPayload,
 } from "./workbookPersistence.js"
 
@@ -1969,6 +1971,251 @@ export function createDataGridSpreadsheetWorkbookModel(
     return changedSheetIds
   }
 
+  const areWorkbookStylesEqual = (
+    left: Readonly<Record<string, unknown>> | null | undefined,
+    right: Readonly<Record<string, unknown>> | null | undefined,
+  ): boolean => {
+    if (left === right) {
+      return true
+    }
+    if (left == null || right == null) {
+      return left == null && right == null
+    }
+    const leftKeys = Object.keys(left)
+    const rightKeys = Object.keys(right)
+    if (leftKeys.length !== rightKeys.length) {
+      return false
+    }
+    for (const key of leftKeys) {
+      if (!Object.prototype.hasOwnProperty.call(right, key) || !Object.is(left[key], right[key])) {
+        return false
+      }
+    }
+    return true
+  }
+
+  const mergeWorkbookStyles = (
+    ...styles: Array<Readonly<Record<string, unknown>> | null | undefined>
+  ): Readonly<Record<string, unknown>> | null => {
+    const merged: Record<string, unknown> = {}
+    for (const style of styles) {
+      if (!style) {
+        continue
+      }
+      for (const [key, value] of Object.entries(style)) {
+        if (String(key).length > 0) {
+          merged[key] = value
+        }
+      }
+    }
+    return Object.keys(merged).length > 0 ? Object.freeze(merged) : null
+  }
+
+  const findWorkbookStateColumn = (
+    columns: readonly DataGridSpreadsheetSheetState["columns"][number][],
+    columnKey: string,
+  ): DataGridSpreadsheetSheetState["columns"][number] | null => {
+    for (const column of columns) {
+      if (column.key === columnKey) {
+        return column
+      }
+    }
+    return null
+  }
+
+  const areWorkbookViewSheetModelOptionsEqual = (
+    left: DataGridSpreadsheetWorkbookViewSheetModelOptions | null,
+    right: DataGridSpreadsheetWorkbookViewSheetModelOptions | null,
+  ): boolean => {
+    const normalizedLeft = normalizeSpreadsheetWorkbookViewSheetModelOptions(left)!
+    const normalizedRight = normalizeSpreadsheetWorkbookViewSheetModelOptions(right)!
+    return areWorkbookStylesEqual(normalizedLeft.sheetStyle, normalizedRight.sheetStyle)
+      && normalizedLeft.functionRegistry === normalizedRight.functionRegistry
+      && normalizedLeft.referenceParserOptions === normalizedRight.referenceParserOptions
+      && normalizedLeft.runtimeErrorPolicy === normalizedRight.runtimeErrorPolicy
+      && normalizedLeft.rawInputRetention === normalizedRight.rawInputRetention
+      && normalizedLeft.resolveContextValue === normalizedRight.resolveContextValue
+  }
+
+  const collectWorkbookSameShapeRestorePatches = (
+    currentSheet: SpreadsheetWorkbookSheetState,
+    nextSheet: Extract<SpreadsheetWorkbookRestoreDescriptor, { kind: "data" }>,
+  ): readonly DataGridSpreadsheetCellInputPatch[] | null => {
+    if (nextSheet.sheetState.formulaTables.length > 0) {
+      return null
+    }
+
+    const currentColumns = currentSheet.sheetModel.getColumns()
+    if (currentColumns.length !== nextSheet.sheetState.columns.length) {
+      return null
+    }
+    for (let columnIndex = 0; columnIndex < currentColumns.length; columnIndex += 1) {
+      const currentColumn = currentColumns[columnIndex]
+      const nextColumn = nextSheet.sheetState.columns[columnIndex]
+      if (
+        !currentColumn
+        || !nextColumn
+        || currentColumn.key !== nextColumn.key
+        || currentColumn.title !== nextColumn.title
+        || currentColumn.formulaAlias !== nextColumn.formulaAlias
+        || !areWorkbookStylesEqual(currentColumn.style, nextColumn.style)
+      ) {
+        return null
+      }
+    }
+
+    const currentRows = currentSheet.sheetModel.getRows()
+    if (currentRows.length !== nextSheet.sheetState.rows.length) {
+      return null
+    }
+
+    const patches: DataGridSpreadsheetCellInputPatch[] = []
+    for (let rowIndex = 0; rowIndex < currentRows.length; rowIndex += 1) {
+      const currentRow = currentRows[rowIndex]
+      const nextRow = nextSheet.sheetState.rows[rowIndex]
+      if (
+        !currentRow
+        || !nextRow
+        || currentRow.id !== nextRow.id
+        || !areWorkbookStylesEqual(currentRow.style, nextRow.style)
+      ) {
+        return null
+      }
+
+      const expectedCellKeys = new Set<string>()
+      for (const cell of nextRow.cells) {
+        if (expectedCellKeys.has(cell.columnKey)) {
+          return null
+        }
+        expectedCellKeys.add(cell.columnKey)
+        const currentCell = currentSheet.sheetModel.getCell({
+          sheetId: currentSheet.id,
+          rowId: currentRow.id,
+          rowIndex,
+          columnKey: cell.columnKey,
+        })
+        const nextColumn = findWorkbookStateColumn(nextSheet.sheetState.columns, cell.columnKey)
+        const expectedCellStyle = mergeWorkbookStyles(
+          nextSheet.sheetState.sheetStyle,
+          nextColumn?.style ?? null,
+          nextRow.style,
+          cell.style,
+        )
+        if (
+          !currentCell
+          || !areWorkbookStylesEqual(currentCell.ownStyle, cell.style)
+          || !areWorkbookStylesEqual(currentCell.style, expectedCellStyle)
+        ) {
+          return null
+        }
+        if (currentCell.rawInput !== cell.rawInput) {
+          patches.push({
+            cell: {
+              sheetId: currentSheet.id,
+              rowId: currentRow.id,
+              rowIndex,
+              columnKey: cell.columnKey,
+            },
+            rawInput: cell.rawInput,
+          })
+        }
+      }
+
+      for (const column of currentColumns) {
+        if (expectedCellKeys.has(column.key)) {
+          continue
+        }
+        const currentCell = currentSheet.sheetModel.getCell({
+          sheetId: currentSheet.id,
+          rowId: currentRow.id,
+          rowIndex,
+          columnKey: column.key,
+        })
+        const expectedCellStyle = mergeWorkbookStyles(
+          nextSheet.sheetState.sheetStyle,
+          column.style,
+          nextRow.style,
+          null,
+        )
+        if ((currentCell?.rawInput ?? "").length > 0 || currentCell?.ownStyle != null) {
+          return null
+        }
+        if (!areWorkbookStylesEqual(currentCell?.style ?? null, expectedCellStyle)) {
+          return null
+        }
+      }
+    }
+
+    return patches
+  }
+
+  const tryRestoreWorkbookStateInPlace = (
+    restoreDescriptors: readonly SpreadsheetWorkbookRestoreDescriptor[],
+    normalizedActiveSheetId: string | null,
+  ): boolean => {
+    if (restoreDescriptors.length !== sheets.length) {
+      return false
+    }
+
+    const sheetPatchSets: Array<{
+      sheet: SpreadsheetWorkbookSheetState
+      patches: readonly DataGridSpreadsheetCellInputPatch[]
+    }> = []
+
+    for (let index = 0; index < restoreDescriptors.length; index += 1) {
+      const currentSheet = sheets[index]
+      const nextSheet = restoreDescriptors[index]
+      if (
+        !currentSheet
+        || !nextSheet
+        || currentSheet.id !== nextSheet.id
+        || currentSheet.name !== nextSheet.name
+        || currentSheet.kind !== nextSheet.kind
+      ) {
+        return false
+      }
+      if (nextSheet.kind === "view") {
+        if (
+          currentSheet.viewDefinition !== nextSheet.viewDefinition
+          || !areWorkbookViewSheetModelOptionsEqual(
+            currentSheet.viewSheetModelOptions,
+            nextSheet.viewSheetModelOptions,
+          )
+        ) {
+          return false
+        }
+      }
+      if (nextSheet.kind === "data") {
+        const patches = collectWorkbookSameShapeRestorePatches(currentSheet, nextSheet)
+        if (!patches) {
+          return false
+        }
+        sheetPatchSets.push({ sheet: currentSheet, patches })
+      }
+    }
+
+    syncInProgress = true
+    try {
+      for (const patchSet of sheetPatchSets) {
+        if (patchSet.patches.length === 0) {
+          continue
+        }
+        patchSet.sheet.sheetModel.setCellInputs(patchSet.patches)
+      }
+    } finally {
+      syncInProgress = false
+    }
+
+    if (normalizedActiveSheetId && sheetsById.has(normalizedActiveSheetId)) {
+      activeSheetId = normalizedActiveSheetId
+    } else {
+      activeSheetId = sheets[0]?.id ?? null
+    }
+
+    runSync({ structural: true })
+    return true
+  }
+
   return {
     getSnapshot,
     exportState,
@@ -1985,6 +2232,10 @@ export function createDataGridSpreadsheetWorkbookModel(
       const normalizedActiveSheetId = typeof state.activeSheetId === "string" && state.activeSheetId.trim().length > 0
         ? normalizeSpreadsheetWorkbookSheetId(state.activeSheetId)
         : null
+
+      if (tryRestoreWorkbookStateInPlace(restoreDescriptors, normalizedActiveSheetId)) {
+        return true
+      }
 
       for (const sheet of sheets) {
         sheet.unsubscribe?.()

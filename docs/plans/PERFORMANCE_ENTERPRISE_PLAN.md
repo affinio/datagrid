@@ -200,14 +200,14 @@ Current execution state:
 
 ## Slice 8: Workbook Snapshot And Restore Slimming
 
-- Status: Pending.
+- Status: Completed.
 - Objective: reduce workbook snapshot size and restore/reference rewrite latency.
 - Affected packages/files:
   - `packages/datagrid-core/src/spreadsheet/*`
   - `scripts/bench-datagrid-spreadsheet-workbook.mjs`
-- Expected behavior change: large workbook export/restore uses less memory and completes faster.
+- Expected behavior change: same-shape workbook restore reuses existing sheet models and applies cell patches instead of rebuilding the workbook; workbook assert now hard-fails exported snapshot and sheet-state byte regressions.
 - Tests to add/update:
-  - Snapshot byte-size, restore duration, reference rewrite, and heap gates.
+  - Same-shape restore coverage plus snapshot byte-size, restore duration, reference rewrite, and heap gates.
 - Validation command: `pnpm run bench:datagrid:spreadsheet-workbook:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): slim workbook snapshots`
