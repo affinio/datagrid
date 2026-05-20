@@ -7,6 +7,7 @@ import { assignDisplayIndexes, enforceCacheCap, patchProjectedRowsByIdentity, pr
 export interface SortValueCacheEntry {
   rowVersion: number
   values: readonly unknown[]
+  singleValue?: unknown
 }
 
 export interface SortValueCounters {
@@ -81,6 +82,8 @@ export interface RunSortProjectionStageResult<T> {
   sortValueCacheKey: string
 }
 
+const EMPTY_SORT_VALUES: readonly unknown[] = Object.freeze([])
+
 export function runSortProjectionStage<T>(
   params: RunSortProjectionStageParams<T>,
 ): RunSortProjectionStageResult<T> {
@@ -97,39 +100,66 @@ export function runSortProjectionStage<T>(
     if (sortKey !== params.sortValueCacheKey || !shouldCacheSortValues || maxSortValueCacheSize <= 0) {
       params.sortValueCache.clear()
     }
-    const sortedRowsProjection = sortLeafRows(rowsForSort, params.sortModel, (row, descriptors) => {
-      if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
-        params.counters.misses += 1
-        const values = new Array<unknown>(descriptors.length)
+    const sortedRowsProjection = sortLeafRows(
+      rowsForSort,
+      params.sortModel,
+      (row, descriptors) => {
+        if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
+          params.counters.misses += 1
+          const values = new Array<unknown>(descriptors.length)
+          for (let index = 0; index < descriptors.length; index += 1) {
+            const descriptor = descriptors[index]
+            values[index] = descriptor
+              ? params.readRowField(row, descriptor.key, descriptor.field)
+              : undefined
+          }
+          return values
+        }
+        const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
+        const cached = params.sortValueCache.get(row.rowId)
+        if (cached && cached.rowVersion === currentRowVersion) {
+          params.counters.hits += 1
+          return cached.values
+        }
+        const resolved = new Array<unknown>(descriptors.length)
         for (let index = 0; index < descriptors.length; index += 1) {
           const descriptor = descriptors[index]
-          values[index] = descriptor
+          resolved[index] = descriptor
             ? params.readRowField(row, descriptor.key, descriptor.field)
             : undefined
         }
-        return values
-      }
-      const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
-      const cached = params.sortValueCache.get(row.rowId)
-      if (cached && cached.rowVersion === currentRowVersion) {
-        params.counters.hits += 1
-        return cached.values
-      }
-      const resolved = new Array<unknown>(descriptors.length)
-      for (let index = 0; index < descriptors.length; index += 1) {
-        const descriptor = descriptors[index]
-        resolved[index] = descriptor
-          ? params.readRowField(row, descriptor.key, descriptor.field)
-          : undefined
-      }
-      params.sortValueCache.set(row.rowId, {
-        rowVersion: currentRowVersion,
-        values: resolved,
-      })
-      enforceCacheCap(params.sortValueCache, maxSortValueCacheSize)
-      params.counters.misses += 1
-      return resolved
-    })
+        params.sortValueCache.set(row.rowId, {
+          rowVersion: currentRowVersion,
+          values: resolved,
+        })
+        enforceCacheCap(params.sortValueCache, maxSortValueCacheSize)
+        params.counters.misses += 1
+        return resolved
+      },
+      (row, descriptor) => {
+        if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
+          params.counters.misses += 1
+          return params.readRowField(row, descriptor.key, descriptor.field)
+        }
+        const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
+        const cached = params.sortValueCache.get(row.rowId)
+        if (cached && cached.rowVersion === currentRowVersion) {
+          params.counters.hits += 1
+          return Object.prototype.hasOwnProperty.call(cached, "singleValue")
+            ? cached.singleValue
+            : cached.values[0]
+        }
+        const resolved = params.readRowField(row, descriptor.key, descriptor.field)
+        params.sortValueCache.set(row.rowId, {
+          rowVersion: currentRowVersion,
+          values: EMPTY_SORT_VALUES,
+          singleValue: resolved,
+        })
+        enforceCacheCap(params.sortValueCache, maxSortValueCacheSize)
+        params.counters.misses += 1
+        return resolved
+      },
+    )
     return {
       sortedRowsProjection,
       recomputed: true,

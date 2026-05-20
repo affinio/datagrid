@@ -4,13 +4,13 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-3c are implemented as of 2026-05-20.
+- Slices 1-3d are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
 - Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate with sort and edit-burst diagnostics.
 - Column-menu sort no longer races with large deferred value-histogram loading when the menu closes before the histogram starts.
-- Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort is dominated by synchronous projection/sort work, and inline-edit bursts are now split into open, commit, paint, frame, mutation, and long-task diagnostics.
-- Remaining blockers are deep sort/edit long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
+- Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort still has synchronous projection/sort work after the single-column fast path, and inline-edit bursts are now split into open, commit, paint, frame, mutation, and long-task diagnostics.
+- Remaining blockers are deeper sort execution policy, inline-edit long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
 ## Slice 1: Browser Frame Resource Hard Gates
@@ -99,17 +99,32 @@ Current execution state:
 - Risk level: Low
 - Suggested commit message: `test(datagrid): gate edit burst frame diagnostics`
 
-## Slice 3d: Sort/Edit Deep Runtime Cleanup
+## Slice 3d: Single-Column Sort Projection Cleanup
+
+- Status: Completed on 2026-05-20.
+- Objective: reduce allocation and comparator overhead in the common single-column local sort path without changing public API.
+- Affected packages/files:
+  - `packages/datagrid-core/src/models/projection/clientRowProjectionPrimitives.ts`
+  - `packages/datagrid-core/src/models/projection/clientRowProjectionBasicStages.ts`
+  - `packages/datagrid-core/src/models/projection/clientRowProjectionAggregateStage.ts`
+- Expected behavior change: single-column local sorts use scalar sort values instead of allocating one sort-value array per row; direction flips continue to reuse the sort-value cache.
+- Tests to add/update:
+  - Existing core sort-value cache and deterministic sort coverage.
+- Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
+- Risk level: High
+- Suggested commit message: `perf(datagrid-core): optimize single column sort`
+
+## Slice 3e: Inline Edit Burst Runtime Cleanup
 
 - Status: Pending.
-- Objective: reduce measured long tasks in local sort projection and inline-edit commit bursts without changing public API.
+- Objective: reduce measured inline-edit commit burst long tasks without changing public API.
 - Affected packages/files:
-  - `packages/datagrid-vue/src/app/*sort*`
+  - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
   - `packages/datagrid-vue-app/src/stage/*editing*`
-  - `packages/datagrid-core/src/models/*`
-- Expected behavior change: local sort and inline-edit burst interactions reduce synchronous frame stalls while preserving current sort/edit semantics.
+  - `packages/datagrid-core/src/models/mutation/*`
+- Expected behavior change: inline-edit burst commit-to-paint and long-task totals decrease while preserving validation, history, focus navigation, and controlled-state behavior.
 - Tests to add/update:
-  - Runtime-specific tests based on sort projection diagnostics and edit-burst phase diagnostics.
+  - Runtime-specific tests based on edit-burst phase diagnostics.
 - Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): reduce interaction frame stalls`
@@ -255,16 +270,17 @@ Current execution state:
 3. Slice 3: Sort/Edit/Context Menu Frame Gate (completed 2026-05-20)
 4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup (completed 2026-05-20)
 5. Slice 3c: Interaction Frame Artifact Triage And Edit Diagnostics (completed 2026-05-20)
-6. Slice 3d: Sort/Edit Deep Runtime Cleanup
-7. Slice 4: Server-Backed Latency And Placeholder Gates
-8. Slice 5: Datasource Churn Reduction
-9. Slice 6: Long Memory Soak
-10. Slice 10: Wide-Table Horizontal Virtualization Matrix
-11. Slice 11: Custom Renderer Performance Contract
-12. Slice 9: Quick-Filter Typing Latency
-13. Slice 7: Grouped/Tree/Pivot Interactivity
-13. Slice 8: Workbook Snapshot And Restore Slimming
-14. Slice 12: Worker Benchmark Canonicalization
+6. Slice 3d: Single-Column Sort Projection Cleanup (completed 2026-05-20)
+7. Slice 3e: Inline Edit Burst Runtime Cleanup
+8. Slice 4: Server-Backed Latency And Placeholder Gates
+9. Slice 5: Datasource Churn Reduction
+10. Slice 6: Long Memory Soak
+11. Slice 10: Wide-Table Horizontal Virtualization Matrix
+12. Slice 11: Custom Renderer Performance Contract
+13. Slice 9: Quick-Filter Typing Latency
+14. Slice 7: Grouped/Tree/Pivot Interactivity
+15. Slice 8: Workbook Snapshot And Restore Slimming
+16. Slice 12: Worker Benchmark Canonicalization
 
 ## Execution Notes
 

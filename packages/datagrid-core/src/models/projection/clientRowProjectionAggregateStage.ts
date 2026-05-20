@@ -123,7 +123,10 @@ export function runAggregateProjectionStage<T>(
     : "filtered"
   const rowsForAggregation = aggregationBasis === "source"
     ? (params.sortModel.length > 0
-        ? sortLeafRows(params.sourceRows, params.sortModel, (row, descriptors) => {
+      ? sortLeafRows(
+          params.sourceRows,
+          params.sortModel,
+          (row, descriptors) => {
             const values = new Array<unknown>(descriptors.length)
             for (let index = 0; index < descriptors.length; index += 1) {
               const descriptor = descriptors[index]
@@ -132,7 +135,9 @@ export function runAggregateProjectionStage<T>(
                 : undefined
             }
             return values
-          })
+          },
+          (row, descriptor) => params.readRowField(row, descriptor.key, descriptor.field),
+        )
         : (params.sourceRows as DataGridRowNode<T>[]))
     : params.sortedRowsProjection
 

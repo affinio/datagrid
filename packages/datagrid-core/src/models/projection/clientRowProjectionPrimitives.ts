@@ -778,11 +778,72 @@ export function sortLeafRows<T>(
   rows: readonly DataGridRowNode<T>[],
   sortModel: readonly DataGridSortState[],
   resolveSortValues?: (row: DataGridRowNode<T>, descriptors: readonly DataGridSortState[]) => readonly unknown[],
+  resolveSingleSortValue?: (row: DataGridRowNode<T>, descriptor: DataGridSortState) => unknown,
 ): DataGridRowNode<T>[] {
   const descriptors = Array.isArray(sortModel) ? sortModel.filter(Boolean) : []
   if (descriptors.length === 0) {
     return rows as DataGridRowNode<T>[]
   }
+  if (descriptors.length === 1) {
+    const descriptor = descriptors[0]
+    if (!descriptor) {
+      return rows as DataGridRowNode<T>[]
+    }
+    const direction = descriptor.direction === "desc" ? -1 : 1
+    const sortValuesByIndex = new Array<unknown>(rows.length)
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index]
+      if (!row) {
+        sortValuesByIndex[index] = undefined
+        continue
+      }
+      sortValuesByIndex[index] = resolveSingleSortValue
+        ? resolveSingleSortValue(row, descriptor)
+        : resolveSortValues
+          ? resolveSortValues(row, descriptors)[0]
+          : readRowField(row, descriptor.key, descriptor.field)
+    }
+
+    const orderedIndexes = new Array<number>(rows.length)
+    for (let index = 0; index < rows.length; index += 1) {
+      orderedIndexes[index] = index
+    }
+
+    orderedIndexes.sort((leftIndex, rightIndex) => {
+      const leftRow = rows[leftIndex]
+      const rightRow = rows[rightIndex]
+      if (!leftRow || !rightRow) {
+        return leftIndex - rightIndex
+      }
+      const compared = compareUnknown(sortValuesByIndex[leftIndex], sortValuesByIndex[rightIndex])
+      if (compared !== 0) {
+        return compared * direction
+      }
+      const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
+      if (rowIdDelta !== 0) {
+        return rowIdDelta
+      }
+      const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
+      if (sourceDelta !== 0) {
+        return sourceDelta
+      }
+      return leftIndex - rightIndex
+    })
+
+    const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)
+    for (let index = 0; index < orderedIndexes.length; index += 1) {
+      const rowIndex = orderedIndexes[index]
+      if (typeof rowIndex === "undefined") {
+        continue
+      }
+      const row = rows[rowIndex]
+      if (row) {
+        sortedRows[index] = row
+      }
+    }
+    return sortedRows
+  }
+
   const sortValuesByIndex = new Array<readonly unknown[]>(rows.length)
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
