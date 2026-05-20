@@ -2,6 +2,22 @@
 
 Baseline date: `2026-03-06`
 
+Current status: `2026-05-20`
+
+Implemented since baseline:
+
+- Community/enterprise boundary docs exist for formula engine, pivot, and Vue app facade.
+- Commercial boundary and release-readiness checks are part of `quality:architecture:datagrid`.
+- `@affino/datagrid-vue-app-enterprise`, `@affino/datagrid-diagnostics-enterprise`, and `@affino/datagrid-formula-engine-enterprise` exist.
+- Enterprise app license handling, diagnostics, formula packs, and performance presets are wired as additive app behavior.
+- Native XLSX export exists as community package `@affino/export-xlsx`.
+
+Still open:
+
+- `@affino/datagrid-worker-enterprise`, `@affino/datagrid-pivot-enterprise`, and any enterprise-core/SSRM package do not exist in the current package set.
+- OSS vs enterprise publish policy and independent release flow are not complete.
+- Root public-surface classification remains a release-readiness task, especially server/worker helpers.
+
 Goal: split OSS and paid surface before first public release so monetization is possible without later semver pain.
 
 Principles:
@@ -142,7 +158,7 @@ Commercial prioritization checklist:
 2. [x] Freeze `@affino/datagrid-pivot` as community-safe pivot API boundary.
 3. [ ] Validate `advanced server data` as first enterprise moat.
 4. [ ] Validate `advanced pivot` as second enterprise moat.
-5. [ ] Validate `diagnostics/devtools` as third enterprise moat.
+5. [x] Validate `diagnostics/devtools` as third enterprise moat.
 6. [ ] Decide whether `advanced tree data` ships as a separate package or inside the enterprise app/runtime bundle.
 7. [ ] Decide whether premium app diagnostics move first through `@affino/datagrid-vue-app-enterprise`.
 8. [ ] Decide whether premium worker/vector runtime is sold standalone or bundled into the enterprise app/runtime bundle.
@@ -169,11 +185,11 @@ Goal: make boundary leakage mechanically hard.
 
 Checklist:
 
-1. [ ] Add `docs/datagrid-open-core-boundary.md` with package ownership rules.
-2. [ ] Add quality gate: OSS packages must not import enterprise packages.
-3. [ ] Add quality gate: OSS docs/examples must not import enterprise packages.
-4. [ ] Add quality gate: enterprise packages may depend on OSS, never the reverse.
-5. [ ] Add acceptance report artifact for boundary leakage checks.
+1. [x] Add package ownership rules through community-vs-enterprise docs.
+2. [x] Add quality gate: OSS packages must not import enterprise packages.
+3. [x] Add quality gate: OSS docs/examples must not import enterprise packages.
+4. [x] Add quality gate: enterprise packages may depend on OSS, never the reverse.
+5. [x] Add acceptance report artifact/check path for boundary leakage checks.
 
 Exit criteria:
 
@@ -185,10 +201,10 @@ Goal: stop over-exporting advanced/server/commercial candidates from OSS root en
 
 Checklist:
 
-1. [ ] Audit [public.ts](/Users/anton/Projects/affinio/datagrid/packages/datagrid-core/src/public.ts).
-2. [ ] Audit [advanced.ts](/Users/anton/Projects/affinio/datagrid/packages/datagrid-core/src/advanced.ts).
-3. [ ] Audit [public.ts](/Users/anton/Projects/affinio/datagrid/packages/datagrid-vue/src/public.ts).
-4. [ ] Audit [index.ts](/Users/anton/Projects/affinio/datagrid/packages/datagrid-laravel/resources/js/index.ts).
+1. [ ] Audit [public.ts](../../../packages/datagrid-core/src/public.ts).
+2. [ ] Audit [advanced.ts](../../../packages/datagrid-core/src/advanced.ts).
+3. [ ] Audit [public.ts](../../../packages/datagrid-vue/src/public.ts).
+4. [ ] Audit [index.ts](../../../packages/datagrid-laravel-app/src/index.ts).
 5. [ ] Remove enterprise-candidate exports from OSS root facades before first release.
 6. [ ] Keep OSS stable root semver-safe and intentionally narrow.
 7. [ ] Update docs/examples to use only the surviving OSS public surface.
@@ -219,11 +235,11 @@ Checklist:
 6. [x] Create `packages/datagrid-diagnostics-enterprise`.
 7. [ ] Create `packages/datagrid-worker-enterprise`.
 9. [x] Create `packages/datagrid-formula-engine-enterprise`.
-10. [x] Create `packages/datagrid-pivot-enterprise`.
-11. [ ] Decide whether `export-xlsx` stays community or needs an enterprise-only companion package.
-12. [ ] Add workspace package manifests and build/type-check scripts.
-13. [ ] Add repository/homepage/license metadata.
-14. [ ] Add placeholder README files explaining OSS vs enterprise role.
+10. [ ] Create `packages/datagrid-pivot-enterprise`.
+11. [x] Decide whether `export-xlsx` stays community or needs an enterprise-only companion package. Current package is community.
+12. [~] Add workspace package manifests and build/type-check scripts.
+13. [~] Add repository/homepage/license metadata.
+14. [~] Add placeholder README files explaining OSS vs enterprise role.
 
 Exit criteria:
 

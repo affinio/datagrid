@@ -52,8 +52,8 @@ Phase 2 status:
 - Touch hit targets: coarse-pointer mode expands fill, fill action, row resize, and column resize targets while preserving desktop marker visuals.
 
 Phase 3 status:
-- Touch scroll lightweight rendering: while the stage is in touch mode and the body viewport is actively scrolling, custom cell/group renderer functions are bypassed and cells render their resolved `displayValue`; desktop renderer behavior is unchanged.
-- Focused renderer/stage coverage verifies that the lightweight path preserves display text, editor predicates, placeholder fallback, cell shell ARIA, and selection/focus ownership while bypassing authored content.
+- Touch scroll renderer stability: active touch scroll keeps visible custom cell/group renderers mounted instead of replacing them with resolved `displayValue`, avoiding viewport flicker for renderer-backed cells.
+- Focused renderer/stage coverage verifies renderer retention during touch scroll while preserving cell shell ARIA and selection/focus ownership.
 
 Interaction audit closure:
 - Interaction orchestration slices 1-14 are complete as of 2026-05-17, and selection enterprise slices 1-15 are complete as of 2026-05-18. Browser e2e coverage and hard-fail Chromium frame profiles now cover desktop interaction races, interaction diagnostics, pointer preview, auto-scroll, focus restoration, pinned-pane drag-selection diagnostics, and scroll-sync drift. The open mobile work remains real-device execution and hardware threshold review.
@@ -66,7 +66,7 @@ Interaction audit closure:
 - Double tap can open inline editing when the viewport is idle; scroll-active double tap is suppressed.
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
-- During active touch scroll, custom cell/group renderers are bypassed in favor of resolved display values to reduce render cost.
+- During active touch scroll, visible custom cell/group renderers remain active; scroll savings come from native panning, hover suppression, rAF batching, and adaptive overscan.
 - Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and hardware traces may require threshold adjustments for scroll-frame, scroll-quality, and interaction-frame telemetry.
 
 ## Current Architecture Summary
@@ -75,7 +75,7 @@ Interaction audit closure:
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
 - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; the stage can request lightweight display-value rendering during touch scroll.
+- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; visible renderer output is preserved during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
 - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts` is a lower-level viewport controller path with rAF scroll sync, drift correction, heavy-update thresholds, and resize observer integration.
 - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts` plus `packages/datagrid-core/src/virtualization/dynamicOverscan.ts` provide adaptive vertical overscan in the core viewport path.
@@ -323,8 +323,8 @@ Current state:
 - `DataGridTableStage.vue` already consumes body scroll-active state.
 - `useDataGridStageViewportRuntime.ts` now exposes both body scroll-active and body scroll-idle refs, plus `runWhenBodyViewportScrollIdle()` for non-critical work that should be delayed until scrolling settles.
 - `useDataGridStageFocusRuntime.ts` defers anchor focus restoration through that idle hook while body scrolling is active and coalesces duplicate restore requests.
-- Touch/coarse scroll now uses that state to bypass authored cell/group renderer functions and render resolved display values while momentum scroll is active.
-- Desktop scrolling still uses authored renderer functions to avoid changing mouse/trackpad behavior.
+- Touch/coarse scroll now uses that state to defer non-critical focus work and suppress hover/edit starts while momentum scroll is active.
+- Touch and desktop scrolling both keep authored cell/group renderer functions active for visible cells to avoid display flicker.
 
 Recommended fix:
 - Continue using the explicit idle callback hook for future expensive overlay recalculation and other optional renderer work.
@@ -462,7 +462,7 @@ Gap:
 - Done: add adaptive vertical overscan based on velocity in the app-stage path.
 - Done: add `isScrolling` and `scrollIdle` state to the stage viewport runtime, with a deferred idle callback hook.
 - Done: defer anchor focus restoration until body scroll idle and coalesce duplicate restore requests.
-- Done for touch mode: add lightweight display-value cell rendering while scrolling for expensive custom renderers, with focused unit/component coverage for display text, editor predicates, placeholder fallback, and cell shell ARIA.
+- Done for touch mode: keep visible custom renderers active while scrolling, with focused unit/component coverage for renderer retention, editor predicates, placeholder surfaces, and cell shell ARIA.
 - Mostly done for the stage path: minimize reactive writes during scroll events; keep final residual audits focused on newly added scroll work.
 - Mostly done for the stage path: consolidate header/body/pinned/canvas sync into one scroll-frame coordinator; keep future work behind `stageScrollFrame` evidence.
 - In progress: improve server/data-source prefetch windows using real velocity and latency metrics; core sparse diagnostics now expose viewport loading ratio for measurement.

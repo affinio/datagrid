@@ -1,6 +1,6 @@
 # Server Data Source Parity Checklist
 
-Status: baseline demo implemented; filtering/histograms, demo-local editing, and server-v1 fill diagnostics implemented.
+Status: flat server datasource path is production-shaped for the current demo scope. Filtering, histograms, optimistic editing, server fill, history, retry/backoff, invalidation, polling change feed, loading placeholders, and latency/cache diagnostics are implemented. Remaining gaps are enterprise projection/live/offline capabilities and unloaded-row operations.
 
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
@@ -39,22 +39,26 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 ## Client-Model Parity Checklist
 - [ ] Selection across unloaded rows
 - [ ] Copy/paste across unloaded rows
-- [ ] Grouping
-- [ ] Aggregation
-- [ ] Pivot/histograms if applicable
-- Note: numeric buckets are not implemented yet; value histograms use exact numeric values for now.
+- [ ] Grouping/tree/pivot server projection
+- [ ] Server-side aggregation over unloaded ranges
+- [x] Column histograms for the current demo scope
+- Note: current `server_demo` intentionally rejects unsupported grouping/tree/pivot pull projection with `400 unsupported-server-projection`.
 
 ## Server-Specific Behaviour
-- [ ] Cache invalidation
-- [ ] Push updates
-- [ ] Error/retry UX
-- [ ] Performance profiling
+- [x] Cache invalidation
+- [x] Push updates through polling change feed
+- [x] Error/retry UX for idempotent reads and change-feed polling
+- [x] Performance profiling/diagnostics for placeholders, cache hit/miss, pull duration, blank viewport, and stale retention
 - [x] Fill diagnostics for loaded-row server v1
+- [ ] Concrete websocket/SSE transport
+- [ ] Offline mutation replay with durable idempotency contract
 
 ## Open API Gaps
-- [ ] Confirm whether additional public hooks are needed for server cache invalidation UX
-- [ ] Confirm whether retry and push-update affordances belong in the public app layer
-- [ ] Confirm whether diagnostics should expose more server-specific cache/prefetch state
+- [x] Confirm whether additional public hooks are needed for server cache invalidation UX: current protocol exposes invalidation, `invalidate*` model methods, and datasource `invalidate`.
+- [x] Confirm whether retry and push-update affordances belong in the public app layer: retry/polling diagnostics are exposed by server-client/adapters, while websocket/SSE remains future transport work.
+- [x] Confirm whether diagnostics should expose more server-specific cache/prefetch state: current diagnostics include placeholder/cache/pull metrics; CI promotion is covered by performance gates.
+- [ ] Define public capability contract for server grouping/tree/pivot/hierarchical stores.
+- [ ] Define durable mutation replay/idempotency API before offline mutation retry.
 
 ## Proposed Mutation API
 - Optional `commitEdits` method on `DataGridDataSource`
@@ -78,9 +82,10 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 
 ## Server Fill Stage 2
 - [x] Server-aware fill boundary resolution
-- [~] Server-side fill execution operation
-- [ ] Server-fill visual refresh/render parity
-- [ ] Server-fill undo/redo fully verified
+- [x] Server-side fill execution operation
+- [x] Server-fill visual refresh/render parity
+- [x] Server-fill undo/redo fully verified for loaded-row server fill
+- [ ] Series fill and fill over unloaded rows
 
 ## Manual Test Checklist
 - [ ] Open the demo and verify initial load completes

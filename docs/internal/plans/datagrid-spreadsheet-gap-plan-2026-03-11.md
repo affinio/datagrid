@@ -1,7 +1,7 @@
 # DataGrid Spreadsheet Gap Plan
 
-Updated: `2026-03-11`
-Scope: `datagrid-vue-app` + `datagrid-formula-engine` spreadsheet path.
+Updated: `2026-05-20`
+Scope: `datagrid-core/src/spreadsheet`, `datagrid-spreadsheet-vue-app`, and `datagrid-formula-engine` spreadsheet path.
 
 ## What already exists
 
@@ -36,7 +36,6 @@ Status:
 Still missing in this area:
 
 - richer editing semantics on top of range refs
-- cross-sheet reference grammar
 - parser profile registry for Excel/A1 and custom enterprise dialects
 
 Update:
@@ -47,6 +46,7 @@ Update:
   - spreadsheet parser now normalizes range refs into canonical IR without leaking Smartsheet syntax into runtime
   - evaluation, dependency tracking, and row insert/remove rewrite now preserve rectangular ranges
   - workbook shell highlighting now expands manual rectangular refs across the full column span
+- `2026-05-20`: sheet-qualified references are implemented behind `allowSheetQualifiedReferences`; direct cross-sheet refs such as `orders![Unit price]1` are parsed, evaluated, decorated, and covered by workbook app/core tests.
 
 ### 2. Workbook / multi-sheet core model
 
@@ -81,9 +81,8 @@ Status:
 
 Still missing in this area:
 
-- direct cross-sheet reference grammar in formulas (for example sheet-qualified cell refs)
 - workbook-level dependency graph / explain surface in public diagnostics
-- sheet duplication / workbook snapshot / workbook history semantics
+- sheet duplication / extended workbook snapshot semantics
 - conflict policy for workbook-managed aliases vs external manual formula tables
 
 ### 2.5. Relation-aware formula helpers
@@ -137,10 +136,10 @@ Status:
 
 Still missing in this area:
 
-- integration with selection/cell-click orchestration in `datagrid-vue-app`
+- deeper reusable integration with selection/cell-click orchestration outside the spreadsheet shell
 - reverse mapping from target cells back to reference spans for hover/focus interactions
-- edit transactions that preserve raw input separately from computed display payload
-- row/column insert-remove semantics with reference shifting and fill/autofill semantics
+- edit transactions that preserve raw input separately from computed display payload in every grid mutation path
+- full fill/autofill semantics over workbook references
 
 ### 4. Style system
 
@@ -189,7 +188,6 @@ Still missing in this area:
 
 - extraction into reusable `datagrid-vue-app` spreadsheet shell primitives instead of sandbox-only wiring
 - reverse-hover from target cell back into formula spans
-- sheet-qualified cross-sheet cell ref grammar in the editor UX
 - clipboard/history semantics for raw formula + style payloads
 
 ## Recommended build order
@@ -205,7 +203,7 @@ Still missing in this area:
 
 After the workbook graph refactor, the next high-leverage core block is:
 
-- add sheet-level per-cell formula execution/persistence model
 - add named relation registry on top of `RELATED` / `ROLLUP`
-- connect spreadsheet editor model to selection-driven reference insertion in `datagrid-vue-app`
-- add sheet-qualified reference grammar on top of the parser profile layer
+- move more spreadsheet shell/reference-builder behavior into reusable package primitives
+- finish raw formula + style clipboard/history semantics across sheets/workbooks
+- continue the token/reference transition so structural mutations no longer rely on eager formula text rewrite

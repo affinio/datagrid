@@ -55,9 +55,12 @@ Pipeline:
 
 Priority set before formula-engine:
 1. [ ] Sorting comparator policy (custom/locale/natural).
-2. [ ] Quick/global filter model.
-3. [ ] Real Excel export pipeline (`.xlsx`, not TSV mime shim).
-4. [ ] Selection overlay default renderer in app wrapper.
+2. [x] Quick filter model.
+3. [x] Real Excel export pipeline (`.xlsx`, not TSV mime shim) through `@affino/export-xlsx`.
+4. [x] Selection overlay default renderer in app wrapper.
+
+Still open after the original feature set:
+- Comparator policy remains the real gap here; quick filter, XLSX export, and selection overlay are no longer blockers.
 
 Deferred after formula-engine kickoff:
 - Column groups runtime.

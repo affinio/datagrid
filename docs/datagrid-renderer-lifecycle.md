@@ -30,7 +30,7 @@ Scope: `@affino/datagrid-vue-app` column `cellRenderer` and `groupCellRenderer` 
 
 - A renderer may be invoked many times for the same logical cell.
 - A rendered child may unmount and remount when rows or columns enter and leave the virtual window.
-- Horizontal virtualization, vertical virtualization, pinned panes, grouping, filtering, sorting, placeholder rows, and lightweight scroll rendering can all cause renderer output to be recreated.
+- Horizontal virtualization, vertical virtualization, pinned panes, grouping, filtering, sorting, and placeholder rows can all cause renderer output to be recreated. Active touch scroll keeps visible custom renderer output mounted instead of replacing it with display values.
 - If a renderer returns `null` or `undefined`, the stage falls back to `displayValue`.
 - If a renderer throws, the stage preserves the cell wrapper and falls back to `displayValue` for that cell.
 - The grid does not preserve renderer-local component state across virtual unmounts. Persist durable state in row data, host state, or the row model.

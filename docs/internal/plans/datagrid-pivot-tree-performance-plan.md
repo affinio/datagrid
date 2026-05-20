@@ -11,6 +11,8 @@ Bring `pivotRuntime` and `treeProjectionRuntime` to the same maturity level as t
 
 ## Current Assessment
 
+Status as of `2026-05-20`: baseline/gate work is partly complete. `bench:datagrid:pivot:assert`, `bench:datagrid:tree:assert`, `bench:datagrid:tree:matrix:assert:*`, and `bench:datagrid:pivot:server-interop:assert` exist and are referenced by quality/perf docs. Remaining work is deeper runtime optimization and explicit memory discipline, not initial benchmark availability.
+
 ### Pivot
 
 Current strengths:
@@ -65,16 +67,16 @@ Pivot and tree still need the same maturity in these areas:
 
 ### Phase P1. Benchmark Baseline and Perf Contracts
 
-- [ ] Lock pivot baseline from `scripts/bench-datagrid-pivot-workload.mjs`
-- [ ] Lock tree baseline from `scripts/bench-datagrid-tree-workload.mjs`
-- [ ] Define per-scenario budgets for:
+- [x] Lock pivot baseline from `scripts/bench-datagrid-pivot-workload.mjs`
+- [x] Lock tree baseline from `scripts/bench-datagrid-tree-workload.mjs`
+- [x] Define per-scenario budgets for:
   - rebuild p95
   - patch p95
   - p99 tail
   - variance (cv%)
   - heap delta
-- [ ] Add markdown/json artifact comparison workflow similar to formula-engine
-- [ ] Record current bottleneck scenarios in docs/perf notes
+- [~] Add markdown/json artifact comparison workflow similar to formula-engine
+- [x] Record current bottleneck scenarios in docs/perf notes
 
 Definition of done:
 - pivot/tree perf is discussed in terms of reproducible workloads, not anecdotes
@@ -188,9 +190,9 @@ Definition of done:
 
 ### Phase P8. CI and Quality Gates
 
-- [ ] Add pivot workload gate to quality/perf flow
-- [ ] Add tree workload gate to quality/perf flow
-- [ ] Upload pivot/tree perf artifacts in CI the same way as formula-engine artifacts
+- [x] Add pivot workload gate to quality/perf flow
+- [x] Add tree workload gate to quality/perf flow
+- [~] Upload pivot/tree perf artifacts in CI the same way as formula-engine artifacts
 - [ ] Fail quality gates on sustained regressions, not one-off manual checks
 
 ## Priority Order
@@ -221,8 +223,8 @@ Reason:
 
 We can say pivot/tree reached formula-engine maturity when:
 
-- [ ] dedicated workload benches exist and are used regularly
-- [ ] rebuild and patch paths have stable p95/p99 budgets
+- [x] dedicated workload benches exist and are used regularly
+- [x] rebuild and patch paths have stable p95/p99 budgets
 - [ ] runtime uses snapshot-aware reads consistently
 - [ ] large workload memory usage is explicitly budgeted
 - [ ] incremental invalidation is narrow and explainable

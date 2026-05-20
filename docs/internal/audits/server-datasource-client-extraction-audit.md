@@ -1,5 +1,7 @@
 # Server Datasource Client Extraction Audit
 
+Status as of `2026-05-20`: extraction is complete for the reusable server client boundary. `packages/datagrid-server-client` exists with transport, normalization, invalidation, row snapshot, change-feed polling, retry/backoff, and live-update transport boundary helpers. `packages/datagrid-server-adapters` owns the Affino HTTP datasource adapter and query codec. The sandbox retains demo-domain row/filter/fill/history shaping. Remaining work is not client extraction; it is concrete websocket/SSE transport, offline replay/idempotency, and server projection implementation.
+
   ## Executive Summary
 
   Recommend a new packages/datagrid-server-client package. The demo adapter is currently doing three jobs at once: demo-domain request shaping, generic HTTP/client

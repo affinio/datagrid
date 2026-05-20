@@ -1,3 +1,11 @@
+Status as of `2026-05-20`: implemented for the current flat `createDataSourceBackedRowModel` path. The code now has `rangeCache`, placeholder rows, stale-row retention, retry/error handling, invalidation paths, velocity-aware prefetch/overscan helpers, and browser/perf gates for blank viewport and placeholder exposure. This document remains useful as historical slice notes, but the open work has moved to enterprise server projection/live/offline capabilities rather than basic blank-viewport range loading.
+
+Open follow-up:
+
+- Promote or tune hardware-specific performance thresholds from real devices.
+- Keep server grouping/tree/pivot/hierarchical-store work separate from this flat range-cache path.
+- Avoid public loading-row API expansion unless a product use case needs cell-renderer-visible loading state.
+
 • План
 
   1. Зафиксировать целевое поведение

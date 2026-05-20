@@ -2,6 +2,8 @@
 
 Date: 2026-03-11
 
+Status as of `2026-05-20`: partially implemented. The sheet runtime has compiled formula/reference metadata and supports sheet-qualified references, but structural mutation paths still update/render `rawInput` eagerly in `sheetModel.ts` and `workbookModel.ts`. Treat P0/P1 as mostly present, P2/P3 as partially complete, and P4/P5 as still open.
+
 ## Goal
 
 Move spreadsheet structural mutations away from formula text rewriting and toward persistent token/reference models.
@@ -26,29 +28,29 @@ That makes row insert/remove cost scale with the number of formulas and absolute
 
 ### P0. Keep current contract, add internal formula model
 
-- Add persistent `formulaModelByCellKey` storage in `packages/datagrid-core/src/spreadsheet/sheetModel.ts`
-- Keep `rawInput` as externally visible editor/export representation
-- Store normalized references separately from text spans
+- [x] Add persistent compiled formula/reference storage in `packages/datagrid-core/src/spreadsheet/sheetModel.ts`
+- [x] Keep `rawInput` as externally visible editor/export representation
+- [x] Store normalized references separately from text spans
 - Initial formula model shape:
-  - `sheetReference`
-  - `columnKey`
-  - `rowSelector`
-  - `outputSyntax`
+  - [x] `sheetReference`
+  - [x] `columnKey`
+  - [x] `rowSelector`
+  - [x] `outputSyntax`
 
 ### P1. Extract token mutation/render helpers
 
-- Extend `packages/datagrid-core/src/spreadsheet/formulaEditorModel.ts`
-- Add API for:
-  - mutating normalized references after structural changes
-  - rendering normalized references back into canonical/smartsheet text
-- Do not change sheet/workbook behavior yet
+- [x] Extend `packages/datagrid-core/src/spreadsheet/formulaEditorModel.ts`
+- [~] Add API for:
+  - [x] mutating normalized references after structural changes
+  - [x] rendering normalized references back into canonical/smartsheet text
+- [~] Do not change sheet/workbook behavior yet; current behavior still writes updated `rawInput` eagerly in some structural paths.
 
 ### P2. Replace local sheet structural rewrite hot path
 
-- Remove text rewrite as primary path in `insertRowsAt()` / `removeRowsAt()`
-- Update token/reference models instead
-- Mark formula text dirty instead of eagerly rewriting every formula string
-- Rebuild dependency graph from token model
+- [~] Remove text rewrite as primary path in `insertRowsAt()` / `removeRowsAt()`
+- [x] Update token/reference models instead
+- [ ] Mark formula text dirty instead of eagerly rewriting every formula string
+- [x] Rebuild dependency graph from token model
 
 Expected impact:
 
@@ -56,10 +58,10 @@ Expected impact:
 
 ### P3. Replace cross-sheet structural rewrite hot path
 
-- Replace workbook-level formula patching in `packages/datagrid-core/src/spreadsheet/workbookModel.ts`
-- Stop doing `getFormulaCells() -> getCell() -> rewrite text -> setCellInputs()`
-- Mutate normalized references directly for dependent sheets
-- Render formula text lazily for editor/export only
+- [~] Replace workbook-level formula patching in `packages/datagrid-core/src/spreadsheet/workbookModel.ts`
+- [ ] Stop doing `getFormulaCells() -> getCell() -> rewrite text -> setCellInputs()`
+- [~] Mutate normalized references directly for dependent sheets
+- [ ] Render formula text lazily for editor/export only
 
 Expected impact:
 
@@ -67,17 +69,17 @@ Expected impact:
 
 ### P4. Separate storage contract from editor/export contract
 
-- `rawInput` becomes derived view, not source-of-truth for formula structure
-- Render formula strings only when needed by:
+- [ ] `rawInput` becomes derived view, not source-of-truth for formula structure
+- [ ] Render formula strings only when needed by:
   - `getCell().rawInput`
   - `exportState()`
   - formula editor entry
 
 ### P5. Identity cleanup
 
-- Keep column references bound to stable `columnKey`
-- Keep row-relative semantics bound to row context
-- Preserve current absolute-reference semantics, but implement them through normalized selectors instead of text rewrite
+- [x] Keep column references bound to stable `columnKey`
+- [x] Keep row-relative semantics bound to row context
+- [~] Preserve current absolute-reference semantics, but implement them through normalized selectors instead of text rewrite
 
 ## Files To Change First
 
