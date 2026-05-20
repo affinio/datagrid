@@ -569,6 +569,7 @@ registerTokenCheck(
     "bench:datagrid:enterprise:browser-frames:assert",
     "bench:datagrid:enterprise:browser-frames:touch:assert",
     "bench:datagrid:enterprise:scroll:assert",
+    "bench:datagrid:enterprise:interaction-frame:assert",
     "bench:datagrid:enterprise:virtualization:assert",
     "enterprise-browser-frames",
     "bench:datagrid:tree",
@@ -885,6 +886,57 @@ registerTokenCheck(
       ok
         ? "ok"
         : `unexpected enterprise scroll assert script or finite budgets: script='${scrollAssertScript}', frameP95=${frameP95}, frameP99=${frameP99}, dropped=${droppedFramePct}, longTaskCount=${longTaskCount}, longTaskTotal=${longTaskTotal}, longTaskMax=${longTaskMax}, heap=${heap}`,
+    )
+  }
+}
+
+{
+  const packageJsonPath = resolve("package.json")
+  const enterpriseInteractionFrameAssertBudgetId = "enterprise-interaction-frame-assert-hard-budgets"
+  if (!existsSync(packageJsonPath)) {
+    registerConditionCheck(
+      enterpriseInteractionFrameAssertBudgetId,
+      false,
+      "Enterprise interaction-frame assert script hard-fails resource, interaction, and sort budget warnings",
+      "package.json missing",
+    )
+  } else {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
+    const script = String(pkg?.scripts?.["bench:datagrid:enterprise:interaction-frame:assert"] ?? "")
+    const frameP95 = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_FRAME_P95_MS")
+    const frameP99 = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_FRAME_P99_MS")
+    const droppedFramePct = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT")
+    const longTaskCount = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_LONG_TASK_COUNT")
+    const longTaskTotal = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS")
+    const longTaskMax = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS")
+    const heap = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const sortMenuOpenToPaint = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS")
+    const sortClickToPaint = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS")
+    const sortWindowFrame = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS")
+    const sortWindowLongTaskTotal = extractEnvNumberFromScript(script, "PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS")
+    const ok =
+      script.includes("BENCH_BROWSER_SCENARIOS=sort-only,inline-edit-burst-only,interaction-context-menu") &&
+      script.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
+      script.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
+      script.includes("BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS=true") &&
+      frameP95 != null &&
+      frameP99 != null &&
+      droppedFramePct != null &&
+      longTaskCount != null &&
+      longTaskTotal != null &&
+      longTaskMax != null &&
+      heap != null &&
+      sortMenuOpenToPaint != null &&
+      sortClickToPaint != null &&
+      sortWindowFrame != null &&
+      sortWindowLongTaskTotal != null
+    registerConditionCheck(
+      enterpriseInteractionFrameAssertBudgetId,
+      ok,
+      "Enterprise interaction-frame assert script hard-fails resource, interaction, and sort budget warnings",
+      ok
+        ? "ok"
+        : `unexpected enterprise interaction-frame assert script or finite budgets: script='${script}', frameP95=${frameP95}, frameP99=${frameP99}, dropped=${droppedFramePct}, longTaskCount=${longTaskCount}, longTaskTotal=${longTaskTotal}, longTaskMax=${longTaskMax}, heap=${heap}, sortMenuOpenToPaint=${sortMenuOpenToPaint}, sortClickToPaint=${sortClickToPaint}, sortWindowFrame=${sortWindowFrame}, sortWindowLongTaskTotal=${sortWindowLongTaskTotal}`,
     )
   }
 }

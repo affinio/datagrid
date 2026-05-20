@@ -111,6 +111,10 @@ const BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS",
   false,
 )
+const BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS",
+  false,
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = floatEnv("PERF_BUDGET_MAX_VARIANCE_PCT", 999999)
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = floatEnv("PERF_BUDGET_MAX_HEAP_DELTA_MB", 999999)
 const PERF_BUDGET_MAX_FRAME_P95_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P95_MS", 120)
@@ -119,6 +123,22 @@ const PERF_BUDGET_MAX_DROPPED_FRAME_PCT = floatEnv("PERF_BUDGET_MAX_DROPPED_FRAM
 const PERF_BUDGET_MAX_LONG_TASK_COUNT = floatEnv("PERF_BUDGET_MAX_LONG_TASK_COUNT", 999999)
 const PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS = floatEnv("PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS", 999999)
 const PERF_BUDGET_MAX_LONG_TASK_MAX_MS = floatEnv("PERF_BUDGET_MAX_LONG_TASK_MAX_MS", 999999)
+const PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS = floatEnv(
+  "PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS = floatEnv(
+  "PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS = floatEnv(
+  "PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS",
+  999999,
+)
 const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
   interactionDeviceProfile.budgets.previewP95Ms,
@@ -432,6 +452,10 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_LONG_TASK_COUNT, "PERF_BUDGET_MAX_LONG_TASK_COUNT"],
   [PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS"],
   [PERF_BUDGET_MAX_LONG_TASK_MAX_MS, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS"],
+  [PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS, "PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS"],
+  [PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS, "PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS"],
+  [PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS, "PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS"],
+  [PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS, "PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS"],
   [PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS, "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS, "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS, "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS"],
@@ -2726,6 +2750,41 @@ function buildRenderingTelemetryWarnings(scenarioReports) {
   return warnings
 }
 
+function buildSortDiagnosticsBudgetWarnings(scenarioReports) {
+  const warnings = []
+  for (const [scenarioId, report] of Object.entries(scenarioReports)) {
+    const diagnostics = report.aggregate.sortDiagnostics
+    if (!diagnostics || diagnostics.totalSortInteractionMs.count <= 0) {
+      continue
+    }
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} sort menu open-to-paint p95`,
+      diagnostics.menuOpenToPaintMs.p95,
+      PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} sort click-to-paint p95`,
+      diagnostics.sortClickToPaintMs.p95,
+      PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} sort window frame p95`,
+      diagnostics.sortWindowFrameP95Ms.p95,
+      PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS,
+    )
+    addWarningIfAbove(
+      warnings,
+      `${scenarioId} sort window long task total p95`,
+      diagnostics.sortWindowLongTaskTotalMs.p95,
+      PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS,
+    )
+  }
+  return warnings
+}
+
 function buildA11yBudgetWarnings(scenarioReports) {
   const warnings = []
   for (const scenario of SCENARIOS) {
@@ -2880,12 +2939,14 @@ const interactionBudgetWarnings = buildInteractionBudgetWarnings(scenarioReports
 const virtualizationBudgetWarnings = buildVirtualizationBudgetWarnings(scenarioReports)
 const renderChurnBudgetWarnings = buildRenderChurnBudgetWarnings(scenarioReports)
 const renderingTelemetryWarnings = buildRenderingTelemetryWarnings(scenarioReports)
+const sortDiagnosticsBudgetWarnings = buildSortDiagnosticsBudgetWarnings(scenarioReports)
 const a11yBudgetWarnings = buildA11yBudgetWarnings(scenarioReports)
 const budgetWarnings = [
   ...interactionBudgetWarnings,
   ...virtualizationBudgetWarnings,
   ...renderChurnBudgetWarnings,
   ...renderingTelemetryWarnings,
+  ...sortDiagnosticsBudgetWarnings,
   ...a11yBudgetWarnings,
 ]
 const budgetErrors = [
@@ -2893,6 +2954,7 @@ const budgetErrors = [
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? virtualizationBudgetWarnings : []),
   ...(BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS ? renderChurnBudgetWarnings : []),
   ...(BENCH_RENDERING_FAIL_ON_WARNINGS ? renderingTelemetryWarnings : []),
+  ...(BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS ? sortDiagnosticsBudgetWarnings : []),
   ...(BENCH_A11Y_FAIL_ON_WARNINGS ? a11yBudgetWarnings : []),
 ]
 const aggregate = {
@@ -2941,6 +3003,7 @@ const summary = {
     renderingFailOnWarnings: BENCH_RENDERING_FAIL_ON_WARNINGS,
     a11yFailOnWarnings: BENCH_A11Y_FAIL_ON_WARNINGS,
     browserResourceFailOnWarnings: BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS,
+    interactionFrameFailOnWarnings: BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
@@ -2973,6 +3036,12 @@ const summary = {
       longTaskMaxMs: PERF_BUDGET_MAX_LONG_TASK_MAX_MS,
       heapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
     },
+    interactionFrameBudgets: {
+      sortMenuOpenToPaintMs: PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS,
+      sortClickToPaintMs: PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS,
+      sortWindowFrameP95Ms: PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS,
+      sortWindowLongTaskTotalMs: PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS,
+    },
     a11yBudgets: {
       stageTabStops: PERF_BUDGET_MAX_A11Y_STAGE_TAB_STOPS,
       activeDescendantCount: PERF_BUDGET_MAX_A11Y_ACTIVE_DESCENDANTS,
@@ -2995,6 +3064,10 @@ const summary = {
     maxLongTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
     maxLongTaskTotalMs: PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS,
     maxLongTaskMaxMs: PERF_BUDGET_MAX_LONG_TASK_MAX_MS,
+    maxSortMenuOpenToPaintMs: PERF_BUDGET_MAX_SORT_MENU_OPEN_TO_PAINT_MS,
+    maxSortClickToPaintMs: PERF_BUDGET_MAX_SORT_CLICK_TO_PAINT_MS,
+    maxSortWindowFrameP95Ms: PERF_BUDGET_MAX_SORT_WINDOW_FRAME_P95_MS,
+    maxSortWindowLongTaskTotalMs: PERF_BUDGET_MAX_SORT_WINDOW_LONG_TASK_TOTAL_MS,
     interaction: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,

@@ -4,9 +4,10 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-2 are implemented as of 2026-05-20.
+- Slices 1-3 are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
+- Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate.
 - Remaining blockers are long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
@@ -45,19 +46,36 @@ Current execution state:
 - Risk level: High
 - Suggested commit message: `perf(datagrid): guard redundant scroll work`
 
-## Slice 3: Sort/Edit/Context Menu Frame Cleanup
+## Slice 3: Sort/Edit/Context Menu Frame Gate
+
+- Status: Completed on 2026-05-20.
+- Objective: isolate sort, inline edit burst, and context-menu open/cleanup browser scenarios behind focused hard budgets before deeper runtime cleanup.
+- Affected packages/files:
+  - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
+  - `scripts/check-datagrid-perf-contracts.mjs`
+  - `package.json`
+  - `docs/perf/datagrid-performance-gates.md`
+  - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
+- Expected behavior change: no runtime grid behavior change; interaction-frame benchmark output now hard-fails resource, interaction, and sort-diagnostic budget warnings.
+- Tests to add/update:
+  - Scenario-specific browser-frame gate for `sort-only`, `inline-edit-burst-only`, and `interaction-context-menu`.
+  - Static perf-contract check for finite interaction-frame budgets.
+- Validation command: `pnpm run quality:perf:datagrid`
+- Risk level: Low
+- Suggested commit message: `test(datagrid): gate interaction frame scenarios`
+
+## Slice 3b: Sort/Edit/Context Menu Frame Cleanup
 
 - Status: Pending.
-- Objective: split heavy synchronous work in sort, inline edit bursts, and context-menu open/cleanup scenarios.
+- Objective: split heavy synchronous runtime work in sort, inline edit bursts, and context-menu open/cleanup scenarios.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/*sort*`
   - `packages/datagrid-vue-app/src/stage/*editing*`
   - `packages/datagrid-orchestration/src/contextMenu/*`
-  - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: sort/edit/menu interactions stop creating visible browser stalls.
 - Tests to add/update:
-  - Scenario-specific browser-frame gates for `sort-only`, `inline-edit-burst-only`, and context-menu paths.
-- Validation command: `pnpm run bench:datagrid:enterprise:browser-frames:assert`
+  - Runtime-specific tests based on the hottest failing diagnostics from `bench:datagrid:enterprise:interaction-frame:assert`.
+- Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
 - Risk level: High
 - Suggested commit message: `perf(datagrid): reduce interaction frame stalls`
 
@@ -199,16 +217,17 @@ Current execution state:
 
 1. Slice 1: Browser Frame Resource Hard Gates (completed 2026-05-20)
 2. Slice 2: Scroll Hot-Path Guard And Focused Gate (completed 2026-05-20)
-3. Slice 3: Sort/Edit/Context Menu Frame Cleanup
-4. Slice 4: Server-Backed Latency And Placeholder Gates
-5. Slice 5: Datasource Churn Reduction
-6. Slice 6: Long Memory Soak
-7. Slice 10: Wide-Table Horizontal Virtualization Matrix
-8. Slice 11: Custom Renderer Performance Contract
-9. Slice 9: Quick-Filter Typing Latency
-10. Slice 7: Grouped/Tree/Pivot Interactivity
-11. Slice 8: Workbook Snapshot And Restore Slimming
-12. Slice 12: Worker Benchmark Canonicalization
+3. Slice 3: Sort/Edit/Context Menu Frame Gate (completed 2026-05-20)
+4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup
+5. Slice 4: Server-Backed Latency And Placeholder Gates
+6. Slice 5: Datasource Churn Reduction
+7. Slice 6: Long Memory Soak
+8. Slice 10: Wide-Table Horizontal Virtualization Matrix
+9. Slice 11: Custom Renderer Performance Contract
+10. Slice 9: Quick-Filter Typing Latency
+11. Slice 7: Grouped/Tree/Pivot Interactivity
+12. Slice 8: Workbook Snapshot And Restore Slimming
+13. Slice 12: Worker Benchmark Canonicalization
 
 ## Execution Notes
 

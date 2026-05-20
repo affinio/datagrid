@@ -8,7 +8,7 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
-Update `2026-05-20`: Slices 1-2 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, and `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios.
+Update `2026-05-20`: Slices 1-3 are implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`. The app-stage body scroll hot path now skips unchanged-offset scroll events before scheduling viewport/chrome work, `bench:datagrid:enterprise:scroll:assert` isolates vertical, smooth vertical, horizontal, and combined scroll scenarios, and `bench:datagrid:enterprise:interaction-frame:assert` isolates sort, inline-edit burst, and context-menu scenarios with hard resource/interaction/sort-diagnostic budgets.
 
 ## Scope
 
@@ -294,6 +294,9 @@ What blocks the target:
    - Remaining work: profile current `bench:datagrid:enterprise:scroll:assert` artifacts and reduce actual long-task sources that still exceed the temporary budgets.
 
 3. **Sort/edit/context-menu frame cleanup**
+   - Status: started on 2026-05-20.
+   - Focused interaction-frame browser gate added for `sort-only`, `inline-edit-burst-only`, and `interaction-context-menu`.
+   - Sort diagnostics now have hard-failable budgets for menu open-to-paint, sort click-to-paint, sort-window frame p95, and sort-window long-task total.
    - Split projection/render/menu work so one interaction cannot create `60-1000ms` frame stalls.
    - Add focused browser-frame gates for sort, inline edit burst, and context menu.
 
