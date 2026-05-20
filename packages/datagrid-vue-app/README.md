@@ -1269,6 +1269,7 @@ Columns can provide a `cellRenderer` callback that returns Vue content for the d
 If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
 For grouped rows, prefer `groupCellRenderer` so you receive structured group metadata instead of reverse-engineering the formatted disclosure label.
 If an authored renderer throws, the stage preserves the cell wrapper and falls back to the resolved `displayValue` for that cell.
+The full lifecycle, remount, cleanup, focus, async, and performance contract is documented in [`docs/datagrid-renderer-lifecycle.md`](../../docs/datagrid-renderer-lifecycle.md).
 
 ```vue
 <script setup lang="ts">

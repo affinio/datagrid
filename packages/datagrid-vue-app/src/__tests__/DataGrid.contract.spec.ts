@@ -1,4 +1,4 @@
-import { defineComponent, h, nextTick, ref } from "vue"
+import { defineComponent, h, nextTick, onUnmounted, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import {
@@ -8259,6 +8259,219 @@ describe("DataGrid app facade contract", () => {
     expect(queryBodyCell(wrapper, 1, 0).text()).toBe("placeholder-row")
     expect(wrapper.findAll(".test-surface-real")).toHaveLength(1)
     expect(wrapper.findAll(".test-surface-placeholder")).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it("keeps grid cell semantics around focusable custom renderer children", async () => {
+    const invoked = vi.fn()
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS.slice(0, 1),
+        columns: [
+          {
+            key: "owner",
+            label: "Owner",
+            width: 180,
+            cellInteraction: {
+              click: true,
+              keyboard: ["enter", "space"],
+              role: "button",
+              label: ({ row }: { row?: DemoRow }) => `Open ${row?.owner ?? "row"}`,
+              onInvoke: invoked,
+            },
+            cellRenderer: ({ displayValue, interactive }: DataGridAppCellRendererContext<DemoRow>) => h("button", {
+              type: "button",
+              class: "renderer-focusable-action",
+              "aria-label": interactive?.ariaLabel,
+              onClick: event => {
+                event.stopPropagation()
+                interactive?.activate("click")
+              },
+            }, displayValue),
+          },
+          { key: "region", label: "Region", width: 160 },
+        ],
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    const button = cell.find("button.renderer-focusable-action")
+
+    expect(cell.attributes("role")).toBe("button")
+    expect(cell.attributes("aria-label")).toBe("Open NOC")
+    expect(button.exists()).toBe(true)
+    expect(button.attributes("aria-label")).toBe("Open NOC")
+
+    await button.trigger("click")
+    await flushRuntimeTasks()
+    await cell.trigger("click")
+    await flushRuntimeTasks()
+
+    expect(invoked).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
+  })
+
+  it("routes group renderer disclosure through group.toggle", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: [
+          {
+            key: "owner",
+            label: "Owner",
+            width: 180,
+            groupCellRenderer: ({ displayValue, group }) => h("button", {
+              type: "button",
+              class: "renderer-group-toggle",
+              "aria-label": group.renderMeta.isExpanded ? "Collapse group" : "Expand group",
+              onClick: event => {
+                event.stopPropagation()
+                group.toggle()
+              },
+            }, `${displayValue}:${group.childrenCount}:${group.renderMeta.isExpanded ? "expanded" : "collapsed"}`),
+          },
+          { key: "region", label: "Region", width: 160 },
+          { key: "amount", label: "Amount", width: 140 },
+        ],
+        groupBy: {
+          fields: ["owner"],
+          expandedByDefault: false,
+        },
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const toggle = wrapper.find(".renderer-group-toggle")
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.text()).toContain("collapsed")
+
+    await toggle.trigger("click")
+    await flushRuntimeTasks()
+
+    const refreshedToggle = wrapper.find(".renderer-group-toggle")
+    expect(refreshedToggle.text()).toContain("expanded")
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("NOC")
+
+    wrapper.unmount()
+  })
+
+  it("remounts custom renderer output across virtual row and column windows", async () => {
+    const rows = Array.from({ length: 80 }, (_unused, index) => ({
+      rowId: `vr-${index + 1}`,
+      c0: `r${index + 1}:c0`,
+      c1: `r${index + 1}:c1`,
+      c2: `r${index + 1}:c2`,
+      c3: `r${index + 1}:c3`,
+    }))
+    const renderCalls: string[] = []
+    const columns = Array.from({ length: 4 }, (_unused, index) => ({
+      key: `c${index}`,
+      label: `C${index}`,
+      width: 120,
+      cellRenderer: ({ row, column, displayValue }: DataGridAppCellRendererContext<Record<string, string>>) => {
+        const marker = `${row?.rowId ?? "missing"}:${column.key}`
+        renderCalls.push(marker)
+        return h("span", {
+          "data-renderer-marker": marker,
+        }, displayValue)
+      },
+    }))
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows,
+        columns,
+        virtualization: {
+          rows: true,
+          columns: true,
+          rowOverscan: 0,
+          columnOverscan: 0,
+        },
+        baseRowHeight: 32,
+        rowSelection: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const viewportWrapper = wrapper.find(".grid-body-viewport")
+    const viewport = viewportWrapper.element as HTMLElement
+    setElementClientHeight(viewport, 96)
+    setElementClientWidth(viewport, 180)
+    viewport.scrollTop = 32 * 20
+    viewport.scrollLeft = 120 * 2
+    await viewportWrapper.trigger("scroll")
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    viewport.scrollTop = 0
+    viewport.scrollLeft = 0
+    await viewportWrapper.trigger("scroll")
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('[data-renderer-marker="vr-1:c0"]').exists()).toBe(true)
+    expect(renderCalls.filter(marker => marker === "vr-1:c0").length).toBeGreaterThanOrEqual(2)
+
+    wrapper.unmount()
+  })
+
+  it("runs renderer child cleanup when custom renderer content unmounts", async () => {
+    const cleanup = vi.fn()
+    const RendererChild = defineComponent({
+      props: {
+        label: {
+          type: String,
+          required: true,
+        },
+      },
+      setup(props) {
+        onUnmounted(cleanup)
+        return () => h("span", {
+          class: "renderer-cleanup-child",
+        }, props.label)
+      },
+    })
+    const rows = ref(BASE_ROWS.slice(0, 1))
+    const Host = defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: rows.value,
+          columns: [{
+            key: "owner",
+            label: "Owner",
+            width: 180,
+            cellRenderer: ({ displayValue }: DataGridAppCellRendererContext<DemoRow>) => h(RendererChild, {
+              label: displayValue,
+            }),
+          }],
+          rowSelection: false,
+        })
+      },
+    })
+    const wrapper = mount(Host, {
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find(".renderer-cleanup-child").exists()).toBe(true)
+
+    rows.value = []
+    await flushRuntimeTasks()
+
+    expect(cleanup).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })

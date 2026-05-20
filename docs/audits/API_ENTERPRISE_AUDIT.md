@@ -7,13 +7,13 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, renderer lifecycle guarantees are partial, event matrix coverage is incomplete, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
+Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, event matrix coverage is incomplete, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
 
-Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, and `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
+Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, and `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
 
 Enterprise readiness score: **7.0 / 10**.
 Target score: **9.0 / 10**.
-The target is blocked by plugin lifecycle unification, Vue stable surface reconciliation, renderer lifecycle guarantees, event matrix coverage, and API-diff quality gates across all public packages.
+The target is blocked by orchestration tiering, event matrix coverage, and API-diff quality gates across all public packages.
 
 ## Current Architecture Summary
 
@@ -111,10 +111,10 @@ The target is blocked by plugin lifecycle unification, Vue stable surface reconc
    - Impact: low-level interaction primitives can become public by accident, increasing long-term compatibility cost.
    - Required: define stable vs advanced orchestration exports or document this package as adapter-internal.
 
-3. **Renderer lifecycle guarantees are partial.**
-   - Evidence: renderer context types are exported from `dataGridFormulaOptions.ts`, and tests cover render output and interactive activation; no reviewed doc defines mount/unmount cleanup, virtualization remount behavior, focus ownership inside custom renderers, async renderer expectations, or performance budgets.
-   - Impact: custom renderers can break selection, editing, focus, a11y, and scroll performance under virtualization.
-   - Required: publish a renderer lifecycle and safety contract, with tests for focusable custom children and virtual remounts.
+3. **Renderer lifecycle guarantees are documented and covered.** (completed 2026-05-20)
+   - Evidence: `docs/datagrid-renderer-lifecycle.md` defines mount/unmount cleanup, virtualization remount behavior, focus ownership inside custom renderers, async renderer expectations, and performance budgets; `DataGrid.contract.spec.ts` covers focusable renderer children, `interactive.activate`, group renderer toggles, virtual remount continuity, and renderer child cleanup.
+   - Impact: custom renderer authors have an explicit safety contract for selection, editing, focus, a11y, and scroll performance under virtualization.
+   - Required: keep future renderer behavior changes aligned with the lifecycle doc and component contract coverage.
 
 4. **Event APIs are coherent in core but fragmented across integration layers.**
    - Evidence: `api.events.on` is typed in `gridApiContracts.ts`; `DataGrid.ts` separately emits Vue events such as `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, and model update events; Vue `createGrid` has a stringly local event bus.
@@ -171,12 +171,12 @@ The target is blocked by plugin lifecycle unification, Vue stable surface reconc
 - Internal vs public boundaries are documented and enforced for `@affino/datagrid-core`; other public packages still need richer tiering and diff gates.
 - Extension ownership is now documented across `api.plugins`, capability-gated plugins, and Vue features; implementation depth still needs future API report gates.
 - Service overrides can replace core subsystems from app code; this is useful but must be treated as advanced and lifecycle-sensitive.
-- Renderer hooks can return arbitrary Vue children; without a lifecycle/focus contract, they can interfere with grid-owned selection, editing, keyboard navigation, and accessibility.
+- Renderer hooks can return arbitrary Vue children; lifecycle, focus, cleanup, and performance rules are now documented for app-level cell and group renderers.
 
 ## Extensibility Quality
 
 - Strong: typed `DataGridApi`, capability introspection, stable events, datasource protocol, renderer contexts, toolbar modules, menu customization, saved views, state import/export, and server adapters.
-- Partial: plugin lifecycle, renderer lifecycle, extension conflict detection, extension ordering, plugin state serialization, capability namespacing, and API version negotiation for third-party extensions.
+- Partial: extension conflict detection, extension ordering, plugin state serialization, capability namespacing, and API version negotiation for third-party extensions.
 - Unsupported as enterprise contract: a full plugin marketplace model, sandboxed third-party plugins, external plugin manifest/version policy, and cross-extension conflict resolution.
 
 ## Package Boundary Risks
@@ -196,9 +196,8 @@ Target score: **9.0 / 10**.
 Blocks to target:
 
 - API surface diff gate for public packages.
-- Renderer lifecycle and customization safety contract.
 - Event matrix across core API, Vue emits, and feature/plugin events.
-- Public inventory that reconciles docs with real exports.
+- Orchestration package tiering or explicit adapter-internal positioning.
 
 ## Phased Roadmap
 
@@ -219,9 +218,8 @@ Blocks to target:
 
 ### Phase 3: Renderer and Customization Safety
 
-- Publish renderer lifecycle docs for app-level cell/group renderers.
-- Define focus, keyboard, selection, editing, a11y, virtualization remount, async rendering, cleanup, and performance rules.
-- Add component tests for custom focusable renderers, group renderers, virtual remount continuity, and interactive cell actions.
+- Keep renderer lifecycle docs current for app-level cell/group renderers.
+- Keep focus, keyboard, selection, editing, a11y, virtualization remount, async rendering, cleanup, and performance rules covered by component tests.
 
 ### Phase 4: Event and Lifecycle Contract
 
@@ -286,6 +284,7 @@ Blocks to target:
    - Outcome: one canonical plugin model with bridge rules for `api.plugins`, capability plugins, and Vue features.
 
 5. **Renderer lifecycle contract**
+   - Status: completed 2026-05-20.
    - Risk: medium
    - Outcome: custom renderer authors have explicit safety rules and tests.
 
@@ -303,4 +302,4 @@ Blocks to target:
 - Moving documented Vue root exports to `advanced` may be breaking; future movement needs migration notes and a focused API proposal.
 - Future plugin work should avoid a new fourth abstraction; keep `api.plugins` as the stable facade and the capability-gated plugin system as the advanced foundation unless a concrete approved gap blocks that path.
 - Service override props should remain available for advanced integrators, but their compatibility status must be explicit.
-- Renderer lifecycle documentation should avoid over-constraining implementation details; document observable behavior and ownership boundaries instead.
+- Renderer lifecycle documentation now describes observable behavior and ownership boundaries; avoid expanding it into implementation-specific guarantees.
