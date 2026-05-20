@@ -25,7 +25,7 @@ The API report reads emitted declarations from package `dist` folders. Run the r
 | `@affino/datagrid-core` | `.`, `./advanced`, `./internal` | Root is stable, `advanced` is power-user, and `internal` is unsafe. Source-shaped wildcard exports are blocked. | New deep-import requirements must be added through an approved tiered entrypoint instead of `./*`. |
 | `@affino/datagrid-vue` | `.`, `./stable`, `./app`, `./app/worker`, `./advanced/*`, `./worker` | Root and `./stable` are contract-equivalent stable entrypoints; app, worker, and advanced subpaths are advanced integration surfaces. | Keep root/stable equivalence and low-level advanced-hook exclusions covered by `entrypointTiers.contract.spec.ts`. |
 | `@affino/datagrid-vue-app` | `.`, feature subpaths, `./internal` | Root and feature subpaths are app-facing stable surfaces; `./internal` is unsafe/internal. | Props, exposed Vue ref helpers, services, startup order, and renderer hooks need a public-vs-advanced table. |
-| `@affino/datagrid-orchestration` | `.` | Broad root is treated as adapter-internal public-root risk. | The package needs stable/advanced tiering or an explicit adapter-internal positioning statement. |
+| `@affino/datagrid-orchestration` | `.` | Root is advanced adapter-internal. It is exported for adapter/framework integration, not app-level stable API. | Future stable ecosystem needs require a public API proposal, tiered entrypoint, and migration notes before export-map changes. |
 | `@affino/datagrid-server-adapters` | `.` | Stable backend adapter surface. | Compatibility notes should stay aligned with server datasource protocol changes. |
 | `@affino/datagrid-server-client` | `.` | Stable backend client helper surface. | Live update, retry, and consistency-token changes need migration notes when public behavior changes. |
 
@@ -39,6 +39,6 @@ The API report reads emitted declarations from package `dist` folders. Run the r
 
 ## Current Hardening Order
 
-1. Define orchestration package positioning: adapter-internal package or tiered public surface.
+1. Keep orchestration stable-surface proposals explicit before export-map changes.
 2. Keep declaration report changes paired with migration notes when public behavior or types change.
 3. Refresh inventory and API report baselines only after reviewing public API impact.

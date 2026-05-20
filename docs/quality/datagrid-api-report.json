@@ -3132,7 +3132,7 @@
       "entries": [
         {
           "subpath": ".",
-          "tier": "adapter-internal-public-root-risk",
+          "tier": "advanced-adapter-internal",
           "types": "./dist/src/index.d.ts",
           "declarationFile": "packages/datagrid-orchestration/dist/src/index.d.ts",
           "declarationExists": true,

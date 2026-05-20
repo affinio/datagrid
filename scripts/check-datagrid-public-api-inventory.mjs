@@ -50,7 +50,7 @@ const trackedPackages = [
   {
     packageDir: "packages/datagrid-orchestration",
     tiers: {
-      ".": "adapter-internal-public-root-risk",
+      ".": "advanced-adapter-internal",
     },
   },
   {

@@ -4,6 +4,10 @@ Framework-agnostic orchestration primitives shared by DataGrid adapters.
 
 This package contains pure TypeScript logic (state commands, interaction policies, transformation helpers) that should be reused by Vue/Laravel/React adapters.
 
+Public contract tier: `advanced-adapter-internal`.
+
+The package root is exported for adapter and framework integration code, not for app-facing stable product integrations. See [DataGrid Orchestration Public Contract](../../docs/datagrid-orchestration-public-contract.md).
+
 ## Source structure
 
 Public orchestration surface is organized by domain chapters under `src/`:
@@ -31,11 +35,11 @@ Internal implementation details live under `src/internal/`.
 
 The intended layering inside the package is:
 
-- public domain modules: adapter-facing orchestration entrypoints and stable exports
+- public domain modules: adapter-facing advanced orchestration entrypoints
 - internal pure helpers: deterministic state transitions, calculations, contracts, kernels
 - internal browser helpers: narrow access points for browser-specific APIs such as animation-frame and clipboard
 
-This keeps public APIs stable while allowing the internal orchestration logic to be decomposed into smaller pure modules.
+This keeps adapter-facing imports reviewable while allowing the internal orchestration logic to be decomposed into smaller pure modules.
 
 ## Canonical Feature Catalog
 
@@ -54,7 +58,7 @@ Single source of truth for platform capabilities:
 - Keep adapter-facing modules thin: orchestration files should mostly coordinate policies, not bury low-level math or state machines.
 - Prefer pure helpers for deterministic behavior: selection, pointer, viewport and context-menu state transitions should remain testable without DOM wiring.
 - Keep browser access narrow: `requestAnimationFrame`, clipboard, and similar browser APIs should flow through dedicated internal helpers instead of being scattered across domains.
-- Preserve public API stability: when a pure helper is extracted internally, public exports should remain compatible unless there is an explicit breaking-change decision.
+- Preserve adapter compatibility: when a pure helper is extracted internally, root exports should remain compatible unless there is an explicit breaking-change decision and migration note.
 
 ## New orchestration primitives
 

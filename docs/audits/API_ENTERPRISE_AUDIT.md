@@ -7,13 +7,13 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blocker is API lifecycle coverage and public-surface depth in `@affino/datagrid-orchestration`, which still has a broad public root without tiering. This is solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory and declaration report current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
+The target API hardening blockers for this audit are closed. The current contract keeps extension work centered on the `DataGridApi` facade plus the capability-gated plugin runtime, keeps generated public API inventory/report baselines in place, and classifies the broad orchestration root as an advanced adapter-internal surface instead of an app-facing stable API.
 
-Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `docs/quality/datagrid-api-report.json` is generated and checked by `pnpm run quality:api:datagrid:report`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules, and `docs/datagrid-event-matrix.md` maps core events, Vue emits, plugin events, and feature-local events.
+Update `2026-05-20`: the public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `docs/quality/datagrid-api-report.json` is generated and checked by `pnpm run quality:api:datagrid:report`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules, `docs/datagrid-event-matrix.md` maps core events, Vue emits, plugin events, and feature-local events, and `docs/datagrid-orchestration-public-contract.md` classifies `@affino/datagrid-orchestration` root as `advanced-adapter-internal`.
 
-Enterprise readiness score: **7.0 / 10**.
+Enterprise readiness score: **9.0 / 10**.
 Target score: **9.0 / 10**.
-The target is blocked by orchestration tiering.
+The target blockers are closed for this audit. Future ecosystem features such as marketplace packaging, sandboxed third-party plugins, and stable orchestration subpaths remain separate proposals.
 
 ## Current Architecture Summary
 
@@ -106,10 +106,10 @@ The target is blocked by orchestration tiering.
    - Impact: semver commitments are explicit for the current root/stable surface.
    - Required: keep new Vue root exports documented and covered by the entrypoint tier contract.
 
-2. **`@affino/datagrid-orchestration` has a broad public root surface without a tiered contract.**
-   - Evidence: `packages/datagrid-orchestration/src/index.ts` re-exports many domain modules from root, and `package.json` exposes only `"."`.
-   - Impact: low-level interaction primitives can become public by accident, increasing long-term compatibility cost.
-   - Required: define stable vs advanced orchestration exports or document this package as adapter-internal.
+2. **`@affino/datagrid-orchestration` root is classified as advanced adapter-internal.** (completed 2026-05-20)
+   - Evidence: `docs/datagrid-orchestration-public-contract.md` documents the root export as `advanced-adapter-internal`, and the inventory/API report gates classify `"."` with the same tier.
+   - Impact: existing adapter/framework integrations keep the root import, while app-level stable integrations are directed to core, Vue stable, Vue app, `DataGridApi`, plugins, props/events, and renderer hooks.
+   - Required: propose a focused tiered entrypoint and migration notes before promoting orchestration primitives to stable ecosystem APIs.
 
 3. **Renderer lifecycle guarantees are documented and covered.** (completed 2026-05-20)
    - Evidence: `docs/datagrid-renderer-lifecycle.md` defines mount/unmount cleanup, virtualization remount behavior, focus ownership inside custom renderers, async renderer expectations, and performance budgets; `DataGrid.contract.spec.ts` covers focusable renderer children, `interactive.activate`, group renderer toggles, virtual remount continuity, and renderer child cleanup.
@@ -184,18 +184,18 @@ The target is blocked by orchestration tiering.
 - `datagrid-core` is architecturally well separated, and its package export map now blocks forbidden deep import patterns.
 - `datagrid-vue` root/stable surface is now documented and guarded; future changes need inventory and entrypoint-tier updates.
 - `datagrid-vue-app` is a broad app facade, which is appropriate, but it needs a public-vs-advanced table for props, exposes, and subpath exports.
-- `datagrid-orchestration` needs either public tiering or an adapter-internal positioning statement.
+- `datagrid-orchestration` root is documented as advanced adapter-internal; future stable subpaths or export-map changes require a public API proposal and migration notes.
 - Server adapters and server client are cleanly separated, but they need compatibility notes if their query shapes become public backend contracts.
 
 ## Enterprise Readiness Score
 
-Current score: **7.0 / 10**.
+Current score: **9.0 / 10**.
 
 Target score: **9.0 / 10**.
 
 Blocks to target:
 
-- Orchestration package tiering or explicit adapter-internal positioning.
+- None for this audit block.
 
 ## Phased Roadmap
 
@@ -206,6 +206,7 @@ Blocks to target:
 - Keep `docs/datagrid-vue-stable-entrypoint.md` reconciled with `packages/datagrid-vue/src/public.ts`.
 - Keep the `@affino/datagrid-core` package export map locked to the tiered entrypoints.
 - Add an API report or typed export snapshot check.
+- Keep `@affino/datagrid-orchestration` root classified as advanced adapter-internal until a focused public API proposal changes the export map.
 
 ### Phase 2: Canonical Extensibility Model
 

@@ -43,6 +43,7 @@ This folder separates user-facing documentation from internal planning material.
 - [AI integration roadmap](./AI_INTEGRATION_ROADMAP.md)
 - [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)
+- [Orchestration public contract](./datagrid-orchestration-public-contract.md)
 - [Theme ownership](./datagrid-theme-ownership.md)
 - [Renderer lifecycle](./datagrid-renderer-lifecycle.md)
 - [Plugin lifecycle](./datagrid-plugin-lifecycle.md)

@@ -345,7 +345,7 @@
       "exports": [
         {
           "subpath": ".",
-          "tier": "adapter-internal-public-root-risk",
+          "tier": "advanced-adapter-internal",
           "types": "./dist/src/index.d.ts",
           "import": "./dist/src/index.js",
           "sourceFile": "src/index.ts",

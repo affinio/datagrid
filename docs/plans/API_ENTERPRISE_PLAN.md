@@ -4,9 +4,10 @@ This plan converts `docs/audits/API_ENTERPRISE_AUDIT.md` into small, separable i
 
 Current execution state:
 
-- Slices 1-7 are implemented as of 2026-05-20.
+- Slices 1-8 are implemented as of 2026-05-20.
 - The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/datagrid-public-api-inventory.md`.
-- Remaining blocker is orchestration package tiering.
+- The orchestration package root is classified as `advanced-adapter-internal` in `docs/datagrid-orchestration-public-contract.md`.
+- No target blockers remain for this API audit block.
 - Do not change public API or package export maps without a focused slice and migration notes.
 
 ## Slice 1: API Inventory And Export Snapshot
@@ -138,6 +139,24 @@ Current execution state:
 - Risk level: Medium
 - Suggested commit message: `test(datagrid): gate public api reports`
 
+## Slice 8: Orchestration Package Positioning
+
+- Status: Completed on 2026-05-20.
+- Objective: close the remaining orchestration tiering blocker without changing package exports by documenting the root as an advanced adapter-internal surface.
+- Affected packages/files:
+  - `docs/datagrid-orchestration-public-contract.md`
+  - `docs/datagrid-public-api-inventory.md`
+  - `docs/datagrid-architecture.md`
+  - `packages/datagrid-orchestration/README.md`
+  - `scripts/check-datagrid-public-api-inventory.mjs`
+  - `scripts/check-datagrid-api-report.mjs`
+- Expected behavior change: no runtime or package import behavior change; orchestration root consumers get an explicit compatibility tier.
+- Tests to add/update:
+  - Public API inventory and declaration report baselines classify the orchestration root as `advanced-adapter-internal`.
+- Validation command: `pnpm run quality:api:datagrid:inventory && pnpm run quality:api:datagrid:report && pnpm --filter @affino/datagrid-orchestration type-check:public && pnpm --filter @affino/datagrid-orchestration test:contracts`
+- Risk level: Low
+- Suggested commit message: `docs(datagrid-orchestration): classify public root contract`
+
 ## Recommended Execution Order
 
 1. Slice 1: API Inventory And Export Snapshot (completed 2026-05-20)
@@ -147,6 +166,7 @@ Current execution state:
 5. Slice 5: Renderer Lifecycle Contract (completed 2026-05-20)
 6. Slice 6: Event Matrix And Event-Order Coverage (completed 2026-05-20)
 7. Slice 7: API Diff Quality Gate (completed 2026-05-20)
+8. Slice 8: Orchestration Package Positioning (completed 2026-05-20)
 
 ## Execution Notes
 
@@ -154,3 +174,4 @@ Current execution state:
 - Prefer tightening existing tiered entrypoints over adding new facades.
 - Do not create a fourth plugin model; choose or bridge the existing models.
 - Keep generated inventory and declaration report checks deterministic.
+- Future orchestration stable subpaths or export-map changes require a focused public API proposal and migration notes before implementation.
