@@ -15,6 +15,7 @@ import type {
   DataGridClientRowPatchOptions,
   DataGridColumnInput,
   DataGridColumnModelSnapshot,
+  DataGridProjectionInvalidationReason,
   DataGridRowNode,
   DataGridRowModel,
   DataGridRowModelSnapshot,
@@ -261,7 +262,7 @@ function buildSparseRowPartitionSnapshot<TRow>(
 
 function buildRowPartitionSignature<TRow>(snapshot: DataGridRowModelSnapshot<TRow>): string {
   return JSON.stringify({
-    revision: snapshot.revision ?? null,
+    projectionRecomputeVersion: snapshot.projection?.recomputeVersion ?? null,
     kind: snapshot.kind,
     rowCount: snapshot.rowCount,
     loading: snapshot.loading,
@@ -283,6 +284,13 @@ function buildIndexedRowPartitionSnapshot<TRow>(
     ...nextPartition,
     signature: buildRowPartitionSignature(snapshot),
   }
+}
+
+function rowModelSnapshotHasInvalidationReason<TRow>(
+  snapshot: DataGridRowModelSnapshot<TRow>,
+  reason: DataGridProjectionInvalidationReason,
+): boolean {
+  return snapshot.projection?.lastInvalidationReasons?.includes(reason) === true
 }
 
 function normalizeBodyViewportRange(
@@ -410,10 +418,11 @@ export function useDataGridRuntime<TRow = unknown>(
 
   const { rowModel, columnModel, core, api } = runtime
   const sparseRowModel = isDataGridSparseRowModel(rowModel)
+  const initialRowModelSnapshot = rowModel.getSnapshot()
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
   const initialRowPartition = sparseRowModel
-    ? buildSparseRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
-    : buildIndexedRowPartitionSnapshot<TRow>(api, rowModel.getSnapshot())
+    ? buildSparseRowPartitionSnapshot<TRow>(api, initialRowModelSnapshot)
+    : buildIndexedRowPartitionSnapshot<TRow>(api, initialRowModelSnapshot)
   const rowPartition = shallowRef<DataGridRuntimeRowPartitionSnapshot<TRow>>(
     initialRowPartition.snapshot,
   )
@@ -421,6 +430,10 @@ export function useDataGridRuntime<TRow = unknown>(
   let bodyDisplayIndexes = initialRowPartition.bodyDisplayIndexes
   let bodyRowIndexById = initialRowPartition.bodyRowIndexById
   let rowPartitionSignature = initialRowPartition.signature
+  let rowPartitionSnapshotRevision = initialRowModelSnapshot.revision ?? 0
+  const invalidateBodyRowCache = (): void => {
+    bodyRows = new Array(bodyDisplayIndexes.length) as Array<DataGridRowNode<TRow> | undefined>
+  }
   const resolveCurrentBodyVirtualWindow = (
     snapshot: DataGridRuntimeVirtualWindowSnapshot | null = runtime.getVirtualWindowSnapshot(),
   ): DataGridRuntimeVirtualWindowSnapshot => {
@@ -454,7 +467,14 @@ export function useDataGridRuntime<TRow = unknown>(
     }
 
     const nextSignature = buildRowPartitionSignature(snapshot)
-    if (nextSignature !== rowPartitionSignature) {
+    const nextRevision = snapshot.revision ?? rowPartitionSnapshotRevision
+    const hasNewRowModelRevision = nextRevision !== rowPartitionSnapshotRevision
+    const hasPinnedRows = rowPartition.value.pinnedTopRows.length > 0 || rowPartition.value.pinnedBottomRows.length > 0
+    if (
+      nextSignature !== rowPartitionSignature
+      || (hasNewRowModelRevision && hasPinnedRows)
+      || (hasNewRowModelRevision && rowModelSnapshotHasInvalidationReason(snapshot, "rowsChanged"))
+    ) {
       const nextPartition = buildIndexedRowPartitionSnapshot<TRow>(api, snapshot)
       bodyRows = nextPartition.bodyRows
       bodyDisplayIndexes = nextPartition.bodyDisplayIndexes
@@ -462,6 +482,13 @@ export function useDataGridRuntime<TRow = unknown>(
       rowPartitionSignature = nextPartition.signature
       rowPartition.value = nextPartition.snapshot
     }
+    else if (hasNewRowModelRevision && (
+      rowModelSnapshotHasInvalidationReason(snapshot, "rowsPatched")
+      || rowModelSnapshotHasInvalidationReason(snapshot, "computedChanged")
+    )) {
+      invalidateBodyRowCache()
+    }
+    rowPartitionSnapshotRevision = nextRevision
     virtualWindow.value = resolveCurrentBodyVirtualWindow()
   })
 
@@ -541,6 +568,22 @@ export function useDataGridRuntime<TRow = unknown>(
       return []
     }
     const normalizedRange = normalizeBodyViewportRange(range, rowPartition.value.bodyRowCount)
+    if (!sparseRowModel && rowPartition.value.bodyRowCount > 0 && bodyRows.length > 0) {
+      const endExclusive = Math.min(bodyRows.length, normalizedRange.end + 1)
+      if (normalizedRange.start < endExclusive) {
+        let rangeFullyCached = true
+        for (let bodyIndex = normalizedRange.start; bodyIndex < endExclusive; bodyIndex += 1) {
+          if (!bodyRows[bodyIndex]) {
+            rangeFullyCached = false
+            break
+          }
+        }
+        if (rangeFullyCached) {
+          runtime.setViewportRange(normalizedRange)
+          return bodyRows.slice(normalizedRange.start, endExclusive) as DataGridRowNode<TRow>[]
+        }
+      }
+    }
     const syncedRows = runtime.syncRowsInRange(normalizedRange)
     if (sparseRowModel) {
       for (let bodyIndex = normalizedRange.start; bodyIndex <= normalizedRange.end; bodyIndex += 1) {

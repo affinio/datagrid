@@ -4,13 +4,13 @@ This plan converts `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md` into small, sep
 
 Current execution state:
 
-- Slices 1-3d are implemented as of 2026-05-20.
+- Slices 1-3e are implemented as of 2026-05-20.
 - Browser-frame resource budgets now have an explicit hard-fail switch for assert runs.
 - Scroll hot path now ignores redundant body scroll events whose sampled offsets did not change.
 - Sort/edit/context-menu browser frame scenarios now have a focused hard-fail interaction-frame gate with sort and edit-burst diagnostics.
 - Column-menu sort no longer races with large deferred value-histogram loading when the menu closes before the histogram starts.
-- Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort still has synchronous projection/sort work after the single-column fast path, and inline-edit bursts are now split into open, commit, paint, frame, mutation, and long-task diagnostics.
-- Remaining blockers are deeper sort execution policy, inline-edit long-task reduction, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
+- Current interaction-frame artifact shows context-menu open/cleanup is not the active blocker, local client sort still has synchronous projection/sort work after the single-column fast path, and frozen inline-edit patches no longer force a full body-row partition rebuild.
+- Remaining blockers are deeper sort execution policy, server-backed latency proof, long memory soak, wide-table coverage, custom-renderer gates, and workload hardening.
 - Do not change public API for performance work unless a focused proposal is approved first.
 
 ## Slice 1: Browser Frame Resource Hard Gates
@@ -116,18 +116,17 @@ Current execution state:
 
 ## Slice 3e: Inline Edit Burst Runtime Cleanup
 
-- Status: Pending.
+- Status: Completed on 2026-05-20.
 - Objective: reduce measured inline-edit commit burst long tasks without changing public API.
 - Affected packages/files:
-  - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
-  - `packages/datagrid-vue-app/src/stage/*editing*`
-  - `packages/datagrid-core/src/models/mutation/*`
-- Expected behavior change: inline-edit burst commit-to-paint and long-task totals decrease while preserving validation, history, focus navigation, and controlled-state behavior.
+  - `packages/datagrid-vue/src/composables/useDataGridRuntime.ts`
+  - `packages/datagrid-vue/src/composables/__tests__/useDataGridRuntime.contract.spec.ts`
+- Expected behavior change: frozen app-level edit patches keep the current body-row partition structure and invalidate only cached body-row data, avoiding a full `api.rows.get()` scan on every committed inline edit while preserving validation, history, focus navigation, and controlled-state behavior.
 - Tests to add/update:
-  - Runtime-specific tests based on edit-burst phase diagnostics.
+  - Runtime contract coverage verifies frozen edit patches reuse the existing body-row partition and lazily refresh the patched row.
 - Validation command: `pnpm run bench:datagrid:enterprise:interaction-frame:assert`
-- Risk level: High
-- Suggested commit message: `perf(datagrid): reduce interaction frame stalls`
+- Risk level: Medium
+- Suggested commit message: `perf(datagrid-vue): avoid body partition rebuilds for frozen edits`
 
 ## Slice 4: Server-Backed Latency And Placeholder Gates
 
@@ -271,7 +270,7 @@ Current execution state:
 4. Slice 3b: Sort/Edit/Context Menu Frame Cleanup (completed 2026-05-20)
 5. Slice 3c: Interaction Frame Artifact Triage And Edit Diagnostics (completed 2026-05-20)
 6. Slice 3d: Single-Column Sort Projection Cleanup (completed 2026-05-20)
-7. Slice 3e: Inline Edit Burst Runtime Cleanup
+7. Slice 3e: Inline Edit Burst Runtime Cleanup (completed 2026-05-20)
 8. Slice 4: Server-Backed Latency And Placeholder Gates
 9. Slice 5: Datasource Churn Reduction
 10. Slice 6: Long Memory Soak

@@ -452,6 +452,44 @@ describe("useDataGridRuntime contract", () => {
     await flushRuntimeTasks()
   })
 
+  it("keeps frozen edit patches out of the full body-row partition rebuild path", async () => {
+    const rows = Array.from({ length: 500 }, (_unused, index) => ({
+      rowId: `r${index}`,
+      name: `Row ${index}`,
+      tested_at: index,
+    }))
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimeFrozenEditPartitionHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rows,
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    expect(runtime).not.toBeNull()
+    const partitionBefore = runtime!.rowPartition.value
+    const getSpy = vi.spyOn(runtime!.api.rows, "get")
+
+    runtime!.applyEdits([{ rowId: "r250", data: { name: "Updated" } }])
+    await flushRuntimeTasks()
+
+    expect(runtime!.rowPartition.value).toBe(partitionBefore)
+    expect(getSpy).not.toHaveBeenCalled()
+    expect((runtime!.getBodyRowAtIndex(250)?.row as { name?: string })?.name).toBe("Updated")
+    expect(getSpy).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+  })
+
   it("treats data-source row models as sparse without worker diagnostics", async () => {
     const source: DataGridDataSource<RuntimeRow> = {
       async pull(request) {
