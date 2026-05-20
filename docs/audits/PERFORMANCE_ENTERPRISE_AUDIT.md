@@ -8,6 +8,8 @@ The current product is not yet enterprise-grade for a 2026 DataGrid/browser spre
 
 Current enterprise performance readiness is **7/10**. A realistic target is **9/10** after converting the current observation-style browser and enterprise artifacts into hard gates, reducing long tasks in scroll/edit/sort/menu paths, adding realistic server latency/cache/placeholder tests, and extending the matrix to 1M rows, 1k+ columns, touch momentum, pinned panes, and custom renderers.
 
+Update `2026-05-20`: Slice 1 is implemented. `docs/plans/PERFORMANCE_ENTERPRISE_PLAN.md` tracks the slice-by-slice closure plan, enterprise browser-frame assert runs can now hard-fail browser resource warnings through `BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true`, and the desktop/touch assert scripts carry finite frame p95/p99, dropped-frame, long-task, and heap budgets guarded by `pnpm run quality:perf:datagrid`.
+
 ## Scope
 
 This audit is based only on saved artifacts under `artifacts/performance`. Benchmarks were not rerun. Where multiple saved artifacts existed, the best passing current result was used as the current-state signal, while older failed artifacts were retained as stability and regression-risk evidence.
@@ -117,7 +119,8 @@ Formula, spreadsheet, and protocol artifacts:
    - Touch vertical scroll: `frameP95 ~65.7ms`, dropped frames `~52.7%`.
    - Context menu: `frameP95 ~539-575ms`, with a single long task around `1s`.
 
-   Required: make browser-frame budgets hard gates, reduce scroll/edit/sort/menu long tasks, and target `<16.7ms p95` for 60Hz with an explicit path toward lower budgets for high-refresh displays.
+   Status: started on 2026-05-20. Browser-frame resource budgets are now hard-failable in desktop/touch assert scripts. Long-task reduction and tighter frame targets remain open.
+   Required: reduce scroll/edit/sort/menu long tasks, then tighten budgets toward `<16.7ms p95` for 60Hz with an explicit path toward lower budgets for high-refresh displays.
 
 2. **Realistic server-backed virtualization is under-tested.**
 
@@ -278,8 +281,9 @@ What blocks the target:
 ## Recommended Implementation Slices
 
 1. **Browser frame hard gates**
+   - Status: started on 2026-05-20.
    - Convert enterprise browser-frame desktop and touch metrics into hard budgets.
-   - Track `frameP95`, `frameP99`, dropped frame percentage, long task count, total long task time, and max long task.
+   - Track `frameP95`, `frameP99`, dropped frame percentage, long task count, total long task time, max long task, and heap delta.
 
 2. **Scroll and combined scenario long-task reduction**
    - Profile vertical-scroll and combined scenarios.

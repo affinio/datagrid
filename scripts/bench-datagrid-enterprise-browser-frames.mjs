@@ -107,11 +107,18 @@ const BENCH_A11Y_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_A11Y_FAIL_ON_WARNINGS",
   false,
 )
+const BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS = boolEnv(
+  "BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS",
+  false,
+)
 const PERF_BUDGET_MAX_VARIANCE_PCT = floatEnv("PERF_BUDGET_MAX_VARIANCE_PCT", 999999)
 const PERF_BUDGET_MAX_HEAP_DELTA_MB = floatEnv("PERF_BUDGET_MAX_HEAP_DELTA_MB", 999999)
 const PERF_BUDGET_MAX_FRAME_P95_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P95_MS", 120)
+const PERF_BUDGET_MAX_FRAME_P99_MS = floatEnv("PERF_BUDGET_MAX_FRAME_P99_MS", 180)
 const PERF_BUDGET_MAX_DROPPED_FRAME_PCT = floatEnv("PERF_BUDGET_MAX_DROPPED_FRAME_PCT", 80)
 const PERF_BUDGET_MAX_LONG_TASK_COUNT = floatEnv("PERF_BUDGET_MAX_LONG_TASK_COUNT", 999999)
+const PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS = floatEnv("PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS", 999999)
+const PERF_BUDGET_MAX_LONG_TASK_MAX_MS = floatEnv("PERF_BUDGET_MAX_LONG_TASK_MAX_MS", 999999)
 const PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS",
   interactionDeviceProfile.budgets.previewP95Ms,
@@ -420,8 +427,11 @@ for (const [value, label] of [
   [PERF_BUDGET_MAX_VARIANCE_PCT, "PERF_BUDGET_MAX_VARIANCE_PCT"],
   [PERF_BUDGET_MAX_HEAP_DELTA_MB, "PERF_BUDGET_MAX_HEAP_DELTA_MB"],
   [PERF_BUDGET_MAX_FRAME_P95_MS, "PERF_BUDGET_MAX_FRAME_P95_MS"],
+  [PERF_BUDGET_MAX_FRAME_P99_MS, "PERF_BUDGET_MAX_FRAME_P99_MS"],
   [PERF_BUDGET_MAX_DROPPED_FRAME_PCT, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT"],
   [PERF_BUDGET_MAX_LONG_TASK_COUNT, "PERF_BUDGET_MAX_LONG_TASK_COUNT"],
+  [PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS"],
+  [PERF_BUDGET_MAX_LONG_TASK_MAX_MS, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS"],
   [PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS, "PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS, "PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS"],
   [PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS, "PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS"],
@@ -2788,6 +2798,7 @@ function buildA11yBudgetWarnings(scenarioReports) {
 function buildBrowserResourceBudgetWarnings(aggregate) {
   const warnings = []
   addWarningIfAbove(warnings, "enterprise browser frame p95", aggregate.frameP95Ms.p95, PERF_BUDGET_MAX_FRAME_P95_MS)
+  addWarningIfAbove(warnings, "enterprise browser frame p99", aggregate.frameP99Ms.p95, PERF_BUDGET_MAX_FRAME_P99_MS)
   addWarningIfAbove(
     warnings,
     "enterprise browser dropped frame pct p95",
@@ -2795,6 +2806,18 @@ function buildBrowserResourceBudgetWarnings(aggregate) {
     PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
   )
   addWarningIfAbove(warnings, "enterprise browser long task count p95", aggregate.longTaskCount.p95, PERF_BUDGET_MAX_LONG_TASK_COUNT)
+  addWarningIfAbove(
+    warnings,
+    "enterprise browser long task total p95",
+    aggregate.longTaskTotalMs.p95,
+    PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS,
+  )
+  addWarningIfAbove(
+    warnings,
+    "enterprise browser long task max p95",
+    aggregate.longTaskMaxMs.p95,
+    PERF_BUDGET_MAX_LONG_TASK_MAX_MS,
+  )
   addWarningIfAbove(warnings, "enterprise browser heap delta p95", aggregate.heapDeltaMb.p95, PERF_BUDGET_MAX_HEAP_DELTA_MB)
   return warnings
 }
@@ -2879,7 +2902,7 @@ const aggregate = {
 }
 const browserResourceBudgetWarnings = buildBrowserResourceBudgetWarnings(aggregate)
 budgetWarnings.push(...browserResourceBudgetWarnings)
-if (BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS) {
+if (BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS || BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS) {
   budgetErrors.push(...browserResourceBudgetWarnings)
 }
 
@@ -2917,6 +2940,7 @@ const summary = {
     virtualizationFailOnWarnings: BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS,
     renderingFailOnWarnings: BENCH_RENDERING_FAIL_ON_WARNINGS,
     a11yFailOnWarnings: BENCH_A11Y_FAIL_ON_WARNINGS,
+    browserResourceFailOnWarnings: BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
@@ -2942,8 +2966,11 @@ const summary = {
     },
     resourceBudgets: {
       frameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
+      frameP99Ms: PERF_BUDGET_MAX_FRAME_P99_MS,
       droppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
       longTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
+      longTaskTotalMs: PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS,
+      longTaskMaxMs: PERF_BUDGET_MAX_LONG_TASK_MAX_MS,
       heapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
     },
     a11yBudgets: {
@@ -2963,8 +2990,11 @@ const summary = {
     maxVariancePct: PERF_BUDGET_MAX_VARIANCE_PCT,
     maxHeapDeltaMb: PERF_BUDGET_MAX_HEAP_DELTA_MB,
     maxFrameP95Ms: PERF_BUDGET_MAX_FRAME_P95_MS,
+    maxFrameP99Ms: PERF_BUDGET_MAX_FRAME_P99_MS,
     maxDroppedFramePct: PERF_BUDGET_MAX_DROPPED_FRAME_PCT,
     maxLongTaskCount: PERF_BUDGET_MAX_LONG_TASK_COUNT,
+    maxLongTaskTotalMs: PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS,
+    maxLongTaskMaxMs: PERF_BUDGET_MAX_LONG_TASK_MAX_MS,
     interaction: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,

@@ -801,18 +801,48 @@ registerTokenCheck(
     const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8"))
     const desktopAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:browser-frames:assert"] ?? "")
     const touchAssertScript = String(pkg?.scripts?.["bench:datagrid:enterprise:browser-frames:touch:assert"] ?? "")
+    const desktopFrameP95 = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_FRAME_P95_MS")
+    const desktopFrameP99 = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_FRAME_P99_MS")
+    const desktopDroppedFramePct = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT")
+    const desktopLongTaskCount = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_LONG_TASK_COUNT")
+    const desktopLongTaskTotal = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS")
+    const desktopLongTaskMax = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS")
+    const desktopHeap = extractEnvNumberFromScript(desktopAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
+    const touchFrameP95 = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_FRAME_P95_MS")
+    const touchFrameP99 = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_FRAME_P99_MS")
+    const touchDroppedFramePct = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_DROPPED_FRAME_PCT")
+    const touchLongTaskCount = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_LONG_TASK_COUNT")
+    const touchLongTaskTotal = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_LONG_TASK_TOTAL_MS")
+    const touchLongTaskMax = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_LONG_TASK_MAX_MS")
+    const touchHeap = extractEnvNumberFromScript(touchAssertScript, "PERF_BUDGET_MAX_HEAP_DELTA_MB")
     const ok =
       desktopAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=desktop-ci") &&
       desktopAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
+      desktopAssertScript.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
+      desktopFrameP95 != null &&
+      desktopFrameP99 != null &&
+      desktopDroppedFramePct != null &&
+      desktopLongTaskCount != null &&
+      desktopLongTaskTotal != null &&
+      desktopLongTaskMax != null &&
+      desktopHeap != null &&
       touchAssertScript.includes("BENCH_INTERACTION_DEVICE_PROFILE=touch-tablet-ci") &&
-      touchAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true")
+      touchAssertScript.includes("BENCH_INTERACTION_FAIL_ON_WARNINGS=true") &&
+      touchAssertScript.includes("BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS=true") &&
+      touchFrameP95 != null &&
+      touchFrameP99 != null &&
+      touchDroppedFramePct != null &&
+      touchLongTaskCount != null &&
+      touchLongTaskTotal != null &&
+      touchLongTaskMax != null &&
+      touchHeap != null
     registerConditionCheck(
       enterpriseBrowserAssertBudgetId,
       ok,
-      "Enterprise browser frame assert scripts hard-fail interaction budget warnings",
+      "Enterprise browser frame assert scripts hard-fail interaction and resource budget warnings",
       ok
         ? "ok"
-        : `unexpected enterprise browser assert scripts: desktop='${desktopAssertScript}', touch='${touchAssertScript}'`,
+        : `unexpected enterprise browser assert scripts or finite budgets: desktop='${desktopAssertScript}', touch='${touchAssertScript}', desktop budgets frameP95=${desktopFrameP95}, frameP99=${desktopFrameP99}, dropped=${desktopDroppedFramePct}, longTaskCount=${desktopLongTaskCount}, longTaskTotal=${desktopLongTaskTotal}, longTaskMax=${desktopLongTaskMax}, heap=${desktopHeap}, touch budgets frameP95=${touchFrameP95}, frameP99=${touchFrameP99}, dropped=${touchDroppedFramePct}, longTaskCount=${touchLongTaskCount}, longTaskTotal=${touchLongTaskTotal}, longTaskMax=${touchLongTaskMax}, heap=${touchHeap}`,
     )
   }
 }
