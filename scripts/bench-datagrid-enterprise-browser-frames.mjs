@@ -25,6 +25,9 @@ const BENCH_BROWSER_HORIZONTAL_STEPS = intEnv("BENCH_BROWSER_HORIZONTAL_STEPS", 
 const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS", 16)
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
+const BENCH_BROWSER_CLIPBOARD_ROWS = intEnv("BENCH_BROWSER_CLIPBOARD_ROWS", 200)
+const BENCH_BROWSER_CLIPBOARD_COLUMNS = intEnv("BENCH_BROWSER_CLIPBOARD_COLUMNS", 20)
+const BENCH_BROWSER_CLIPBOARD_ITERATIONS = intEnv("BENCH_BROWSER_CLIPBOARD_ITERATIONS", 3)
 const BENCH_BROWSER_SCENARIO_FILTER = parseCsvEnv("BENCH_BROWSER_SCENARIOS")
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
 const BENCH_ENABLE_FILTER = (process.env.BENCH_BROWSER_ENABLE_FILTER ?? "true").trim().toLowerCase() !== "false"
@@ -120,6 +123,18 @@ const PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS = floatEnv(
 const PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX = floatEnv(
   "PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX",
   interactionDeviceProfile.budgets.scrollSyncDriftPx,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_BROWSER_WRITE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_BROWSER_WRITE_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_BROWSER_READ_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_BROWSER_READ_P95_MS",
+  999999,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_BROWSER_ROUNDTRIP_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_BROWSER_ROUNDTRIP_P95_MS",
+  999999,
 )
 const PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS",
@@ -345,6 +360,13 @@ const ALL_SCENARIOS = [
     interaction: "context-menu",
     interactionDiagnostics: true,
   },
+  {
+    id: "interaction-clipboard-browser",
+    route: "/vue/base-grid",
+    interaction: "clipboard-browser",
+    interactionDiagnostics: true,
+    clipboardDiagnostics: true,
+  },
 ]
 const SCENARIOS = BENCH_BROWSER_SCENARIO_FILTER.length > 0
   ? ALL_SCENARIOS.filter(scenario => BENCH_BROWSER_SCENARIO_FILTER.includes(scenario.id))
@@ -364,6 +386,9 @@ assertPositiveInteger(BENCH_BROWSER_SCROLL_STEPS, "BENCH_BROWSER_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_STEPS, "BENCH_BROWSER_SMOOTH_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX, "BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX")
 assertPositiveInteger(BENCH_BROWSER_HORIZONTAL_STEPS, "BENCH_BROWSER_HORIZONTAL_STEPS")
+assertPositiveInteger(BENCH_BROWSER_CLIPBOARD_ROWS, "BENCH_BROWSER_CLIPBOARD_ROWS")
+assertPositiveInteger(BENCH_BROWSER_CLIPBOARD_COLUMNS, "BENCH_BROWSER_CLIPBOARD_COLUMNS")
+assertPositiveInteger(BENCH_BROWSER_CLIPBOARD_ITERATIONS, "BENCH_BROWSER_CLIPBOARD_ITERATIONS")
 assertPositiveInteger(BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS, "BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS")
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
 assertNonNegativeInteger(BENCH_BROWSER_CELL_UPDATE_BURST, "BENCH_BROWSER_CELL_UPDATE_BURST")
@@ -676,6 +701,7 @@ async function runScenario(page, sessionIndex, scenario) {
           scrollSyncDrift: null,
           traceSummary: {},
           appPerf: null,
+          clipboard: null,
         }
       : null
 
@@ -1649,6 +1675,17 @@ async function runScenario(page, sessionIndex, scenario) {
         await waitForPaint()
         return sourceCell
       }
+      const createClipboardPayload = () => {
+        const rows = new Array(input.clipboardRows)
+        for (let rowIndex = 0; rowIndex < input.clipboardRows; rowIndex += 1) {
+          const cells = new Array(input.clipboardColumns)
+          for (let columnIndex = 0; columnIndex < input.clipboardColumns; columnIndex += 1) {
+            cells[columnIndex] = `browser-${input.sessionIndex}-${rowIndex}-${columnIndex}`
+          }
+          rows[rowIndex] = cells.join("\t")
+        }
+        return rows.join("\n")
+      }
       const runInteraction = async () => {
         switch (input.scenario.interaction) {
           case "drag-selection": {
@@ -1761,6 +1798,49 @@ async function runScenario(page, sessionIndex, scenario) {
               interactionDiagnostics.skipped.push("context-menu:no-header")
             }
             dispatchWindowMouse("mouseup", outsidePoint())
+            break
+          }
+          case "clipboard-browser": {
+            if (!navigator.clipboard?.writeText || !navigator.clipboard?.readText) {
+              interactionDiagnostics.skipped.push("clipboard-browser:api-unavailable")
+              return
+            }
+            const payload = createClipboardPayload()
+            const writeSamplesMs = []
+            const readSamplesMs = []
+            const roundtripSamplesMs = []
+            let lastReadLength = 0
+            for (let iteration = 0; iteration < input.clipboardIterations; iteration += 1) {
+              const iterationPayload = `${payload}\niteration-${iteration}`
+              const startedAt = performance.now()
+              const writeStartedAt = performance.now()
+              await navigator.clipboard.writeText(iterationPayload)
+              const writeEndedAt = performance.now()
+              const readStartedAt = performance.now()
+              const readPayload = await navigator.clipboard.readText()
+              const readEndedAt = performance.now()
+              writeSamplesMs.push(writeEndedAt - writeStartedAt)
+              readSamplesMs.push(readEndedAt - readStartedAt)
+              roundtripSamplesMs.push(readEndedAt - startedAt)
+              lastReadLength = readPayload.length
+              if (readPayload !== iterationPayload) {
+                interactionDiagnostics.skipped.push("clipboard-browser:roundtrip-mismatch")
+                break
+              }
+            }
+            interactionDiagnostics.clipboard = {
+              payloadBytes: new Blob([payload]).size,
+              rows: input.clipboardRows,
+              columns: input.clipboardColumns,
+              iterations: writeSamplesMs.length,
+              lastReadLength,
+              writeSamplesMs,
+              readSamplesMs,
+              roundtripSamplesMs,
+              writeMs: summarizeNumbers(writeSamplesMs),
+              readMs: summarizeNumbers(readSamplesMs),
+              roundtripMs: summarizeNumbers(roundtripSamplesMs),
+            }
             break
           }
           default:
@@ -2073,6 +2153,9 @@ async function runScenario(page, sessionIndex, scenario) {
     horizontalSteps: BENCH_BROWSER_HORIZONTAL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     cellUpdateBurst: BENCH_BROWSER_CELL_UPDATE_BURST,
+    clipboardRows: BENCH_BROWSER_CLIPBOARD_ROWS,
+    clipboardColumns: BENCH_BROWSER_CLIPBOARD_COLUMNS,
+    clipboardIterations: BENCH_BROWSER_CLIPBOARD_ITERATIONS,
     enableFilter: BENCH_ENABLE_FILTER,
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
@@ -2234,6 +2317,10 @@ function aggregateRuns(runs) {
       preventDefaultCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionPreventDefault?.count ?? 0)),
       cancelCount: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.traceSummary?.interactionCancel?.count ?? 0)),
       scrollSyncDriftPx: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.scrollSyncDrift?.maxAbsPx)),
+      clipboardWriteP95Ms: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.clipboard?.writeMs?.p95)),
+      clipboardReadP95Ms: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.clipboard?.readMs?.p95)),
+      clipboardRoundtripP95Ms: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.clipboard?.roundtripMs?.p95)),
+      clipboardPayloadBytes: stats(interactionDiagnosticsRuns.map(diagnostics => diagnostics.clipboard?.payloadBytes)),
     },
     datasourcePlaceholderDiagnostics: {
       events: stats(datasourcePlaceholderRuns.map(diagnostics => diagnostics.events)),
@@ -2307,6 +2394,26 @@ function buildInteractionBudgetWarnings(scenarioReports) {
       diagnostics.scrollSyncDriftPx.max,
       PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
     )
+    if (scenarioId === "interaction-clipboard-browser") {
+      addWarningIfAbove(
+        warnings,
+        `${scenarioId} clipboard write p95`,
+        diagnostics.clipboardWriteP95Ms.p95,
+        PERF_BUDGET_MAX_CLIPBOARD_BROWSER_WRITE_P95_MS,
+      )
+      addWarningIfAbove(
+        warnings,
+        `${scenarioId} clipboard read p95`,
+        diagnostics.clipboardReadP95Ms.p95,
+        PERF_BUDGET_MAX_CLIPBOARD_BROWSER_READ_P95_MS,
+      )
+      addWarningIfAbove(
+        warnings,
+        `${scenarioId} clipboard roundtrip p95`,
+        diagnostics.clipboardRoundtripP95Ms.p95,
+        PERF_BUDGET_MAX_CLIPBOARD_BROWSER_ROUNDTRIP_P95_MS,
+      )
+    }
     const skipped = report.sessions.flatMap(session => session.interactionDiagnostics?.skipped ?? [])
     for (const reason of skipped) {
       warnings.push(`${scenarioId} skipped ${reason}`)
@@ -2479,6 +2586,9 @@ const browser = await chromium.launch({
 })
 
 const context = await browser.newContext(interactionDeviceProfile.context)
+await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+  origin: new URL(BENCH_BROWSER_BASE_URL).origin,
+})
 
 const sessions = []
 const setup = []
@@ -2563,6 +2673,9 @@ const summary = {
     horizontalSteps: BENCH_BROWSER_HORIZONTAL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     cellUpdateBurst: BENCH_BROWSER_CELL_UPDATE_BURST,
+    clipboardRows: BENCH_BROWSER_CLIPBOARD_ROWS,
+    clipboardColumns: BENCH_BROWSER_CLIPBOARD_COLUMNS,
+    clipboardIterations: BENCH_BROWSER_CLIPBOARD_ITERATIONS,
     enableFilter: BENCH_ENABLE_FILTER,
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
@@ -2577,6 +2690,9 @@ const summary = {
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
       focusRestoreMaxMs: PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
       scrollSyncDriftPx: PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
+      clipboardBrowserWriteP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_WRITE_P95_MS,
+      clipboardBrowserReadP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_READ_P95_MS,
+      clipboardBrowserRoundtripP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_ROUNDTRIP_P95_MS,
     },
     virtualizationBudgets: {
       viewportUpdateP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS,
@@ -2612,6 +2728,9 @@ const summary = {
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,
       focusRestoreMaxMs: PERF_BUDGET_MAX_INTERACTION_FOCUS_RESTORE_MAX_MS,
       scrollSyncDriftPx: PERF_BUDGET_MAX_INTERACTION_SCROLL_DRIFT_PX,
+      clipboardBrowserWriteP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_WRITE_P95_MS,
+      clipboardBrowserReadP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_READ_P95_MS,
+      clipboardBrowserRoundtripP95Ms: PERF_BUDGET_MAX_CLIPBOARD_BROWSER_ROUNDTRIP_P95_MS,
     },
     virtualization: {
       viewportUpdateP95Ms: PERF_BUDGET_MAX_VIRTUALIZATION_VIEWPORT_UPDATE_P95_MS,
