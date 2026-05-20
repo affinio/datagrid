@@ -15,6 +15,7 @@ This folder separates user-facing documentation from internal planning material.
 ## Core References
 
 - [Grid API](./datagrid-grid-api.md)
+- [Event matrix](./datagrid-event-matrix.md)
 - [Public API inventory](./datagrid-public-api-inventory.md)
 - [Core factories](./datagrid-core-factories-reference.md)
 - [Advanced core reference](./datagrid-core-advanced-reference.md)

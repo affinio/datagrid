@@ -59,6 +59,7 @@ Important:
 ## Typed public events (`api.events`)
 
 Subscribe via `api.events.on(event, listener)`.
+For cross-layer mapping between `api.events`, Vue component emits, plugins, and local feature events, see [Event matrix](./datagrid-event-matrix.md).
 
 Stable event set:
 
@@ -66,6 +67,7 @@ Stable event set:
 - `columns:changed`
 - `projection:recomputed`
 - `selection:changed`
+- `row-selection:changed`
 - `pivot:changed`
 - `transaction:changed`
 - `viewport:changed`

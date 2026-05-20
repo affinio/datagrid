@@ -4,9 +4,9 @@ This plan converts `docs/audits/API_ENTERPRISE_AUDIT.md` into small, separable i
 
 Current execution state:
 
-- Slices 1-5 are implemented as of 2026-05-20.
+- Slices 1-6 are implemented as of 2026-05-20.
 - The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/datagrid-public-api-inventory.md`.
-- Remaining blockers are event matrix coverage, orchestration package tiering, and API diff gates.
+- Remaining blockers are orchestration package tiering and API diff gates.
 - Do not change public API or package export maps without a focused slice and migration notes.
 
 ## Slice 1: API Inventory And Export Snapshot
@@ -105,7 +105,7 @@ Current execution state:
 
 ## Slice 6: Event Matrix And Event-Order Coverage
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: document event sources, payloads, ordering, reentrancy, and preferred integration path across `api.events`, Vue emits, plugin events, and feature-local events.
 - Affected packages/files:
   - `docs/datagrid-event-matrix.md`
@@ -145,7 +145,7 @@ Current execution state:
 3. Slice 3: Vue Stable Surface Reconciliation (completed 2026-05-20)
 4. Slice 4: Canonical Plugin Model Decision (completed 2026-05-20)
 5. Slice 5: Renderer Lifecycle Contract (completed 2026-05-20)
-6. Slice 6: Event Matrix And Event-Order Coverage
+6. Slice 6: Event Matrix And Event-Order Coverage (completed 2026-05-20)
 7. Slice 7: API Diff Quality Gate
 
 ## Execution Notes

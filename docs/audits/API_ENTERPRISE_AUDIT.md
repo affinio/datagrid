@@ -7,13 +7,13 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, event matrix coverage is incomplete, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
+Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
 
-Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, and `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
+Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules, and `docs/datagrid-event-matrix.md` maps core events, Vue emits, plugin events, and feature-local events. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
 
 Enterprise readiness score: **7.0 / 10**.
 Target score: **9.0 / 10**.
-The target is blocked by orchestration tiering, event matrix coverage, and API-diff quality gates across all public packages.
+The target is blocked by orchestration tiering and API-diff quality gates across all public packages.
 
 ## Current Architecture Summary
 
@@ -116,10 +116,10 @@ The target is blocked by orchestration tiering, event matrix coverage, and API-d
    - Impact: custom renderer authors have an explicit safety contract for selection, editing, focus, a11y, and scroll performance under virtualization.
    - Required: keep future renderer behavior changes aligned with the lifecycle doc and component contract coverage.
 
-4. **Event APIs are coherent in core but fragmented across integration layers.**
-   - Evidence: `api.events.on` is typed in `gridApiContracts.ts`; `DataGrid.ts` separately emits Vue events such as `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, and model update events; Vue `createGrid` has a stringly local event bus.
-   - Impact: integrators may duplicate listeners or miss ordering guarantees across API events, Vue emits, and local feature events.
-   - Required: document an event matrix with source, payload, ordering, reentrancy, and preferred integration path.
+4. **Event APIs are coherent across integration layers.** (completed 2026-05-20)
+   - Evidence: `docs/datagrid-event-matrix.md` maps `api.events`, Vue app emits, `api.plugins.onEvent`, `createGrid` feature-local events, payload ownership, ordering, reentrancy, failure behavior, and preferred integration paths. Core, Vue, and Vue app tests cover representative ordering and failure semantics.
+   - Impact: integrators can choose one event surface for a workflow and avoid duplicate listeners across mirrored runtime/component events.
+   - Required: keep new public event names and Vue emit aliases reflected in the event matrix.
 
 5. **Migration safety lacks generated API surface diff gates across all public packages.**
    - Evidence: contract tests and `quality:api:datagrid:flat` exist; no reviewed script generates or compares `.d.ts` public API reports for `datagrid-core`, `datagrid-vue`, `datagrid-vue-app`, `datagrid-orchestration`, server adapters, and server client.
@@ -196,7 +196,6 @@ Target score: **9.0 / 10**.
 Blocks to target:
 
 - API surface diff gate for public packages.
-- Event matrix across core API, Vue emits, and feature/plugin events.
 - Orchestration package tiering or explicit adapter-internal positioning.
 
 ## Phased Roadmap
@@ -223,9 +222,8 @@ Blocks to target:
 
 ### Phase 4: Event and Lifecycle Contract
 
-- Create an event matrix covering `api.events`, Vue component emits, plugin events, feature events, state import events, selection/editing/clipboard events, and error events.
-- Document ordering and reentrancy guarantees for each event family.
-- Add tests for representative event order across API facade and Vue component emits.
+- Keep the event matrix current for `api.events`, Vue component emits, plugin events, feature events, state import events, selection/editing/clipboard events, and error events.
+- Keep ordering and reentrancy guarantees covered for each public event family.
 
 ### Phase 5: Migration and Compatibility Gates
 
@@ -289,6 +287,7 @@ Blocks to target:
    - Outcome: custom renderer authors have explicit safety rules and tests.
 
 6. **Event matrix and event-order tests**
+   - Status: completed 2026-05-20.
    - Risk: medium
    - Outcome: API events, Vue emits, plugin events, and feature events are predictable.
 

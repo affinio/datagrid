@@ -1,6 +1,6 @@
 # DataGrid Unified Grid API
 
-Updated: `2026-05-19`
+Updated: `2026-05-20`
 
 `DataGridApi` is the semver-safe, namespace-based facade for model/service operations in `@affino/datagrid-core`.
 
@@ -71,7 +71,7 @@ Use it as guard before capability-dependent mutating calls.
 - `data.pause()/resume()/flush()` is the public backpressure control surface for supported server/data-source row models.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).
 - `state.migrate(...)` is the explicit payload migration/validation hook before restore.
-- `events.on` is the typed public event surface with documented in-process ordering.
+- `events.on` is the typed public event surface with documented in-process ordering. See [Event matrix](./datagrid-event-matrix.md) for cross-layer mapping.
 - `events.on("row-selection:changed", ...)` is the typed row-selection event surface for `selectedRows` / `focusedRow` snapshots.
 - `events` includes explicit state import boundaries (`state:import:begin/end`).
 - `compute.switchMode(...)` is synchronous and does not implicitly trigger recompute.

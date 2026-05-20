@@ -1348,6 +1348,43 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("orders Vue row/state/edit emits for committed inline text edits", async () => {
+    const eventOrder: string[] = []
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        onCellChange: () => {
+          eventOrder.push("cell-change")
+        },
+        "onUpdate:state": () => {
+          eventOrder.push("update:state")
+        },
+        onCellEdit: () => {
+          eventOrder.push("cell-edit")
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    eventOrder.length = 0
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+
+    const editor = wrapper.find<HTMLInputElement>(".cell-editor-input")
+    expect(editor.exists()).toBe(true)
+    await editor.setValue("Ordered")
+    await editor.trigger("blur")
+    await flushRuntimeTasks()
+
+    expect(eventOrder.slice(0, 3)).toEqual(["cell-change", "update:state", "cell-edit"])
+
+    wrapper.unmount()
+  })
+
   it("keeps native context menu on an active text editor without opening the grid menu", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

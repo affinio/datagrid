@@ -2482,6 +2482,57 @@ describe("data grid api facade contracts", () => {
     expect(events).toEqual(["begin", "imported", "end"])
   })
 
+  it("queues reentrant facade events in deterministic FIFO order", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    let selectionSnapshot: DataGridSelectionSnapshot | null = null
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getSelectionSnapshot() {
+            return selectionSnapshot
+          },
+          setSelectionSnapshot(snapshot) {
+            selectionSnapshot = snapshot
+          },
+          clearSelection() {
+            selectionSnapshot = null
+          },
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const events: string[] = []
+    const unsubs = [
+      api.events.on("rows:changed", () => {
+        events.push("rows")
+        api.selection.setSnapshot({
+          ranges: [],
+          activeRangeIndex: -1,
+          activeCell: null,
+        })
+      }),
+      api.events.on("selection:changed", () => {
+        events.push("selection")
+      }),
+      api.events.on("projection:recomputed", () => {
+        events.push("projection")
+      }),
+    ]
+
+    api.rows.setSortModel([{ key: "owner", direction: "asc" }])
+    unsubs.forEach(unsubscribe => unsubscribe())
+
+    expect(events.slice(0, 3)).toEqual(["rows", "selection", "projection"])
+  })
+
   it("supports state migration hook with strict and non-strict behavior", () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
