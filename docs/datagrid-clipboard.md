@@ -96,7 +96,7 @@ Touch selection remains scroll-first. Mobile clipboard behavior should use expli
 
 ## Performance Gates
 
-`bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, paste payload creation, paste patch application, and total paste latency. Browser clipboard read/write latency, TSV parser cost, and mobile/coarse-pointer clipboard workflows remain planned gates.
+`bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency. Browser clipboard read/write latency and mobile/coarse-pointer clipboard workflows remain planned gates.
 
 ## Unsupported Or Planned Scope
 

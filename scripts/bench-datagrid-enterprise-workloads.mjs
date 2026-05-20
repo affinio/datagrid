@@ -48,6 +48,8 @@ const COPY_ROWS = intEnv("BENCH_ENTERPRISE_COPY_ROWS", IS_SMOKE ? 80 : 1000)
 const COPY_COLUMNS = intEnv("BENCH_ENTERPRISE_COPY_COLUMNS", IS_SMOKE ? 8 : 20)
 const FILL_ROWS = intEnv("BENCH_ENTERPRISE_FILL_ROWS", IS_SMOKE ? 200 : 5000)
 const FILL_COLUMNS = intEnv("BENCH_ENTERPRISE_FILL_COLUMNS", IS_SMOKE ? 4 : 5)
+const CLIPBOARD_TSV_PARSE_ROWS = intEnv("BENCH_ENTERPRISE_CLIPBOARD_TSV_PARSE_ROWS", IS_SMOKE ? 1000 : 10000)
+const CLIPBOARD_TSV_PARSE_COLUMNS = intEnv("BENCH_ENTERPRISE_CLIPBOARD_TSV_PARSE_COLUMNS", IS_SMOKE ? 20 : 20)
 
 const SELECTION_ROW_COUNT = intEnv("BENCH_ENTERPRISE_SELECTION_ROW_COUNT", IS_SMOKE ? 10000 : 1000000)
 const SELECTION_COLUMN_COUNT = intEnv("BENCH_ENTERPRISE_SELECTION_COLUMN_COUNT", 100)
@@ -108,6 +110,10 @@ const PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS",
   Number.POSITIVE_INFINITY,
 )
+const PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
 
 if (!BENCH_SEEDS.length) {
   throw new Error("BENCH_SEEDS must contain at least one positive integer")
@@ -119,6 +125,7 @@ for (const [label, value] of [
   ["BENCH_ENTERPRISE_SORT_FILTER_COLUMN_COUNT", SORT_FILTER_COLUMN_COUNT],
   ["BENCH_ENTERPRISE_COPY_COLUMN_COUNT", COPY_COLUMN_COUNT],
   ["BENCH_ENTERPRISE_SELECTION_COLUMN_COUNT", SELECTION_COLUMN_COUNT],
+  ["BENCH_ENTERPRISE_CLIPBOARD_TSV_PARSE_COLUMNS", CLIPBOARD_TSV_PARSE_COLUMNS],
   ["BENCH_ENTERPRISE_SOAK_COLUMN_COUNT", SOAK_COLUMN_COUNT],
 ]) {
   assertPositiveInteger(value, label)
@@ -536,7 +543,53 @@ async function loadDatagridCore() {
   return { ...factories, selection }
 }
 
-function warnIfDistLooksStale(distCandidates, sourceCandidates, buildMarkerCandidates) {
+async function loadDatagridClipboardParser() {
+  const parserCandidates = [
+    resolve("packages/datagrid-orchestration/dist/src/clipboard/clipboardTsv.js"),
+  ]
+  const sourceCandidates = [
+    resolve("packages/datagrid-orchestration/src/clipboard/clipboardTsv.ts"),
+  ]
+  const buildMarkerCandidates = [
+    resolve("packages/datagrid-orchestration/tsconfig.tsbuildinfo"),
+    resolve("packages/datagrid-orchestration/tsconfig.public.tsbuildinfo"),
+    resolve("packages/datagrid-orchestration/dist/tsconfig.tsbuildinfo"),
+    resolve("packages/datagrid-orchestration/dist/tsconfig.public.tsbuildinfo"),
+  ]
+
+  warnIfDistLooksStale(
+    parserCandidates,
+    sourceCandidates,
+    buildMarkerCandidates,
+    "pnpm --filter @affino/datagrid-orchestration build",
+  )
+
+  let lastError = null
+  for (const candidate of parserCandidates) {
+    if (!existsSync(candidate)) {
+      continue
+    }
+    try {
+      const module = await import(pathToFileURL(candidate).href)
+      if (typeof module.parseDataGridClipboardTsv === "function") {
+        return module.parseDataGridClipboardTsv
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  if (lastError) {
+    throw new Error(`Failed to load datagrid clipboard parser: ${String(lastError)}`)
+  }
+  throw new Error("Unable to locate datagrid-orchestration clipboard build artifact. Run `pnpm --filter @affino/datagrid-orchestration build`.")
+}
+
+function warnIfDistLooksStale(
+  distCandidates,
+  sourceCandidates,
+  buildMarkerCandidates,
+  buildCommand = "pnpm --filter @affino/datagrid-core build",
+) {
   if (process.env.BENCH_ALLOW_STALE_DIST === "1") {
     return
   }
@@ -554,7 +607,7 @@ function warnIfDistLooksStale(distCandidates, sourceCandidates, buildMarkerCandi
     }
     const freshnessTimestamp = Math.max(statSync(candidate).mtimeMs, newestBuildMarkerTimestamp)
     if (newestSourceTimestamp > freshnessTimestamp) {
-      const message = `Datagrid dist artifact appears stale (${candidate}). Run \`pnpm --filter @affino/datagrid-core build\` before benchmarks.`
+      const message = `Datagrid dist artifact appears stale (${candidate}). Run \`${buildCommand}\` before benchmarks.`
       if (process.env.BENCH_ENFORCE_FRESH_DIST === "1") {
         throw new Error(message)
       }
@@ -1256,6 +1309,8 @@ const COPY_PASTE_FILL_PHASE_KEYS = [
   "rowModelCreation",
   "copySourceRangeAccess",
   "copiedRangeCreation",
+  "clipboardTsvPayloadCreation",
+  "clipboardTsvParse",
   "calculationSnapshotCreation",
   "historySnapshotSizeEstimate",
   "historySnapshotPush",
@@ -1281,6 +1336,38 @@ const COPY_PASTE_FILL_MEMORY_PHASES = [
 ]
 
 const COPY_PATCH_DIAGNOSTIC_PHASES = ["paste", "fill"]
+
+function serializeBenchmarkClipboardTsvField(value) {
+  const normalized = String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  if (normalized.includes("\t") || normalized.includes("\n") || normalized.includes("\"")) {
+    return `"${normalized.replace(/"/g, "\"\"")}"`
+  }
+  return normalized
+}
+
+function createBenchmarkClipboardTsvPayload(rows, columns, seed) {
+  const lines = new Array(rows)
+  for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const cells = new Array(columns)
+    for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
+      const selector = (rowIndex * 31 + columnIndex * 17 + seed) % 23
+      let value = `cell-${seed}-${rowIndex}-${columnIndex}`
+      if (selector === 0) {
+        value = `quoted "${rowIndex}:${columnIndex}"`
+      } else if (selector === 1) {
+        value = `tab\t${rowIndex}:${columnIndex}`
+      } else if (selector === 2) {
+        value = `line\n${rowIndex}:${columnIndex}`
+      } else if (selector === 3) {
+        value = ""
+      }
+      cells[columnIndex] = serializeBenchmarkClipboardTsvField(value)
+    }
+    lines[rowIndex] = cells.join("\t")
+  }
+  return lines.join("\n")
+}
+
 const COPY_PATCH_DIAGNOSTIC_NUMERIC_KEYS = [
   "rowPatches",
   "changedCellFields",
@@ -1492,13 +1579,13 @@ function aggregateCopyPatchDiagnostics(runs) {
   )
 }
 
-async function runCopyPasteFillScenario(createClientRowModel) {
+async function runCopyPasteFillScenario(createClientRowModel, parseClipboardTsv) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
     for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-      await measureCopyPasteFillSeed(createClientRowModel, seed + warmup + 5000, { warmupOnly: true })
+      await measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed + warmup + 5000, { warmupOnly: true })
     }
-    runs.push(await measureCopyPasteFillSeed(createClientRowModel, seed))
+    runs.push(await measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed))
   }
   const aggregate = {
     copyLatencyMs: stats(runs.map(run => run.copyLatencyMs)),
@@ -1506,6 +1593,8 @@ async function runCopyPasteFillScenario(createClientRowModel) {
     fillLatencyMs: stats(runs.map(run => run.fillLatencyMs)),
     undoLatencyMs: stats(runs.map(run => run.undoLatencyMs)),
     historySnapshotSizeBytes: stats(runs.map(run => run.historySnapshotSizeBytes)),
+    clipboardTsvPayloadSizeBytes: stats(runs.map(run => run.clipboardTsvPayloadSizeBytes)),
+    parsedClipboardCells: stats(runs.map(run => run.parsedClipboardCells)),
     phaseTimingsMs: aggregatePhaseTimings(runs, COPY_PASTE_FILL_PHASE_KEYS),
     phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, COPY_PASTE_FILL_MEMORY_PHASES),
     patchDiagnostics: aggregateCopyPatchDiagnostics(runs),
@@ -1525,6 +1614,9 @@ async function runCopyPasteFillScenario(createClientRowModel) {
   if (aggregate.pasteLatencyMs.p95 > PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS) {
     budgetErrors.push(`clipboard paste total p95 ${aggregate.pasteLatencyMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS}ms`)
   }
+  if (aggregate.phaseTimingsMs.clipboardTsvParse.p95 > PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS) {
+    budgetErrors.push(`clipboard tsv parse p95 ${aggregate.phaseTimingsMs.clipboardTsvParse.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS}ms`)
+  }
   const report = createScenarioReport(
     "copy-paste-fill",
     {
@@ -1535,6 +1627,8 @@ async function runCopyPasteFillScenario(createClientRowModel) {
       copyColumns: COPY_COLUMNS,
       fillRows: FILL_ROWS,
       fillColumns: FILL_COLUMNS,
+      clipboardTsvParseRows: CLIPBOARD_TSV_PARSE_ROWS,
+      clipboardTsvParseColumns: CLIPBOARD_TSV_PARSE_COLUMNS,
       warmupRuns: BENCH_WARMUP_RUNS,
     },
     runs,
@@ -1545,6 +1639,7 @@ async function runCopyPasteFillScenario(createClientRowModel) {
         maxClipboardPastePayloadP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS,
         maxClipboardPastePatchP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS,
         maxClipboardPasteTotalP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS,
+        maxClipboardTsvParseP95Ms: PERF_BUDGET_MAX_CLIPBOARD_TSV_PARSE_P95_MS,
       },
       budgetErrors,
       ok: budgetErrors.length === 0,
@@ -1554,7 +1649,7 @@ async function runCopyPasteFillScenario(createClientRowModel) {
   return report
 }
 
-async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}) {
+async function measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
   const phaseTimingsMs = {}
   const phaseMemoryMb = {
@@ -1603,6 +1698,14 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
   recordMemory(phaseMemoryMb, "afterCopiedRangeCreation")
   const copyLatencyMs =
     (phaseTimingsMs.copySourceRangeAccess ?? 0) + (phaseTimingsMs.copiedRangeCreation ?? 0)
+
+  const clipboardTsvPayload = measurePhase(phaseTimingsMs, "clipboardTsvPayloadCreation", () =>
+    createBenchmarkClipboardTsvPayload(CLIPBOARD_TSV_PARSE_ROWS, CLIPBOARD_TSV_PARSE_COLUMNS, seed),
+  )
+  const parsedClipboardMatrix = measurePhase(phaseTimingsMs, "clipboardTsvParse", () =>
+    parseClipboardTsv(clipboardTsvPayload),
+  )
+  const parsedClipboardCells = parsedClipboardMatrix.reduce((total, row) => total + row.length, 0)
 
   const snapshot = measurePhase(phaseTimingsMs, "calculationSnapshotCreation", () =>
     typeof model.createCalculationSnapshot === "function" ? model.createCalculationSnapshot() : null,
@@ -1733,6 +1836,8 @@ async function measureCopyPasteFillSeed(createClientRowModel, seed, options = {}
     undoLatencyMs,
     undoSupported,
     copiedCells: copied.length * COPY_COLUMNS,
+    parsedClipboardCells,
+    clipboardTsvPayloadSizeBytes: Buffer.byteLength(clipboardTsvPayload),
     pastedCells: pasteUpdates.length * COPY_COLUMNS,
     filledCells: fillUpdates.length * FILL_COLUMNS,
     pasteRowPatches: pasteUpdates.length,
@@ -2458,6 +2563,7 @@ function createCombinedSummary(scenarioReports, startedAt) {
 const startedAt = performance.now()
 mkdirSync(OUTPUT_DIR, { recursive: true })
 const core = await loadDatagridCore()
+const parseClipboardTsv = await loadDatagridClipboardParser()
 
 console.log("\nAffino DataGrid Enterprise Workloads Benchmark")
 console.log(`profile=${PROFILE} seeds=${BENCH_SEEDS.join(",")} observationMode=true`)
@@ -2477,7 +2583,7 @@ console.log("[enterprise] sort-filter-combo...")
 scenarioReports.push(await runSortFilterComboScenario(core.createClientRowModel))
 
 console.log("[enterprise] copy-paste-fill...")
-scenarioReports.push(await runCopyPasteFillScenario(core.createClientRowModel))
+scenarioReports.push(await runCopyPasteFillScenario(core.createClientRowModel, parseClipboardTsv))
 
 console.log("[enterprise] selection-operations...")
 scenarioReports.push(await runSelectionEnterpriseScenario())
