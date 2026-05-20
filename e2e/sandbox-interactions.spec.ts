@@ -367,6 +367,67 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
   })
 
+  test("cut clipboard outline remounts after vertical and horizontal virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await stageCellClipboardOperationAndExpectPending(page, sourceCell, "cut")
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    await expect(page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-top/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-bottom/)
+
+    await setViewportScroll(viewport, { top: 0, left: 2_400 })
+    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(0)
+    await expect(page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-left/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-right/)
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+  })
+
+  test("right-pinned cut clipboard outline remounts after vertical virtualization", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    await pinColumnRight(page, "amount")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const sourceCell = page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
+    await expect(stage).toBeVisible({ timeout: 20_000 })
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+
+    await stageCellClipboardOperationAndExpectPending(page, sourceCell, "cut")
+
+    await setViewportScroll(viewport, { top: 1_400, left: 0 })
+    await expect.poll(async () => viewportRangeStart(page)).toBeGreaterThan(2)
+    await expect(page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]')).toHaveCount(0)
+
+    await setViewportScroll(viewport, { top: 0, left: 0 })
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-top/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-bottom/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-left/)
+    await expect(sourceCell).toHaveClass(/grid-cell--clipboard-pending-right/)
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+  })
+
   test("inline editor draft commits when its row leaves the virtual window", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -761,9 +822,17 @@ async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
 }
 
 async function copyCellAndExpectPending(page: Page, cell: Locator): Promise<void> {
+  await stageCellClipboardOperationAndExpectPending(page, cell, "copy")
+}
+
+async function stageCellClipboardOperationAndExpectPending(
+  page: Page,
+  cell: Locator,
+  operation: "copy" | "cut",
+): Promise<void> {
   await cell.click()
   await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(cell))
-  await page.keyboard.press("Control+C")
+  await page.keyboard.press(operation === "copy" ? "Control+C" : "Control+X")
   await expect(cell).toHaveClass(/grid-cell--clipboard-pending/)
 }
 

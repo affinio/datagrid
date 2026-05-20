@@ -176,7 +176,7 @@ Current execution state:
 
 ## Slice 10: Clipboard Remount, A11y, Mobile, And Performance Gates
 
-- Status: Partially completed on 2026-05-20. App-level contract coverage now verifies pending clipboard ranges remain stable across viewport remount offsets and clipboard fallback status reaches a polite grid live region. Playwright coverage now verifies copied clipboard outlines after vertical/horizontal remounts and right-pinned remounts. A materialized copy/paste enterprise benchmark assert gates copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency; browser clipboard latency and mobile/coarse-pointer gates remain planned.
+- Status: Partially completed on 2026-05-20. App-level contract coverage now verifies pending clipboard ranges remain stable across viewport remount offsets and clipboard fallback status reaches a polite grid live region. Playwright coverage now verifies copied and cut clipboard outlines after vertical/horizontal remounts and right-pinned remounts. A materialized copy/paste enterprise benchmark assert gates copy creation, TSV parser cost, paste payload creation, paste patch application, and total paste latency; browser clipboard latency and mobile/coarse-pointer gates remain planned.
 - Objective: add focused validation for pending clipboard outlines across virtualization remounts, live-region/status feedback, touch/mobile clipboard affordances, and large materialized copy/paste budgets.
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/*`
@@ -186,10 +186,9 @@ Current execution state:
   - `scripts/bench-datagrid-interactions.mjs`
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/datagrid-clipboard.md`
-- Expected behavior change: pending clipboard range logic is covered across viewport remount offsets in app contracts and browser remount flows, clipboard/fill status messages now have a mounted live-region surface in the app renderer, and materialized copy/paste plus TSV parser regressions can hard-fail through `bench:datagrid:enterprise:clipboard:assert`. Coarse-pointer workflows, partial-result announcements, and browser clipboard latency remain planned.
+- Expected behavior change: pending clipboard range logic is covered across viewport remount offsets in app contracts and browser copy/cut remount flows, clipboard/fill status messages now have a mounted live-region surface in the app renderer, and materialized copy/paste plus TSV parser regressions can hard-fail through `bench:datagrid:enterprise:clipboard:assert`. Coarse-pointer workflows, partial-result announcements, and browser clipboard latency remain planned.
 - Tests to add/update:
-  - Pending copied outlines reappear after vertical, horizontal, and right-pinned remounts.
-  - Pending cut outlines reappear after vertical and horizontal remounts.
+  - Pending copied and cut outlines reappear after vertical, horizontal, and right-pinned remounts.
   - Clipboard denied, copied, pasted, partial, and blocked states are announced where status UI exists.
   - Touch/coarse-pointer copy/paste follows the documented affordance.
   - Copy payload build, parse, and paste patch creation stay within documented local budgets.

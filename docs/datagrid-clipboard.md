@@ -94,7 +94,7 @@ The current app exposes visual pending clipboard outlines and routes grid status
 
 Touch selection remains scroll-first. Mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 
-Browser validation covers copied clipboard outlines across vertical remounts, horizontal remounts, and right-pinned pane remounts. Cut-outline browser remount coverage remains planned.
+Browser validation covers copied and cut clipboard outlines across vertical remounts, horizontal remounts, and right-pinned pane remounts.
 
 ## Performance Gates
 
