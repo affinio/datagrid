@@ -4,9 +4,9 @@ This plan converts `docs/audits/API_ENTERPRISE_AUDIT.md` into small, separable i
 
 Current execution state:
 
-- Slices 1-2 are implemented as of 2026-05-20.
+- Slices 1-3 are implemented as of 2026-05-20.
 - The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/datagrid-public-api-inventory.md`.
-- Remaining blockers are plugin lifecycle unification, Vue stable surface reconciliation, renderer lifecycle guarantees, event matrix coverage, and API diff gates.
+- Remaining blockers are plugin lifecycle unification, renderer lifecycle guarantees, event matrix coverage, orchestration package tiering, and API diff gates.
 - Do not change public API or package export maps without a focused slice and migration notes.
 
 ## Slice 1: API Inventory And Export Snapshot
@@ -48,7 +48,7 @@ Current execution state:
 
 ## Slice 3: Vue Stable Surface Reconciliation
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: make `@affino/datagrid-vue` root/stable exports match the stable-entrypoint documentation or explicitly classify current root exports.
 - Affected packages/files:
   - `packages/datagrid-vue/src/index.ts`
@@ -142,7 +142,7 @@ Current execution state:
 
 1. Slice 1: API Inventory And Export Snapshot (completed 2026-05-20)
 2. Slice 2: Core Package Export Map Hardening (completed 2026-05-20)
-3. Slice 3: Vue Stable Surface Reconciliation
+3. Slice 3: Vue Stable Surface Reconciliation (completed 2026-05-20)
 4. Slice 4: Canonical Plugin Model Decision
 5. Slice 5: Renderer Lifecycle Contract
 6. Slice 6: Event Matrix And Event-Order Coverage

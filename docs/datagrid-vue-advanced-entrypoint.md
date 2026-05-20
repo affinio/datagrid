@@ -1,6 +1,6 @@
 # DataGrid Vue Advanced Entrypoint
 
-Updated: `2026-03-03`
+Updated: `2026-05-20`
 
 This document defines the explicit advanced namespace for power-user hooks in `@affino/datagrid-vue`.
 
@@ -100,7 +100,8 @@ This document defines the explicit advanced namespace for power-user hooks in `@
 
 ## Boundary Rule
 
-- Root/stable entrypoint (`@affino/datagrid-vue`, `@affino/datagrid-vue/stable`) must not export advanced hooks.
+- Root/stable entrypoint (`@affino/datagrid-vue`, `@affino/datagrid-vue/stable`) must not export low-level pointer, editing, header, viewport, scroll, keyboard, clipboard mutation, or lifecycle orchestration hooks.
+- `useDataGridSelectionOverlayOrchestration`, `createGrid`, and `useAffinoGrid` are intentionally also present on root/stable as stable integration primitives. They remain available from advanced/domain entrypoints for existing power-user imports.
 - Advanced entrypoint is for integrators who intentionally opt into lower-level orchestration APIs.
 
 ## Perf Note

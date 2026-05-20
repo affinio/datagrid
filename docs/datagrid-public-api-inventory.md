@@ -15,7 +15,7 @@ pnpm run quality:api:datagrid:inventory
 | Package | Export paths | Current tier decision | Remaining risk |
 | --- | --- | --- | --- |
 | `@affino/datagrid-core` | `.`, `./advanced`, `./internal` | Root is stable, `advanced` is power-user, and `internal` is unsafe. Source-shaped wildcard exports are blocked. | New deep-import requirements must be added through an approved tiered entrypoint instead of `./*`. |
-| `@affino/datagrid-vue` | `.`, `./stable`, `./app`, `./app/worker`, `./advanced/*`, `./worker` | `./stable` is stable; root currently aliases the stable entry; app, worker, and advanced subpaths are advanced integration surfaces. | Stable-entrypoint docs must stay reconciled with the root/stable source exports. |
+| `@affino/datagrid-vue` | `.`, `./stable`, `./app`, `./app/worker`, `./advanced/*`, `./worker` | Root and `./stable` are contract-equivalent stable entrypoints; app, worker, and advanced subpaths are advanced integration surfaces. | Keep root/stable equivalence and low-level advanced-hook exclusions covered by `entrypointTiers.contract.spec.ts`. |
 | `@affino/datagrid-vue-app` | `.`, feature subpaths, `./internal` | Root and feature subpaths are app-facing stable surfaces; `./internal` is unsafe/internal. | Props, exposed Vue ref helpers, services, startup order, and renderer hooks need a public-vs-advanced table. |
 | `@affino/datagrid-orchestration` | `.` | Broad root is treated as adapter-internal public-root risk. | The package needs stable/advanced tiering or an explicit adapter-internal positioning statement. |
 | `@affino/datagrid-server-adapters` | `.` | Stable backend adapter surface. | Compatibility notes should stay aligned with server datasource protocol changes. |
@@ -30,7 +30,6 @@ pnpm run quality:api:datagrid:inventory
 
 ## Current Hardening Order
 
-1. Reconcile `@affino/datagrid-vue` root/stable exports with `docs/datagrid-vue-stable-entrypoint.md`.
-2. Decide orchestration package positioning: adapter-internal package or tiered public surface.
-3. Add renderer lifecycle and app expose/service tier docs.
-4. Promote the snapshot into a richer API diff report when declaration baselines are available.
+1. Decide orchestration package positioning: adapter-internal package or tiered public surface.
+2. Add renderer lifecycle and app expose/service tier docs.
+3. Promote the snapshot into a richer API diff report when declaration baselines are available.

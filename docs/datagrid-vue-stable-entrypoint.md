@@ -1,6 +1,6 @@
 # DataGrid Vue Stable Entrypoint (Common Usage)
 
-Updated: `2026-03-03`
+Updated: `2026-05-20`
 
 This document defines the stable, semver-safe entrypoints for common `@affino/datagrid-vue` integrations.
 
@@ -14,20 +14,35 @@ This document defines the stable, semver-safe entrypoints for common `@affino/da
 
 ## Stable Surface
 
+- Core model and helper facade:
+  - common row model factories, column model helpers, cell type helpers, cell render-model helpers, selection summary helpers, filter/sort helpers, datasource types, formula types, pivot types, and `DataGridApi` types re-exported from `@affino/datagrid-core`
+  - pivot spec helpers re-exported from `@affino/datagrid-pivot`: `normalizePivotSpec`, `clonePivotSpec`, `isSamePivotSpec`
 - Runtime/base:
   - `createDataGridVueRuntime`
   - `useDataGridRuntime`
+  - `createGrid`
+  - `useAffinoGrid`
   - Pivot utilities through `useDataGridRuntime`: `setPivotModel`, `getPivotModel`, `getPivotCellDrilldown`, `exportPivotLayout`, `importPivotLayout`, `exportPivotInterop`
-- Settings + overlays + a11y:
+- Settings, overlays, selectors, context, and a11y:
   - `useDataGridSettingsStore`
   - `createDataGridSettingsAdapter`
   - `buildDataGridOverlayTransform`
   - `buildDataGridOverlayTransformFromSnapshot`
+  - `useDataGridSelectionOverlayOrchestration`
   - `mapDataGridA11yGridAttributes`
   - `mapDataGridA11yCellAttributes`
   - `useDataGridContextMenu`
+  - `DATA_GRID_CLASS_NAMES`
+  - `DATA_GRID_DATA_ATTRS`
+  - `DATA_GRID_SELECTORS`
+  - `dataGridCellSelector`
+  - `dataGridHeaderCellSelector`
+  - `dataGridResizeHandleSelector`
+  - `provideDataGridEngineContext`, `useDataGridEngineContext`, `useGridApi`
+  - `provideDataGridViewContext`, `useDataGridViewContext`
+  - `provideDataGridContext`, `useDataGridContext`
 
-No advanced hooks are part of this surface.
+The stable root intentionally includes the integration primitives above because existing app and wrapper integrations use them without opting into low-level pointer/editing/viewport internals. Low-level orchestration hooks remain outside root/stable.
 
 Advanced hooks are available only via:
 - `@affino/datagrid-vue/advanced`
@@ -87,6 +102,7 @@ Use `useDataGridRuntime` for headless runtime ownership. Build interaction/UI be
 
 - Stable/runtime contract coverage lives in:
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridRuntime.contract.spec.ts`
+  - `packages/datagrid-vue/src/__tests__/entrypointTiers.contract.spec.ts`
 - Run package contract suite:
   - `pnpm --filter @affino/datagrid-vue run test:contracts`
 
