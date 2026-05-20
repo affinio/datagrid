@@ -4,9 +4,9 @@ This plan converts `docs/audits/API_ENTERPRISE_AUDIT.md` into small, separable i
 
 Current execution state:
 
-- Slices 1-6 are implemented as of 2026-05-20.
+- Slices 1-7 are implemented as of 2026-05-20.
 - The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/datagrid-public-api-inventory.md`.
-- Remaining blockers are orchestration package tiering and API diff gates.
+- Remaining blocker is orchestration package tiering.
 - Do not change public API or package export maps without a focused slice and migration notes.
 
 ## Slice 1: API Inventory And Export Snapshot
@@ -123,7 +123,7 @@ Current execution state:
 
 ## Slice 7: API Diff Quality Gate
 
-- Status: Planned.
+- Status: Completed on 2026-05-20.
 - Objective: add a declaration-level API diff/report gate for public packages so semver-relevant type changes are reviewable.
 - Affected packages/files:
   - `scripts/check-datagrid-api-report.mjs`
@@ -146,11 +146,11 @@ Current execution state:
 4. Slice 4: Canonical Plugin Model Decision (completed 2026-05-20)
 5. Slice 5: Renderer Lifecycle Contract (completed 2026-05-20)
 6. Slice 6: Event Matrix And Event-Order Coverage (completed 2026-05-20)
-7. Slice 7: API Diff Quality Gate
+7. Slice 7: API Diff Quality Gate (completed 2026-05-20)
 
 ## Execution Notes
 
 - Public API changes require migration notes before implementation unless the slice is docs-only.
 - Prefer tightening existing tiered entrypoints over adding new facades.
 - Do not create a fourth plugin model; choose or bridge the existing models.
-- Keep generated inventory checks small and deterministic until a declaration-level API report gate exists.
+- Keep generated inventory and declaration report checks deterministic.

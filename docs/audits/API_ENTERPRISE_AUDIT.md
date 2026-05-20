@@ -7,13 +7,13 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
+Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blocker is API lifecycle coverage and public-surface depth in `@affino/datagrid-orchestration`, which still has a broad public root without tiering. This is solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory and declaration report current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
 
-Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules, and `docs/datagrid-event-matrix.md` maps core events, Vue emits, plugin events, and feature-local events. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
+Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `docs/quality/datagrid-api-report.json` is generated and checked by `pnpm run quality:api:datagrid:report`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model, `docs/datagrid-renderer-lifecycle.md` defines app renderer lifecycle/focus/remount/cleanup rules, and `docs/datagrid-event-matrix.md` maps core events, Vue emits, plugin events, and feature-local events.
 
 Enterprise readiness score: **7.0 / 10**.
 Target score: **9.0 / 10**.
-The target is blocked by orchestration tiering and API-diff quality gates across all public packages.
+The target is blocked by orchestration tiering.
 
 ## Current Architecture Summary
 
@@ -121,10 +121,10 @@ The target is blocked by orchestration tiering and API-diff quality gates across
    - Impact: integrators can choose one event surface for a workflow and avoid duplicate listeners across mirrored runtime/component events.
    - Required: keep new public event names and Vue emit aliases reflected in the event matrix.
 
-5. **Migration safety lacks generated API surface diff gates across all public packages.**
-   - Evidence: contract tests and `quality:api:datagrid:flat` exist; no reviewed script generates or compares `.d.ts` public API reports for `datagrid-core`, `datagrid-vue`, `datagrid-vue-app`, `datagrid-orchestration`, server adapters, and server client.
-   - Impact: accidental public type changes can ship without a focused semver review.
-   - Required: add API report / export inventory gates and require migration notes for breaking diffs.
+5. **Migration safety has a declaration-level API report gate.** (completed 2026-05-20)
+   - Evidence: `scripts/check-datagrid-api-report.mjs` compares emitted `.d.ts` declaration graphs for `datagrid-core`, `datagrid-vue`, `datagrid-vue-app`, `datagrid-orchestration`, server adapters, and server client against `docs/quality/datagrid-api-report.json`.
+   - Impact: accidental public type changes are reviewable through a focused baseline update and semver review.
+   - Required: keep migration notes paired with intentional public type changes before refreshing the baseline.
 
 ### Medium
 
@@ -169,7 +169,7 @@ The target is blocked by orchestration tiering and API-diff quality gates across
 
 - Public API ownership is strongest in core and weaker in integration packages.
 - Internal vs public boundaries are documented and enforced for `@affino/datagrid-core`; other public packages still need richer tiering and diff gates.
-- Extension ownership is now documented across `api.plugins`, capability-gated plugins, and Vue features; implementation depth still needs future API report gates.
+- Extension ownership is now documented across `api.plugins`, capability-gated plugins, and Vue features; public type drift is guarded by the declaration report baseline.
 - Service overrides can replace core subsystems from app code; this is useful but must be treated as advanced and lifecycle-sensitive.
 - Renderer hooks can return arbitrary Vue children; lifecycle, focus, cleanup, and performance rules are now documented for app-level cell and group renderers.
 
@@ -195,7 +195,6 @@ Target score: **9.0 / 10**.
 
 Blocks to target:
 
-- API surface diff gate for public packages.
 - Orchestration package tiering or explicit adapter-internal positioning.
 
 ## Phased Roadmap
@@ -227,7 +226,7 @@ Blocks to target:
 
 ### Phase 5: Migration and Compatibility Gates
 
-- Add API diff reports to CI.
+- Keep API diff reports in CI/release validation.
 - Require migration notes for public surface changes.
 - Expand codemod coverage when exports move between stable and advanced tiers.
 - Add release checklist entries for API inventory, docs update, and semver classification.
@@ -292,6 +291,7 @@ Blocks to target:
    - Outcome: API events, Vue emits, plugin events, and feature events are predictable.
 
 7. **API diff quality gate**
+   - Status: completed 2026-05-20.
    - Risk: medium
    - Outcome: public type changes become reviewable release artifacts.
 

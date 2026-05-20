@@ -113,6 +113,7 @@
     "quality:perf:datagrid": "node ./scripts/check-datagrid-perf-contracts.mjs",
     "quality:api:datagrid:flat": "node ./scripts/check-datagrid-flat-api-usage.mjs",
     "quality:api:datagrid:inventory": "node ./scripts/check-datagrid-public-api-inventory.mjs",
+    "quality:api:datagrid:report": "node ./scripts/check-datagrid-api-report.mjs",
     "quality:architecture:datagrid": "node ./scripts/check-datagrid-architecture-acceptance.mjs && node ./scripts/check-datagrid-docs-framework-track.mjs && node ./scripts/check-datagrid-flat-api-usage.mjs && node ./scripts/check-datagrid-commercial-boundaries.mjs && node ./scripts/check-datagrid-commercial-release-readiness.mjs",
     "quality:facade:datagrid": "node ./scripts/report-datagrid-facade-coverage.mjs --check",
     "quality:facade:datagrid:report": "node ./scripts/report-datagrid-facade-coverage.mjs",

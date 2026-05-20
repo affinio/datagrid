@@ -123,6 +123,10 @@ Enforcement:
 
 - flat usage baseline lock: `pnpm run quality:api:datagrid:flat`
 - baseline file: `docs/quality/datagrid-flat-api-baseline.json`
+- public export inventory lock: `pnpm run quality:api:datagrid:inventory`
+- declaration-level API report lock: `pnpm run quality:api:datagrid:report`
+
+When public types change, review semver impact before refreshing `docs/quality/datagrid-api-report.json`.
 
 ## GroupBy-only -> TreeData Migration
 

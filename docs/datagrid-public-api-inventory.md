@@ -10,6 +10,14 @@ The generated snapshot lives at `docs/quality/datagrid-public-api-inventory.json
 pnpm run quality:api:datagrid:inventory
 ```
 
+The declaration-level API report lives at `docs/quality/datagrid-api-report.json` and is checked by:
+
+```bash
+pnpm run quality:api:datagrid:report
+```
+
+The API report reads emitted declarations from package `dist` folders. Run the relevant package builds first when declarations are missing.
+
 ## Package Export Tiers
 
 | Package | Export paths | Current tier decision | Remaining risk |
@@ -26,10 +34,11 @@ pnpm run quality:api:datagrid:inventory
 - Any new package export path must be classified in `scripts/check-datagrid-public-api-inventory.mjs`.
 - Any changed source entrypoint or export declaration must refresh `docs/quality/datagrid-public-api-inventory.json` with `node ./scripts/check-datagrid-public-api-inventory.mjs --write-baseline` after review.
 - Public API movement between stable, advanced, and internal tiers requires migration notes in `docs/datagrid-migration-guide.md` or the domain-specific guide.
-- The generated inventory is an export-map and entrypoint declaration snapshot. It is not a substitute for a future `.d.ts` API report gate.
+- The generated inventory is an export-map and source-entrypoint snapshot.
+- The generated API report is the declaration-level gate. Public type changes must refresh `docs/quality/datagrid-api-report.json` with `node ./scripts/check-datagrid-api-report.mjs --write-baseline` after semver review.
 
 ## Current Hardening Order
 
-1. Decide orchestration package positioning: adapter-internal package or tiered public surface.
-2. Add renderer lifecycle and app expose/service tier docs.
-3. Promote the snapshot into a richer API diff report when declaration baselines are available.
+1. Define orchestration package positioning: adapter-internal package or tiered public surface.
+2. Keep declaration report changes paired with migration notes when public behavior or types change.
+3. Refresh inventory and API report baselines only after reviewing public API impact.
