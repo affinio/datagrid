@@ -7,7 +7,9 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are boundary enforcement and extension-model coherence: `@affino/datagrid-core` still exposes a package wildcard that can make forbidden deep imports reachable, Vue stable exports do not fully match the stable-entrypoint documentation, and there are at least three extension models (`api.plugins`, `@affino/datagrid-plugins`, and Vue `createGrid` features) without one canonical public plugin lifecycle. These are solvable without inventing a parallel architecture: tighten the existing tiered entrypoints, publish an API inventory, and converge extension contracts around the current `DataGridApi` facade plus the capability-gated plugin runtime.
+Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are boundary enforcement and extension-model coherence: `@affino/datagrid-core` still exposes a package wildcard that can make forbidden deep imports reachable, Vue stable exports do not fully match the stable-entrypoint documentation, and there are at least three extension models (`api.plugins`, `@affino/datagrid-plugins`, and Vue `createGrid` features) without one canonical public plugin lifecycle. These are solvable without inventing a parallel architecture: tighten the existing tiered entrypoints, maintain the public API inventory, and converge extension contracts around the current `DataGridApi` facade plus the capability-gated plugin runtime.
+
+Update `2026-05-20`: the first public API inventory slice is implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, and `docs/quality/datagrid-public-api-inventory.json` is now generated and checked by `pnpm run quality:api:datagrid:inventory`. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
 
 Enterprise readiness score: **7.0 / 10**.
 Target score: **9.0 / 10**.
@@ -266,6 +268,7 @@ Blocks to target:
 ## Prioritized Implementation Slices
 
 1. **API inventory doc and generated export snapshot**
+   - Status: completed 2026-05-20.
    - Risk: low
    - Outcome: every public export has an owner and tier.
 
