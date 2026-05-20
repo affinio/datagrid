@@ -92,6 +92,22 @@ const PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS = floatEnv(
   "PERF_BUDGET_MAX_SELECTION_OVERLAY_PLANNING_P95_MS",
   Number.POSITIVE_INFINITY,
 )
+const PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
+const PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS = floatEnv(
+  "PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS",
+  Number.POSITIVE_INFINITY,
+)
 
 if (!BENCH_SEEDS.length) {
   throw new Error("BENCH_SEEDS must contain at least one positive integer")
@@ -1484,6 +1500,31 @@ async function runCopyPasteFillScenario(createClientRowModel) {
     }
     runs.push(await measureCopyPasteFillSeed(createClientRowModel, seed))
   }
+  const aggregate = {
+    copyLatencyMs: stats(runs.map(run => run.copyLatencyMs)),
+    pasteLatencyMs: stats(runs.map(run => run.pasteLatencyMs)),
+    fillLatencyMs: stats(runs.map(run => run.fillLatencyMs)),
+    undoLatencyMs: stats(runs.map(run => run.undoLatencyMs)),
+    historySnapshotSizeBytes: stats(runs.map(run => run.historySnapshotSizeBytes)),
+    phaseTimingsMs: aggregatePhaseTimings(runs, COPY_PASTE_FILL_PHASE_KEYS),
+    phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, COPY_PASTE_FILL_MEMORY_PHASES),
+    patchDiagnostics: aggregateCopyPatchDiagnostics(runs),
+    elapsedMs: stats(runs.map(run => run.elapsedMs)),
+    heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
+  }
+  const budgetErrors = []
+  if (aggregate.copyLatencyMs.p95 > PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS) {
+    budgetErrors.push(`clipboard copy p95 ${aggregate.copyLatencyMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS}ms`)
+  }
+  if (aggregate.phaseTimingsMs.pastePayloadCreation.p95 > PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS) {
+    budgetErrors.push(`clipboard paste payload p95 ${aggregate.phaseTimingsMs.pastePayloadCreation.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS}ms`)
+  }
+  if (aggregate.phaseTimingsMs.pastePatchApplication.p95 > PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS) {
+    budgetErrors.push(`clipboard paste patch p95 ${aggregate.phaseTimingsMs.pastePatchApplication.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS}ms`)
+  }
+  if (aggregate.pasteLatencyMs.p95 > PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS) {
+    budgetErrors.push(`clipboard paste total p95 ${aggregate.pasteLatencyMs.p95.toFixed(3)}ms exceeds PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS=${PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS}ms`)
+  }
   const report = createScenarioReport(
     "copy-paste-fill",
     {
@@ -1497,17 +1538,16 @@ async function runCopyPasteFillScenario(createClientRowModel) {
       warmupRuns: BENCH_WARMUP_RUNS,
     },
     runs,
+    aggregate,
     {
-      copyLatencyMs: stats(runs.map(run => run.copyLatencyMs)),
-      pasteLatencyMs: stats(runs.map(run => run.pasteLatencyMs)),
-      fillLatencyMs: stats(runs.map(run => run.fillLatencyMs)),
-      undoLatencyMs: stats(runs.map(run => run.undoLatencyMs)),
-      historySnapshotSizeBytes: stats(runs.map(run => run.historySnapshotSizeBytes)),
-      phaseTimingsMs: aggregatePhaseTimings(runs, COPY_PASTE_FILL_PHASE_KEYS),
-      phaseMemoryDeltaMb: aggregatePhaseMemoryDeltas(runs, COPY_PASTE_FILL_MEMORY_PHASES),
-      patchDiagnostics: aggregateCopyPatchDiagnostics(runs),
-      elapsedMs: stats(runs.map(run => run.elapsedMs)),
-      heapDeltaMb: stats(runs.map(run => run.heapDeltaMb)),
+      budgets: {
+        maxClipboardCopyP95Ms: PERF_BUDGET_MAX_CLIPBOARD_COPY_P95_MS,
+        maxClipboardPastePayloadP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_PAYLOAD_P95_MS,
+        maxClipboardPastePatchP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_PATCH_P95_MS,
+        maxClipboardPasteTotalP95Ms: PERF_BUDGET_MAX_CLIPBOARD_PASTE_TOTAL_P95_MS,
+      },
+      budgetErrors,
+      ok: budgetErrors.length === 0,
     },
   )
   report.path = await writeScenarioReport("bench-datagrid-enterprise-copy-paste-fill.json", report)

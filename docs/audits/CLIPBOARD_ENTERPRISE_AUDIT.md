@@ -31,7 +31,7 @@ The existing package split is sound. The architecture should be hardened in plac
 - Slice 7, Server Virtual Clipboard Delegation, is completed as of 2026-05-20 for opt-in app-level server copy/cut/paste delegates over unloaded virtual ranges.
 - Slice 8, Async Paste Pending And Recovery, is completed as of 2026-05-20 for app-level pending/rejected paste state, duplicate-paste blocking, and async rejection messages.
 - Slice 9, Cut-Paste Atomicity, is completed as of 2026-05-20 for local row-model cut-paste source clear and target write as one commit.
-- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage and clipboard fallback live-region coverage; browser/device/performance gates remain planned.
+- Slice 10 is partially completed as of 2026-05-20 for app-level pending clipboard range remount coverage, clipboard fallback live-region coverage, and materialized copy/paste enterprise benchmark budgets; browser/device gates remain planned.
 - Current code includes typed draft validation and local target/applied/blocked/skipped/invalid status on the canonical app clipboard paste path; the remaining validation work is custom/server result contracts, host paste policies, and per-cell rejection UI.
 - Server-delegated clipboard operations remain planned; local virtual/unloaded operations continue to block safely.
 
@@ -217,7 +217,7 @@ Tests and benchmarks sampled:
 - Multi-range paste flattens and merges updates, which is simple but can grow costly for many ranges or wide selections.
 - Copy payload creation is synchronous and builds one large string in memory.
 - Browser clipboard write/read of large payloads can block or fail without progress feedback.
-- Existing performance gates cover fill and enterprise copy-paste-fill benchmark phases, but not the full browser clipboard permission/read/write path or TSV parser costs.
+- Existing performance gates cover fill and enterprise copy-paste-fill benchmark phases. `bench:datagrid:enterprise:clipboard:assert` now hard-fails materialized copy creation, paste payload creation, paste patch application, and total paste latency regressions, but not the full browser clipboard permission/read/write path or TSV parser costs.
 
 ## Virtualization And Server Risks
 
@@ -291,9 +291,9 @@ Playwright/e2e tests:
 
 Performance tests:
 
-- Copy payload creation time and memory for 10k, 100k materialized cells.
+- Copy payload creation time and memory for larger materialized cells beyond the smoke assert shape.
 - Paste parse time for large TSV/CSV payloads.
-- Paste patch creation and row-model apply time for 10k, 100k cells.
+- Paste patch creation and row-model apply time for larger materialized cells beyond the smoke assert shape.
 - Multi-range scalar paste cost for many ranges.
 - Browser clipboard read/write latency and failure rate for large payloads.
 - Fill and paste shared `applyClipboardEdits` telemetry with applied/blocked cell counts.

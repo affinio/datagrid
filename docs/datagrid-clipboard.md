@@ -94,6 +94,10 @@ The current app exposes visual pending clipboard outlines and routes grid status
 
 Touch selection remains scroll-first. Mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 
+## Performance Gates
+
+`bench:datagrid:enterprise:clipboard:assert` gates the current materialized copy/paste path for copy creation, paste payload creation, paste patch application, and total paste latency. Browser clipboard read/write latency, TSV parser cost, and mobile/coarse-pointer clipboard workflows remain planned gates.
+
 ## Unsupported Or Planned Scope
 
 The mounted table-stage DataGrid does not currently provide:
