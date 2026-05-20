@@ -43,6 +43,7 @@ This folder separates user-facing documentation from internal planning material.
 - [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)
 - [Theme ownership](./datagrid-theme-ownership.md)
+- [Plugin lifecycle](./datagrid-plugin-lifecycle.md)
 - [Plugin capability model](./datagrid-plugin-capability-model.md)
 
 ## Specialized Folders

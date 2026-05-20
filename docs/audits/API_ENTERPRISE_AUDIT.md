@@ -7,9 +7,9 @@ Scope: public API boundaries, extension points, renderer APIs, datasource APIs, 
 
 DataGrid has a strong enterprise API foundation: `DataGridApi` is namespaced, documented, version-aware, and backed by contract tests; core/Vue stable and advanced entrypoints are documented; datasource and row/column model contracts are explicit; and the app-facing Vue component exposes production-shaped props, events, imperative helpers, renderer hooks, state persistence, and saved-view helpers.
 
-Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are extension-model coherence and API lifecycle coverage: there are at least three extension models (`api.plugins`, `@affino/datagrid-plugins`, and Vue `createGrid` features) without one canonical public plugin lifecycle, `@affino/datagrid-orchestration` still has a broad public root without tiering, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and converge extension contracts around the current `DataGridApi` facade plus the capability-gated plugin runtime.
+Current readiness is not yet enterprise-grade for a public extension ecosystem. The main blockers are API lifecycle coverage and public-surface depth: `@affino/datagrid-orchestration` still has a broad public root without tiering, renderer lifecycle guarantees are partial, event matrix coverage is incomplete, and API diff gates are not yet declaration-level. These are solvable without inventing a parallel architecture: maintain the existing tiered entrypoints, keep the public API inventory current, and keep extension contracts centered on the current `DataGridApi` facade plus the capability-gated plugin runtime.
 
-Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, and `@affino/datagrid-vue` root/stable docs now match the current stable integration surface. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
+Update `2026-05-20`: the first public API inventory slices are implemented. `docs/datagrid-public-api-inventory.md` classifies tracked package export paths, `docs/quality/datagrid-public-api-inventory.json` is generated and checked by `pnpm run quality:api:datagrid:inventory`, `@affino/datagrid-core` no longer exposes a source-shaped package wildcard, `@affino/datagrid-vue` root/stable docs now match the current stable integration surface, and `docs/datagrid-plugin-lifecycle.md` defines the canonical plugin model. The generated snapshot is an export-map/entrypoint baseline, not yet a declaration-level API diff gate.
 
 Enterprise readiness score: **7.0 / 10**.
 Target score: **9.0 / 10**.
@@ -94,10 +94,10 @@ The target is blocked by plugin lifecycle unification, Vue stable surface reconc
    - Impact: unsupported deep imports such as `@affino/datagrid-core/src/*` and `@affino/datagrid-core/viewport/*` are no longer package exports.
    - Required: keep new public needs flowing through an approved tiered entrypoint and migration note.
 
-2. **Plugin readiness is split across three extension models.**
-   - Evidence: `DataGridApiPluginDefinition` in `gridApiContracts.ts` supports `id`, `onRegister`, `onDispose`, and `onEvent`; `@affino/datagrid-plugins` defines capability-gated `setup(context)` plugins; Vue `createGrid` defines feature registration with `requires`, local events, and cleanup.
-   - Impact: integrators cannot tell which plugin model is canonical for enterprise extensions, capability negotiation, lifecycle ordering, state serialization, or compatibility.
-   - Required: designate one public plugin model and define bridge/deprecation rules for the other two.
+2. **Plugin model roles are defined.** (completed 2026-05-20)
+   - Evidence: `docs/datagrid-plugin-lifecycle.md` designates `api.plugins` as the stable public plugin facade, `@affino/datagrid-plugins` as the advanced capability-gated runtime foundation, and Vue `createGrid` features as local composition features.
+   - Impact: integrators now have one public plugin lifecycle and bridge rules for capability-sensitive and Vue-local extensions.
+   - Required: keep future plugin expansion aligned with this role split instead of adding a fourth model.
 
 ### High
 
@@ -169,7 +169,7 @@ The target is blocked by plugin lifecycle unification, Vue stable surface reconc
 
 - Public API ownership is strongest in core and weaker in integration packages.
 - Internal vs public boundaries are documented and enforced for `@affino/datagrid-core`; other public packages still need richer tiering and diff gates.
-- Extension ownership is unclear because plugin registration, capability-gated plugins, and feature registration overlap.
+- Extension ownership is now documented across `api.plugins`, capability-gated plugins, and Vue features; implementation depth still needs future API report gates.
 - Service overrides can replace core subsystems from app code; this is useful but must be treated as advanced and lifecycle-sensitive.
 - Renderer hooks can return arbitrary Vue children; without a lifecycle/focus contract, they can interfere with grid-owned selection, editing, keyboard navigation, and accessibility.
 
@@ -195,7 +195,6 @@ Target score: **9.0 / 10**.
 
 Blocks to target:
 
-- Single canonical plugin/extensibility lifecycle.
 - API surface diff gate for public packages.
 - Renderer lifecycle and customization safety contract.
 - Event matrix across core API, Vue emits, and feature/plugin events.
@@ -213,9 +212,9 @@ Blocks to target:
 
 ### Phase 2: Canonical Extensibility Model
 
-- Choose the canonical public extension model.
-- Map `api.plugins`, `@affino/datagrid-plugins`, and Vue `DataGridFeature` into stable/advanced/internal roles.
-- Define lifecycle ordering, cleanup, event delivery, failure isolation, capability namespacing, duplicate handling, dependency ordering, and state serialization policy.
+- Keep `api.plugins` as the canonical public extension model.
+- Keep `@affino/datagrid-plugins` as the advanced capability-gated runtime foundation and Vue `DataGridFeature` as local composition.
+- Maintain lifecycle ordering, cleanup, event delivery, failure isolation, capability namespacing, duplicate handling, dependency ordering, and state serialization policy.
 - Add contract tests for plugin ordering, failed setup, failed cleanup, capability denial, and event handler errors.
 
 ### Phase 3: Renderer and Customization Safety
@@ -282,6 +281,7 @@ Blocks to target:
    - Outcome: root exports match stable docs, or docs intentionally commit to current root exports.
 
 4. **Plugin model decision record**
+   - Status: completed 2026-05-20.
    - Risk: medium
    - Outcome: one canonical plugin model with bridge rules for `api.plugins`, capability plugins, and Vue features.
 
@@ -301,6 +301,6 @@ Blocks to target:
 
 - The core wildcard export was removed; consumers that imported `@affino/datagrid-core/src/*` must migrate to `.`, `./advanced`, or `./internal` using the existing public-protocol codemod guidance.
 - Moving documented Vue root exports to `advanced` may be breaking; future movement needs migration notes and a focused API proposal.
-- Unifying plugin models should avoid a new fourth abstraction; prefer designating the existing capability-gated plugin system as the advanced plugin foundation and keeping `api.plugins` as the stable facade unless a concrete gap blocks that path.
+- Future plugin work should avoid a new fourth abstraction; keep `api.plugins` as the stable facade and the capability-gated plugin system as the advanced foundation unless a concrete approved gap blocks that path.
 - Service override props should remain available for advanced integrators, but their compatibility status must be explicit.
 - Renderer lifecycle documentation should avoid over-constraining implementation details; document observable behavior and ownership boundaries instead.

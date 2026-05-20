@@ -60,6 +60,14 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
 ): DataGridApiPluginsRuntime<TRow> {
   const plugins = new Map<string, DataGridApiPluginDefinition<TRow>>()
 
+  const disposePlugin = (plugin: DataGridApiPluginDefinition<TRow>): void => {
+    try {
+      plugin.onDispose?.()
+    } catch {
+      // Plugin cleanup failures are isolated from core disposal paths.
+    }
+  }
+
   const dispatchEvent = <K extends keyof DataGridApiEventMap<TRow>>(
     event: K,
     payload: DataGridApiEventMap<TRow>[K],
@@ -89,8 +97,13 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
     if (plugins.has(id)) {
       return false
     }
-    plugins.set(id, { ...plugin, id })
-    plugin.onRegister?.()
+    const normalizedPlugin = { ...plugin, id }
+    try {
+      normalizedPlugin.onRegister?.()
+    } catch {
+      return false
+    }
+    plugins.set(id, normalizedPlugin)
     return true
   }
 
@@ -101,7 +114,7 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
       return false
     }
     plugins.delete(normalizedId)
-    plugin.onDispose?.()
+    disposePlugin(plugin)
     return true
   }
 
@@ -122,7 +135,7 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
     },
     clearPlugins() {
       for (const plugin of plugins.values()) {
-        plugin.onDispose?.()
+        disposePlugin(plugin)
       }
       plugins.clear()
     },
@@ -131,7 +144,7 @@ export function createDataGridApiPluginsRuntime<TRow = unknown>(
         unsubscribe()
       }
       for (const plugin of plugins.values()) {
-        plugin.onDispose?.()
+        disposePlugin(plugin)
       }
       plugins.clear()
     },

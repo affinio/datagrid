@@ -2543,6 +2543,48 @@ describe("data grid api facade contracts", () => {
     expect(goodPluginRowsChanged > 0).toBe(true)
   })
 
+  it("isolates plugin lifecycle failures from core plugin registry state", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    expect(api.plugins.register({
+      id: "bad-setup",
+      onRegister() {
+        throw new Error("setup failed")
+      },
+    })).toBe(false)
+    expect(api.plugins.has("bad-setup")).toBe(false)
+
+    expect(api.plugins.register({
+      id: "bad-cleanup",
+      onDispose() {
+        throw new Error("cleanup failed")
+      },
+    })).toBe(true)
+    expect(() => api.plugins.unregister("bad-cleanup")).not.toThrow()
+    expect(api.plugins.has("bad-cleanup")).toBe(false)
+
+    expect(api.plugins.register({
+      id: "bad-clear-cleanup",
+      onDispose() {
+        throw new Error("cleanup failed")
+      },
+    })).toBe(true)
+    expect(() => api.plugins.clear()).not.toThrow()
+    expect(api.plugins.list()).toEqual([])
+  })
+
   it("delegates transaction APIs when transaction capability is implemented", async () => {
     const rowModel = createClientRowModel()
     const columnModel = createDataGridColumnModel()

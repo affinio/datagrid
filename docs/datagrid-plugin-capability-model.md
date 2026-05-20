@@ -1,8 +1,10 @@
 # DataGrid Plugin Capability Model
 
-Updated: `2026-02-09`
+Updated: `2026-05-20`
 
 This document defines the capability boundary for runtime plugins in `@affino/datagrid-plugins` (consumed by `@affino/datagrid-core`).
+
+For the cross-package plugin lifecycle decision, see `docs/datagrid-plugin-lifecycle.md`. The stable public plugin facade is `DataGridApi.plugins`; this capability model is the advanced lower-level runtime for host/plugin environments that need explicit capability negotiation.
 
 ## Policy
 

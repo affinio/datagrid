@@ -96,9 +96,11 @@ Use it as guard before capability-dependent mutating calls.
 
 ## Plugin safety model
 
+- `api.plugins` is the stable public plugin facade.
 - Plugins are observational by default and consume only public event payloads.
-- Plugin handler failures are isolated from core dispatch.
+- Plugin `onRegister`, `onEvent`, and `onDispose` failures are isolated from core registry and event-dispatch paths.
 - Plugins can mutate state only through public API calls.
+- Advanced capability-gated plugin hosts should use `@affino/datagrid-plugins` as described in `docs/datagrid-plugin-lifecycle.md`.
 
 ## Service binding notes
 
