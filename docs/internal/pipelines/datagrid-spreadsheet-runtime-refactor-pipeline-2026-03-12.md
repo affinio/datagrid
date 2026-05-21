@@ -378,10 +378,11 @@ Rules for this block:
 - [x] Split sheet runtime helper/storage ownership into current flat spreadsheet modules:
   - [x] `spreadsheetCellRuntime.ts` for cell input, preview, address, and row-index helper logic
   - [x] `spreadsheetCellStoreRuntime.ts` for sparse raw-input and cell-style storage
-  - [x] `spreadsheetFormulaTableRuntime.ts` for formula table context keys
+  - [x] `spreadsheetFormulaTableRuntime.ts` for formula table context keys, storage, export, and patch dirty-context tracking
   - [x] `spreadsheetFormulaRuntime.ts` for formula runtime state types, dependency closure helpers, structural snapshots, diagnostics, and row-offset analysis shifts
   - [x] `spreadsheetMutationSnapshotRuntime.ts` for mutation snapshot cloning
   - [x] `spreadsheetReferenceRuntime.ts` for sheet/column reference normalization and lookups
+  - [x] `spreadsheetSheetLifecycleRuntime.ts` for listener lifecycle, revision counters, sheet snapshots, and last mutation snapshots
   - [x] `spreadsheetSheetStateRuntime.ts` for sheet row/column state initialization, indexes, resolved values, and address resolution
   - [x] `spreadsheetStyleRuntime.ts` for style normalization, merge, and state-equivalence helpers
   - [x] `spreadsheetStructuralMutationRuntime.ts` for row insert/remove and column rename formula rewrite policy
@@ -391,7 +392,7 @@ Rules for this block:
   - [x] `sheetFormulaRuntime.ts` equivalent partially covered by `spreadsheetFormulaRuntime.ts`
   - [x] `sheetRowMutation.ts` equivalent partially covered by `spreadsheetStructuralMutationRuntime.ts`
   - [x] `sheetStyleRuntime.ts` equivalent covered by `spreadsheetStyleRuntime.ts`
-  - [ ] keep `sheetModel.ts` as facade/orchestrator only for formula evaluation context, revision mutation, and restore orchestration
+  - [ ] keep `sheetModel.ts` as facade/orchestrator only for formula evaluation context and restore orchestration
 - [ ] Split formula editor/runtime helpers into:
   - [ ] `formulaEditorTypes.ts` for editor/runtime formula types
   - [ ] `formulaAnalysis.ts` for cell input analysis, diagnostics, reference target resolution

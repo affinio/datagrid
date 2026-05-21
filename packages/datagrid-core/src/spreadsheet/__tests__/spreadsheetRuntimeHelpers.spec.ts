@@ -18,9 +18,11 @@ import {
   hasCurrentSheetAbsoluteReferencesAtOrAfter,
 } from "../spreadsheetStructuralMutationRuntime.js"
 import {
+  createSpreadsheetFormulaTableRuntime,
   resolveFormulaTableBindingName,
   resolveFormulaTableContextKey,
 } from "../spreadsheetFormulaTableRuntime.js"
+import { createSpreadsheetSheetLifecycleRuntime } from "../spreadsheetSheetLifecycleRuntime.js"
 import {
   buildSpreadsheetColumnReferenceLookup,
   normalizeColumnKey,
@@ -78,6 +80,63 @@ describe("spreadsheet runtime helpers", () => {
     expect(resolveFormulaTableContextKey("")).toBe("tables")
     expect(resolveFormulaTableBindingName("table:orders")).toBe("orders")
     expect(resolveFormulaTableBindingName("tables")).toBe("")
+  })
+
+  it("owns formula table storage patches", () => {
+    const ordersSource = { rows: [{ amount: 10 }] }
+    const customersSource = { rows: [{ name: "Ada" }] }
+    const runtime = createSpreadsheetFormulaTableRuntime([{ name: " Orders ", source: ordersSource }])
+
+    expect(runtime.getSource("table:orders")).toBe(ordersSource)
+    expect(runtime.exportBindings()).toEqual([{ name: "orders", source: ordersSource }])
+
+    const patchResult = runtime.patch({
+      set: [{ name: "Customers", source: customersSource }],
+      remove: ["orders"],
+    })
+
+    expect(patchResult.changed).toBe(true)
+    expect([...patchResult.dirtyContextKeys].sort()).toEqual(["table:customers", "table:orders"])
+    expect(runtime.exportBindings()).toEqual([{ name: "customers", source: customersSource }])
+  })
+
+  it("owns sheet lifecycle revisions and listener emission", () => {
+    const snapshots: number[] = []
+    const runtime = createSpreadsheetSheetLifecycleRuntime({
+      sheetId: "sheet-a",
+      sheetName: "Sheet A",
+      getMetrics: () => ({
+        rowCount: 2,
+        columnCount: 1,
+        formulaCellCount: 1,
+        errorCellCount: 0,
+      }),
+    })
+    const unsubscribe = runtime.subscribe(snapshot => snapshots.push(snapshot.revision))
+
+    runtime.incrementRevision()
+    runtime.incrementValueRevision()
+    runtime.recordRowMutation("insert", 1, 2)
+    runtime.emit()
+
+    expect(snapshots).toEqual([1])
+    expect(runtime.getSnapshot()).toMatchObject({
+      revision: 1,
+      valueRevision: 1,
+      rowCount: 2,
+      lastRowMutation: {
+        revision: 1,
+        kind: "insert",
+        index: 1,
+        count: 2,
+      },
+    })
+
+    unsubscribe()
+    runtime.dispose(() => snapshots.push(-1))
+
+    expect(snapshots).toEqual([1, -1])
+    expect(() => runtime.ensureActive()).toThrow("disposed")
   })
 
   it("owns sparse raw input and cell style storage", () => {

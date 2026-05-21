@@ -43,8 +43,7 @@ import {
 } from "./spreadsheetCellRuntime.js"
 import { createSpreadsheetCellStoreRuntime } from "./spreadsheetCellStoreRuntime.js"
 import {
-  resolveFormulaTableBindingName,
-  resolveFormulaTableContextKey,
+  createSpreadsheetFormulaTableRuntime,
 } from "./spreadsheetFormulaTableRuntime.js"
 import {
   areSpreadsheetFormulaNumberArraysEqual,
@@ -61,10 +60,6 @@ import {
   type SpreadsheetFormulaStateMaps,
 } from "./spreadsheetFormulaRuntime.js"
 import {
-  cloneSpreadsheetSheetColumnMutation,
-  cloneSpreadsheetSheetRowMutation,
-} from "./spreadsheetMutationSnapshotRuntime.js"
-import {
   buildSpreadsheetColumnReferenceLookup,
   createCompiledFormulaReferenceToken,
   normalizeColumnFormulaAlias,
@@ -75,6 +70,7 @@ import {
   resolveCompiledFormulaReferenceTokenIndex,
   resolveSpreadsheetColumnKeysForReferenceRange,
 } from "./spreadsheetReferenceRuntime.js"
+import { createSpreadsheetSheetLifecycleRuntime } from "./spreadsheetSheetLifecycleRuntime.js"
 import {
   createSpreadsheetSheetStateRuntime,
   type SpreadsheetRowState,
@@ -365,7 +361,7 @@ export function createDataGridSpreadsheetSheetModel(
   const deleteStoredCellStyle = cellStore.deleteCellStyle
   const formulaCellByKey = new Map<string, SpreadsheetFormulaCellState>()
   const dependentsByCellKey = new Map<string, Set<string>>()
-  const formulaTablesByContextKey = new Map<string, DataGridFormulaTableSource>()
+  const formulaTableRuntime = createSpreadsheetFormulaTableRuntime(options.formulaTables)
   const compiledFormulaArtifactByExactFormula = new Map<string, DataGridCompiledFormulaArtifact<Record<string, unknown>>>()
   const reusableCurrentRowFormulaAnalysisByRawInput = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
   const reusableCurrentRowFormulaTemplateByKey = new Map<string, SpreadsheetFormulaCellState>()
@@ -401,54 +397,32 @@ export function createDataGridSpreadsheetSheetModel(
     }
   }
 
-  for (const binding of options.formulaTables ?? []) {
-    formulaTablesByContextKey.set(resolveFormulaTableContextKey(binding.name), binding.source)
-  }
-
-  let disposed = false
-  let revision = 0
-  let valueRevision = 0
-  let formulaStructureRevision = 0
-  let styleRevision = 0
-  let rowMutationRevision = 0
-  let columnMutationRevision = 0
-  let lastRowMutation: DataGridSpreadsheetSheetRowMutation | null = null
-  let lastColumnMutation: DataGridSpreadsheetSheetColumnMutation | null = null
   let sheetStyle = normalizeSpreadsheetStyle(options.sheetStyle)
-  const listeners = new Set<DataGridSpreadsheetSheetListener>()
-
-  function ensureActive(): void {
-    if (disposed) {
-      throw new Error("DataGridSpreadsheetSheetModel has been disposed")
-    }
-  }
-
-  function getSnapshot(): DataGridSpreadsheetSheetSnapshot {
-    let errorCellCount = 0
-    for (const formulaCell of formulaCellByKey.values()) {
-      const value = getResolvedCellValue(rows[formulaCell.address.rowIndex], formulaCell.address.columnKey)
-      if (isFormulaErrorValue(value) || formulaCell.analysis.diagnostics.length > 0) {
-        errorCellCount += 1
+  const lifecycle = createSpreadsheetSheetLifecycleRuntime({
+    sheetId,
+    sheetName,
+    getMetrics: () => {
+      let errorCellCount = 0
+      for (const formulaCell of formulaCellByKey.values()) {
+        const value = getResolvedCellValue(rows[formulaCell.address.rowIndex], formulaCell.address.columnKey)
+        if (isFormulaErrorValue(value) || formulaCell.analysis.diagnostics.length > 0) {
+          errorCellCount += 1
+        }
       }
-    }
-    return {
-      revision,
-      valueRevision,
-      formulaStructureRevision,
-      styleRevision,
-      rowCount: rows.length,
-      columnCount: columns.length,
-      formulaCellCount: formulaCellByKey.size,
-      errorCellCount,
-      sheetId,
-      sheetName,
-      lastRowMutation: cloneSpreadsheetSheetRowMutation(lastRowMutation),
-      lastColumnMutation: cloneSpreadsheetSheetColumnMutation(lastColumnMutation),
-    }
-  }
+      return {
+        rowCount: rows.length,
+        columnCount: columns.length,
+        formulaCellCount: formulaCellByKey.size,
+        errorCellCount,
+      }
+    },
+  })
+  const ensureActive = lifecycle.ensureActive
+  const getSnapshot = lifecycle.getSnapshot
+  const emit = lifecycle.emit
 
   function resolveFormulaStructuralReferenceIndex(): ReadonlyMap<string, readonly string[]> {
-    if (formulaStructuralReferenceIndexRevision === formulaStructureRevision) {
+    if (formulaStructuralReferenceIndexRevision === lifecycle.getFormulaStructureRevision()) {
       return formulaStructuralCellKeysBySheetAlias
     }
 
@@ -478,18 +452,8 @@ export function createDataGridSpreadsheetSheetModel(
     formulaStructuralCellKeysBySheetAlias = new Map(
       [...nextIndex.entries()].map(([alias, cellKeys]) => [alias, Object.freeze([...cellKeys])]),
     )
-    formulaStructuralReferenceIndexRevision = formulaStructureRevision
+    formulaStructuralReferenceIndexRevision = lifecycle.getFormulaStructureRevision()
     return formulaStructuralCellKeysBySheetAlias
-  }
-
-  function emit(): void {
-    if (listeners.size === 0 || disposed) {
-      return
-    }
-    const snapshot = getSnapshot()
-    for (const listener of listeners) {
-      listener(snapshot)
-    }
   }
 
   function rebuildColumnReferenceLookup(): void {
@@ -608,15 +572,7 @@ export function createDataGridSpreadsheetSheetModel(
   function areCurrentFormulaTablesEquivalent(
     nextFormulaTables: readonly DataGridSpreadsheetFormulaTableBinding[],
   ): boolean {
-    const currentFormulaTables = Object.freeze(
-      [...formulaTablesByContextKey.entries()]
-        .map(([contextKey, source]) => ({
-          name: resolveFormulaTableBindingName(contextKey),
-          source,
-        }))
-        .sort((left, right) => left.name.localeCompare(right.name)),
-    )
-    return areSpreadsheetFormulaTableBindingsEqual(currentFormulaTables, nextFormulaTables)
+    return areSpreadsheetFormulaTableBindingsEqual(formulaTableRuntime.exportBindings(), nextFormulaTables)
   }
 
   function tryRestoreSameShapeState(
@@ -1483,7 +1439,7 @@ export function createDataGridSpreadsheetSheetModel(
           : (resolvedValues[0] ?? null)
       },
       getContextValue: (key: string) => {
-        const tableSource = formulaTablesByContextKey.get(key)
+        const tableSource = formulaTableRuntime.getSource(key)
         if (typeof tableSource !== "undefined") {
           return tableSource
         }
@@ -1640,16 +1596,16 @@ export function createDataGridSpreadsheetSheetModel(
     }
 
     if (formulaStructureDirty) {
-      formulaStructureRevision += 1
+      lifecycle.incrementFormulaStructureRevision()
       const result = recomputeAfterInputChange(seedCellKeys, true)
       if (result.changed || result.baseValuesChanged) {
-        valueRevision += 1
+        lifecycle.incrementValueRevision()
       }
     } else if (recomputeAfterInputChange(seedCellKeys, false).changed) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
 
-    revision += 1
+    lifecycle.incrementRevision()
     emit()
     return true
   }
@@ -1732,16 +1688,16 @@ export function createDataGridSpreadsheetSheetModel(
       return false
     }
 
-    formulaStructureRevision += 1
+    lifecycle.incrementFormulaStructureRevision()
     const dirtyFormulaKeys = collectSpreadsheetFormulaDependentClosure(
       seedFormulaKeys,
       dependentsByCellKey,
       formulaCellByKey,
     )
     if (applyFormulaEvaluation(dirtyFormulaKeys)) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
-    revision += 1
+    lifecycle.incrementRevision()
     emit()
     return true
   }
@@ -1775,8 +1731,8 @@ export function createDataGridSpreadsheetSheetModel(
     if (!changed) {
       return false
     }
-    styleRevision += 1
-    revision += 1
+    lifecycle.incrementStyleRevision()
+    lifecycle.incrementRevision()
     emit()
     return true
   }
@@ -1785,27 +1741,7 @@ export function createDataGridSpreadsheetSheetModel(
     patch: DataGridSpreadsheetFormulaTablePatch,
   ): boolean {
     ensureActive()
-    let changed = false
-    const dirtyContextKeys = new Set<string>()
-
-    for (const binding of patch.set ?? []) {
-      const contextKey = resolveFormulaTableContextKey(binding.name)
-      if (formulaTablesByContextKey.get(contextKey) === binding.source) {
-        continue
-      }
-      formulaTablesByContextKey.set(contextKey, binding.source)
-      dirtyContextKeys.add(contextKey)
-      changed = true
-    }
-
-    for (const name of patch.remove ?? []) {
-      const contextKey = resolveFormulaTableContextKey(name)
-      if (!formulaTablesByContextKey.delete(contextKey)) {
-        continue
-      }
-      dirtyContextKeys.add(contextKey)
-      changed = true
-    }
+    const { changed, dirtyContextKeys } = formulaTableRuntime.patch(patch)
 
     if (!changed) {
       return false
@@ -1828,9 +1764,9 @@ export function createDataGridSpreadsheetSheetModel(
       formulaCellByKey,
     )
     if (applyFormulaEvaluation(dirtyFormulaKeys)) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
-    revision += 1
+    lifecycle.incrementRevision()
     emit()
     return true
   }
@@ -1923,15 +1859,9 @@ export function createDataGridSpreadsheetSheetModel(
       }
     }
 
-    formulaStructureRevision += 1
-    rowMutationRevision += 1
-    lastRowMutation = {
-      revision: rowMutationRevision,
-      kind: "insert",
-      index: normalizedIndex,
-      count: insertedRowStates.length,
-    }
-    revision += 1
+    lifecycle.incrementFormulaStructureRevision()
+    lifecycle.recordRowMutation("insert", normalizedIndex, insertedRowStates.length)
+    lifecycle.incrementRevision()
     const rebuildResult = rebuildFormulaStateAfterRowMutation({
       kind: "insert",
       index: normalizedIndex,
@@ -1947,7 +1877,7 @@ export function createDataGridSpreadsheetSheetModel(
       : null
     const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
     if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
     emit()
     return true
@@ -2020,15 +1950,9 @@ export function createDataGridSpreadsheetSheetModel(
       }
     }
 
-    formulaStructureRevision += 1
-    rowMutationRevision += 1
-    lastRowMutation = {
-      revision: rowMutationRevision,
-      kind: "remove",
-      index: normalizedIndex,
-      count: removedRowCount,
-    }
-    revision += 1
+    lifecycle.incrementFormulaStructureRevision()
+    lifecycle.recordRowMutation("remove", normalizedIndex, removedRowCount)
+    lifecycle.incrementRevision()
     const rebuildResult = rebuildFormulaStateAfterRowMutation({
       kind: "remove",
       index: normalizedIndex,
@@ -2043,7 +1967,7 @@ export function createDataGridSpreadsheetSheetModel(
       : null
     const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
     if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
     emit()
     return true
@@ -2135,19 +2059,13 @@ export function createDataGridSpreadsheetSheetModel(
     reusableCurrentRowFormulaAnalysisByRawInput.clear()
     reusableCurrentRowFormulaTemplateByKey.clear()
 
-    formulaStructureRevision += 1
-    columnMutationRevision += 1
-    lastColumnMutation = {
-      revision: columnMutationRevision,
-      kind: "rename",
-      previousKey: normalizedColumnKey,
-      nextKey: normalizedNextColumnKey,
-    }
-    revision += 1
+    lifecycle.incrementFormulaStructureRevision()
+    lifecycle.recordColumnRenameMutation(normalizedColumnKey, normalizedNextColumnKey)
+    lifecycle.incrementRevision()
     const baseValuesChanged = rebuildFormulaState()
     const formulaValuesChanged = applyFormulaEvaluation(null)
     if (baseValuesChanged || formulaValuesChanged) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
     emit()
     return true
@@ -2172,7 +2090,7 @@ export function createDataGridSpreadsheetSheetModel(
       return false
     }
     column.title = nextTitle
-    revision += 1
+    lifecycle.incrementRevision()
     emit()
     return true
   }
@@ -2229,19 +2147,13 @@ export function createDataGridSpreadsheetSheetModel(
     reusableCurrentRowFormulaAnalysisByRawInput.clear()
     reusableCurrentRowFormulaTemplateByKey.clear()
 
-    formulaStructureRevision += 1
-    columnMutationRevision += 1
-    lastColumnMutation = {
-      revision: columnMutationRevision,
-      kind: "rename",
-      previousKey: previousFormulaAlias,
-      nextKey: nextFormulaAlias,
-    }
-    revision += 1
+    lifecycle.incrementFormulaStructureRevision()
+    lifecycle.recordColumnRenameMutation(previousFormulaAlias, nextFormulaAlias)
+    lifecycle.incrementRevision()
     const baseValuesChanged = rebuildFormulaState()
     const formulaValuesChanged = applyFormulaEvaluation(null)
     if (baseValuesChanged || formulaValuesChanged) {
-      valueRevision += 1
+      lifecycle.incrementValueRevision()
     }
     emit()
     return true
@@ -2250,8 +2162,8 @@ export function createDataGridSpreadsheetSheetModel(
   const initialBaseValuesChanged = rebuildFormulaState()
   const initialFormulaValuesChanged = applyFormulaEvaluation(null)
   if (initialBaseValuesChanged || initialFormulaValuesChanged) {
-    valueRevision += 1
-    revision += 1
+    lifecycle.incrementValueRevision()
+    lifecycle.incrementRevision()
   }
 
   function readCellSnapshot(cellKey: string): DataGridSpreadsheetCellSnapshot | null {
@@ -2348,14 +2260,7 @@ export function createDataGridSpreadsheetSheetModel(
           })
         })),
         sheetStyle,
-        formulaTables: Object.freeze(
-          [...formulaTablesByContextKey.entries()]
-            .map(([contextKey, source]) => ({
-              name: resolveFormulaTableBindingName(contextKey),
-              source,
-            }))
-            .sort((left, right) => left.name.localeCompare(right.name)),
-        ),
+        formulaTables: formulaTableRuntime.exportBindings(),
         functionRegistry,
         referenceParserOptions,
         runtimeErrorPolicy,
@@ -2433,21 +2338,20 @@ export function createDataGridSpreadsheetSheetModel(
           }
         }
 
-        formulaTablesByContextKey.clear()
-        for (const binding of state.formulaTables ?? []) {
-          formulaTablesByContextKey.set(resolveFormulaTableContextKey(String(binding.name ?? "")), binding.source)
-        }
+        formulaTableRuntime.replaceBindings((state.formulaTables ?? []).map(binding => ({
+          name: String(binding.name ?? ""),
+          source: binding.source,
+        })))
 
         sheetStyle = normalizeSpreadsheetStyle(state.sheetStyle)
         analysisByCellKey.clear()
         formulaCellByKey.clear()
         dependentsByCellKey.clear()
-        lastRowMutation = null
-        lastColumnMutation = null
-        formulaStructureRevision += 1
-        styleRevision += 1
-        valueRevision += 1
-        revision += 1
+        lifecycle.clearMutations()
+        lifecycle.incrementFormulaStructureRevision()
+        lifecycle.incrementStyleRevision()
+        lifecycle.incrementValueRevision()
+        lifecycle.incrementRevision()
         emit()
         return true
       }
@@ -2568,24 +2472,20 @@ export function createDataGridSpreadsheetSheetModel(
         }
       }
 
-      formulaTablesByContextKey.clear()
-      for (const binding of nextState.formulaTables) {
-        formulaTablesByContextKey.set(resolveFormulaTableContextKey(binding.name), binding.source)
-      }
+      formulaTableRuntime.replaceBindings(nextState.formulaTables)
 
       sheetStyle = nextState.sheetStyle
       analysisByCellKey.clear()
       formulaCellByKey.clear()
       dependentsByCellKey.clear()
-      lastRowMutation = null
-      lastColumnMutation = null
-      formulaStructureRevision += 1
-      styleRevision += 1
-      revision += 1
+      lifecycle.clearMutations()
+      lifecycle.incrementFormulaStructureRevision()
+      lifecycle.incrementStyleRevision()
+      lifecycle.incrementRevision()
       const baseValuesChanged = rebuildFormulaState()
       const formulaValuesChanged = applyFormulaEvaluation(null)
       if (baseValuesChanged || formulaValuesChanged) {
-        valueRevision += 1
+        lifecycle.incrementValueRevision()
       }
       emit()
       return true
@@ -2667,15 +2567,15 @@ export function createDataGridSpreadsheetSheetModel(
       return tableSource
     },
     getTableSourceRevision() {
-      return valueRevision
+      return lifecycle.getValueRevision()
     },
     recompute() {
       ensureActive()
       if (!applyFormulaEvaluation(null)) {
         return false
       }
-      valueRevision += 1
-      revision += 1
+      lifecycle.incrementValueRevision()
+      lifecycle.incrementRevision()
       emit()
       return true
     },
@@ -2715,8 +2615,8 @@ export function createDataGridSpreadsheetSheetModel(
         return false
       }
       sheetStyle = nextStyle
-      styleRevision += 1
-      revision += 1
+      lifecycle.incrementStyleRevision()
+      lifecycle.incrementRevision()
       emit()
       return true
     },
@@ -2736,8 +2636,8 @@ export function createDataGridSpreadsheetSheetModel(
         return false
       }
       column.style = nextStyle
-      styleRevision += 1
-      revision += 1
+      lifecycle.incrementStyleRevision()
+      lifecycle.incrementRevision()
       emit()
       return true
     },
@@ -2756,8 +2656,8 @@ export function createDataGridSpreadsheetSheetModel(
         return false
       }
       row.style = nextStyle
-      styleRevision += 1
-      revision += 1
+      lifecycle.incrementStyleRevision()
+      lifecycle.incrementRevision()
       emit()
       return true
     },
@@ -2783,30 +2683,17 @@ export function createDataGridSpreadsheetSheetModel(
     },
     patchFormulaTables,
     subscribe(listener) {
-      if (disposed) {
-        return () => {}
-      }
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
+      return lifecycle.subscribe(listener)
     },
     dispose() {
-      if (disposed) {
-        return
-      }
-      disposed = true
-      listeners.clear()
-      rawInputByRowIndex.length = 0
-      analysisByCellKey.clear()
-      cellStyleByRowIndex.length = 0
-      formulaCellByKey.clear()
-      dependentsByCellKey.clear()
-      formulaTablesByContextKey.clear()
-      revision = 0
-      valueRevision = 0
-      formulaStructureRevision = 0
-      styleRevision = 0
+      lifecycle.dispose(() => {
+        rawInputByRowIndex.length = 0
+        analysisByCellKey.clear()
+        cellStyleByRowIndex.length = 0
+        formulaCellByKey.clear()
+        dependentsByCellKey.clear()
+        formulaTableRuntime.clear()
+      })
     },
   }
 }

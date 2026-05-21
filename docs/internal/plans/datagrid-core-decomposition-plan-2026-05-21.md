@@ -32,11 +32,12 @@ Completed:
 
 - Extracted cell value/input/address helpers into `spreadsheetCellRuntime`.
 - Extracted sparse raw-input and cell-style storage into `spreadsheetCellStoreRuntime`.
-- Extracted formula table key normalization into `spreadsheetFormulaTableRuntime`.
+- Extracted formula table key normalization, storage, export, and patch dirty-context tracking into `spreadsheetFormulaTableRuntime`.
 - Extracted formula runtime types, structural snapshots, dependency closure, preservation checks, row-offset analysis shifts, and diagnostic error helpers into `spreadsheetFormulaRuntime`.
 - Extracted mutation snapshot cloning into `spreadsheetMutationSnapshotRuntime`.
 - Extracted sheet/column reference normalization and lookup into `spreadsheetReferenceRuntime`.
 - Extracted row/column state initialization, indexes, resolved-value helpers, and address resolution into `spreadsheetSheetStateRuntime`.
+- Extracted listener lifecycle, revisions, sheet snapshots, and last mutation snapshots into `spreadsheetSheetLifecycleRuntime`.
 - Extracted style normalization, merge, and sheet-state equivalence helpers into `spreadsheetStyleRuntime`.
 - Extracted row insert/remove and column rename formula rewrite policy into `spreadsheetStructuralMutationRuntime`.
 - Added focused helper tests and kept existing sheet/formula behavior tests green.
