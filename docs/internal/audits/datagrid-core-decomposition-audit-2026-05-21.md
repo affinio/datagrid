@@ -208,6 +208,7 @@ Validation target:
 ## Secondary Watchlist
 
 - `packages/datagrid-core/src/models/clientRowModel.ts`: currently labelled as a composition root; keep enforcing that boundary and move new logic into host/state/projection/materialization runtimes.
+  - `2026-05-21`: formula table patching/context invalidation moved into `clientRowFormulaTableHostRuntime`; next work should continue removing local domain policy without changing `ClientRowModel`.
 - `packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts`: consider splitting row/batch/columnar execution paths if compute work expands.
 - `packages/datagrid-core/src/models/rowModel.ts`: types plus tree/group/pagination/normalization helpers; split helper modules before adding more row-model helpers.
 - `packages/datagrid-core/src/models/columnModel.ts`: watch for pin/order/visibility/width groups growing into separate owners.

@@ -98,6 +98,7 @@ import {
 } from "./compute/clientRowComputedRegistryRuntime.js"
 import { createClientRowComputedFieldHostRuntime } from "./host/clientRowComputedFieldHostRuntime.js"
 import { createClientRowFormulaHostRuntime } from "./host/clientRowFormulaHostRuntime.js"
+import { createClientRowFormulaTableHostRuntime } from "./host/clientRowFormulaTableHostRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -864,54 +865,15 @@ export function createClientRowModel<T>(
     recomputeComputedFieldsAndRefresh,
   })
 
-  const normalizeFormulaTableName = (value: unknown): string => String(value ?? "").trim().toLowerCase()
-  const createFormulaTableContextKey = (name: string): string => `table:${name}`
-
-  const applyFormulaTablePatch = (patch: DataGridFormulaTablePatch): boolean => {
-    ensureActive()
-    const contextKeys = new Set<string>()
-    let changed = false
-
-    if (Array.isArray(patch.remove)) {
-      for (const name of patch.remove) {
-        const normalizedName = normalizeFormulaTableName(name)
-        if (normalizedName.length === 0) {
-          continue
-        }
-        if (!computedRegistry.removeFormulaTable(normalizedName)) {
-          continue
-        }
-        contextKeys.add("tables")
-        contextKeys.add(createFormulaTableContextKey(normalizedName))
-        changed = true
-      }
-    }
-
-    if (Array.isArray(patch.set)) {
-      for (const entry of patch.set) {
-        if (!entry) {
-          continue
-        }
-        const normalizedName = normalizeFormulaTableName(entry.name)
-        if (normalizedName.length === 0) {
-          throw new Error("[clientRowModel] Formula table name must be non-empty")
-        }
-        if (!computedRegistry.setFormulaTable(normalizedName, entry.rows)) {
-          continue
-        }
-        contextKeys.add("tables")
-        contextKeys.add(createFormulaTableContextKey(normalizedName))
-        changed = true
-      }
-    }
-
-    if (!changed) {
-      return false
-    }
-
-    void recomputeComputedFieldsAndRefresh(undefined, { contextKeys })
-    return true
-  }
+  const formulaTableHostRuntime = createClientRowFormulaTableHostRuntime({
+    ensureActive,
+    setFormulaTable: computedRegistry.setFormulaTable,
+    removeFormulaTable: computedRegistry.removeFormulaTable,
+    getFormulaTableNames: computedRegistry.getFormulaTableNames,
+    recomputeFormulaContext: contextKeys => {
+      void recomputeComputedFieldsAndRefresh(undefined, { contextKeys })
+    },
+  })
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
@@ -1007,21 +969,16 @@ export function createClientRowModel<T>(
       return formulaHostRuntime.resolveModule().getFormulaFunctionNames()
     },
     setFormulaTable(name: string, rows: DataGridFormulaTableSource) {
-      applyFormulaTablePatch({
-        set: [{ name, rows }],
-      })
+      formulaTableHostRuntime.setFormulaTable(name, rows)
     },
     patchFormulaTables(patch: DataGridFormulaTablePatch) {
-      return applyFormulaTablePatch(patch)
+      return formulaTableHostRuntime.patchFormulaTables(patch)
     },
     removeFormulaTable(name: string) {
-      return applyFormulaTablePatch({
-        remove: [name],
-      })
+      return formulaTableHostRuntime.removeFormulaTable(name)
     },
     getFormulaTableNames() {
-      ensureActive()
-      return computedRegistry.getFormulaTableNames()
+      return formulaTableHostRuntime.getFormulaTableNames()
     },
     getFormulaExecutionPlan() {
       return formulaHostRuntime.resolveModule().getFormulaExecutionPlan()

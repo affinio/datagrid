@@ -102,8 +102,7 @@ export function buildHorizontalMeta({
 }: BuildHorizontalMetaInput): BuildHorizontalMetaResult {
 	const layout = resolveCachedLayout(columns, layoutScale, resolvePinMode)
 
-	// Legacy compatibility field: index column width is no longer injected as a synthetic viewport inset.
-	// The viewport math is driven by real pinned column widths from column layout only.
+	// Keep index-column width out of horizontal virtualization math; pinned column widths drive viewport insets.
 	const indexColumnWidth = 0
 	const containerWidthForColumns = Math.max(0, viewportWidth)
 
