@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Added internal datasource runtime lifecycle contracts for scheduler, transport coordination, cache, invalidation, telemetry, and optimistic mutation services.
+
+  ## User impact
+
+  No public API or browser behavior change expected. Server datasource internals now share deterministic `init`, `attach`, `suspend`, `resume`, and `dispose` transitions for the next architecture slices.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource lifecycle regressions, datasource-backed row model regressions, package type-check, and architecture gate passed
+
+- ## Summary
+
   Formalized server datasource runtime phases behind an internal state machine and now derives the existing `loading`, `initialLoading`, and `refreshing` snapshot flags from that helper.
 
   ## User impact

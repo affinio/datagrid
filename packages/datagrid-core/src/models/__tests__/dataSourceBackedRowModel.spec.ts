@@ -3037,6 +3037,76 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("suspends new datasource pulls without dropping cached rows", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100,
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    expect(calls).toHaveLength(1)
+    calls[0]?.resolve({
+      rows: buildRows(0, 2),
+      total: 100,
+    })
+    await flushMicrotasks()
+
+    expect(model.getRow(0)?.row).toEqual({ id: 0, value: "row-0" })
+    expect(model.pauseBackpressure()).toBe(true)
+
+    model.setViewportRange({ start: 10, end: 12 })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(1)
+    expect(model.getRow(0)?.row).toEqual({ id: 0, value: "row-0" })
+    expect(model.getBackpressureDiagnostics()).toMatchObject({
+      paused: true,
+      hasPendingPull: true,
+      rowCacheSize: 3,
+    })
+
+    expect(model.resumeBackpressure()).toBe(true)
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(2)
+    expect(calls[1]?.request.range).toEqual({ start: 10, end: 12 })
+
+    calls[1]?.resolve({
+      rows: buildRows(10, 12),
+      total: 100,
+    })
+    await flushMicrotasks()
+
+    model.dispose()
+  })
+
+  it("dispose aborts active pulls and clears suspended pending work", async () => {
+    const { calls, dataSource } = createAbortableDeferredPullDataSource<{ id: number; value: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 100,
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    expect(calls).toHaveLength(1)
+
+    expect(model.pauseBackpressure()).toBe(true)
+    model.setViewportRange({ start: 10, end: 12 })
+    await flushMicrotasks()
+
+    expect(calls).toHaveLength(1)
+    expect(model.getBackpressureDiagnostics().hasPendingPull).toBe(true)
+
+    model.dispose()
+    await flushMicrotasks()
+
+    expect(calls[0]?.request.signal.aborted).toBe(true)
+    expect(calls).toHaveLength(1)
+  })
+
   it("propagates group-by state into pull request and issues group-change pull", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {

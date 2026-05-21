@@ -25,7 +25,7 @@ Slices:
     - Keep public `DataGridRowModelSnapshot` shape stable; derive existing `loading`, `initialLoading`, and `refreshing` fields from the formal state.
     - Add focused transition tests for pull start/settle, invalidation overlap, background prefetch, optimistic commit success/reject/failure, stale-retained cache replacement, and dispose.
     - Validation: datasource row model unit suite, core type-check, architecture gate.
-12. [ ] Add internal datasource service lifecycle contracts.
+12. [x] Add internal datasource service lifecycle contracts.
     - Scope: internal `init`, `attach`, `suspend`, `resume`, and `dispose` lifecycle for scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine.
     - Keep ownership in core; do not expose lifecycle API to package consumers.
     - Add focused tests that suspend/resume blocks new pulls without dropping visible cache, dispose cancels in-flight/pending work, and attach initializes diagnostics deterministically.

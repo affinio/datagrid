@@ -1,4 +1,8 @@
 import type { DataGridRowId, DataGridRowNode } from "../rowModel.js"
+import {
+  createDataSourceRuntimeLifecycle,
+  type DataSourceRuntimeLifecycle,
+} from "./dataSourceRuntimeLifecycle.js"
 
 export interface DataSourceOptimisticEditTransaction<T> {
   id: number
@@ -8,7 +12,7 @@ export interface DataSourceOptimisticEditTransaction<T> {
   baselinesByRowId: Map<DataGridRowId, DataGridRowNode<T>>
 }
 
-export interface DataSourceOptimisticMutationEngine<T> {
+export interface DataSourceOptimisticMutationEngine<T> extends DataSourceRuntimeLifecycle {
   nextTransactionId(): number
   register(transaction: DataSourceOptimisticEditTransaction<T>): void
   remove(transactionId: number): void
@@ -39,16 +43,37 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
     return pending
   }
 
+  function clearTransactions(): void {
+    transactions.clear()
+    transactionOrder.splice(0)
+  }
+
+  const lifecycle = createDataSourceRuntimeLifecycle({
+    service: "optimistic-mutation-engine",
+    onAttach: clearTransactions,
+    onDispose: clearTransactions,
+  })
+
   return {
+    ...lifecycle,
     nextTransactionId() {
+      if (lifecycle.isDisposed()) {
+        return transactionCounter
+      }
       transactionCounter += 1
       return transactionCounter
     },
     register(transaction) {
+      if (lifecycle.isDisposed()) {
+        return
+      }
       transactions.set(transaction.id, transaction)
       transactionOrder.push(transaction.id)
     },
     remove(transactionId) {
+      if (lifecycle.isDisposed()) {
+        return
+      }
       if (!transactions.delete(transactionId)) {
         return
       }
@@ -58,9 +83,15 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
       }
     },
     getPendingCount() {
+      if (lifecycle.isDisposed()) {
+        return 0
+      }
       return transactions.size
     },
     applyPendingEditsToNode(node, applyPatch, excludeTransactionId) {
+      if (lifecycle.isDisposed()) {
+        return node
+      }
       let nextNode = node
       for (const transaction of pendingTransactionsForRow(node.rowId)) {
         if (transaction.id === excludeTransactionId) {
@@ -83,6 +114,9 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
       return nextNode
     },
     enqueueCommit(task) {
+      if (lifecycle.isDisposed()) {
+        return Promise.resolve()
+      }
       const commitTask = commitQueue.then(task)
       commitQueue = commitTask.then(() => undefined, () => undefined)
       return commitTask

@@ -85,6 +85,10 @@ import {
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
+import {
+  createDataSourceRuntimeLifecycle,
+  type DataSourceRuntimeLifecycle,
+} from "./server/dataSourceRuntimeLifecycle.js"
 import { resolveDataSourceRuntimeState } from "./server/dataSourceRuntimeStateMachine.js"
 import type {
   DataGridDataSource,
@@ -382,6 +386,24 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
   const telemetry = createDataSourceTelemetryRuntime(diagnostics)
   const scheduler = createDataSourcePullScheduler(diagnostics)
+  const transportCoordinatorLifecycle = createDataSourceRuntimeLifecycle({
+    service: "transport-coordinator",
+  })
+  const invalidationEngineLifecycle = createDataSourceRuntimeLifecycle({
+    service: "invalidation-engine",
+  })
+  const runtimeServices: DataSourceRuntimeLifecycle[] = [
+    scheduler,
+    transportCoordinatorLifecycle,
+    cacheManager,
+    invalidationEngineLifecycle,
+    telemetry,
+    optimisticMutationEngine,
+  ]
+  for (const service of runtimeServices) {
+    service.init()
+    service.attach()
+  }
 
   const unsubscribePush = typeof dataSource.subscribe === "function"
     ? dataSource.subscribe(event => {
@@ -1364,6 +1386,28 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function writePendingPull(priority: DataGridDataSourcePullPriority, value: PendingPull | null): void {
     scheduler.write(priority === "background" ? "background" : "critical", value)
+  }
+
+  function suspendRuntimeServices(): boolean {
+    let changed = false
+    for (const service of runtimeServices) {
+      changed = service.suspend() || changed
+    }
+    return changed
+  }
+
+  function resumeRuntimeServices(): boolean {
+    let changed = false
+    for (const service of runtimeServices) {
+      changed = service.resume() || changed
+    }
+    return changed
+  }
+
+  function disposeRuntimeServices(): void {
+    for (const service of runtimeServices) {
+      service.dispose()
+    }
   }
 
   function abortLaneInFlight(priority: DataGridDataSourcePullPriority, reason: "stale" | "preempted" = "preempted") {
@@ -2706,6 +2750,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (backpressurePaused) {
         return false
       }
+      suspendRuntimeServices()
       backpressurePaused = true
       diagnostics.paused = true
       emit()
@@ -2716,6 +2761,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!backpressurePaused) {
         return false
       }
+      resumeRuntimeServices()
       backpressurePaused = false
       diagnostics.paused = false
       const pendingCriticalPull = readPendingPull("critical")
@@ -2737,6 +2783,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       ensureActive()
       const wasPaused = backpressurePaused
       if (wasPaused) {
+        resumeRuntimeServices()
         backpressurePaused = false
         diagnostics.paused = false
       }
@@ -2747,6 +2794,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       } finally {
         clearBackgroundPrefetchState("reset")
         if (wasPaused && !disposed) {
+          suspendRuntimeServices()
           backpressurePaused = true
           diagnostics.paused = true
         }
@@ -2797,6 +2845,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       diagnostics.paused = false
       diagnostics.hasPendingPull = false
       diagnostics.rowCacheSize = 0
+      disposeRuntimeServices()
       unsubscribePush?.()
     },
   }

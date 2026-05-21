@@ -1,7 +1,11 @@
 import type { DataGridDataSourceBackpressureDiagnostics } from "./dataSourceProtocol.js"
+import {
+  createDataSourceRuntimeLifecycle,
+  type DataSourceRuntimeLifecycle,
+} from "./dataSourceRuntimeLifecycle.js"
 import type { DataGridViewportRange } from "../rowModel.js"
 
-export interface DataSourceTelemetryRuntime {
+export interface DataSourceTelemetryRuntime extends DataSourceRuntimeLifecycle {
   finishPlaceholderExposure(index: number, timestampMs?: number): void
   finishAllPlaceholderExposures(timestampMs?: number): void
   finishPlaceholderExposuresOutsideRange(range: DataGridViewportRange, timestampMs?: number): void
@@ -37,7 +41,14 @@ export function createDataSourceTelemetryRuntime(
     return Number.isFinite(now) ? now : 0
   }
 
+  function resetViewportDataAvailability(): void {
+    viewportDataAvailabilityStartedAtMs = null
+  }
+
   function finishPlaceholderExposure(index: number, timestampMs = readNowMs()): void {
+    if (lifecycle.isDisposed()) {
+      return
+    }
     const startedAtMs = activePlaceholderExposureRows.get(index)
     if (typeof startedAtMs !== "number") {
       return
@@ -51,11 +62,20 @@ export function createDataSourceTelemetryRuntime(
     diagnostics.placeholderExposureActiveRows = activePlaceholderExposureRows.size
   }
 
+  function finishAllPlaceholderExposures(timestampMs = readNowMs()): void {
+    for (const index of Array.from(activePlaceholderExposureRows.keys())) {
+      finishPlaceholderExposure(index, timestampMs)
+    }
+  }
+
   function reconcilePlaceholderExposure(options: {
     sourceViewport: DataGridViewportRange
     rowCount: number
     hasCachedRow: (index: number) => boolean
   }): void {
+    if (lifecycle.isDisposed()) {
+      return
+    }
     const timestampMs = readNowMs()
     const visiblePlaceholderIndexes = new Set<number>()
     if (options.rowCount > 0) {
@@ -82,6 +102,9 @@ export function createDataSourceTelemetryRuntime(
     options: { visibleRowCount: number; isViewportFullyCached: () => boolean },
     timestampMs = readNowMs(),
   ): void {
+    if (lifecycle.isDisposed()) {
+      return
+    }
     if (viewportDataAvailabilityStartedAtMs === null) {
       return
     }
@@ -96,14 +119,23 @@ export function createDataSourceTelemetryRuntime(
     diagnostics.viewportDataAvailabilityMaxMs = Math.max(diagnostics.viewportDataAvailabilityMaxMs, durationMs)
   }
 
-  return {
-    finishPlaceholderExposure,
-    finishAllPlaceholderExposures(timestampMs = readNowMs()) {
-      for (const index of Array.from(activePlaceholderExposureRows.keys())) {
-        finishPlaceholderExposure(index, timestampMs)
-      }
+  const lifecycle = createDataSourceRuntimeLifecycle({
+    service: "telemetry-runtime",
+    onAttach: resetViewportDataAvailability,
+    onDispose() {
+      finishAllPlaceholderExposures()
+      resetViewportDataAvailability()
     },
+  })
+
+  return {
+    ...lifecycle,
+    finishPlaceholderExposure,
+    finishAllPlaceholderExposures,
     finishPlaceholderExposuresOutsideRange(range, timestampMs = readNowMs()) {
+      if (lifecycle.isDisposed()) {
+        return
+      }
       for (const index of Array.from(activePlaceholderExposureRows.keys())) {
         if (index < range.start || index > range.end) {
           finishPlaceholderExposure(index, timestampMs)
@@ -112,6 +144,9 @@ export function createDataSourceTelemetryRuntime(
     },
     reconcilePlaceholderExposure,
     markViewportDataAvailabilityRequested(options) {
+      if (lifecycle.isDisposed()) {
+        return
+      }
       if (options.rowCount <= 0 || !options.rangesOverlap(options.range, options.sourceViewport)) {
         return
       }
@@ -121,10 +156,11 @@ export function createDataSourceTelemetryRuntime(
       viewportDataAvailabilityStartedAtMs ??= readNowMs()
     },
     finishViewportDataAvailability,
-    resetViewportDataAvailability() {
-      viewportDataAvailabilityStartedAtMs = null
-    },
+    resetViewportDataAvailability,
     recordPullDuration(startedAtMs, timestampMs = readNowMs()) {
+      if (lifecycle.isDisposed()) {
+        return
+      }
       const durationMs = Math.max(0, timestampMs - startedAtMs)
       diagnostics.pullDurationEvents += 1
       diagnostics.pullDurationLastMs = durationMs

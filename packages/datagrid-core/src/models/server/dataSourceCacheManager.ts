@@ -1,10 +1,14 @@
 import type { DataGridRowNode, DataGridViewportRange } from "../rowModel.js"
 import {
+  createDataSourceRuntimeLifecycle,
+  type DataSourceRuntimeLifecycle,
+} from "./dataSourceRuntimeLifecycle.js"
+import {
   createDataGridRangeCache,
   type DataGridRangeCache,
 } from "./rangeCache.js"
 
-export interface DataSourceCacheManager<T> {
+export interface DataSourceCacheManager<T> extends DataSourceRuntimeLifecycle {
   readonly rowCache: Map<number, DataGridRowNode<T>>
   readonly staleRetainedRowIndexes: Set<number>
   readonly rangeCache: DataGridRangeCache<DataGridRowNode<T>>
@@ -47,7 +51,20 @@ export function createDataSourceCacheManager<T>(options: {
     return deleted
   }
 
+  function clear(): void {
+    rowCache.clear()
+    staleRetainedRowIndexes.clear()
+    rangeCache.reset()
+  }
+
+  const lifecycle = createDataSourceRuntimeLifecycle({
+    service: "cache-manager",
+    onAttach: clear,
+    onDispose: clear,
+  })
+
   return {
+    ...lifecycle,
     rowCache,
     staleRetainedRowIndexes,
     rangeCache,
@@ -73,10 +90,6 @@ export function createDataSourceCacheManager<T>(options: {
       }
     },
     deleteIndex,
-    clear() {
-      rowCache.clear()
-      staleRetainedRowIndexes.clear()
-      rangeCache.reset()
-    },
+    clear,
   }
 }
