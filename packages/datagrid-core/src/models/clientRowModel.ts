@@ -102,6 +102,7 @@ import { createClientRowRefreshHostRuntime } from "./host/clientRowRefreshHostRu
 import { createClientRowAccessHostRuntime } from "./host/clientRowAccessHostRuntime.js"
 import { createClientRowRowsFacadeRuntime } from "./host/clientRowRowsFacadeRuntime.js"
 import { createClientRowCalculationSnapshotFacadeRuntime } from "./host/clientRowCalculationSnapshotFacadeRuntime.js"
+import { createClientRowFormulaFacadeRuntime } from "./host/clientRowFormulaFacadeRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -878,6 +879,10 @@ export function createClientRowModel<T>(
       void recomputeComputedFieldsAndRefresh(undefined, { contextKeys })
     },
   })
+  const formulaFacadeRuntime = createClientRowFormulaFacadeRuntime<T>({
+    resolveFormulaModule: () => formulaHostRuntime.resolveModule(),
+    formulaTableHostRuntime,
+  })
   const pivotDrilldownHostRuntime = createClientRowPivotDrilldownHostRuntime<T>({
     ensureActive,
     getPivotModel,
@@ -976,58 +981,58 @@ export function createClientRowModel<T>(
       patchHostRuntime.patchRows(updates, options)
     },
     registerComputedField(definition: DataGridComputedFieldDefinition<T>) {
-      formulaHostRuntime.resolveModule().registerComputedField(definition)
+      formulaFacadeRuntime.registerComputedField(definition)
     },
     registerFormulaField(definition: DataGridFormulaFieldDefinition) {
-      formulaHostRuntime.resolveModule().registerFormulaField(definition)
+      formulaFacadeRuntime.registerFormulaField(definition)
     },
     getComputedFields() {
-      return formulaHostRuntime.resolveModule().getComputedFields()
+      return formulaFacadeRuntime.getComputedFields()
     },
     getFormulaFields() {
-      return formulaHostRuntime.resolveModule().getFormulaFields()
+      return formulaFacadeRuntime.getFormulaFields()
     },
     registerFormulaFunction(
       name: string,
       definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
     ) {
-      formulaHostRuntime.resolveModule().registerFormulaFunction(name, definition)
+      formulaFacadeRuntime.registerFormulaFunction(name, definition)
     },
     unregisterFormulaFunction(name: string) {
-      return formulaHostRuntime.resolveModule().unregisterFormulaFunction(name)
+      return formulaFacadeRuntime.unregisterFormulaFunction(name)
     },
     getFormulaFunctionNames() {
-      return formulaHostRuntime.resolveModule().getFormulaFunctionNames()
+      return formulaFacadeRuntime.getFormulaFunctionNames()
     },
     setFormulaTable(name: string, rows: DataGridFormulaTableSource) {
-      formulaTableHostRuntime.setFormulaTable(name, rows)
+      formulaFacadeRuntime.setFormulaTable(name, rows)
     },
     patchFormulaTables(patch: DataGridFormulaTablePatch) {
-      return formulaTableHostRuntime.patchFormulaTables(patch)
+      return formulaFacadeRuntime.patchFormulaTables(patch)
     },
     removeFormulaTable(name: string) {
-      return formulaTableHostRuntime.removeFormulaTable(name)
+      return formulaFacadeRuntime.removeFormulaTable(name)
     },
     getFormulaTableNames() {
-      return formulaTableHostRuntime.getFormulaTableNames()
+      return formulaFacadeRuntime.getFormulaTableNames()
     },
     getFormulaExecutionPlan() {
-      return formulaHostRuntime.resolveModule().getFormulaExecutionPlan()
+      return formulaFacadeRuntime.getFormulaExecutionPlan()
     },
     getFormulaGraph() {
-      return formulaHostRuntime.resolveModule().getFormulaGraph()
+      return formulaFacadeRuntime.getFormulaGraph()
     },
     getFormulaComputeStageDiagnostics() {
-      return formulaHostRuntime.resolveModule().getFormulaComputeStageDiagnostics()
+      return formulaFacadeRuntime.getFormulaComputeStageDiagnostics()
     },
     getFormulaRowRecomputeDiagnostics() {
-      return formulaHostRuntime.resolveModule().getFormulaRowRecomputeDiagnostics()
+      return formulaFacadeRuntime.getFormulaRowRecomputeDiagnostics()
     },
     recomputeComputedFields(rowIds?: readonly DataGridRowId[]) {
-      return formulaHostRuntime.resolveModule().recomputeComputedFields(rowIds)
+      return formulaFacadeRuntime.recomputeComputedFields(rowIds)
     },
     recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest) {
-      return formulaHostRuntime.resolveModule().recomputeFormulaContext(request)
+      return formulaFacadeRuntime.recomputeFormulaContext(request)
     },
     reorderRows(input: DataGridClientRowReorderInput) {
       return mutationHostRuntime.reorderRows(input)
