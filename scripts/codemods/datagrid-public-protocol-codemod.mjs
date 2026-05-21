@@ -170,20 +170,6 @@ function transform(source) {
     "viewport-deep-import",
     appliedTransforms,
   )
-  code = applyReplace(
-    code,
-    /\bcreateTableViewportController\b/g,
-    "createDataGridViewportController",
-    "viewport-factory-rename",
-    appliedTransforms,
-  )
-  code = applyReplace(
-    code,
-    /\bserverIntegration\s*:/g,
-    "/* TODO(datagrid-codemod): migrate to rowModel boundary */ serverIntegration:",
-    "server-integration-todo",
-    appliedTransforms,
-  )
   code = rewriteRootImportsToTieredEntrypoints(code, appliedTransforms)
 
   return {

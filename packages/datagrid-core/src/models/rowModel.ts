@@ -941,17 +941,7 @@ export function buildPaginationSnapshot(
   }
 }
 
-export interface DataGridLegacyVisibleRow<T = unknown> {
-  row: T
-  rowId: DataGridRowId
-  originalIndex: number
-  displayIndex?: number
-  kind?: DataGridRowKind
-  groupMeta?: Partial<DataGridRowGroupMeta>
-  state?: Partial<DataGridRowNodeState>
-}
-
-export type DataGridRowNodeInput<T = unknown> = DataGridRowNode<T> | DataGridLegacyVisibleRow<T> | T
+export type DataGridRowNodeInput<T = unknown> = DataGridRowNode<T> | T
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
   return typeof value === "string" || typeof value === "number"
@@ -962,6 +952,20 @@ function assertDataGridRowId(value: unknown, context: string): DataGridRowId {
     throw new Error(`[DataGrid] ${context}. Expected row id to be string|number.`)
   }
   return value
+}
+
+function isDataGridRowNodeInput<T>(node: DataGridRowNodeInput<T>): node is DataGridRowNode<T> {
+  if (!node || typeof node !== "object") {
+    return false
+  }
+  const candidate = node as Partial<DataGridRowNode<T>>
+  return (
+    (candidate.kind === "leaf" || candidate.kind === "group")
+    && typeof candidate.data !== "undefined"
+    && typeof candidate.row !== "undefined"
+    && typeof candidate.rowKey !== "undefined"
+    && typeof candidate.rowId !== "undefined"
+  )
 }
 
 function normalizePinnedState(state: Partial<DataGridRowNodeState> | null | undefined): DataGridRowPinState {
@@ -975,15 +979,7 @@ function normalizePinnedState(state: Partial<DataGridRowNodeState> | null | unde
 }
 
 function resolveRowKind(node: DataGridRowNodeInput<unknown>): DataGridRowKind {
-  const kind = (node as { kind?: unknown }).kind
-  if (kind === "group") {
-    return "group"
-  }
-  if (kind === "leaf") {
-    return "leaf"
-  }
-  const state = (node as { state?: Partial<DataGridRowNodeState> }).state
-  return state?.group ? "group" : "leaf"
+  return isDataGridRowNodeInput(node) && node.kind === "group" ? "group" : "leaf"
 }
 
 function normalizeGroupMeta(
@@ -1012,55 +1008,39 @@ function normalizeGroupMeta(
 }
 
 function resolveRowState(node: DataGridRowNodeInput<unknown>, rowKind: DataGridRowKind): DataGridRowNodeState {
-  const state = (node as { state?: Partial<DataGridRowNodeState> }).state
+  const state = isDataGridRowNodeInput(node) ? node.state : undefined
   return {
     selected: Boolean(state?.selected),
-    group: rowKind === "group" || Boolean(state?.group),
+    group: rowKind === "group",
     pinned: normalizePinnedState(state),
     expanded: Boolean(state?.expanded),
   }
 }
 
 function resolveSourceIndex(node: DataGridRowNodeInput<unknown>, fallbackIndex: number): number {
-  const rowNode = node as Partial<DataGridRowNode<unknown>>
-  if (Number.isFinite(rowNode.sourceIndex)) {
-    return Math.max(0, Math.trunc(rowNode.sourceIndex as number))
-  }
-  if (Number.isFinite(rowNode.originalIndex)) {
-    return Math.max(0, Math.trunc(rowNode.originalIndex as number))
+  if (isDataGridRowNodeInput(node) && Number.isFinite(node.sourceIndex)) {
+    return Math.max(0, Math.trunc(node.sourceIndex as number))
   }
   return Math.max(0, Math.trunc(fallbackIndex))
 }
 
 function resolveDisplayIndex(node: DataGridRowNodeInput<unknown>, fallbackIndex: number): number {
-  const rowNode = node as Partial<DataGridRowNode<unknown>>
-  if (Number.isFinite(rowNode.displayIndex)) {
-    return Math.max(0, Math.trunc(rowNode.displayIndex as number))
+  if (isDataGridRowNodeInput(node) && Number.isFinite(node.displayIndex)) {
+    return Math.max(0, Math.trunc(node.displayIndex as number))
   }
   return Math.max(0, Math.trunc(fallbackIndex))
 }
 
 function resolveRowData<T>(node: DataGridRowNodeInput<T>): T {
-  const rowNode = node as Partial<DataGridRowNode<T>>
-  if (typeof rowNode.data !== "undefined") {
-    return rowNode.data
-  }
-  if (typeof (node as DataGridLegacyVisibleRow<T>).row !== "undefined") {
-    return (node as DataGridLegacyVisibleRow<T>).row
-  }
-  return node as T
+  return isDataGridRowNodeInput(node) ? node.data : node as T
 }
 
 function resolveRowKey<T>(node: DataGridRowNodeInput<T>): DataGridRowId {
-  const rowNode = node as Partial<DataGridRowNode<T>>
-  if (typeof rowNode.rowKey !== "undefined") {
-    return assertDataGridRowId(rowNode.rowKey, "Invalid rowKey")
-  }
-  if (typeof rowNode.rowId !== "undefined") {
-    return assertDataGridRowId(rowNode.rowId, "Invalid rowId")
+  if (isDataGridRowNodeInput(node)) {
+    return assertDataGridRowId(node.rowKey, "Invalid rowKey")
   }
   throw new Error(
-    "[DataGrid] Missing row identity. Provide rowKey/rowId or configure a row id resolver in the row model.",
+    "[DataGrid] Missing row identity. Provide rowKey or configure a row id resolver in the row model.",
   )
 }
 
@@ -1069,10 +1049,7 @@ export function withResolvedRowIdentity<T>(
   index: number,
   resolveRowId?: DataGridRowIdResolver<T>,
 ): DataGridRowNodeInput<T> {
-  if (typeof (node as Partial<DataGridRowNode<T>>).rowKey !== "undefined") {
-    return node
-  }
-  if (typeof (node as Partial<DataGridRowNode<T>>).rowId !== "undefined") {
+  if (isDataGridRowNodeInput(node)) {
     return node
   }
   if (typeof resolveRowId !== "function") {
@@ -1080,10 +1057,17 @@ export function withResolvedRowIdentity<T>(
   }
   const rowData = resolveRowData(node)
   const rowId = assertDataGridRowId(resolveRowId(rowData, index), "Invalid row id returned by resolver")
-  if (typeof node === "object" && node !== null) {
-    return { ...(node as object), rowId } as DataGridRowNodeInput<T>
+  return {
+    kind: "leaf",
+    data: rowData,
+    row: rowData,
+    rowKey: rowId,
+    rowId,
+    originalIndex: index,
+    sourceIndex: index,
+    displayIndex: index,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
   }
-  return { row: rowData, rowId } as DataGridRowNodeInput<T>
 }
 
 export function normalizeRowNode<T>(

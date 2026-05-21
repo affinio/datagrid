@@ -35,19 +35,6 @@ import { createDataGridApi, createDataGridViewportController, type DataGridHostE
     )
   })
 
-  it("renames legacy viewport factory and marks serverIntegration path", () => {
-    const input = `
-const controller = createDataGridViewportController({
-  serverIntegration: createLegacyBridge(),
-})
-`.trim()
-
-    const result = transformDataGridPublicProtocolSource(input)
-    expect(result.code).toContain("createDataGridViewportController")
-    expect(result.code).toContain("TODO(datagrid-codemod): migrate to rowModel boundary")
-    expect(result.appliedTransforms).toContain("viewport-factory-rename")
-    expect(result.appliedTransforms).toContain("server-integration-todo")
-  })
 
   it("keeps source untouched when no migration pattern is present", () => {
     const input = `

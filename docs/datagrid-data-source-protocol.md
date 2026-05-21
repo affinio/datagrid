@@ -40,7 +40,7 @@ Import path:
 - `signal` - abort signal for the histogram request
 - `sortModel`, `filterModel`, `groupBy`, `groupExpansion`, `treeData`, `pivot`, `pagination` - same effective runtime context shape used by pull requests
 
-When `ignoreSelfFilter` is true, `DataSourceBackedRowModel` removes the current column's value/style/legacy advanced filter entries before calling the data source. The data source should still apply the remaining filter context so the returned values represent the current table scope without the current column collapsing its own value list.
+When `ignoreSelfFilter` is true, `DataSourceBackedRowModel` removes the current column's value/style filter entries before calling the data source. The data source should still apply the remaining filter context so the returned values represent the current table scope without the current column collapsing its own value list.
 
 When `search` is present, the data source should apply it server-side to the histogram value text/domain where possible. Client-backed row models keep the same option and filter the in-memory histogram locally.
 

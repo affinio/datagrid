@@ -25,7 +25,6 @@ import {
 } from "@affino/datagrid-server-client"
 import {
   normalizeDataGridServerAdvancedExpression,
-  normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
   normalizeDataGridServerQuery,
   normalizeDataGridServerQuickFilter,
@@ -304,9 +303,6 @@ function normalizeServerDemoFilterModel(
   const columnStyleFilters = normalizeDataGridServerColumnFilters(
     omitServerDemoColumn(filterModel.columnStyleFilters, omitColumnId),
   )
-  const advancedFilters = normalizeDataGridServerAdvancedFilters(
-    omitServerDemoColumn(filterModel.advancedFilters, omitColumnId),
-  )
   const advancedExpression = Object.prototype.hasOwnProperty.call(filterModel, "advancedExpression")
     ? normalizeDataGridServerAdvancedExpression(filterModel.advancedExpression)
     : undefined
@@ -314,7 +310,6 @@ function normalizeServerDemoFilterModel(
   const normalized: DataGridServerFilterModel = {
     ...(columnFilters ? { columnFilters } : {}),
     ...(columnStyleFilters ? { columnStyleFilters } : {}),
-    ...(advancedFilters ? { advancedFilters } : {}),
     ...(advancedExpression !== undefined ? { advancedExpression } : {}),
     ...(quickFilter ? { quickFilter } : {}),
   }

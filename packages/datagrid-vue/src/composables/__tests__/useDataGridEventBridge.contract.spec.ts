@@ -74,41 +74,4 @@ describe("useDataGridEventBridge contract", () => {
     wrapper.unmount()
   })
 
-  it("keeps row-select as a legacy alias", () => {
-    const emit = vi.fn()
-    const gridListeners = new Map<string, Array<(payload: unknown) => void>>()
-
-    const wrapper = mountEventBridge({
-      grid: {
-        api: {
-          events: {
-            on() {
-              return () => undefined
-            },
-          },
-        },
-        on(event, listener) {
-          const listeners = gridListeners.get(event) ?? []
-          listeners.push(listener as (payload: unknown) => void)
-          gridListeners.set(event, listeners)
-          return () => undefined
-        },
-      },
-      emit,
-    })
-
-    gridListeners.get("row-select")?.forEach(listener => {
-      listener({
-        focusedRow: null,
-        selectedRows: ["r1"],
-      })
-    })
-
-    expect(emit).toHaveBeenCalledWith("row-select", {
-      focusedRow: null,
-      selectedRows: ["r1"],
-    })
-
-    wrapper.unmount()
-  })
 })

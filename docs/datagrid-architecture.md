@@ -24,7 +24,7 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 - `datagrid-orchestration` is framework-light shared interaction infrastructure.
 - `datagrid-vue` depends on `datagrid-core` and consumes core contracts.
 - `datagrid-vue-app` composes `datagrid-vue` app hooks and orchestration-backed behavior into the mounted stage.
-- Adapter boundary normalizes legacy input before runtime (example: pinning legacy fields to canonical `pin`).
+- Adapter boundary normalizes host input before runtime; core row-node and column contracts stay canonical.
 
 ## Stable Public API
 

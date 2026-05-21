@@ -47,7 +47,7 @@ Rule: if an import path is outside tiered entrypoints above, it is not part of p
 
 Current deprecations are versioned in `DATAGRID_DEPRECATION_WINDOWS`.
 
-Facade-level deprecation planning for `required but unused` public exports is tracked in:
+Facade-level deprecation planning is tracked in:
 - `docs/quality/datagrid-facade-deprecation-plan.json`
 
 Required fields per deprecation:

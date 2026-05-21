@@ -299,10 +299,4 @@ export const industrialNeutralTheme: DataGridStyleConfig = {
       ...darkUiTokens,
     },
   },
-  body: {
-    row: "selectable-row selectable-row--idle",
-  },
-  state: {
-    selectedRow: "selectable-row selectable-row--selected",
-  },
 }

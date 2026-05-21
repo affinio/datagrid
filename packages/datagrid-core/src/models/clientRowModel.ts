@@ -82,13 +82,13 @@ import {
   type DataGridClientRowModelDerivedCacheDiagnostics,
 } from "./projection/clientRowDerivedCacheRuntime.js"
 import {
-  cloneProjectionFormulaDiagnostics,
   type DataGridCalculationHistory,
   type DataGridCalculationHistoryEntry,
   type DataGridCalculationSnapshot,
   type DataGridCalculationSnapshotInspection,
   type DataGridCalculationSnapshotRestoreOptions,
 } from "./snapshot/clientRowCalculationSnapshotRuntime.js"
+import { createClientRowCalculationSnapshotRestoreRuntime } from "./snapshot/clientRowCalculationSnapshotRestoreRuntime.js"
 import {
   createClientRowComputedSnapshotRuntime,
 } from "./materialization/clientRowComputedSnapshotRuntime.js"
@@ -461,53 +461,6 @@ export function createClientRowModel<T>(
     getComputedFieldNames: () => computedRegistry.getComputedEntryByIndex().map(entry => entry.field),
     setComputedFields: fields => computedSnapshotRuntime.setComputedFields(fields),
   })
-  const commitCalculationSnapshotRestore = (
-    snapshot: DataGridCalculationSnapshot<T>,
-    options: DataGridCalculationSnapshotRestoreOptions = {},
-  ): boolean => {
-    computedSnapshotFieldsRuntime.sync()
-    computedSnapshotRuntime.replaceRowBoundSnapshot(snapshot.computedSnapshot)
-    refreshMaterializedSourceRows()
-
-    const restoredModelSnapshot = snapshot.modelSnapshot
-    setSortModel(cloneSortModel(restoredModelSnapshot.sortModel))
-    setFilterModel(cloneFilterModel(restoredModelSnapshot.filterModel))
-    if (!treeData) {
-      setGroupBy(cloneGroupBySpec(restoredModelSnapshot.groupBy))
-      expansionHostRuntime.restoreExpansionSnapshot(restoredModelSnapshot.groupExpansion)
-    }
-    setPivotModel(clonePivotSpec(restoredModelSnapshot.pivotModel ?? null))
-    setPivotColumns(pivotRuntime.normalizeColumns(restoredModelSnapshot.pivotColumns ?? []))
-    treePivotIntegrationRuntime.resetPivotExpansionState()
-    setAggregationModel(cloneAggregationModel(snapshot.aggregationModel))
-    setPaginationInput(restoredModelSnapshot.pagination.enabled
-      ? normalizePaginationInput({
-        pageSize: restoredModelSnapshot.pagination.pageSize,
-        currentPage: restoredModelSnapshot.pagination.currentPage,
-      })
-      : normalizePaginationInput(null))
-    setViewportRange(normalizeViewportRange(restoredModelSnapshot.viewportRange, runtimeState.rows.length))
-
-    formulaDiagnosticsRuntime.commitFormulaDiagnostics(
-      cloneProjectionFormulaDiagnostics(restoredModelSnapshot.projection?.formula ?? null) ?? createEmptyFormulaDiagnostics(),
-    )
-    commitFormulaComputeStageDiagnostics(snapshot.formulaComputeStage ?? createEmptyFormulaComputeStageDiagnostics())
-    commitFormulaRowRecomputeDiagnostics(snapshot.formulaRowRecompute ?? { rows: [] })
-
-    derivedCacheRuntime.resetAllCaches()
-    treePivotIntegrationRuntime.clearPendingPivotValuePatch()
-    projectionTransientStateRuntime.resetGroupByIncrementalAggregationState()
-    treePivotIntegrationRuntime.invalidateTreeProjectionCaches()
-
-    runtimeStateStore.setProjectionInvalidation(["computedChanged"])
-    if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
-      computeHostRuntime.refresh()
-    }
-    if (options.emit !== false) {
-      emit()
-    }
-    return true
-  }
 
   const sourceColumnCacheRuntime = createClientRowSourceColumnCacheRuntime<T>({
     getSourceRows: () => getBaseSourceRows(),
@@ -678,6 +631,63 @@ export function createClientRowModel<T>(
     computeHostRuntime,
   } = computeBootstrap
 
+  const calculationSnapshotRestoreRuntime = createClientRowCalculationSnapshotRestoreRuntime<T>({
+    syncComputedSnapshotFields: () => computedSnapshotFieldsRuntime.sync(),
+    replaceComputedSnapshot: snapshot => {
+      computedSnapshotRuntime.replaceRowBoundSnapshot(snapshot)
+    },
+    refreshMaterializedSourceRows,
+    cloneSortModel,
+    setSortModel,
+    cloneFilterModel,
+    setFilterModel,
+    isTreeDataEnabled: () => Boolean(treeData),
+    cloneGroupBySpec,
+    setGroupBy,
+    restoreExpansionSnapshot: snapshot => {
+      expansionHostRuntime.restoreExpansionSnapshot(snapshot)
+    },
+    clonePivotSpec,
+    setPivotModel,
+    normalizePivotColumns: columns => pivotRuntime.normalizeColumns(columns),
+    setPivotColumns,
+    resetPivotExpansionState: () => {
+      treePivotIntegrationRuntime.resetPivotExpansionState()
+    },
+    cloneAggregationModel,
+    setAggregationModel,
+    normalizePaginationInput,
+    setPaginationInput,
+    normalizeViewportRange,
+    getOutputRowCount: () => runtimeState.rows.length,
+    setViewportRange,
+    createEmptyFormulaDiagnostics,
+    commitFormulaDiagnostics,
+    createEmptyFormulaComputeStageDiagnostics,
+    commitFormulaComputeStageDiagnostics,
+    commitFormulaRowRecomputeDiagnostics,
+    resetDerivedCaches: () => {
+      derivedCacheRuntime.resetAllCaches()
+    },
+    clearPendingPivotValuePatch: () => {
+      treePivotIntegrationRuntime.clearPendingPivotValuePatch()
+    },
+    resetGroupByIncrementalAggregationState: () => {
+      projectionTransientStateRuntime.resetGroupByIncrementalAggregationState()
+    },
+    invalidateTreeProjectionCaches: () => {
+      treePivotIntegrationRuntime.invalidateTreeProjectionCaches()
+    },
+    setProjectionInvalidation: reasons => {
+      runtimeStateStore.setProjectionInvalidation(reasons)
+    },
+    tryApplyFlatIdentityProjectionRefresh: () => flatIdentityProjectionRefreshRuntime.tryApply(),
+    refreshComputeHost: () => {
+      computeHostRuntime.refresh()
+    },
+    emit,
+  })
+
   const snapshotBootstrap = createClientRowModelSnapshotBootstrap<T>({
     runtimeState,
     runtimeStateStore,
@@ -708,7 +718,7 @@ export function createClientRowModel<T>(
     getFormulaComputeStageDiagnosticsSnapshot,
     getFormulaRowRecomputeDiagnosticsSnapshot,
     applySnapshotRestore: (snapshot, _inspection, restoreOptions) =>
-      commitCalculationSnapshotRestore(snapshot, restoreOptions),
+      calculationSnapshotRestoreRuntime.restoreCalculationSnapshot(snapshot, restoreOptions),
   })
 
   const {

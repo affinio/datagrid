@@ -104,12 +104,6 @@ const THEME_SYMBOLS = new Set([
   "normalizeHex",
   "DataGridThemeTokens",
   "DataGridResolvedStyleConfig",
-  "DataGridStyleSection",
-  "DataGridHeaderStyle",
-  "DataGridBodyStyle",
-  "DataGridGroupStyle",
-  "DataGridSummaryStyle",
-  "DataGridStateStyle",
   "DataGridThemeTokenVariants",
   "DataGridStyleConfig",
 ])
@@ -370,19 +364,6 @@ export function transformDataGridPublicProtocolSource(source: string): DataGridC
     /from\s+["']@affino\/datagrid-core\/viewport\/dataGridViewportController["']/g,
     'from "@affino/datagrid-core/advanced"',
     "viewport-deep-import",
-    appliedTransforms,
-  )
-  if (/\bcreateTableViewportController\b/.test(code)) {
-    code = code.replace(/\bcreateTableViewportController\b/g, "createDataGridViewportController")
-    appliedTransforms.push("viewport-factory-rename")
-  } else if (/\bcreateDataGridViewportController\b/.test(code)) {
-    appliedTransforms.push("viewport-factory-rename")
-  }
-  code = applyReplace(
-    code,
-    /\bserverIntegration\s*:/g,
-    "/* TODO(datagrid-codemod): migrate to rowModel boundary */ serverIntegration:",
-    "server-integration-todo",
     appliedTransforms,
   )
   code = rewriteRootImportsToTieredEntrypoints(code, appliedTransforms)

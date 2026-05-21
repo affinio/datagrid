@@ -41,7 +41,7 @@ Implementations:
 
 Identity resolver contract:
 
-- `createClientRowModel({ resolveRowId })` lets adapters inject deterministic identity for legacy rows that do not provide `rowId/rowKey`.
+- `createClientRowModel({ resolveRowId })` lets adapters inject deterministic identity for plain row data. Structured row-node input must use canonical `DataGridRowNode` fields.
 - `createServerBackedRowModel({ resolveRowId })` is the preferred path for server datasets; default behavior reads `row.id` and throws if identity is missing.
 
 RowModel kind truthfulness:
@@ -276,7 +276,6 @@ Command invariants:
 
 `DataGridFilterSnapshot` supports both compatibility and canonical expression input:
 
-- compatibility: `advancedFilters` map (`columnKey -> clauses[]`)
 - canonical: `advancedExpression` AST (`condition | group | not`)
 
 Expression rules:
@@ -291,7 +290,7 @@ Projection order remains unchanged:
 
 Compatibility guarantee:
 
-- if `advancedExpression` is absent, row model derives expression from legacy `advancedFilters` map.
+- `advancedExpression` is the canonical advanced filter transport shape.
 
 ## Selection Summary Contract
 

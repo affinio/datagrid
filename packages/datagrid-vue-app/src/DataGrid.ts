@@ -919,7 +919,6 @@ const DataGridRuntimeComponent = defineComponent({
     "cell-edit": (_payload: DataGridCellEditEvent<Record<string, unknown>>) => true,
     "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
     "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
-    "row-select": (_payload: DataGridRowSelectionSnapshot | null) => true,
     "update:rowSelectionState": (_payload: DataGridRowSelectionSnapshot | null) => true,
     "update:columnState": (_payload: DataGridUnifiedColumnState | null) => true,
     "update:columnOrder": (_payload: readonly string[] | null) => true,
@@ -1339,7 +1338,6 @@ const DataGridRuntimeComponent = defineComponent({
     watch(
       rowSelectionSnapshot,
       (snapshot: DataGridRowSelectionSnapshot | null) => {
-        emit("row-select", snapshot)
         emit("update:rowSelectionState", snapshot)
         flushRowSelectionSnapshotUpdates()
       },

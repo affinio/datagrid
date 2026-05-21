@@ -1595,7 +1595,7 @@ const rowSelectionState = ref({
 </template>
 ```
 
-The legacy `row-select` event still exists, but `rowSelectionState` is the stable controlled API when the page wants to bind selected row ids without diffing unified-state updates.
+`rowSelectionState` is the controlled API when the page wants to bind selected row ids without diffing unified-state updates.
 
 For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
 
@@ -1814,7 +1814,6 @@ The component emits:
 - `cell-change`
 - `selection-change`
 - `row-selection-change`
-- `row-select` (legacy alias; prefer `row-selection-change` for typed row-selection snapshots)
 - `update:column-state`
 - `update:column-order`
 - `update:hidden-column-keys`

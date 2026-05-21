@@ -340,7 +340,6 @@ export {
   type DataGridTreeDataResolvedParentSpec,
   type DataGridTreeDataResolvedSpec,
   type DataGridTreeDataDiagnostics,
-  type DataGridLegacyVisibleRow,
   type DataGridRowGroupMeta,
   type DataGridRowKind,
   type DataGridRowRenderMeta,

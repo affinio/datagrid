@@ -24,7 +24,7 @@ Relevant tests:
 
 Checks:
 - Confirm runtime receives canonical `pin` only.
-- Confirm legacy pin fields are normalized at adapter boundary.
+- Confirm host column pin fields are normalized to canonical `pin` before reaching core.
 
 Relevant tests:
 - `packages/datagrid-core/src/columns/__tests__/pinning.spec.ts`

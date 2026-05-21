@@ -136,7 +136,6 @@ Backends can either:
   normalizeDataGridServerQuery(request, {
     columnIdMap,
     quickFilterModeFallback: "contains",
-    legacyAdvancedFilters: "preserve",
   })
 
   Это хороший production default, но без ложного обещания “универсального backend protocol для всех”.

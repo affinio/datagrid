@@ -16,7 +16,7 @@ Scope: public and integration event surfaces across `@affino/datagrid-core`, `@a
 | --- | --- | --- | --- | --- | --- |
 | `api.events` | `rows:changed`, `columns:changed`, `projection:recomputed`, `selection:changed`, `row-selection:changed`, `pivot:changed`, `transaction:changed`, `viewport:changed`, `state:import:begin`, `state:imported`, `state:import:end`, `error` | `@affino/datagrid-core` typed event map | Deterministic in-process ordering; reentrant emissions are queued FIFO | Listener exceptions are not swallowed; integration listeners must isolate their own failures | Stable runtime observation, headless integrations, diagnostics, plugin input |
 | `api.plugins.onEvent` | Same event names as `api.events` | `@affino/datagrid-core` typed event map | Delivered from the core event stream after plugin registration | Plugin handler failures are isolated from core event dispatch and other plugins | Stable public plugin observation |
-| `DataGrid` emits | `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, `row-select`, `update:*`, `toolbar-modules-change`, `ready` | `@affino/datagrid-vue-app` component facade | Mirrors runtime host events and controlled-prop snapshots in component lifecycle order | Vue listener behavior applies; handler failures are host-owned | Component consumers and controlled Vue props |
+| `DataGrid` emits | `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, `update:*`, `toolbar-modules-change`, `ready` | `@affino/datagrid-vue-app` component facade | Mirrors runtime host events and controlled-prop snapshots in component lifecycle order | Vue listener behavior applies; handler failures are host-owned | Component consumers and controlled Vue props |
 | `createGrid` feature bus | String event names chosen by local features | Local Vue feature | Synchronous registration-order delivery | Handler exceptions propagate and stop the current local emit | Local feature coordination only |
 | Internal runtime host | `cell-change`, `selection-change`, `row-selection-change` | `@affino/datagrid-vue-app` runtime host | Bridges selected `api.events` into app component emits | Internal component boundary | Do not consume directly outside package internals |
 
@@ -63,7 +63,7 @@ If an event listener mutates the grid and causes another event, the nested event
 | Stage edit commit | `cell-edit` | Emitted after the edit patch has been applied. A `cell-change` from the row mutation may already have fired. |
 | `selection:changed` | `selection-change` | Selection-only changes do not emit `update:state`. |
 | `row-selection:changed` | `row-selection-change` | Carries `{ snapshot }`. |
-| Row-selection watcher | `row-select`, `update:rowSelectionState` | `row-select` is a legacy alias; prefer `row-selection-change` or `update:rowSelectionState`. |
+| Row-selection watcher | `update:rowSelectionState` | Controlled row-selection snapshots are emitted through `update:rowSelectionState`; typed changes use `row-selection-change`. |
 | Controlled state snapshots | `update:state`, `update:columnState`, `update:columnOrder`, `update:hiddenColumnKeys`, `update:columnWidths`, `update:columnPins`, `update:groupBy`, `update:viewMode` | Use these for Vue controlled-prop synchronization. |
 | Runtime ready | `ready` | Provides `{ api, rowModel }` after the runtime is available. |
 

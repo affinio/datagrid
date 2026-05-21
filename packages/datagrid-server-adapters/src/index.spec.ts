@@ -3,7 +3,6 @@ import type { DataGridDataSourcePullRequest } from "@affino/datagrid-core"
 import {
   createAffinoDatasource,
   normalizeDataGridServerAdvancedExpression,
-  normalizeDataGridServerAdvancedFilters,
   normalizeDataGridServerColumnFilters,
   normalizeDataGridServerGroupExpansion,
   normalizeDataGridServerGroupBy,
@@ -151,47 +150,6 @@ describe("normalizeDataGridServerAdvancedExpression", () => {
       meta: {
         source: "toolbar",
       },
-    })
-  })
-})
-
-describe("normalizeDataGridServerAdvancedFilters", () => {
-  it("preserves legacy advanced filters by default", () => {
-    expect(normalizeDataGridServerAdvancedFilters({
-      owner: {
-        type: "text",
-        clauses: [
-          { operator: "contains", value: "NOC" },
-        ],
-      },
-    })).toEqual({
-      owner: {
-        type: "text",
-        clauses: [
-          { operator: "contains", value: "NOC" },
-        ],
-      },
-    })
-  })
-
-  it("can drop legacy advanced filters and maps column ids when preserved", () => {
-    const filters = {
-      owner: {
-        type: "text",
-        clauses: [
-          { operator: "contains", value: "NOC" },
-        ],
-      },
-    } as const
-
-    expect(normalizeDataGridServerAdvancedFilters(filters, {
-      legacyAdvancedFilters: "drop",
-      columnIdMap: { owner: "owner_name" },
-    })).toBeNull()
-    expect(normalizeDataGridServerAdvancedFilters(filters, {
-      columnIdMap: { owner: "owner_name" },
-    })).toEqual({
-      owner_name: filters.owner,
     })
   })
 })

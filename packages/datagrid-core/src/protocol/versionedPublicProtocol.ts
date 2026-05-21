@@ -57,24 +57,7 @@ export const DATAGRID_SEMVER_RULES = [
   "All deprecations must provide a replacement and codemod command before removal-ready status.",
 ] as const
 
-export const DATAGRID_DEPRECATION_WINDOWS: readonly DataGridDeprecationWindow[] = [
-  {
-    id: "core.viewport.createDataGridViewportController",
-    deprecatedIn: "0.2.0",
-    removeIn: "0.4.0",
-    replacement: "createDataGridViewportController from @affino/datagrid-core/advanced",
-    codemodCommand: "pnpm run codemod:datagrid:public-protocol -- --write <path>",
-    notes: "Use advanced import and DataGrid-named controller factory.",
-  },
-  {
-    id: "vue.useDataGridViewport.serverIntegration-option",
-    deprecatedIn: "0.2.0",
-    removeIn: "0.4.0",
-    replacement: "rowModel-driven integration via @affino/datagrid-core model contracts",
-    codemodCommand: "pnpm run codemod:datagrid:public-protocol -- --write <path>",
-    notes: "serverIntegration path is compatibility-only and will be removed after migration period.",
-  },
-] as const
+export const DATAGRID_DEPRECATION_WINDOWS: readonly DataGridDeprecationWindow[] = [] as const
 
 interface ParsedSemver {
   major: number

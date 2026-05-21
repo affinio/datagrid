@@ -36,7 +36,7 @@ Runtime canonical pin contract:
 
 Migration rule:
 - Use canonical `pin` only.
-- Do not rely on legacy pin fields in runtime or adapter input.
+- Use canonical `pin` fields in runtime and adapter input.
 
 ## Column Authored Input Migration (Required)
 
@@ -188,7 +188,7 @@ API-level edit flow:
 ## Verification Checklist
 
 - Public imports only (no direct `src/*` internals for production integration).
-- No runtime dependency on legacy pin fields.
+- No runtime dependency on noncanonical pin fields.
 - Integration reads pinned/overlay state via snapshot contract (`getIntegrationSnapshot`) instead of private refs.
 - Overlay and selection geometry remain aligned during horizontal scroll.
 - X-virtualization deterministic under resize/teleport-like scroll jumps.

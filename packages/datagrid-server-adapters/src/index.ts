@@ -1,6 +1,5 @@
 import {
   serializeColumnValueToToken,
-  type DataGridAdvancedFilter,
   type DataGridAdvancedFilterExpression,
   type DataGridColumnHistogram,
   type DataGridColumnHistogramEntry,
@@ -98,7 +97,6 @@ export type DataGridServerColumnFilter =
 export interface DataGridServerFilterModel {
   columnFilters?: Readonly<Record<string, DataGridServerColumnFilter>>
   columnStyleFilters?: Readonly<Record<string, DataGridServerColumnFilter>>
-  advancedFilters?: Readonly<Record<string, DataGridServerJsonValue>>
   advancedExpression?: DataGridServerJsonValue | null
   quickFilter?: DataGridServerQuickFilter
 }
@@ -137,7 +135,6 @@ export interface DataGridServerQuery {
 export interface DataGridServerQueryCodecOptions {
   columnIdMap?: Readonly<Record<string, string>> | ((columnKey: string) => string | null | undefined)
   quickFilterModeFallback?: DataGridServerQuickFilter["mode"]
-  legacyAdvancedFilters?: "preserve" | "drop"
 }
 
 function isJsonSafeValue(value: unknown): value is DataGridServerJsonValue {
@@ -290,30 +287,6 @@ export function normalizeDataGridServerAdvancedExpression(
     return null
   }
   return normalizeServerJsonValue(input) ?? null
-}
-
-export function normalizeDataGridServerAdvancedFilters(
-  input: Readonly<Record<string, DataGridAdvancedFilter>> | null | undefined,
-  options: Pick<DataGridServerQueryCodecOptions, "columnIdMap" | "legacyAdvancedFilters"> = {},
-): Readonly<Record<string, DataGridServerJsonValue>> | null {
-  if (!input || options.legacyAdvancedFilters === "drop") {
-    return null
-  }
-  const normalizedFilters: Record<string, DataGridServerJsonValue> = {}
-  for (const [columnKey, filter] of Object.entries(input)) {
-    const normalizedColumnKey = columnKey.trim()
-    if (!normalizedColumnKey) {
-      continue
-    }
-    const normalizedFilter = normalizeServerJsonValue(filter)
-    if (normalizedFilter === undefined) {
-      continue
-    }
-    normalizedFilters[resolveServerColumnId(normalizedColumnKey, options.columnIdMap)] = normalizedFilter
-  }
-  return Object.keys(normalizedFilters).length > 0
-    ? Object.freeze(normalizedFilters)
-    : null
 }
 
 function normalizeQuickFilterMode(
@@ -482,7 +455,6 @@ function normalizeDataGridServerFilterModel(
   }
   const columnFilters = normalizeDataGridServerColumnFilters(input.columnFilters, options)
   const columnStyleFilters = normalizeDataGridServerColumnFilters(input.columnStyleFilters, options)
-  const advancedFilters = normalizeDataGridServerAdvancedFilters(input.advancedFilters, options)
   const advancedExpression = Object.prototype.hasOwnProperty.call(input, "advancedExpression")
     ? normalizeDataGridServerAdvancedExpression(input.advancedExpression)
     : undefined
@@ -490,7 +462,6 @@ function normalizeDataGridServerFilterModel(
   const filterModel: DataGridServerFilterModel = {
     ...(columnFilters ? { columnFilters } : {}),
     ...(columnStyleFilters ? { columnStyleFilters } : {}),
-    ...(advancedFilters ? { advancedFilters } : {}),
     ...(advancedExpression !== undefined ? { advancedExpression } : {}),
     ...(quickFilter ? { quickFilter } : {}),
   }

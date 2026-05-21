@@ -47,12 +47,6 @@ function mergeStyleConfigs(base: DataGridStyleConfig, override: DataGridStyleCon
   return {
     ...base,
     ...override,
-    grid: { ...(base.grid ?? {}), ...(override.grid ?? {}) },
-    header: { ...(base.header ?? {}), ...(override.header ?? {}) },
-    body: { ...(base.body ?? {}), ...(override.body ?? {}) },
-    group: { ...(base.group ?? {}), ...(override.group ?? {}) },
-    summary: { ...(base.summary ?? {}), ...(override.summary ?? {}) },
-    state: { ...(base.state ?? {}), ...(override.state ?? {}) },
     tokens: { ...(base.tokens ?? {}), ...(override.tokens ?? {}) },
     tokenVariants: mergeTokenVariants(base.tokenVariants, override.tokenVariants),
   }
@@ -69,12 +63,6 @@ function isStyleConfig(input: unknown): input is DataGridStyleConfig {
     || "defaultTokenVariant" in input
     || "inheritThemeFromDocument" in input
     || "documentDarkClass" in input
-    || "grid" in input
-    || "header" in input
-    || "body" in input
-    || "group" in input
-    || "summary" in input
-    || "state" in input
   )
 }
 

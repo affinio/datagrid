@@ -41,7 +41,7 @@ const datasource = createAffinoDatasource<AuctionRow>({
 - `headers` forwards request headers on adapter-owned requests
 - `historyScope` forwards `workspace_id`, `user_id`, and `session_id` into edit, fill, and history bodies
 - `histogram.ignoreSelfFilter` sets the default histogram behavior for requests that should ignore the active column filter
-- `queryCodec` configures the default pull request codec, including `columnIdMap`, `quickFilterModeFallback`, and `legacyAdvancedFilters`
+- `queryCodec` configures the default pull request codec, including `columnIdMap`, `quickFilterModeFallback`
 - `mapQuery` receives the normalized backend DTO and can adapt it to a backend-specific request body
 - `mapPullRequest` receives the raw `DataGridDataSourcePullRequest` and bypasses the package codec entirely
 
@@ -57,7 +57,6 @@ const query = normalizeDataGridServerQuery(request, {
     updatedAt: "updated_at",
   },
   quickFilterModeFallback: "contains",
-  legacyAdvancedFilters: "preserve",
 })
 ```
 

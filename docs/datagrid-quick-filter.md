@@ -37,7 +37,7 @@ Quick filter runs inside the normal filter stage:
 filter -> sort -> group -> pivot -> aggregate -> paginate -> visible
 ```
 
-It composes with column filters, style filters, legacy advanced filters, and advanced filter expressions through `AND`.
+It composes with column filters, style filters, and advanced filter expressions through `AND`.
 
 Changing `quickFilter.query`, `quickFilter.columns`, or `quickFilter.mode` invalidates the filter stage and all downstream projection stages. It must not add a new projection stage.
 

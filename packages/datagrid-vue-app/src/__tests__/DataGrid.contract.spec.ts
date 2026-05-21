@@ -6629,7 +6629,7 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("propagates row-select and unified state updates after header bulk row selection", async () => {
+  it("propagates row-selection state updates after header bulk row selection", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -6641,7 +6641,6 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const initialStateUpdateCount = (wrapper.emitted("update:state") ?? []).length
-    const initialRowSelectCount = (wrapper.emitted("row-select") ?? []).length
     const headerCheckbox = wrapper.find('.grid-header-shell .grid-checkbox-trigger[aria-label="Select all filtered rows"]')
 
     expect(headerCheckbox.exists()).toBe(true)
@@ -6652,12 +6651,6 @@ describe("DataGrid app facade contract", () => {
 
     expect(headerCheckbox.attributes("aria-checked")).toBe("true")
 
-    const rowSelectEvents = wrapper.emitted("row-select") ?? []
-    expect(rowSelectEvents.length).toBeGreaterThan(initialRowSelectCount)
-    expect(rowSelectEvents.at(-1)?.[0]).toEqual({
-      focusedRow: null,
-      selectedRows: ["r1", "r2", "r3"],
-    })
 
     const rowSelectionChangeEvents = wrapper.emitted("row-selection-change") ?? []
     expect(rowSelectionChangeEvents.at(-1)?.[0]).toEqual({
@@ -6682,7 +6675,6 @@ describe("DataGrid app facade contract", () => {
   it("preserves controlled row selection across header bulk toggle and rows churn with stable row ids", async () => {
     const controlledRows = ref<DemoRow[]>(BASE_ROWS.map(row => ({ ...row })))
     const controlledState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(null)
-    const rowSelectEvents: Array<DataGridRowSelectionSnapshot | null> = []
 
     const wrapper = mount(defineComponent({
       setup() {
@@ -6693,9 +6685,6 @@ describe("DataGrid app facade contract", () => {
           state: controlledState.value,
           "onUpdate:state": (nextState: DataGridUnifiedState<Record<string, unknown>> | null) => {
             controlledState.value = nextState
-          },
-          onRowSelect: (snapshot: DataGridRowSelectionSnapshot | null) => {
-            rowSelectEvents.push(snapshot)
           },
         })
       },
@@ -6712,10 +6701,6 @@ describe("DataGrid app facade contract", () => {
     await headerCheckbox.trigger("click")
     await flushRuntimeTasks()
 
-    expect(rowSelectEvents.at(-1)).toEqual({
-      focusedRow: null,
-      selectedRows: ["r1", "r2", "r3"],
-    })
     expect(controlledState.value).toMatchObject({
       rowSelection: {
         focusedRow: null,
@@ -6743,12 +6728,11 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("supports a controlled rowSelectionState contract alongside the legacy row-select event", async () => {
+  it("supports a controlled rowSelectionState contract", async () => {
     const controlledRowSelection = ref<DataGridRowSelectionSnapshot | null>({
       focusedRow: "r2",
       selectedRows: ["r2"],
     })
-    const rowSelectEvents: Array<DataGridRowSelectionSnapshot | null> = []
 
     const wrapper = mount(defineComponent({
       setup() {
@@ -6759,9 +6743,6 @@ describe("DataGrid app facade contract", () => {
           rowSelectionState: controlledRowSelection.value,
           "onUpdate:rowSelectionState": (nextState: DataGridRowSelectionSnapshot | null) => {
             controlledRowSelection.value = nextState
-          },
-          onRowSelect: (snapshot: DataGridRowSelectionSnapshot | null) => {
-            rowSelectEvents.push(snapshot)
           },
         })
       },
@@ -6792,8 +6773,6 @@ describe("DataGrid app facade contract", () => {
 
     expect(controlledRowSelection.value?.focusedRow).toBeNull()
     expect([...(controlledRowSelection.value?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
-    expect(rowSelectEvents.at(-1)?.focusedRow).toBeNull()
-    expect([...(rowSelectEvents.at(-1)?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
 
     wrapper.unmount()
   })

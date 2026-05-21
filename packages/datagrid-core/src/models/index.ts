@@ -55,7 +55,6 @@ export type {
   DataGridTreeDataResolvedParentSpec,
   DataGridTreeDataResolvedSpec,
   DataGridTreeDataDiagnostics,
-  DataGridLegacyVisibleRow,
   DataGridRowGroupMeta,
   DataGridRowKind,
   DataGridRowRenderMeta,

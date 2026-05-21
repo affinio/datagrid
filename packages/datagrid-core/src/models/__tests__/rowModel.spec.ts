@@ -25,10 +25,15 @@ describe("rowModel normalization", () => {
   it("defaults to leaf kind for regular rows", () => {
     const row = normalizeRowNode(
       {
+        kind: "leaf",
+        data: { id: 1, owner: "alice" },
         row: { id: 1, owner: "alice" },
+        rowKey: "r-1",
         rowId: "r-1",
+        sourceIndex: 0,
         originalIndex: 0,
         displayIndex: 0,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
       },
       0,
     )
@@ -40,39 +45,18 @@ describe("rowModel normalization", () => {
     expect(isDataGridGroupRowNode(row)).toBe(false)
   })
 
-  it("infers group kind from legacy state.group and normalizes group meta defaults", () => {
-    const row = normalizeRowNode(
-      {
-        row: { label: "EU" },
-        rowId: "region=EU",
-        originalIndex: 4,
-        displayIndex: 4,
-        state: { group: true, expanded: true },
-      },
-      4,
-    )
-
-    expect(row.kind).toBe("group")
-    expect(row.state.group).toBe(true)
-    expect(row.groupMeta).toEqual({
-      groupKey: "region=EU",
-      groupField: "",
-      groupValue: "region=EU",
-      level: 0,
-      childrenCount: 0,
-    })
-    expect(isDataGridGroupRowNode(row)).toBe(true)
-    expect(isDataGridLeafRowNode(row)).toBe(false)
-  })
-
   it("keeps explicit group kind and clamps group meta shape", () => {
     const row = normalizeRowNode(
       {
         kind: "group",
+        data: { label: "service=api" },
         row: { label: "service=api" },
+        rowKey: "service=api",
         rowId: "service=api",
+        sourceIndex: 8,
         originalIndex: 8,
         displayIndex: 8,
+        state: { selected: false, group: true, pinned: "none", expanded: true },
         groupMeta: {
           groupKey: "service=api",
           groupField: "service",
@@ -99,10 +83,14 @@ describe("rowModel normalization", () => {
     const row = normalizeRowNode(
       {
         kind: "group",
+        data: { label: "service=api" },
         row: { label: "service=api" },
+        rowKey: "service=api",
         rowId: "service=api",
+        sourceIndex: 8,
         originalIndex: 8,
         displayIndex: 8,
+        state: { selected: false, group: true, pinned: "none", expanded: true },
         groupMeta: {
           groupKey: "service=api",
           groupField: "service",

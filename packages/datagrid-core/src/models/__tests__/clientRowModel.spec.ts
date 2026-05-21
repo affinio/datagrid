@@ -1794,7 +1794,7 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("normalizes both legacy and canonical row-node inputs", () => {
+  it("normalizes canonical row-node inputs", () => {
     const rows: DataGridRowNodeInput<{ id: number }>[] = [
       {
         kind: "leaf",
@@ -1808,35 +1808,28 @@ describe("createClientRowModel", () => {
         state: { selected: true, group: false, pinned: "none", expanded: false },
       },
       {
-        row: { id: 11 },
-        rowId: "b",
-        originalIndex: 1,
-        displayIndex: 1,
-      },
-      {
+        kind: "leaf",
+        data: { id: 12 },
         row: { id: 12 },
+        rowKey: "c",
         rowId: "c",
+        sourceIndex: 2,
         originalIndex: 2,
         displayIndex: 2,
-        state: { pinned: "bottom" },
+        state: { selected: false, group: false, pinned: "bottom", expanded: false },
       },
     ]
     const model = createClientRowModel({ rows })
 
     const first = model.getRow(0)
     const second = model.getRow(1)
-    const third = model.getRow(2)
 
     expect(first?.data.id).toBe(10)
     expect(first?.row.id).toBe(10)
     expect(first?.rowKey).toBe("a")
     expect(first?.state.selected).toBe(true)
-    expect(second?.data.id).toBe(11)
-    expect(second?.row.id).toBe(11)
-    expect(second?.rowKey).toBe("b")
-    expect(second?.state.pinned).toBe("none")
-    expect(third?.data.id).toBe(12)
-    expect(third?.state.pinned).toBe("bottom")
+    expect(second?.data.id).toBe(12)
+    expect(second?.state.pinned).toBe("bottom")
 
     model.dispose()
   })
