@@ -30,7 +30,23 @@
       @marker-hover="handleMarkerHover"
       @marker-leave="handleMarkerLeave"
       @view-change="viewState = $event"
-    />
+    >
+      <template #marker="{ radius, selected, hovered, markerClass, markerStyle }">
+        <g class="world-map-demo__marker" :class="{ 'world-map-demo__marker--selected': selected, 'world-map-demo__marker--hovered': hovered }">
+          <circle
+            v-if="selected"
+            class="world-map-demo__marker-pulse"
+            :r="radius + 11"
+          />
+          <circle
+            class="world-map-demo__marker-core"
+            :class="markerClass"
+            :style="markerStyle"
+            :r="selected ? radius + 2 : radius"
+          />
+        </g>
+      </template>
+    </WorldMapSvg>
 
     <aside
       v-if="geoTagInteraction !== null"
@@ -384,6 +400,47 @@ function shouldRenderCountry(feature: WorldMapCountryFeature): boolean {
 
   .world-map-demo__meta {
     justify-content: flex-start;
+  }
+}
+
+.world-map-demo__marker {
+  pointer-events: none;
+}
+
+.world-map-demo__marker-core {
+  fill: #f8fafc;
+  stroke: #06141f;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+  transition: fill 160ms ease, stroke 160ms ease, transform 160ms ease;
+}
+
+.world-map-demo__marker--hovered .world-map-demo__marker-core {
+  fill: #dbeafe;
+}
+
+.world-map-demo__marker--selected .world-map-demo__marker-core {
+  fill: #facc15;
+  stroke: #f8fafc;
+}
+
+.world-map-demo__marker-pulse {
+  fill: none;
+  stroke: rgba(250, 204, 21, 0.72);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  transform-origin: 0 0;
+  animation: world-map-demo-pulse 1.6s ease-out infinite;
+}
+
+@keyframes world-map-demo-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
   }
 }
 </style>
