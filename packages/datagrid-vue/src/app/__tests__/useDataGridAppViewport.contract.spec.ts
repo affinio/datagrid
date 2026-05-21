@@ -475,11 +475,11 @@ describe("useDataGridAppViewport contract", () => {
 
     vi.advanceTimersByTime(121)
     syncRowsInRange.mockClear()
-    element.scrollTop = 3000
+    element.scrollTop = 900
     viewport.handleViewportScroll(createScrollEvent(element))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 149, end: 155 })
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 44, end: 50 })
   })
 
   it("keeps adaptive row overscan disabled when base overscan is zero", () => {
@@ -720,16 +720,87 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r0", "r1", "r2", "r3", "r4"])
 
     getBodyRowAtIndex.mockClear()
-    element.scrollTop = 5000
+    element.scrollTop = 200
     viewport.handleViewportScroll(createScrollEvent(element))
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
     expect(setVirtualWindowRange).toHaveBeenCalledTimes(1)
-    expect(setVirtualWindowRange).toHaveBeenLastCalledWith({ start: 250, end: 254 })
+    expect(setVirtualWindowRange).toHaveBeenLastCalledWith({ start: 10, end: 14 })
     expect(setViewportRange).not.toHaveBeenCalled()
     expect(getBodyRowAtIndex).toHaveBeenCalledTimes(5)
-    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([250, 251, 252, 253, 254])
+    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([10, 11, 12, 13, 14])
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r10", "r11", "r12", "r13", "r14"])
+  })
+
+  it("defers far-jump visible rows and runtime position until scroll idle", () => {
+    vi.useFakeTimers()
+    const raf = createRafHarness()
+    const rows = makeRows(300)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setViewportPosition = vi.fn()
+    const setVirtualWindowRange = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        setVirtualWindowRange,
+        setViewportPosition,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 300, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 4 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 0,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+
+    syncRowsInRange.mockClear()
+    getBodyRowAtIndex.mockClear()
+    setVirtualWindowRange.mockClear()
+    setViewportPosition.mockClear()
+    element.scrollTop = 5000
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(setVirtualWindowRange).not.toHaveBeenCalled()
+    expect(setViewportPosition).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r0", "r1", "r2", "r3", "r4"])
+
+    vi.advanceTimersByTime(119)
+    expect(syncRowsInRange).not.toHaveBeenCalled()
+    expect(setViewportPosition).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 250, end: 254 })
+    expect(setVirtualWindowRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(1)
+    expect(getBodyRowAtIndex).toHaveBeenLastCalledWith(250)
+    expect(setViewportPosition).toHaveBeenCalledTimes(1)
+    expect(setViewportPosition).toHaveBeenLastCalledWith(expect.objectContaining({
+      range: { start: 250, end: 254 },
+      anchor: expect.objectContaining({ rowId: "r250", rowIndex: 250 }),
+      scroll: { top: 5000, left: 0 },
+    }))
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r250", "r251", "r252", "r253", "r254"])
   })
 

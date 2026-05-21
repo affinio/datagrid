@@ -31,6 +31,8 @@ const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_FRAME_MS = 16.7
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_VELOCITY_RATIO =
   DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS / DATA_GRID_ADAPTIVE_ROW_OVERSCAN_FRAME_MS
+const DATA_GRID_FAR_JUMP_MIN_ROWS = 32
+const DATA_GRID_FAR_JUMP_MIN_PX = 1000
 
 type DataGridPerfSample = {
   scope: string
@@ -528,6 +530,7 @@ export function useDataGridAppViewport<TRow>(
   let isSyncingRuntimeViewportPosition = false
   let pendingRuntimeViewportPosition: DataGridViewportPositionSnapshot | null = null
   let pendingRuntimeViewportPositionIdleSync = false
+  let pendingFarJumpViewportSync = false
   let lastSyncedRuntimeViewportPositionKey: string | null = null
   let lastViewportRangeResolveMs = 0
   const horizontalScrollIdleRevision = ref(0)
@@ -597,11 +600,68 @@ export function useDataGridAppViewport<TRow>(
     verticalScrollIdleTimer = null
   }
 
+  const shouldDeferFarJumpViewportSync = (snapshot: ViewportSnapshot, forceVisibleRows: boolean): boolean => {
+    if (forceVisibleRows || isPaginationMode.value || !resolveMaybeRef(options.rowVirtualizationEnabled)) {
+      return false
+    }
+    if (resolveScrollableBodyRowCount() <= 0) {
+      return false
+    }
+    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
+    const jumpThresholdPx = Math.max(
+      DATA_GRID_FAR_JUMP_MIN_PX,
+      Math.max(1, snapshot.clientHeight),
+      estimatedRowHeight * DATA_GRID_FAR_JUMP_MIN_ROWS,
+    )
+    return Math.abs(snapshot.scrollTop - lastViewportScrollTop) >= jumpThresholdPx
+  }
+
+  const recordDeferredFarJumpVisibleRows = (scrollTopDelta: number): void => {
+    if (!perfTraceEnabled) {
+      return
+    }
+    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
+    const changedRowCount = Math.max(1, Math.floor(Math.abs(scrollTopDelta) / estimatedRowHeight))
+    lastVisibleRowSyncPerf = {
+      mode: "far-jump-deferred",
+      totalMs: 0,
+      incrementalResolveMs: 0,
+      runtimeSyncMs: 0,
+      setViewportRangeMs: 0,
+      displayRowsAssignMs: 0,
+      viewportCommitMs: 0,
+      rangeShiftStart: changedRowCount,
+      rangeShiftEnd: changedRowCount,
+      changedRowCount,
+    }
+  }
+
+  const flushPendingFarJumpViewportSync = (): boolean => {
+    if (!pendingFarJumpViewportSync) {
+      return false
+    }
+    pendingFarJumpViewportSync = false
+    pendingRuntimeViewportPositionIdleSync = false
+    const element = bodyViewportRef.value
+    if (!element) {
+      return true
+    }
+    commitViewportSnapshot(captureViewportSnapshot(element), {
+      forceVisibleRows: true,
+      measureVisibleRowHeights: false,
+      syncRuntimePosition: true,
+    })
+    return true
+  }
+
   const scheduleVerticalScrollIdleReset = (): void => {
     clearVerticalScrollIdleTimer()
     verticalScrollIdleTimer = globalThis.setTimeout(() => {
       verticalScrollIdleTimer = null
       resetAdaptiveRowOverscan()
+      if (flushPendingFarJumpViewportSync()) {
+        return
+      }
       if (!pendingRuntimeViewportPositionIdleSync) {
         return
       }
@@ -1425,40 +1485,49 @@ export function useDataGridAppViewport<TRow>(
     viewportShellClientWidth.value = snapshot.shellClientWidth
     syncHeaderScrollLeftFromBody(snapshot.scrollLeft)
 
+    const shouldDeferFarJumpRows = shouldDeferFarJumpViewportSync(snapshot, commitOptions.forceVisibleRows)
     if (commitOptions.forceVisibleRows || snapshot.scrollTop !== lastViewportScrollTop) {
+      const scrollTopDelta = snapshot.scrollTop - lastViewportScrollTop
       lastViewportScrollTop = snapshot.scrollTop
-      const nextViewportSnapshot = {
-        scrollTop: snapshot.scrollTop,
-        clientHeight: snapshot.clientHeight,
-      }
-      const visibleRangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-      const visibleRange = resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot)
-      if (perfTraceEnabled) {
-        lastViewportRangeResolveMs += resolveDataGridPerfNow() - visibleRangeResolveStart
-      }
-      if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(visibleRange)) {
-        if (perfTraceEnabled) {
-          lastVisibleRowSyncPerf = {
-            mode: "retained",
-            totalMs: 0,
-            incrementalResolveMs: 0,
-            runtimeSyncMs: 0,
-            setViewportRangeMs: 0,
-            displayRowsAssignMs: 0,
-            viewportCommitMs: 0,
-            rangeShiftStart: 0,
-            rangeShiftEnd: 0,
-            changedRowCount: 0,
-          }
-        }
+      if (shouldDeferFarJumpRows) {
+        pendingFarJumpViewportSync = true
+        recordDeferredFarJumpVisibleRows(scrollTopDelta)
       }
       else {
-        const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
-        if (perfTraceEnabled) {
-          lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
+        pendingFarJumpViewportSync = false
+        const nextViewportSnapshot = {
+          scrollTop: snapshot.scrollTop,
+          clientHeight: snapshot.clientHeight,
         }
-        syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
+        const visibleRangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+        const visibleRange = resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot)
+        if (perfTraceEnabled) {
+          lastViewportRangeResolveMs += resolveDataGridPerfNow() - visibleRangeResolveStart
+        }
+        if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(visibleRange)) {
+          if (perfTraceEnabled) {
+            lastVisibleRowSyncPerf = {
+              mode: "retained",
+              totalMs: 0,
+              incrementalResolveMs: 0,
+              runtimeSyncMs: 0,
+              setViewportRangeMs: 0,
+              displayRowsAssignMs: 0,
+              viewportCommitMs: 0,
+              rangeShiftStart: 0,
+              rangeShiftEnd: 0,
+              changedRowCount: 0,
+            }
+          }
+        }
+        else {
+          const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+          const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
+          if (perfTraceEnabled) {
+            lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
+          }
+          syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
+        }
       }
     }
 
@@ -1469,7 +1538,7 @@ export function useDataGridAppViewport<TRow>(
     if (
       commitOptions.syncRuntimePosition === true
       && !commitOptions.forceVisibleRows
-      && isSparseViewportRuntime()
+      && (shouldDeferFarJumpRows || isSparseViewportRuntime())
     ) {
       pendingRuntimeViewportPositionIdleSync = true
     }
@@ -1640,6 +1709,7 @@ export function useDataGridAppViewport<TRow>(
     pendingViewportSyncMeasureVisibleRowHeights = false
     pendingViewportSyncRuntimePosition = false
     pendingRuntimeViewportPositionIdleSync = false
+    pendingFarJumpViewportSync = false
     clearHorizontalScrollIdleTimer()
     clearVerticalScrollIdleTimer()
     resetAdaptiveRowOverscan()
