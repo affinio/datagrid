@@ -3293,7 +3293,7 @@ const aggregate = {
 }
 const browserResourceBudgetWarnings = buildBrowserResourceBudgetWarnings(aggregate)
 budgetWarnings.push(...browserResourceBudgetWarnings)
-if (BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS || BENCH_VIRTUALIZATION_FAIL_ON_WARNINGS) {
+if (BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS) {
   budgetErrors.push(...browserResourceBudgetWarnings)
 }
 

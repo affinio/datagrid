@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Split server datasource row-model internals into focused scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine modules.
+
+  ## User impact
+
+  No public API or browser behavior change expected. The server datasource implementation is easier to maintain and extend without growing `dataSourceBackedRowModel`.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource-backed row model regressions and package type-check passed
+
+- ## Summary
+
   Narrowed datasource invalidation refreshes to the affected visible block and attached the active group expansion tree context for grouped server projections.
 
   ## User impact

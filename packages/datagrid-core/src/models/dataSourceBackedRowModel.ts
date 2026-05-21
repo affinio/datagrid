@@ -57,15 +57,34 @@ import {
   isSamePullAggregationModel,
   normalizePivotColumnsFromUnknown,
 } from "./server/pullRowModelSerialization.js"
-import {
-  createDataGridRangeCache,
-  type DataGridRangeCacheLoadToken,
-  type DataGridRangeCacheIndexState,
-} from "./server/rangeCache.js"
+import { type DataGridRangeCacheIndexState } from "./server/rangeCache.js"
 import {
   resolveDataGridVelocityOverscanRange,
   type DataGridVelocityOverscanSample,
 } from "./server/velocityOverscan.js"
+import {
+  isAbortError,
+  normalizeRequestedRange,
+  normalizeTreePullContext,
+  rangeContains,
+  rangesOverlap,
+  resolvePriorityRank,
+  serializePullState,
+  type DataGridDataSourceInFlightPull as InFlightPull,
+  type DataGridDataSourcePendingPull as PendingPull,
+  type DataGridDataSourcePullRangeOptions as PullRangeOptions,
+} from "./server/dataSourceTransportCoordinator.js"
+import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
+import {
+  createDataSourceOptimisticMutationEngine,
+  type DataSourceOptimisticEditTransaction as OptimisticEditTransaction,
+} from "./server/dataSourceOptimisticMutationEngine.js"
+import {
+  rangeFromIndexes,
+  resolveVisibleRangeInvalidation,
+} from "./server/dataSourceInvalidationEngine.js"
+import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
+import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -146,41 +165,6 @@ export interface DataGridExternalRowUpdateOptions {
   signal?: AbortSignal | null
 }
 
-interface InFlightPull {
-  requestId: number
-  controller: AbortController
-  key: string
-  stateKey: string
-  range: DataGridViewportRange
-  promise: Promise<void>
-  priority: DataGridDataSourcePullPriority
-  reason: DataGridDataSourcePullReason
-  affectsLoading: boolean
-  rangeCacheToken: DataGridRangeCacheLoadToken
-}
-
-interface PendingPull {
-  range: DataGridViewportRange
-  reason: DataGridDataSourcePullReason
-  priority: DataGridDataSourcePullPriority
-  key: string
-  stateKey: string
-  treeData: DataGridDataSourceTreePullContext | null
-}
-
-interface PullRangeOptions {
-  replaceCacheOnSuccess?: boolean
-  affectsLoading?: boolean
-}
-
-interface OptimisticEditTransaction<T> {
-  id: number
-  updatesByRowId: Map<DataGridRowId, Partial<T>>
-  previousByRowId: Map<DataGridRowId, Partial<T>>
-  revisionsByRowId: Map<DataGridRowId, Readonly<Record<string, string | number | null>>>
-  baselinesByRowId: Map<DataGridRowId, DataGridRowNode<T>>
-}
-
 const DEFAULT_ROW_CACHE_LIMIT = 4096
 const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
 const DEFAULT_PREFETCH_TRIGGER_VIEWPORT_FACTOR = 1
@@ -203,89 +187,11 @@ type DataGridDataSourceLoadingRowNode<T> = DataGridRowNode<T> & {
   readonly __placeholder: true
 }
 
-function isAbortError(error: unknown): boolean {
-  if (!error) {
-    return false
-  }
-  const named = error as { name?: unknown }
-  return named.name === "AbortError"
-}
-
-function normalizeRequestedRange(range: DataGridViewportRange): DataGridViewportRange {
-  const start = Number.isFinite(range.start) ? Math.max(0, Math.trunc(range.start)) : 0
-  const endCandidate = Number.isFinite(range.end) ? Math.max(0, Math.trunc(range.end)) : start
-  return {
-    start,
-    end: Math.max(start, endCandidate),
-  }
-}
-
-function rangesOverlap(left: DataGridViewportRange, right: DataGridViewportRange): boolean {
-  return left.start <= right.end && right.start <= left.end
-}
-
-function rangeContains(container: DataGridViewportRange, target: DataGridViewportRange): boolean {
-  return container.start <= target.start && container.end >= target.end
-}
-
-function intersectRanges(left: DataGridViewportRange, right: DataGridViewportRange): DataGridViewportRange | null {
-  const start = Math.max(left.start, right.start)
-  const end = Math.min(left.end, right.end)
-  return start <= end ? { start, end } : null
-}
-
 function normalizeTotal(total: number | null | undefined): number | null {
   if (!Number.isFinite(total)) {
     return null
   }
   return Math.max(0, Math.trunc(total as number))
-}
-
-function serializePullState(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? ""
-  } catch {
-    return ""
-  }
-}
-
-function resolvePriorityRank(priority: DataGridDataSourcePullPriority): number {
-  switch (priority) {
-    case "critical":
-      return 3
-    case "normal":
-      return 2
-    case "background":
-      return 1
-    default:
-      return 0
-  }
-}
-
-function normalizeTreePullContext(
-  treeData: DataGridDataSourceTreePullContext | null | undefined,
-): DataGridDataSourceTreePullContext | null {
-  if (!treeData) {
-    return null
-  }
-  const seenGroupKeys = new Set<string>()
-  const groupKeys: string[] = []
-  for (const rawGroupKey of treeData.groupKeys ?? []) {
-    if (typeof rawGroupKey !== "string") {
-      continue
-    }
-    const normalizedGroupKey = rawGroupKey.trim()
-    if (normalizedGroupKey.length === 0 || seenGroupKeys.has(normalizedGroupKey)) {
-      continue
-    }
-    seenGroupKeys.add(normalizedGroupKey)
-    groupKeys.push(normalizedGroupKey)
-  }
-  return {
-    operation: treeData.operation,
-    scope: treeData.scope,
-    groupKeys,
-  }
 }
 
 function normalizeHistogramOptions(options: DataGridColumnHistogramOptions | undefined): DataGridColumnHistogramOptions {
@@ -385,14 +291,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let requestCounter = 0
   let criticalInFlight: InFlightPull | null = null
   let backgroundInFlight: InFlightPull | null = null
-  let pendingCriticalPull: PendingPull | null = null
-  let pendingBackgroundPull: PendingPull | null = null
-  let scheduledViewportPull: PendingPull | null = null
   let viewportPullSchedulePending = false
-  let optimisticEditTransactionCounter = 0
-  const optimisticEditTransactions = new Map<number, OptimisticEditTransaction<T>>()
-  const optimisticEditTransactionOrder: number[] = []
-  let optimisticEditQueue: Promise<void> = Promise.resolve()
+  const optimisticMutationEngine = createDataSourceOptimisticMutationEngine<T>()
   let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
   let lastViewportDirection: -1 | 0 | 1 = 0
@@ -428,13 +328,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
     } as const
   })()
 
-  const rowCache = new Map<number, DataGridRowNode<T>>()
-  const staleRetainedRowIndexes = new Set<number>()
-  const activePlaceholderExposureRows = new Map<number, number>()
-  const rangeCache = createDataGridRangeCache<DataGridRowNode<T>>({
-    chunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
-    maxChunks: Math.max(1, Math.ceil(rowCacheLimit / DEFAULT_RANGE_CACHE_CHUNK_SIZE)),
+  const cacheManager = createDataSourceCacheManager<T>({
+    rowCacheLimit,
+    rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
   })
+  const { rowCache, staleRetainedRowIndexes, rangeCache } = cacheManager
   const listeners = new Set<DataGridRowModelListener<T>>()
   const diagnostics: DataGridDataSourceBackpressureDiagnostics = {
     pullRequested: 0,
@@ -481,7 +379,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     pullDurationMaxMs: 0,
     pullDurationLastMs: 0,
   }
-  let viewportDataAvailabilityStartedAtMs: number | null = null
+  const telemetry = createDataSourceTelemetryRuntime(diagnostics)
+  const scheduler = createDataSourcePullScheduler(diagnostics)
 
   const unsubscribePush = typeof dataSource.subscribe === "function"
     ? dataSource.subscribe(event => {
@@ -499,42 +398,19 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     maybeAdd(criticalInFlight?.range)
     maybeAdd(backgroundInFlight?.range)
-    maybeAdd(pendingCriticalPull?.range)
-    maybeAdd(pendingBackgroundPull?.range)
+    maybeAdd(readPendingPull("critical")?.range)
+    maybeAdd(readPendingPull("background")?.range)
     return protectedRanges
   }
 
-  function isProtectedCacheIndex(index: number, protectedRanges: readonly DataGridViewportRange[]): boolean {
-    for (const range of protectedRanges) {
-      if (index >= range.start && index <= range.end) {
-        return true
-      }
-    }
-    return false
-  }
-
   function enforceRowCacheLimit() {
-    const protectedRanges = getProtectedSourceRanges()
-    while (rowCache.size > rowCacheLimit) {
-      let evictIndex: number | undefined
-      for (const cachedIndex of rowCache.keys()) {
-        if (!isProtectedCacheIndex(cachedIndex, protectedRanges)) {
-          evictIndex = cachedIndex
-          break
-        }
-      }
-      if (typeof evictIndex === "undefined") {
-        evictIndex = rowCache.keys().next().value as number | undefined
-      }
-      if (typeof evictIndex === "undefined") {
-        break
-      }
-      if (rowCache.delete(evictIndex)) {
-        staleRetainedRowIndexes.delete(evictIndex)
-        rangeCache.deleteRow(evictIndex)
+    cacheManager.enforceLimit({
+      rowCacheLimit,
+      protectedRanges: getProtectedSourceRanges(),
+      onEvict: () => {
         diagnostics.rowCacheEvicted += 1
-      }
-    }
+      },
+    })
     diagnostics.rowCacheSize = rowCache.size
   }
 
@@ -566,7 +442,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCache.has(index)) {
       rowCache.delete(index)
     }
-    finishPlaceholderExposure(index)
+    telemetry.finishPlaceholderExposure(index)
     staleRetainedRowIndexes.delete(index)
     rowCache.set(index, row)
     rangeCache.setRow(index, row)
@@ -592,52 +468,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return null
   }
 
-  function getPendingOptimisticTransactionsForRow(rowId: DataGridRowId): OptimisticEditTransaction<T>[] {
-    const pending: OptimisticEditTransaction<T>[] = []
-    for (const transactionId of optimisticEditTransactionOrder) {
-      const transaction = optimisticEditTransactions.get(transactionId)
-      if (!transaction || !transaction.updatesByRowId.has(rowId)) {
-        continue
-      }
-      pending.push(transaction)
-    }
-    return pending
-  }
-
   function applyPendingOptimisticEditsToNode(
     node: DataGridRowNode<T>,
     excludeTransactionId?: number,
   ): DataGridRowNode<T> {
-    let nextNode = node
-    for (const transaction of getPendingOptimisticTransactionsForRow(node.rowId)) {
-      if (transaction.id === excludeTransactionId) {
-        continue
-      }
-      const patch = transaction.updatesByRowId.get(node.rowId)
-      if (!patch) {
-        continue
-      }
-      const nextRow = applyRowDataPatch(nextNode.row, patch)
-      if (nextRow === nextNode.row) {
-        continue
-      }
-      nextNode = {
-        ...nextNode,
-        data: nextRow,
-        row: nextRow,
-      }
-    }
-    return nextNode
-  }
-
-  function removeOptimisticTransaction(transactionId: number): void {
-    if (!optimisticEditTransactions.delete(transactionId)) {
-      return
-    }
-    const orderIndex = optimisticEditTransactionOrder.indexOf(transactionId)
-    if (orderIndex >= 0) {
-      optimisticEditTransactionOrder.splice(orderIndex, 1)
-    }
+    return optimisticMutationEngine.applyPendingEditsToNode(node, applyRowDataPatch, excludeTransactionId)
   }
 
   function shouldRefreshAfterOptimisticCommit(transaction: OptimisticEditTransaction<T>): boolean {
@@ -705,7 +540,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   ): boolean {
     let changed = false
     const affectedRows = new Set(rowIds)
-    removeOptimisticTransaction(transaction.id)
+    optimisticMutationEngine.remove(transaction.id)
     for (const rowId of affectedRows) {
       const baseline = transaction.baselinesByRowId.get(rowId)
       if (!baseline) {
@@ -752,7 +587,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         throw error
       }
 
-      removeOptimisticTransaction(transaction.id)
+      optimisticMutationEngine.remove(transaction.id)
       error = null
       const changedByMutationResult = applyMutationResult(result)
       const needsProjectionRefresh = !result.invalidation
@@ -796,11 +631,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (disposed) {
       throw new Error("DataSourceBackedRowModel has been disposed")
     }
-  }
-
-  function readTelemetryNowMs(): number {
-    const now = globalThis.performance?.now?.()
-    return Number.isFinite(now) ? now : 0
   }
 
   function getPaginationSnapshot() {
@@ -865,73 +695,29 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return rowCache.has(index) && !staleRetainedRowIndexes.has(index)
   }
 
-  function finishPlaceholderExposure(index: number, timestampMs = readTelemetryNowMs()): void {
-    const startedAtMs = activePlaceholderExposureRows.get(index)
-    if (typeof startedAtMs !== "number") {
-      return
-    }
-    activePlaceholderExposureRows.delete(index)
-    const durationMs = Math.max(0, timestampMs - startedAtMs)
-    diagnostics.placeholderExposureEvents += 1
-    diagnostics.placeholderExposureLastMs = durationMs
-    diagnostics.placeholderExposureTotalMs += durationMs
-    diagnostics.placeholderExposureMaxMs = Math.max(diagnostics.placeholderExposureMaxMs, durationMs)
-    diagnostics.placeholderExposureActiveRows = activePlaceholderExposureRows.size
-  }
-
   function reconcilePlaceholderExposure(sourceViewport: DataGridViewportRange = toSourceRange(viewportRange)): void {
-    const timestampMs = readTelemetryNowMs()
-    const visiblePlaceholderIndexes = new Set<number>()
-    if (rowCount > 0) {
-      const bounded = normalizeViewportRange(sourceViewport, rowCount)
-      for (let index = bounded.start; index <= bounded.end; index += 1) {
-        if (!rowCache.has(index)) {
-          visiblePlaceholderIndexes.add(index)
-          if (!activePlaceholderExposureRows.has(index)) {
-            activePlaceholderExposureRows.set(index, timestampMs)
-          }
-        }
-      }
-    }
-    for (const index of Array.from(activePlaceholderExposureRows.keys())) {
-      if (!visiblePlaceholderIndexes.has(index)) {
-        finishPlaceholderExposure(index, timestampMs)
-      }
-    }
-    diagnostics.placeholderExposureActiveRows = activePlaceholderExposureRows.size
+    telemetry.reconcilePlaceholderExposure({
+      sourceViewport,
+      rowCount,
+      hasCachedRow: index => rowCache.has(index),
+    })
   }
 
-  function finishViewportDataAvailability(timestampMs = readTelemetryNowMs()): void {
-    if (viewportDataAvailabilityStartedAtMs === null) {
-      return
-    }
-    if (getVisibleRowCount() > 0 && !isRangeFullyCached(toSourceRange(viewportRange))) {
-      return
-    }
-    const durationMs = Math.max(0, timestampMs - viewportDataAvailabilityStartedAtMs)
-    viewportDataAvailabilityStartedAtMs = null
-    diagnostics.viewportDataAvailabilityEvents += 1
-    diagnostics.viewportDataAvailabilityLastMs = durationMs
-    diagnostics.viewportDataAvailabilityTotalMs += durationMs
-    diagnostics.viewportDataAvailabilityMaxMs = Math.max(diagnostics.viewportDataAvailabilityMaxMs, durationMs)
+  function finishViewportDataAvailability(): void {
+    telemetry.finishViewportDataAvailability({
+      visibleRowCount: getVisibleRowCount(),
+      isViewportFullyCached: () => isRangeFullyCached(toSourceRange(viewportRange)),
+    })
   }
 
   function markViewportDataAvailabilityRequested(range: DataGridViewportRange): void {
-    if (rowCount <= 0 || !rangesOverlap(range, toSourceRange(viewportRange))) {
-      return
-    }
-    if (isRangeFullyCached(toSourceRange(viewportRange))) {
-      return
-    }
-    viewportDataAvailabilityStartedAtMs ??= readTelemetryNowMs()
-  }
-
-  function recordPullDuration(startedAtMs: number, timestampMs = readTelemetryNowMs()): void {
-    const durationMs = Math.max(0, timestampMs - startedAtMs)
-    diagnostics.pullDurationEvents += 1
-    diagnostics.pullDurationLastMs = durationMs
-    diagnostics.pullDurationTotalMs += durationMs
-    diagnostics.pullDurationMaxMs = Math.max(diagnostics.pullDurationMaxMs, durationMs)
+    telemetry.markViewportDataAvailabilityRequested({
+      range,
+      rowCount,
+      sourceViewport: toSourceRange(viewportRange),
+      rangesOverlap,
+      isViewportFullyCached: () => isRangeFullyCached(toSourceRange(viewportRange)),
+    })
   }
 
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
@@ -1308,22 +1094,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState()
   }
 
-  function rangeFromIndexes(indexes: readonly number[]): DataGridViewportRange | null {
-    let min = Number.POSITIVE_INFINITY
-    let max = Number.NEGATIVE_INFINITY
-    for (const rawIndex of indexes) {
-      if (!Number.isFinite(rawIndex)) {
-        continue
-      }
-      const index = Math.max(0, Math.trunc(rawIndex))
-      min = Math.min(min, index)
-      max = Math.max(max, index)
-    }
-    return Number.isFinite(min) && Number.isFinite(max)
-      ? { start: min, end: max }
-      : null
-  }
-
   function clearRowsById(
     rowIds: readonly DataGridRowId[],
     options: { preserveRange?: DataGridViewportRange | null } = {},
@@ -1373,10 +1143,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
           clearBackgroundPrefetchState("stale")
         }
+        const pendingBackgroundPull = readPendingPull("background")
         if (pendingBackgroundPull && index >= pendingBackgroundPull.range.start && index <= pendingBackgroundPull.range.end) {
           diagnostics.prefetchDroppedStale += 1
-          pendingBackgroundPull = null
-          updatePendingPullDiagnostics()
+          writePendingPull("background", null)
         }
       }
     }
@@ -1419,11 +1189,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         bumpRevision()
       }
       let removedRows = 0
-      for (const index of Array.from(activePlaceholderExposureRows.keys())) {
-        if (index < preserveRange.start || index > preserveRange.end) {
-          finishPlaceholderExposure(index)
-        }
-      }
+      telemetry.finishPlaceholderExposuresOutsideRange(preserveRange)
       for (const index of Array.from(rowCache.keys())) {
         if (index >= preserveRange.start && index <= preserveRange.end) {
           continue
@@ -1445,14 +1211,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
       bumpRevision()
     }
     diagnostics.invalidatedRows += rowCache.size
-    for (const index of Array.from(activePlaceholderExposureRows.keys())) {
-      finishPlaceholderExposure(index)
-    }
+    telemetry.finishAllPlaceholderExposures()
     rowCache.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
     diagnostics.rowCacheSize = rowCache.size
-    viewportDataAvailabilityStartedAtMs = null
+    telemetry.resetViewportDataAvailability()
     updateLoadingState()
   }
 
@@ -1581,20 +1345,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function readPendingPull(priority: DataGridDataSourcePullPriority): PendingPull | null {
-    return priority === "background" ? pendingBackgroundPull : pendingCriticalPull
+    return scheduler.read(priority === "background" ? "background" : "critical")
   }
 
   function updatePendingPullDiagnostics(): void {
-    diagnostics.hasPendingPull = Boolean(pendingCriticalPull || pendingBackgroundPull || scheduledViewportPull)
+    diagnostics.hasPendingPull = scheduler.hasPending()
   }
 
   function writePendingPull(priority: DataGridDataSourcePullPriority, value: PendingPull | null): void {
-    if (priority === "background") {
-      pendingBackgroundPull = value
-    } else {
-      pendingCriticalPull = value
-    }
-    updatePendingPullDiagnostics()
+    scheduler.write(priority === "background" ? "background" : "critical", value)
   }
 
   function abortLaneInFlight(priority: DataGridDataSourcePullPriority, reason: "stale" | "preempted" = "preempted") {
@@ -1618,22 +1377,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function clearBackgroundPrefetchState(reason: "stale" | "reset" = "stale"): void {
     abortLaneInFlight("background", reason === "reset" ? "preempted" : reason)
-    if (pendingBackgroundPull) {
-      if (reason === "stale") {
-        diagnostics.prefetchDroppedStale += 1
-      }
-      pendingBackgroundPull = null
-    }
-    updatePendingPullDiagnostics()
+    scheduler.clearBackground(reason)
   }
 
   function clearScheduledViewportPull(): void {
-    if (!scheduledViewportPull) {
-      return
-    }
-    scheduledViewportPull = null
-    diagnostics.pullDropped += 1
-    updatePendingPullDiagnostics()
+    scheduler.clearScheduledViewport()
   }
 
   function buildRequestStateKey(): string {
@@ -1739,14 +1487,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     requestStateKey: string,
     treePullContext: DataGridDataSourceTreePullContext | null = null,
   ): void {
-    scheduledViewportPull = {
+    scheduler.setScheduledViewport({
       range: requestRange,
       reason: "viewport-change",
       priority: "critical",
       key: buildRequestKey(requestRange, "viewport-change", "critical", treePullContext, requestStateKey),
       stateKey: requestStateKey,
       treeData: treePullContext,
-    }
+    })
     diagnostics.pullCoalesced += viewportPullSchedulePending ? 1 : 0
     diagnostics.pullDeferred += 1
     updatePendingPullDiagnostics()
@@ -1757,9 +1505,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     viewportPullSchedulePending = true
     queueMicrotask(() => {
       viewportPullSchedulePending = false
-      const next = scheduledViewportPull
-      scheduledViewportPull = null
-      updatePendingPullDiagnostics()
+      const next = scheduler.readScheduledViewport()
+      scheduler.setScheduledViewport(null)
       if (!next || disposed) {
         return
       }
@@ -1775,10 +1522,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         await activeCritical.catch(() => {})
         continue
       }
-      const nextCritical = pendingCriticalPull
+      const nextCritical = readPendingPull("critical")
       if (nextCritical) {
-        pendingCriticalPull = null
-        updatePendingPullDiagnostics()
+        writePendingPull("critical", null)
         await pullRange(nextCritical.range, nextCritical.reason, nextCritical.priority, nextCritical.treeData)
         continue
       }
@@ -1868,10 +1614,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (backgroundInFlight && backgroundInFlight.stateKey !== requestStateKey) {
         abortLaneInFlight("background", "stale")
       }
+      const pendingBackgroundPull = readPendingPull("background")
       if (pendingBackgroundPull && pendingBackgroundPull.stateKey !== requestStateKey) {
         diagnostics.prefetchDroppedStale += 1
-        pendingBackgroundPull = null
-        updatePendingPullDiagnostics()
+        writePendingPull("background", null)
       }
       if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {
         const nextRank = resolvePriorityRank(priority)
@@ -1900,7 +1646,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         diagnostics.prefetchStarted += 1
       }
       error = priority === "background" ? error : null
-      const pullStartedAtMs = readTelemetryNowMs()
+      const pullStartedAtMs = telemetry.readNowMs()
 
       try {
         const result = await dataSource.pull({
@@ -1922,7 +1668,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             cursor: paginationCursor,
           },
         })
-        recordPullDuration(pullStartedAtMs)
+        telemetry.recordPullDuration(pullStartedAtMs)
 
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
@@ -1988,7 +1734,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (isAbortError(reasonError)) {
           return
         }
-        recordPullDuration(pullStartedAtMs)
+        telemetry.recordPullDuration(pullStartedAtMs)
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
           diagnostics.pullDropped += 1
@@ -2009,15 +1755,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
           writeLaneInFlight(priority, null)
           updateLoadingState()
           if (!disposed && !backpressurePaused) {
+            const pendingCriticalPull = readPendingPull("critical")
+            const pendingBackgroundPull = readPendingPull("background")
             if (!criticalInFlight && pendingCriticalPull) {
               const next = pendingCriticalPull
-              pendingCriticalPull = null
-              updatePendingPullDiagnostics()
+              writePendingPull("critical", null)
               void pullRange(next.range, next.reason, next.priority, next.treeData)
             } else if (!backgroundInFlight && !criticalInFlight && pendingBackgroundPull) {
               const next = pendingBackgroundPull
-              pendingBackgroundPull = null
-              updatePendingPullDiagnostics()
+              writePendingPull("background", null)
               void pullRange(next.range, next.reason, next.priority, next.treeData)
             }
           }
@@ -2064,7 +1810,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
     const normalizedInvalidationRange = normalizeRequestedRange(invalidation.range)
     const sourceViewport = toSourceRange(viewportRange)
-    const visibleRefreshRange = intersectRanges(normalizedInvalidationRange, sourceViewport)
+    const visibleRefreshRange = resolveVisibleRangeInvalidation(normalizedInvalidationRange, sourceViewport)
     const touchesViewport = visibleRefreshRange !== null
     clearRange(invalidation.range, touchesViewport ? { preserveRange: sourceViewport } : {})
     if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizedInvalidationRange)) {
@@ -2282,7 +2028,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
             if (!Array.isArray(updates) || updates.length === 0) {
               return
             }
-            const transactionId = ++optimisticEditTransactionCounter
+            const transactionId = optimisticMutationEngine.nextTransactionId()
             const baselinesByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
             const updatesByRowId = new Map<DataGridRowId, Partial<T>>()
             const previousByRowId = new Map<DataGridRowId, Partial<T>>()
@@ -2353,18 +2099,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
               revisionsByRowId,
               baselinesByRowId,
             }
-            optimisticEditTransactions.set(transactionId, transaction)
-            optimisticEditTransactionOrder.push(transactionId)
+            optimisticMutationEngine.register(transaction)
 
             if (changed) {
               bumpRevision()
               emit()
             }
 
-            const previousCommitQueue = optimisticEditQueue
-            const commitTask = previousCommitQueue.then(() => processOptimisticCommit(transaction))
-            optimisticEditQueue = commitTask.then(() => undefined, () => undefined)
-            return commitTask
+            return optimisticMutationEngine.enqueueCommit(() => processOptimisticCommit(transaction))
           },
         }
       : {}
@@ -2901,16 +2643,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const invalidation: DataGridDataSourceInvalidation = { kind: "range", range: sourceRange, reason: "model-range" }
       const normalizedSourceRange = normalizeRequestedRange(sourceRange)
       const sourceViewport = toSourceRange(viewportRange)
-      const visibleRefreshRange = intersectRanges(normalizedSourceRange, sourceViewport)
+      const visibleRefreshRange = resolveVisibleRangeInvalidation(normalizedSourceRange, sourceViewport)
       const touchesViewport = visibleRefreshRange !== null
       clearRange(sourceRange, touchesViewport ? { preserveRange: sourceViewport } : {})
       if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, sourceRange)) {
         clearBackgroundPrefetchState("stale")
       }
+      const pendingBackgroundPull = readPendingPull("background")
       if (pendingBackgroundPull && rangesOverlap(pendingBackgroundPull.range, sourceRange)) {
         diagnostics.prefetchDroppedStale += 1
-        pendingBackgroundPull = null
-        updatePendingPullDiagnostics()
+        writePendingPull("background", null)
       }
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
@@ -2966,15 +2708,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       backpressurePaused = false
       diagnostics.paused = false
+      const pendingCriticalPull = readPendingPull("critical")
+      const pendingBackgroundPull = readPendingPull("background")
       if (pendingCriticalPull && !criticalInFlight) {
         const next = pendingCriticalPull
-        pendingCriticalPull = null
-        updatePendingPullDiagnostics()
+        writePendingPull("critical", null)
         void pullRange(next.range, next.reason, next.priority, next.treeData)
       } else if (pendingBackgroundPull && !criticalInFlight && !backgroundInFlight) {
         const next = pendingBackgroundPull
-        pendingBackgroundPull = null
-        updatePendingPullDiagnostics()
+        writePendingPull("background", null)
         void pullRange(next.range, next.reason, next.priority, next.treeData)
       } else {
         emit()
@@ -3030,16 +2772,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       abortLaneInFlight("critical", "stale")
       abortLaneInFlight("background", "stale")
       listeners.clear()
-      for (const index of Array.from(activePlaceholderExposureRows.keys())) {
-        finishPlaceholderExposure(index)
-      }
+      telemetry.finishAllPlaceholderExposures()
       rowCache.clear()
       staleRetainedRowIndexes.clear()
       rangeCache.clear()
-      viewportDataAvailabilityStartedAtMs = null
-      pendingCriticalPull = null
-      pendingBackgroundPull = null
-      scheduledViewportPull = null
+      telemetry.resetViewportDataAvailability()
+      writePendingPull("critical", null)
+      writePendingPull("background", null)
+      scheduler.setScheduledViewport(null)
       viewportPullSchedulePending = false
       diagnostics.inFlight = false
       diagnostics.criticalInFlight = false

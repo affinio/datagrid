@@ -19,6 +19,7 @@ Slices:
 7. [x] Add server pivot projection implementation or explicit enterprise adapter boundary.
 8. [x] Add browser regression coverage for grouped server datasource expand/collapse viewport rematerialization.
 9. [x] Add browser/perf gates for grouped server datasource scroll and refresh.
+10. [x] Decompose `dataSourceBackedRowModel` into scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine modules.
 
 ## Track 2. Unloaded-Row Operations
 
