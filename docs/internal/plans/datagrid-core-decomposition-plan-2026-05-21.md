@@ -46,6 +46,7 @@ Completed:
 - Extracted computed recompute/projection refresh orchestration into `clientRowComputedRefreshRuntime`.
 - Extracted row-model dispose cleanup into `clientRowDisposeHostRuntime`.
 - Extracted row-model runtime constants and guards into `clientRowModelRuntimeConfig`.
+- Extracted initial/manual refresh policy into `clientRowRefreshHostRuntime`.
 
 Next candidates:
 

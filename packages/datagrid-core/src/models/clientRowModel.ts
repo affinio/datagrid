@@ -98,6 +98,7 @@ import { createClientRowComputedFieldHostRuntime } from "./host/clientRowCompute
 import { createClientRowFormulaHostRuntime } from "./host/clientRowFormulaHostRuntime.js"
 import { createClientRowFormulaTableHostRuntime } from "./host/clientRowFormulaTableHostRuntime.js"
 import { createClientRowDisposeHostRuntime } from "./host/clientRowDisposeHostRuntime.js"
+import { createClientRowRefreshHostRuntime } from "./host/clientRowRefreshHostRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -883,11 +884,22 @@ export function createClientRowModel<T>(
     formulaDiagnosticsRuntime,
     runtimeStateStore,
   })
+  const refreshHostRuntime = createClientRowRefreshHostRuntime({
+    ensureActive,
+    setProjectionInvalidation: reasons => {
+      runtimeStateStore.setProjectionInvalidation(reasons)
+    },
+    tryApplyFlatIdentityProjectionRefresh: () => flatIdentityProjectionRefreshRuntime.tryApply(),
+    refreshComputeHost: () => {
+      computeHostRuntime.refresh()
+    },
+    recomputeFromComputeStage: () => {
+      computeHostRuntime.recomputeFromStage("compute")
+    },
+    emit,
+  })
 
-  runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
-  if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
-    computeHostRuntime.recomputeFromStage("compute")
-  }
+  refreshHostRuntime.bootstrapInitialProjection()
 
   return {
     kind: "client",
@@ -1099,14 +1111,7 @@ export function createClientRowModel<T>(
       mutationHostRuntime.collapseAllGroups()
     },
     refresh(reason?: DataGridRowModelRefreshReason) {
-      ensureActive()
-      runtimeStateStore.setProjectionInvalidation(
-        reason === "sort-change" ? ["sortChanged"] : ["manualRefresh"],
-      )
-      if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
-        computeHostRuntime.refresh()
-      }
-      emit()
+      refreshHostRuntime.refresh(reason)
     },
     subscribe(listener: DataGridRowModelListener<T>) {
       return lifecycle.subscribe(listener)
