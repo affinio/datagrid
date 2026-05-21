@@ -10,3 +10,10 @@ export type {
   WorldMapMarkerVariant,
   WorldMapPoint,
 } from "./types"
+export type {
+  WorldMapSelectionState,
+  WorldMapStateApplyOptions,
+  WorldMapStateMigrateOptions,
+  WorldMapUnifiedState,
+  WorldMapViewState,
+} from "./state"

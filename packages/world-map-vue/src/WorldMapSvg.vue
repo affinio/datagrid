@@ -132,6 +132,13 @@ import type {
   WorldMapMarkerScaleMode,
   WorldMapMarkerVariant,
 } from "./types"
+import type {
+  WorldMapStateApplyOptions,
+  WorldMapStateMigrateOptions,
+  WorldMapUnifiedState,
+  WorldMapViewState,
+} from "./state"
+import { migrateWorldMapState } from "./state"
 
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 480
@@ -139,12 +146,6 @@ const DEFAULT_MIN_ZOOM = 1
 const DEFAULT_MAX_ZOOM = 8
 const ZOOM_STEP = 1.25
 const DRAG_THRESHOLD_PX = 3
-
-interface WorldMapViewState {
-  zoom: number
-  panX: number
-  panY: number
-}
 
 interface ProjectedWorldMapMarker extends WorldMapScreenPoint {
   marker: WorldMapMarker
@@ -271,6 +272,13 @@ const countryValueDomain = computed<WorldMapValueDomain | null>(() => {
     max: Math.max(rawMin, rawMax),
   }
 })
+
+defineExpose({
+  getState,
+  migrateState,
+  applyState,
+})
+
 const countryValueFills = computed(() => {
   const domain = countryValueDomain.value
   const fills = new Map<WorldMapCountryId, string>()
@@ -415,17 +423,23 @@ function clearSelectedMarker(): void {
 }
 
 function setSelectedCountryId(countryId: WorldMapCountryId | null): void {
+  const previousCountryId = resolvedSelectedCountryId.value
   if (props.selectedCountryId === undefined) {
     internalSelectedCountryId.value = countryId
   }
-  emit("update:selectedCountryId", countryId)
+  if (previousCountryId !== countryId) {
+    emit("update:selectedCountryId", countryId)
+  }
 }
 
 function setSelectedMarkerId(markerId: string | null): void {
+  const previousMarkerId = resolvedSelectedMarkerId.value
   if (props.selectedMarkerId === undefined) {
     internalSelectedMarkerId.value = markerId
   }
-  emit("update:selectedMarkerId", markerId)
+  if (previousMarkerId !== markerId) {
+    emit("update:selectedMarkerId", markerId)
+  }
 }
 
 function handleWindowKeydown(event: KeyboardEvent): void {
@@ -457,10 +471,11 @@ function zoomOut(): void {
 }
 
 function resetView(): void {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
-  emitViewChange()
+  setViewState({
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+  })
 }
 
 function handleWheel(event: WheelEvent): void {
@@ -551,6 +566,19 @@ function setZoom(nextZoom: number, center: { x: number; y: number }): void {
   emitViewChange()
 }
 
+function setViewState(viewState: WorldMapViewState): void {
+  const clampedZoom = clamp(viewState.zoom, resolvedMinZoom.value, resolvedMaxZoom.value)
+  const changed = zoom.value !== clampedZoom || panX.value !== viewState.panX || panY.value !== viewState.panY
+  if (!changed) {
+    return
+  }
+
+  zoom.value = clampedZoom
+  panX.value = viewState.panX
+  panY.value = viewState.panY
+  emitViewChange()
+}
+
 function svgPointFromClient(svg: SVGSVGElement, clientX: number, clientY: number): { x: number; y: number } {
   const rect = svg.getBoundingClientRect()
   if (rect.width === 0 || rect.height === 0) {
@@ -609,6 +637,56 @@ function emitViewChange(): void {
     panX: panX.value,
     panY: panY.value,
   })
+}
+
+function getState(): WorldMapUnifiedState {
+  return {
+    version: 1,
+    selection: {
+      selectedCountryId: resolvedSelectedCountryId.value,
+      selectedMarkerId: resolvedSelectedMarkerId.value,
+    },
+    view: {
+      zoom: zoom.value,
+      panX: panX.value,
+      panY: panY.value,
+    },
+  }
+}
+
+function migrateState(
+  state: unknown,
+  options: WorldMapStateMigrateOptions = {},
+): WorldMapUnifiedState | null {
+  return migrateWorldMapState(state, options)
+}
+
+function applyState(
+  state: WorldMapUnifiedState | null,
+  options: WorldMapStateApplyOptions = {},
+): boolean {
+  if (state === null) {
+    if (options.strict) {
+      throw new Error("[WorldMap] State application failed: state is null.")
+    }
+    return false
+  }
+
+  const migrated = migrateWorldMapState(state, options)
+  if (migrated === null) {
+    return false
+  }
+
+  if (options.applySelection !== false) {
+    setSelectedCountryId(migrated.selection.selectedCountryId)
+    setSelectedMarkerId(migrated.selection.selectedMarkerId)
+  }
+
+  if (options.applyView !== false) {
+    setViewState(migrated.view)
+  }
+
+  return true
 }
 
 function clamp(value: number, min: number, max: number): number {

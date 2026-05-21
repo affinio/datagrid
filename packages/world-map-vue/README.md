@@ -166,6 +166,25 @@ Use `markerScaleMode` to choose how marker size behaves during zoom:
 - `"screen"` keeps marker visual radius stable while zooming by reducing SVG radius as zoom increases.
 - `"map"` keeps marker radius in map coordinates, so markers scale with the map.
 
+## State Persistence
+
+`WorldMapSvg` exposes a small imperative state API on the component instance so applications can persist and restore map view state symmetrically with `datagrid`.
+
+```ts
+const state = worldMapRef.value?.getState()
+const migrated = worldMapRef.value?.migrateState(rawState)
+const restored = worldMapRef.value?.applyState(migrated)
+```
+
+The exported state currently includes:
+
+- selected country id
+- selected marker id
+- zoom level
+- pan offsets
+
+The state shape is versioned and validated before restore. Invalid payloads return `null` from `migrateState` unless `strict: true` is passed.
+
 Generic GPS tracking overlays can keep their domain data in `properties`:
 
 ```ts

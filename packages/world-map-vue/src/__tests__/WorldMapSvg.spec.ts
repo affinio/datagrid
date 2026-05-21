@@ -157,6 +157,66 @@ describe("WorldMapSvg", () => {
     expect(resetButton?.attributes("disabled")).toBeDefined()
   })
 
+  it("exports, migrates, and restores view and selection state", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        selectedCountryId: "AA",
+        selectedMarkerId: "london",
+      },
+    })
+
+    await wrapper.find(".world-map-svg__controls button:nth-child(2)").trigger("click")
+    await nextTick()
+
+    const exportedState = (wrapper.vm as unknown as {
+      getState: () => {
+        version: 1
+        selection: { selectedCountryId: string | null; selectedMarkerId: string | null }
+        view: { zoom: number; panX: number; panY: number }
+      }
+    }).getState()
+
+    expect(exportedState).toMatchObject({
+      version: 1,
+      selection: {
+        selectedCountryId: "AA",
+        selectedMarkerId: "london",
+      },
+      view: {
+        zoom: 1.25,
+        panX: -120,
+        panY: -60,
+      },
+    })
+
+    const migrated = (wrapper.vm as unknown as {
+      migrateState: (state: unknown) => typeof exportedState | null
+      applyState: (state: typeof exportedState | null) => boolean
+    }).migrateState(exportedState)
+
+    expect(migrated).toEqual(exportedState)
+    expect((wrapper.vm as unknown as { migrateState: (state: unknown) => unknown }).migrateState({ version: 2 })).toBeNull()
+
+    const restoredWrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        selectedCountryId: null,
+        selectedMarkerId: null,
+      },
+    })
+    const restoreVm = restoredWrapper.vm as unknown as {
+      applyState: (state: typeof exportedState | null) => boolean
+    }
+
+    expect(restoreVm.applyState(exportedState)).toBe(true)
+    await nextTick()
+
+    expect(latestSelectedEmission(restoredWrapper)).toBe("AA")
+    expect(latestSelectedMarkerEmission(restoredWrapper)).toBe("london")
+    expect(restoredWrapper.find(".world-map-svg__map-layer").attributes("transform")).toBe("translate(-120 -60) scale(1.25)")
+  })
+
   it("selects a country on short pointer interaction after zoom", async () => {
     const wrapper = mount(WorldMapSvg, {
       props: {
