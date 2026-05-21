@@ -123,17 +123,22 @@ function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
   const regions = ["AMER", "EMEA", "APAC"] as const
   const teams = ["core", "growth", "platform", "payments"] as const
   return Array.from({ length: count }, (_, index) => {
-    const row = {
+    const row: BenchRow = {
       id: index + 1,
       region: regions[index % regions.length]!,
       team: teams[index % teams.length]!,
       revenue: 10 + ((index * 11) % 100),
     }
     return {
+      kind: "leaf",
+      data: row,
       row,
+      rowKey: row.id,
       rowId: row.id,
+      sourceIndex: index,
       originalIndex: index,
       displayIndex: index,
+      state: { selected: false, group: false, pinned: "none", expanded: false },
     }
   })
 }
@@ -675,10 +680,15 @@ describe("worker-owned row model", () => {
   it("supports formula registration through worker protocol and recomputes on patch", async () => {
     const rows: DataGridRowNodeInput<BenchRow>[] = [
       {
+        kind: "leaf",
+        data: { id: 1, region: "AMER", revenue: 10, qty: 2 },
         row: { id: 1, region: "AMER", revenue: 10, qty: 2 },
+        rowKey: 1,
         rowId: 1,
+        sourceIndex: 0,
         originalIndex: 0,
         displayIndex: 0,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
       },
     ]
     const channel = createMessageChannelPair()

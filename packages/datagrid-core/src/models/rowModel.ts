@@ -1052,17 +1052,25 @@ export function withResolvedRowIdentity<T>(
   if (isDataGridRowNodeInput(node)) {
     return node
   }
-  if (typeof resolveRowId !== "function") {
-    return node
-  }
   const rowData = resolveRowData(node)
-  const rowId = assertDataGridRowId(resolveRowId(rowData, index), "Invalid row id returned by resolver")
+  const fallbackId = ((): DataGridRowId => {
+    if (typeof resolveRowId === "function") {
+      return assertDataGridRowId(resolveRowId(rowData, index), "Invalid row id returned by resolver")
+    }
+    const candidate = rowData && typeof rowData === "object"
+      ? ((rowData as { rowId?: unknown; id?: unknown }).rowId ?? (rowData as { id?: unknown }).id)
+      : undefined
+    if (typeof candidate === "string" || typeof candidate === "number") {
+      return candidate
+    }
+    return index
+  })()
   return {
     kind: "leaf",
     data: rowData,
     row: rowData,
-    rowKey: rowId,
-    rowId,
+    rowKey: fallbackId,
+    rowId: fallbackId,
     originalIndex: index,
     sourceIndex: index,
     displayIndex: index,

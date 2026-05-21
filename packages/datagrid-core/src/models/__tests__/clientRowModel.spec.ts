@@ -6,7 +6,6 @@ import {
   normalizeViewportRange,
   serializeColumnValueToToken,
 } from "../index"
-import type { VisibleRow } from "../../types"
 import type { DataGridFilterSnapshot, DataGridRowNodeInput } from "../rowModel"
 
 const projectionStageTimer = <TResult>(_stage: string, run: () => TResult) => ({
@@ -14,13 +13,22 @@ const projectionStageTimer = <TResult>(_stage: string, run: () => TResult) => ({
   duration: 0,
 })
 
-function buildRows(count: number): VisibleRow<{ id: number }>[] {
-  return Array.from({ length: count }, (_, index) => ({
-    row: { id: index },
-    rowId: index,
+function createRowNode<T extends { id: string | number }>(row: T, index: number = Number(row.id)): DataGridRowNodeInput<T> {
+  return {
+    kind: "leaf",
+    data: row,
+    row,
+    rowKey: row.id,
+    rowId: row.id,
+    sourceIndex: index,
     originalIndex: index,
     displayIndex: index,
-  }))
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
+}
+
+function buildRows(count: number): DataGridRowNodeInput<{ id: number }>[] {
+  return Array.from({ length: count }, (_, index) => createRowNode({ id: index }, index))
 }
 
 function encodeGroupKey(segments: readonly { field: string; value: string }[]): string {

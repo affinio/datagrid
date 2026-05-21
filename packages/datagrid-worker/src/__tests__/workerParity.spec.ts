@@ -75,10 +75,15 @@ function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
       revenue: 10 + ((index * 17) % 200),
     }
     return {
+      kind: "leaf",
+      data: row,
       row,
+      rowKey: row.id,
       rowId: row.id,
+      sourceIndex: index,
       originalIndex: index,
       displayIndex: index,
+      state: { selected: false, group: false, pinned: "none", expanded: false },
     }
   })
 }

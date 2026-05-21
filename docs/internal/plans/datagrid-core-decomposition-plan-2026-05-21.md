@@ -42,6 +42,7 @@ Completed:
 - Moved calculation snapshot restore orchestration into `clientRowCalculationSnapshotRestoreRuntime`.
 - Extracted column histogram read-policy into `clientRowColumnHistogramRuntime`.
 - Extracted pivot drilldown facade wiring into `clientRowPivotDrilldownHostRuntime`.
+- Extracted computed apply/materialization refresh policy into `clientRowComputedApplyRuntime`.
 
 Next candidates:
 

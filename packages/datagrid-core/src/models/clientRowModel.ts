@@ -102,6 +102,7 @@ import {
   type ApplyComputedFieldsToSourceRowsOptions,
   type ApplyComputedFieldsToSourceRowsResult,
 } from "./compute/clientRowComputedExecutionRuntime.js"
+import { createClientRowComputedApplyRuntime } from "./compute/clientRowComputedApplyRuntime.js"
 import {
   type DataGridFormulaFunctionDefinition,
   type DataGridFormulaFunctionRegistry,
@@ -524,6 +525,7 @@ export function createClientRowModel<T>(
   const materializeOutputRow = materializationRuntime.materializeOutputRow
   const materializeOutputRows = materializationRuntime.materializeOutputRows
   const materializeOutputRowsInRange = materializationRuntime.materializeOutputRowsInRange
+  const refreshMaterializedSourceRows = sourceColumnHostRuntime.refreshMaterializedSourceRows
   const computedExecutionRuntime = createClientRowComputedExecutionRuntime<T>({
     vectorBatchSize: DATAGRID_COMPUTE_VECTOR_BATCH_SIZE,
     isRecord,
@@ -555,23 +557,17 @@ export function createClientRowModel<T>(
     createEmptyFormulaComputeStageDiagnostics,
     withRuntimeErrorsCollector: formulaDiagnosticsRuntime.withRuntimeErrorsCollector,
   })
-  const applyComputedFieldsToSourceRows = (
-    options: ApplyComputedFieldsToSourceRowsOptions = {},
-  ): ApplyComputedFieldsToSourceRowsResult<T> => {
-    const result = computedExecutionRuntime.applyComputedFieldsToSourceRows(options)
-    const fieldsChanged = computedSnapshotFieldsRuntime.sync()
-    const snapshotChanged = computedSnapshotRuntime.applyComputedUpdates(result.computedUpdatesByRowId)
-    if (fieldsChanged) {
-      refreshMaterializedSourceRows()
-    } else if (snapshotChanged || result.changed) {
-      const changedRowIds = result.changedRowIds.length > 0
-        ? result.changedRowIds
-        : Array.from(result.computedUpdatesByRowId.keys())
-      refreshMaterializedSourceRows(changedRowIds)
-    }
-    return result
-  }
-  const refreshMaterializedSourceRows = sourceColumnHostRuntime.refreshMaterializedSourceRows
+  const computedApplyRuntime = createClientRowComputedApplyRuntime<T>({
+    executeComputedFields: applyOptions =>
+      computedExecutionRuntime.applyComputedFieldsToSourceRows(applyOptions),
+    syncComputedSnapshotFields: () => computedSnapshotFieldsRuntime.sync(),
+    applyComputedUpdates: updates => computedSnapshotRuntime.applyComputedUpdates(updates),
+    refreshMaterializedSourceRows,
+  })
+  const applyComputedFieldsToSourceRows: (
+    options?: ApplyComputedFieldsToSourceRowsOptions,
+  ) => ApplyComputedFieldsToSourceRowsResult<T> = applyOptions =>
+    computedApplyRuntime.applyComputedFieldsToSourceRows(applyOptions)
   const computedFieldHostRuntime = createClientRowComputedFieldHostRuntime<T>({
     computedRegistry,
     initialComputedFields: options.initialComputedFields,
