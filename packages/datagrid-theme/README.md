@@ -18,7 +18,13 @@ Theme tokens, presets, and utilities for Affino DataGrid.
 
 The preferred styling path is token-driven theming through `DataGridStyleConfig.tokens` and `tokenVariants`.
 
-The exported default tokens are intentionally plain: white and neutral gray surfaces, subtle borders, Arial-style system typography, and a small blue accent only for active/focus/selection states. Use `industrialNeutralTheme` or `sugarTheme` when you need a more opinionated look, or provide your own token map for product branding.
+The built-in presets are intentionally distinct and each ships `light` and `dark` token variants:
+
+- `defaultStyleConfig`: strict neutral baseline with white/gray surfaces, Arial-style typography, and a small blue interaction accent.
+- `industrialNeutralTheme`: compact engineering preset with monospace typography, stronger grid lines, steel surfaces, and cyan operational accents.
+- `sugarTheme`: warmer expressive preset with soft rose surfaces and a pink/violet accent system.
+
+All presets set `inheritThemeFromDocument: true`; `resolveGridThemeTokens()` will select the `dark` variant when `document.documentElement` has `data-theme="dark"` or the configured dark class. Provide `activeTokenVariant` only when you need to force a specific variant.
 
 `DataGridStyleConfig` is token-only. Class-slot styling hooks were removed; renderer-owned class names remain internal implementation details.
 
