@@ -46,6 +46,49 @@
     </DataGridTableStageHeader>
 
     <div
+      v-if="rows.pinnedTopRows.length > 0"
+      class="grid-body-shell grid-body-shell--pinned-top"
+      :style="paneLayoutStyle"
+      @mouseleave="clearHoveredRow"
+    >
+      <DataGridTableStagePinnedPane
+        :pane="leftPinnedTopPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      />
+
+      <DataGridTableStageCenterPane
+        :display-rows="rows.pinnedTopRows"
+        :runtime-revision="rows.runtimeRevision"
+        :body-rows-revision="rows.displayRowsRevision"
+        viewport-class="grid-body-viewport grid-body-viewport--pinned-top"
+        :viewport-ref="capturePinnedTopViewportRef"
+        :viewport-tab-index="pinnedTopViewportTabIndex"
+        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="props.reportFillPlumbingState"
+        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+        :perf-trace-enabled="perfTraceEnabled"
+        :handle-scroll="handlePinnedTopViewportScroll"
+        :handle-wheel="handleBodyViewportWheel"
+        :handle-keydown="handlePinnedTopViewportKeydown"
+        :handle-context-menu="onViewportContextMenu"
+        :selection-overlay-segments="emptyOverlaySegments"
+        :fill-preview-overlay-segments="emptyOverlaySegments"
+        :move-preview-overlay-segments="emptyOverlaySegments"
+        :overlay-lanes="emptyOverlayLanes"
+        :render-api="centerPaneRenderApi"
+      />
+
+      <DataGridTableStagePinnedPane
+        :pane="rightPinnedTopPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      />
+    </div>
+
+    <div
       ref="bodyShellRef"
       class="grid-body-shell"
       :style="[paneLayoutStyle, layout.bodyShellStyle]"
@@ -329,6 +372,7 @@ const interaction = stageContext.interaction
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
 const displayRows = computed(() => rows.value?.displayRows ?? [])
+const pinnedTopRows = computed(() => rows.value?.pinnedTopRows ?? [])
 const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
 const selectionRange = computed(() => selection.value?.selectionRange ?? null)
 const selectionRanges = computed<readonly OverlayRange[]>(() => {
@@ -438,11 +482,15 @@ function hasVisibleFocusedRowIndexInRows(rowsList: readonly TableRow[]): boolean
 }
 
 const hasVisibleCellFocusTarget = computed(() => (
-  hasVisibleCellAnchorInRows(rows.value.displayRows) || hasVisibleCellAnchorInRows(rows.value.pinnedBottomRows ?? [])
+  hasVisibleCellAnchorInRows(rows.value.pinnedTopRows ?? [])
+  || hasVisibleCellAnchorInRows(rows.value.displayRows)
+  || hasVisibleCellAnchorInRows(rows.value.pinnedBottomRows ?? [])
 ))
 
 const hasVisibleRowIndexFocusTarget = computed(() => (
-  hasVisibleFocusedRowIndexInRows(rows.value.displayRows) || hasVisibleFocusedRowIndexInRows(rows.value.pinnedBottomRows ?? [])
+  hasVisibleFocusedRowIndexInRows(rows.value.pinnedTopRows ?? [])
+  || hasVisibleFocusedRowIndexInRows(rows.value.displayRows)
+  || hasVisibleFocusedRowIndexInRows(rows.value.pinnedBottomRows ?? [])
 ))
 
 const bodyViewportTabIndex = computed(() => (
@@ -450,6 +498,7 @@ const bodyViewportTabIndex = computed(() => (
 ))
 
 const pinnedBottomViewportTabIndex = computed(() => -1)
+const pinnedTopViewportTabIndex = computed(() => -1)
 
 function resolveViewportRowStart(): number {
   return viewport.value?.viewportRowStart ?? 0
@@ -916,11 +965,15 @@ const isRangeMoving = computed(() => selection.value.isRangeMoving)
 
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
+const emptyOverlaySegments = computed(() => [])
+const emptyOverlayLanes = computed(() => [])
 
 const stageRootEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const leftTopPaneContentRef = ref<HTMLElement | null>(null)
+const rightTopPaneContentRef = ref<HTMLElement | null>(null)
 const leftBottomPaneContentRef = ref<HTMLElement | null>(null)
 const rightBottomPaneContentRef = ref<HTMLElement | null>(null)
 const leftHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
@@ -1087,8 +1140,10 @@ const {
   isBodyViewportScrolling: runtimeBodyViewportScrolling,
   runWhenBodyViewportScrollIdle,
   captureBodyViewportRef,
+  capturePinnedTopViewportRef,
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll,
+  handlePinnedTopViewportScroll,
   handlePinnedBottomViewportScroll,
   handleLinkedViewportWheel,
   handleBodyViewportWheel,
@@ -1516,6 +1571,8 @@ function isBodyGridFocusTarget(target: EventTarget | null): boolean {
     || bodyShellRef.value?.contains(target) === true
     || leftPaneContentRef.value?.contains(target) === true
     || rightPaneContentRef.value?.contains(target) === true
+    || leftTopPaneContentRef.value?.contains(target) === true
+    || rightTopPaneContentRef.value?.contains(target) === true
     || leftBottomPaneContentRef.value?.contains(target) === true
     || rightBottomPaneContentRef.value?.contains(target) === true
   )
@@ -1718,6 +1775,10 @@ function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)
 }
 
+function handlePinnedTopViewportKeydown(event: KeyboardEvent): void {
+  viewport.value.handleViewportKeydown(event)
+}
+
 const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
   bodyViewportClientHeight: bodyViewportClientHeight.value,
   indexColumnWidthPx: indexColumnWidthPx.value,
@@ -1916,9 +1977,12 @@ const layoutRuntime = computed(() => ({
 const paneRuntime = computed(() => ({
   leftPaneContentRef,
   rightPaneContentRef,
+  leftTopPaneContentRef,
+  rightTopPaneContentRef,
   leftBottomPaneContentRef,
   rightBottomPaneContentRef,
   displayRows,
+  pinnedTopRows,
   pinnedBottomRows,
   showRowIndex: rowIndexState.showRowIndex,
   pinnedLeftColumns,
@@ -1979,6 +2043,8 @@ const {
   centerBottomChromeCanvasStyle,
   leftPinnedPane,
   rightPinnedPane,
+  leftPinnedTopPane,
+  rightPinnedTopPane,
   leftPinnedBottomPane,
   rightPinnedBottomPane,
 } = useDataGridStagePanes({

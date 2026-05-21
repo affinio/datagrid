@@ -58,12 +58,14 @@ Goal: make enterprise layout semantics first-class instead of stage-local behavi
 
 Slices:
 
-1. [ ] Define public column-group model, state snapshot, and migration behavior.
-2. [ ] Implement column-group header runtime across center/pinned panes.
-3. [ ] Add column-group resize/reorder/visibility semantics.
-4. [ ] Define row pinning model for top/bottom rows and state persistence.
-5. [ ] Implement pinned-row virtualization and keyboard/selection semantics.
-6. [ ] Add visual/browser coverage for wide tables, pinned panes, selection overlays, and state restore.
+1. [x] Define public column-group model, state snapshot, and migration behavior.
+2. [x] Implement column-group header runtime across center/pinned panes.
+3. [x] Add column-group resize/reorder/visibility semantics.
+4. [x] Define row pinning model for top/bottom rows and state persistence.
+5. [x] Implement pinned-row virtualization and keyboard/selection semantics.
+6. [x] Add visual/browser coverage for wide tables, pinned panes, selection overlays, and state restore.
+
+Status: closed for the app-stage/runtime contract. `DataGridColumnDef.columnGroup` now normalizes into immutable snapshot `groupPath`, header groups render across pinned-left, center, and pinned-right panes, and row partitioning exposes top/body/bottom rows with top and bottom pinned surfaces outside body virtualization. Focused contract coverage exists for column-group snapshots, top/bottom row partitioning, grouped headers, and pinned top/bottom rendering. Browser validation is still expected for visual polish across wide tables and saved-view restore.
 
 ## Track 4. Comparator Policy And Aggregation Registry
 

@@ -131,6 +131,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   displayRows: readonly DataGridTableRow<TRow>[]
   displayRowsRevision?: number
   runtimeRevision?: string | number | null
+  pinnedTopRows: readonly DataGridTableRow<TRow>[]
   pinnedBottomRows: readonly DataGridTableRow<TRow>[]
   sourceRows?: readonly TRow[]
   showRowIndex?: boolean

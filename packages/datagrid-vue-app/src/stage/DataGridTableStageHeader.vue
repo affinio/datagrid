@@ -1,5 +1,5 @@
 <template>
-  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasPivotHeaderGroups }" :style="paneLayoutStyle">
+  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle">
     <slot name="center-chrome" />
 
     <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
@@ -28,6 +28,9 @@
           :data-datagrid-pivot-group-label="group.label ?? undefined"
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
+          :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-span="group.columns.length"
+          :data-datagrid-column-group-depth="rowIndex"
         >
           <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
         </div>
@@ -290,6 +293,9 @@
           :data-datagrid-pivot-group-label="group.label ?? undefined"
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
+          :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-span="group.columns.length"
+          :data-datagrid-column-group-depth="rowIndex"
         >
           <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
         </div>
@@ -496,6 +502,9 @@
           :data-datagrid-pivot-group-label="group.label ?? undefined"
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
+          :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-span="group.columns.length"
+          :data-datagrid-column-group-depth="rowIndex"
         >
           <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
         </div>
@@ -776,7 +785,11 @@ const pivotHeaderGroupDepth = computed(() => {
     return Math.max(maxDepth, meta?.groupLabels?.length ?? 0)
   }, 0)
 })
-const hasPivotHeaderGroups = computed(() => pivotHeaderGroupDepth.value > 0)
+const columnHeaderGroupDepth = computed(() => visibleColumns.value.reduce((maxDepth, column) => (
+  Math.max(maxDepth, column.groupPath?.length ?? 0)
+), 0))
+const headerGroupDepth = computed(() => Math.max(pivotHeaderGroupDepth.value, columnHeaderGroupDepth.value))
+const hasHeaderGroups = computed(() => headerGroupDepth.value > 0)
 const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedLeftColumns.value))
 const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(renderedColumns.value))
 const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
@@ -936,13 +949,21 @@ function resolveHeaderDisplayLabel(column: TableColumn): string {
   return readPivotHeaderMeta(column)?.leafLabel ?? column.column.label ?? column.key
 }
 
+function resolveColumnGroupLabel(column: TableColumn, depth: number): string | null {
+  if (mode.value === "pivot") {
+    const meta = readPivotHeaderMeta(column)
+    return typeof meta?.groupLabels?.[depth] === "string" && meta.groupLabels[depth].length > 0
+      ? meta.groupLabels[depth]
+      : null
+  }
+  const group = column.groupPath?.[depth]
+  return group?.label ? group.label : null
+}
+
 function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): readonly DataGridHeaderGroup[] {
   const groups: DataGridHeaderGroup[] = []
   for (const column of columnsList) {
-    const meta = readPivotHeaderMeta(column)
-    const label = typeof meta?.groupLabels?.[depth] === "string" && meta.groupLabels[depth].length > 0
-      ? meta.groupLabels[depth]
-      : null
+    const label = resolveColumnGroupLabel(column, depth)
     const width = resolveColumnWidth(column)
     const previous = groups[groups.length - 1]
     if (previous && previous.label === label) {
@@ -961,11 +982,11 @@ function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): 
 }
 
 function buildHeaderGroupRows(columnsList: readonly TableColumn[]): readonly (readonly DataGridHeaderGroup[])[] {
-  if (!hasPivotHeaderGroups.value) {
+  if (!hasHeaderGroups.value) {
     return []
   }
   const rows: Array<readonly DataGridHeaderGroup[]> = []
-  for (let depth = 0; depth < pivotHeaderGroupDepth.value; depth += 1) {
+  for (let depth = 0; depth < headerGroupDepth.value; depth += 1) {
     rows.push(buildHeaderGroups(columnsList, depth))
   }
   return rows

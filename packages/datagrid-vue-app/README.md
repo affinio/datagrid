@@ -1733,6 +1733,7 @@ Notes:
 - Multiple flex columns share leftover available stage width by their flex weight.
 - If there is no free space, the column falls back to its base width.
 - Pinned and unpinned columns participate in the same effective width calculation.
+- `columnGroup` can be a string id, `{ id, label }`, or a nested path. The stage renders group headers across left-pinned, center, and right-pinned panes; visibility, resize, reorder, and pinning recalculate group spans from the current visible column snapshot.
 
 Unified column-state object:
 
@@ -1906,6 +1907,7 @@ Row drag-and-drop is declarative and opt-in.
 - `rowReorder: false` keeps the row index non-draggable
 - the feature only applies when the grid is using a mutable rows API and `showRowIndex` is enabled
 - placeholder rows, group rows, and pinned rows are not draggable
+- rows with `state.pinned: 'top' | 'bottom'` render outside the scrollable body; body virtualization and row drag only operate on unpinned rows
 
 ```vue
 <DataGrid

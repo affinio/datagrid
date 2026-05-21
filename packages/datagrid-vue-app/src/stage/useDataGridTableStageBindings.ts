@@ -106,6 +106,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     displayRows: unref(options.displayRows),
     displayRowsRevision: unref(options.displayRowsRevision),
     runtimeRevision: unref(options.runtimeRevision),
+    pinnedTopRows: unref(options.pinnedTopRows),
     pinnedBottomRows: unref(options.pinnedBottomRows),
     sourceRows: unref(options.sourceRows),
     showRowIndex: unref(options.showRowIndex),

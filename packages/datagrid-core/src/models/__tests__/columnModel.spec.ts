@@ -70,6 +70,32 @@ describe("createDataGridColumnModel", () => {
     model.dispose()
   })
 
+  it("projects column group paths across visibility, pinning and reorder state", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "region", label: "Region", columnGroup: { id: "geo", label: "Geography" }, initialState: { pin: "left" } },
+        { key: "country", label: "Country", columnGroup: { id: "geo", label: "Geography" } },
+        { key: "revenue", label: "Revenue", columnGroup: ["financials", { id: "q1", label: "Q1" }] },
+        { key: "margin", label: "Margin", columnGroup: "financials", initialState: { visible: false } },
+      ],
+    })
+
+    model.setColumnOrder(["revenue", "country", "region"])
+    model.setColumnPin("country", "left")
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.visibleColumns.map(column => column.key)).toEqual(["region", "country", "revenue"])
+    expect(snapshot.byKey.region?.groupPath).toEqual([{ id: "geo", label: "Geography", depth: 0 }])
+    expect(snapshot.byKey.country?.groupPath).toEqual([{ id: "geo", label: "Geography", depth: 0 }])
+    expect(snapshot.byKey.revenue?.groupPath).toEqual([
+      { id: "financials", label: "financials", depth: 0 },
+      { id: "q1", label: "Q1", depth: 1 },
+    ])
+    expect(snapshot.byKey.margin?.groupPath).toEqual([{ id: "financials", label: "financials", depth: 0 }])
+
+    model.dispose()
+  })
+
   it("keeps existing pinned order stable and reorders pinned zones independently", () => {
     const model = createDataGridColumnModel({
       columns: [

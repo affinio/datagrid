@@ -42,7 +42,6 @@ import { createDataGridApiViewMethods } from "./gridApiViewMethods"
 export type {
   CreateDataGridApiFromCoreOptions,
   CreateDataGridApiFromDepsOptions,
-  CreateDataGridApiDependencies,
   CreateDataGridApiOptions,
 } from "./gridApiDependencies"
 

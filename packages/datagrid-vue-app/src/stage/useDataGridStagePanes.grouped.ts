@@ -16,9 +16,12 @@ type LayoutRuntime = Readonly<Ref<{
 type PaneRuntime = Readonly<Ref<{
   leftPaneContentRef: Ref<HTMLElement | null>
   rightPaneContentRef: Ref<HTMLElement | null>
+  leftTopPaneContentRef: Ref<HTMLElement | null>
+  rightTopPaneContentRef: Ref<HTMLElement | null>
   leftBottomPaneContentRef: Ref<HTMLElement | null>
   rightBottomPaneContentRef: Ref<HTMLElement | null>
   displayRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
+  pinnedTopRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
   pinnedBottomRows: Readonly<Ref<readonly DataGridTableStageBodyRow[]>>
   showRowIndex: Readonly<Ref<boolean>>
   pinnedLeftColumns: Readonly<Ref<readonly DataGridTableStageBodyColumn[]>>
@@ -82,9 +85,12 @@ export interface UseDataGridStagePanesResult {
   rightTrackStyle: ComputedRef<CSSProperties>
   centerHeaderChromeCanvasStyle: ComputedRef<CSSProperties>
   centerChromeCanvasStyle: ComputedRef<CSSProperties>
+  centerTopChromeCanvasStyle: ComputedRef<CSSProperties>
   centerBottomChromeCanvasStyle: ComputedRef<CSSProperties>
   leftPinnedPane: ComputedRef<DataGridTableStagePinnedPaneProps>
   rightPinnedPane: ComputedRef<DataGridTableStagePinnedPaneProps>
+  leftPinnedTopPane: ComputedRef<DataGridTableStagePinnedPaneProps>
+  rightPinnedTopPane: ComputedRef<DataGridTableStagePinnedPaneProps>
   leftPinnedBottomPane: ComputedRef<DataGridTableStagePinnedPaneProps>
   rightPinnedBottomPane: ComputedRef<DataGridTableStagePinnedPaneProps>
 }
@@ -150,6 +156,8 @@ function createPaneProps(
 export function useDataGridStagePanes(options: UseDataGridStagePanesOptions): UseDataGridStagePanesResult {
   const leftPaneWidth = computed(() => options.layoutRuntime.value.leftPaneWidth)
   const rightPaneWidth = computed(() => options.layoutRuntime.value.rightPaneWidth)
+  const emptyOverlaySegments = computed<readonly DataGridTableStageOverlaySegment[]>(() => [])
+  const emptyOverlayLanes = computed<readonly DataGridTableStageOverlayLane[]>(() => [])
 
   const paneLayoutStyle = computed<CSSProperties>(() => ({
     gridTemplateColumns: `${leftPaneWidth.value}px minmax(0, 1fr) ${rightPaneWidth.value}px`,
@@ -170,6 +178,12 @@ export function useDataGridStagePanes(options: UseDataGridStagePanesOptions): Us
     left: `${leftPaneWidth.value}px`,
     width: `${Math.max(0, options.layoutRuntime.value.bodyViewportClientWidth)}px`,
     height: `${Math.max(0, options.layoutRuntime.value.bodyViewportClientHeight)}px`,
+  }))
+
+  const centerTopChromeCanvasStyle = computed<CSSProperties>(() => ({
+    left: `${leftPaneWidth.value}px`,
+    width: `${Math.max(0, options.layoutRuntime.value.bodyViewportClientWidth)}px`,
+    height: `${Math.max(0, options.layoutRuntime.value.pinnedBottomViewportClientHeight)}px`,
   }))
 
   const centerBottomChromeCanvasStyle = computed<CSSProperties>(() => ({
@@ -212,6 +226,42 @@ export function useDataGridStagePanes(options: UseDataGridStagePanesOptions): Us
     options.overlayRuntime.value.rightFillPreviewSeamOverlaySegments,
     options.overlayRuntime.value.rightMovePreviewSeamOverlaySegments,
     options.overlayRuntime.value.rightCustomSeamOverlayLanes,
+  )
+
+  const leftPinnedTopPane = createPaneProps(
+    "left",
+    leftPaneWidth,
+    leftPaneStyle,
+    options.paneRuntime.value.leftTopPaneContentRef,
+    options.paneRuntime.value.pinnedLeftColumns,
+    options.paneRuntime.value.showRowIndex,
+    options.paneRuntime.value.pinnedTopRows,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlayLanes,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlayLanes,
+  )
+
+  const rightPinnedTopPane = createPaneProps(
+    "right",
+    rightPaneWidth,
+    rightPaneStyle,
+    options.paneRuntime.value.rightTopPaneContentRef,
+    options.paneRuntime.value.pinnedRightColumns,
+    computed(() => false),
+    options.paneRuntime.value.pinnedTopRows,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlayLanes,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlaySegments,
+    emptyOverlayLanes,
   )
 
   const leftPinnedBottomPane = createPaneProps(
@@ -258,9 +308,12 @@ export function useDataGridStagePanes(options: UseDataGridStagePanesOptions): Us
     rightTrackStyle,
     centerHeaderChromeCanvasStyle,
     centerChromeCanvasStyle,
+    centerTopChromeCanvasStyle,
     centerBottomChromeCanvasStyle,
     leftPinnedPane,
     rightPinnedPane,
+    leftPinnedTopPane,
+    rightPinnedTopPane,
     leftPinnedBottomPane,
     rightPinnedBottomPane,
   }

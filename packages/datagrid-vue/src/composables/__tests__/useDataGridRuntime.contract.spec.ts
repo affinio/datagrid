@@ -342,6 +342,7 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime).not.toBeNull()
     expect(runtime!.rowPartition.value.bodyRowCount).toBe(4)
     expect(runtime!.virtualWindow.value?.rowTotal).toBe(4)
+    expect(runtime!.rowPartition.value.pinnedTopRows.map(row => String(row.rowId))).toEqual([])
     expect(runtime!.rowPartition.value.pinnedBottomRows.map(row => String(row.rowId))).toEqual(["r2", "r5"])
     expect(runtime!.syncBodyRowsInRange({ start: 1, end: 2 }).map(row => String(row.rowId))).toEqual(["r3", "r4"])
     expect(runtime!.getViewportRange()).toEqual({ start: 1, end: 2 })
@@ -355,6 +356,38 @@ describe("useDataGridRuntime contract", () => {
     ])
     expect(runtime!.virtualWindow.value?.rowStart).toBe(0)
     expect(runtime!.virtualWindow.value?.rowEnd).toBe(3)
+
+    wrapper.unmount()
+    await flushRuntimeTasks()
+  })
+
+  it("partitions pinned top and bottom rows outside the body viewport", async () => {
+    const rows: DataGridRowNodeInput<RuntimeRow>[] = [
+      { row: { rowId: "r1", name: "Top" }, rowId: "r1", originalIndex: 0, displayIndex: 0, state: { pinned: "top" } },
+      { row: { rowId: "r2", name: "Body A" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      { row: { rowId: "r3", name: "Body B" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      { row: { rowId: "r4", name: "Bottom" }, rowId: "r4", originalIndex: 3, displayIndex: 3, state: { pinned: "bottom" } },
+    ]
+    let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
+
+    const Host = defineComponent({
+      name: "RuntimePinnedTopBottomPartitionHost",
+      setup() {
+        runtime = useDataGridRuntime<RuntimeRow>({
+          rowModel: createClientRowModel<RuntimeRow>({ rows }),
+          columns: COLUMNS,
+        })
+        return () => h("div")
+      },
+    })
+
+    const wrapper = mount(Host)
+    await flushRuntimeTasks()
+
+    expect(runtime!.rowPartition.value.bodyRowCount).toBe(2)
+    expect(runtime!.rowPartition.value.pinnedTopRows.map(row => String(row.rowId))).toEqual(["r1"])
+    expect(runtime!.rowPartition.value.pinnedBottomRows.map(row => String(row.rowId))).toEqual(["r4"])
+    expect(runtime!.syncBodyRowsInRange({ start: 0, end: 1 }).map(row => String(row.rowId))).toEqual(["r2", "r3"])
 
     wrapper.unmount()
     await flushRuntimeTasks()

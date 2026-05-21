@@ -98,13 +98,15 @@ Detailed treeData contract, policies, and migration examples:
 Headless contracts:
 
 - `DataGridColumnDef` = immutable definition only:
-  - `key`, `field`, `label`, `minWidth`, `maxWidth`, `dataType`, `presentation`, `capabilities`, `constraints`, `cellInteraction`, `meta`
+  - `key`, `field`, `label`, `columnGroup`, `minWidth`, `maxWidth`, `dataType`, `presentation`, `capabilities`, `constraints`, `cellInteraction`, `meta`
 - `DataGridColumnInput` = authored input:
   - `DataGridColumnDef` + optional `initialState`
 - `DataGridColumnState` = runtime mutable state:
   - `visible`, `pin`, `width`
 - UI-only fields (`isSystem`, `sticky*`, legacy pin fields) are not part of the core contract
 - adapter-specific payload is allowed only through `meta` (opaque boundary channel)
+- `columnGroup` accepts a group id, `{ id, label }`, or a nested path; snapshots expose the normalized immutable `groupPath`
+- group headers are derived from visible columns, so reorder, pin, resize, and visibility changes update group span/width without extra persisted state
 
 Authored state must be nested under `initialState`:
 

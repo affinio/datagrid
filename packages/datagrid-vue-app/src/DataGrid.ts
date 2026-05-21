@@ -1127,7 +1127,7 @@ const DataGridRuntimeComponent = defineComponent({
         return 0
       }
       const rowPartition = unref(runtime.rowPartition)
-      return Math.max(0, rowPartition.bodyRowCount + rowPartition.pinnedBottomRows.length)
+      return Math.max(0, rowPartition.pinnedTopRows.length + rowPartition.bodyRowCount + rowPartition.pinnedBottomRows.length)
     })
     const resolveSelectionRowAtIndex = (rowIndex: number): DataGridRowNode<unknown> | null => {
       const runtime = dataGridRef.value?.runtime
@@ -1135,11 +1135,16 @@ const DataGridRuntimeComponent = defineComponent({
         return null
       }
       const rowPartition = unref(runtime.rowPartition)
-      const bodyRowCount = rowPartition.bodyRowCount
-      if (rowIndex < bodyRowCount) {
-        return runtime.getBodyRowAtIndex(rowIndex)
+      const pinnedTopCount = rowPartition.pinnedTopRows.length
+      if (rowIndex < pinnedTopCount) {
+        return rowPartition.pinnedTopRows[rowIndex] ?? null
       }
-      const pinnedBottomIndex = rowIndex - bodyRowCount
+      const bodyRowCount = rowPartition.bodyRowCount
+      const bodyRowIndex = rowIndex - pinnedTopCount
+      if (bodyRowIndex < bodyRowCount) {
+        return runtime.getBodyRowAtIndex(bodyRowIndex)
+      }
+      const pinnedBottomIndex = bodyRowIndex - bodyRowCount
       return rowPartition.pinnedBottomRows[pinnedBottomIndex] ?? null
     }
     const selectionOptions = {

@@ -104,6 +104,10 @@ Preferred API shape:
 
 Legacy flat methods are removed from `DataGridApi`.
 
+Type alias cleanup:
+
+- `CreateDataGridApiDependencies` was removed. Use `CreateDataGridApiFromDepsOptions`.
+
 Examples:
 
 - `api.setColumnWidth(key, width)` -> `api.columns.setWidth(key, width)`

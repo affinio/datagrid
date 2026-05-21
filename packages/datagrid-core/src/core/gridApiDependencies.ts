@@ -31,9 +31,6 @@ export interface CreateDataGridApiFromDepsOptions<TRow = unknown> {
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
 }
 
-/** @deprecated Use CreateDataGridApiFromDepsOptions instead. */
-export type CreateDataGridApiDependencies<TRow = unknown> = CreateDataGridApiFromDepsOptions<TRow>
-
 export type CreateDataGridApiOptions<TRow = unknown> =
   | CreateDataGridApiFromCoreOptions<TRow>
   | CreateDataGridApiFromDepsOptions<TRow>

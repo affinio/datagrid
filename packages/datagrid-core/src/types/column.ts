@@ -6,6 +6,7 @@ import type {
   DataGridColumnDataType,
   DataGridColumnPresentation,
   DataGridColumnValueAccessors,
+  DataGridColumnGroupInput,
 } from "../models/columnModel.js"
 
 export type {
@@ -25,6 +26,7 @@ export type {
   DataGridColumnInitialState,
   DataGridColumnInput,
   DataGridColumnState,
+  DataGridColumnGroupInput,
 } from "../models/columnModel.js"
 
 /**
@@ -39,6 +41,7 @@ export interface DataGridColumn extends DataGridColumnValueAccessors<any> {
   key: string
   field?: string
   label: string
+  columnGroup?: DataGridColumnGroupInput | readonly DataGridColumnGroupInput[]
   flex?: number
   dataType?: DataGridColumnDataType | string
   cellType?: DataGridCellTypeId | string

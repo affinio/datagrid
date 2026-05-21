@@ -140,6 +140,7 @@ function createStageProps(
     rowCount?: number
     totalRowCount?: number
     pinnedBottomRowCount?: number
+    pinnedTopRowCount?: number
     isCellOnSelectionEdge?: (rowOffset: number, columnIndex: number, edge: "top" | "right" | "bottom" | "left") => boolean
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
     isFillHandleCell?: (rowOffset: number, columnIndex: number) => boolean
@@ -206,6 +207,7 @@ function createStageProps(
     }
     return row
   })
+  const pinnedTopRows = createRows(options?.pinnedTopRowCount ?? 0, -1 * (options?.pinnedTopRowCount ?? 0))
   const pinnedBottomRows = createRows(options?.pinnedBottomRowCount ?? 0, rows.length)
 
   return {
@@ -250,6 +252,7 @@ function createStageProps(
     },
     rows: {
       displayRows: rows,
+      pinnedTopRows,
       pinnedBottomRows,
       showRowIndex: options?.showRowIndex ?? true,
       rowHover: options?.rowHover ?? false,
@@ -852,6 +855,23 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("renders pinned top rows in a dedicated top shell", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+        pinnedTopRowCount: 1,
+      }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.findAll(".grid-body-shell--pinned-top .grid-body-viewport--pinned-top .grid-row")).toHaveLength(1)
+    expect(wrapper.findAll(".grid-body-shell:not(.grid-body-shell--pinned-top):not(.grid-body-shell--pinned-bottom) .grid-body-viewport .grid-row")).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
   it("keeps overlay borders visually continuous across left, center and right panes", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -1111,6 +1131,28 @@ describe("DataGridTableStage contract", () => {
     expect(sortedHeader.attributes("aria-label")).toBe("Center B, sorted descending")
     expect(sortedHeader.find(".col-resize").attributes("aria-label")).toBe("Resize Center B column")
     expect(filteredHeader.find(".col-filter-input").attributes("aria-label")).toBe("Filter Center A column")
+
+    wrapper.unmount()
+  })
+
+  it("renders column group headers across pinned and center panes", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [
+          { key: "left", pin: "left", width: 80, groupPath: [{ id: "identity", label: "Identity", depth: 0 }], column: { key: "left", label: "Left" } },
+          { key: "centerA", pin: "center", width: 120, groupPath: [{ id: "metrics", label: "Metrics", depth: 0 }], column: { key: "centerA", label: "Center A" } },
+          { key: "centerB", pin: "center", width: 130, groupPath: [{ id: "metrics", label: "Metrics", depth: 0 }], column: { key: "centerB", label: "Center B" } },
+          { key: "right", pin: "right", width: 90, groupPath: [{ id: "actions", label: "Actions", depth: 0 }], column: { key: "right", label: "Right" } },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    expect(wrapper.find('.grid-header-pane--left [data-datagrid-column-group-label="Identity"]').exists()).toBe(true)
+    const metricsGroup = wrapper.find('.grid-header-viewport [data-datagrid-column-group-label="Metrics"]')
+    expect(metricsGroup.exists()).toBe(true)
+    expect(metricsGroup.attributes("data-datagrid-column-group-span")).toBe("2")
+    expect(wrapper.find('.grid-header-pane--right [data-datagrid-column-group-label="Actions"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

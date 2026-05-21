@@ -46,6 +46,7 @@ export function useDataGridTableStageColumns<TRow extends Record<string, unknown
       visible: true,
       pin: "left",
       width: ROW_SELECTION_COLUMN_WIDTH,
+      groupPath: [],
       column: {
         key: ROW_SELECTION_COLUMN_KEY,
         label: "",

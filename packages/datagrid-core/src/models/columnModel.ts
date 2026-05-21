@@ -96,10 +96,28 @@ export interface DataGridColumnOption {
   value: unknown
 }
 
+export interface DataGridColumnGroupRef {
+  id: string
+  label?: string
+}
+
+export type DataGridColumnGroupInput = string | DataGridColumnGroupRef
+
+export interface DataGridColumnGroupDef extends DataGridColumnGroupRef {
+  children?: readonly string[]
+}
+
+export interface DataGridColumnGroupSnapshot {
+  id: string
+  label: string
+  depth: number
+}
+
 export interface DataGridColumnDef<TRow = unknown> extends DataGridColumnValueAccessors<TRow> {
   key: string
   field?: Extract<keyof TRow, string> | string
   label?: string
+  columnGroup?: DataGridColumnGroupInput | readonly DataGridColumnGroupInput[]
   flex?: number
   minWidth?: number
   maxWidth?: number
@@ -135,6 +153,7 @@ export interface DataGridColumnSnapshot {
   visible: boolean
   pin: DataGridColumnPin
   width: number | null
+  groupPath: readonly DataGridColumnGroupSnapshot[]
   column: DataGridColumnDef
 }
 
@@ -277,6 +296,43 @@ function normalizeCellTypeId(value: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined
 }
 
+function normalizeColumnGroupInput(value: unknown): DataGridColumnGroupSnapshot | null {
+  if (typeof value === "string") {
+    const id = value.trim()
+    return id.length > 0 ? Object.freeze({ id, label: id, depth: 0 }) : null
+  }
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const id = typeof record.id === "string" ? record.id.trim() : ""
+  if (!id) {
+    return null
+  }
+  const label = typeof record.label === "string" && record.label.trim().length > 0
+    ? record.label.trim()
+    : id
+  return Object.freeze({ id, label, depth: 0 })
+}
+
+function normalizeColumnGroupPath(value: unknown): readonly DataGridColumnGroupSnapshot[] {
+  const rawPath = Array.isArray(value) ? value : value == null ? [] : [value]
+  const path: DataGridColumnGroupSnapshot[] = []
+  const seen = new Set<string>()
+  rawPath.forEach(rawGroup => {
+    const group = normalizeColumnGroupInput(rawGroup)
+    if (!group || seen.has(group.id)) {
+      return
+    }
+    seen.add(group.id)
+    path.push(Object.freeze({
+      ...group,
+      depth: path.length,
+    }))
+  })
+  return Object.freeze(path)
+}
+
 function inferColumnCellType<TRow>(column: DataGridColumnDef<TRow>): string | undefined {
   const explicitCellType = normalizeCellTypeId(column.cellType)
   if (explicitCellType) {
@@ -376,6 +432,7 @@ function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>)
   const {
     initialState: _initialState,
     presentation: _presentation,
+    columnGroup: _columnGroup,
     capabilities,
     constraints,
     cellInteraction,
@@ -386,6 +443,9 @@ function freezeColumnDefinition<TRow = unknown>(column: DataGridColumnDef<TRow>)
   } = column as DataGridColumnDef<TRow> & { currency?: unknown; editor?: unknown; initialState?: unknown }
   const normalized: DataGridColumnDef<TRow> = {
     ...rest,
+    ...(normalizeColumnGroupPath(column.columnGroup).length > 0
+      ? { columnGroup: normalizeColumnGroupPath(column.columnGroup) }
+      : {}),
     ...(typeof normalizedValueGetter === "function" ? { valueGetter: normalizedValueGetter } : {}),
     cellType: normalizedCellType,
     presentation: normalizedPresentation,
@@ -419,6 +479,10 @@ function resolveInitialColumnState(column: DataGridColumnInput, definition: Data
   })
 }
 
+function resolveColumnGroupPath(column: DataGridColumnDef): readonly DataGridColumnGroupSnapshot[] {
+  return normalizeColumnGroupPath(column.columnGroup)
+}
+
 function createColumnSnapshot(key: string, state: MutableColumnState): DataGridColumnSnapshot {
   return Object.freeze({
     key,
@@ -426,6 +490,7 @@ function createColumnSnapshot(key: string, state: MutableColumnState): DataGridC
     visible: state.state.visible,
     pin: state.state.pin,
     width: state.state.width,
+    groupPath: resolveColumnGroupPath(state.column),
     column: state.column,
   })
 }

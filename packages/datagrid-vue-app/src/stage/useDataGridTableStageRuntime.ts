@@ -409,8 +409,14 @@ export function useDataGridTableStageRuntime<
   })
   const totalSelectableRows = computed(() => Math.max(0, placeholderRows.totalVisualRows.value))
   const totalInteractiveRows = computed(() => {
-    return Math.max(0, totalSelectableRows.value + options.runtime.rowPartition.value.pinnedBottomRows.length)
+    return Math.max(
+      0,
+      options.runtime.rowPartition.value.pinnedTopRows.length
+      + totalSelectableRows.value
+      + options.runtime.rowPartition.value.pinnedBottomRows.length,
+    )
   })
+  const pinnedTopRows = computed(() => options.runtime.rowPartition.value.pinnedTopRows)
   const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
@@ -578,10 +584,15 @@ export function useDataGridTableStageRuntime<
       return null
     }
     const normalizedIndex = Math.max(0, Math.trunc(rowIndex))
-    if (normalizedIndex < totalSelectableRows.value) {
-      return selectableRuntime.getBodyRowAtIndex(normalizedIndex)
+    const pinnedTopCount = options.runtime.rowPartition.value.pinnedTopRows.length
+    if (normalizedIndex < pinnedTopCount) {
+      return options.runtime.rowPartition.value.pinnedTopRows[normalizedIndex] ?? null
     }
-    const pinnedBottomIndex = normalizedIndex - totalSelectableRows.value
+    const bodyIndex = normalizedIndex - pinnedTopCount
+    if (bodyIndex < totalSelectableRows.value) {
+      return selectableRuntime.getBodyRowAtIndex(bodyIndex)
+    }
+    const pinnedBottomIndex = bodyIndex - totalSelectableRows.value
     return options.runtime.rowPartition.value.pinnedBottomRows[pinnedBottomIndex] ?? null
   }
 
@@ -1322,7 +1333,8 @@ export function useDataGridTableStageRuntime<
   }
 
   const isRenderedEditingRow = (rowId: string | number): boolean => {
-    return displayRows.value.some(row => row.rowId === rowId)
+    return pinnedTopRows.value.some(row => row.rowId === rowId)
+      || displayRows.value.some(row => row.rowId === rowId)
       || pinnedBottomRows.value.some(row => row.rowId === rowId)
   }
 
@@ -2018,6 +2030,7 @@ export function useDataGridTableStageRuntime<
     displayRows,
     displayRowsRevision,
     runtimeRevision: runtimeRowModelRevision,
+    pinnedTopRows,
     pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
     showRowIndex,

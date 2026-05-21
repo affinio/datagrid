@@ -36,11 +36,13 @@ export interface UseDataGridStageViewportRuntimeOptions {
 
 export interface UseDataGridStageViewportRuntimeResult {
   bodyViewportEl: Ref<HTMLElement | null>
+  topViewportEl: Ref<HTMLElement | null>
   bottomViewportEl: Ref<HTMLElement | null>
   bodyViewportScrollTop: Ref<number>
   bodyViewportScrollLeft: Ref<number>
   bodyViewportClientWidth: Ref<number>
   bodyViewportClientHeight: Ref<number>
+  pinnedTopViewportClientHeight: Ref<number>
   pinnedBottomViewportClientHeight: Ref<number>
   bodyViewportTopOffset: Ref<number>
   headerShellHeight: Ref<number>
@@ -49,8 +51,10 @@ export interface UseDataGridStageViewportRuntimeResult {
   isBodyViewportScrollIdle: Ref<boolean>
   runWhenBodyViewportScrollIdle: (callback: () => void) => void
   captureBodyViewportRef: (value: Element | ComponentPublicInstance | null) => void
+  capturePinnedTopViewportRef: (value: Element | ComponentPublicInstance | null) => void
   capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
   handleCenterViewportScroll: (event: Event) => void
+  handlePinnedTopViewportScroll: (event: Event) => void
   handlePinnedBottomViewportScroll: (event: Event) => void
   handleLinkedViewportWheel: (event: WheelEvent) => void
   handleBodyViewportWheel: (event: WheelEvent) => void
@@ -84,6 +88,7 @@ export function useDataGridStageViewportRuntime(
   options: UseDataGridStageViewportRuntimeOptions,
 ): UseDataGridStageViewportRuntimeResult {
   const bodyViewportEl = ref<HTMLElement | null>(null)
+  const topViewportEl = ref<HTMLElement | null>(null)
   const bottomViewportEl = ref<HTMLElement | null>(null)
   const headerShellHeight = ref(0)
   const headerViewportClientWidth = ref(0)
@@ -91,6 +96,7 @@ export function useDataGridStageViewportRuntime(
   const bodyViewportScrollLeft = ref(0)
   const bodyViewportClientWidth = ref(0)
   const bodyViewportClientHeight = ref(0)
+  const pinnedTopViewportClientHeight = ref(0)
   const pinnedBottomViewportClientHeight = ref(0)
   const bodyViewportTopOffset = ref(0)
   const isBodyViewportScrolling = ref(false)
@@ -333,6 +339,13 @@ export function useDataGridStageViewportRuntime(
     syncers.syncPinnedBottomViewportScrollLeft()
   }
 
+  function capturePinnedTopViewportRef(value: Element | ComponentPublicInstance | null): void {
+    topViewportEl.value = resolveElementRef(value)
+    pinnedTopViewportClientHeight.value = topViewportEl.value?.clientHeight ?? 0
+    const syncers = options.gridChromeSyncers.value
+    syncers.syncPinnedBottomViewportScrollLeft()
+  }
+
   function handleCenterViewportScroll(event: Event): void {
     const element = event.target as HTMLElement | null
     if (!element) {
@@ -371,6 +384,10 @@ export function useDataGridStageViewportRuntime(
     scheduleScrollGridChromeRedraw("center-scroll")
   }
 
+  function handlePinnedTopViewportScroll(event: Event): void {
+    handlePinnedBottomViewportScroll(event)
+  }
+
   function handleLinkedViewportWheel(event: WheelEvent): void {
     managedWheelScroll.onLinkedViewportWheel(event)
   }
@@ -406,11 +423,13 @@ export function useDataGridStageViewportRuntime(
 
   return {
     bodyViewportEl,
+    topViewportEl,
     bottomViewportEl,
     bodyViewportScrollTop,
     bodyViewportScrollLeft,
     bodyViewportClientWidth,
     bodyViewportClientHeight,
+    pinnedTopViewportClientHeight,
     pinnedBottomViewportClientHeight,
     bodyViewportTopOffset,
     headerShellHeight,
@@ -419,8 +438,10 @@ export function useDataGridStageViewportRuntime(
     isBodyViewportScrollIdle,
     runWhenBodyViewportScrollIdle,
     captureBodyViewportRef,
+    capturePinnedTopViewportRef,
     capturePinnedBottomViewportRef,
     handleCenterViewportScroll,
+    handlePinnedTopViewportScroll,
     handlePinnedBottomViewportScroll,
     handleLinkedViewportWheel,
     handleBodyViewportWheel,
