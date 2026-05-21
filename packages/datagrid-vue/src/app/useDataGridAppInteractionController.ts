@@ -2,6 +2,7 @@ import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from "vue"
 import type {
   DataGridColumnSnapshot,
   DataGridRowNode,
+  DataGridRowNodeInput,
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-core"
 import {
@@ -1321,11 +1322,20 @@ export function useDataGridAppInteractionController<
     resolveSourceRows: resolveBaseDataRows,
     resolveSourceRowId: row => String(row.rowId),
     applySourceRows: nextRows => {
-      options.runtime.api.rows.setData(nextRows.map((row, index) => ({
-        rowId: row.rowId,
-        originalIndex: index,
-        row: options.cloneRowData(row),
-      })))
+      options.runtime.api.rows.setData(nextRows.map((row, index): DataGridRowNodeInput<TRow> => {
+        const rowData = options.cloneRowData(row)
+        return {
+          kind: "leaf",
+          data: rowData,
+          row: rowData,
+          rowKey: row.rowId,
+          rowId: row.rowId,
+          sourceIndex: index,
+          originalIndex: index,
+          displayIndex: index,
+          state: { selected: false, group: false, pinned: "none", expanded: false },
+        }
+      }))
       options.syncViewport()
     },
     resolveDisplayedRows: () => resolveBaseDataRows().map(row => ({ rowId: String(row.rowId) })),

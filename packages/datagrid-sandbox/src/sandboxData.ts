@@ -236,11 +236,7 @@ export function buildWorkerRowInputs(
       updatedAt: `2026-03-${String((index % 28) + 1).padStart(2, "0")}`,
     }
     fillExtraFields(row, index, columnCount, baseColumnsLength)
-    rows[index] = {
-      row,
-      rowId: row.rowId,
-      originalIndex: index,
-    }
+    rows[index] = toRowInput(row, index)
   }
 
   return rows
@@ -416,10 +412,21 @@ function buildWorkerRows(rowCount: number, columnCount: number): VueWorkerRow[] 
   return buildWorkerRowInputs(rowCount, columnCount).map(entry => entry.row as VueWorkerRow)
 }
 
-export function toRowInputs<TRow>(rows: readonly TRow[]): DataGridRowNodeInput<TRow>[] {
-  return rows.map((row, index) => ({
+function toRowInput<TRow>(row: TRow, index: number): DataGridRowNodeInput<TRow> {
+  const rowId = String((row as { rowId?: string }).rowId ?? `${index}`)
+  return {
+    kind: "leaf",
+    data: row,
     row,
-    rowId: String((row as { rowId?: string }).rowId ?? `${index}`),
+    rowKey: rowId,
+    rowId,
+    sourceIndex: index,
     originalIndex: index,
-  }))
+    displayIndex: index,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
+}
+
+export function toRowInputs<TRow>(rows: readonly TRow[]): DataGridRowNodeInput<TRow>[] {
+  return rows.map((row, index) => toRowInput(row, index))
 }

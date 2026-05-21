@@ -43,7 +43,6 @@ import{
 } from "./rowModel.js"
 import {
   clonePivotSpec,
-  normalizePivotAxisValue,
 } from "@affino/datagrid-pivot"
 import type {
   DataGridPivotCellDrilldownInput,
@@ -62,7 +61,6 @@ import { createClientRowComputedSnapshotFieldsRuntime } from "./materialization/
 import type { ClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
 import {
   createFilterPredicate,
-  normalizeText,
 } from "./projection/clientRowProjectionPrimitives.js"
 import { createClientRowColumnHistogramRuntime } from "./projection/clientRowColumnHistogramRuntime.js"
 import {
@@ -70,7 +68,7 @@ import {
   mergeRowPatch,
 } from "./clientRowRuntimeUtils.js"
 import type { DataGridFieldDependency } from "./dependency/dependencyGraph.js"
-import { resolveClientRowPivotCellDrilldown } from "./pivot/clientRowPivotDrilldownRuntime.js"
+import { createClientRowPivotDrilldownHostRuntime } from "./pivot/clientRowPivotDrilldownHostRuntime.js"
 import { createClientRowSourceColumnHostRuntime } from "./host/clientRowSourceColumnHostRuntime.js"
 import { createClientRowFormulaDiagnosticsRuntime } from "./compute/clientRowFormulaDiagnosticsRuntime.js"
 import { createClientRowSourceColumnCacheRuntime } from "./materialization/clientRowSourceColumnCacheRuntime.js"
@@ -876,6 +874,18 @@ export function createClientRowModel<T>(
       void recomputeComputedFieldsAndRefresh(undefined, { contextKeys })
     },
   })
+  const pivotDrilldownHostRuntime = createClientRowPivotDrilldownHostRuntime<T>({
+    ensureActive,
+    getPivotModel,
+    getPivotColumns,
+    getAggregatedRowsProjection: () => runtimeState.aggregatedRowsProjection,
+    getPivotedRowsProjection: () => runtimeState.pivotedRowsProjection,
+    getGroupedRowsProjection: () => runtimeState.groupedRowsProjection,
+    getSourceRows: () => getBaseSourceRows(),
+    isDataGridRowId,
+    readProjectionRowField: (row, key) => readProjectionRowField(row, key),
+    materializeOutputRows,
+  })
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
@@ -1062,26 +1072,7 @@ export function createClientRowModel<T>(
       return clonePivotSpec(viewStateRuntime.getPivotModel())
     },
     getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
-      ensureActive()
-      const drilldown = resolveClientRowPivotCellDrilldown({
-        input,
-        pivotModel: getPivotModel(),
-        pivotColumns: getPivotColumns(),
-        aggregatedRowsProjection: runtimeState.aggregatedRowsProjection,
-        pivotedRowsProjection: runtimeState.pivotedRowsProjection,
-        groupedRowsProjection: runtimeState.groupedRowsProjection,
-        sourceRows: getBaseSourceRows(),
-        isDataGridRowId,
-        normalizePivotAxisValue: (value: unknown) => normalizePivotAxisValue(value, normalizeText),
-        readRowField: (row, key) => readProjectionRowField(row, key),
-      })
-      if (!drilldown) {
-        return null
-      }
-      return {
-        ...drilldown,
-        rows: materializeOutputRows(drilldown.rows),
-      }
+      return pivotDrilldownHostRuntime.getPivotCellDrilldown(input)
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
       mutationHostRuntime.setAggregationModel(nextAggregationModel)

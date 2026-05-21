@@ -11,6 +11,20 @@ interface RuntimeRow {
 
 const COLUMNS = [{ key: "name", label: "Name" }] as const
 
+function createRuntimeRowNode(row: RuntimeRow, index: number): DataGridRowNodeInput<RuntimeRow> {
+  return {
+    kind: "leaf",
+    data: row,
+    row,
+    rowKey: row.rowId,
+    rowId: row.rowId,
+    sourceIndex: index,
+    originalIndex: index,
+    displayIndex: index,
+    state: { selected: false, group: false, pinned: "none", expanded: false },
+  }
+}
+
 function buildRows(count: number): RuntimeRow[] {
   return Array.from({ length: count }, (_, index) => ({
     rowId: `r${index}`,
@@ -19,12 +33,7 @@ function buildRows(count: number): RuntimeRow[] {
 }
 
 function buildRowInputs(count: number): DataGridRowNodeInput<RuntimeRow>[] {
-  return buildRows(count).map((row, index) => ({
-    row,
-    rowId: row.rowId,
-    originalIndex: index,
-    displayIndex: index,
-  }))
+  return buildRows(count).map((row, index) => createRuntimeRowNode(row, index))
 }
 
 async function flushRuntimeTasks(): Promise<void> {

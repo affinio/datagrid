@@ -6,6 +6,7 @@ import {
   createDataSourceBackedRowModel,
   type DataGridDataSource,
   type DataGridRowNodeInput,
+  type DataGridRowNodeState,
 } from "@affino/datagrid-core"
 import {
   createDataGridWorkerOwnedRowModel,
@@ -21,6 +22,24 @@ interface RuntimeRow {
 }
 
 const COLUMNS = [{ key: "name", label: "Name" }] as const
+
+function createRuntimeRowNode(
+  row: RuntimeRow,
+  index: number,
+  state: Partial<DataGridRowNodeState> = {},
+): DataGridRowNodeInput<RuntimeRow> {
+  return {
+    kind: "leaf",
+    data: row,
+    row,
+    rowKey: row.rowId,
+    rowId: row.rowId,
+    sourceIndex: index,
+    originalIndex: index,
+    displayIndex: index,
+    state: { selected: false, group: false, pinned: "none", expanded: false, ...state },
+  }
+}
 
 async function flushRuntimeTasks() {
   await nextTick()
@@ -304,24 +323,12 @@ describe("useDataGridRuntime contract", () => {
 
   it("partitions interleaved pinned-bottom rows before viewport sync", async () => {
     const rows: DataGridRowNodeInput<RuntimeRow>[] = [
-      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
-      {
-        row: { rowId: "r2", name: "Pinned total A" },
-        rowId: "r2",
-        originalIndex: 1,
-        displayIndex: 1,
-        state: { pinned: "bottom" },
-      },
-      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
-      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
-      {
-        row: { rowId: "r5", name: "Pinned total B" },
-        rowId: "r5",
-        originalIndex: 4,
-        displayIndex: 4,
-        state: { pinned: "bottom" },
-      },
-      { row: { rowId: "r6", name: "Delta" }, rowId: "r6", originalIndex: 5, displayIndex: 5 },
+      createRuntimeRowNode({ rowId: "r1", name: "Alpha" }, 0),
+      createRuntimeRowNode({ rowId: "r2", name: "Pinned total A" }, 1, { pinned: "bottom" }),
+      createRuntimeRowNode({ rowId: "r3", name: "Bravo" }, 2),
+      createRuntimeRowNode({ rowId: "r4", name: "Charlie" }, 3),
+      createRuntimeRowNode({ rowId: "r5", name: "Pinned total B" }, 4, { pinned: "bottom" }),
+      createRuntimeRowNode({ rowId: "r6", name: "Delta" }, 5),
     ]
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 
@@ -363,10 +370,10 @@ describe("useDataGridRuntime contract", () => {
 
   it("partitions pinned top and bottom rows outside the body viewport", async () => {
     const rows: DataGridRowNodeInput<RuntimeRow>[] = [
-      { row: { rowId: "r1", name: "Top" }, rowId: "r1", originalIndex: 0, displayIndex: 0, state: { pinned: "top" } },
-      { row: { rowId: "r2", name: "Body A" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
-      { row: { rowId: "r3", name: "Body B" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
-      { row: { rowId: "r4", name: "Bottom" }, rowId: "r4", originalIndex: 3, displayIndex: 3, state: { pinned: "bottom" } },
+      createRuntimeRowNode({ rowId: "r1", name: "Top" }, 0, { pinned: "top" }),
+      createRuntimeRowNode({ rowId: "r2", name: "Body A" }, 1),
+      createRuntimeRowNode({ rowId: "r3", name: "Body B" }, 2),
+      createRuntimeRowNode({ rowId: "r4", name: "Bottom" }, 3, { pinned: "bottom" }),
     ]
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 
@@ -442,16 +449,10 @@ describe("useDataGridRuntime contract", () => {
 
   it("prefills client body-row cache so body-relative reads avoid per-row api.get calls", async () => {
     const rows: readonly DataGridRowNodeInput<RuntimeRow>[] = [
-      { row: { rowId: "r1", name: "Alpha" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
-      {
-        row: { rowId: "r2", name: "Pinned total" },
-        rowId: "r2",
-        originalIndex: 1,
-        displayIndex: 1,
-        state: { pinned: "bottom" },
-      },
-      { row: { rowId: "r3", name: "Bravo" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
-      { row: { rowId: "r4", name: "Charlie" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      createRuntimeRowNode({ rowId: "r1", name: "Alpha" }, 0),
+      createRuntimeRowNode({ rowId: "r2", name: "Pinned total" }, 1, { pinned: "bottom" }),
+      createRuntimeRowNode({ rowId: "r3", name: "Bravo" }, 2),
+      createRuntimeRowNode({ rowId: "r4", name: "Charlie" }, 3),
     ]
     let runtime: ReturnType<typeof useDataGridRuntime<RuntimeRow>> | null = null
 
@@ -713,8 +714,8 @@ describe("useDataGridRuntime contract", () => {
       source: channel.worker,
       target: channel.worker,
       rows: [
-        { row: { rowId: "r1", name: "Alpha", tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
-        { row: { rowId: "r2", name: "Bravo", tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        createRuntimeRowNode({ rowId: "r1", name: "Alpha", tested_at: 100 }, 0),
+        createRuntimeRowNode({ rowId: "r2", name: "Bravo", tested_at: 200 }, 1),
       ],
     })
 

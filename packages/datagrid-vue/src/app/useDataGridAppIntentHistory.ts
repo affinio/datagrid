@@ -1,5 +1,6 @@
 import type { DataGridIntentTransactionDescriptor } from "../advanced"
 import { useDataGridIntentHistory } from "../advanced"
+import type { DataGridRowNodeInput } from "@affino/datagrid-core"
 import type { UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 
 export interface DataGridAppRowSnapshot<TRow> {
@@ -301,7 +302,7 @@ export function useDataGridAppIntentHistory<TRow>(
     const rowsApi = options.runtime.api.rows as {
       hasDataMutationSupport?: () => boolean
       applyEdits?: (updates: Array<{ rowId: string | number; data: Partial<TRow> }>) => void | Promise<void>
-      setData?: (rows: Array<{ rowId: string | number; originalIndex: number; row: TRow }>) => void
+      setData?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
     }
     if (typeof rowsApi.hasDataMutationSupport === "function" && !rowsApi.hasDataMutationSupport()) {
       const rowPatches = snapshot.rows.map(entry => ({
@@ -316,11 +317,20 @@ export function useDataGridAppIntentHistory<TRow>(
       options.syncViewport()
       return
     }
-    rowsApi.setData?.(snapshot.rows.map((entry, index) => ({
-      rowId: entry.rowId,
-      originalIndex: index,
-      row: cloneReplayRowData(entry.row),
-    })))
+    rowsApi.setData?.(snapshot.rows.map((entry, index): DataGridRowNodeInput<TRow> => {
+      const row = cloneReplayRowData(entry.row)
+      return {
+        kind: "leaf",
+        data: row,
+        row,
+        rowKey: entry.rowId,
+        rowId: entry.rowId,
+        sourceIndex: index,
+        originalIndex: index,
+        displayIndex: index,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
+      }
+    }))
     refreshComputedSnapshotRows(snapshot.rows.map(entry => entry.rowId))
   }
 

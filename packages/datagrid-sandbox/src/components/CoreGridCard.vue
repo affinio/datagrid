@@ -467,11 +467,7 @@ const captureRowsSnapshot = (): GridRowsSnapshot<CoreBaseRow> => {
 const intentHistory = useDataGridIntentHistory<GridRowsSnapshot<CoreBaseRow>>({
   captureSnapshot: captureRowsSnapshot,
   applySnapshot: snapshot => {
-    api.rows.setData(snapshot.rows.map((entry, index) => ({
-      rowId: entry.rowId,
-      originalIndex: index,
-      row: cloneRowData(entry.row),
-    })))
+    api.rows.setData(toRowInputs(snapshot.rows.map(entry => cloneRowData(entry.row))))
     syncViewportFromDom()
   },
 })
@@ -1553,11 +1549,7 @@ const rangeMutationEngine = useDataGridRangeMutationEngine<
   resolveSourceRows: resolveBaseDataRows,
   resolveSourceRowId: row => String(row.rowId),
   applySourceRows: nextRows => {
-    api.rows.setData(nextRows.map((row, index) => ({
-      rowId: row.rowId,
-      originalIndex: index,
-      row: cloneRowData(row),
-    })))
+    api.rows.setData(toRowInputs(nextRows.map(row => cloneRowData(row))))
     syncRangeRows(viewportRange.value)
   },
   resolveDisplayedRows: () => resolveBaseDataRows().map(row => ({ rowId: String(row.rowId) })),
