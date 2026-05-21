@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Narrowed datasource invalidation refreshes to the affected visible block and attached the active group expansion tree context for grouped server projections.
+
+  ## User impact
+
+  Server-backed grouped grids keep visible rows stable during invalidation while avoiding broad viewport refetches when only a branch/block changed.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - focused datasource-backed row model invalidation regressions passed
+
+- ## Summary
+
   Replaced the datasource row cache after server-backed group expansion changes succeed, so branch expand/collapse cannot keep out-of-window rows from the previous projected layout as valid cache entries.
 
   ## User impact

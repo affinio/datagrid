@@ -228,6 +228,12 @@ function rangeContains(container: DataGridViewportRange, target: DataGridViewpor
   return container.start <= target.start && container.end >= target.end
 }
 
+function intersectRanges(left: DataGridViewportRange, right: DataGridViewportRange): DataGridViewportRange | null {
+  const start = Math.max(left.start, right.start)
+  const end = Math.min(left.end, right.end)
+  return start <= end ? { start, end } : null
+}
+
 function normalizeTotal(total: number | null | undefined): number | null {
   if (!Number.isFinite(total)) {
     return null
@@ -1302,14 +1308,31 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState()
   }
 
+  function rangeFromIndexes(indexes: readonly number[]): DataGridViewportRange | null {
+    let min = Number.POSITIVE_INFINITY
+    let max = Number.NEGATIVE_INFINITY
+    for (const rawIndex of indexes) {
+      if (!Number.isFinite(rawIndex)) {
+        continue
+      }
+      const index = Math.max(0, Math.trunc(rawIndex))
+      min = Math.min(min, index)
+      max = Math.max(max, index)
+    }
+    return Number.isFinite(min) && Number.isFinite(max)
+      ? { start: min, end: max }
+      : null
+  }
+
   function clearRowsById(
     rowIds: readonly DataGridRowId[],
     options: { preserveRange?: DataGridViewportRange | null } = {},
-  ): { changed: boolean; touchedViewport: boolean } {
+  ): { changed: boolean; touchedViewport: boolean; touchedViewportIndexes: number[] } {
     if (!Array.isArray(rowIds) || rowIds.length === 0 || rowCache.size === 0) {
       return {
         changed: false,
         touchedViewport: false,
+        touchedViewportIndexes: [],
       }
     }
     const uniqueRowIds = new Set<DataGridRowId>()
@@ -1322,18 +1345,23 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return {
         changed: false,
         touchedViewport: false,
+        touchedViewportIndexes: [],
       }
     }
     const sourceViewport = toSourceRange(viewportRange)
     const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
     let changed = false
     let touchedViewport = false
+    const touchedViewportIndexes: number[] = []
     for (const [index, node] of rowCache.entries()) {
       if (!uniqueRowIds.has(node.rowId)) {
         continue
       }
       const touchesSourceViewport = index >= sourceViewport.start && index <= sourceViewport.end
       touchedViewport = touchedViewport || touchesSourceViewport
+      if (touchesSourceViewport) {
+        touchedViewportIndexes.push(index)
+      }
       if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) {
         continue
       }
@@ -1360,18 +1388,25 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return {
       changed,
       touchedViewport,
+      touchedViewportIndexes,
     }
   }
 
   function invalidateRows(rowIds: readonly DataGridRowId[]) {
     ensureActive()
     const sourceViewport = toSourceRange(viewportRange)
-    const { changed, touchedViewport } = clearRowsById(rowIds, { preserveRange: sourceViewport })
+    const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, { preserveRange: sourceViewport })
     if (!changed && !touchedViewport) {
       return
     }
     if (touchedViewport) {
-      void pullRange(sourceViewport, "invalidation", "normal", null, { affectsLoading: false })
+      void pullRange(
+        rangeFromIndexes(touchedViewportIndexes) ?? sourceViewport,
+        "invalidation",
+        "normal",
+        createProjectionRefreshTreePullContext(),
+        { affectsLoading: false },
+      )
       return
     }
     emit()
@@ -2029,7 +2064,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
     const normalizedInvalidationRange = normalizeRequestedRange(invalidation.range)
     const sourceViewport = toSourceRange(viewportRange)
-    const touchesViewport = rangesOverlap(normalizedInvalidationRange, sourceViewport)
+    const visibleRefreshRange = intersectRanges(normalizedInvalidationRange, sourceViewport)
+    const touchesViewport = visibleRefreshRange !== null
     clearRange(invalidation.range, touchesViewport ? { preserveRange: sourceViewport } : {})
     if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizedInvalidationRange)) {
       clearBackgroundPrefetchState("stale")
@@ -2037,8 +2073,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (typeof dataSource.invalidate === "function") {
       void Promise.resolve(dataSource.invalidate(invalidation))
     }
-    if (touchesViewport) {
-      void pullRange(sourceViewport, "push-invalidation", "normal", null, { affectsLoading: false })
+    if (visibleRefreshRange) {
+      void pullRange(visibleRefreshRange, "push-invalidation", "normal", createProjectionRefreshTreePullContext(), { affectsLoading: false })
     } else {
       emit()
     }
@@ -2190,6 +2226,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
       normalized.push(groupKey)
     }
     return normalized
+  }
+
+  function createProjectionRefreshTreePullContext(): DataGridDataSourceTreePullContext | null {
+    if (!getExpansionSpec()) {
+      return null
+    }
+    return createTreePullContext("set-group-expansion", Array.from(toggledGroupKeys), "all")
   }
 
   function getPivotPullContext(): DataGridDataSourcePivotPullContext {
@@ -2858,7 +2901,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       const invalidation: DataGridDataSourceInvalidation = { kind: "range", range: sourceRange, reason: "model-range" }
       const normalizedSourceRange = normalizeRequestedRange(sourceRange)
       const sourceViewport = toSourceRange(viewportRange)
-      const touchesViewport = rangesOverlap(normalizedSourceRange, sourceViewport)
+      const visibleRefreshRange = intersectRanges(normalizedSourceRange, sourceViewport)
+      const touchesViewport = visibleRefreshRange !== null
       clearRange(sourceRange, touchesViewport ? { preserveRange: sourceViewport } : {})
       if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, sourceRange)) {
         clearBackgroundPrefetchState("stale")
@@ -2871,8 +2915,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
-      if (touchesViewport) {
-        void pullRange(sourceViewport, "invalidation", "normal", null, { affectsLoading: false })
+      if (visibleRefreshRange) {
+        void pullRange(visibleRefreshRange, "invalidation", "normal", createProjectionRefreshTreePullContext(), { affectsLoading: false })
       } else {
         emit()
       }
@@ -2880,12 +2924,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
     invalidateRows(rowIds) {
       ensureActive()
       const sourceViewport = toSourceRange(viewportRange)
-      const { changed, touchedViewport } = clearRowsById(rowIds, { preserveRange: sourceViewport })
+      const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, { preserveRange: sourceViewport })
       if (!changed && !touchedViewport) {
         return
       }
       if (touchedViewport) {
-        void pullRange(sourceViewport, "invalidation", "normal", null, { affectsLoading: false })
+        void pullRange(
+          rangeFromIndexes(touchedViewportIndexes) ?? sourceViewport,
+          "invalidation",
+          "normal",
+          createProjectionRefreshTreePullContext(),
+          { affectsLoading: false },
+        )
       } else {
         emit()
       }

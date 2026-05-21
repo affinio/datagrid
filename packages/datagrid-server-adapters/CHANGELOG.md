@@ -6,6 +6,17 @@
 
 - ## Summary
 
+  Documented and covered the server pivot boundary: the default query codec intentionally omits pivot payloads, while `mapPullRequest` remains the raw enterprise escape hatch.
+
+  ## User impact
+
+  Backends without approved pivot projection keep receiving the stable base DTO, and pivot-capable integrations can explicitly map the raw DataGrid pull request into their own API.
+
+  ## Validation
+  - focused server adapter codec tests passed
+
+- ## Summary
+
   Forwarded `groupExpansion` and datasource `treeData` pull context through the default server query codec when grouping is active.
 
   ## User impact

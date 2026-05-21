@@ -14,11 +14,11 @@ Slices:
 2. [x] Add server projection capability metadata and docs for supported/unsupported group/tree/pivot modes.
 3. [x] Add server tree pull context contract and deterministic row ids for current branch rows.
 4. [x] Add branch projection cache replacement for current group expand/collapse.
-5. [ ] Add block-store cache semantics for hierarchical projections.
-6. [ ] Add partial refresh/invalidation per group branch/block.
-7. [ ] Add server pivot projection implementation or explicit enterprise adapter boundary.
+5. [x] Add block-store cache semantics for hierarchical projections.
+6. [x] Add partial refresh/invalidation per group branch/block.
+7. [x] Add server pivot projection implementation or explicit enterprise adapter boundary.
 8. [x] Add browser regression coverage for grouped server datasource expand/collapse viewport rematerialization.
-9. [ ] Add browser/perf gates for grouped server datasource scroll and refresh.
+9. [x] Add browser/perf gates for grouped server datasource scroll and refresh.
 
 ## Track 2. Unloaded-Row Operations
 

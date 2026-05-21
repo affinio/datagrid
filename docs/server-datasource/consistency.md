@@ -254,7 +254,8 @@ Frontend handling:
 
 - cell invalidation maps to row invalidation at the client cache boundary
 - row invalidation refetches the active viewport only when affected rows are visible
-- visible range invalidation keeps currently rendered rows visible while the refresh is pending
+- visible range invalidation keeps currently rendered rows visible while the refresh is pending and refetches only the visible overlap block
+- grouped projection invalidation sends the active group expansion tree context with the block refresh
 - dataset invalidation keeps the active viewport visible and schedules a refresh; non-visible cached rows may be dropped
 - malformed range invalidation falls back to dataset invalidation during change-feed mapping
 

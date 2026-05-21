@@ -157,6 +157,12 @@ Unsupported in the current `server_demo` pull path:
 - arbitrary `treeData` / hierarchical tree projection
 - `pivot`
 
+Pivot boundary:
+
+- the default `@affino/datagrid-server-adapters` query codec does not serialize `request.pivot`
+- pivot-capable enterprise backends should use `mapPullRequest` and map the raw `DataGridDataSourcePullRequest.pivot` into an approved backend-specific API shape
+- integrations without server pivot support should keep returning `400 unsupported-server-projection` when a pivot payload reaches their backend contract
+
 Backward compatibility:
 
 - older clients may omit `sortModel` and `filterModel`

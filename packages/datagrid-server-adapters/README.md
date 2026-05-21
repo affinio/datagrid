@@ -83,6 +83,8 @@ The normalized shape keeps request concerns explicit:
 
 `quickFilter` stays inside `filterModel`. The codec trims the query, dedupes columns, defaults invalid modes to `"contains"` unless configured otherwise, and never creates a top-level `search` field.
 
+Pivot is an explicit enterprise backend boundary. The default codec does not serialize `request.pivot`; backends that implement server pivot projection should use `mapPullRequest` to forward the raw `DataGridDataSourcePullRequest` or map `request.pivot` into their own approved API shape.
+
 ## Request Mapping
 
 Use the default normalized DTO when your backend accepts the package request shape:
@@ -126,6 +128,7 @@ const datasource = createAffinoDatasource<AuctionRow>({
     groupBy: request.groupBy,
     groupExpansion: request.groupExpansion,
     treeData: request.treeData,
+    pivot: request.pivot,
     pagination: request.pagination,
   }),
 })

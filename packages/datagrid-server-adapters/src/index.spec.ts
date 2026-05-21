@@ -478,6 +478,28 @@ describe("normalizeDataGridServerQuery", () => {
       filterModel: null,
     })
   })
+
+  it("keeps pivot outside the default server query codec boundary", () => {
+    const normalized = normalizeDataGridServerQuery(createPullRequest({
+      pivot: {
+        pivotModel: {
+          rows: ["region"],
+          columns: ["year"],
+          values: [{ field: "amount", agg: "sum" }],
+        },
+        aggregationModel: {
+          columns: [{ key: "amount", op: "sum" }],
+          basis: "filtered",
+        },
+      },
+    }))
+
+    expect(normalized).toEqual({
+      range: { startRow: 0, endRow: 10 },
+      filterModel: null,
+    })
+    expect("pivot" in normalized).toBe(false)
+  })
 })
 
 describe("createAffinoDatasource query mapping", () => {
@@ -582,12 +604,32 @@ describe("createAffinoDatasource query mapping", () => {
       baseUrl: "https://api.test",
       tableId: "orders",
       fetchImpl: raw.fetchImpl,
-      mapPullRequest: request => ({ rawStart: request.range.start }),
+      mapPullRequest: request => ({ rawStart: request.range.start, pivot: request.pivot }),
     })
 
-    await rawDatasource.pull(createPullRequest({ range: { start: 4, end: 6 } }))
+    await rawDatasource.pull(createPullRequest({
+      range: { start: 4, end: 6 },
+      pivot: {
+        pivotModel: {
+          rows: ["region"],
+          columns: ["year"],
+          values: [{ field: "amount", agg: "sum" }],
+        },
+        aggregationModel: null,
+      },
+    }))
 
-    expect(raw.bodies[0]).toEqual({ rawStart: 4 })
+    expect(raw.bodies[0]).toEqual({
+      rawStart: 4,
+      pivot: {
+        pivotModel: {
+          rows: ["region"],
+          columns: ["year"],
+          values: [{ field: "amount", agg: "sum" }],
+        },
+        aggregationModel: null,
+      },
+    })
   })
 
   it("preserves commit metadata and publishes history status", async () => {

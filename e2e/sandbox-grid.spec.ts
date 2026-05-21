@@ -192,6 +192,39 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     }).toBeLessThanOrEqual(0.05)
     await assertNoBlankVerticalViewport(page)
   })
+
+  test("server data source grouped region scroll and refresh keep the viewport covered", async ({ page }) => {
+    await clearServerDatasourceGridState(page)
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await page.getByRole("button", { name: "Steady latency" }).click()
+
+    const regionMenuButton = page
+      .locator('.sandbox-server-data-source-grid [data-datagrid-column-menu-button="true"][data-column-key="region"]')
+      .first()
+    await expect(regionMenuButton).toBeVisible({ timeout: 20_000 })
+    await regionMenuButton.click()
+    await page.locator('[data-datagrid-column-menu-action="toggle-group"]').click()
+    await expect(page.locator(".sandbox-server-data-source-grid .grid-body-viewport .grid-row.row--group").first()).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+
+    await runLongVerticalSession(viewport)
+    await assertNoBlankVerticalViewport(page)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+
+    await page.getByRole("button", { name: "Refresh visible range" }).click()
+    await assertNoBlankVerticalViewport(page)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await assertNoBlankVerticalViewport(page)
+  })
 })
 
 test.describe("sandbox resize and fractional viewport contracts", () => {

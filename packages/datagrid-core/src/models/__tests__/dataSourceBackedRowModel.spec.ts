@@ -3227,20 +3227,21 @@ describe("createDataSourceBackedRowModel", () => {
   it("refreshes visible range invalidation without clearing cached rows first", async () => {
     const invalidate = vi.fn()
     let generation = 0
-    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
-      async pull(request) {
-        const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
-          const index = request.range.start + offset
-          return {
-            index,
-            row: { id: index, value: generation > 0 ? `row-${index}-fresh` : `row-${index}` },
-          }
-        })
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest) => {
+      const rows = Array.from({ length: request.range.end - request.range.start + 1 }, (_, offset) => {
+        const index = request.range.start + offset
         return {
-          rows,
-          total: 1000,
+          index,
+          row: { id: index, value: generation > 0 ? `row-${index}-fresh` : `row-${index}` },
         }
-      },
+      })
+      return {
+        rows,
+        total: 1000,
+      }
+    })
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull,
       invalidate,
     }
 
@@ -3267,6 +3268,11 @@ describe("createDataSourceBackedRowModel", () => {
     })
 
     await flushMicrotasks()
+    expect(model.getRow(11)?.row.value).toBe("row-11")
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      range: { start: 12, end: 13 },
+      reason: "invalidation",
+    }))
     expect(model.getRow(12)?.row.value).toBe("row-12-fresh")
     expect(model.getRow(13)?.row.value).toBe("row-13-fresh")
     expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
@@ -3312,12 +3318,94 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getSnapshot().loading).toBe(false)
 
     await flushMicrotasks()
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      range: { start: 12, end: 12 },
+      reason: "invalidation",
+    }))
 
     expect(pull).toHaveBeenCalledTimes(2)
-    expect(model.getRow(11)?.row.value).toBe("row-11-fresh")
+    expect(model.getRow(11)?.row.value).toBe("row-11")
     expect(model.getRow(12)?.row.value).toBe("row-12-fresh")
-    expect(model.getRow(13)?.row.value).toBe("row-13-fresh")
+    expect(model.getRow(13)?.row.value).toBe("row-13")
     expect(model.getBackpressureDiagnostics().invalidatedRows).toBe(0)
+
+    model.dispose()
+  })
+
+  it("refreshes only the invalidated grouped projection block with tree context", async () => {
+    type GroupedRow = { id: string; label: string; region: string }
+    const createGroupRow = (
+      index: number,
+      region: string,
+      expanded: boolean,
+    ): DataGridDataSourcePullResult<GroupedRow>["rows"][number] => ({
+      index,
+      rowId: `group:region:${region}`,
+      kind: "group",
+      state: { expanded },
+      groupMeta: {
+        groupKey: `group:region:${region}`,
+        groupField: "region",
+        groupValue: region,
+        level: 0,
+        childrenCount: 1,
+      },
+      row: { id: `group:region:${region}`, label: `Region ${region}`, region },
+    })
+    let generation = 0
+    const pull = vi.fn(async (request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<GroupedRow>> => {
+      const expanded = request.groupExpansion.toggledGroupKeys.includes("group:region:AMER")
+      const projection: DataGridDataSourcePullResult<GroupedRow>["rows"] = expanded
+        ? [
+            createGroupRow(0, "AMER", true),
+            {
+              index: 1,
+              rowId: "srv-amer-1",
+              kind: "leaf",
+              row: { id: "srv-amer-1", label: generation > 0 ? "AMER fresh" : "AMER", region: "AMER" },
+            },
+            createGroupRow(2, "EMEA", false),
+          ]
+        : [
+            createGroupRow(0, "AMER", false),
+            createGroupRow(1, "EMEA", false),
+          ]
+      return {
+        rows: projection.filter(entry => entry.index >= request.range.start && entry.index <= request.range.end),
+        total: projection.length,
+      }
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource: { pull },
+      resolveRowId: row => row.id,
+      initialTotal: 2,
+      initialGroupBy: { fields: ["region"], expandedByDefault: false },
+    })
+
+    model.setViewportRange({ start: 0, end: 2 })
+    await flushMicrotasks()
+    model.expandGroup("group:region:AMER")
+    await flushMicrotasks()
+
+    expect(model.getRow(1)?.row.label).toBe("AMER")
+
+    generation = 1
+    model.invalidateRange({ start: 1, end: 1 })
+    expect(model.getRow(1)?.row.label).toBe("AMER")
+    await flushMicrotasks()
+
+    expect(pull).toHaveBeenLastCalledWith(expect.objectContaining({
+      range: { start: 1, end: 1 },
+      reason: "invalidation",
+      treeData: {
+        operation: "set-group-expansion",
+        scope: "all",
+        groupKeys: ["group:region:AMER"],
+      },
+    }))
+    expect(model.getRow(0)?.row.label).toBe("Region AMER")
+    expect(model.getRow(1)?.row.label).toBe("AMER fresh")
 
     model.dispose()
   })
