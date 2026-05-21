@@ -85,6 +85,7 @@ import {
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
+import { resolveDataSourceRuntimeState } from "./server/dataSourceRuntimeStateMachine.js"
 import type {
   DataGridDataSource,
   DataGridDataSourceBackpressureDiagnostics,
@@ -419,11 +420,20 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function updateLoadingState() {
-    const hasVisibleCache = rowCache.size > 0
-    const criticalLoading = Boolean(criticalInFlight?.affectsLoading)
-    initialLoading = !hasVisibleCache && criticalLoading
-    refreshing = hasVisibleCache && criticalLoading
-    loading = initialLoading || refreshing
+    const runtimeState = resolveDataSourceRuntimeState({
+      cachedRows: rowCache.size,
+      criticalInFlight: Boolean(criticalInFlight),
+      criticalAffectsLoading: Boolean(criticalInFlight?.affectsLoading),
+      backgroundInFlight: Boolean(backgroundInFlight),
+      invalidating: criticalInFlight?.reason === "invalidation" || criticalInFlight?.reason === "push-invalidation",
+      optimisticMutating: optimisticMutationEngine.getPendingCount() > 0,
+      staleRetainedRows: staleRetainedRowIndexes.size,
+      error,
+      disposed,
+    })
+    initialLoading = runtimeState.initialLoading
+    refreshing = runtimeState.refreshing
+    loading = runtimeState.loading
   }
 
   function readRowCache(index: number): DataGridRowNode<T> | undefined {

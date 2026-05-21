@@ -20,7 +20,7 @@ Slices:
 8. [x] Add browser regression coverage for grouped server datasource expand/collapse viewport rematerialization.
 9. [x] Add browser/perf gates for grouped server datasource scroll and refresh.
 10. [x] Decompose `dataSourceBackedRowModel` into scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine modules.
-11. [ ] Formalize datasource runtime state machine.
+11. [x] Formalize datasource runtime state machine.
     - Scope: internal-only phase/transition helper for `idle`, `initial-loading`, `refreshing`, `invalidating`, `prefetching`, `optimistic-mutating`, `stale-retained`, and error recovery.
     - Keep public `DataGridRowModelSnapshot` shape stable; derive existing `loading`, `initialLoading`, and `refreshing` fields from the formal state.
     - Add focused transition tests for pull start/settle, invalidation overlap, background prefetch, optimistic commit success/reject/failure, stale-retained cache replacement, and dispose.

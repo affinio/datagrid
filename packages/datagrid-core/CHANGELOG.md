@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Formalized server datasource runtime phases behind an internal state machine and now derives the existing `loading`, `initialLoading`, and `refreshing` snapshot flags from that helper.
+
+  ## User impact
+
+  No public API or browser behavior change expected. Runtime states such as invalidation, prefetch, optimistic mutation, stale-retained cache, and error recovery are now explicit internally for the next datasource architecture slices.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource runtime state-machine regressions, datasource-backed row model regressions, package type-check, and architecture gate passed
+
+- ## Summary
+
   Split server datasource row-model internals into focused scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine modules.
 
   ## User impact

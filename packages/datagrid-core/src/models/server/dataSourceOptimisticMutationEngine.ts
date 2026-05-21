@@ -12,6 +12,7 @@ export interface DataSourceOptimisticMutationEngine<T> {
   nextTransactionId(): number
   register(transaction: DataSourceOptimisticEditTransaction<T>): void
   remove(transactionId: number): void
+  getPendingCount(): number
   applyPendingEditsToNode(
     node: DataGridRowNode<T>,
     applyPatch: (row: T, patch: Partial<T>) => T,
@@ -55,6 +56,9 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
       if (orderIndex >= 0) {
         transactionOrder.splice(orderIndex, 1)
       }
+    },
+    getPendingCount() {
+      return transactions.size
     },
     applyPendingEditsToNode(node, applyPatch, excludeTransactionId) {
       let nextNode = node
