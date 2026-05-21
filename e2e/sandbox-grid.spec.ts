@@ -150,6 +150,48 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     }).toBeLessThanOrEqual(0.05)
     await assertNoBlankVerticalViewport(page)
   })
+
+  test("server data source grouped region expand and collapse rematerializes the viewport", async ({ page }) => {
+    await clearServerDatasourceGridState(page)
+    await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
+
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+
+    const regionMenuButton = page
+      .locator('.sandbox-server-data-source-grid [data-datagrid-column-menu-button="true"][data-column-key="region"]')
+      .first()
+    await expect(regionMenuButton).toBeVisible({ timeout: 20_000 })
+    await regionMenuButton.click()
+    await page.locator('[data-datagrid-column-menu-action="toggle-group"]').click()
+
+    const firstGroupRow = page.locator(".sandbox-server-data-source-grid .grid-body-viewport .grid-row.row--group").first()
+    const firstGroupCell = firstGroupRow.locator(".grid-cell[data-column-key]:not(.grid-cell--row-selection)").first()
+    await expect(firstGroupRow).toBeVisible({ timeout: 20_000 })
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "true")
+
+    const expandedRowCount = await gridAriaRowCount(viewport)
+    expect(expandedRowCount).toBeGreaterThan(100_000)
+    await assertNoBlankVerticalViewport(page)
+
+    await firstGroupCell.click()
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "false")
+    await expect.poll(async () => gridAriaRowCount(viewport), {
+      timeout: 20_000,
+    }).toBeLessThan(expandedRowCount)
+    const collapsedRowCount = await gridAriaRowCount(viewport)
+    await assertNoBlankVerticalViewport(page)
+
+    await firstGroupCell.click()
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "true")
+    await expect.poll(async () => gridAriaRowCount(viewport), {
+      timeout: 20_000,
+    }).toBeGreaterThan(collapsedRowCount)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await assertNoBlankVerticalViewport(page)
+  })
 })
 
 test.describe("sandbox resize and fractional viewport contracts", () => {
@@ -732,6 +774,16 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   }
 }
 
+async function clearServerDatasourceGridState(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    for (const key of Object.keys(window.localStorage)) {
+      if (key.includes("server-data-source-grid")) {
+        window.localStorage.removeItem(key)
+      }
+    }
+  })
+}
+
 async function forceCoarsePointer(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const originalMatchMedia = window.matchMedia.bind(window)
@@ -1238,6 +1290,12 @@ async function serverViewportLoadingRatio(page: Page): Promise<number> {
     .getAttribute("data-ratio")
   const value = Number(raw)
   return Number.isFinite(value) ? value : 1
+}
+
+async function gridAriaRowCount(viewport: Locator): Promise<number> {
+  const raw = await viewport.getAttribute("aria-rowcount")
+  const value = Number(raw)
+  return Number.isFinite(value) ? value : 0
 }
 
 async function serverPlaceholderExposureEvents(page: Page): Promise<number> {

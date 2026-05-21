@@ -17,7 +17,8 @@ Slices:
 5. [ ] Add block-store cache semantics for hierarchical projections.
 6. [ ] Add partial refresh/invalidation per group branch/block.
 7. [ ] Add server pivot projection implementation or explicit enterprise adapter boundary.
-8. [ ] Add browser/perf gates for grouped server datasource scroll, expand/collapse, and refresh.
+8. [x] Add browser regression coverage for grouped server datasource expand/collapse viewport rematerialization.
+9. [ ] Add browser/perf gates for grouped server datasource scroll and refresh.
 
 ## Track 2. Unloaded-Row Operations
 
