@@ -18,7 +18,7 @@ Theme tokens, presets, and utilities for Affino DataGrid.
 
 The preferred styling path is token-driven theming through `DataGridStyleConfig.tokens` and `tokenVariants`.
 
-Treat the exported default tokens as the current Affino baseline, not as a frozen visual contract. If your product needs an exact long-lived look, pin an explicit preset (`defaultStyleConfig`, `industrialNeutralTheme`, `sugarTheme`) or provide your own token map instead of inheriting the moving defaults.
+The exported default tokens are intentionally plain: white and neutral gray surfaces, subtle borders, Arial-style system typography, and a small blue accent only for active/focus/selection states. Use `industrialNeutralTheme` or `sugarTheme` when you need a more opinionated look, or provide your own token map for product branding.
 
 `DataGridStyleConfig` is token-only. Class-slot styling hooks were removed; renderer-owned class names remain internal implementation details.
 
