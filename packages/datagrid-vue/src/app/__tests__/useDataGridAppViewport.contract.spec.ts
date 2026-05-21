@@ -733,7 +733,7 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r10", "r11", "r12", "r13", "r14"])
   })
 
-  it("defers far-jump visible rows and runtime position until scroll idle", () => {
+  it("syncs far-jump visible rows immediately and defers runtime position until scroll idle", () => {
     vi.useFakeTimers()
     const raf = createRafHarness()
     const rows = makeRows(300)
@@ -780,28 +780,23 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).not.toHaveBeenCalled()
-    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
-    expect(setVirtualWindowRange).not.toHaveBeenCalled()
+    expect(setVirtualWindowRange).toHaveBeenCalledTimes(1)
+    expect(setVirtualWindowRange).toHaveBeenLastCalledWith({ start: 250, end: 254 })
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(5)
+    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([250, 251, 252, 253, 254])
     expect(setViewportPosition).not.toHaveBeenCalled()
-    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r0", "r1", "r2", "r3", "r4"])
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r250", "r251", "r252", "r253", "r254"])
 
     vi.advanceTimersByTime(119)
-    expect(syncRowsInRange).not.toHaveBeenCalled()
     expect(setViewportPosition).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
-    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
-    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 250, end: 254 })
-    expect(setVirtualWindowRange).not.toHaveBeenCalled()
-    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(1)
-    expect(getBodyRowAtIndex).toHaveBeenLastCalledWith(250)
     expect(setViewportPosition).toHaveBeenCalledTimes(1)
     expect(setViewportPosition).toHaveBeenLastCalledWith(expect.objectContaining({
       range: { start: 250, end: 254 },
       anchor: expect.objectContaining({ rowId: "r250", rowIndex: 250 }),
       scroll: { top: 5000, left: 0 },
     }))
-    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(["r250", "r251", "r252", "r253", "r254"])
   })
 
   it("retains the last synced window while the visible range stays inside the overscan buffer", () => {

@@ -616,42 +616,13 @@ export function useDataGridAppViewport<TRow>(
     return Math.abs(snapshot.scrollTop - lastViewportScrollTop) >= jumpThresholdPx
   }
 
-  const recordDeferredFarJumpVisibleRows = (scrollTopDelta: number): void => {
-    if (!perfTraceEnabled) {
-      return
-    }
-    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
-    const changedRowCount = Math.max(1, Math.floor(Math.abs(scrollTopDelta) / estimatedRowHeight))
-    lastVisibleRowSyncPerf = {
-      mode: "far-jump-deferred",
-      totalMs: 0,
-      incrementalResolveMs: 0,
-      runtimeSyncMs: 0,
-      setViewportRangeMs: 0,
-      displayRowsAssignMs: 0,
-      viewportCommitMs: 0,
-      rangeShiftStart: changedRowCount,
-      rangeShiftEnd: changedRowCount,
-      changedRowCount,
-    }
-  }
-
   const flushPendingFarJumpViewportSync = (): boolean => {
     if (!pendingFarJumpViewportSync) {
       return false
     }
     pendingFarJumpViewportSync = false
     pendingRuntimeViewportPositionIdleSync = false
-    const element = bodyViewportRef.value
-    if (!element) {
-      return true
-    }
-    commitViewportSnapshot(captureViewportSnapshot(element), {
-      forceVisibleRows: true,
-      measureVisibleRowHeights: false,
-      syncRuntimePosition: true,
-    })
-    return true
+    return false
   }
 
   const scheduleVerticalScrollIdleReset = (): void => {
@@ -1373,6 +1344,7 @@ export function useDataGridAppViewport<TRow>(
       return
     }
     const previousRange = lastSyncedRange
+    const previousRows = displayRows.value
     const visibleRowsPerfStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
     let incrementalResolveMs = 0
     let runtimeSyncMs = 0
@@ -1390,6 +1362,38 @@ export function useDataGridAppViewport<TRow>(
         incrementalResolveMs = resolveDataGridPerfNow() - incrementalStart
         return rows
       })()
+    const shouldRetainPreviousRows =
+      !force
+      && previousRange !== null
+      && previousRows.length > 0
+      && resolveScrollableBodyRowCount() > 0
+    const nextRowsFromRuntime = indexedRows
+      ? null
+      : options.runtime.syncBodyRowsInRange(range)
+    const nextRows = indexedRows?.rows ?? nextRowsFromRuntime ?? []
+    if (nextRows.length === 0 && shouldRetainPreviousRows) {
+      lastSyncedRange = {
+        start: range.start,
+        end: range.end,
+      }
+      if (perfTraceEnabled) {
+        lastVisibleRowSyncPerf = {
+          mode: indexedRows ? indexedRows.mode : "runtime-retained",
+          totalMs: resolveDataGridPerfNow() - visibleRowsPerfStart,
+          incrementalResolveMs,
+          runtimeSyncMs,
+          setViewportRangeMs,
+          displayRowsAssignMs,
+          viewportCommitMs,
+          rangeShiftStart: previousRange ? range.start - previousRange.start : 0,
+          rangeShiftEnd: previousRange ? range.end - previousRange.end : 0,
+          changedRowCount: previousRange
+            ? Math.max(Math.abs(range.start - previousRange.start), Math.abs(range.end - previousRange.end))
+            : Math.max(0, range.end - range.start + 1),
+        }
+      }
+      return
+    }
     if (indexedRows) {
       const setWindowRange = options.runtime.setVirtualWindowRange ?? options.runtime.setViewportRange
       if (typeof setWindowRange === "function") {
@@ -1412,7 +1416,7 @@ export function useDataGridAppViewport<TRow>(
       }
       else {
         const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        commitDisplayRows(options.runtime.syncBodyRowsInRange(range))
+        commitDisplayRows(nextRows)
         if (perfTraceEnabled) {
           runtimeSyncMs = resolveDataGridPerfNow() - syncStart
         }
@@ -1420,7 +1424,7 @@ export function useDataGridAppViewport<TRow>(
     }
     else {
       const syncStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-      commitDisplayRows(options.runtime.syncBodyRowsInRange(range))
+      commitDisplayRows(nextRows)
       if (perfTraceEnabled) {
         runtimeSyncMs = resolveDataGridPerfNow() - syncStart
       }
@@ -1487,47 +1491,42 @@ export function useDataGridAppViewport<TRow>(
 
     const shouldDeferFarJumpRows = shouldDeferFarJumpViewportSync(snapshot, commitOptions.forceVisibleRows)
     if (commitOptions.forceVisibleRows || snapshot.scrollTop !== lastViewportScrollTop) {
-      const scrollTopDelta = snapshot.scrollTop - lastViewportScrollTop
       lastViewportScrollTop = snapshot.scrollTop
-      if (shouldDeferFarJumpRows) {
-        pendingFarJumpViewportSync = true
-        recordDeferredFarJumpVisibleRows(scrollTopDelta)
+      const nextViewportSnapshot = {
+        scrollTop: snapshot.scrollTop,
+        clientHeight: snapshot.clientHeight,
+      }
+      const visibleRangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+      const visibleRange = resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot)
+      if (perfTraceEnabled) {
+        lastViewportRangeResolveMs += resolveDataGridPerfNow() - visibleRangeResolveStart
+      }
+      if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(visibleRange)) {
+        if (perfTraceEnabled) {
+          lastVisibleRowSyncPerf = {
+            mode: "retained",
+            totalMs: 0,
+            incrementalResolveMs: 0,
+            runtimeSyncMs: 0,
+            setViewportRangeMs: 0,
+            displayRowsAssignMs: 0,
+            viewportCommitMs: 0,
+            rangeShiftStart: 0,
+            rangeShiftEnd: 0,
+            changedRowCount: 0,
+          }
+        }
       }
       else {
-        pendingFarJumpViewportSync = false
-        const nextViewportSnapshot = {
-          scrollTop: snapshot.scrollTop,
-          clientHeight: snapshot.clientHeight,
-        }
-        const visibleRangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        const visibleRange = resolveVisibleRowRangeFromSnapshot(nextViewportSnapshot)
+        const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
+        const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
         if (perfTraceEnabled) {
-          lastViewportRangeResolveMs += resolveDataGridPerfNow() - visibleRangeResolveStart
+          lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
         }
-        if (!commitOptions.forceVisibleRows && canRetainLastSyncedRange(visibleRange)) {
-          if (perfTraceEnabled) {
-            lastVisibleRowSyncPerf = {
-              mode: "retained",
-              totalMs: 0,
-              incrementalResolveMs: 0,
-              runtimeSyncMs: 0,
-              setViewportRangeMs: 0,
-              displayRowsAssignMs: 0,
-              viewportCommitMs: 0,
-              rangeShiftStart: 0,
-              rangeShiftEnd: 0,
-              changedRowCount: 0,
-            }
-          }
-        }
-        else {
-          const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-          const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
-          if (perfTraceEnabled) {
-            lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
-          }
-          syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
-        }
+        syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
+      }
+      if (shouldDeferFarJumpRows) {
+        pendingRuntimeViewportPositionIdleSync = true
       }
     }
 
