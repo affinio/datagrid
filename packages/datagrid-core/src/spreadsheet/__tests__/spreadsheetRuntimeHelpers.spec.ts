@@ -7,6 +7,17 @@ import {
 } from "../spreadsheetCellRuntime.js"
 import { createSpreadsheetCellStoreRuntime } from "../spreadsheetCellStoreRuntime.js"
 import {
+  collectSpreadsheetFormulaDependentClosure,
+  createSpreadsheetFormulaDiagnosticError,
+  deleteSpreadsheetFormulaDependentLink,
+  setSpreadsheetFormulaDependentLinkInMap,
+  type SpreadsheetFormulaCellState,
+} from "../spreadsheetFormulaRuntime.js"
+import { createSpreadsheetSheetStateRuntime } from "../spreadsheetSheetStateRuntime.js"
+import {
+  hasCurrentSheetAbsoluteReferencesAtOrAfter,
+} from "../spreadsheetStructuralMutationRuntime.js"
+import {
   resolveFormulaTableBindingName,
   resolveFormulaTableContextKey,
 } from "../spreadsheetFormulaTableRuntime.js"
@@ -88,6 +99,67 @@ describe("spreadsheet runtime helpers", () => {
 
     expect(store.hasRawInput(0, "amount")).toBe(false)
     expect(store.getCellStyle(0, "amount")).toBeUndefined()
+  })
+
+  it("owns sheet row and column state indexes", () => {
+    const runtime = createSpreadsheetSheetStateRuntime({
+      columns: [{ key: "amount" }],
+      rows: [{ id: "row-1" }],
+    })
+
+    const cellKey = runtime.resolveCellKey({ rowIndex: 0, columnKey: "amount" })
+
+    expect(runtime.columns[0]?.title).toBe("amount")
+    expect(runtime.rowIndexById.get("row-1")).toBe(0)
+    expect(cellKey).toBe("0\u001famount")
+    expect(runtime.resolveAddressFromCellKey("sheet-a", cellKey)).toEqual({
+      sheetId: "sheet-a",
+      rowId: "row-1",
+      rowIndex: 0,
+      columnKey: "amount",
+    })
+    expect(runtime.setResolvedCellValueOnRow(runtime.rows[0], "amount", 42)).toBe(true)
+    expect(runtime.getResolvedCellValue(runtime.rows[0], "amount")).toBe(42)
+    expect(runtime.createResolvedRowData(runtime.rows[0]!)).toEqual({ amount: 42 })
+  })
+
+  it("owns formula dependent closure helpers", () => {
+    const dependentsByCellKey = new Map<string, Set<string>>()
+    const formulaCell = {
+      key: "1\u001famount",
+      address: { rowIndex: 1, columnKey: "amount" },
+      analysis: {
+        diagnostics: [{ message: "Invalid amount" }],
+      },
+    } as SpreadsheetFormulaCellState
+    const formulaCellByKey = new Map<string, SpreadsheetFormulaCellState>([[formulaCell.key, formulaCell]])
+
+    setSpreadsheetFormulaDependentLinkInMap(dependentsByCellKey, "0\u001famount", formulaCell.key)
+
+    expect([...collectSpreadsheetFormulaDependentClosure(
+      new Set(["0\u001famount"]),
+      dependentsByCellKey,
+      formulaCellByKey,
+    )]).toEqual([formulaCell.key])
+    expect(createSpreadsheetFormulaDiagnosticError(formulaCell.analysis).message).toBe("Invalid amount")
+
+    deleteSpreadsheetFormulaDependentLink(dependentsByCellKey, "0\u001famount", formulaCell.key)
+
+    expect(dependentsByCellKey.size).toBe(0)
+  })
+
+  it("owns structural absolute-reference detection", () => {
+    const runtimeModel = {
+      bindings: [{
+        kind: "reference",
+        sheetReference: null,
+        rowSelector: { kind: "absolute", rowIndex: 4 },
+      }],
+    }
+    const isCurrentSheetReference = () => true
+
+    expect(hasCurrentSheetAbsoluteReferencesAtOrAfter(runtimeModel, 4, isCurrentSheetReference)).toBe(true)
+    expect(hasCurrentSheetAbsoluteReferencesAtOrAfter(runtimeModel, 5, isCurrentSheetReference)).toBe(false)
   })
 
   it("compares and merges spreadsheet styles outside the sheet facade", () => {

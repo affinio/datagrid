@@ -379,16 +379,19 @@ Rules for this block:
   - [x] `spreadsheetCellRuntime.ts` for cell input, preview, address, and row-index helper logic
   - [x] `spreadsheetCellStoreRuntime.ts` for sparse raw-input and cell-style storage
   - [x] `spreadsheetFormulaTableRuntime.ts` for formula table context keys
+  - [x] `spreadsheetFormulaRuntime.ts` for formula runtime state types, dependency closure helpers, structural snapshots, diagnostics, and row-offset analysis shifts
   - [x] `spreadsheetMutationSnapshotRuntime.ts` for mutation snapshot cloning
   - [x] `spreadsheetReferenceRuntime.ts` for sheet/column reference normalization and lookups
+  - [x] `spreadsheetSheetStateRuntime.ts` for sheet row/column state initialization, indexes, resolved values, and address resolution
   - [x] `spreadsheetStyleRuntime.ts` for style normalization, merge, and state-equivalence helpers
+  - [x] `spreadsheetStructuralMutationRuntime.ts` for row insert/remove and column rename formula rewrite policy
 - [ ] Continue sheet runtime split when those behavior areas are next touched:
   - [ ] `sheetTypes.ts` for model interfaces, patches, snapshots, mutation/state types
-  - [ ] `sheetState.ts` for init/export/restore/normalization/equality helpers
-  - [ ] `sheetFormulaRuntime.ts` for formula analysis maps, dependency graph, compilation, evaluation
-  - [ ] `sheetRowMutation.ts` for insert/remove and structural mutation rewrite logic
+  - [x] `sheetState.ts` equivalent partially covered by `spreadsheetSheetStateRuntime.ts`
+  - [x] `sheetFormulaRuntime.ts` equivalent partially covered by `spreadsheetFormulaRuntime.ts`
+  - [x] `sheetRowMutation.ts` equivalent partially covered by `spreadsheetStructuralMutationRuntime.ts`
   - [x] `sheetStyleRuntime.ts` equivalent covered by `spreadsheetStyleRuntime.ts`
-  - [ ] keep `sheetModel.ts` as facade/orchestrator only for formula evaluation and structural rewrite policy
+  - [ ] keep `sheetModel.ts` as facade/orchestrator only for formula evaluation context, revision mutation, and restore orchestration
 - [ ] Split formula editor/runtime helpers into:
   - [ ] `formulaEditorTypes.ts` for editor/runtime formula types
   - [ ] `formulaAnalysis.ts` for cell input analysis, diagnostics, reference target resolution

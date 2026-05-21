@@ -86,8 +86,8 @@ Recommended decomposition:
 Status as of `2026-05-21`:
 
 - Closed the safe facade-preserving decomposition slice for `sheetModel.ts`.
-- Extracted cell helpers, sparse cell storage, formula table key helpers, mutation snapshot cloning, column/reference lookup, and style normalization/equality/merge into focused spreadsheet runtime modules.
-- Left formula dependency/evaluation and row/column structural rewrite policy inside the facade for now because those paths are tightly coupled to current closure state and should move only with a behavior-touching slice.
+- Extracted cell helpers, sparse cell storage, sheet row/column state, formula table key helpers, formula runtime helpers, mutation snapshot cloning, column/reference lookup, style normalization/equality/merge, and structural formula rewrite policy into focused spreadsheet runtime modules.
+- Left formula evaluation context, revision mutation, and restore orchestration inside the facade because they still coordinate multiple runtime owners and should move only with a behavior-touching slice.
 
 Validation target:
 
