@@ -20,6 +20,22 @@ Slices:
 8. [x] Add browser regression coverage for grouped server datasource expand/collapse viewport rematerialization.
 9. [x] Add browser/perf gates for grouped server datasource scroll and refresh.
 10. [x] Decompose `dataSourceBackedRowModel` into scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine modules.
+11. [ ] Formalize datasource runtime state machine.
+    - Scope: internal-only phase/transition helper for `idle`, `initial-loading`, `refreshing`, `invalidating`, `prefetching`, `optimistic-mutating`, `stale-retained`, and error recovery.
+    - Keep public `DataGridRowModelSnapshot` shape stable; derive existing `loading`, `initialLoading`, and `refreshing` fields from the formal state.
+    - Add focused transition tests for pull start/settle, invalidation overlap, background prefetch, optimistic commit success/reject/failure, stale-retained cache replacement, and dispose.
+    - Validation: datasource row model unit suite, core type-check, architecture gate.
+12. [ ] Add internal datasource service lifecycle contracts.
+    - Scope: internal `init`, `attach`, `suspend`, `resume`, and `dispose` lifecycle for scheduler, transport coordinator, cache manager, invalidation engine, telemetry runtime, and optimistic mutation engine.
+    - Keep ownership in core; do not expose lifecycle API to package consumers.
+    - Add focused tests that suspend/resume blocks new pulls without dropping visible cache, dispose cancels in-flight/pending work, and attach initializes diagnostics deterministically.
+    - Validation: datasource row model unit suite, core type-check, architecture gate.
+13. [ ] Introduce typed internal datasource signals.
+    - Scope: minimal typed signal surface for `pullStarted`, `pullSettled`, `cacheInvalidated`, `viewportCoverageChanged`, `optimisticMutationStarted`, and `optimisticMutationSettled`.
+    - Prefer explicit signal payloads over a generic untyped event bus; no public API changes.
+    - Route telemetry/cache/scheduler/mutation cross-talk through signals only where it removes direct coupling.
+    - Add tests for signal ordering and unsubscribe/dispose behavior.
+    - Validation: datasource row model unit suite, core type-check, architecture gate.
 
 ## Track 2. Unloaded-Row Operations
 
