@@ -255,17 +255,6 @@ export type {
   DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
 export { createClientRowModel } from "./clientRowModel.js"
-export type {
-  ClientWorkbookModel,
-  CreateClientWorkbookModelOptions,
-  DataGridWorkbookListener,
-  DataGridWorkbookSheetHandle,
-  DataGridWorkbookSheetInput,
-  DataGridWorkbookSheetSnapshot,
-  DataGridWorkbookSnapshot,
-  DataGridWorkbookSyncSnapshot,
-} from "./clientWorkbookModel.js"
-export { createClientWorkbookModel } from "./clientWorkbookModel.js"
 export {
   createClientRowDerivedCacheRuntime,
   type ClientRowDerivedCacheRuntime,

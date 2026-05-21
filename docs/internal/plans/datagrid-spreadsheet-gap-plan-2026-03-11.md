@@ -63,7 +63,7 @@ Needed:
 Status:
 
 - `2026-03-11`: second block implemented
-  - added `createClientWorkbookModel`
+  - added `createClientWorkbookModel` (removed on `2026-05-21`)
   - added stable sheet ids + active-sheet state
   - added add/remove/rename sheet flows
   - added auto-sync of sheets into formula `TABLE()` aliases by both `sheet.id` and `sheet.name`
@@ -73,6 +73,8 @@ Status:
   - added lazy workbook table exports and batched formula-table patching to avoid `map + freeze + clone` on every inter-sheet sync
   - added cached workbook graph state with invalidation on structural/formula changes instead of rebuilding graph on every sync
   - switched workbook export invalidation to explicit source/formula structure revisions instead of relying on array identity
+- `2026-05-21`: row-model workbook API removed
+  - removed `createClientWorkbookModel`; `createDataGridSpreadsheetWorkbookModel()` is the canonical workbook API
 - `2026-03-11`: spreadsheet workbook host implemented
   - added `createDataGridSpreadsheetWorkbookModel()`
   - spreadsheet sheets now auto-sync as `TABLE()` / `RELATED()` / `ROLLUP()` sources by `sheet.id` and `sheet.name`
