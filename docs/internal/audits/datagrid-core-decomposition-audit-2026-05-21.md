@@ -218,6 +218,7 @@ Validation target:
   - `2026-05-21`: row-model dispose cleanup moved into `clientRowDisposeHostRuntime`; `clientRowModel` now delegates disposal cleanup sequencing.
   - `2026-05-21`: row-model runtime constants and guards moved into `clientRowModelRuntimeConfig`; `clientRowModel` no longer owns config normalization helpers.
   - `2026-05-21`: initial/manual refresh policy moved into `clientRowRefreshHostRuntime`; `clientRowModel` now delegates projection refresh bootstrap and public refresh.
+  - `2026-05-21`: row access, row mutation facade, and calculation snapshot facade methods moved into focused host runtimes; `clientRowModel` now delegates these public method groups.
 - `packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts`: consider splitting row/batch/columnar execution paths if compute work expands.
 - `packages/datagrid-core/src/models/rowModel.ts`: types plus tree/group/pagination/normalization helpers; split helper modules before adding more row-model helpers.
 - `packages/datagrid-core/src/models/columnModel.ts`: watch for pin/order/visibility/width groups growing into separate owners.

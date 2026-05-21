@@ -99,6 +99,9 @@ import { createClientRowFormulaHostRuntime } from "./host/clientRowFormulaHostRu
 import { createClientRowFormulaTableHostRuntime } from "./host/clientRowFormulaTableHostRuntime.js"
 import { createClientRowDisposeHostRuntime } from "./host/clientRowDisposeHostRuntime.js"
 import { createClientRowRefreshHostRuntime } from "./host/clientRowRefreshHostRuntime.js"
+import { createClientRowAccessHostRuntime } from "./host/clientRowAccessHostRuntime.js"
+import { createClientRowRowsFacadeRuntime } from "./host/clientRowRowsFacadeRuntime.js"
+import { createClientRowCalculationSnapshotFacadeRuntime } from "./host/clientRowCalculationSnapshotFacadeRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -709,6 +712,10 @@ export function createClientRowModel<T>(
   const {
     snapshotHostRuntime,
   } = snapshotBootstrap
+  const calculationSnapshotFacadeRuntime = createClientRowCalculationSnapshotFacadeRuntime<T>({
+    ensureActive,
+    snapshotHostRuntime,
+  })
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
     return snapshotHostRuntime.getSnapshot()
@@ -779,6 +786,25 @@ export function createClientRowModel<T>(
     mutationHostRuntime,
     patchHostRuntime,
   } = mutationBootstrap
+  const rowAccessHostRuntime = createClientRowAccessHostRuntime<T>({
+    ensureActive,
+    getMaterializedSourceRows,
+    getRowRevision: () => runtimeState.rowRevision,
+    getFormulaStructureRevision: () => formulaStructureRevision,
+    getRows: () => runtimeState.rows,
+    normalizeViewportRange,
+    materializeOutputRow,
+    materializeOutputRowsInRange,
+  })
+  const rowsFacadeRuntime = createClientRowRowsFacadeRuntime<T>({
+    getBaseSourceRows,
+    setRows: rows => {
+      mutationHostRuntime.setRows(rows)
+    },
+    insertRowsAt: mutationHostRuntime.insertRowsAt,
+    insertRowsBefore: mutationHostRuntime.insertRowsBefore,
+    insertRowsAfter: mutationHostRuntime.insertRowsAfter,
+  })
 
   const computedRefreshRuntime = createClientRowComputedRefreshRuntime<T>({
     applyComputedFieldsToSourceRows,
@@ -905,59 +931,43 @@ export function createClientRowModel<T>(
     kind: "client",
     getSnapshot,
     getSourceRows() {
-      ensureActive()
-      return getMaterializedSourceRows()
+      return rowAccessHostRuntime.getSourceRows()
     },
     getSourceRowsRevision() {
-      ensureActive()
-      return runtimeState.rowRevision
+      return rowAccessHostRuntime.getSourceRowsRevision()
     },
     getFormulaStructureRevision() {
-      ensureActive()
-      return formulaStructureRevision
+      return rowAccessHostRuntime.getFormulaStructureRevision()
     },
     getRowCount() {
-      return runtimeState.rows.length
+      return rowAccessHostRuntime.getRowCount()
     },
     getRow(index: number) {
-      if (!Number.isFinite(index)) {
-        return undefined
-      }
-      return materializeOutputRow(runtimeState.rows[Math.max(0, Math.trunc(index))])
+      return rowAccessHostRuntime.getRow(index)
     },
     getRowsInRange(range: DataGridViewportRange) {
-      const normalized = normalizeViewportRange(range, runtimeState.rows.length)
-      if (runtimeState.rows.length === 0) {
-        return []
-      }
-      return materializeOutputRowsInRange(runtimeState.rows, normalized.start, normalized.end)
+      return rowAccessHostRuntime.getRowsInRange(range)
     },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
-      mutationHostRuntime.setRows(nextRows)
+      rowsFacadeRuntime.setRows(nextRows)
     },
     replaceRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
-      mutationHostRuntime.setRows(nextRows)
+      rowsFacadeRuntime.replaceRows(nextRows)
     },
     appendRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
-      if (nextRows.length === 0) {
-        return
-      }
-      mutationHostRuntime.setRows([...getBaseSourceRows(), ...nextRows])
+      rowsFacadeRuntime.appendRows(nextRows)
     },
     prependRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
-      if (nextRows.length === 0) {
-        return
-      }
-      mutationHostRuntime.setRows([...nextRows, ...getBaseSourceRows()])
+      rowsFacadeRuntime.prependRows(nextRows)
     },
     insertRowsAt(index: number, nextRows: readonly DataGridRowNodeInput<T>[]) {
-      return mutationHostRuntime.insertRowsAt(index, nextRows)
+      return rowsFacadeRuntime.insertRowsAt(index, nextRows)
     },
     insertRowsBefore(rowId: DataGridRowId, nextRows: readonly DataGridRowNodeInput<T>[]) {
-      return mutationHostRuntime.insertRowsBefore(rowId, nextRows)
+      return rowsFacadeRuntime.insertRowsBefore(rowId, nextRows)
     },
     insertRowsAfter(rowId: DataGridRowId, nextRows: readonly DataGridRowNodeInput<T>[]) {
-      return mutationHostRuntime.insertRowsAfter(rowId, nextRows)
+      return rowsFacadeRuntime.insertRowsAfter(rowId, nextRows)
     },
     patchRows(
       updates: readonly DataGridClientRowPatch<T>[],
@@ -1023,32 +1033,25 @@ export function createClientRowModel<T>(
       return mutationHostRuntime.reorderRows(input)
     },
     createCalculationSnapshot() {
-      ensureActive()
-      return snapshotHostRuntime.createCalculationSnapshot()
+      return calculationSnapshotFacadeRuntime.createCalculationSnapshot()
     },
     restoreCalculationSnapshot(snapshot, options = {}) {
-      ensureActive()
-      return snapshotHostRuntime.restoreCalculationSnapshot(snapshot, options)
+      return calculationSnapshotFacadeRuntime.restoreCalculationSnapshot(snapshot, options)
     },
     inspectCalculationSnapshot(snapshot, options = {}) {
-      ensureActive()
-      return snapshotHostRuntime.inspectCalculationSnapshot(snapshot, options)
+      return calculationSnapshotFacadeRuntime.inspectCalculationSnapshot(snapshot, options)
     },
     pushCalculationSnapshot(label?: string) {
-      ensureActive()
-      return snapshotHostRuntime.pushCalculationSnapshot(label)
+      return calculationSnapshotFacadeRuntime.pushCalculationSnapshot(label)
     },
     undoCalculationSnapshot(options = {}) {
-      ensureActive()
-      return snapshotHostRuntime.undoCalculationSnapshot(options)
+      return calculationSnapshotFacadeRuntime.undoCalculationSnapshot(options)
     },
     redoCalculationSnapshot(options = {}) {
-      ensureActive()
-      return snapshotHostRuntime.redoCalculationSnapshot(options)
+      return calculationSnapshotFacadeRuntime.redoCalculationSnapshot(options)
     },
     getCalculationSnapshotHistory() {
-      ensureActive()
-      return snapshotHostRuntime.getCalculationSnapshotHistory()
+      return calculationSnapshotFacadeRuntime.getCalculationSnapshotHistory()
     },
     setViewportRange(range: DataGridViewportRange) {
       mutationHostRuntime.setViewportRange(range)

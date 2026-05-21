@@ -47,6 +47,7 @@ Completed:
 - Extracted row-model dispose cleanup into `clientRowDisposeHostRuntime`.
 - Extracted row-model runtime constants and guards into `clientRowModelRuntimeConfig`.
 - Extracted initial/manual refresh policy into `clientRowRefreshHostRuntime`.
+- Extracted row access, row mutation facade, and calculation snapshot facade methods into focused host runtimes.
 
 Next candidates:
 
