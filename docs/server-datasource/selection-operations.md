@@ -1,17 +1,17 @@
 # Server Selection Operations
 
-This document defines the server-backed selection operation contract for future implementation slices. It does not add runtime endpoints by itself.
+This document defines the server-backed selection operation contract used by server datasource integrations.
 
 Current implemented behavior:
 
-- Local copy/cut blocks selected ranges that include unloaded or placeholder rows.
-- Local paste blocks targets that include unloaded or placeholder rows.
+- Server-backed copy/cut delegates unloaded or placeholder ranges to `DataGridDataSource.executeOperation` when the active row model snapshot is `kind: "server"`; otherwise it blocks.
+- Server-backed paste delegates unloaded or placeholder targets to `DataGridDataSource.executeOperation` when available; otherwise it blocks.
 - Clipboard, clear/delete, and local range-move paths block stale virtual selections before local materialized work.
-- Local clear/delete/fill/range-move paths are materialized-row oriented unless a dedicated server path already exists.
-- Server fill has boundary and commit plumbing.
+- Clear/delete, fill, and range-move delegate unloaded server-backed ranges through `executeOperation`; materialized ranges continue to use local or legacy fill paths.
+- Server fill has boundary and commit plumbing. Unloaded target fill can use unified `executeOperation`; series fill remains explicitly unsupported and is downgraded/blocked until backend support is added.
 - Row selection supports explicit selected rows and `all` with exclusions.
 - Virtual cell selection carries loaded coverage, missing intervals, projection identity, stale state, and operation decisions.
-- Local/smoke performance gates cover selection summary planning, virtual coverage, clipboard planning, overlay planning, and additive rendered-cell lookup. Delegated server operation latency gates remain future work until those handlers exist.
+- Local/smoke performance gates cover selection summary planning, virtual coverage, clipboard planning, overlay planning, additive rendered-cell lookup, and focused delegated-operation contracts. End-to-end backend latency budgets remain future work.
 
 ## Operation Modes
 
@@ -39,7 +39,7 @@ Current implemented behavior:
 
 ## Request Contract For Delegated Operations
 
-Future server-delegated cell operations should carry:
+Server-delegated cell operations carry:
 
 - `operationId` for idempotency.
 - `baseRevision` for stale-write checks.
@@ -49,7 +49,7 @@ Future server-delegated cell operations should carry:
 - `columns` as stable column keys, not display labels.
 - `projection` context: sort, filter, group, group expansion, tree, pivot, and pagination state.
 - `mode` when behavior has variants, such as fill `copy` versus `series` or paste `values`.
-- `workspaceId`, `tableId`, and user/session scope through the existing server datasource conventions.
+- `workspaceId`, `tableId`, and user/session scope through the existing server datasource conventions. Affino adapters send this through the `POST /api/{tableId}/operations/execute` body.
 
 Responses should return:
 
@@ -62,7 +62,7 @@ Responses should return:
 
 ## Clipboard Delegation Contract
 
-Server clipboard delegation is planned contract work. It should reuse the request and response conventions above instead of adding a clipboard-specific consistency model.
+Server clipboard delegation reuses the request and response conventions above instead of adding a clipboard-specific consistency model.
 
 Clipboard copy/export requests should carry:
 
@@ -107,9 +107,9 @@ If the backend cannot prove projection or revision consistency, it must reject w
 
 ## Current Gaps
 
-- Server-delegated copy/export, cut, clear/delete, paste, range move, and summary are contract-level only.
-- Clipboard, paste target, clear/delete, and local range move only apply virtual operation decisions as a safety guard; they do not execute delegated server operations yet.
-- Server fill exists, but series fill is not implemented.
+- Server summary is contract-level only.
+- Server-delegated copy/export, cut, clear/delete, paste, fill, and range move require a backend `executeOperation` implementation; without it the frontend still blocks unloaded ranges.
+- Series fill is not implemented.
 - Selection summaries remain loaded/local unless a server summary operation is added.
 - Group row operation semantics are blocked unless a backend explicitly defines group-to-children or group-summary behavior.
-- Performance gates currently cover local planning and safety checks; end-to-end backend latency budgets should be added with the delegated operation handlers.
+- Performance gates currently cover local planning and safety checks; end-to-end backend latency budgets should be added for real backend handlers.

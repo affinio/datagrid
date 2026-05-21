@@ -6,6 +6,21 @@
 
 - ## Summary
 
+  Added typed server datasource operation contracts for copy, cut, clear/delete, paste, fill, and range move over unloaded server-backed selections.
+
+  ## User impact
+
+  Server datasource integrations can implement `DataGridDataSource.executeOperation(...)` for delegated operations without changing client row-model behavior.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: implement `executeOperation(...)` on server-backed datasources that need unloaded-row operations.
+
+  ## Validation
+  - package type-check passed
+
+- ## Summary
+
   Introduced typed internal datasource runtime signals for pull lifecycle, cache invalidation, viewport coverage, and optimistic mutation transitions.
 
   ## User impact

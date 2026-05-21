@@ -6,6 +6,21 @@
 
 - ## Summary
 
+  Added Affino adapter support for unified datasource operation execution via `POST /api/{tableId}/operations/execute`.
+
+  ## User impact
+
+  Server-backed integrations can handle unloaded copy/cut/paste/clear/fill/range-move requests through one backend operation route with revision, projection, invalidation, and history metadata.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: implement the `operations/execute` backend route for delegated operations.
+
+  ## Validation
+  - focused server adapter tests and package type-check passed
+
+- ## Summary
+
   Documented and covered the server pivot boundary: the default query codec intentionally omits pivot payloads, while `mapPullRequest` remains the raw enterprise escape hatch.
 
   ## User impact

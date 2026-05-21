@@ -43,12 +43,14 @@ Goal: selection, clipboard, fill, and range move should delegate to the server w
 
 Slices:
 
-1. [ ] Define operation eligibility and blocked/server/local states in app diagnostics.
-2. [ ] Add server operation request/response shape for delete/clear/copy/paste/fill/range move.
-3. [ ] Implement copy/paste over unloaded ranges with revision and projection tokens.
-4. [ ] Implement fill over unloaded ranges; keep series fill explicitly unsupported until implemented.
-5. [ ] Implement range move over unloaded ranges with conflict handling.
-6. [ ] Add browser checks for placeholder, stale, and grouped projection cases.
+1. [x] Define operation eligibility and blocked/server/local states in app diagnostics.
+2. [x] Add server operation request/response shape for delete/clear/copy/paste/fill/range move.
+3. [x] Implement copy/paste over unloaded ranges with revision and projection tokens.
+4. [x] Implement fill over unloaded ranges; keep series fill explicitly unsupported until implemented.
+5. [x] Implement range move over unloaded ranges with conflict handling.
+6. [x] Add browser checks for placeholder, stale, and grouped projection cases.
+
+Status: closed for server-backed row model integrations. Client/materialized flows remain local. Browser validation is still required against a backend that implements `POST /api/{tableId}/operations/execute`, especially stale projection and grouped-row rejection semantics.
 
 ## Track 3. Column Groups And Row Pinning
 

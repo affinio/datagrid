@@ -2554,6 +2554,144 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(syncViewport).toHaveBeenCalled()
   })
 
+  it("delegates unloaded server-backed range move to datasource executeOperation", async () => {
+    const executeOperation = vi.fn(async () => ({
+      operationId: "move-1",
+      status: "committed",
+      acceptedCells: 1,
+      invalidation: { kind: "range", range: { start: 0, end: 1 } },
+    }))
+    const {
+      controller,
+      row,
+      selectionSnapshot,
+      applyEdits,
+      applySelectionRange,
+      invalidateRange,
+      syncViewport,
+    } = createControllerHarness({
+      rowCount: 2,
+      loadedRowCount: 1,
+      columnCount: 2,
+      columnWidths: [100, 100],
+      shellWidth: 272,
+      shellHeight: 80,
+      indexColumnWidth: 72,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(1, Math.floor(offset / 24))),
+      rowData: [
+        { a: "A1", b: "B1" },
+        { a: "A2", b: "B2" },
+      ],
+      runtimeRowModelDataSource: { executeOperation },
+      rowModelSnapshot: () => ({ kind: "server", revision: "rev-1" }),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+    }
+
+    controller.handleCellMouseDown(createMouseEvent("mousedown", createCell(0, 0), {
+      button: 0,
+      altKey: true,
+      clientX: 120,
+      clientY: 12,
+    }), row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      altKey: true,
+      clientX: 220,
+      clientY: 36,
+    }))
+    controller.handleWindowMouseUp()
+    await flushAsync()
+
+    expect(applyEdits).not.toHaveBeenCalled()
+    expect(executeOperation).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "range-move",
+      baseRevision: "rev-1",
+      sourceRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 },
+      targetRange: { startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 },
+      sourceColumns: ["a"],
+      targetColumns: ["b"],
+    }))
+    expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 1 })
+    expect(applySelectionRange).toHaveBeenCalledWith({
+      startRow: 1,
+      endRow: 1,
+      startColumn: 1,
+      endColumn: 1,
+    })
+    expect(syncViewport).toHaveBeenCalled()
+  })
+
+  it("delegates unloaded server-backed clear selection to datasource executeOperation", async () => {
+    const executeOperation = vi.fn(async () => ({
+      operationId: "clear-1",
+      status: "committed",
+      acceptedCells: 4,
+      invalidation: { kind: "range", range: { start: 0, end: 1 } },
+    }))
+    const {
+      controller,
+      selectionSnapshot,
+      applyClipboardEdits,
+      applySelectionRange,
+      invalidateRange,
+      syncViewport,
+    } = createControllerHarness({
+      rowCount: 2,
+      loadedRowCount: 1,
+      columnCount: 2,
+      runtimeRowModelDataSource: { executeOperation },
+      rowModelSnapshot: () => ({ kind: "server", revision: "rev-1" }),
+    })
+
+    selectionSnapshot.value = {
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      ranges: [{
+        startRow: 0,
+        endRow: 1,
+        startCol: 0,
+        endCol: 1,
+        startRowId: "r1",
+        endRowId: "__datagrid_placeholder__:1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "__datagrid_placeholder__:1" },
+      }],
+    }
+
+    await expect(controller.clearSelectedCells("keyboard")).resolves.toBe(true)
+
+    expect(applyClipboardEdits).not.toHaveBeenCalled()
+    expect(executeOperation).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "clear",
+      baseRevision: "rev-1",
+      targetRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 },
+      columns: ["a", "b"],
+      expectedCounts: { rows: 2, cells: 4 },
+    }))
+    expect(invalidateRange).toHaveBeenCalledWith({ start: 0, end: 1 })
+    expect(applySelectionRange).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 0,
+      endColumn: 1,
+    })
+    expect(syncViewport).toHaveBeenCalled()
+  })
+
   it("starts fill drag from the current range without extending preview before pointer movement", () => {
     const { controller, selectionSnapshot } = createControllerHarness({
       rowCount: 3,

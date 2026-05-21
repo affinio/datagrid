@@ -173,6 +173,92 @@ export interface DataGridDataSourceCommitEditsResult<T = unknown> extends DataGr
   updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
 }
 
+export type DataGridDataSourceOperationKind =
+  | "copy"
+  | "cut"
+  | "clear"
+  | "delete"
+  | "paste"
+  | "fill"
+  | "range-move"
+
+export type DataGridDataSourceOperationStatus =
+  | "committed"
+  | "partial"
+  | "rejected"
+  | "blocked"
+
+export type DataGridDataSourceClipboardFormat = "tsv" | "csv" | "internal-json"
+
+export interface DataGridDataSourceCellRange {
+  startRow: number
+  endRow: number
+  startColumn: number
+  endColumn: number
+}
+
+export interface DataGridDataSourceOperationRejection {
+  rowIndex?: number | null
+  rowId?: DataGridRowId | null
+  columnId?: string | null
+  columnIndex?: number | null
+  reason: string
+}
+
+export interface DataGridDataSourceOperationRequest {
+  kind: DataGridDataSourceOperationKind
+  operationId?: string | null
+  revision?: string | number | null
+  baseRevision?: string | number | null
+  projectionHash?: string | null
+  projection: DataGridDataSourceFillProjectionContext
+  selection?: {
+    ranges: readonly DataGridDataSourceCellRange[]
+    activeRangeIndex?: number | null
+    rowIds?: readonly DataGridRowId[]
+  } | null
+  sourceRange?: DataGridDataSourceCellRange | null
+  sourceRanges?: readonly DataGridDataSourceCellRange[]
+  targetRange?: DataGridDataSourceCellRange | null
+  targetRanges?: readonly DataGridDataSourceCellRange[]
+  columns: readonly string[]
+  sourceColumns?: readonly string[]
+  targetColumns?: readonly string[]
+  payload?: {
+    format: DataGridDataSourceClipboardFormat
+    text?: string | null
+    cells?: readonly (readonly unknown[])[]
+  } | null
+  mode?: string | null
+  expectedCounts?: {
+    rows?: number | null
+    cells?: number | null
+  } | null
+  sourceRowIds?: readonly DataGridRowId[]
+  targetRowIds?: readonly DataGridRowId[]
+  metadata?: Readonly<Record<string, unknown>> | null
+  signal?: AbortSignal
+}
+
+export interface DataGridDataSourceOperationResult<T = unknown> extends DataGridDataSourceMutationMetadata {
+  operationId?: string | null
+  status: DataGridDataSourceOperationStatus
+  payload?: {
+    format: DataGridDataSourceClipboardFormat
+    text?: string | null
+    cells?: readonly (readonly unknown[])[]
+  } | null
+  acceptedCells?: number
+  rejectedCells?: number
+  blockedCells?: number
+  skippedCells?: number
+  materializedRows?: number
+  rejections?: readonly DataGridDataSourceOperationRejection[]
+  invalidation?: DataGridDataSourceInvalidation | null
+  rows?: readonly DataGridDataSourceRowEntry<T>[]
+  updatedRows?: readonly DataGridDataSourceRowEntry<T>[]
+}
+
 export type DataGridFillMode = "copy" | "series"
 
 export interface DataGridDataSourceFillProjectionContext {
@@ -302,6 +388,7 @@ export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
   commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult<T>>
+  executeOperation?(request: DataGridDataSourceOperationRequest): Promise<DataGridDataSourceOperationResult<T>>
   commitFillOperation?(request: DataGridDataSourceFillOperationRequest): Promise<DataGridDataSourceFillOperationResult<T>>
   undoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillUndoResult<T>>
   redoFillOperation?(request: DataGridDataSourceFillUndoRequest): Promise<DataGridDataSourceFillRedoResult<T>>

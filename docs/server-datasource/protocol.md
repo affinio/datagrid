@@ -424,8 +424,10 @@ Server-delegated selection operations are documented in [Server selection operat
 Current protocol status:
 
 - Server fill boundary and commit are implemented.
-- Copy/export, cut, clear/delete, paste, range move, and summary over unloaded selections are planned contracts, not implemented HTTP routes in this protocol.
-- Until those routes exist, frontend code must keep unloaded or stale selection operations `blocked` unless a dedicated server capability is wired.
+- Unified server datasource operations are exposed through the optional `DataGridDataSource.executeOperation` client hook and Affino adapter route `POST /api/{tableId}/operations/execute`.
+- Copy/export, cut, clear/delete, paste, fill, and range move over unloaded selections may delegate through that hook when the active row model snapshot is `kind: "server"`.
+- Summary over unloaded selections remains planned contract work.
+- Frontend code must keep unloaded or stale selection operations `blocked` unless the server-backed row model exposes the dedicated operation capability.
 
 Delegated selection operations should reuse the existing consistency vocabulary:
 
@@ -435,27 +437,32 @@ Delegated selection operations should reuse the existing consistency vocabulary:
 - `revision` and `datasetVersion` in mutation responses
 - scoped `invalidation`
 
-### Planned Clipboard Operations
+### Unified Selection Operation
 
-The current protocol does not implement clipboard delegation routes. The contract below is the target shape for future server-backed copy/export, cut, clear/delete, and paste/import over unloaded selections.
+Server-backed copy/export, cut, clear/delete, paste/import, fill, and range move share one operation route:
 
-Clipboard copy/export planned route:
-
-`POST /api/server-demo/clipboard/copy`
+`POST /api/{tableId}/operations/execute`
 
 Request shape:
 
 ```json
 {
-  "operationId": "clipboard-copy-123",
+  "kind": "copy",
+  "operationId": "operation-123",
   "baseRevision": "18",
   "projectionHash": "projection-abc",
-  "selection": [
-    { "startRow": 20, "endRow": 120, "startColumn": 1, "endColumn": 4 }
-  ],
+  "selection": {
+    "ranges": [
+      { "startRow": 20, "endRow": 120, "startColumn": 1, "endColumn": 4 }
+    ],
+    "activeRangeIndex": 0
+  },
+  "sourceRange": { "startRow": 20, "endRow": 120, "startColumn": 1, "endColumn": 4 },
+  "targetRange": null,
   "columns": ["name", "status", "region", "value"],
-  "format": "tsv",
-  "includeHeaders": false,
+  "payload": { "format": "tsv" },
+  "mode": null,
+  "expectedCounts": { "rows": 101, "cells": 404 },
   "projection": {
     "sortModel": [],
     "filterModel": null,
@@ -472,10 +479,13 @@ Response shape:
 
 ```json
 {
-  "operationId": "clipboard-copy-123",
+  "operationId": "operation-123",
   "status": "committed",
-  "format": "tsv",
-  "payload": "Account 20\tActive\tEMEA\t970",
+  "payload": {
+    "format": "tsv",
+    "text": "Account 20\tActive\tEMEA\t970"
+  },
+  "acceptedCells": 404,
   "affectedRows": 100,
   "affectedCells": 400,
   "revision": "18",
@@ -484,61 +494,13 @@ Response shape:
 }
 ```
 
-Clipboard paste/import planned route:
+Operation-specific fields:
 
-`POST /api/server-demo/clipboard/paste`
-
-Request shape:
-
-```json
-{
-  "operationId": "clipboard-paste-123",
-  "baseRevision": "18",
-  "projectionHash": "projection-abc",
-  "target": { "startRow": 20, "endRow": 22, "startColumn": 1, "endColumn": 2 },
-  "columns": ["status", "region"],
-  "mode": "values",
-  "payload": {
-    "format": "tsv",
-    "text": "Active\tEMEA\nPaused\tAPAC"
-  },
-  "projection": {
-    "sortModel": [],
-    "filterModel": null,
-    "groupBy": null,
-    "groupExpansion": { "expandedByDefault": false, "toggledGroupKeys": [] },
-    "treeData": null,
-    "pivot": null,
-    "pagination": null
-  }
-}
-```
-
-Response shape:
-
-```json
-{
-  "operationId": "clipboard-paste-123",
-  "status": "committed",
-  "acceptedCells": 4,
-  "rejectedCells": [],
-  "blockedCells": 0,
-  "skippedCells": 0,
-  "materializedRows": 2,
-  "revision": "19",
-  "datasetVersion": 19,
-  "invalidation": {
-    "type": "range",
-    "range": { "startRow": 20, "endRow": 22 },
-    "rows": [],
-    "cells": []
-  },
-  "canUndo": true,
-  "canRedo": false,
-  "latestUndoOperationId": "clipboard-paste-123",
-  "latestRedoOperationId": null
-}
-```
+- `copy` and `cut` send `selection`, `sourceRange`/`sourceRanges`, `columns`, and a `payload.format`.
+- `paste` sends `targetRange`/`targetRanges`, `columns`, `payload.cells` or `payload.text`, and `mode`.
+- `clear` and `delete` send `selection`, `targetRange`/`targetRanges`, `columns`, and `expectedCounts`.
+- `fill` sends `sourceRange`, `targetRange`, source/target columns, source row ids when materialized, `mode: "copy"`, and optional boundary consistency tokens. Series fill remains unsupported until the backend implements it explicitly.
+- `range-move` sends `sourceRange`, `targetRange`, source/target columns, `mode: "move"`, and `expectedCounts`.
 
 Clipboard mutation responses may use `status: "partial"` with `rejectedCells` when validation rejects only part of the request. They should use `status: "rejected"` and avoid mutation when `baseRevision` is stale, `projectionHash` does not match, target ranges include unsupported group rows, or authorization is lost.
 

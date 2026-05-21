@@ -8,6 +8,8 @@ import {
   type DataGridColumnStyleFilter,
   type DataGridDataSource,
   type DataGridDataSourceInvalidation,
+  type DataGridDataSourceOperationRequest,
+  type DataGridDataSourceOperationResult,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
   type DataGridDataSourceTreePullContext,
@@ -527,6 +529,10 @@ type AffinoFillOperationResult = Awaited<ReturnType<NonNullable<DataGridDataSour
 type AffinoFillUndoRequest = Parameters<NonNullable<DataGridDataSource<unknown>["undoFillOperation"]>>[0] & { signal?: AbortSignal }
 type AffinoFillUndoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<unknown>["undoFillOperation"]>>>
 type AffinoFillRedoResult = Awaited<ReturnType<NonNullable<DataGridDataSource<unknown>["redoFillOperation"]>>>
+type AffinoExecuteOperationRequest = DataGridDataSourceOperationRequest & { signal?: AbortSignal }
+type AffinoExecuteOperationResult<TRow> = Omit<DataGridDataSourceOperationResult<TRow>, "datasetVersion"> & {
+  datasetVersion?: number | null
+}
 type AffinoFillProjection = NonNullable<AffinoFillOperationRequest["projection"]>
 
 export interface AffinoDatasourceExtras<TRow> {
@@ -945,6 +951,76 @@ function normalizeFillCommitRequestBody(
   }
 }
 
+function normalizeDatasourceOperationRequestBody(
+  request: AffinoExecuteOperationRequest,
+): Record<string, unknown> {
+  return {
+    kind: request.kind,
+    operationId: request.operationId ?? null,
+    revision: request.revision ?? null,
+    baseRevision: request.baseRevision ?? null,
+    projectionHash: request.projectionHash ?? null,
+    projection: normalizeAffinoFillProjection(request.projection),
+    selection: request.selection ?? null,
+    sourceRange: request.sourceRange ?? null,
+    sourceRanges: request.sourceRanges ?? [],
+    targetRange: request.targetRange ?? null,
+    targetRanges: request.targetRanges ?? [],
+    columns: request.columns,
+    sourceColumns: request.sourceColumns ?? [],
+    targetColumns: request.targetColumns ?? [],
+    payload: request.payload ?? null,
+    mode: request.mode ?? null,
+    expectedCounts: request.expectedCounts ?? null,
+    sourceRowIds: request.sourceRowIds ?? [],
+    targetRowIds: request.targetRowIds ?? [],
+    metadata: request.metadata ?? null,
+  }
+}
+
+function normalizeDatasourceOperationResult<TRow>(
+  response: unknown,
+  fallbackOperationId: string | null | undefined,
+): AffinoExecuteOperationResult<TRow> {
+  if (!isRecord(response)) {
+    return {
+      operationId: fallbackOperationId ?? null,
+      status: "rejected",
+      warnings: ["Invalid datasource operation response."],
+    }
+  }
+  const normalized = normalizeFillUndoResult(response)
+  const rawStatus = typeof response.status === "string" ? response.status : "rejected"
+  const status = rawStatus === "committed" || rawStatus === "partial" || rawStatus === "blocked" || rawStatus === "rejected"
+    ? rawStatus
+    : "rejected"
+  return {
+    operationId: typeof response.operationId === "string" ? response.operationId : fallbackOperationId ?? null,
+    status,
+    payload: isRecord(response.payload) ? response.payload as AffinoExecuteOperationResult<TRow>["payload"] : null,
+    acceptedCells: typeof response.acceptedCells === "number" ? Math.max(0, Math.trunc(response.acceptedCells)) : undefined,
+    rejectedCells: typeof response.rejectedCells === "number" ? Math.max(0, Math.trunc(response.rejectedCells)) : undefined,
+    blockedCells: typeof response.blockedCells === "number" ? Math.max(0, Math.trunc(response.blockedCells)) : undefined,
+    skippedCells: typeof response.skippedCells === "number" ? Math.max(0, Math.trunc(response.skippedCells)) : undefined,
+    materializedRows: typeof response.materializedRows === "number" ? Math.max(0, Math.trunc(response.materializedRows)) : undefined,
+    rejections: Array.isArray(response.rejections) ? response.rejections as AffinoExecuteOperationResult<TRow>["rejections"] : [],
+    invalidation: normalized.invalidation,
+    revision: normalized.revision,
+    datasetVersion: normalized.datasetVersion,
+    rows: normalizeRowSnapshots(normalized.rows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+    updatedRows: normalizeRowSnapshots(normalized.updatedRows as readonly ServerRowSnapshotLike<TRow>[]) ?? [],
+    canUndo: normalized.canUndo,
+    canRedo: normalized.canRedo,
+    latestUndoOperationId: normalized.latestUndoOperationId,
+    latestRedoOperationId: normalized.latestRedoOperationId,
+    affectedRows: typeof response.affectedRows === "number" ? Math.max(0, Math.trunc(response.affectedRows)) : undefined,
+    affectedCells: typeof response.affectedCells === "number" ? Math.max(0, Math.trunc(response.affectedCells)) : undefined,
+    affectedRowCount: typeof response.affectedRowCount === "number" ? Math.max(0, Math.trunc(response.affectedRowCount)) : undefined,
+    affectedCellCount: typeof response.affectedCellCount === "number" ? Math.max(0, Math.trunc(response.affectedCellCount)) : undefined,
+    warnings: normalized.warnings,
+  }
+}
+
 function normalizeFillUndoResult(response: unknown): AffinoFillUndoResult & {
   operationId?: string | null
   revision?: string | number | null
@@ -1222,6 +1298,21 @@ export function createAffinoDatasource<TRow>(
         affectedCells: normalized.affectedCells,
         warnings: normalized.warnings,
       }
+    },
+    async executeOperation(request: AffinoExecuteOperationRequest): Promise<AffinoExecuteOperationResult<TRow>> {
+      const response = await postJson<unknown>(
+        fetchImpl,
+        resolveWriteEndpoint(resolveAffinoEndpoint(tableId, "operations/execute")),
+        {
+          ...normalizeDatasourceOperationRequestBody(request),
+          ...historyScopeBody,
+        },
+        request.signal,
+      )
+      const normalized = normalizeDatasourceOperationResult<TRow>(response, request.operationId)
+      updateHistoryStatus(normalized)
+      applyMutationSideEffects(normalized)
+      return normalized
     },
     async resolveFillBoundary(
       request: AffinoResolveFillBoundaryRequest,

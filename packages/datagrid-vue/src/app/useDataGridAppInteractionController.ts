@@ -105,10 +105,34 @@ type DataGridAppServerFillInvalidation =
   | { kind: "range"; range: DataGridCopyRange; reason?: string }
   | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
 
+type DataGridAppServerOperationInvalidation =
+  | { kind: "all"; reason?: string }
+  | { kind: "range"; range: { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | DataGridCopyRange; reason?: string }
+  | { kind: "rows"; rowIds: readonly (string | number)[]; reason?: string }
+
+interface DataGridAppServerOperationResult {
+  operationId?: string | null
+  revision?: string | number | null
+  status?: "committed" | "partial" | "rejected" | "blocked" | string
+  acceptedCells?: number
+  rejectedCells?: number
+  blockedCells?: number
+  affectedRows?: number
+  affectedCells?: number
+  affectedRowCount?: number
+  affectedCellCount?: number
+  invalidation?: DataGridAppServerOperationInvalidation | null
+  warnings?: readonly string[]
+  rejections?: readonly { reason?: string | null }[]
+}
+
 interface DataGridAppFillDataSource {
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
+  executeOperation?: (
+    request: Record<string, unknown>,
+  ) => Promise<DataGridAppServerOperationResult | null> | DataGridAppServerOperationResult | null
   commitFillOperation?: (request: {
     operationId?: string | null
     revision?: string | number | null
@@ -992,16 +1016,178 @@ export function useDataGridAppInteractionController<
     return true
   }
 
+  const isCommittedServerOperationResult = (result: DataGridAppServerOperationResult | null | undefined): boolean => {
+    return result?.status === "committed" || result?.status === "partial"
+  }
+
+  const resolveServerOperationMessage = (
+    result: DataGridAppServerOperationResult | null | undefined,
+    fallback: string,
+  ): string => {
+    return result?.warnings?.find(warning => warning.trim().length > 0)
+      ?? result?.rejections?.find(rejection => typeof rejection.reason === "string" && rejection.reason.trim().length > 0)?.reason
+      ?? fallback
+  }
+
+  const isServerRowModelSnapshot = (rowModel: unknown): boolean => {
+    const snapshot = (rowModel as { getSnapshot?: () => unknown } | null | undefined)?.getSnapshot?.()
+    return typeof snapshot === "object" && snapshot != null && (snapshot as { kind?: unknown }).kind === "server"
+  }
+
+  const resolveServerOperationDataSource = (): DataGridAppFillDataSource | undefined => {
+    const controllerRowModel = options.runtimeRowModel as
+      | ({ dataSource?: DataGridAppFillDataSource } & { getSnapshot?: () => unknown })
+      | null
+      | undefined
+    const runtimeRowModel = options.runtime.rowModel as
+      | ({ dataSource?: DataGridAppFillDataSource } & { getSnapshot?: () => unknown })
+      | undefined
+    const runtimeIsServer = isServerRowModelSnapshot(runtimeRowModel)
+    if (
+      typeof controllerRowModel?.dataSource?.executeOperation === "function"
+      && (isServerRowModelSnapshot(controllerRowModel) || runtimeIsServer)
+    ) {
+      return controllerRowModel.dataSource
+    }
+    if (typeof runtimeRowModel?.dataSource?.executeOperation === "function" && runtimeIsServer) {
+      return runtimeRowModel.dataSource
+    }
+    return undefined
+  }
+
+  const buildServerOperationProjection = (): DataGridAppFillProjectionContext => {
+    const snapshot = (
+      (options.runtimeRowModel as { getSnapshot?: () => unknown } | null | undefined)?.getSnapshot?.()
+      ?? (options.runtime.rowModel as { getSnapshot?: () => unknown } | undefined)?.getSnapshot?.()
+      ?? options.runtime.api.rows.getSnapshot()
+    ) as {
+      sortModel?: readonly DataGridSortState[]
+      filterModel?: DataGridFilterSnapshot | null
+      groupBy?: DataGridGroupBySpec | null
+      groupExpansion?: DataGridGroupExpansionSnapshot
+      pagination?: DataGridPaginationSnapshot
+      revision?: string | number | null
+    } | null
+    return {
+      sortModel: snapshot?.sortModel ?? [],
+      filterModel: snapshot?.filterModel ?? null,
+      groupBy: snapshot?.groupBy ?? null,
+      groupExpansion: snapshot?.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null,
+      pivot: null,
+      pagination: snapshot?.pagination ?? {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 0,
+      },
+    }
+  }
+
+  const resolveServerOperationBaseRevision = (): string | number | null => {
+    const snapshot = (
+      (options.runtimeRowModel as { getSnapshot?: () => unknown } | null | undefined)?.getSnapshot?.()
+      ?? (options.runtime.rowModel as { getSnapshot?: () => unknown } | undefined)?.getSnapshot?.()
+      ?? options.runtime.api.rows.getSnapshot()
+    ) as { revision?: string | number | null } | null
+    return snapshot?.revision ?? null
+  }
+
+  const applyServerOperationInvalidation = async (
+    result: DataGridAppServerOperationResult | null | undefined,
+    fallbackRange?: DataGridCopyRange | { start?: unknown; end?: unknown; startRow?: unknown; endRow?: unknown } | null,
+  ): Promise<void> => {
+    const runtimeRowModel = options.runtimeRowModel as unknown as {
+      invalidateAll?: () => void
+      invalidateRange?: (range: { start: number; end: number }) => void
+      invalidateRows?: (rowIds: readonly (string | number)[]) => void
+    } | null
+    const runtimeRowModelFallback = options.runtime.rowModel as unknown as {
+      invalidateAll?: () => void
+      invalidateRange?: (range: { start: number; end: number }) => void
+      invalidateRows?: (rowIds: readonly (string | number)[]) => void
+    } | undefined
+    const rowsApi = options.runtime.api.rows as unknown as {
+      refresh?: () => void | Promise<void>
+    }
+    const invalidation = result?.invalidation
+    const invalidateAllTarget = runtimeRowModel?.invalidateAll ?? runtimeRowModelFallback?.invalidateAll
+    const invalidateRangeTarget = runtimeRowModel?.invalidateRange ?? runtimeRowModelFallback?.invalidateRange
+    const invalidateRowsTarget = runtimeRowModel?.invalidateRows ?? runtimeRowModelFallback?.invalidateRows
+
+    if (invalidation?.kind === "rows") {
+      if (typeof invalidateRowsTarget === "function") {
+        invalidateRowsTarget(invalidation.rowIds)
+        return
+      }
+      await Promise.resolve(rowsApi.refresh?.())
+      return
+    }
+    if (invalidation?.kind === "range") {
+      const normalizedRange = normalizeServerFillInvalidationRange(invalidation.range)
+      if (normalizedRange && typeof invalidateRangeTarget === "function") {
+        invalidateRangeTarget(normalizedRange)
+        return
+      }
+      await Promise.resolve(rowsApi.refresh?.())
+      return
+    }
+    if (invalidation?.kind === "all") {
+      if (typeof invalidateAllTarget === "function") {
+        invalidateAllTarget()
+        return
+      }
+      await Promise.resolve(rowsApi.refresh?.())
+      return
+    }
+    const fallbackInvalidationRange = normalizeServerFillInvalidationRange(fallbackRange)
+    if (fallbackInvalidationRange && typeof invalidateRangeTarget === "function") {
+      invalidateRangeTarget(fallbackInvalidationRange)
+      return
+    }
+    await Promise.resolve(rowsApi.refresh?.())
+  }
+
+  const executeServerSelectionOperation = async (
+    kind: "clear" | "fill" | "range-move",
+    request: Record<string, unknown>,
+  ): Promise<DataGridAppServerOperationResult | null> => {
+    const dataSource = resolveServerOperationDataSource()
+    if (!dataSource?.executeOperation) {
+      return null
+    }
+    return dataSource.executeOperation({
+      ...request,
+      kind,
+      operationId: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      baseRevision: resolveServerOperationBaseRevision(),
+      projection: buildServerOperationProjection(),
+    })
+  }
+
+  const resolveColumnKeysInRange = (range: DataGridCopyRange): readonly string[] => {
+    return options.visibleColumns.value
+      .slice(range.startColumn, range.endColumn + 1)
+      .map(column => String(column.key))
+      .filter(columnKey => columnKey !== ROW_SELECTION_COLUMN_KEY)
+  }
+
   const applyServerBackedRangeMove = async (
     baseRange: DataGridCopyRange,
     targetRange: DataGridCopyRange,
   ): Promise<boolean> => {
+    const serverOperationDataSource = resolveServerOperationDataSource()
     const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
       "range-move",
       options.selectionSnapshot.value,
       options.normalizeClipboardRange,
       {
         range: baseRange,
+        capabilities: serverOperationDataSource ? { rangeMove: true } : {},
+        allowServerDelegation: typeof serverOperationDataSource?.executeOperation === "function",
         blockedMessage: "Range move includes unloaded rows. Load the full source and target ranges before moving.",
         serverUnavailableMessage: "Range move requires a server operation. Server range move delegation is not configured.",
       },
@@ -1011,6 +1197,30 @@ export function useDataGridAppInteractionController<
       return false
     }
     if (!isRangeFullyMaterialized(baseRange) || !isRangeFullyMaterialized(targetRange)) {
+      const result = await executeServerSelectionOperation("range-move", {
+        sourceRange: baseRange,
+        targetRange,
+        columns: resolveColumnKeysInRange(baseRange),
+        sourceColumns: resolveColumnKeysInRange(baseRange),
+        targetColumns: resolveColumnKeysInRange(targetRange),
+        mode: "move",
+        expectedCounts: {
+          rows: Math.max(0, baseRange.endRow - baseRange.startRow + 1),
+          cells: Math.max(0, baseRange.endRow - baseRange.startRow + 1) * Math.max(0, baseRange.endColumn - baseRange.startColumn + 1),
+        },
+        metadata: { trigger: "range-move" },
+      })
+      if (isCommittedServerOperationResult(result)) {
+        await applyServerOperationInvalidation(result, targetRange)
+        options.applySelectionRange(targetRange)
+        options.syncViewport()
+        options.reportFillWarning?.(resolveServerOperationMessage(result, "server range move committed"))
+        return true
+      }
+      if (serverOperationDataSource?.executeOperation) {
+        options.reportFillWarning?.(resolveServerOperationMessage(result, "server range move rejected"))
+        return false
+      }
       options.reportFillWarning?.("Range move includes unloaded rows. Load the full source and target ranges before moving.")
       return false
     }
@@ -1206,7 +1416,7 @@ export function useDataGridAppInteractionController<
         clearFillPreviewState(baseRange, previewRange)
       }
       const dataSource = resolveServerFillDataSource()
-      if (!dataSource?.commitFillOperation) {
+      if (!dataSource?.commitFillOperation && !resolveServerOperationDataSource()?.executeOperation) {
         options.reportFillWarning?.("server fill execution not implemented yet")
         clearCurrentFillPreview()
         return null
@@ -1278,7 +1488,74 @@ export function useDataGridAppInteractionController<
 
       const missingTargetRows = targetResolution.missingCount
       if (!targetResolution.fullyMaterialized || targetResolution.rowIds.length <= sourceRowIds.length) {
+        const result = await executeServerSelectionOperation("fill", {
+          sourceRange: baseRange,
+          targetRange: previewRange,
+          columns: resolveColumnKeysInRange(previewRange),
+          sourceColumns: resolveColumnKeysInRange(baseRange),
+          targetColumns: resolveColumnKeysInRange(previewRange),
+          sourceRowIds,
+          payload: {
+            format: "internal-json",
+            cells: sourceMatrix,
+          },
+          mode: serverFillBehavior.behavior,
+          expectedCounts: {
+            rows: Math.max(0, previewRange.endRow - previewRange.startRow + 1),
+            cells: Math.max(0, previewRange.endRow - previewRange.startRow + 1) * Math.max(0, previewRange.endColumn - previewRange.startColumn + 1),
+          },
+          ...(boundaryConsistencyMetadata?.revision !== undefined
+            ? { baseRevision: boundaryConsistencyMetadata.revision }
+            : {}),
+          ...(boundaryConsistencyMetadata?.projectionHash !== undefined
+            ? { projectionHash: boundaryConsistencyMetadata.projectionHash }
+            : {}),
+          ...(boundaryConsistencyMetadata?.boundaryToken !== undefined
+            ? { boundaryToken: boundaryConsistencyMetadata.boundaryToken }
+            : {}),
+          metadata: { origin: "double-click-fill", behaviorSource: "default" },
+        })
+        clearCurrentFillPreview()
+        if (isCommittedServerOperationResult(result)) {
+          const affectedRowCount = result?.affectedRowCount ?? result?.affectedRows ?? Math.max(0, previewRange.endRow - previewRange.startRow + 1)
+          const affectedCellCount = result?.affectedCellCount ?? result?.affectedCells ?? result?.acceptedCells ?? (
+            Math.max(0, previewRange.endRow - previewRange.startRow + 1) * Math.max(0, previewRange.endColumn - previewRange.startColumn + 1)
+          )
+          const warnings = result?.warnings ?? []
+          const committedOperationId = normalizeServerFillOperationId(result?.operationId) ?? operationId
+          await applyServerOperationInvalidation(result, previewRange)
+          promoteCommittedFillSelection(previewRange)
+          options.reportFillPlumbingState?.("server_fill_affectedRowCount", affectedCellCount > 0)
+          options.reportFillPlumbingState?.("server-fill-committed", true)
+          if (warnings.length > 0) {
+            for (const warning of warnings) {
+              options.reportFillWarning?.(warning)
+            }
+          }
+          else {
+            options.reportFillWarning?.("server fill committed")
+          }
+          return {
+            operationId: committedOperationId,
+            revision: result?.revision,
+            affectedRange: previewRange,
+            invalidation: result?.invalidation as DataGridAppServerFillInvalidation | null | undefined ?? null,
+            affectedRowCount,
+            affectedCellCount,
+            warnings,
+          }
+        }
+        if (resolveServerOperationDataSource()?.executeOperation) {
+          options.reportFillWarning?.(resolveServerOperationMessage(result, "server fill rejected"))
+          return null
+        }
         options.reportFillWarning?.(`server fill target row ids are not fully materialized (${missingTargetRows} target rows missing)`)
+        clearCurrentFillPreview()
+        return null
+      }
+
+      if (!dataSource?.commitFillOperation) {
+        options.reportFillWarning?.("server fill execution not implemented yet")
         clearCurrentFillPreview()
         return null
       }
@@ -2219,12 +2496,15 @@ export function useDataGridAppInteractionController<
     if (!range) {
       return false
     }
+    const serverOperationDataSource = resolveServerOperationDataSource()
     const virtualGuard = resolveDataGridVirtualSelectionOperationGuard(
       "clear",
       options.selectionSnapshot.value,
       options.normalizeClipboardRange,
       {
         range,
+        capabilities: serverOperationDataSource ? { clear: true } : {},
+        allowServerDelegation: typeof serverOperationDataSource?.executeOperation === "function",
         blockedMessage: "Selected range includes unloaded rows. Load rows or use server operation.",
         serverUnavailableMessage: "Selected range requires a server operation. Server clear delegation is not configured.",
       },
@@ -2232,6 +2512,35 @@ export function useDataGridAppInteractionController<
     if (virtualGuard.blocked) {
       options.reportFillWarning?.(virtualGuard.message ?? "Selected range cannot be cleared.")
       return false
+    }
+    if (!isRangeFullyMaterialized(range)) {
+      const result = await executeServerSelectionOperation("clear", {
+        selection: {
+          ranges: [range],
+          activeRangeIndex: 0,
+        },
+        targetRange: range,
+        targetRanges: [range],
+        columns: resolveColumnKeysInRange(range),
+        expectedCounts: {
+          rows: Math.max(0, range.endRow - range.startRow + 1),
+          cells: Math.max(0, range.endRow - range.startRow + 1) * Math.max(0, range.endColumn - range.startColumn + 1),
+        },
+        metadata: { trigger },
+      })
+      if (isCommittedServerOperationResult(result)) {
+        await applyServerOperationInvalidation(result, range)
+        options.clearPendingClipboardOperation(false)
+        options.applySelectionRange(range)
+        options.syncViewport()
+        options.reportFillWarning?.(resolveServerOperationMessage(result, "server clear committed"))
+        void trigger
+        return true
+      }
+      if (serverOperationDataSource?.executeOperation) {
+        options.reportFillWarning?.(resolveServerOperationMessage(result, "server clear rejected"))
+        return false
+      }
     }
     const groupRowIndex = resolveGroupRowIndexInRange(getBodyRowAtIndex, range)
     if (groupRowIndex != null) {

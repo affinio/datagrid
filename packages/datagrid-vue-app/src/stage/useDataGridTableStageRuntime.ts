@@ -23,6 +23,7 @@ import {
   createDataGridAppRowHeightMetrics,
   type DataGridAppHistoryRestorationState,
   type DataGridAppPasteOptions,
+  type DataGridAppServerClipboardOperations,
   useDataGridAppActiveCellViewport,
   useDataGridAppCellSelection,
   useDataGridAppClipboard,
@@ -197,6 +198,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
         mode: DataGridFillBehavior
         metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
       }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+      executeOperation?: (request: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>
       undoFillOperation?: (request: {
         operationId: string
         revision?: string | number | null
@@ -229,6 +231,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
           mode: DataGridFillBehavior
           metadata?: { origin?: "drag-fill" | "double-click-fill" | "menu-reapply"; behaviorSource?: "default" | "explicit" } | null
         }) => Promise<{ operationId: string; revision?: string | number | null; affectedRowCount: number; affectedCellCount?: number; invalidation?: { kind: "range"; range: DataGridCopyRange; reason?: string } | null; warnings?: readonly string[] } | null>
+        executeOperation?: (request: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>
         undoFillOperation?: (request: {
           operationId: string
           revision?: string | number | null
@@ -1035,6 +1038,169 @@ export function useDataGridTableStageRuntime<
     )
   }
 
+  const resolveServerOperationDataSource = (): {
+    executeOperation?: (request: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>
+  } | null => {
+    const snapshot = options.runtimeRowModel?.getSnapshot?.()
+    if (snapshot?.kind !== "server") {
+      return null
+    }
+    const dataSource = (options.runtimeRowModel as unknown as {
+      dataSource?: {
+        executeOperation?: (request: Record<string, unknown>) => Promise<Record<string, unknown>> | Record<string, unknown>
+      }
+    } | null)?.dataSource
+    return typeof dataSource?.executeOperation === "function" ? dataSource : null
+  }
+
+  const buildServerOperationProjection = () => {
+    const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? options.runtime.api.rows.getSnapshot()
+    return {
+      sortModel: snapshot.sortModel ?? [],
+      filterModel: snapshot.filterModel ?? null,
+      groupBy: snapshot.groupBy ?? null,
+      groupExpansion: snapshot.groupExpansion ?? { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null,
+      pivot: null,
+      pagination: snapshot.pagination ?? {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 0,
+        startIndex: 0,
+        endIndex: 0,
+      },
+    }
+  }
+
+  const applyServerOperationInvalidation = (result: Record<string, unknown>): void => {
+    const invalidation = result.invalidation as
+      | { kind?: unknown; range?: { start?: unknown; end?: unknown }; rowIds?: readonly (string | number)[] }
+      | null
+      | undefined
+    if (!invalidation || typeof invalidation !== "object") {
+      return
+    }
+    const runtimeRowModel = options.runtimeRowModel as unknown as {
+      invalidateAll?: () => void
+      invalidateRange?: (range: { start: number; end: number }) => void
+      invalidateRows?: (rowIds: readonly (string | number)[]) => void
+    } | null
+    if (invalidation.kind === "rows" && Array.isArray(invalidation.rowIds) && typeof runtimeRowModel?.invalidateRows === "function") {
+      runtimeRowModel.invalidateRows(invalidation.rowIds)
+      return
+    }
+    if (invalidation.kind === "range" && typeof runtimeRowModel?.invalidateRange === "function") {
+      const start = Number(invalidation.range?.start)
+      const end = Number(invalidation.range?.end)
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        runtimeRowModel.invalidateRange({ start, end })
+      }
+      return
+    }
+    if (invalidation.kind === "all" && typeof runtimeRowModel?.invalidateAll === "function") {
+      runtimeRowModel.invalidateAll()
+    }
+  }
+
+  const normalizeServerOperationClipboardResult = (
+    result: Record<string, unknown> | null | undefined,
+    fallbackMessage: string,
+  ): { ok: boolean; message: string; payload?: string | null } => {
+    if (!result) {
+      return { ok: false, message: "Server operation failed." }
+    }
+    const status = typeof result.status === "string" ? result.status : "rejected"
+    const ok = status === "committed" || status === "partial"
+    const payload = result.payload && typeof result.payload === "object"
+      ? (result.payload as { text?: unknown }).text
+      : null
+    const warnings = Array.isArray(result.warnings) ? result.warnings.filter((warning): warning is string => typeof warning === "string") : []
+    return {
+      ok,
+      message: warnings[0] ?? (ok ? fallbackMessage : "Server operation rejected."),
+      ...(typeof payload === "string" ? { payload } : {}),
+    }
+  }
+
+  const createServerClipboardOperations = (): DataGridAppServerClipboardOperations | undefined => {
+    const dataSource = resolveServerOperationDataSource()
+    if (!dataSource?.executeOperation) {
+      return undefined
+    }
+    const execute = async (
+      kind: "copy" | "cut" | "paste",
+      request: Record<string, unknown>,
+      fallbackMessage: string,
+    ) => {
+      const snapshot = options.runtimeRowModel?.getSnapshot?.()
+      const result = await dataSource.executeOperation?.({
+        ...request,
+        kind,
+        operationId: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        baseRevision: snapshot?.revision ?? null,
+        projection: buildServerOperationProjection(),
+      })
+      applyServerOperationInvalidation(result ?? {})
+      return normalizeServerOperationClipboardResult(result, fallbackMessage)
+    }
+    return {
+      capabilities: {
+        copy: true,
+        cut: true,
+        paste: true,
+        clear: true,
+        delete: true,
+        fill: true,
+        rangeMove: true,
+      },
+      copy: request => execute("copy", {
+        selection: {
+          ranges: request.ranges,
+          activeRangeIndex: 0,
+        },
+        sourceRange: request.range,
+        sourceRanges: request.ranges,
+        columns: request.columns,
+        payload: { format: "tsv" },
+        metadata: { trigger: request.trigger },
+      }, "Server copied selected range"),
+      cut: request => execute("cut", {
+        selection: {
+          ranges: request.ranges,
+          activeRangeIndex: 0,
+        },
+        sourceRange: request.range,
+        sourceRanges: request.ranges,
+        columns: request.columns,
+        payload: { format: "tsv" },
+        metadata: { trigger: request.trigger },
+      }, "Server staged selected range for cut"),
+      paste: request => execute("paste", {
+        targetRange: request.targetRanges[0] ?? null,
+        targetRanges: request.targetRanges,
+        sourceRange: request.sourceRange,
+        columns: request.columns,
+        payload: {
+          format: "tsv",
+          cells: request.matrix,
+        },
+        mode: request.mode,
+        expectedCounts: {
+          rows: request.targetRanges.reduce((total, range) => total + Math.max(0, range.endRow - range.startRow + 1), 0),
+          cells: request.targetRanges.reduce((total, range) => (
+            total + Math.max(0, range.endRow - range.startRow + 1) * Math.max(0, range.endColumn - range.startColumn + 1)
+          ), 0),
+        },
+        metadata: {
+          trigger: request.trigger,
+          pendingOperation: request.pendingOperation,
+        },
+      }, "Server pasted selected range"),
+    }
+  }
+
   const clipboard = useDataGridAppClipboard<TRow, unknown>({
     mode: options.mode,
     runtime: selectableRuntime as never,
@@ -1065,6 +1231,7 @@ export function useDataGridTableStageRuntime<
     isCellEditable: isSurfaceCellEditableByKey,
     syncViewport: () => syncViewportFromDom(),
     applyClipboardEdits: options.applyClipboardEdits,
+    serverClipboardOperations: createServerClipboardOperations(),
     buildFillMatrixFromRange: options.buildFillMatrixFromRange,
     buildPasteSpecialMatrixFromRange: options.buildPasteSpecialMatrixFromRange,
     ensureEditableRowAtIndex: rowIndex => placeholderRows.ensureMaterializedRowAt(rowIndex, "paste"),

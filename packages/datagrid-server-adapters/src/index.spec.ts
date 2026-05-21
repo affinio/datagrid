@@ -503,6 +503,81 @@ describe("normalizeDataGridServerQuery", () => {
 })
 
 describe("createAffinoDatasource query mapping", () => {
+  it("posts unified datasource operations through the operations execute endpoint", async () => {
+    const calls: Array<{ url: string; body: unknown }> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      calls.push({
+        url: String(input),
+        body: JSON.parse(String(init?.body ?? "null")) as unknown,
+      })
+      return new Response(JSON.stringify({
+        operationId: "clear-1",
+        status: "committed",
+        acceptedCells: 4,
+        invalidation: { kind: "range", range: { start: 0, end: 1 } },
+        datasetVersion: 8,
+        canUndo: true,
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    const datasource = createAffinoDatasource({
+      baseUrl: "https://api.test",
+      tableId: "orders",
+      fetchImpl,
+      historyScope: { scope: "table", tableId: "orders" },
+    })
+
+    const result = await datasource.executeOperation?.({
+      kind: "clear",
+      operationId: "clear-1",
+      baseRevision: "rev-1",
+      projection: {
+        sortModel: [],
+        filterModel: null,
+        groupBy: null,
+        groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+        treeData: null,
+        pivot: null,
+        pagination: {
+          snapshot: {
+            enabled: false,
+            pageSize: 0,
+            currentPage: 0,
+            pageCount: 0,
+            totalRowCount: 0,
+            startIndex: 0,
+            endIndex: 0,
+          },
+          cursor: null,
+        },
+      },
+      targetRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 },
+      columns: ["a", "b"],
+      expectedCounts: { rows: 2, cells: 4 },
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.url).toBe("https://api.test/api/orders/operations/execute")
+    expect(calls[0]?.body).toMatchObject({
+      kind: "clear",
+      operationId: "clear-1",
+      baseRevision: "rev-1",
+      targetRange: { startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 },
+      columns: ["a", "b"],
+      expectedCounts: { rows: 2, cells: 4 },
+      table_id: "orders",
+    })
+    expect(result).toMatchObject({
+      operationId: "clear-1",
+      status: "committed",
+      acceptedCells: 4,
+      datasetVersion: 8,
+      canUndo: true,
+    })
+  })
+
   it("uses the normalized server query codec by default", async () => {
     const { bodies, fetchImpl } = createFetchRecorder()
     const datasource = createAffinoDatasource({

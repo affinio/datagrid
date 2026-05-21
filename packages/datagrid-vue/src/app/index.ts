@@ -35,6 +35,7 @@ export {
   type DataGridAppPasteOptions,
   type DataGridAppPendingClipboardEdge,
   type DataGridAppPendingClipboardOperation,
+  type DataGridAppServerClipboardOperations,
   type UseDataGridAppClipboardOptions,
   type UseDataGridAppClipboardResult,
 } from "./useDataGridAppClipboard"

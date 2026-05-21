@@ -6,6 +6,21 @@
 
 - ## Summary
 
+  Routed unloaded server-backed clear and range-move operations through datasource `executeOperation(...)`, while keeping materialized and client-grid paths local.
+
+  ## User impact
+
+  Server-backed grids can clear and move ranges that include unloaded rows when the backend exposes the delegated operation contract. Stale, grouped, and unsupported ranges remain blocked.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: provide `executeOperation(...)` on server-backed row models for unloaded clear/range-move support.
+
+  ## Validation
+  - focused interaction controller contracts and package type-check passed
+
+- ## Summary
+
   Extended the shared app-selection and clipboard composables to support committed multi-range selection, additive Ctrl/Cmd selection flows, and aggregate recomputation from effective selection values after row-model changes. The unreleased clipboard surface now also accepts explicit paste modes so downstream facades can route `Paste special` variants through the same shared pipeline.
 
   ## User impact

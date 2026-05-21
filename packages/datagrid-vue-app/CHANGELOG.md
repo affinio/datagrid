@@ -6,6 +6,21 @@
 
 - ## Summary
 
+  Wired server-backed clipboard operations to datasource `executeOperation(...)` for unloaded copy/cut/paste ranges in the app stage runtime.
+
+  ## User impact
+
+  App-level server grids can delegate clipboard work over unloaded rows to the backend when the active row model is server-backed. Client grids and materialized ranges continue using the existing local paths.
+
+  ## Migration
+  - No migration required.
+  - Optional adoption: expose `executeOperation(...)` on the server datasource to enable unloaded clipboard operations.
+
+  ## Validation
+  - package type-check passed
+
+- ## Summary
+
   Added native quick-filter apply timing controls to the app shell. `quick-filter` now supports `applyMode: "input" | "debounce" | "manual"` plus `debounceMs`; manual mode shows built-in Apply/Clear controls while still committing only to `filterModel.quickFilter`.
 
   ## User impact
