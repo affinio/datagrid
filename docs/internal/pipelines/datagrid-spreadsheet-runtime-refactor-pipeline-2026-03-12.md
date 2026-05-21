@@ -375,13 +375,20 @@ Rules for this block:
   - [ ] `workbookPersistence.ts` for export/restore and state builders
   - [ ] `workbookSync.ts` for sync orchestration, component schedule, materialization pass application
   - [ ] keep `workbookModel.ts` as facade/orchestrator only
-- [ ] Split sheet runtime into:
+- [x] Split sheet runtime helper/storage ownership into current flat spreadsheet modules:
+  - [x] `spreadsheetCellRuntime.ts` for cell input, preview, address, and row-index helper logic
+  - [x] `spreadsheetCellStoreRuntime.ts` for sparse raw-input and cell-style storage
+  - [x] `spreadsheetFormulaTableRuntime.ts` for formula table context keys
+  - [x] `spreadsheetMutationSnapshotRuntime.ts` for mutation snapshot cloning
+  - [x] `spreadsheetReferenceRuntime.ts` for sheet/column reference normalization and lookups
+  - [x] `spreadsheetStyleRuntime.ts` for style normalization, merge, and state-equivalence helpers
+- [ ] Continue sheet runtime split when those behavior areas are next touched:
   - [ ] `sheetTypes.ts` for model interfaces, patches, snapshots, mutation/state types
   - [ ] `sheetState.ts` for init/export/restore/normalization/equality helpers
   - [ ] `sheetFormulaRuntime.ts` for formula analysis maps, dependency graph, compilation, evaluation
   - [ ] `sheetRowMutation.ts` for insert/remove and structural mutation rewrite logic
-  - [ ] `sheetStyleRuntime.ts` for style resolution and style mutation helpers
-  - [ ] keep `sheetModel.ts` as facade/orchestrator only
+  - [x] `sheetStyleRuntime.ts` equivalent covered by `spreadsheetStyleRuntime.ts`
+  - [ ] keep `sheetModel.ts` as facade/orchestrator only for formula evaluation and structural rewrite policy
 - [ ] Split formula editor/runtime helpers into:
   - [ ] `formulaEditorTypes.ts` for editor/runtime formula types
   - [ ] `formulaAnalysis.ts` for cell input analysis, diagnostics, reference target resolution

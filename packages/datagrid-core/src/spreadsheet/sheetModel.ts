@@ -4,7 +4,6 @@ import {
   compileDataGridFormulaFieldArtifact,
   createFormulaErrorValue,
   isFormulaErrorValue,
-  normalizeFormulaReference,
   parseDataGridFormulaIdentifier,
   type DataGridCompiledFormulaArtifact,
   type DataGridCompiledFormulaField,
@@ -34,6 +33,44 @@ import {
   type DataGridSpreadsheetFormulaReferenceSpan,
 } from "./formulaEditorModel.js"
 import { isTypedPlainSpreadsheetSheetState } from "./sheetStateGuards.js"
+import {
+  cloneCellAddress,
+  compareCellAddresses,
+  createCellAddress,
+  formatSpreadsheetCellPreviewValue,
+  makeCellKey,
+  normalizeCellRawInput,
+  normalizeRowId,
+  parsePlainCellDisplayValue,
+  resolveFormulaTargetRowIndexes,
+} from "./spreadsheetCellRuntime.js"
+import { createSpreadsheetCellStoreRuntime } from "./spreadsheetCellStoreRuntime.js"
+import {
+  resolveFormulaTableBindingName,
+  resolveFormulaTableContextKey,
+} from "./spreadsheetFormulaTableRuntime.js"
+import {
+  cloneSpreadsheetSheetColumnMutation,
+  cloneSpreadsheetSheetRowMutation,
+} from "./spreadsheetMutationSnapshotRuntime.js"
+import {
+  buildSpreadsheetColumnReferenceLookup,
+  createCompiledFormulaReferenceToken,
+  normalizeColumnFormulaAlias,
+  normalizeColumnKey,
+  normalizeColumnTitle,
+  normalizeSheetIdentity,
+  normalizeSpreadsheetSheetReferenceAlias,
+  resolveCompiledFormulaReferenceTokenIndex,
+  resolveSpreadsheetColumnKeysForReferenceRange,
+} from "./spreadsheetReferenceRuntime.js"
+import {
+  areSpreadsheetFormulaTableBindingsEqual,
+  areSpreadsheetSheetStatesEquivalent,
+  areSpreadsheetStylesEqual,
+  mergeSpreadsheetStyles,
+  normalizeSpreadsheetStyle,
+} from "./spreadsheetStyleRuntime.js"
 
 export type DataGridSpreadsheetStyle = Readonly<Record<string, unknown>>
 
@@ -254,35 +291,11 @@ export interface DataGridSpreadsheetSheetModel {
   dispose(): void
 }
 
-function formatSpreadsheetCellPreviewValue(value: unknown): string {
-  if (value == null || value === "") {
-    return ""
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? String(value) : ""
-  }
-  if (typeof value === "boolean") {
-    return value ? "TRUE" : "FALSE"
-  }
-  if (typeof value === "bigint") {
-    return String(value)
-  }
-  if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value.toISOString() : ""
-  }
-  return String(value)
-}
-
 interface SpreadsheetColumnState {
   key: string
   title: string
   formulaAlias: string
   style: DataGridSpreadsheetStyle | null
-}
-
-interface SpreadsheetColumnReferenceSource {
-  key: string
-  formulaAlias?: string | null
 }
 
 interface SpreadsheetRowState {
@@ -312,453 +325,6 @@ interface SpreadsheetFormulaStateMaps {
 
 const EMPTY_DIAGNOSTICS = Object.freeze([]) as readonly []
 const EMPTY_DEPENDENCIES = Object.freeze([]) as readonly DataGridSpreadsheetCellAddress[]
-const COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX = "__spreadsheet_ref_"
-
-function normalizeSheetIdentity(value: unknown): string | null {
-  const normalized = String(value ?? "").trim()
-  return normalized.length === 0 ? null : normalized
-}
-
-function createCompiledFormulaReferenceToken(index: number): string {
-  return `${COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX}${index}`
-}
-
-function resolveCompiledFormulaReferenceTokenIndex(token: string): number | null {
-  if (!token.startsWith(COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX)) {
-    return null
-  }
-  const suffix = token.slice(COMPILED_FORMULA_REFERENCE_TOKEN_PREFIX.length)
-  const index = Number.parseInt(suffix, 10)
-  return Number.isInteger(index) && index >= 0 ? index : null
-}
-
-function normalizeColumnKey(value: unknown): string {
-  const normalized = String(value ?? "").trim()
-  if (normalized.length === 0) {
-    throw new Error("[DataGridSpreadsheetSheet] column key must be non-empty.")
-  }
-  return normalized
-}
-
-function normalizeColumnTitle(value: unknown, fallback: string): string {
-  const normalized = String(value ?? "").trim()
-  return normalized.length === 0 ? fallback : normalized
-}
-
-function normalizeColumnFormulaAlias(value: unknown, fallback: string): string {
-  const normalized = String(value ?? "").trim()
-  return normalized.length === 0 ? fallback : normalized
-}
-
-function normalizeFormulaReferenceLookupName(referenceName: unknown): string {
-  const normalized = String(referenceName ?? "").trim()
-  if (normalized.length === 0) {
-    return ""
-  }
-  const normalizedReference = normalizeFormulaReference(normalized)
-  if (
-    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(normalizedReference)
-    || normalizedReference.includes(".")
-    || normalizedReference.includes("[")
-    || normalizedReference.includes('"')
-  ) {
-    return normalizedReference
-  }
-  return normalizeFormulaReference(`"${normalized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
-}
-
-function resolveColumnFormulaReferenceName(column: SpreadsheetColumnReferenceSource): string {
-  const normalizedFormulaAlias = String(column.formulaAlias ?? "").trim()
-  return normalizedFormulaAlias.length > 0 ? normalizedFormulaAlias : column.key
-}
-
-function buildSpreadsheetColumnReferenceLookup(
-  availableColumns: readonly SpreadsheetColumnReferenceSource[],
-): ReadonlyMap<string, string> {
-  const keyByReferenceName = new Map<string, string>()
-  const aliasCandidates = new Map<string, Set<string>>()
-
-  for (const column of availableColumns) {
-    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
-    if (normalizedKeyReferenceName.length > 0) {
-      keyByReferenceName.set(normalizedKeyReferenceName, column.key)
-    }
-  }
-
-  for (const column of availableColumns) {
-    const normalizedAliasReferenceName = normalizeFormulaReferenceLookupName(resolveColumnFormulaReferenceName(column))
-    const normalizedKeyReferenceName = normalizeFormulaReferenceLookupName(column.key)
-    if (
-      normalizedAliasReferenceName.length === 0
-      || normalizedAliasReferenceName === normalizedKeyReferenceName
-    ) {
-      continue
-    }
-    const candidates = aliasCandidates.get(normalizedAliasReferenceName) ?? new Set<string>()
-    candidates.add(column.key)
-    aliasCandidates.set(normalizedAliasReferenceName, candidates)
-  }
-
-  for (const [referenceName, candidateKeys] of aliasCandidates.entries()) {
-    if (candidateKeys.size !== 1 || keyByReferenceName.has(referenceName)) {
-      continue
-    }
-    const [columnKey] = candidateKeys
-    if (columnKey) {
-      keyByReferenceName.set(referenceName, columnKey)
-    }
-  }
-
-  return keyByReferenceName
-}
-
-function resolveSpreadsheetColumnReferenceKey(
-  referenceName: string,
-  availableColumns: readonly SpreadsheetColumnReferenceSource[],
-  lookup: ReadonlyMap<string, string> = buildSpreadsheetColumnReferenceLookup(availableColumns),
-): string | null {
-  const normalizedReferenceName = normalizeFormulaReferenceLookupName(referenceName)
-  if (normalizedReferenceName.length === 0) {
-    return null
-  }
-  return lookup.get(normalizedReferenceName) ?? null
-}
-
-function resolveSpreadsheetColumnKeysForReferenceRange(
-  startReferenceName: string,
-  endReferenceName: string | null | undefined,
-  availableColumns: readonly SpreadsheetColumnReferenceSource[],
-  lookup: ReadonlyMap<string, string> = buildSpreadsheetColumnReferenceLookup(availableColumns),
-): readonly string[] {
-  const startColumnKey = resolveSpreadsheetColumnReferenceKey(startReferenceName, availableColumns, lookup)
-  if (!startColumnKey) {
-    return Object.freeze([])
-  }
-  const endColumnKey = endReferenceName
-    ? resolveSpreadsheetColumnReferenceKey(endReferenceName, availableColumns, lookup) ?? startColumnKey
-    : startColumnKey
-  if (endColumnKey === startColumnKey) {
-    return Object.freeze([startColumnKey])
-  }
-  const startIndex = availableColumns.findIndex(column => column.key === startColumnKey)
-  const endIndex = availableColumns.findIndex(column => column.key === endColumnKey)
-  if (startIndex < 0 || endIndex < 0) {
-    return Object.freeze([startColumnKey])
-  }
-  const [from, to] = startIndex <= endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
-  return Object.freeze(availableColumns.slice(from, to + 1).map(column => column.key))
-}
-
-function normalizeSpreadsheetStyle(
-  style: DataGridSpreadsheetStyle | null | undefined,
-): DataGridSpreadsheetStyle | null {
-  if (style == null) {
-    return null
-  }
-  if (typeof style !== "object" || Array.isArray(style)) {
-    throw new Error("[DataGridSpreadsheetSheet] style must be an object or null.")
-  }
-  const normalizedEntries = Object.entries(style)
-    .filter(([key]) => String(key).length > 0)
-    .map(([key, value]) => [String(key), value] as const)
-  if (normalizedEntries.length === 0) {
-    return null
-  }
-  return Object.freeze(Object.fromEntries(normalizedEntries))
-}
-
-function areSpreadsheetStylesEqual(
-  left: DataGridSpreadsheetStyle | null,
-  right: DataGridSpreadsheetStyle | null,
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (!left || !right) {
-    return false
-  }
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  if (leftKeys.length !== rightKeys.length) {
-    return false
-  }
-  for (const key of leftKeys) {
-    if (!Object.prototype.hasOwnProperty.call(right, key)) {
-      return false
-    }
-    if (!Object.is(left[key], right[key])) {
-      return false
-    }
-  }
-  return true
-}
-
-function areSpreadsheetColumnSnapshotsEqual(
-  left: readonly DataGridSpreadsheetColumnSnapshot[],
-  right: readonly DataGridSpreadsheetColumnSnapshot[],
-): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    const leftColumn = left[index]
-    const rightColumn = right[index]
-    if (
-      !leftColumn
-      || !rightColumn
-      || leftColumn.key !== rightColumn.key
-      || leftColumn.title !== rightColumn.title
-      || leftColumn.formulaAlias !== rightColumn.formulaAlias
-      || !areSpreadsheetStylesEqual(leftColumn.style, rightColumn.style)
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-function areSpreadsheetFormulaTableBindingsEqual(
-  left: readonly DataGridSpreadsheetFormulaTableBinding[],
-  right: readonly DataGridSpreadsheetFormulaTableBinding[],
-): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    const leftBinding = left[index]
-    const rightBinding = right[index]
-    if (
-      !leftBinding
-      || !rightBinding
-      || leftBinding.name !== rightBinding.name
-      || leftBinding.source !== rightBinding.source
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-function areSpreadsheetSheetStateRowsEqual(
-  left: readonly DataGridSpreadsheetSheetStateRow[],
-  right: readonly DataGridSpreadsheetSheetStateRow[],
-): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-  for (let rowIndex = 0; rowIndex < left.length; rowIndex += 1) {
-    const leftRow = left[rowIndex]
-    const rightRow = right[rowIndex]
-    if (
-      !leftRow
-      || !rightRow
-      || leftRow.id !== rightRow.id
-      || !areSpreadsheetStylesEqual(leftRow.style, rightRow.style)
-      || leftRow.cells.length !== rightRow.cells.length
-    ) {
-      return false
-    }
-    for (let cellIndex = 0; cellIndex < leftRow.cells.length; cellIndex += 1) {
-      const leftCell = leftRow.cells[cellIndex]
-      const rightCell = rightRow.cells[cellIndex]
-      if (
-        !leftCell
-        || !rightCell
-        || leftCell.columnKey !== rightCell.columnKey
-        || leftCell.rawInput !== rightCell.rawInput
-        || !areSpreadsheetStylesEqual(leftCell.style, rightCell.style)
-      ) {
-        return false
-      }
-    }
-  }
-  return true
-}
-
-function areSpreadsheetSheetStatesEquivalent(
-  left: DataGridSpreadsheetSheetState,
-  right: DataGridSpreadsheetSheetState,
-): boolean {
-  return areSpreadsheetColumnSnapshotsEqual(left.columns, right.columns)
-    && areSpreadsheetSheetStateRowsEqual(left.rows, right.rows)
-    && areSpreadsheetStylesEqual(left.sheetStyle, right.sheetStyle)
-    && areSpreadsheetFormulaTableBindingsEqual(left.formulaTables, right.formulaTables)
-}
-
-function mergeSpreadsheetStyles(
-  sheetStyle: DataGridSpreadsheetStyle | null,
-  columnStyle: DataGridSpreadsheetStyle | null,
-  rowStyle: DataGridSpreadsheetStyle | null,
-  cellStyle: DataGridSpreadsheetStyle | null,
-): DataGridSpreadsheetStyle | null {
-  const merged = {
-    ...(sheetStyle ?? {}),
-    ...(columnStyle ?? {}),
-    ...(rowStyle ?? {}),
-    ...(cellStyle ?? {}),
-  }
-  return normalizeSpreadsheetStyle(merged)
-}
-
-function normalizeCellRawInput(value: unknown): string {
-  if (value == null) {
-    return ""
-  }
-  if (typeof value === "string") {
-    return value
-  }
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-    return String(value)
-  }
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? "" : value.toISOString()
-  }
-  return String(value)
-}
-
-function parsePlainCellDisplayValue(rawInput: string): unknown {
-  const trimmed = rawInput.trim()
-  if (trimmed.length === 0) {
-    return null
-  }
-  if (/^(true|false)$/i.test(trimmed)) {
-    return trimmed.toLowerCase() === "true"
-  }
-  if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
-    const parsed = Number(trimmed)
-    if (Number.isFinite(parsed)) {
-      return parsed
-    }
-  }
-  return rawInput
-}
-
-function normalizeRowId(value: unknown, fallbackRowIndex: number): DataGridRowId {
-  if (typeof value === "string" || typeof value === "number") {
-    return value
-  }
-  return fallbackRowIndex + 1
-}
-
-function makeCellKey(rowIndex: number, columnKey: string): string {
-  return `${rowIndex}\u001f${columnKey}`
-}
-
-function cloneCellAddress(address: DataGridSpreadsheetCellAddress): DataGridSpreadsheetCellAddress {
-  return {
-    sheetId: address.sheetId ?? null,
-    rowId: address.rowId ?? null,
-    rowIndex: address.rowIndex,
-    columnKey: address.columnKey,
-  }
-}
-
-function cloneSpreadsheetSheetRowMutation(
-  mutation: DataGridSpreadsheetSheetRowMutation | null,
-): DataGridSpreadsheetSheetRowMutation | null {
-  return mutation
-    ? {
-      revision: mutation.revision,
-      kind: mutation.kind,
-      index: mutation.index,
-      count: mutation.count,
-    }
-    : null
-}
-
-function cloneSpreadsheetSheetColumnMutation(
-  mutation: DataGridSpreadsheetSheetColumnMutation | null,
-): DataGridSpreadsheetSheetColumnMutation | null {
-  return mutation
-    ? {
-      revision: mutation.revision,
-      kind: mutation.kind,
-      previousKey: mutation.previousKey,
-      nextKey: mutation.nextKey,
-    }
-    : null
-}
-
-function resolveFormulaTableContextKey(name: string): string {
-  const normalized = name.trim().toLowerCase()
-  return normalized.length === 0 ? "tables" : `table:${normalized}`
-}
-
-function resolveFormulaTableBindingName(contextKey: string): string {
-  if (contextKey === "tables") {
-    return ""
-  }
-  return contextKey.startsWith("table:") ? contextKey.slice("table:".length) : contextKey
-}
-
-function normalizeSpreadsheetSheetReferenceAlias(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase()
-}
-
-function resolveFormulaTargetRowIndexes(
-  rowSelector: ReturnType<typeof parseDataGridFormulaIdentifier>["rowSelector"],
-  currentRowIndex: number,
-  rowCount: number,
-): readonly number[] {
-  const targetIndexes: number[] = []
-  const pushRowIndex = (rowIndex: number): void => {
-    if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= rowCount) {
-      return
-    }
-    targetIndexes.push(rowIndex)
-  }
-
-  if (rowSelector.kind === "current") {
-    pushRowIndex(currentRowIndex)
-    return Object.freeze(targetIndexes)
-  }
-  if (rowSelector.kind === "absolute") {
-    pushRowIndex(rowSelector.rowIndex)
-    return Object.freeze(targetIndexes)
-  }
-  if (rowSelector.kind === "absolute-window") {
-    for (let rowIndex = rowSelector.startRowIndex; rowIndex <= rowSelector.endRowIndex; rowIndex += 1) {
-      pushRowIndex(rowIndex)
-    }
-    return Object.freeze(targetIndexes)
-  }
-  if (rowSelector.kind === "relative") {
-    pushRowIndex(currentRowIndex + rowSelector.offset)
-    return Object.freeze(targetIndexes)
-  }
-  const step = rowSelector.startOffset <= rowSelector.endOffset ? 1 : -1
-  for (
-    let offset = rowSelector.startOffset;
-    step > 0 ? offset <= rowSelector.endOffset : offset >= rowSelector.endOffset;
-    offset += step
-  ) {
-    pushRowIndex(currentRowIndex + offset)
-  }
-  return Object.freeze(targetIndexes)
-}
-
-function createCellAddress(
-  sheetId: string | null,
-  row: SpreadsheetRowState,
-  columnKey: string,
-): DataGridSpreadsheetCellAddress {
-  return {
-    sheetId,
-    rowId: row.id,
-    rowIndex: row.rowIndex,
-    columnKey,
-  }
-}
-
-function compareCellAddresses(
-  left: DataGridSpreadsheetCellAddress,
-  right: DataGridSpreadsheetCellAddress,
-): number {
-  if (left.rowIndex !== right.rowIndex) {
-    return left.rowIndex - right.rowIndex
-  }
-  return left.columnKey.localeCompare(right.columnKey)
-}
 
 export function createDataGridSpreadsheetSheetModel(
   options: CreateDataGridSpreadsheetSheetModelOptions,
@@ -892,6 +458,18 @@ export function createDataGridSpreadsheetSheetModel(
   const rawInputByRowIndex: Array<Map<string, string>> = rows.map(() => new Map())
   const analysisByCellKey = new Map<string, DataGridSpreadsheetCellInputAnalysis>()
   const cellStyleByRowIndex: Array<Map<string, DataGridSpreadsheetStyle>> = rows.map(() => new Map())
+  const cellStore = createSpreadsheetCellStoreRuntime({
+    rawInputByRowIndex,
+    cellStyleByRowIndex,
+  })
+  const getStoredRawInput = cellStore.getRawInput
+  const hasStoredRawInput = cellStore.hasRawInput
+  const setStoredRawInput = cellStore.setRawInput
+  const deleteStoredRawInput = cellStore.deleteRawInput
+  const iterateStoredRawInputs = cellStore.iterateRawInputs
+  const getStoredCellStyle = cellStore.getCellStyle
+  const setStoredCellStyle = cellStore.setCellStyle
+  const deleteStoredCellStyle = cellStore.deleteCellStyle
   const formulaCellByKey = new Map<string, SpreadsheetFormulaCellState>()
   const dependentsByCellKey = new Map<string, Set<string>>()
   const formulaTablesByContextKey = new Map<string, DataGridFormulaTableSource>()
@@ -923,7 +501,7 @@ export function createDataGridSpreadsheetSheetModel(
         continue
       }
       if (shouldRetainRawInput(rawInput)) {
-        rawInputByRowIndex[rowIndex]?.set(columnKey, rawInput)
+        setStoredRawInput(rowIndex, columnKey, rawInput)
       } else {
         syncNonRetainedRawInputToResolvedValue(rowIndex, columnKey, rawInput)
       }
@@ -1073,81 +651,6 @@ export function createDataGridSpreadsheetSheetModel(
     }
     const columnKey = cellKey.slice(separatorIndex + 1)
     return createCellAddress(sheetId, row, columnKey)
-  }
-
-  function getStoredRawInput(
-    rowIndex: number,
-    columnKey: string,
-  ): string | undefined {
-    return rawInputByRowIndex[rowIndex]?.get(columnKey)
-  }
-
-  function hasStoredRawInput(
-    rowIndex: number,
-    columnKey: string,
-  ): boolean {
-    return rawInputByRowIndex[rowIndex]?.has(columnKey) ?? false
-  }
-
-  function setStoredRawInput(
-    rowIndex: number,
-    columnKey: string,
-    rawInput: string,
-  ): void {
-    let rowInputs = rawInputByRowIndex[rowIndex]
-    if (!rowInputs) {
-      rowInputs = new Map()
-      rawInputByRowIndex[rowIndex] = rowInputs
-    }
-    rowInputs.set(columnKey, rawInput)
-  }
-
-  function deleteStoredRawInput(
-    rowIndex: number,
-    columnKey: string,
-  ): void {
-    rawInputByRowIndex[rowIndex]?.delete(columnKey)
-  }
-
-  function iterateStoredRawInputs(): IterableIterator<[string, string]> {
-    return (function* (): IterableIterator<[string, string]> {
-      for (let rowIndex = 0; rowIndex < rawInputByRowIndex.length; rowIndex += 1) {
-        const rowInputs = rawInputByRowIndex[rowIndex]
-        if (!rowInputs) {
-          continue
-        }
-        for (const [columnKey, rawInput] of rowInputs.entries()) {
-          yield [makeCellKey(rowIndex, columnKey), rawInput]
-        }
-      }
-    })()
-  }
-
-  function getStoredCellStyle(
-    rowIndex: number,
-    columnKey: string,
-  ): DataGridSpreadsheetStyle | undefined {
-    return cellStyleByRowIndex[rowIndex]?.get(columnKey)
-  }
-
-  function setStoredCellStyle(
-    rowIndex: number,
-    columnKey: string,
-    style: DataGridSpreadsheetStyle,
-  ): void {
-    let rowStyles = cellStyleByRowIndex[rowIndex]
-    if (!rowStyles) {
-      rowStyles = new Map()
-      cellStyleByRowIndex[rowIndex] = rowStyles
-    }
-    rowStyles.set(columnKey, style)
-  }
-
-  function deleteStoredCellStyle(
-    rowIndex: number,
-    columnKey: string,
-  ): void {
-    cellStyleByRowIndex[rowIndex]?.delete(columnKey)
   }
 
   function getCellOwnStyle(cellKey: string): DataGridSpreadsheetStyle | null {

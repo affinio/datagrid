@@ -2602,7 +2602,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 31,
-          "declarationHash": "ec141761165d252b52d174117b46c63a5db090025ff72ebf3209b295b93d2be6",
+          "declarationHash": "84fada1974d5330f3160715cbaa25269f94d45958c24757d5d6d04cefe5cf06d",
           "entrypointExportCount": 36,
           "entrypointExports": [
             "export declare const DataGrid: import(\"./DataGrid\").DataGridComponent",
@@ -2713,7 +2713,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/DataGrid.d.ts",
-              "hash": "ad042a0b341e98cb6301fd048495b0887304b5db8369b364018a2d92cd67e0e0"
+              "hash": "95ea3cbb6a91841ca3489931e1900513b315d65c546ce0af779ba4b06dd014bb"
             },
             {
               "path": "packages/datagrid-vue-app/dist/dataGridEditability.d.ts",
@@ -2753,7 +2753,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "bb8702ec4638199f83cd6deef1f425f4ab2599303bd08f8f741e02236535d8ee"
+              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/useDataGridTableStageHistory.d.ts",
@@ -2860,7 +2860,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/gantt.d.ts",
           "declarationExists": true,
           "declarationFileCount": 8,
-          "declarationHash": "8d6d75dfb1493b70068d0b7b6cefc116e820553a6079fb8cb43bfcf42941b3cf",
+          "declarationHash": "e3d96851df216fedfe29f26ceca8437ec18ebe41d00c1751fa665dc014b20644",
           "entrypointExportCount": 3,
           "entrypointExports": [
             "export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\"",
@@ -2894,7 +2894,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "bb8702ec4638199f83cd6deef1f425f4ab2599303bd08f8f741e02236535d8ee"
+              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStageContext.d.ts",
@@ -2909,7 +2909,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/internal.d.ts",
           "declarationExists": true,
           "declarationFileCount": 37,
-          "declarationHash": "abbcccbd7b1cdb3f8ff8f705bd5daaa1ca4b9491c5c42a38d10bebdbe0d801ec",
+          "declarationHash": "993f0d632e4a6ea59e8aaa44c417dd6e8c3be4db27bdb470bf4610afbd60dea4",
           "entrypointExportCount": 28,
           "entrypointExports": [
             "export type { AnyDataGridTableStageContext, DataGridTableStageContextSource, DataGridTableStageSectionKey, } from \"./stage/dataGridTableStageContext\"",
@@ -3028,7 +3028,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/host/DataGridDefaultRenderer.d.ts",
-              "hash": "57fa74c343cf3fb886a0016e6475e9f429984ab0dc3c15fc7d368e58a160e11d"
+              "hash": "323228cb86f1bccab38fde8c1417619f82c5c5a2ca3427121fbb481832b4cc59"
             },
             {
               "path": "packages/datagrid-vue-app/dist/host/DataGridModuleHost.d.ts",
@@ -3060,7 +3060,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "bb8702ec4638199f83cd6deef1f425f4ab2599303bd08f8f741e02236535d8ee"
+              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/DataGridTableStage.vue.d.ts",
@@ -3080,7 +3080,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/useDataGridTableStageRuntime.d.ts",
-              "hash": "bdc9f0ad601b08643044f2a0efd4dd1b77397e918ec4e5e26a7a83bab2c2ba08"
+              "hash": "4ccd4406c9dae71626dd504979ffde7f4d17991c1b7aac18dc61ce306b35a727"
             },
             {
               "path": "packages/datagrid-vue-app/dist/types/bivariance.d.ts",

@@ -12,10 +12,15 @@ type Row = {
 function makeRowNode(row: Row, index: number): DataGridRowNode<Row> {
   return normalizeRowNode<Row>(
     {
+      kind: "leaf",
+      data: row,
       row,
+      rowKey: row.id,
       rowId: row.id,
+      sourceIndex: index,
       originalIndex: index,
       displayIndex: index,
+      state: { selected: false, group: false, pinned: "none", expanded: false },
     },
     index,
   )

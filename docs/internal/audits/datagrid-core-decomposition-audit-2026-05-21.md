@@ -83,6 +83,12 @@ Recommended decomposition:
 - Extract `spreadsheetStyleRuntime` for sheet/row/column/cell style normalization, equality, merge, and inheritance.
 - Keep persistence helpers outside the facade; `workbookPersistence.ts` is the existing direction to follow.
 
+Status as of `2026-05-21`:
+
+- Closed the safe facade-preserving decomposition slice for `sheetModel.ts`.
+- Extracted cell helpers, sparse cell storage, formula table key helpers, mutation snapshot cloning, column/reference lookup, and style normalization/equality/merge into focused spreadsheet runtime modules.
+- Left formula dependency/evaluation and row/column structural rewrite policy inside the facade for now because those paths are tightly coupled to current closure state and should move only with a behavior-touching slice.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/sheetModel.spec.ts`

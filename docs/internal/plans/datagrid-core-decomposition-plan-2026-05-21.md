@@ -17,14 +17,39 @@ Status: active
 | Priority | Slice | Target | Status |
 | --- | --- | --- | --- |
 | P0 | Server datasource runtime ownership | `dataSourceBackedRowModel` cache, transport, invalidation, telemetry, optimistic mutations | done in Track 1 |
-| P0 | Client row-model composition root cleanup | Keep `clientRowModel` as wiring-only by moving local domain policy into existing host/state/projection runtimes | active |
-| P0 | Spreadsheet sheet runtime | Split sheet state, formula runtime, structural mutations, style runtime | planned |
+| P0 | Client row-model composition root cleanup | Keep `clientRowModel` as wiring-only by moving local domain policy into existing host/state/projection runtimes | done |
+| P0 | Spreadsheet sheet runtime | Split sheet state, formula runtime, structural mutations, style runtime | done |
 | P1 | Spreadsheet workbook runtime | Split graph/scheduler/sync/persistence ownership without reintroducing row-model workbook API | planned |
 | P1 | View pipeline stage ownership | Split filter/sort/project/join/group/pivot stages behind existing materializers | planned |
 | P1 | Viewport controller pipeline | Split measurement, model binding, update sequencing while preserving one scroll owner | planned |
 | P2 | Tree projection runtime | Split path and parent projection engines behind `createTreeProjectionRuntime()` | planned |
 
-## Current Slice: Client Row-Model Composition Root
+## Current Slice: Spreadsheet Sheet Runtime
+
+Objective: keep `sheetModel.ts` as the spreadsheet sheet facade while moving stable helper/storage responsibilities into named internal runtimes.
+
+Completed:
+
+- Extracted cell value/input/address helpers into `spreadsheetCellRuntime`.
+- Extracted sparse raw-input and cell-style storage into `spreadsheetCellStoreRuntime`.
+- Extracted formula table key normalization into `spreadsheetFormulaTableRuntime`.
+- Extracted mutation snapshot cloning into `spreadsheetMutationSnapshotRuntime`.
+- Extracted sheet/column reference normalization and lookup into `spreadsheetReferenceRuntime`.
+- Extracted style normalization, merge, and sheet-state equivalence helpers into `spreadsheetStyleRuntime`.
+- Added focused helper tests and kept existing sheet/formula behavior tests green.
+
+Remaining non-blocking candidates:
+
+- Move formula dependency graph/evaluation into `spreadsheetFormulaRuntime` if the next formula feature touches those paths.
+- Move row/column structural rewrite policy into `spreadsheetStructuralMutationRuntime` if row/column mutation behavior changes.
+
+Validation target:
+
+- `pnpm --filter @affino/datagrid-core type-check`
+- focused spreadsheet helper and sheet/formula tests
+- `pnpm run quality:architecture:datagrid`
+
+## Previous Slice: Client Row-Model Composition Root
 
 Objective: make `clientRowModel.ts` read as orchestration, not as a place where new domain policy accumulates.
 
