@@ -242,6 +242,8 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MAX_EXPAND_BURST_P99_MS=60`
   - `PERF_BUDGET_MAX_FILTER_SORT_BURST_P95_MS=50`
   - `PERF_BUDGET_MAX_FILTER_SORT_BURST_P99_MS=65`
+  - Tree value-only patches use dependency fields to avoid structural cache invalidation. When changed row ids are known, path and parent tree caches patch only the affected cached row entries and dirty aggregate ancestors instead of walking every branch.
+  - Pivot patching has an incremental same-bucket tier: patches that touch pivot axis fields may still use the incremental path when normalized row/column bucket keys stay stable; bucket-changing patches fall back to full rebuild.
 - Shared:
   - `PERF_BUDGET_MAX_VARIANCE_PCT=60`
   - `PERF_BUDGET_MAX_HEAP_DELTA_MB=140`

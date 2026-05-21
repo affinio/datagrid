@@ -57,7 +57,7 @@ describe("table runtime typed event routing", () => {
 
   it("separates internal lifecycle and unknown-plugin-host events", () => {
     const internalEvents: Array<{ name: string; payload: unknown }> = []
-    const legacyUnknownEvents: string[] = []
+    const unknownPluginHostEvents: string[] = []
     let pluginContext: any
 
     const runtime = createDataGridRuntime({
@@ -66,7 +66,7 @@ describe("table runtime typed event routing", () => {
         internalEvents.push({ name, payload: args[0] })
       },
       onUnknownPluginEvent: event => {
-        legacyUnknownEvents.push(event)
+        unknownPluginHostEvents.push(event)
       },
       pluginContext: createPluginContext("grid-internal"),
       initialPlugins: [
@@ -87,7 +87,7 @@ describe("table runtime typed event routing", () => {
     expect(internalEvents.some(event => event.name === "host:dispatched")).toBe(true)
     expect(internalEvents.some(event => event.name === "plugin:host-unknown")).toBe(true)
     expect(internalEvents.some(event => event.name === "lifecycle:dispose")).toBe(true)
-    expect(legacyUnknownEvents).toEqual(["not-a-host-event"])
+    expect(unknownPluginHostEvents).toEqual(["not-a-host-event"])
   })
 
   it("routes custom plugin events with strict domain separation", () => {

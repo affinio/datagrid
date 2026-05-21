@@ -15,14 +15,14 @@ describe("resolveCanonicalPinMode", () => {
     expect(resolveCanonicalPinMode({ isSystem: true, pin: "none" })).toBe("left")
   })
 
-  it("ignores legacy pin fields by contract", () => {
-    const legacyPayload = {
+  it("ignores noncanonical pin fields by contract", () => {
+    const nonCanonicalPayload = {
       pinned: "left",
       sticky: "right",
       stickyLeft: true,
       lock: "left",
       locked: true,
     }
-    expect(resolveCanonicalPinMode(legacyPayload as unknown as Parameters<typeof resolveCanonicalPinMode>[0])).toBe("none")
+    expect(resolveCanonicalPinMode(nonCanonicalPayload as unknown as Parameters<typeof resolveCanonicalPinMode>[0])).toBe("none")
   })
 })

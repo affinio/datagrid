@@ -244,14 +244,13 @@ export function runClientRowPatchProjection<T>(
     const affectsPivotValues = pivotValueFields.size === 0
       ? false
       : input.projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotValueFields)
-    const canApplyPivotValuePatch =
-      affectsPivotValues &&
-      !affectsPivotAxis &&
+    const canTryIncrementalPivotPatch =
+      (affectsPivotValues || affectsPivotAxis) &&
       !effectiveChangeSet.stageImpact.affectsFilter &&
       !effectiveChangeSet.stageImpact.affectsSort &&
       !input.staleStagesBeforeRequest.has("group") &&
       !input.staleStagesBeforeRequest.has("pivot")
-    if (canApplyPivotValuePatch) {
+    if (canTryIncrementalPivotPatch) {
       const changedRows: DataGridPivotIncrementalPatchRow<T>[] = []
       for (const changedRowId of input.changedRowIds) {
         const previousRow = input.previousRowsById.get(changedRowId)

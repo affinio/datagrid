@@ -87,9 +87,11 @@ Goal: reduce latency and heap cost for large tree/pivot workloads.
 
 Slices:
 
-1. [ ] Profile current tree path/parent cache build and pivot rebuild hot paths.
-2. [ ] Tighten tree invalidation to structural dependency fields.
-3. [ ] Add tree value-only patch fast path.
-4. [ ] Expand pivot patch tiers beyond value-only patch.
-5. [ ] Reduce pivot/tree allocation churn and duplicated materialized state.
-6. [ ] Promote sustained regression gates and memory budgets.
+1. [x] Profile current tree path/parent cache build and pivot rebuild hot paths.
+2. [x] Tighten tree invalidation to structural dependency fields.
+3. [x] Add tree value-only patch fast path.
+4. [x] Expand pivot patch tiers beyond value-only patch.
+5. [x] Reduce pivot/tree allocation churn and duplicated materialized state.
+6. [x] Promote sustained regression gates and memory budgets.
+
+Status: closed for current core runtime hardening. Tree value-only patches now use structural `treeData.dependencyFields` and changed-row-id targeted cache patching for path/parent caches, avoiding broad branch walks when hierarchy does not change. Pivot patching now attempts the incremental path for same-bucket axis patches as well as value patches, with runtime fallback to full rebuild when row/column buckets change. Sustained validation is covered by focused unit tests plus `bench:datagrid:tree:assert` and `bench:datagrid:pivot:assert`; CI/nightly matrix gates remain documented in `docs/perf/datagrid-performance-gates.md`.

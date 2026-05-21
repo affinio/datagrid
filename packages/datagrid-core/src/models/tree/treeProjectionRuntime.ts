@@ -48,14 +48,17 @@ export interface TreePathProjectionCache<T> {
   rootGroups: Map<string, TreePathBranch<T>>
   branchByKey: Map<string, TreePathBranch<T>>
   leafBranchByLeafRowId: Map<DataGridRowId, TreePathBranch<T>>
+  branchLeafIndexByLeafRowId: Map<DataGridRowId, number>
   branchParentByKey: Map<string, string | null>
   branchPathByLeafRowId: Map<DataGridRowId, readonly string[]>
   groupIndexByRowId: Map<DataGridRowId, number>
   togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
   toggleNextDescendantsBuffer: DataGridRowNode<T>[]
   rootLeaves: DataGridRowNode<T>[]
+  rootLeafIndexByRowId: Map<DataGridRowId, number>
   matchedLeafRowIds: Set<DataGridRowId>
   leafOnlyRows: DataGridRowNode<T>[]
+  leafOnlyRowIndexByRowId: Map<DataGridRowId, number>
   aggregatesByGroupKey: Map<string, Record<string, unknown>>
   aggregateStateByGroupKey?: Map<string, DataGridIncrementalAggregationGroupState>
   leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
@@ -255,6 +258,40 @@ function patchTreePathProjectionCacheRowsByIdentity<T>(
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
   changedRowIds: readonly DataGridRowId[] = [],
 ): TreePathProjectionCache<T> {
+  if (changedRowIds.length > 0) {
+    const patchArrayIndex = (
+      rows: DataGridRowNode<T>[],
+      index: number | undefined,
+      next: DataGridRowNode<T>,
+    ): void => {
+      if (typeof index !== "number" || index < 0 || index >= rows.length) {
+        return
+      }
+      const current = rows[index]
+      if (!current || current.rowId !== next.rowId || (current.data === next.data && current.row === next.row)) {
+        return
+      }
+      rows[index] = normalizeLeafRow(next)
+    }
+
+    for (const rowId of changedRowIds) {
+      const next = sourceById.get(rowId)
+      if (next) {
+        patchArrayIndex(cache.rootLeaves, cache.rootLeafIndexByRowId.get(rowId), next)
+        patchArrayIndex(cache.leafOnlyRows, cache.leafOnlyRowIndexByRowId.get(rowId), next)
+        const branch = cache.leafBranchByLeafRowId.get(rowId)
+        patchArrayIndex(branch?.leaves ?? [], cache.branchLeafIndexByLeafRowId.get(rowId), next)
+      }
+      const branchPath = cache.branchPathByLeafRowId.get(rowId)
+      if (!branchPath) {
+        continue
+      }
+      for (const branchKey of branchPath) {
+        cache.dirtyBranchKeys.add(branchKey)
+      }
+    }
+    return cache
+  }
   cache.rootLeaves = patchProjectedRowsByIdentity(cache.rootLeaves, sourceById)
   cache.leafOnlyRows = patchProjectedRowsByIdentity(cache.leafOnlyRows, sourceById)
   const patchBranch = (branch: TreePathBranch<T>) => {
@@ -283,6 +320,21 @@ function patchTreeParentProjectionCacheRowsByIdentity<T>(
   sourceById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
   changedRowIds: readonly DataGridRowId[] = [],
 ): TreeParentProjectionCache<T> {
+  if (changedRowIds.length > 0) {
+    for (const rowId of changedRowIds) {
+      const row = cache.rowById.get(rowId)
+      const next = sourceById.get(rowId)
+      if (row && next && (next.data !== row.data || next.row !== row.row)) {
+        cache.rowById.set(rowId, normalizeLeafRow(next))
+      }
+      let cursor: DataGridRowId | null = rowId
+      while (cursor != null) {
+        cache.dirtyBranchRootIds.add(cursor)
+        cursor = cache.parentById.get(cursor) ?? null
+      }
+    }
+    return cache
+  }
   for (const [rowId, row] of cache.rowById.entries()) {
     const next = sourceById.get(rowId)
     if (!next || (next.data === row.data && next.row === row.row)) {
@@ -325,6 +377,7 @@ function buildTreePathProjectionCache<T>(
   const rootGroups = new Map<string, TreePathBranch<T>>()
   const branchByKey = new Map<string, TreePathBranch<T>>()
   const leafBranchByLeafRowId = new Map<DataGridRowId, TreePathBranch<T>>()
+  const branchLeafIndexByLeafRowId = new Map<DataGridRowId, number>()
   const branchParentByKey = new Map<string, string | null>()
   const supportsIncrementalAggregation = Boolean(
     createLeafContribution &&
@@ -337,8 +390,10 @@ function buildTreePathProjectionCache<T>(
   const togglePreviousDescendantsBuffer: DataGridRowNode<T>[] = []
   const toggleNextDescendantsBuffer: DataGridRowNode<T>[] = []
   const rootLeaves: DataGridRowNode<T>[] = []
+  const rootLeafIndexByRowId = new Map<DataGridRowId, number>()
   const matchedLeafRowIds = new Set<DataGridRowId>()
   const leafOnlyRows: DataGridRowNode<T>[] = []
+  const leafOnlyRowIndexByRowId = new Map<DataGridRowId, number>()
   const aggregatesByGroupKey = new Map<string, Record<string, unknown>>()
   const leafContributionById = (computeAggregates || createLeafContribution)
     ? new Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>()
@@ -357,9 +412,11 @@ function buildTreePathProjectionCache<T>(
     const matches = rowMatchesFilter(normalizedLeaf)
     if (matches) {
       matchedLeafRowIds.add(normalizedLeaf.rowId)
+      leafOnlyRowIndexByRowId.set(normalizedLeaf.rowId, leafOnlyRows.length)
       leafOnlyRows.push(normalizedLeaf)
     }
     if (path.length === 0) {
+      rootLeafIndexByRowId.set(normalizedLeaf.rowId, rootLeaves.length)
       rootLeaves.push(normalizedLeaf)
       continue
     }
@@ -394,6 +451,7 @@ function buildTreePathProjectionCache<T>(
     }
     const target = traversed[traversed.length - 1]
     if (target) {
+      branchLeafIndexByLeafRowId.set(normalizedLeaf.rowId, target.leaves.length)
       target.leaves.push(normalizedLeaf)
       leafBranchByLeafRowId.set(normalizedLeaf.rowId, target)
       if (supportsIncrementalAggregation) {
@@ -483,14 +541,17 @@ function buildTreePathProjectionCache<T>(
     rootGroups,
     branchByKey,
     leafBranchByLeafRowId,
+    branchLeafIndexByLeafRowId,
     branchParentByKey,
     branchPathByLeafRowId,
     groupIndexByRowId,
     togglePreviousDescendantsBuffer,
     toggleNextDescendantsBuffer,
     rootLeaves,
+    rootLeafIndexByRowId,
     matchedLeafRowIds,
     leafOnlyRows,
+    leafOnlyRowIndexByRowId,
     aggregatesByGroupKey,
     aggregateStateByGroupKey,
     leafContributionById,

@@ -408,7 +408,7 @@ export function createDataGridViewportModelBridgeService<TRow = unknown>(
     snapshotColumn: ReturnType<DataGridColumnModel["getSnapshot"]>["columns"][number],
   ): DataGridColumn => {
     const columnDef: DataGridColumnDef = snapshotColumn.column
-    const legacyPassthrough = Object.fromEntries(
+    const customColumnFields = Object.fromEntries(
       Object.entries(columnDef as unknown as Record<string, unknown>)
         .filter(([key]) => !CORE_COLUMN_KEYS.has(key)),
     )
@@ -436,7 +436,7 @@ export function createDataGridViewportModelBridgeService<TRow = unknown>(
     const normalizedWidth = Number.isFinite(widthValue as number) ? (widthValue as number) : undefined
 
     return {
-      ...legacyPassthrough,
+      ...customColumnFields,
       ...(meta ?? {}),
       key: snapshotColumn.key,
       ...(field ? { field } : {}),

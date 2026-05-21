@@ -553,10 +553,10 @@ describe("table viewport model bridge service", () => {
     fallbackColumnModel.dispose()
   })
 
-  it("keeps backward-compatible passthrough for legacy column extras", () => {
+  it("preserves custom column fields at the bridge boundary", () => {
     const rowModel = createClientRowModel<BridgeRow>()
-    const legacyColumn = {
-      key: "legacy",
+    const customColumn = {
+      key: "custom",
       initialState: {
         width: 100,
         pin: "left",
@@ -565,7 +565,7 @@ describe("table viewport model bridge service", () => {
       stickyLeft: true,
     } as unknown as DataGridColumnInput
     const columnModel = createDataGridColumnModel({
-      columns: [legacyColumn],
+      columns: [customColumn],
     })
     const fallbackRowModel = createClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()

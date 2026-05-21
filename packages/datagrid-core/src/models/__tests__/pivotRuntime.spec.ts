@@ -72,4 +72,42 @@ describe("pivotRuntime incremental patching", () => {
     expect(amerRow[String(yearColumnId)]).toBe(100)
     expect(emeaRow[String(yearColumnId)]).toBe(20)
   })
+
+  it("applies patch when raw axis values change but normalized pivot buckets stay stable", () => {
+    const runtime = createPivotRuntime<PivotRow>()
+    const sourceRows = [
+      createLeafRow({ id: "r1", region: "1", year: 2024, revenue: 10 }, 0),
+      createLeafRow({ id: "r2", region: "2", year: 2024, revenue: 20 }, 1),
+    ]
+    const pivotModel: DataGridPivotSpec = {
+      rows: ["region"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    }
+
+    const projected = runtime.projectRows({
+      inputRows: sourceRows,
+      pivotModel,
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+    const yearColumnId = projected.columns[0]?.id
+    expect(typeof yearColumnId).toBe("string")
+
+    const patched = runtime.applyValueOnlyPatch({
+      projectedRows: projected.rows,
+      pivotModel,
+      changedRows: [
+        {
+          previousRow: sourceRows[0]!,
+          nextRow: createLeafRow({ id: "r1", region: 1 as unknown as string, year: 2024, revenue: 100 }, 0),
+        },
+      ],
+    })
+
+    expect(patched).not.toBeNull()
+    const rowOne = patched!.rows.find(row => String((row.row as unknown as Record<string, unknown>).region ?? "") === "1")
+    const rowTwo = patched!.rows.find(row => String((row.row as unknown as Record<string, unknown>).region ?? "") === "2")
+    expect((rowOne!.row as unknown as Record<string, unknown>)[String(yearColumnId)]).toBe(100)
+    expect((rowTwo!.row as unknown as Record<string, unknown>)[String(yearColumnId)]).toBe(20)
+  })
 })

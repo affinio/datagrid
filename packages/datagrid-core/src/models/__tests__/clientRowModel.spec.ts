@@ -3187,6 +3187,35 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("tries incremental pivot patch when an axis patch stays in the same bucket", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", region: 1 as string | number, year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", region: 2 as string | number, year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialPivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+    })
+
+    const year2024ColumnId = model.getSnapshot().pivotColumns?.find(column => column.label.includes("year=2024"))?.id
+    expect(typeof year2024ColumnId).toBe("string")
+
+    model.patchRows([{ rowId: "r1", data: { region: "1", revenue: 100 } }], {
+      recomputeGroup: true,
+    })
+
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const rowOne = rows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "1")
+    const rowTwo = rows.find(row => String((row.row as Record<string, unknown>)?.region ?? "") === "2")
+    expect((rowOne?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]).toBe(100)
+    expect((rowTwo?.row as Record<string, unknown> | undefined)?.[String(year2024ColumnId)]).toBe(20)
+
+    model.dispose()
+  })
+
   it("projects treeData path mode deterministically and toggles expansion by group key", () => {
     const model = createClientRowModel({
       rows: [
@@ -4557,6 +4586,44 @@ describe("createClientRowModel", () => {
     const afterToggle = model.getRowsInRange({ start: 0, end: 10 })
     expect(afterToggle.map(row => String(row.rowId))).toEqual(["r1", "r2"])
     expect((afterToggle[1]?.row as { label?: string })?.label).toBe("Child-updated")
+
+    model.dispose()
+  })
+
+  it("patches tree path cache rows by changed ids when dependency fields isolate structure", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", path: ["root"], label: "Root" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", path: ["root", "child"], label: "Child" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        dependencyFields: ["path"],
+        expandedByDefault: true,
+      },
+    })
+
+    const before = model.getSnapshot().projection
+    model.patchRows([{ rowId: "r2", data: { label: "Child-updated" } }])
+    const after = model.getSnapshot().projection
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+
+    expect(rows.map(row => String(row.rowId))).toEqual([
+      encodeTreePathGroupKey(["root"]),
+      encodeTreePathGroupKey(["root", "child"]),
+      "r2",
+      "r1",
+    ])
+    expect((rows[2]?.row as { label?: string })?.label).toBe("Child-updated")
+    expect(after?.staleStages).toEqual([])
+    expect(after?.recomputeVersion).toBe(before?.recomputeVersion)
+    expect(after?.version).toBeGreaterThan(before?.version ?? 0)
+
+    model.toggleGroup(encodeTreePathGroupKey(["root", "child"]))
+    model.toggleGroup(encodeTreePathGroupKey(["root", "child"]))
+    const afterToggle = model.getRowsInRange({ start: 0, end: 10 })
+    expect((afterToggle[2]?.row as { label?: string })?.label).toBe("Child-updated")
 
     model.dispose()
   })
