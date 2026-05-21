@@ -12,6 +12,8 @@ from app.features.server_demo.schemas import (
     ServerDemoFillCommitRequest,
     ServerDemoFillCommitResponse,
     ServerDemoHistogramResponse,
+    ServerDemoOperationRequest,
+    ServerDemoOperationResponse,
     ServerDemoPullRequest,
     ServerDemoPullResponse,
 )
@@ -31,6 +33,8 @@ class ServerGridDataAdapter(GridDataAdapter, Protocol):
     async def resolve_fill_boundary(self, request: ServerDemoFillBoundaryRequest) -> ServerDemoFillBoundaryResponse: ...
 
     async def commit_fill(self, request: ServerDemoFillCommitRequest) -> ServerDemoFillCommitResponse: ...
+
+    async def execute_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse: ...
 
     async def undo_operation(self, operation_id: str) -> ServerDemoCommitEditsResponse: ...
 

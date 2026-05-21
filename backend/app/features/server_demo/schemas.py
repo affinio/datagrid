@@ -344,6 +344,103 @@ class ServerDemoFillCommitResponse(BaseModel):
     rows: list[ServerDemoRow] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
+class ServerDemoOperationSelection(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    ranges: list[ServerDemoFillRange] = Field(default_factory=list)
+    active_range_index: int | None = Field(default=None, alias="activeRangeIndex")
+    row_ids: list[str] = Field(default_factory=list, alias="rowIds")
+
+
+class ServerDemoOperationPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    format: Literal["tsv", "csv", "internal-json"] = "tsv"
+    text: str | None = None
+    cells: list[list[Any]] = Field(default_factory=list)
+
+
+class ServerDemoOperationExpectedCounts(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    rows: int | None = Field(default=None, ge=0)
+    cells: int | None = Field(default=None, ge=0)
+
+
+class ServerDemoOperationRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    kind: Literal["copy", "cut", "clear", "delete", "paste", "fill", "range-move"]
+    operation_id: str | None = Field(default=None, alias="operationId")
+    workspace_id: str | None = Field(default=None, alias="workspaceId")
+    table_id: str | None = Field(default=None, alias="tableId")
+    user_id: str | None = Field(default=None, alias="userId")
+    session_id: str | None = Field(default=None, alias="sessionId")
+    revision: str | int | None = None
+    base_revision: str | int | None = Field(default=None, alias="baseRevision")
+    projection_hash: str | None = Field(default=None, alias="projectionHash")
+    boundary_token: str | None = Field(default=None, alias="boundaryToken")
+    projection: ServerDemoFillProjectionSnapshot
+    selection: ServerDemoOperationSelection | None = None
+    source_range: ServerDemoFillRange | None = Field(default=None, alias="sourceRange")
+    target_range: ServerDemoFillRange | None = Field(default=None, alias="targetRange")
+    target_ranges: list[ServerDemoFillRange] = Field(default_factory=list, alias="targetRanges")
+    columns: list[str] = Field(default_factory=list)
+    source_columns: list[str] = Field(default_factory=list, alias="sourceColumns")
+    target_columns: list[str] = Field(default_factory=list, alias="targetColumns")
+    payload: ServerDemoOperationPayload | None = None
+    mode: str | None = None
+    expected_counts: ServerDemoOperationExpectedCounts | None = Field(default=None, alias="expectedCounts")
+    source_row_ids: list[str] = Field(default_factory=list, alias="sourceRowIds")
+    target_row_ids: list[str] = Field(default_factory=list, alias="targetRowIds")
+    metadata: dict[str, Any] | None = None
+
+    @model_validator(mode="after")
+    def normalize_scope(self) -> "ServerDemoOperationRequest":
+        self.workspace_id = _normalize_scope_value(self.workspace_id)
+        self.table_id = normalize_server_demo_table_id(self.table_id) or "server_demo"
+        self.user_id = _normalize_scope_value(self.user_id)
+        self.session_id = _normalize_scope_value(self.session_id) or DEFAULT_SERVER_DEMO_SESSION_ID
+        return self
+
+
+class ServerDemoOperationRejection(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    row_index: int | None = Field(default=None, alias="rowIndex")
+    row_id: str | None = Field(default=None, alias="rowId")
+    column_id: str | None = Field(default=None, alias="columnId")
+    column_index: int | None = Field(default=None, alias="columnIndex")
+    reason: str
+
+
+class ServerDemoOperationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    operation_id: str | None = Field(default=None, alias="operationId")
+    status: Literal["committed", "partial", "rejected", "blocked"]
+    payload: ServerDemoOperationPayload | None = None
+    accepted_cells: int = Field(default=0, ge=0, alias="acceptedCells")
+    rejected_cells: int = Field(default=0, ge=0, alias="rejectedCells")
+    blocked_cells: int = Field(default=0, ge=0, alias="blockedCells")
+    skipped_cells: int = Field(default=0, ge=0, alias="skippedCells")
+    materialized_rows: int = Field(default=0, ge=0, alias="materializedRows")
+    rejections: list[ServerDemoOperationRejection] = Field(default_factory=list)
+    affected_rows: int = Field(default=0, ge=0, alias="affectedRows")
+    affected_cells: int = Field(default=0, ge=0, alias="affectedCells")
+    affected_row_count: int = Field(default=0, ge=0, alias="affectedRowCount")
+    affected_cell_count: int = Field(default=0, ge=0, alias="affectedCellCount")
+    revision: str | None = None
+    dataset_version: int = Field(default=0, ge=0, alias="datasetVersion")
+    can_undo: bool = Field(default=False, alias="canUndo")
+    can_redo: bool = Field(default=False, alias="canRedo")
+    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
+    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
+    invalidation: ServerDemoMutationInvalidation | None = None
+    warnings: list[str] = Field(default_factory=list)
+    rows: list[ServerDemoRow] = Field(default_factory=list)
+
+
 class ServerDemoEditItem(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

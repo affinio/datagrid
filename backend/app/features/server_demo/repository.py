@@ -37,6 +37,10 @@ from app.features.server_demo.schemas import (
     ServerDemoMutationCellInvalidation,
     ServerDemoMutationInvalidation,
     ServerDemoMutationRangeInvalidation,
+    ServerDemoOperationPayload,
+    ServerDemoOperationRejection,
+    ServerDemoOperationRequest,
+    ServerDemoOperationResponse,
     ServerDemoPullRequest,
     ServerDemoPullResponse,
     ServerDemoRejectedEdit,
@@ -397,6 +401,335 @@ class ServerDemoRepository(ServerGridDataAdapter):
         }
         response_payload.update(self._history_response_fields(result.history_status))
         return ServerDemoFillCommitResponse(**response_payload)
+
+    async def execute_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        if self._operation_projection_is_grouped(request):
+            return await self._blocked_operation_response(request, "grouped-projection-unsupported")
+
+        if request.kind in {"copy", "cut"}:
+            return await self._execute_copy_operation(request)
+        if request.kind in {"clear", "delete"}:
+            return await self._execute_clear_operation(request)
+        if request.kind == "paste":
+            return await self._execute_paste_operation(request)
+        if request.kind == "range-move":
+            return await self._execute_range_move_operation(request)
+        if request.kind == "fill":
+            return await self._execute_fill_operation(request)
+
+        return await self._blocked_operation_response(request, "unsupported-operation")
+
+    async def _execute_copy_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        source_range = self._operation_source_range(request)
+        if source_range is None:
+            return await self._blocked_operation_response(request, "missing-source-range")
+        columns = self._operation_columns(request.columns)
+        if not columns:
+            return await self._blocked_operation_response(request, "missing-columns")
+        rows = await self._fetch_operation_projected_rows(request.projection, source_range.start_row, source_range.end_row)
+        text = self._serialize_operation_rows(rows, columns)
+        revision = await self._revision.get_revision(self._session)
+        cell_count = len(rows) * len(columns)
+        return ServerDemoOperationResponse(
+            operationId=request.operation_id,
+            status="committed",
+            payload=ServerDemoOperationPayload(format=request.payload.format if request.payload else "tsv", text=text),
+            acceptedCells=cell_count,
+            affectedRows=len(rows),
+            affectedCells=cell_count,
+            affectedRowCount=len(rows),
+            affectedCellCount=cell_count,
+            revision=revision,
+            datasetVersion=self._dataset_version(revision),
+        )
+
+    async def _execute_clear_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        target_range = self._operation_target_range(request)
+        if target_range is None:
+            return await self._blocked_operation_response(request, "missing-target-range")
+        columns = self._operation_columns(request.columns or request.target_columns)
+        if not columns:
+            return await self._blocked_operation_response(request, "missing-columns")
+        rows = await self._fetch_operation_projected_rows(request.projection, target_range.start_row, target_range.end_row)
+        edits = [
+            {
+                "rowId": row.id,
+                "columnId": column_id,
+                "value": self._operation_blank_value(column_id),
+            }
+            for row in rows
+            for column_id in columns
+        ]
+        return await self._commit_operation_edits(request, edits, operation_type="clear")
+
+    async def _execute_paste_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        target_range = self._operation_target_range(request)
+        if target_range is None:
+            return await self._blocked_operation_response(request, "missing-target-range")
+        columns = self._operation_columns(request.columns or request.target_columns)
+        matrix = request.payload.cells if request.payload is not None else []
+        if not columns or not matrix:
+            return await self._blocked_operation_response(request, "missing-paste-payload")
+        rows = await self._fetch_operation_projected_rows(request.projection, target_range.start_row, target_range.end_row)
+        edits: list[dict[str, Any]] = []
+        for row_offset, row in enumerate(rows):
+            source_values = matrix[row_offset % len(matrix)] if matrix else []
+            for column_offset, column_id in enumerate(columns):
+                value = source_values[column_offset % len(source_values)] if source_values else None
+                edits.append({"rowId": row.id, "columnId": column_id, "value": value})
+
+        metadata = request.metadata or {}
+        if metadata.get("pendingOperation") == "cut" and request.source_range is not None:
+            source_columns = self._operation_columns(request.source_columns or columns)
+            source_rows = await self._fetch_operation_projected_rows(
+                request.projection,
+                request.source_range.start_row,
+                request.source_range.end_row,
+            )
+            edits.extend(
+                {
+                    "rowId": row.id,
+                    "columnId": column_id,
+                    "value": self._operation_blank_value(column_id),
+                }
+                for row in source_rows
+                for column_id in source_columns
+            )
+        return await self._commit_operation_edits(request, edits, operation_type="paste")
+
+    async def _execute_range_move_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        if request.source_range is None or request.target_range is None:
+            return await self._blocked_operation_response(request, "missing-range")
+        source_columns = self._operation_columns(request.source_columns or request.columns)
+        target_columns = self._operation_columns(request.target_columns or request.columns)
+        if not source_columns or not target_columns:
+            return await self._blocked_operation_response(request, "missing-columns")
+        source_rows = await self._fetch_operation_projected_rows(
+            request.projection,
+            request.source_range.start_row,
+            request.source_range.end_row,
+        )
+        target_rows = await self._fetch_operation_projected_rows(
+            request.projection,
+            request.target_range.start_row,
+            request.target_range.end_row,
+        )
+        edits: list[dict[str, Any]] = []
+        for row_offset, source_row in enumerate(source_rows):
+            target_row = target_rows[row_offset] if row_offset < len(target_rows) else None
+            if target_row is None:
+                continue
+            for column_offset, source_column in enumerate(source_columns):
+                target_column = target_columns[column_offset] if column_offset < len(target_columns) else target_columns[-1]
+                edits.append({
+                    "rowId": target_row.id,
+                    "columnId": target_column,
+                    "value": self._read_operation_value(source_row, source_column),
+                })
+                edits.append({
+                    "rowId": source_row.id,
+                    "columnId": source_column,
+                    "value": self._operation_blank_value(source_column),
+                })
+        return await self._commit_operation_edits(request, edits, operation_type="range-move")
+
+    async def _execute_fill_operation(self, request: ServerDemoOperationRequest) -> ServerDemoOperationResponse:
+        if request.source_range is None or request.target_range is None:
+            return await self._blocked_operation_response(request, "missing-range")
+        if (request.mode or "copy") == "series":
+            return await self._blocked_operation_response(request, "unsupported-fill-mode")
+        source_row_ids = request.source_row_ids or [
+            row.id
+            for row in await self._fetch_operation_projected_rows(
+                request.projection,
+                request.source_range.start_row,
+                request.source_range.end_row,
+            )
+        ]
+        target_row_ids = request.target_row_ids or [
+            row.id
+            for row in await self._fetch_operation_projected_rows(
+                request.projection,
+                request.target_range.start_row,
+                request.target_range.end_row,
+            )
+        ]
+        fill_columns = self._operation_columns(request.target_columns or request.columns)
+        reference_columns = self._operation_columns(request.source_columns or request.columns)
+        fill_request = ServerDemoFillCommitRequest(
+            operationId=request.operation_id,
+            workspaceId=request.workspace_id,
+            tableId=request.table_id,
+            userId=request.user_id,
+            sessionId=request.session_id,
+            baseRevision=str(request.base_revision) if request.base_revision is not None else None,
+            projectionHash=request.projection_hash,
+            boundaryToken=request.boundary_token,
+            sourceRange=request.source_range.model_dump(by_alias=True),
+            targetRange=request.target_range.model_dump(by_alias=True),
+            sourceRowIds=source_row_ids,
+            targetRowIds=target_row_ids,
+            fillColumns=fill_columns,
+            referenceColumns=reference_columns,
+            mode="copy",
+            projection=request.projection,
+            metadata=request.metadata,
+        )
+        try:
+            fill_response = await self.commit_fill(fill_request)
+        except ApiException as exc:
+            if exc.status_code >= 500:
+                raise
+            return await self._blocked_operation_response(request, exc.code)
+        return self._operation_response_from_fill(request, fill_response)
+
+    async def _commit_operation_edits(
+        self,
+        request: ServerDemoOperationRequest,
+        edits: list[dict[str, Any]],
+        *,
+        operation_type: str,
+    ) -> ServerDemoOperationResponse:
+        if not edits:
+            return await self._blocked_operation_response(request, "empty-operation")
+        edit_request = ServerDemoCommitEditsRequest(
+            operationId=request.operation_id,
+            workspaceId=request.workspace_id,
+            tableId=request.table_id,
+            userId=request.user_id,
+            sessionId=request.session_id,
+            baseRevision=str(request.base_revision) if request.base_revision is not None else None,
+            edits=edits,
+        )
+        try:
+            response = await self.commit_edits(edit_request)
+        except ApiException as exc:
+            if exc.status_code >= 500:
+                raise
+            return await self._blocked_operation_response(request, exc.code)
+        return self._operation_response_from_edits(request, response, operation_type=operation_type)
+
+    def _operation_response_from_edits(
+        self,
+        request: ServerDemoOperationRequest,
+        response: ServerDemoCommitEditsResponse,
+        *,
+        operation_type: str,
+    ) -> ServerDemoOperationResponse:
+        rejected = [
+            ServerDemoOperationRejection(rowId=item.row_id, columnId=item.column_id, reason=item.reason)
+            for item in response.rejected
+        ]
+        status = "committed" if not rejected else "partial" if response.committed else "rejected"
+        return ServerDemoOperationResponse(
+            operationId=response.operation_id or request.operation_id,
+            status=status,
+            acceptedCells=len(response.committed),
+            rejectedCells=len(rejected),
+            affectedRows=response.affected_rows,
+            affectedCells=response.affected_cells,
+            affectedRowCount=response.affected_rows,
+            affectedCellCount=response.affected_cells,
+            rejections=rejected,
+            revision=response.revision,
+            datasetVersion=response.dataset_version,
+            canUndo=response.can_undo,
+            canRedo=response.can_redo,
+            latestUndoOperationId=response.latest_undo_operation_id,
+            latestRedoOperationId=response.latest_redo_operation_id,
+            invalidation=response.invalidation,
+            warnings=[] if status == "committed" else [f"{operation_type} partially rejected"],
+            rows=response.rows,
+        )
+
+    def _operation_response_from_fill(
+        self,
+        request: ServerDemoOperationRequest,
+        response: ServerDemoFillCommitResponse,
+    ) -> ServerDemoOperationResponse:
+        status = "committed" if response.affected_cell_count > 0 else "rejected"
+        return ServerDemoOperationResponse(
+            operationId=response.operation_id or request.operation_id,
+            status=status,
+            acceptedCells=response.affected_cell_count,
+            affectedRows=response.affected_rows,
+            affectedCells=response.affected_cells,
+            affectedRowCount=response.affected_row_count,
+            affectedCellCount=response.affected_cell_count,
+            revision=response.revision,
+            datasetVersion=response.dataset_version,
+            canUndo=response.can_undo,
+            canRedo=response.can_redo,
+            latestUndoOperationId=response.latest_undo_operation_id,
+            latestRedoOperationId=response.latest_redo_operation_id,
+            invalidation=response.invalidation,
+            warnings=response.warnings,
+            rows=response.rows,
+        )
+
+    async def _blocked_operation_response(self, request: ServerDemoOperationRequest, reason: str) -> ServerDemoOperationResponse:
+        revision = await self._revision.get_revision(self._session)
+        return ServerDemoOperationResponse(
+            operationId=request.operation_id,
+            status="blocked",
+            revision=revision,
+            datasetVersion=self._dataset_version(revision),
+            warnings=[reason],
+            rejections=[ServerDemoOperationRejection(reason=reason)],
+        )
+
+    def _operation_projection_is_grouped(self, request: ServerDemoOperationRequest) -> bool:
+        projection = request.projection
+        return bool(projection.group_by or projection.tree_data or projection.pivot)
+
+    def _operation_source_range(self, request: ServerDemoOperationRequest):
+        if request.source_range is not None:
+            return request.source_range
+        if request.selection and request.selection.ranges:
+            return request.selection.ranges[request.selection.active_range_index or 0]
+        return None
+
+    def _operation_target_range(self, request: ServerDemoOperationRequest):
+        if request.target_range is not None:
+            return request.target_range
+        if request.target_ranges:
+            return request.target_ranges[0]
+        if request.selection and request.selection.ranges:
+            return request.selection.ranges[request.selection.active_range_index or 0]
+        return None
+
+    def _operation_columns(self, columns: list[str]) -> list[str]:
+        return [
+            column_id
+            for column_id in dict.fromkeys(column.strip() for column in columns if column and column.strip())
+            if SERVER_DEMO_TABLE.column(column_id) is not None
+        ]
+
+    def _operation_blank_value(self, column_id: str) -> Any:
+        definition = SERVER_DEMO_TABLE.column(column_id)
+        if definition is not None and definition.value_type == "integer":
+            return None
+        return ""
+
+    def _read_operation_value(self, row: GridDemoRowModel, column_id: str) -> Any:
+        return getattr(row, SERVER_DEMO_TABLE.model_attr(column_id))
+
+    def _serialize_operation_rows(self, rows: list[GridDemoRowModel], columns: list[str]) -> str:
+        return "\n".join(
+            "\t".join("" if (value := self._read_operation_value(row, column_id)) is None else str(value) for column_id in columns)
+            for row in rows
+        )
+
+    async def _fetch_operation_projected_rows(
+        self,
+        projection: Any,
+        start_row: int,
+        end_row: int,
+    ) -> list[GridDemoRowModel]:
+        if end_row < start_row:
+            return []
+        stmt = self._fill.build_projected_query(self._session, projection).offset(start_row).limit(end_row - start_row + 1)
+        return list((await self._session.scalars(stmt)).all())
 
     async def _count_rows_with_policy(self, conditions: list[Any], max_rows: int | None) -> int:
         total = await self._projection.count_rows(self._session, conditions)

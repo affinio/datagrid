@@ -16,6 +16,8 @@ from app.features.server_demo.schemas import (
     ServerDemoHealthResponse,
     ServerDemoHistogramRequest,
     ServerDemoHistogramResponse,
+    ServerDemoOperationRequest,
+    ServerDemoOperationResponse,
     ServerDemoPullRequest,
     ServerDemoPullResponse,
 )
@@ -86,6 +88,14 @@ async def commit_fill(
     repository: ServerGridDataAdapter = Depends(get_server_demo_repository),
 ) -> ServerDemoFillCommitResponse:
     return await repository.commit_fill(request)
+
+
+@router.post("/operations/execute", response_model=ServerDemoOperationResponse)
+async def execute_operation(
+    request: ServerDemoOperationRequest,
+    repository: ServerGridDataAdapter = Depends(get_server_demo_repository),
+) -> ServerDemoOperationResponse:
+    return await repository.execute_operation(request)
 
 
 @router.post("/operations/{operation_id}/undo", response_model=ServerDemoCommitEditsResponse)

@@ -9,6 +9,7 @@ import type {
 import { shouldRefreshHistoryStatusAfterCommit } from "./serverDemoHistoryState"
 
 type ServerDemoHttpFillDatasource = {
+  executeOperation?: NonNullable<DataGridDataSource<ServerDemoRow>["executeOperation"]>
   resolveFillBoundary?: NonNullable<DataGridDataSource<ServerDemoRow>["resolveFillBoundary"]>
   commitFillOperation?: (request: ServerDemoFillOperationRequest) => Promise<ServerDemoFillOperationResult>
   undoFillOperation?: (request: ServerDemoUndoFillRequest) => Promise<ServerDemoUndoFillResult>
@@ -32,13 +33,15 @@ export function createServerDemoDatasourceHttpFillDataSource(
   }
 
   const { httpDatasource, fallbackDataSource } = options
+  const executeOperation = httpDatasource.executeOperation
   const resolveFillBoundary = httpDatasource.resolveFillBoundary
   const commitFillOperation = httpDatasource.commitFillOperation
   const undoFillOperation = httpDatasource.undoFillOperation
   const redoFillOperation = httpDatasource.redoFillOperation
 
   if (
-    typeof resolveFillBoundary !== "function"
+    typeof executeOperation !== "function"
+    && typeof resolveFillBoundary !== "function"
     && typeof commitFillOperation !== "function"
     && typeof undoFillOperation !== "function"
     && typeof redoFillOperation !== "function"
@@ -48,6 +51,19 @@ export function createServerDemoDatasourceHttpFillDataSource(
 
   return {
     ...fallbackDataSource,
+    async executeOperation(request) {
+      if (typeof executeOperation !== "function") {
+        if (typeof fallbackDataSource.executeOperation === "function") {
+          return await fallbackDataSource.executeOperation(request)
+        }
+        throw new Error("Server demo HTTP adapter does not implement executeOperation")
+      }
+      const result = await executeOperation(request)
+      if (shouldRefreshHistoryStatusAfterCommit(result)) {
+        await options.refreshHistoryStatus?.()
+      }
+      return result
+    },
     async resolveFillBoundary(request) {
       if (typeof resolveFillBoundary !== "function") {
         if (typeof fallbackDataSource.resolveFillBoundary === "function") {

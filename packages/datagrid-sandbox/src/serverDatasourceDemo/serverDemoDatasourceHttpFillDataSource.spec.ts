@@ -74,6 +74,43 @@ function createProjection() {
 }
 
 describe("createServerDemoDatasourceHttpFillDataSource", () => {
+  it("forwards unified server operations when HTTP mode is enabled", async () => {
+    const fallback = createFallbackDataSource()
+    const refreshHistoryStatus = vi.fn()
+    const httpExecuteOperation = vi.fn(async () => ({
+      operationId: "clear-123",
+      status: "committed" as const,
+      acceptedCells: 2,
+      affectedCells: 2,
+      affectedRows: 1,
+      canUndo: true,
+      canRedo: false,
+      latestUndoOperationId: "clear-123",
+      latestRedoOperationId: null,
+      invalidation: { kind: "range" as const, range: { start: 10, end: 11 } },
+    }))
+    const dataSource = createServerDemoDatasourceHttpFillDataSource({
+      enabled: true,
+      fallbackDataSource: fallback,
+      httpDatasource: {
+        executeOperation: httpExecuteOperation,
+      },
+      refreshHistoryStatus,
+    })
+
+    const result = await dataSource.executeOperation!({
+      kind: "clear",
+      operationId: "clear-123",
+      projection: createProjection(),
+      targetRange: { startRow: 10, endRow: 11, startColumn: 2, endColumn: 2 },
+      columns: ["status"],
+    })
+
+    expect(httpExecuteOperation).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ operationId: "clear-123", status: "committed" })
+    expect(refreshHistoryStatus).not.toHaveBeenCalled()
+  })
+
   it("uses HTTP fill methods when HTTP mode is enabled", async () => {
     const fallback = createFallbackDataSource()
     const refreshHistoryStatus = vi.fn()

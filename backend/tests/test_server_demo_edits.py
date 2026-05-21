@@ -373,6 +373,78 @@ async def test_server_demo_batch_edit_persists(client: AsyncClient) -> None:
     assert row_21["region"] == "LATAM"
 
 
+async def test_server_demo_execute_operation_clears_unloaded_range(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/operations/execute",
+        json={
+            **server_demo_history_scope(),
+            "kind": "clear",
+            "operationId": "execute-clear-31",
+            "projection": create_fill_projection_payload(),
+            "targetRange": {"startRow": 31, "endRow": 32, "startColumn": 2, "endColumn": 2},
+            "columns": ["status"],
+            "expectedCounts": {"rows": 2, "cells": 2},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == "execute-clear-31"
+    assert body["status"] == "committed"
+    assert body["acceptedCells"] == 2
+    assert body["affectedRows"] == 2
+    assert body["affectedCells"] == 2
+    assert body["canUndo"] is True
+    assert body["invalidation"]["type"] == "cell"
+
+    row = await pull_row(client, 31)
+    assert row["status"] == ""
+
+
+async def test_server_demo_execute_operation_copies_unloaded_range(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/server-demo/operations/execute",
+        json={
+            "kind": "copy",
+            "operationId": "execute-copy-33",
+            "projection": create_fill_projection_payload(),
+            "sourceRange": {"startRow": 33, "endRow": 34, "startColumn": 0, "endColumn": 1},
+            "columns": ["name", "status"],
+            "payload": {"format": "tsv"},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["operationId"] == "execute-copy-33"
+    assert body["status"] == "committed"
+    assert body["payload"]["format"] == "tsv"
+    assert "Account" in body["payload"]["text"]
+    assert "\t" in body["payload"]["text"]
+    assert body["acceptedCells"] == 4
+
+
+async def test_server_demo_execute_operation_blocks_grouped_projection(client: AsyncClient) -> None:
+    projection = create_fill_projection_payload()
+    projection["groupBy"] = {"fields": ["region"]}
+
+    response = await client.post(
+        "/api/server-demo/operations/execute",
+        json={
+            "kind": "clear",
+            "operationId": "execute-group-blocked",
+            "projection": projection,
+            "targetRange": {"startRow": 0, "endRow": 1, "startColumn": 1, "endColumn": 1},
+            "columns": ["status"],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "blocked"
+    assert body["warnings"] == ["grouped-projection-unsupported"]
+
+
 async def test_server_demo_large_batch_edit_persists_with_range_invalidation(client: AsyncClient) -> None:
     edits = [
         {
