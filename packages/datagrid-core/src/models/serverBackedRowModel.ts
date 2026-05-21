@@ -693,10 +693,20 @@ export function createServerBackedRowModel<T>(
     }
 
     const normalized = normalizeRowNode({
+      kind: "leaf",
+      data: row,
       row,
+      rowKey: rowId,
       rowId,
+      sourceIndex,
       originalIndex: sourceIndex,
       displayIndex: index,
+      state: {
+        selected: false,
+        group: false,
+        pinned: "none",
+        expanded: false,
+      },
     }, sourceIndex)
     writeRowCache(sourceIndex, normalized)
     return normalized

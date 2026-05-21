@@ -40,6 +40,7 @@ Completed:
 - Extracted formula table patching and context invalidation into `clientRowFormulaTableHostRuntime`.
 - Moved materialized source-row cache ownership into `clientRowMaterializationRuntime`.
 - Moved calculation snapshot restore orchestration into `clientRowCalculationSnapshotRestoreRuntime`.
+- Extracted column histogram read-policy into `clientRowColumnHistogramRuntime`.
 
 Next candidates:
 

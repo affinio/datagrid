@@ -61,10 +61,10 @@ import { createClientRowLifecycle } from "./clientRowLifecycle.js"
 import { createClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
 import type { ClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
 import {
-  buildColumnHistogram,
   createFilterPredicate,
   normalizeText,
 } from "./projection/clientRowProjectionPrimitives.js"
+import { createClientRowColumnHistogramRuntime } from "./projection/clientRowColumnHistogramRuntime.js"
 import {
   applyRowDataPatch,
   mergeRowPatch,
@@ -396,6 +396,15 @@ export function createClientRowModel<T>(
     sort: runtimeState.sortRevision,
     filter: runtimeState.filterRevision,
     group: runtimeState.groupRevision,
+  })
+  const columnHistogramRuntime = createClientRowColumnHistogramRuntime<T>({
+    ensureActive: () => lifecycle.ensureActive(),
+    getBaseSourceRows,
+    getFilteredRowsProjection: () => runtimeState.filteredRowsProjection,
+    readProjectionRowField: (row, key, field) => readProjectionRowField(row, key, field),
+    readFilterCell: options.readFilterCell,
+    readFilterCellStyle: options.readFilterCellStyle,
+    resolveFilterPredicate: filterOptions => derivedCacheRuntime.resolveFilterPredicate(filterOptions),
   })
   const groupByIncrementalAggregationState = projectionTransientStateRuntime.getGroupByIncrementalAggregationState()
   const computedRegistryRef: { current: ClientRowComputedRegistryRuntime<T> | null } = {
@@ -1081,46 +1090,7 @@ export function createClientRowModel<T>(
       return cloneAggregationModel(viewStateRuntime.getAggregationModel())
     },
     getColumnHistogram(columnId: string, histogramOptions?: DataGridColumnHistogramOptions) {
-      ensureActive()
-      const normalizedColumnId = columnId.trim()
-      if (normalizedColumnId.length === 0) {
-        return []
-      }
-
-      const scope = histogramOptions?.scope ?? "filtered"
-      if (scope === "sourceAll") {
-        return buildColumnHistogram(getBaseSourceRows(), normalizedColumnId, histogramOptions, {
-          readField: readProjectionRowField,
-          readFilterCell: options.readFilterCell,
-          readFilterCellStyle: options.readFilterCellStyle,
-        })
-      }
-
-      if (histogramOptions?.ignoreSelfFilter === true) {
-        const filterPredicate = derivedCacheRuntime.resolveFilterPredicate({ ignoreColumnFilterKey: normalizedColumnId })
-        const rowsForHistogram: DataGridRowNode<T>[] = []
-        for (const row of getBaseSourceRows()) {
-          if (filterPredicate(row)) {
-            rowsForHistogram.push(row)
-          }
-        }
-        return buildColumnHistogram(rowsForHistogram, normalizedColumnId, histogramOptions, {
-          readField: readProjectionRowField,
-          readFilterCell: options.readFilterCell,
-          readFilterCellStyle: options.readFilterCellStyle,
-        })
-      }
-
-      return buildColumnHistogram(
-        runtimeState.filteredRowsProjection,
-        normalizedColumnId,
-        histogramOptions,
-        {
-          readField: readProjectionRowField,
-          readFilterCell: options.readFilterCell,
-          readFilterCellStyle: options.readFilterCellStyle,
-        },
-      )
+      return columnHistogramRuntime.getColumnHistogram(columnId, histogramOptions)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       mutationHostRuntime.setGroupExpansion(expansion)

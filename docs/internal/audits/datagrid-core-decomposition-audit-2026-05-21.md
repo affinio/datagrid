@@ -211,6 +211,7 @@ Validation target:
   - `2026-05-21`: formula table patching/context invalidation moved into `clientRowFormulaTableHostRuntime`; next work should continue removing local domain policy without changing `ClientRowModel`.
   - `2026-05-21`: materialized source-row cache ownership moved into `clientRowMaterializationRuntime`; `clientRowModel` now delegates source-row materialization cache reads.
   - `2026-05-21`: calculation snapshot restore orchestration moved into `clientRowCalculationSnapshotRestoreRuntime`; `clientRowModel` now wires restore dependencies instead of owning restore policy.
+  - `2026-05-21`: column histogram scope/read-policy moved into `clientRowColumnHistogramRuntime`; `clientRowModel` now delegates histogram reads.
 - `packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts`: consider splitting row/batch/columnar execution paths if compute work expands.
 - `packages/datagrid-core/src/models/rowModel.ts`: types plus tree/group/pagination/normalization helpers; split helper modules before adding more row-model helpers.
 - `packages/datagrid-core/src/models/columnModel.ts`: watch for pin/order/visibility/width groups growing into separate owners.
