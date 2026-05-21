@@ -246,8 +246,74 @@ describe("WorldMapSvg", () => {
     expect(markerElements[0]?.attributes("data-marker-id")).toBe("london")
     expect(markerElements[0]?.attributes("data-marker-variant")).toBe("success")
     expect(markerElements[0]?.classes()).toContain("world-map-svg__marker--variant-success")
-    expect(markerElements[0]?.attributes("cx")).toBe("179.8724")
-    expect(markerElements[0]?.attributes("cy")).toBe("38.4928")
+    expect(markerElements[0]?.attributes("transform")).toBe("translate(179.8724 38.4928)")
+    expect(markerElements[0]?.find(".world-map-svg__marker-shape").attributes("r")).toBe("4")
+  })
+
+  it("applies per-marker class and style to the default marker shape", () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers: [
+          {
+            ...markers[0],
+            class: "custom-marker",
+            style: { "--affino-world-map-marker-selected-fill": "rgb(1, 2, 3)" },
+          },
+        ],
+      },
+    })
+
+    const shape = wrapper.find(".world-map-svg__marker-shape")
+    expect(shape.classes()).toContain("custom-marker")
+    expect(shape.attributes("style")).toContain("--affino-world-map-marker-selected-fill")
+  })
+
+  it("exposes projected marker slot context and falls back to the default shape", async () => {
+    const wrapper = mount(WorldMapSvg, {
+      props: {
+        paths,
+        markers: [
+          {
+            ...markers[0],
+            class: "custom-marker",
+            style: { "--marker-accent": "rgb(255, 0, 128)" },
+          },
+        ],
+        selectedMarkerId: "london",
+      },
+      slots: {
+        marker: `
+          <template #marker="{ marker, radius, selected, hovered, variant, markerClass, markerStyle }">
+            <g
+              class="marker-slot"
+              :data-marker-id="marker.id"
+              :data-radius="String(radius)"
+              :data-selected="String(selected)"
+              :data-hovered="String(hovered)"
+              :data-variant="variant"
+              :class="markerClass"
+              :style="markerStyle"
+            >
+              <circle class="marker-slot__ring" :r="radius + 3" />
+            </g>
+          </template>
+        `,
+      },
+    })
+
+    const slotMarker = wrapper.find(".marker-slot")
+    expect(slotMarker.exists()).toBe(true)
+    expect(slotMarker.attributes("data-selected")).toBe("true")
+    expect(slotMarker.attributes("data-hovered")).toBe("false")
+    expect(slotMarker.attributes("data-variant")).toBe("success")
+    expect(slotMarker.classes()).toContain("custom-marker")
+    expect(slotMarker.attributes("style")).toContain("--marker-accent")
+    expect(wrapper.find(".world-map-svg__marker-shape").exists()).toBe(false)
+
+    await wrapper.find('[data-marker-id="london"]').trigger("mouseenter")
+    await nextTick()
+    expect(wrapper.find(".marker-slot").attributes("data-hovered")).toBe("true")
   })
 
   it("does not render markers when marker rendering is disabled", () => {
@@ -352,13 +418,14 @@ describe("WorldMapSvg", () => {
       },
     })
     const marker = wrapper.find('[data-marker-id="london"]')
+    const shape = marker.find(".world-map-svg__marker-shape")
 
-    expect(marker.attributes("r")).toBe("4")
+    expect(shape.attributes("r")).toBe("4")
 
     await findButtonByText(wrapper, "Zoom in")?.trigger("click")
     await nextTick()
 
-    expect(marker.attributes("r")).toBe("3.2")
+    expect(shape.attributes("r")).toBe("3.2")
   })
 
   it("scales marker radius with the map in map scale mode", async () => {
@@ -371,11 +438,12 @@ describe("WorldMapSvg", () => {
       },
     })
     const marker = wrapper.find('[data-marker-id="london"]')
+    const shape = marker.find(".world-map-svg__marker-shape")
 
     await findButtonByText(wrapper, "Zoom in")?.trigger("click")
     await nextTick()
 
-    expect(marker.attributes("r")).toBe("4")
+    expect(shape.attributes("r")).toBe("4")
   })
 
   it("applies choropleth value fill only to countries with finite values", () => {

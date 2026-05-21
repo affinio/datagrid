@@ -8,7 +8,11 @@ Reusable Vue SVG world map components for Affino.
 
 ```ts
 import { WorldMapSvg } from "@affino/world-map-vue"
-import type { WorldMapMarker, WorldMapMarkerInteraction } from "@affino/world-map-vue"
+import type {
+  WorldMapMarker,
+  WorldMapMarkerInteraction,
+  WorldMapMarkerRenderContext,
+} from "@affino/world-map-vue"
 ```
 
 `WorldMapSvg` renders `WorldMapPathFeature[]` as SVG country paths and provides local hover, selection, keyboard, zoom, and pan interactions.
@@ -86,6 +90,8 @@ interface WorldMapMarker {
   label?: string
   value?: number
   variant?: "default" | "success" | "warning" | "danger" | "muted"
+  class?: string | string[] | Record<string, boolean | undefined> | null | undefined
+  style?: string | Record<string, string | number | undefined> | null | undefined
   properties?: Record<string, unknown>
 }
 ```
@@ -104,6 +110,28 @@ interface WorldMapMarkerInteraction {
 `svgPoint` is the rendered SVG coordinate after the current zoom/pan transform. `clientPoint` is the center of the marker element in viewport coordinates. `anchorRect` is a plain object copied from the marker element bounding rect and can be used as a virtual anchor for application-owned popovers.
 
 Markers are projected with the same fixed equirectangular viewport as the country paths and render above countries inside the zoom/pan layer. The optional `variant` field provides generic visual states for dashboards, GPS tracking, analytics, auctions, and similar overlays without imposing a domain-specific schema.
+
+
+## Marker Slots And Custom Styling
+
+Markers accept per-item `class` and `style` overrides. Those values are applied to the default marker shape, and the component also exposes a typed `marker` slot so consumers can render custom SVG content for each point without DOM geometry workarounds.
+
+```vue
+<WorldMapSvg :paths="pathFeatures" :markers="markers">
+  <template #marker="{ radius, selected, hovered, variant, markerClass, markerStyle }">
+    <g>
+      <circle
+        :r="radius"
+        :class="[markerClass, `marker-${variant}`, { 'marker--selected': selected, 'marker--hovered': hovered }]"
+        :style="markerStyle"
+      />
+      <circle v-if="selected" :r="radius + 8" class="marker-pulse" />
+    </g>
+  </template>
+</WorldMapSvg>
+```
+
+The slot context is typed as `WorldMapMarkerRenderContext` and includes the current marker, projected `x`/`y`, rendered `radius`, `selected` and `hovered` state, current `variant`, and the marker's base `class`/`style` values. When no slot is provided, `WorldMapSvg` falls back to the default `<circle>` rendering.
 
 ## SVG Render Layers
 

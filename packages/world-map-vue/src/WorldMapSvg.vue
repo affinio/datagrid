@@ -68,28 +68,40 @@
             pointer-events="none"
           ></g>
           <g class="world-map-svg__marker-layer">
-            <circle
+            <g
               v-for="marker in projectedMarkers"
               :key="marker.marker.id"
               class="world-map-svg__marker"
               :data-marker-id="marker.marker.id"
               :data-marker-label="marker.marker.label"
-              :data-marker-variant="markerVariant(marker.marker)"
+              :data-marker-variant="marker.variant"
               :class="{
-                'world-map-svg__marker--hovered': marker.marker.id === hoveredMarkerId,
-                'world-map-svg__marker--selected': marker.marker.id === resolvedSelectedMarkerId,
-                [`world-map-svg__marker--variant-${markerVariant(marker.marker)}`]: true,
+                'world-map-svg__marker--hovered': marker.hovered,
+                'world-map-svg__marker--selected': marker.selected,
+                [`world-map-svg__marker--variant-${marker.variant}`]: true,
               }"
-              :cx="marker.x"
-              :cy="marker.y"
-              :r="markerVisualRadius"
+              :transform="`translate(${marker.x} ${marker.y})`"
               tabindex="0"
               @mouseenter="handleMarkerMouseEnter($event, marker)"
               @mouseleave="handleMarkerMouseLeave($event, marker)"
               @click.stop="handleMarkerClick($event, marker)"
               @keydown.enter.prevent="handleMarkerKeyboardActivate($event, marker)"
               @keydown.space.prevent="handleMarkerKeyboardActivate($event, marker)"
-            />
+            >
+              <slot
+                name="marker"
+                v-bind="getMarkerRenderContext(marker)"
+              >
+                <circle
+                  class="world-map-svg__marker-shape"
+                  :class="marker.marker.class"
+                  :style="marker.marker.style"
+                  cx="0"
+                  cy="0"
+                  :r="marker.radius"
+                />
+              </slot>
+            </g>
           </g>
           <g
             class="world-map-svg__overlay-layer"
@@ -116,6 +128,7 @@ import type {
   WorldMapAnchorRect,
   WorldMapMarker,
   WorldMapMarkerInteraction,
+  WorldMapMarkerRenderContext,
   WorldMapMarkerScaleMode,
   WorldMapMarkerVariant,
 } from "./types"
@@ -135,12 +148,20 @@ interface WorldMapViewState {
 
 interface ProjectedWorldMapMarker extends WorldMapScreenPoint {
   marker: WorldMapMarker
+  radius: number
+  selected: boolean
+  hovered: boolean
+  variant: WorldMapMarkerVariant
 }
 
 interface WorldMapValueDomain {
   min: number
   max: number
 }
+
+defineSlots<{
+  marker?(props: WorldMapMarkerRenderContext): unknown
+}>()
 
 const props = withDefaults(defineProps<{
   paths: WorldMapPathFeature[]
@@ -277,8 +298,8 @@ const projectedMarkers = computed<ProjectedWorldMapMarker[]>(() => {
     return []
   }
 
-  return props.markers.map((marker) => ({
-    ...projectWorldMapPosition({
+  return props.markers.map((marker) => {
+    const projectedPoint = projectWorldMapPosition({
       lon: marker.lon,
       lat: marker.lat,
     }, {
@@ -287,9 +308,17 @@ const projectedMarkers = computed<ProjectedWorldMapMarker[]>(() => {
         height: resolvedHeight.value,
       },
       projection: "equirectangular",
-    }),
-    marker,
-  }))
+    })
+
+    return {
+      ...projectedPoint,
+      marker,
+      radius: markerVisualRadius.value,
+      selected: marker.id === resolvedSelectedMarkerId.value,
+      hovered: marker.id === hoveredMarkerId.value,
+      variant: markerVariant(marker),
+    }
+  })
 })
 
 onMounted(() => {
@@ -607,6 +636,20 @@ function markerVariant(marker: WorldMapMarker): WorldMapMarkerVariant {
   return marker.variant ?? "default"
 }
 
+function getMarkerRenderContext(marker: ProjectedWorldMapMarker): WorldMapMarkerRenderContext {
+  return {
+    marker: marker.marker,
+    x: marker.x,
+    y: marker.y,
+    radius: marker.radius,
+    selected: marker.selected,
+    hovered: marker.hovered,
+    variant: marker.variant,
+    markerClass: marker.marker.class,
+    markerStyle: marker.marker.style,
+  }
+}
+
 function createMarkerInteraction(
   marker: ProjectedWorldMapMarker,
   currentTarget: EventTarget | null,
@@ -801,43 +844,47 @@ function anchorRectFromTarget(currentTarget: EventTarget | null): WorldMapAnchor
 }
 
 .world-map-svg__marker {
+  cursor: pointer;
+  outline: none;
+}
+
+.world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-fill);
   stroke: var(--affino-world-map-marker-stroke);
   stroke-width: 1.5;
   outline: none;
   vector-effect: non-scaling-stroke;
-  cursor: pointer;
   transition: fill 120ms ease, stroke 120ms ease;
 }
 
-.world-map-svg__marker--variant-success {
+.world-map-svg__marker--variant-success .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-success-fill);
 }
 
-.world-map-svg__marker--variant-warning {
+.world-map-svg__marker--variant-warning .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-warning-fill);
 }
 
-.world-map-svg__marker--variant-danger {
+.world-map-svg__marker--variant-danger .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-danger-fill);
 }
 
-.world-map-svg__marker--variant-muted {
+.world-map-svg__marker--variant-muted .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-muted-fill);
 }
 
-.world-map-svg__marker:hover,
-.world-map-svg__marker--hovered {
+.world-map-svg__marker:hover .world-map-svg__marker-shape,
+.world-map-svg__marker--hovered .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-hover-fill);
 }
 
-.world-map-svg__marker--selected {
+.world-map-svg__marker--selected .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-selected-fill);
   stroke: var(--affino-world-map-marker-selected-stroke);
 }
 
-.world-map-svg__marker--selected:hover,
-.world-map-svg__marker--selected.world-map-svg__marker--hovered {
+.world-map-svg__marker--selected:hover .world-map-svg__marker-shape,
+.world-map-svg__marker--selected.world-map-svg__marker--hovered .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-selected-fill);
   stroke: var(--affino-world-map-marker-selected-stroke);
 }
@@ -847,7 +894,7 @@ function anchorRectFromTarget(currentTarget: EventTarget | null): WorldMapAnchor
   outline: none;
 }
 
-.world-map-svg__marker:focus-visible {
+.world-map-svg__marker:focus-visible .world-map-svg__marker-shape {
   fill: var(--affino-world-map-marker-hover-fill);
   stroke: var(--affino-world-map-marker-focus-stroke);
   stroke-width: 2;

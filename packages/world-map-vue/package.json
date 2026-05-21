@@ -1,6 +1,6 @@
 {
   "name": "@affino/world-map-vue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Reusable Vue SVG world map component for Affino",
