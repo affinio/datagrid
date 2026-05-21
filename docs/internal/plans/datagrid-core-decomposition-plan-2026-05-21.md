@@ -38,11 +38,11 @@ Rules:
 Completed:
 
 - Extracted formula table patching and context invalidation into `clientRowFormulaTableHostRuntime`.
+- Moved materialized source-row cache ownership into `clientRowMaterializationRuntime`.
 
 Next candidates:
 
 - Move calculation snapshot restore orchestration behind snapshot host runtime if its inputs can stay explicit.
-- Move materialized source-row cache ownership into materialization runtime.
 - Move row-model public facade method groups into narrow host delegates only where this reduces local branching.
 
 Validation target:

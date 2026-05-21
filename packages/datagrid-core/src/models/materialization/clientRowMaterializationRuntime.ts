@@ -25,6 +25,8 @@ export interface CreateClientRowMaterializationRuntimeOptions<T> {
 
 export interface DataGridClientRowMaterializationRuntime<T> {
   refreshMaterializedSourceRows(changedRowIds?: readonly DataGridRowId[]): void
+  getMaterializedSourceRows(rowRevision: number): readonly DataGridRowNode<T>[]
+  clearMaterializedSourceRowsCache(): void
   materializeBaseRowAtIndex(rowIndex: number): DataGridRowNode<T> | undefined
   materializeOutputRow(rowNode: DataGridRowNode<T> | undefined): DataGridRowNode<T> | undefined
   materializeOutputRows(rows: readonly DataGridRowNode<T>[]): DataGridRowNode<T>[]
@@ -40,6 +42,8 @@ export function createClientRowMaterializationRuntime<T>(
   options: CreateClientRowMaterializationRuntimeOptions<T>,
 ): DataGridClientRowMaterializationRuntime<T> {
   const projectionRowFieldReaderCache = new Map<string, (row: DataGridRowNode<T>) => unknown>()
+  let materializedSourceRowsCacheRevision = -1
+  let materializedSourceRowsCache: readonly DataGridRowNode<T>[] = []
 
   const refreshMaterializedSourceRows = (
     changedRowIds?: readonly DataGridRowId[],
@@ -72,6 +76,30 @@ export function createClientRowMaterializationRuntime<T>(
     }
     const baseRow = baseSourceRows[rowIndex]
     return baseRow ? options.materializeRow(baseRow) : undefined
+  }
+
+  const getMaterializedSourceRows = (rowRevision: number): readonly DataGridRowNode<T>[] => {
+    if (materializedSourceRowsCacheRevision === rowRevision) {
+      return materializedSourceRowsCache
+    }
+    const baseSourceRows = options.getBaseSourceRows()
+    if (baseSourceRows.length === 0) {
+      materializedSourceRowsCache = []
+      materializedSourceRowsCacheRevision = rowRevision
+      return materializedSourceRowsCache
+    }
+    const materializedRows = new Array<DataGridRowNode<T>>(baseSourceRows.length)
+    for (let index = 0; index < baseSourceRows.length; index += 1) {
+      materializedRows[index] = materializeBaseRowAtIndex(index) ?? baseSourceRows[index] as DataGridRowNode<T>
+    }
+    materializedSourceRowsCache = materializedRows
+    materializedSourceRowsCacheRevision = rowRevision
+    return materializedSourceRowsCache
+  }
+
+  const clearMaterializedSourceRowsCache = (): void => {
+    materializedSourceRowsCache = []
+    materializedSourceRowsCacheRevision = -1
   }
 
   const materializeOutputRow = (
@@ -125,6 +153,8 @@ export function createClientRowMaterializationRuntime<T>(
 
   return {
     refreshMaterializedSourceRows,
+    getMaterializedSourceRows,
+    clearMaterializedSourceRowsCache,
     materializeBaseRowAtIndex,
     materializeOutputRow,
     materializeOutputRows,

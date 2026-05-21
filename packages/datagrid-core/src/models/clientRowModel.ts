@@ -557,26 +557,9 @@ export function createClientRowModel<T>(
   const materializeBaseRowAtIndex = (rowIndex: number): DataGridRowNode<T> | null => {
     return materializationRuntime.materializeBaseRowAtIndex(rowIndex) ?? null
   }
-  let materializedSourceRowsCacheRevision = -1
-  let materializedSourceRowsCache: readonly DataGridRowNode<T>[] = []
   let formulaStructureRevision = 0
   const getMaterializedSourceRows = (): readonly DataGridRowNode<T>[] => {
-    if (materializedSourceRowsCacheRevision === runtimeState.rowRevision) {
-      return materializedSourceRowsCache
-    }
-    const baseSourceRows = getBaseSourceRows()
-    if (baseSourceRows.length === 0) {
-      materializedSourceRowsCache = []
-      materializedSourceRowsCacheRevision = runtimeState.rowRevision
-      return materializedSourceRowsCache
-    }
-    const materializedRows = new Array<DataGridRowNode<T>>(baseSourceRows.length)
-    for (let index = 0; index < baseSourceRows.length; index += 1) {
-      materializedRows[index] = materializeBaseRowAtIndex(index) ?? baseSourceRows[index] as DataGridRowNode<T>
-    }
-    materializedSourceRowsCache = materializedRows
-    materializedSourceRowsCacheRevision = runtimeState.rowRevision
-    return materializedSourceRowsCache
+    return materializationRuntime.getMaterializedSourceRows(runtimeState.rowRevision)
   }
   const materializeOutputRow = materializationRuntime.materializeOutputRow
   const materializeOutputRows = materializationRuntime.materializeOutputRows
@@ -1187,8 +1170,7 @@ export function createClientRowModel<T>(
       runtimeState.pivotedRowsProjection = []
       runtimeState.aggregatedRowsProjection = []
       runtimeState.paginatedRowsProjection = []
-      materializedSourceRowsCache = []
-      materializedSourceRowsCacheRevision = -1
+      materializationRuntime.clearMaterializedSourceRowsCache()
       resetPivotColumns()
       rowVersionRuntime.clear()
       projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()
