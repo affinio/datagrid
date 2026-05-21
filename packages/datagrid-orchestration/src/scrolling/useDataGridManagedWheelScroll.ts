@@ -29,8 +29,6 @@ export interface UseDataGridManagedWheelScrollOptions {
   resolveStopImmediatePropagation?: () => boolean
   resolveWheelPropagationMode?: () => DataGridWheelPropagationMode
   resolveShouldPropagateWheelEvent?: (result: DataGridWheelConsumptionResult) => boolean
-  /** @deprecated Use resolvePreventDefaultWhenHandled */
-  resolvePreventDefaultWhenConsumed?: () => boolean
   resolveMinDeltaToApply?: () => number
   resolveWheelPageSizeY?: () => number
   resolveWheelPageSizeX?: () => number
@@ -78,9 +76,7 @@ export function useDataGridManagedWheelScroll(
 ): UseDataGridManagedWheelScrollResult {
   const resolveWheelMode = options.resolveWheelMode ?? (() => "managed" as const)
   const resolveAxisLock = options.resolveWheelAxisLockMode ?? (() => "dominant" as const)
-  const resolvePreventDefaultWhenHandled = options.resolvePreventDefaultWhenHandled
-    ?? options.resolvePreventDefaultWhenConsumed
-    ?? (() => true)
+  const resolvePreventDefaultWhenHandled = options.resolvePreventDefaultWhenHandled ?? (() => true)
   const resolveStopImmediatePropagation = options.resolveStopImmediatePropagation ?? (() => false)
   const resolveWheelPropagationMode = options.resolveWheelPropagationMode ?? (() => "retain" as const)
   const deltaPipeline = createDataGridManagedScrollDeltaPipeline({

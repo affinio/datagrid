@@ -152,12 +152,4 @@ describe("datagrid-worker postMessage transport", () => {
 
     transport.dispose()
   })
-
-  it("keeps backward compatibility for legacy direct compute payload", () => {
-    expect(resolveWorkerComputeRequestPayload({ kind: "refresh" })).toEqual({
-      schemaVersion: 1,
-      request: { kind: "refresh" },
-      batchPlan: null,
-    })
-  })
 })

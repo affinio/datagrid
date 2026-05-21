@@ -20,9 +20,7 @@ export interface DataGridWorkerComputeRequestPayloadEnvelope {
   batchPlan?: DataGridWorkerComputeBatchPlan | null
 }
 
-export type DataGridWorkerComputeRequestPayload =
-  | DataGridWorkerComputeRequest
-  | DataGridWorkerComputeRequestPayloadEnvelope
+export type DataGridWorkerComputeRequestPayload = DataGridWorkerComputeRequestPayloadEnvelope
 
 export interface DataGridWorkerProtocolHeader {
   version: typeof DATAGRID_WORKER_PROTOCOL_VERSION
@@ -194,14 +192,6 @@ export function resolveWorkerComputeRequestPayload(
 ): DataGridWorkerComputeRequestPayloadEnvelope | null {
   if (!payload || typeof payload !== "object") {
     return null
-  }
-  const directCandidate = payload as Partial<DataGridWorkerComputeRequest>
-  if (isWorkerComputeRequestKind(directCandidate.kind)) {
-    return {
-      schemaVersion: 1,
-      request: directCandidate as DataGridWorkerComputeRequest,
-      batchPlan: serializeComputeBatchPlan(directCandidate as DataGridWorkerComputeRequest),
-    }
   }
   const envelope = payload as Partial<DataGridWorkerComputeRequestPayloadEnvelope>
   if (

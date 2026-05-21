@@ -38,6 +38,7 @@ import {
 import { runGroupProjectionStage } from "./clientRowProjectionGroupStage.js"
 import { runPivotProjectionStage } from "./clientRowProjectionPivotStage.js"
 import { runAggregateProjectionStage } from "./clientRowProjectionAggregateStage.js"
+import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface ClientRowProjectionHandlersDiagnosticsState {
   revisions: {
@@ -59,6 +60,7 @@ export interface ClientRowProjectionHandlersRuntimeContext<T> {
   getSourceRows: () => readonly DataGridRowNode<T>[]
   buildSourceById: () => ReadonlyMap<DataGridRowId, DataGridRowNode<T>>
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
+  comparatorRegistry?: DataGridComparatorRegistry<T>
   normalizeText: (value: unknown) => string
   computeStageExecutor: DataGridClientProjectionComputeStageExecutor<T>
 
@@ -185,6 +187,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
       rowVersionById: context.getRowVersionById(),
       counters: sortValueCounters,
       readRowField: context.readRowField,
+      comparatorRegistry: context.comparatorRegistry,
     })
     context.runtimeState.sortedRowsProjection = result.sortedRowsProjection
     context.setSortValueCacheKey(result.sortValueCacheKey)
@@ -281,6 +284,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
       resetGroupByIncrementalAggregationState: context.resetGroupByIncrementalAggregationState,
       readRowField: context.readRowField,
       normalizeText: context.normalizeText,
+      comparatorRegistry: context.comparatorRegistry,
     })
     context.runtimeState.aggregatedRowsProjection = result.aggregatedRowsProjection
     return result.recomputed

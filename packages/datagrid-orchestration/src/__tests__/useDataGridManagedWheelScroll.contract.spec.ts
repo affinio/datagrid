@@ -122,7 +122,7 @@ describe("useDataGridManagedWheelScroll contract", () => {
       resolveWheelMode: () => "managed",
       resolveBodyViewport: () => bodyViewport,
       resolveMainViewport: () => mainViewport,
-      resolvePreventDefaultWhenConsumed: () => true,
+      resolvePreventDefaultWhenHandled: () => true,
       setHandledScrollTop(value) {
         state.top = value
       },

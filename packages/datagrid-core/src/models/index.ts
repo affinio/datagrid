@@ -21,6 +21,9 @@ export type {
   DataGridFilterSnapshot,
   DataGridQuickFilterMode,
   DataGridQuickFilterSnapshot,
+  DataGridComparatorNullsPolicy,
+  DataGridComparatorPolicy,
+  DataGridComparatorPolicyKind,
   DataGridSortAndFilterModelInput,
   DataGridPaginationInput,
   DataGridPaginationSnapshot,
@@ -245,6 +248,23 @@ export {
   evaluateColumnPredicateFilter,
   serializeColumnValueToToken,
 } from "./filters/columnFilterUtils.js"
+
+export {
+  createDataGridComparatorRegistry,
+  compareDataGridValues,
+  type DataGridComparator,
+  type DataGridComparatorContext,
+  type DataGridComparatorDefinition,
+  type DataGridComparatorRegistry,
+  type DataGridComparatorRegistryInput,
+} from "./comparator/comparatorPolicy.js"
+
+export {
+  createDataGridAggregationRegistry,
+  type DataGridAggregationDefinition,
+  type DataGridAggregationRegistry,
+  type DataGridAggregationRegistryInput,
+} from "./aggregation/aggregationEngine.js"
 
 export type {
   ClientRowModel,

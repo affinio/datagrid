@@ -114,6 +114,14 @@ import { createClientRowModelProjectionBootstrap } from "./bootstrap/clientRowMo
 import { createClientRowModelComputeBootstrap } from "./bootstrap/clientRowModelComputeBootstrap.js"
 import { createClientRowModelSnapshotBootstrap } from "./bootstrap/clientRowModelSnapshotBootstrap.js"
 import {
+  createDataGridComparatorRegistry,
+  type DataGridComparatorRegistryInput,
+} from "./comparator/comparatorPolicy.js"
+import type {
+  DataGridAggregationRegistry,
+  DataGridAggregationRegistryInput,
+} from "./aggregation/aggregationEngine.js"
+import {
   snapshotDataGridFormulaGraph,
   snapshotDataGridFormulaExecutionPlan,
   type DataGridFormulaGraphSnapshot,
@@ -147,6 +155,8 @@ export interface CreateClientRowModelOptions<T> {
   initialGroupBy?: DataGridGroupBySpec | null
   initialPivotModel?: DataGridPivotSpec | null
   initialAggregationModel?: DataGridAggregationModel<T> | null
+  comparatorRegistry?: DataGridComparatorRegistryInput<T> | null
+  aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
   initialPagination?: DataGridPaginationInput | null
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
@@ -437,6 +447,7 @@ export function createClientRowModel<T>(
     getSourceRows: () => getSourceRowsState(),
     getPivotModel,
     getGroupBy,
+    aggregationRegistry: options.aggregationRegistry,
   })
   const {
     pivotRuntime,
@@ -645,6 +656,7 @@ export function createClientRowModel<T>(
     getSourceRowsState,
     getSourceRowIndexById,
     readProjectionRowField,
+    comparatorRegistry: createDataGridComparatorRegistry(options.comparatorRegistry),
     resolveFilterPredicate: (options?: { ignoreColumnFilterKey?: string }) => derivedCacheRuntime.resolveFilterPredicate(options),
     rowVersionRuntime,
     derivedCacheRuntime,

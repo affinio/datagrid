@@ -616,7 +616,7 @@ describe("createDataSourceBackedRowModel", () => {
     expect(model.getSnapshot().initialLoading).toBe(false)
     expect(model.getSnapshot().refreshing).toBe(false)
 
-    const sortModel = [{ key: "value", direction: "asc" as const }]
+    const sortModel = [{ key: "value", direction: "asc" as const, comparator: { kind: "natural" as const } }]
     model.setSortModel(sortModel)
 
     expect(calls).toHaveLength(2)
@@ -1239,7 +1239,11 @@ describe("createDataSourceBackedRowModel", () => {
     })
     await flushMicrotasks()
 
-    const sortModel = [{ key: "value", direction: "asc" as const }]
+    const sortModel = [{
+      key: "value",
+      direction: "asc" as const,
+      comparator: { kind: "custom" as const, comparatorId: "server-priority" },
+    }]
     const filterModel = {
       columnFilters: {
         status: { kind: "valueSet", tokens: ["string:active"] },

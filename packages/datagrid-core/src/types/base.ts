@@ -40,6 +40,9 @@ export type {
   DataGridFilterSnapshot,
   DataGridQuickFilterMode,
   DataGridQuickFilterSnapshot,
+  DataGridComparatorNullsPolicy,
+  DataGridComparatorPolicy,
+  DataGridComparatorPolicyKind,
   DataGridSortDirection,
   DataGridSortState,
 } from "@affino/datagrid-pivot"

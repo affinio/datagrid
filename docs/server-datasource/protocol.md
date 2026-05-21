@@ -105,7 +105,12 @@ Current response shape:
 {
   "range": { "startRow": 0, "endRow": 50 },
   "sortModel": [
-    { "colId": "currentPrice", "sort": "desc" }
+    {
+      "key": "currentPrice",
+      "field": "currentPrice",
+      "direction": "desc",
+      "comparator": { "kind": "natural", "nulls": "last" }
+    }
   ],
   "filterModel": {
     "status": { "type": "equals", "filter": "Open" }
@@ -144,6 +149,8 @@ Recommended fields:
 
 - `sortModel`
 - `filterModel`
+
+`sortModel[].comparator` is optional and serializable. Supported policy names are `default`, `locale`, `natural`, and `custom`; `custom` must use a backend-approved `comparatorId`. Backends that do not recognize a comparator policy should reject the request or fall back according to their documented capability instead of applying a different implicit ordering.
 
 Supported projection in the current `server_demo` pull path:
 

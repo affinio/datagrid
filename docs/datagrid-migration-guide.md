@@ -107,6 +107,8 @@ Legacy flat methods are removed from `DataGridApi`.
 Type alias cleanup:
 
 - `CreateDataGridApiDependencies` was removed. Use `CreateDataGridApiFromDepsOptions`.
+- `resolvePreventDefaultWhenConsumed` was removed from managed wheel scroll options. Use `resolvePreventDefaultWhenHandled`.
+- Worker compute request messages no longer accept direct payloads. Use the schema-versioned payload envelope.
 
 Examples:
 

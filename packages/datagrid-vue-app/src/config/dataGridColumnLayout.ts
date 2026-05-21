@@ -54,9 +54,9 @@ function resolveLabel(value: string | undefined, fallback: string): string {
 
 function resolveColumnLayoutLabels(
   input: DataGridColumnLayoutLabels | undefined,
-  legacyButtonLabel?: string,
+  buttonLabelOverride?: string,
 ): DataGridResolvedColumnLayoutLabels {
-  const buttonLabel = resolveLabel(legacyButtonLabel, resolveLabel(input?.buttonLabel, DEFAULT_BUTTON_LABEL))
+  const buttonLabel = resolveLabel(buttonLabelOverride, resolveLabel(input?.buttonLabel, DEFAULT_BUTTON_LABEL))
   return Object.freeze({
     buttonLabel,
     eyebrow: resolveLabel(input?.eyebrow, DEFAULT_DATAGRID_COLUMN_LAYOUT_LABELS.eyebrow),

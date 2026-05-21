@@ -73,11 +73,13 @@ Goal: make business sorting and aggregation extensible without patching core int
 
 Slices:
 
-1. [ ] Define comparator policy contract: default, locale, natural, custom.
-2. [ ] Wire comparator policy into sort, group, pivot, and server query serialization.
-3. [ ] Define public aggregation registry contract.
-4. [ ] Add custom aggregation registration and validation.
-5. [ ] Add docs and tests for client, worker, pivot, and server boundaries.
+1. [x] Define comparator policy contract: default, locale, natural, custom.
+2. [x] Wire comparator policy into sort, group, pivot, and server query serialization.
+3. [x] Define public aggregation registry contract.
+4. [x] Add custom aggregation registration and validation.
+5. [x] Add docs and tests for client, worker, pivot, and server boundaries.
+
+Status: closed for client and datasource model contracts. `DataGridSortState.comparator` is serializable and supports default, locale, natural, and named custom policies; client/group/pivot sort paths resolve policies through the comparator registry, worker fallback keeps the same semantics, and datasource requests preserve comparator metadata for backend translation. Custom aggregation is exposed through `aggregationRegistry` plus `aggregationId` on aggregation columns and pivot values, with focused coverage for client grouping, pivot values, worker fallback, and server datasource serialization.
 
 ## Track 5. Pivot/Tree Performance Hardening
 

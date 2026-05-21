@@ -4,11 +4,25 @@ export type DataGridRowId = string | number
 
 export type DataGridSortDirection = "asc" | "desc"
 
+export type DataGridComparatorPolicyKind = "default" | "locale" | "natural" | "custom"
+export type DataGridComparatorNullsPolicy = "first" | "last"
+
+export interface DataGridComparatorPolicy {
+  kind?: DataGridComparatorPolicyKind
+  comparatorId?: string
+  locale?: string | readonly string[]
+  numeric?: boolean
+  sensitivity?: Intl.CollatorOptions["sensitivity"]
+  caseFirst?: Intl.CollatorOptions["caseFirst"]
+  nulls?: DataGridComparatorNullsPolicy
+}
+
 export interface DataGridSortState {
   key: string
   field?: string
   dependencyFields?: readonly string[]
   direction: DataGridSortDirection
+  comparator?: DataGridComparatorPolicy
 }
 
 export interface DataGridFilterClause {
@@ -147,6 +161,7 @@ export interface DataGridAggregationColumnSpec<T = unknown, TState = unknown> {
   key: string
   field?: string
   op: DataGridAggOp
+  aggregationId?: string
   createState?: () => TState
   add?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
   merge?: DataGridAggregationStateHandler<TState, [childState: TState]>

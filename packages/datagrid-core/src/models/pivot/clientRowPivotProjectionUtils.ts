@@ -3,6 +3,10 @@ import type {
   DataGridRowNode,
   DataGridSortState,
 } from "../rowModel.js"
+import {
+  compareDataGridValues,
+  type DataGridComparatorRegistry,
+} from "../comparator/comparatorPolicy.js"
 
 function toComparableNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -19,7 +23,22 @@ function comparePivotSortValue(
   left: unknown,
   right: unknown,
   normalizeText: (value: unknown) => string,
+  options: {
+    descriptor?: DataGridSortState
+    leftRow?: DataGridRowNode<unknown>
+    rightRow?: DataGridRowNode<unknown>
+    comparatorRegistry?: DataGridComparatorRegistry<unknown>
+  } = {},
 ): number {
+  if (options.descriptor?.comparator) {
+    return compareDataGridValues(left, right, {
+      descriptor: options.descriptor,
+      leftRow: options.leftRow,
+      rightRow: options.rightRow,
+    }, {
+      comparatorRegistry: options.comparatorRegistry,
+    })
+  }
   if (left == null && right == null) {
     return 0
   }
@@ -45,6 +64,7 @@ export function sortPivotProjectionRows<T>(
   descriptors: readonly DataGridSortState[],
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown,
   normalizeText: (value: unknown) => string,
+  options: { comparatorRegistry?: DataGridComparatorRegistry<T> } = {},
 ): DataGridRowNode<T>[] {
   if (!Array.isArray(rows) || rows.length <= 1 || descriptors.length === 0) {
     return [...rows]
@@ -106,7 +126,12 @@ export function sortPivotProjectionRows<T>(
       const direction = descriptor.direction === "desc" ? -1 : 1
       const leftValue = readRowField(left.anchor, descriptor.key, descriptor.field)
       const rightValue = readRowField(right.anchor, descriptor.key, descriptor.field)
-      const compared = comparePivotSortValue(leftValue, rightValue, normalizeText)
+      const compared = comparePivotSortValue(leftValue, rightValue, normalizeText, {
+        descriptor,
+        leftRow: left.anchor as DataGridRowNode<unknown>,
+        rightRow: right.anchor as DataGridRowNode<unknown>,
+        comparatorRegistry: options.comparatorRegistry as DataGridComparatorRegistry<unknown> | undefined,
+      })
       if (compared !== 0) {
         return compared * direction
       }

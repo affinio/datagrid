@@ -18,6 +18,7 @@ import {
   rebuildGroupByIncrementalAggregationState,
   type GroupByIncrementalAggregationState,
 } from "../aggregation/incrementalAggregationRuntime.js"
+import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface AggregateProjectionEngine<T> {
   setModel: (model: DataGridAggregationModel<T> | null) => void
@@ -56,6 +57,7 @@ export interface RunAggregateProjectionStageParams<T> {
   resetGroupByIncrementalAggregationState: () => void
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
   normalizeText: (value: unknown) => string
+  comparatorRegistry?: DataGridComparatorRegistry<T>
 }
 
 export interface RunAggregateProjectionStageResult<T> {
@@ -82,7 +84,9 @@ export function runAggregateProjectionStage<T>(
     params.resetGroupByIncrementalAggregationState()
     return {
       aggregatedRowsProjection: params.sortModel.length > 0
-        ? sortPivotProjectionRows(params.pivotedRowsProjection, params.sortModel, params.readRowField, params.normalizeText)
+        ? sortPivotProjectionRows(params.pivotedRowsProjection, params.sortModel, params.readRowField, params.normalizeText, {
+            comparatorRegistry: params.comparatorRegistry,
+          })
         : (params.pivotedRowsProjection as DataGridRowNode<T>[]),
       recomputed: true,
     }
@@ -137,6 +141,7 @@ export function runAggregateProjectionStage<T>(
             return values
           },
           (row, descriptor) => params.readRowField(row, descriptor.key, descriptor.field),
+          { comparatorRegistry: params.comparatorRegistry },
         )
         : (params.sourceRows as DataGridRowNode<T>[]))
     : params.sortedRowsProjection

@@ -179,9 +179,9 @@ function normalizeJoinLabels(
 
 function resolveAdvancedFilterLabels(
   input: DataGridAdvancedFilterLabels | undefined,
-  legacyButtonLabel?: string,
+  buttonLabelOverride?: string,
 ): DataGridResolvedAdvancedFilterLabels {
-  const buttonLabel = resolveLabel(legacyButtonLabel, resolveLabel(input?.buttonLabel, DEFAULT_BUTTON_LABEL))
+  const buttonLabel = resolveLabel(buttonLabelOverride, resolveLabel(input?.buttonLabel, DEFAULT_BUTTON_LABEL))
   return Object.freeze({
     buttonLabel,
     eyebrow: resolveLabel(input?.eyebrow, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.eyebrow),

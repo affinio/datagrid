@@ -2425,6 +2425,84 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("sorts client rows with natural and custom comparator policies", () => {
+    const naturalModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, label: "item2" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, label: "item10" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, label: "item1" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialSortModel: [{ key: "label", direction: "asc", comparator: { kind: "natural" } }],
+    })
+
+    expect(naturalModel.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { label: string }).label))
+      .toEqual(["item1", "item2", "item10"])
+    naturalModel.dispose()
+
+    const customModel = createClientRowModel({
+      rows: [
+        { row: { id: 1, priority: "low" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, priority: "high" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, priority: "medium" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      comparatorRegistry: {
+        priority(left, right) {
+          const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+          return (rank[String(left)] ?? 99) - (rank[String(right)] ?? 99)
+        },
+      },
+      initialSortModel: [{
+        key: "priority",
+        direction: "asc",
+        comparator: { kind: "custom", comparatorId: "priority" },
+      }],
+    })
+
+    expect(customModel.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { priority: string }).priority))
+      .toEqual(["high", "medium", "low"])
+    customModel.dispose()
+  })
+
+  it("uses aggregation registry entries for grouped custom aggregates", () => {
+    interface RangeState {
+      min: number | null
+      max: number | null
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 25 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, team: "B", score: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      aggregationRegistry: [{
+        id: "range",
+        createState: (): RangeState => ({ min: null, max: null }),
+        add(state: RangeState, value) {
+          const numeric = Number(value)
+          if (!Number.isFinite(numeric)) {
+            return
+          }
+          state.min = state.min == null ? numeric : Math.min(state.min, numeric)
+          state.max = state.max == null ? numeric : Math.max(state.max, numeric)
+        },
+        finalize(state: RangeState) {
+          return state.min == null || state.max == null ? null : state.max - state.min
+        },
+      }],
+      initialAggregationModel: {
+        columns: [{ key: "scoreRange", field: "score", op: "custom", aggregationId: "range" }],
+      },
+    })
+
+    const groups = model.getRowsInRange({ start: 0, end: 10 }).filter(row => row.kind === "group")
+    expect(groups[0]?.groupMeta?.aggregates).toEqual({ scoreRange: 15 })
+    expect(groups[1]?.groupMeta?.aggregates).toEqual({ scoreRange: 0 })
+
+    model.dispose()
+  })
+
   it("projects pivot rows with deterministic runtime pivot columns", () => {
     const model = createClientRowModel({
       rows: [
@@ -2468,6 +2546,51 @@ describe("createClientRowModel", () => {
     expect(rowBRecord?.rowId).toBeDefined()
     expect(typeof rowARecord?.rowId).toBe("string")
     expect(typeof rowBRecord?.rowId).toBe("string")
+
+    model.dispose()
+  })
+
+  it("uses aggregation registry entries for pivot custom values", () => {
+    interface RangeState {
+      min: number | null
+      max: number | null
+    }
+
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: "r1", team: "A", year: 2024, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: "r2", team: "A", year: 2024, score: 30 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: "r3", team: "B", year: 2024, score: 7 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      aggregationRegistry: [{
+        id: "range",
+        createState: (): RangeState => ({ min: null, max: null }),
+        add(state: RangeState, value) {
+          const numeric = Number(value)
+          if (!Number.isFinite(numeric)) {
+            return
+          }
+          state.min = state.min == null ? numeric : Math.min(state.min, numeric)
+          state.max = state.max == null ? numeric : Math.max(state.max, numeric)
+        },
+        finalize(state: RangeState) {
+          return state.min == null || state.max == null ? null : state.max - state.min
+        },
+      }],
+      initialPivotModel: {
+        rows: ["team"],
+        columns: ["year"],
+        values: [{ field: "score", agg: "custom", aggregationId: "range" }],
+      },
+    })
+
+    const pivotColumn = model.getSnapshot().pivotColumns?.[0]
+    expect(pivotColumn?.aggregationId).toBe("range")
+    const rows = model.getRowsInRange({ start: 0, end: 10 })
+    const rowA = rows.find(row => (row.row as { team?: string }).team === "A")
+    const rowB = rows.find(row => (row.row as { team?: string }).team === "B")
+    expect((rowA?.row as Record<string, unknown> | undefined)?.[String(pivotColumn?.id)]).toBe(20)
+    expect((rowB?.row as Record<string, unknown> | undefined)?.[String(pivotColumn?.id)]).toBe(0)
 
     model.dispose()
   })
@@ -4600,6 +4723,28 @@ describe("createClientRowModel", () => {
     expect(diagnostics.dispatchCount).toBeGreaterThan(0)
     expect(diagnostics.fallbackCount).toBeGreaterThan(0)
     expect(dispatchCalls.length).toBeGreaterThan(0)
+
+    model.dispose()
+  })
+
+  it("applies comparator policies when worker compute falls back locally", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, label: "item2" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, label: "item10" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, label: "item1" }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      computeMode: "worker",
+      computeTransport: {
+        dispatch() {
+          return { handled: false }
+        },
+      },
+    })
+
+    model.setSortModel([{ key: "label", direction: "asc", comparator: { kind: "natural" } }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { label: string }).label))
+      .toEqual(["item1", "item2", "item10"])
 
     model.dispose()
   })

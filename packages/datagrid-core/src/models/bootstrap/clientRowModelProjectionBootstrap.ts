@@ -6,6 +6,11 @@ import type {
 } from "../rowModel.js"
 import type { DataGridPivotSpec, DataGridPivotRuntime } from "@affino/datagrid-pivot"
 import { createDataGridAggregationEngine } from "../aggregation/aggregationEngine.js"
+import type {
+  DataGridAggregationRegistry,
+  DataGridAggregationRegistryInput,
+} from "../aggregation/aggregationEngine.js"
+import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 import { createPivotRuntime } from "../pivot/pivotRuntime.js"
 import { createTreeProjectionRuntime, type TreeProjectionRuntime } from "../tree/treeProjectionRuntime.js"
 import {
@@ -33,6 +38,8 @@ export interface CreateClientRowModelProjectionBootstrapOptions<T> {
   getSourceRows: () => readonly DataGridRowNode<T>[]
   getPivotModel: () => DataGridPivotSpec | null
   getGroupBy: () => DataGridGroupBySpec | null
+  comparatorRegistry?: DataGridComparatorRegistry<T>
+  aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
 }
 
 export function createClientRowModelProjectionBootstrap<T>(
@@ -40,12 +47,14 @@ export function createClientRowModelProjectionBootstrap<T>(
 ): ClientRowModelProjectionBootstrapResult<T> {
   const pivotRuntime = createPivotRuntime<T>({
     readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
+    aggregationRegistry: options.aggregationRegistry,
   })
   const treeProjectionRuntime = createTreeProjectionRuntime<T>({
     resolveTreeDataRow: options.resolveTreeDataRow,
   })
   const aggregationEngine = createDataGridAggregationEngine<T>(options.getAggregationModel(), {
     readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
+    aggregationRegistry: options.aggregationRegistry,
   })
   const treePivotIntegrationRuntime = createClientRowTreePivotIntegrationRuntime<T>({
     getTreeData: options.getTreeData,

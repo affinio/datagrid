@@ -11,6 +11,7 @@ export interface DataGridAggregationFieldReader<T = unknown> {
 
 export interface DataGridAggregationEngineOptions<T = unknown> {
   readRowField?: DataGridAggregationFieldReader<T>
+  aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
 }
 
 function readByPathSegments(value: unknown, segments: readonly string[]): unknown {
@@ -149,6 +150,26 @@ type DataGridCompiledAggregationStateHandler<TState, TArgs extends readonly unkn
   bivarianceHack(state: TState, ...args: TArgs): TResult
 }["bivarianceHack"]
 
+export interface DataGridAggregationDefinition<T = unknown, TState = unknown> {
+  id: string
+  createState: () => TState
+  add: DataGridCompiledAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  merge?: DataGridCompiledAggregationStateHandler<TState, [childState: TState]>
+  remove?: DataGridCompiledAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
+  finalize?: DataGridCompiledAggregationStateHandler<TState, [], unknown>
+  coerce?: (value: unknown) => number | string | null
+}
+
+export interface DataGridAggregationRegistry<T = unknown> {
+  resolve(id: string): DataGridAggregationDefinition<T, unknown> | undefined
+}
+
+export type DataGridAggregationRegistryInput<T = unknown> =
+  | DataGridAggregationRegistry<T>
+  | ReadonlyMap<string, DataGridAggregationDefinition<T, unknown>>
+  | Readonly<Record<string, DataGridAggregationDefinition<T, unknown>>>
+  | readonly DataGridAggregationDefinition<T, unknown>[]
+
 type DataGridBuiltInAggregationOp = Exclude<DataGridAggOp, "custom">
 
 interface DataGridBuiltInAggregationStateMap {
@@ -201,6 +222,67 @@ interface DataGridAggregationStackEntry {
   groupKey: string
   level: number
   states: unknown[]
+}
+
+function normalizeAggregationId(id: unknown): string {
+  return typeof id === "string" ? id.trim() : ""
+}
+
+function validateAggregationDefinition<T>(
+  id: unknown,
+  definition: unknown,
+): DataGridAggregationDefinition<T, unknown> {
+  const normalizedId = normalizeAggregationId(id)
+  const candidate = definition as DataGridAggregationDefinition<T, unknown> | null | undefined
+  if (
+    !normalizedId
+    || !candidate
+    || typeof candidate.createState !== "function"
+    || typeof candidate.add !== "function"
+  ) {
+    throw new Error("Invalid DataGrid aggregation registry entry")
+  }
+  return {
+    ...candidate,
+    id: normalizedId,
+  }
+}
+
+export function createDataGridAggregationRegistry<T = unknown>(
+  input?: DataGridAggregationRegistryInput<T> | null,
+): DataGridAggregationRegistry<T> | undefined {
+  if (!input) {
+    return undefined
+  }
+  if (typeof (input as DataGridAggregationRegistry<T>).resolve === "function") {
+    return input as DataGridAggregationRegistry<T>
+  }
+  const definitions = new Map<string, DataGridAggregationDefinition<T, unknown>>()
+  const addDefinition = (id: unknown, definition: unknown): void => {
+    const validated = validateAggregationDefinition<T>(id, definition)
+    if (definitions.has(validated.id)) {
+      throw new Error(`Duplicate DataGrid aggregation id: ${validated.id}`)
+    }
+    definitions.set(validated.id, validated)
+  }
+  if (input instanceof Map) {
+    for (const [id, definition] of input.entries()) {
+      addDefinition(id, definition)
+    }
+  } else if (Array.isArray(input)) {
+    for (const definition of input) {
+      addDefinition(definition?.id, definition)
+    }
+  } else {
+    for (const [id, definition] of Object.entries(input)) {
+      addDefinition(id, definition)
+    }
+  }
+  return {
+    resolve(id: string): DataGridAggregationDefinition<T, unknown> | undefined {
+      return definitions.get(normalizeAggregationId(id))
+    },
+  }
 }
 
 function coerceForOp(
@@ -276,6 +358,7 @@ function compileBuiltInColumn<T, TOp extends DataGridBuiltInAggregationOp>(input
 function compileColumnSpec<T, TState>(
   spec: DataGridAggregationColumnSpec<T, TState>,
   readRowField?: DataGridAggregationFieldReader<T>,
+  aggregationRegistry?: DataGridAggregationRegistry<T>,
 ): DataGridCompiledAggregationColumnAnyState<T> | null {
   const key = spec.key.trim()
   if (key.length === 0) {
@@ -285,6 +368,36 @@ function compileColumnSpec<T, TState>(
   const readValue = compileRowFieldReader<T>(spec.key, spec.field, readRowField)
 
   if (op === "custom") {
+    const aggregationId = normalizeAggregationId(spec.aggregationId)
+    const registered = aggregationId ? aggregationRegistry?.resolve(aggregationId) : undefined
+    if (registered) {
+      const coerce = spec.coerce ?? registered.coerce
+      const readAggregatedValue = (row: DataGridRowNode<T>): unknown => {
+        const raw = readValue(row)
+        return typeof coerce === "function" ? coerce(raw) : raw
+      }
+      return {
+        key,
+        op,
+        readValue: readAggregatedValue,
+        createState: () => registered.createState(),
+        add: (state: unknown, value: unknown, row: DataGridRowNode<T>) => registered.add(state, value, row),
+        merge: registered.merge
+          ? ((state: unknown, childState: unknown) => {
+              registered.merge!(state, childState)
+            })
+          : undefined,
+        remove: registered.remove
+          ? ((state: unknown, value: unknown, row: DataGridRowNode<T>) => registered.remove!(state, value, row))
+          : undefined,
+        finalize: typeof registered.finalize === "function"
+          ? ((state: unknown) => registered.finalize!(state))
+          : ((state: unknown) => state),
+      }
+    }
+    if (aggregationId && typeof spec.add !== "function") {
+      return null
+    }
     const createState = typeof spec.createState === "function"
       ? (() => spec.createState!())
       : (() => null)
@@ -533,13 +646,14 @@ function mergeStates<T>(
 function compileAggregationColumns<T>(
   model: DataGridAggregationModel<T> | null,
   readRowField?: DataGridAggregationFieldReader<T>,
+  aggregationRegistry?: DataGridAggregationRegistry<T>,
 ): readonly DataGridCompiledAggregationColumnAnyState<T>[] {
   if (!model || !Array.isArray(model.columns) || model.columns.length === 0) {
     return []
   }
   const compiled: DataGridCompiledAggregationColumnAnyState<T>[] = []
   for (const spec of model.columns) {
-    const column = compileColumnSpec(spec, readRowField)
+    const column = compileColumnSpec(spec, readRowField, aggregationRegistry)
     if (!column) {
       continue
     }
@@ -557,7 +671,8 @@ export function createDataGridAggregationEngine<T>(
   options: DataGridAggregationEngineOptions<T> = {},
 ): DataGridAggregationEngine<T> {
   let model = initialModel
-  let compiledColumns = compileAggregationColumns(model, options.readRowField)
+  const aggregationRegistry = createDataGridAggregationRegistry<T>(options.aggregationRegistry)
+  let compiledColumns = compileAggregationColumns(model, options.readRowField, aggregationRegistry)
   const isIncrementalSupported = (): boolean => {
     if (compiledColumns.length === 0) {
       return false
@@ -655,7 +770,7 @@ export function createDataGridAggregationEngine<T>(
   return {
     setModel(nextModel: DataGridAggregationModel<T> | null) {
       model = nextModel
-      compiledColumns = compileAggregationColumns(model, options.readRowField)
+      compiledColumns = compileAggregationColumns(model, options.readRowField, aggregationRegistry)
     },
     getModel: () => model,
     getCompiledColumns: () => compiledColumns,

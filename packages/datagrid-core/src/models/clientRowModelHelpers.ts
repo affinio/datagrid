@@ -164,6 +164,7 @@ export function isSameAggregationModel<T>(
       leftColumn.key !== rightColumn.key ||
       leftColumn.field !== rightColumn.field ||
       leftColumn.op !== rightColumn.op ||
+      leftColumn.aggregationId !== rightColumn.aggregationId ||
       leftColumn.createState !== rightColumn.createState ||
       leftColumn.add !== rightColumn.add ||
       leftColumn.remove !== rightColumn.remove ||

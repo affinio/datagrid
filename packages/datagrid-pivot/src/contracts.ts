@@ -15,6 +15,7 @@ export type DataGridAggOp =
 export interface DataGridPivotValueSpec {
   field: string
   agg: DataGridAggOp
+  aggregationId?: string
 }
 
 export interface DataGridPivotSpec {
@@ -38,6 +39,7 @@ export interface DataGridPivotColumn {
   id: string
   valueField: string
   agg: DataGridAggOp
+  aggregationId?: string
   columnPath: readonly DataGridPivotColumnPathSegment[]
   label: string
   subtotal?: boolean

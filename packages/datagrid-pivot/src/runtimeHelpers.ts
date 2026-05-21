@@ -9,6 +9,7 @@ export interface DataGridPivotRuntimeValueSpec {
   field: string
   agg: DataGridAggOp
   aggregateKey: string
+  aggregationId?: string
 }
 
 const pivotPathValueCollator = new Intl.Collator(undefined, {
@@ -28,7 +29,8 @@ export function createPivotAxisKey(
 }
 
 export function createPivotAggregateKey(spec: DataGridPivotRuntimeValueSpec): string {
-  return `pivot:agg:${spec.agg.length}:${spec.agg}${spec.field.length}:${spec.field}`
+  const aggregationId = spec.aggregationId ?? ""
+  return `pivot:agg:${spec.agg.length}:${spec.agg}${aggregationId.length}:${aggregationId}${spec.field.length}:${spec.field}`
 }
 
 export function createPivotColumnId(
@@ -123,6 +125,7 @@ export function normalizePivotColumns(
     id: column.id,
     valueField: column.valueField,
     agg: column.agg,
+    ...(column.aggregationId ? { aggregationId: column.aggregationId } : {}),
     label: column.label,
     ...(column.subtotal ? { subtotal: true } : {}),
     ...(column.grandTotal ? { grandTotal: true } : {}),
@@ -137,7 +140,11 @@ export function serializePivotModelForIncrementalState(pivotModel: DataGridPivot
   return JSON.stringify({
     rows: pivotModel.rows,
     columns: pivotModel.columns,
-    values: pivotModel.values.map(value => ({ field: value.field, agg: value.agg })),
+    values: pivotModel.values.map(value => ({
+      field: value.field,
+      agg: value.agg,
+      ...(value.aggregationId ? { aggregationId: value.aggregationId } : {}),
+    })),
     rowSubtotals: pivotModel.rowSubtotals === true,
     columnSubtotals: pivotModel.columnSubtotals === true,
     grandTotal: pivotModel.grandTotal === true,

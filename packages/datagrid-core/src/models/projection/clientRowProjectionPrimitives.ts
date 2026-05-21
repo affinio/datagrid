@@ -17,6 +17,10 @@ import {
   serializeColumnValueToToken,
 } from "../filters/columnFilterUtils.js"
 import { resolveAdvancedExpression } from "../mutation/rowPatchAnalyzer.js"
+import {
+  compareDataGridValues,
+  type DataGridComparatorRegistry,
+} from "../comparator/comparatorPolicy.js"
 
 export type DataGridFilterCellValueReader<T> = (
   rowNode: DataGridRowNode<T>,
@@ -511,7 +515,8 @@ export function serializeSortValueModelForCache(
         ? [...descriptor.dependencyFields].map(value => String(value).trim()).filter(Boolean).sort().join(",")
         : ""
       const direction = includeDirection ? descriptor.direction ?? "asc" : ""
-      return `${descriptor.key}:${descriptor.field ?? ""}:${direction}:${dependencyFields}`
+      const comparator = stableSerializeUnknown(descriptor.comparator ?? null)
+      return `${descriptor.key}:${descriptor.field ?? ""}:${direction}:${dependencyFields}:${comparator}`
     })
     .join("|")
 }
@@ -743,35 +748,8 @@ export function isSameFilterModel(
   return serializeFilterModelForSignature(left) === serializeFilterModelForSignature(right)
 }
 
-function toComparableNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value
-  }
-  if (value instanceof Date) {
-    return value.getTime()
-  }
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
 function compareUnknown(left: unknown, right: unknown): number {
-  if (left == null && right == null) {
-    return 0
-  }
-  if (left == null) {
-    return 1
-  }
-  if (right == null) {
-    return -1
-  }
-  const leftNumber = toComparableNumber(left)
-  const rightNumber = toComparableNumber(right)
-  if (leftNumber != null && rightNumber != null) {
-    return leftNumber - rightNumber
-  }
-  const leftText = normalizeText(left)
-  const rightText = normalizeText(right)
-  return leftText.localeCompare(rightText)
+  return compareDataGridValues(left, right)
 }
 
 export function sortLeafRows<T>(
@@ -779,6 +757,7 @@ export function sortLeafRows<T>(
   sortModel: readonly DataGridSortState[],
   resolveSortValues?: (row: DataGridRowNode<T>, descriptors: readonly DataGridSortState[]) => readonly unknown[],
   resolveSingleSortValue?: (row: DataGridRowNode<T>, descriptor: DataGridSortState) => unknown,
+  options: { comparatorRegistry?: DataGridComparatorRegistry<T> } = {},
 ): DataGridRowNode<T>[] {
   const descriptors = Array.isArray(sortModel) ? sortModel.filter(Boolean) : []
   if (descriptors.length === 0) {
@@ -815,7 +794,12 @@ export function sortLeafRows<T>(
       if (!leftRow || !rightRow) {
         return leftIndex - rightIndex
       }
-      const compared = compareUnknown(sortValuesByIndex[leftIndex], sortValuesByIndex[rightIndex])
+      const compared = compareDataGridValues(
+        sortValuesByIndex[leftIndex],
+        sortValuesByIndex[rightIndex],
+        { descriptor, leftRow, rightRow },
+        { comparatorRegistry: options.comparatorRegistry },
+      )
       if (compared !== 0) {
         return compared * direction
       }
@@ -877,7 +861,12 @@ export function sortLeafRows<T>(
       const direction = descriptor.direction === "desc" ? -1 : 1
       const leftValue = leftSortValues[descriptorIndex]
       const rightValue = rightSortValues[descriptorIndex]
-      const compared = compareUnknown(leftValue, rightValue)
+      const compared = compareDataGridValues(
+        leftValue,
+        rightValue,
+        { descriptor, leftRow, rightRow },
+        { comparatorRegistry: options.comparatorRegistry },
+      )
       if (compared !== 0) {
         return compared * direction
       }

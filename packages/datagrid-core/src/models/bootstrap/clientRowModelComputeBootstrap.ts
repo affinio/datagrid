@@ -36,6 +36,7 @@ import { buildRowIdIndex } from "../clientRowRuntimeUtils.js"
 import { normalizeText } from "../projection/clientRowProjectionPrimitives.js"
 import type { DataGridClientRowModelDerivedCacheDiagnostics } from "../projection/clientRowDerivedCacheRuntime.js"
 import { createDataGridAggregationEngine } from "../aggregation/aggregationEngine.js"
+import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface ClientRowModelComputeBootstrapResult<T> {
   computeModuleHost: DataGridClientComputeModuleHost<T>
@@ -54,6 +55,7 @@ export interface CreateClientRowModelComputeBootstrapOptions<T> {
   getSourceRowsState: () => readonly DataGridRowNode<T>[]
   getSourceRowIndexById: () => ReadonlyMap<string | number, number>
   readProjectionRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
+  comparatorRegistry?: DataGridComparatorRegistry<T>
   resolveFilterPredicate: ClientRowDerivedCacheRuntime<T>["resolveFilterPredicate"]
   rowVersionRuntime: ClientRowRowVersionRuntime<T>
   derivedCacheRuntime: ClientRowDerivedCacheRuntime<T>
@@ -119,6 +121,7 @@ export function createClientRowModelComputeBootstrap<T>(
       getSourceRows: options.getSourceRowsState,
       buildSourceById: () => buildRowIdIndex(options.getSourceRowsState()),
       readRowField: options.readProjectionRowField,
+      comparatorRegistry: options.comparatorRegistry,
       normalizeText,
       computeStageExecutor: computeModuleHost.getProjectionComputeStageExecutor(),
       resolveFilterPredicate: opts => options.resolveFilterPredicate(opts),

@@ -1,5 +1,7 @@
 import {
   createDataGridAggregationEngine,
+  type DataGridAggregationRegistry,
+  type DataGridAggregationRegistryInput,
   type DataGridIncrementalAggregationLeafContribution,
   type DataGridIncrementalAggregationGroupState,
 } from "../aggregation/aggregationEngine.js"
@@ -45,6 +47,7 @@ interface DataGridPivotRuntimeColumn {
   columnKey: string
   valueField: string
   agg: DataGridAggOp
+  aggregationId?: string
   aggregateKey: string
   columnPath: readonly DataGridPivotColumnPathSegment[]
   subtotal: boolean
@@ -92,6 +95,10 @@ interface DataGridPivotProjectionBuildResult<T> extends DataGridPivotProjectionR
   incrementalState: DataGridPivotIncrementalProjectionState<T> | null
 }
 
+type CoreDataGridPivotRuntimeOptions<T> = DataGridPivotRuntimeOptions<T> & {
+  aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
+}
+
 export type {
   DataGridPivotRuntimeOptions,
   DataGridPivotProjectionResult,
@@ -117,7 +124,7 @@ function resolvePivotProjectionEntryRank(kind: DataGridPivotProjectionEntryKind)
 
 function buildPivotProjectionRows<T>(
   input: DataGridPivotProjectRowsInput<T>,
-  options: DataGridPivotRuntimeOptions<T> = {},
+  options: CoreDataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotProjectionBuildResult<T> {
   const { inputRows, pivotModel, normalizeFieldValue } = input
   if (inputRows.length === 0) {
@@ -126,11 +133,15 @@ function buildPivotProjectionRows<T>(
 
   const valueSpecs: DataGridPivotRuntimeValueSpec[] = pivotModel.values.map((valueSpec) => {
     const field = valueSpec.field.trim()
-    const aggregateKey = `v:${valueSpec.agg}:${field}`
+    const aggregationId = typeof valueSpec.aggregationId === "string" ? valueSpec.aggregationId.trim() : ""
+    const aggregateKey = aggregationId
+      ? `v:${valueSpec.agg}:${aggregationId}:${field}`
+      : `v:${valueSpec.agg}:${field}`
     return {
       field,
       agg: valueSpec.agg,
       aggregateKey,
+      ...(aggregationId ? { aggregationId } : {}),
     }
   })
   if (valueSpecs.length === 0) {
@@ -143,7 +154,10 @@ function buildPivotProjectionRows<T>(
       key: valueSpec.aggregateKey,
       field: valueSpec.field,
       op: valueSpec.agg,
+      ...(valueSpec.aggregationId ? { aggregationId: valueSpec.aggregationId } : {}),
     })),
+  }, {
+    aggregationRegistry: options.aggregationRegistry,
   })
   const canUseIncrementalPivotAggregation = pivotAggregationEngine.isIncrementalAggregationSupported()
   const rowFieldResolvers: DataGridPivotFieldResolver<T>[] = pivotModel.rows
@@ -385,6 +399,7 @@ function buildPivotProjectionRows<T>(
         columnKey,
         valueField: valueSpec.field,
         agg: valueSpec.agg,
+        ...(valueSpec.aggregationId ? { aggregationId: valueSpec.aggregationId } : {}),
         aggregateKey: valueSpec.aggregateKey,
         columnPath,
         subtotal,
@@ -672,6 +687,7 @@ function buildPivotProjectionRows<T>(
     id: column.id,
     valueField: column.valueField,
     agg: column.agg,
+    ...(column.aggregationId ? { aggregationId: column.aggregationId } : {}),
     ...(column.subtotal ? { subtotal: true } : {}),
     ...(column.grandTotal ? { grandTotal: true } : {}),
     columnPath: column.columnPath.map(segment => ({
@@ -682,6 +698,7 @@ function buildPivotProjectionRows<T>(
       field: column.valueField,
       agg: column.agg,
       aggregateKey: column.aggregateKey,
+      ...(column.aggregationId ? { aggregationId: column.aggregationId } : {}),
     }, {
       subtotal: column.subtotal,
       grandTotal: column.grandTotal,
@@ -721,7 +738,7 @@ function buildPivotProjectionRows<T>(
 }
 
 export function createPivotRuntime<T>(
-  options: DataGridPivotRuntimeOptions<T> = {},
+  options: CoreDataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotRuntime<T> {
   let incrementalState: DataGridPivotIncrementalProjectionState<T> | null = null
 

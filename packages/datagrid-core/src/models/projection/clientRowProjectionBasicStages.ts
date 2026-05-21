@@ -3,6 +3,7 @@ import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
 import { preservePivotProjectionRowIdentity } from "../pivot/clientRowPivotProjectionUtils.js"
 import { serializeSortValueModelForCache, shouldUseFilteredRowsForTreeSort, sortLeafRows } from "./clientRowProjectionPrimitives.js"
 import { assignDisplayIndexes, enforceCacheCap, patchProjectedRowsByIdentity, preserveRowOrder, remapRowsByIdentity } from "../clientRowRuntimeUtils.js"
+import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface SortValueCacheEntry {
   rowVersion: number
@@ -74,6 +75,7 @@ export interface RunSortProjectionStageParams<T> {
   rowVersionById: ReadonlyMap<DataGridRowId, number>
   counters: SortValueCounters
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
+  comparatorRegistry?: DataGridComparatorRegistry<T>
 }
 
 export interface RunSortProjectionStageResult<T> {
@@ -159,6 +161,7 @@ export function runSortProjectionStage<T>(
         params.counters.misses += 1
         return resolved
       },
+      { comparatorRegistry: params.comparatorRegistry },
     )
     return {
       sortedRowsProjection,

@@ -57,7 +57,10 @@ export function normalizePivotSpec(
       if (field.length === 0 || !isPivotAggOp(agg)) {
         continue
       }
-      const dedupeKey = `${field}::${agg}`
+      const aggregationId = typeof valueSpec?.aggregationId === "string"
+        ? valueSpec.aggregationId.trim()
+        : ""
+      const dedupeKey = `${field}::${agg}::${aggregationId}`
       if (seenValues.has(dedupeKey)) {
         continue
       }
@@ -65,6 +68,7 @@ export function normalizePivotSpec(
       normalizedValues.push({
         field,
         agg,
+        ...(aggregationId ? { aggregationId } : {}),
       })
     }
   }
@@ -176,7 +180,11 @@ export function isSamePivotSpec(
     if (!leftValue || !rightValue) {
       return false
     }
-    if (leftValue.field !== rightValue.field || leftValue.agg !== rightValue.agg) {
+    if (
+      leftValue.field !== rightValue.field
+      || leftValue.agg !== rightValue.agg
+      || (leftValue.aggregationId ?? "") !== (rightValue.aggregationId ?? "")
+    ) {
       return false
     }
   }

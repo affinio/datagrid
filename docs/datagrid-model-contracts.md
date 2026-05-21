@@ -1,6 +1,6 @@
 # DataGrid Model Contracts
 
-Updated: `2026-03-20`
+Updated: `2026-05-21`
 
 This document defines the canonical model layer for `@affino/datagrid-core`.
 
@@ -75,6 +75,21 @@ Execution notes:
 - adapters derive tree-like render hints through `getDataGridRowRenderMeta(rowNode)`; viewport/virtualization stay tree-agnostic.
 
 Reference: `docs/datagrid-groupby-rowmodel-projection.md`.
+
+## Sort Comparator And Aggregation Extension Contract
+
+Sort descriptors may include an optional serializable `comparator` policy:
+
+- `default`: current deterministic value comparison.
+- `locale`: `Intl.Collator`-based text comparison with optional `locale`, `numeric`, `sensitivity`, `caseFirst`, and `nulls`.
+- `natural`: locale comparison with numeric ordering and base sensitivity.
+- `custom`: named comparator resolved from `createClientRowModel({ comparatorRegistry })`.
+
+Custom comparator functions are intentionally not stored in `sortModel`; use `comparatorId` so snapshots and server/data-source requests stay serializable. Client sorting, grouped projection order, pivot row sorting, worker fallback execution, and data-source pull serialization all preserve the same descriptor shape.
+
+Aggregation extensions use `createClientRowModel({ aggregationRegistry })` plus `op: "custom"` and `aggregationId` on aggregation columns or pivot values. Registry entries provide `createState`, `add`, optional `merge`/`remove`, optional `finalize`, and optional `coerce`. Invalid registry entries fail during model creation; missing `aggregationId` references are skipped instead of silently running an incomplete custom aggregate.
+
+Built-in aggregation ops remain unchanged. Custom registry aggregation currently uses the non-incremental aggregation path unless it is implemented as a built-in incremental op.
 
 ## TreeView Contract (DataGrid Baseline)
 

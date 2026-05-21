@@ -96,6 +96,9 @@ export type {
   DataGridQuickFilterSnapshot,
   DataGridPivotCellDrilldown,
   DataGridPivotCellDrilldownInput,
+  DataGridComparatorNullsPolicy,
+  DataGridComparatorPolicy,
+  DataGridComparatorPolicyKind,
   DataGridSortAndFilterModelInput,
   DataGridSortDirection,
   DataGridSortState,
@@ -147,6 +150,7 @@ export interface DataGridAggregationColumnSpec<T = unknown, TState = unknown> {
   key: string
   field?: string
   op: DataGridAggOp
+  aggregationId?: string
   createState?: () => TState
   add?: DataGridAggregationStateHandler<TState, [value: unknown, row: DataGridRowNode<T>]>
   merge?: DataGridAggregationStateHandler<TState, [childState: TState]>
