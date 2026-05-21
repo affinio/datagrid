@@ -2716,6 +2716,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         "group-change",
         "critical",
         createTreePullContext("set-group-expansion", expansion?.toggledGroupKeys ?? [], "all"),
+        {
+          replaceCacheOnSuccess: true,
+        },
       )
       emit()
     },
@@ -2735,6 +2738,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         "group-change",
         "critical",
         createTreePullContext("toggle-group", [groupKey]),
+        {
+          replaceCacheOnSuccess: true,
+        },
       )
       emit()
     },
@@ -2754,6 +2760,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         "group-change",
         "critical",
         createTreePullContext("expand-group", [groupKey]),
+        {
+          replaceCacheOnSuccess: true,
+        },
       )
       emit()
     },
@@ -2773,6 +2782,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
         "group-change",
         "critical",
         createTreePullContext("collapse-group", [groupKey]),
+        {
+          replaceCacheOnSuccess: true,
+        },
       )
       emit()
     },

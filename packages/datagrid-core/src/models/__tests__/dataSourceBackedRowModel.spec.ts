@@ -1126,6 +1126,100 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("drops out-of-window cached rows after branch group expansion changes projection", async () => {
+    type GroupedRow = { id: string; label: string; region: string }
+    let pushListener: DataGridDataSourcePushListener<GroupedRow> | null = null
+    const calls: PullCall<GroupedRow>[] = []
+    const dataSource: DataGridDataSource<GroupedRow> = {
+      pull(request) {
+        return new Promise<DataGridDataSourcePullResult<GroupedRow>>((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+        })
+      },
+      subscribe(listener) {
+        pushListener = listener
+        return () => {
+          pushListener = null
+        }
+      },
+    }
+    const createGroupRow = (
+      index: number,
+      region: string,
+      expanded: boolean,
+    ): DataGridDataSourcePullResult<GroupedRow>["rows"][number] => ({
+      index,
+      rowId: `group:region:${region}`,
+      kind: "group",
+      state: { expanded },
+      groupMeta: {
+        groupKey: `group:region:${region}`,
+        groupField: "region",
+        groupValue: region,
+        level: 0,
+        childrenCount: 2,
+      },
+      row: { id: `group:region:${region}`, label: `Region ${region}`, region },
+    })
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 4,
+      initialGroupBy: { fields: ["region"], expandedByDefault: false },
+    })
+
+    model.setViewportRange({ start: 0, end: 1 })
+    calls[0]?.resolve({
+      rows: [
+        createGroupRow(0, "AMER", false),
+        createGroupRow(1, "EMEA", false),
+      ],
+      total: 4,
+    })
+    await flushMicrotasks()
+
+    pushListener?.({
+      type: "upsert",
+      rows: [
+        createGroupRow(2, "APAC", false),
+      ],
+      total: 4,
+    })
+    expect(model.getRow(2)?.row.label).toBe("Region APAC")
+
+    model.expandGroup("group:region:AMER")
+    expect(calls[1]?.request.groupExpansion).toEqual({
+      expandedByDefault: false,
+      toggledGroupKeys: ["group:region:AMER"],
+    })
+    expect(calls[1]?.request.treeData).toEqual({
+      operation: "expand-group",
+      scope: "branch",
+      groupKeys: ["group:region:AMER"],
+    })
+    calls[1]?.resolve({
+      rows: [
+        createGroupRow(0, "AMER", true),
+        {
+          index: 1,
+          rowId: "srv-amer-1",
+          kind: "leaf",
+          row: { id: "srv-amer-1", label: "AMER 1", region: "AMER" },
+        },
+      ],
+      total: 6,
+    })
+    await flushMicrotasks()
+    await flushMicrotasks()
+
+    expect(model.getRow(2)).toBeUndefined()
+    model.setViewportRange({ start: 2, end: 2 })
+    expect(calls[2]?.request.range).toEqual({ start: 2, end: 2 })
+
+    model.dispose()
+  })
+
   it("keeps old rows visible during pending batched sort and filter refresh and swaps cache on success", async () => {
     const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
     const model = createDataSourceBackedRowModel({

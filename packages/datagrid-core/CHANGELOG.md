@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Replaced the datasource row cache after server-backed group expansion changes succeed, so branch expand/collapse cannot keep out-of-window rows from the previous projected layout as valid cache entries.
+
+  ## User impact
+
+  Server-side grouped grids avoid stale rows when a group expands or collapses and previously cached rows shift to different indexes.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - focused datasource-backed row model regression passed
+
+- ## Summary
+
   Added the canonical quick filter contract to `DataGridFilterSnapshot`, including client projection support, worker-safe snapshot propagation, data-source request serialization, and guardrail documentation.
 
   ## User impact

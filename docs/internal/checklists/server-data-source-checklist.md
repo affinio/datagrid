@@ -1,6 +1,6 @@
 # Server Data Source Parity Checklist
 
-Status: flat server datasource path is production-shaped for the current demo scope. Filtering, histograms, optimistic editing, server fill, history, retry/backoff, invalidation, polling change feed, loading placeholders, latency/cache diagnostics, and backend `region` grouping are implemented. Remaining gaps are enterprise projection/live/offline capabilities, broader grouping, and unloaded-row operations.
+Status: flat server datasource path is production-shaped for the current demo scope. Filtering, histograms, optimistic editing, server fill, history, retry/backoff, invalidation, polling change feed, loading placeholders, latency/cache diagnostics, backend `region` grouping, and grouped projection cache replacement are implemented. Remaining gaps are enterprise projection/live/offline capabilities, broader grouping, and unloaded-row operations.
 
 ## Current Baseline
 - Demo route: `/vue/server-data-source-grid`
@@ -49,6 +49,7 @@ Note: if fill or batch commit hits partial rejection, the demo surfaces a warnin
 - [x] Push updates through polling change feed
 - [x] Error/retry UX for idempotent reads and change-feed polling
 - [x] Performance profiling/diagnostics for placeholders, cache hit/miss, pull duration, blank viewport, and stale retention
+- [x] Group expand/collapse replaces stale projected row cache after successful server pulls
 - [x] Fill diagnostics for loaded-row server v1
 - [ ] Concrete websocket/SSE transport
 - [ ] Offline mutation replay with durable idempotency contract

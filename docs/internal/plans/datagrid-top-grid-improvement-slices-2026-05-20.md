@@ -13,10 +13,11 @@ Slices:
 1. [x] Add server-demo grouping projection for `groupBy: region` using the existing pull protocol.
 2. [x] Add server projection capability metadata and docs for supported/unsupported group/tree/pivot modes.
 3. [x] Add server tree pull context contract and deterministic row ids for current branch rows.
-4. [ ] Add block-store cache semantics for hierarchical projections.
-5. [ ] Add partial refresh/invalidation per group branch/block.
-6. [ ] Add server pivot projection implementation or explicit enterprise adapter boundary.
-7. [ ] Add browser/perf gates for grouped server datasource scroll, expand/collapse, and refresh.
+4. [x] Add branch projection cache replacement for current group expand/collapse.
+5. [ ] Add block-store cache semantics for hierarchical projections.
+6. [ ] Add partial refresh/invalidation per group branch/block.
+7. [ ] Add server pivot projection implementation or explicit enterprise adapter boundary.
+8. [ ] Add browser/perf gates for grouped server datasource scroll, expand/collapse, and refresh.
 
 ## Track 2. Unloaded-Row Operations
 
