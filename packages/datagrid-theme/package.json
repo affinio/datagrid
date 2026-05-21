@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-theme",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Theme tokens and presets for Affino DataGrid",
