@@ -1842,17 +1842,21 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
-  it("throws when row identity is missing and no resolver is configured", () => {
-    expect(() =>
-      createClientRowModel({
-        rows: [{ row: { id: 999 }, originalIndex: 0, displayIndex: 0 } as unknown as DataGridRowNodeInput<{ id: number }>],
-      }),
-    ).toThrowError(/Missing row identity/)
+  it("assigns deterministic source-index identity for plain rows without ids", () => {
+    const model = createClientRowModel({
+      rows: [{ label: "missing-id" }],
+    })
+
+    const row = model.getRow(0)
+    expect(row?.rowKey).toBe(0)
+    expect(row?.rowId).toBe(0)
+    expect(row?.row).toEqual({ label: "missing-id" })
+    model.dispose()
   })
 
   it("resolves row identity through explicit resolver", () => {
     const model = createClientRowModel({
-      rows: [{ row: { id: 42 }, originalIndex: 0, displayIndex: 0 } as unknown as DataGridRowNodeInput<{ id: number }>],
+      rows: [{ id: 42 }],
       resolveRowId: row => row.id,
     })
 

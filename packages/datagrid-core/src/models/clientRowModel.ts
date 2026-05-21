@@ -103,6 +103,7 @@ import {
   type ApplyComputedFieldsToSourceRowsResult,
 } from "./compute/clientRowComputedExecutionRuntime.js"
 import { createClientRowComputedApplyRuntime } from "./compute/clientRowComputedApplyRuntime.js"
+import { createClientRowComputedRefreshRuntime } from "./compute/clientRowComputedRefreshRuntime.js"
 import {
   type DataGridFormulaFunctionDefinition,
   type DataGridFormulaFunctionRegistry,
@@ -798,33 +799,33 @@ export function createClientRowModel<T>(
     patchHostRuntime,
   } = mutationBootstrap
 
-  function recomputeComputedFieldsAndRefresh(
-    rowIds?: ReadonlySet<DataGridRowId>,
-    options: {
-      contextKeys?: ReadonlySet<string>
-    } = {},
-  ): number {
-    const computedResult = applyComputedFieldsToSourceRows({
-      rowIds,
-      changedContextKeys: options.contextKeys,
-    })
-    commitFormulaDiagnostics(computedResult.formulaDiagnostics)
-    commitFormulaComputeStageDiagnostics(computedResult.computeStageDiagnostics)
-    commitFormulaRowRecomputeDiagnostics(computedResult.rowRecomputeDiagnostics)
-    if (!computedResult.changed) {
-      return 0
-    }
-    rowVersionRuntime.bump(computedResult.changedRowIds)
-    runtimeStateStore.bumpRowRevision()
-    projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()
-    projectionIntegrationHostRuntime.invalidateTreeProjectionCaches()
-    runtimeStateStore.setProjectionInvalidation(["computedChanged"])
-    if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
+  const computedRefreshRuntime = createClientRowComputedRefreshRuntime<T>({
+    applyComputedFieldsToSourceRows,
+    commitFormulaDiagnostics,
+    commitFormulaComputeStageDiagnostics,
+    commitFormulaRowRecomputeDiagnostics,
+    bumpRowVersions: rowIds => {
+      rowVersionRuntime.bump(rowIds)
+    },
+    bumpRowRevision: () => {
+      runtimeStateStore.bumpRowRevision()
+    },
+    resetGroupByIncrementalAggregationState: () => {
+      projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()
+    },
+    invalidateTreeProjectionCaches: () => {
+      projectionIntegrationHostRuntime.invalidateTreeProjectionCaches()
+    },
+    markComputedProjectionInvalidated: () => {
+      runtimeStateStore.setProjectionInvalidation(["computedChanged"])
+    },
+    tryApplyFlatIdentityProjectionRefresh: () => flatIdentityProjectionRefreshRuntime.tryApply(),
+    recomputeFromComputeStage: () => {
       computeHostRuntime.recomputeFromStage("compute")
-    }
-    emit()
-    return computedResult.changedRowIds.length
-  }
+    },
+    emit,
+  })
+  const recomputeComputedFieldsAndRefresh = computedRefreshRuntime.recomputeComputedFieldsAndRefresh
 
   const formulaHostRuntime = createClientRowFormulaHostRuntime<T>({
     computeModuleHost,

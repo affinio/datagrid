@@ -288,12 +288,6 @@ describe("normalizeDataGridServerQuery", () => {
         columnStyleFilters: {
           status: { kind: "styleValueSet", styleKey: " bg ", tokens: [" #fff "] },
         },
-        advancedFilters: {
-          amount: {
-            type: "number",
-            clauses: [{ operator: "gt", value: 10 }],
-          },
-        },
         advancedExpression: {
           kind: "condition",
           key: "amount",
@@ -358,12 +352,6 @@ describe("normalizeDataGridServerQuery", () => {
         },
         columnStyleFilters: {
           status_code: { kind: "styleValueSet", styleKey: "bg", tokens: ["#fff"] },
-        },
-        advancedFilters: {
-          amount: {
-            type: "number",
-            clauses: [{ operator: "gt", value: 10 }],
-          },
         },
         advancedExpression: {
           kind: "condition",

@@ -43,6 +43,7 @@ Completed:
 - Extracted column histogram read-policy into `clientRowColumnHistogramRuntime`.
 - Extracted pivot drilldown facade wiring into `clientRowPivotDrilldownHostRuntime`.
 - Extracted computed apply/materialization refresh policy into `clientRowComputedApplyRuntime`.
+- Extracted computed recompute/projection refresh orchestration into `clientRowComputedRefreshRuntime`.
 
 Next candidates:
 

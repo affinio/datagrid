@@ -111,11 +111,14 @@ describe("rowModel normalization", () => {
     const groupRow = normalizeRowNode(
       {
         kind: "group",
+        data: { label: "region=EU" },
         row: { label: "region=EU" },
+        rowKey: "region=EU",
         rowId: "region=EU",
+        sourceIndex: 0,
         originalIndex: 0,
         displayIndex: 0,
-        state: { group: true, expanded: true },
+        state: { selected: false, group: true, pinned: "none", expanded: true },
         groupMeta: {
           groupKey: "region=EU",
           groupField: "region",
@@ -128,10 +131,15 @@ describe("rowModel normalization", () => {
     )
     const leafRow = normalizeRowNode(
       {
+        kind: "leaf",
+        data: { id: 10 },
         row: { id: 10 },
+        rowKey: "leaf-10",
         rowId: "leaf-10",
+        sourceIndex: 1,
         originalIndex: 1,
         displayIndex: 1,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
       },
       1,
     )

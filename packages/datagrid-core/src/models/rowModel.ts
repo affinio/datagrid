@@ -1052,6 +1052,44 @@ export function withResolvedRowIdentity<T>(
   if (isDataGridRowNodeInput(node)) {
     return node
   }
+  if (node && typeof node === "object") {
+    const untyped = node as {
+      row?: T
+      rowId?: unknown
+      rowKey?: unknown
+      originalIndex?: unknown
+      displayIndex?: unknown
+      data?: unknown
+      kind?: unknown
+    }
+    if (
+      typeof untyped.kind === "undefined"
+      && typeof untyped.data === "undefined"
+      && typeof untyped.row !== "undefined"
+      && typeof untyped.originalIndex !== "undefined"
+      && (isDataGridRowId(untyped.rowId) || isDataGridRowId(untyped.rowKey))
+    ) {
+      const rowData = untyped.row as T
+      const rowId = (isDataGridRowId(untyped.rowKey) ? untyped.rowKey : untyped.rowId) as DataGridRowId
+      const sourceIndex = Number.isFinite(untyped.originalIndex)
+        ? Math.max(0, Math.trunc(untyped.originalIndex as number))
+        : index
+      const displayIndex = Number.isFinite(untyped.displayIndex)
+        ? Math.max(0, Math.trunc(untyped.displayIndex as number))
+        : sourceIndex
+      return {
+        kind: "leaf",
+        data: rowData,
+        row: rowData,
+        rowKey: rowId,
+        rowId,
+        originalIndex: sourceIndex,
+        sourceIndex,
+        displayIndex,
+        state: { selected: false, group: false, pinned: "none", expanded: false },
+      }
+    }
+  }
   const rowData = resolveRowData(node)
   const fallbackId = ((): DataGridRowId => {
     if (typeof resolveRowId === "function") {
