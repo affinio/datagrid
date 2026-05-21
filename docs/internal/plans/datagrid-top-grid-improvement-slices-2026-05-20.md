@@ -30,7 +30,7 @@ Slices:
     - Keep ownership in core; do not expose lifecycle API to package consumers.
     - Add focused tests that suspend/resume blocks new pulls without dropping visible cache, dispose cancels in-flight/pending work, and attach initializes diagnostics deterministically.
     - Validation: datasource row model unit suite, core type-check, architecture gate.
-13. [ ] Introduce typed internal datasource signals.
+13. [x] Introduce typed internal datasource signals.
     - Scope: minimal typed signal surface for `pullStarted`, `pullSettled`, `cacheInvalidated`, `viewportCoverageChanged`, `optimisticMutationStarted`, and `optimisticMutationSettled`.
     - Prefer explicit signal payloads over a generic untyped event bus; no public API changes.
     - Route telemetry/cache/scheduler/mutation cross-talk through signals only where it removes direct coupling.

@@ -6,6 +6,20 @@
 
 - ## Summary
 
+  Introduced typed internal datasource runtime signals for pull lifecycle, cache invalidation, viewport coverage, and optimistic mutation transitions.
+
+  ## User impact
+
+  No public API or browser behavior change expected. Datasource services now have explicit signal payloads for internal coordination instead of relying only on direct orchestration calls.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource signal regressions, datasource-backed row model regressions, package type-check, and architecture gate passed
+
+- ## Summary
+
   Added internal datasource runtime lifecycle contracts for scheduler, transport coordination, cache, invalidation, telemetry, and optimistic mutation services.
 
   ## User impact

@@ -61,10 +61,10 @@ export function createDataSourceRuntimeLifecycle(
       phase = "attached"
     },
     suspend() {
-      if (isDisposed()  || phase !== "attached") {
+      if (isDisposed() || phase !== "attached") {
         return false
       }
-      
+
       options.onSuspend?.()
       phase = "suspended"
       return true

@@ -89,6 +89,7 @@ import {
   createDataSourceRuntimeLifecycle,
   type DataSourceRuntimeLifecycle,
 } from "./server/dataSourceRuntimeLifecycle.js"
+import { createDataSourceRuntimeSignals } from "./server/dataSourceRuntimeSignals.js"
 import { resolveDataSourceRuntimeState } from "./server/dataSourceRuntimeStateMachine.js"
 import type {
   DataGridDataSource,
@@ -386,6 +387,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
   const telemetry = createDataSourceTelemetryRuntime(diagnostics)
   const scheduler = createDataSourcePullScheduler(diagnostics)
+  const signals = createDataSourceRuntimeSignals()
   const transportCoordinatorLifecycle = createDataSourceRuntimeLifecycle({
     service: "transport-coordinator",
   })
@@ -393,6 +395,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     service: "invalidation-engine",
   })
   const runtimeServices: DataSourceRuntimeLifecycle[] = [
+    signals,
     scheduler,
     transportCoordinatorLifecycle,
     cacheManager,
@@ -404,6 +407,30 @@ export function createDataSourceBackedRowModel<T = unknown>(
     service.init()
     service.attach()
   }
+  signals.subscribe("pullStarted", event => {
+    if (event.priority !== "background") {
+      markViewportDataAvailabilityRequested(event.range)
+    }
+  })
+  signals.subscribe("cacheInvalidated", event => {
+    if (event.preserveRange) {
+      telemetry.finishPlaceholderExposuresOutsideRange(event.preserveRange)
+      return
+    }
+    if (event.kind === "all") {
+      telemetry.finishAllPlaceholderExposures()
+    }
+  })
+  signals.subscribe("viewportCoverageChanged", event => {
+    reconcilePlaceholderExposure(event.sourceViewport)
+    finishViewportDataAvailability()
+  })
+  signals.subscribe("optimisticMutationStarted", () => {
+    updateLoadingState()
+  })
+  signals.subscribe("optimisticMutationSettled", () => {
+    updateLoadingState()
+  })
 
   const unsubscribePush = typeof dataSource.subscribe === "function"
     ? dataSource.subscribe(event => {
@@ -586,6 +613,23 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   async function processOptimisticCommit(transaction: OptimisticEditTransaction<T>): Promise<void> {
+    let optimisticMutationSettled = false
+    const settleOptimisticMutation = (
+      status: "committed" | "rejected" | "failed",
+      settledError?: Error,
+    ) => {
+      if (optimisticMutationSettled) {
+        return
+      }
+      optimisticMutationSettled = true
+      signals.emit("optimisticMutationSettled", {
+        transactionId: transaction.id,
+        rowIds: Array.from(transaction.updatesByRowId.keys()),
+        status,
+        ...(settledError ? { error: settledError } : {}),
+      })
+    }
+
     try {
       const result = await Promise.resolve(
         getDataSourceCommitEdits!({
@@ -614,12 +658,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
           ?? "commitEdits returned rejected rows",
         )
         rollbackOptimisticTransaction(transaction, Array.from(rejectedRowIds))
+        settleOptimisticMutation("rejected", error)
         bumpRevision()
         emit()
         throw error
       }
 
       optimisticMutationEngine.remove(transaction.id)
+      settleOptimisticMutation("committed")
       error = null
       const changedByMutationResult = applyMutationResult(result)
       const needsProjectionRefresh = !result.invalidation
@@ -641,6 +687,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       console.error("[DataGridDataSource] commitEdits failed.", commitError)
       error = commitError instanceof Error ? commitError : new Error(String(commitError))
       rollbackOptimisticTransaction(transaction)
+      settleOptimisticMutation("failed", error)
       bumpRevision()
       emit()
       throw error
@@ -800,7 +847,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       diagnostics.viewportCacheMissRows = 0
       diagnostics.viewportCacheHitRatio = 1
       diagnostics.blankViewportActive = false
-      reconcilePlaceholderExposure(sourceViewport)
+      signals.emit("viewportCoverageChanged", {
+        sourceViewport,
+        visibleRowCount: 0,
+        hitRows: 0,
+        missRows: 0,
+        hitRatio: 1,
+        blankViewportActive: false,
+      })
       return
     }
     const bounded = normalizeViewportRange(sourceViewport, rowCount)
@@ -830,8 +884,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       sourceViewport.start - 1,
       0,
     )
-    reconcilePlaceholderExposure(sourceViewport)
-    finishViewportDataAvailability()
+    signals.emit("viewportCoverageChanged", {
+      sourceViewport,
+      visibleRowCount: getVisibleRowCount(),
+      hitRows,
+      missRows,
+      hitRatio: diagnostics.viewportCacheHitRatio,
+      blankViewportActive,
+    })
   }
 
   function resolveVelocityAwareSourceRange(sourceViewport: DataGridViewportRange): DataGridViewportRange {
@@ -1080,7 +1140,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
     rowCache.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
-    diagnostics.invalidatedRows += Math.max(0, previousSize - preservedRows.length)
+    const removedRows = Math.max(0, previousSize - preservedRows.length)
+    diagnostics.invalidatedRows += removedRows
+    if (removedRows > 0) {
+      signals.emit("cacheInvalidated", {
+        kind: "replace",
+        removedRows,
+        preserveRange,
+        reason: "replace-cache",
+      })
+    }
 
     for (const preserved of preservedRows) {
       writeRowCache(preserved.index, preserved.node)
@@ -1108,6 +1177,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return
     }
     let changed = false
+    let removedRows = 0
     for (let index = bounded.start; index <= bounded.end; index += 1) {
       if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) {
         continue
@@ -1116,11 +1186,19 @@ export function createDataSourceBackedRowModel<T = unknown>(
         staleRetainedRowIndexes.delete(index)
         rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
+        removedRows += 1
         changed = true
       }
     }
     if (changed) {
       bumpRevision()
+      signals.emit("cacheInvalidated", {
+        kind: "range",
+        removedRows,
+        range: bounded,
+        preserveRange,
+        reason: "range-clear",
+      })
     }
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
@@ -1154,6 +1232,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
     let changed = false
     let touchedViewport = false
+    let removedRows = 0
     const touchedViewportIndexes: number[] = []
     for (const [index, node] of rowCache.entries()) {
       if (!uniqueRowIds.has(node.rowId)) {
@@ -1171,6 +1250,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         staleRetainedRowIndexes.delete(index)
         rangeCache.deleteRow(index)
         diagnostics.invalidatedRows += 1
+        removedRows += 1
         changed = true
         if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
           clearBackgroundPrefetchState("stale")
@@ -1184,6 +1264,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     if (changed) {
       bumpRevision()
+      signals.emit("cacheInvalidated", {
+        kind: "rows",
+        removedRows,
+        rowIds: Array.from(uniqueRowIds),
+        preserveRange,
+        reason: "rows-clear",
+      })
     }
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
@@ -1221,7 +1308,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
         bumpRevision()
       }
       let removedRows = 0
-      telemetry.finishPlaceholderExposuresOutsideRange(preserveRange)
       for (const index of Array.from(rowCache.keys())) {
         if (index >= preserveRange.start && index <= preserveRange.end) {
           continue
@@ -1233,6 +1319,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
       }
       diagnostics.invalidatedRows += removedRows
+      if (removedRows > 0) {
+        signals.emit("cacheInvalidated", {
+          kind: "all",
+          removedRows,
+          preserveRange,
+          reason: "clear-all-preserve-range",
+        })
+      }
       diagnostics.rowCacheSize = rowCache.size
       updateLoadingState()
       updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
@@ -1242,8 +1336,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
     if (rowCache.size > 0) {
       bumpRevision()
     }
-    diagnostics.invalidatedRows += rowCache.size
-    telemetry.finishAllPlaceholderExposures()
+    const removedRows = rowCache.size
+    diagnostics.invalidatedRows += removedRows
+    if (removedRows > 0) {
+      signals.emit("cacheInvalidated", {
+        kind: "all",
+        removedRows,
+        preserveRange: null,
+        reason: "clear-all",
+      })
+    }
     rowCache.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
@@ -1418,6 +1520,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
     rangeCache.cancelLoad(active.rangeCacheToken)
     if (!active.controller.signal.aborted) {
       active.controller.abort()
+      signals.emit("pullSettled", {
+        requestId: active.requestId,
+        range: active.range,
+        priority: active.priority,
+        reason: active.reason,
+        status: "aborted",
+      })
       diagnostics.pullAborted += 1
       if (priority === "background") {
         diagnostics.prefetchAborted += 1
@@ -1690,10 +1799,15 @@ export function createDataSourceBackedRowModel<T = unknown>(
     requestCounter = requestId
     const controller = new AbortController()
     const rangeCacheToken = rangeCache.beginLoad(requestRange)
-    if (priority !== "background") {
-      markViewportDataAvailabilityRequested(requestRange)
-    }
     const requestPromise = (async () => {
+      let settledStatus: "completed" | "failed" | "dropped" = "completed"
+      let settledError: Error | undefined
+      signals.emit("pullStarted", {
+        requestId,
+        range: requestRange,
+        priority,
+        reason,
+      })
       diagnostics.paused = backpressurePaused
       diagnostics.pullRequested += 1
       if (priority === "background") {
@@ -1726,6 +1840,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
+          settledStatus = "dropped"
           diagnostics.pullDropped += 1
           if (priority === "background") {
             diagnostics.prefetchDroppedStale += 1
@@ -1791,6 +1906,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         telemetry.recordPullDuration(pullStartedAtMs)
         const active = readLaneInFlight(priority)
         if (disposed || !active || active.requestId !== requestId || controller.signal.aborted) {
+          settledStatus = "dropped"
           diagnostics.pullDropped += 1
           if (priority === "background") {
             diagnostics.prefetchDroppedStale += 1
@@ -1799,13 +1915,24 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
         if (priority !== "background") {
           error = reasonError instanceof Error ? reasonError : new Error(String(reasonError))
+          settledError = error
           rangeCache.failLoad(rangeCacheToken, error)
         } else {
+          settledError = reasonError instanceof Error ? reasonError : new Error(String(reasonError))
           rangeCache.cancelLoad(rangeCacheToken)
         }
+        settledStatus = "failed"
       } finally {
         const active = readLaneInFlight(priority)
         if (active && active.requestId === requestId) {
+          signals.emit("pullSettled", {
+            requestId,
+            range: requestRange,
+            priority,
+            reason,
+            status: settledStatus,
+            ...(settledError ? { error: settledError } : {}),
+          })
           writeLaneInFlight(priority, null)
           updateLoadingState()
           if (!disposed && !backpressurePaused) {
@@ -2154,6 +2281,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
               baselinesByRowId,
             }
             optimisticMutationEngine.register(transaction)
+            signals.emit("optimisticMutationStarted", {
+              transactionId: transaction.id,
+              rowIds: Array.from(transaction.updatesByRowId.keys()),
+            })
 
             if (changed) {
               bumpRevision()
