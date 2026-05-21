@@ -108,6 +108,7 @@ function createTableProps(options?: {
     },
     rows: {
       displayRows: rows,
+      pinnedTopRows: [],
       pinnedBottomRows: [],
       showRowIndex: true,
       rowHover: options?.rowHover ?? false,

@@ -95,7 +95,7 @@ Phase A delivery status: completed in current branch.
 | Work item | Complexity | Core break risk | Notes |
 | --- | --- | --- | --- |
 | Fix column virtualization toggle wiring in app feature | S | low | Done: adapter bridges `set/getVirtualizationEnabled` with legacy method names. |
-| Make `rowSelectionModes` affect real selection behavior | M | low | Done: row-select payload now supports additive/toggle and honors mode. |
+| Make `rowSelectionModes` affect real selection behavior | M | low | Done: row-selection payload supports additive/toggle and honors mode. |
 | Promote `aggregationFunctionsRegistry` from local map to integrated resolver path | M | medium | Done: registry now materializes custom handlers into aggregation model. |
 | Add built-in app UI shells for `groupPanel`, `pivotPanel`, `filterBuilderUI`, `columnMenu` | M | low | Done: base shells are wired in `<DataGrid />`. |
 

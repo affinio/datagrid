@@ -215,6 +215,7 @@ Validation target:
   - `2026-05-21`: pivot drilldown facade wiring moved into `clientRowPivotDrilldownHostRuntime`; `clientRowModel` now delegates pivot cell drilldown reads.
   - `2026-05-21`: computed apply/materialization refresh policy moved into `clientRowComputedApplyRuntime`; `clientRowModel` now delegates computed execution result application.
   - `2026-05-21`: computed recompute/projection refresh orchestration moved into `clientRowComputedRefreshRuntime`; `clientRowModel` now delegates formula-triggered recompute refresh policy.
+  - `2026-05-21`: row-model dispose cleanup moved into `clientRowDisposeHostRuntime`; `clientRowModel` now delegates disposal cleanup sequencing.
 - `packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts`: consider splitting row/batch/columnar execution paths if compute work expands.
 - `packages/datagrid-core/src/models/rowModel.ts`: types plus tree/group/pagination/normalization helpers; split helper modules before adding more row-model helpers.
 - `packages/datagrid-core/src/models/columnModel.ts`: watch for pin/order/visibility/width groups growing into separate owners.

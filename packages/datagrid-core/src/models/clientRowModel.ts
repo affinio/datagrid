@@ -97,6 +97,7 @@ import {
 import { createClientRowComputedFieldHostRuntime } from "./host/clientRowComputedFieldHostRuntime.js"
 import { createClientRowFormulaHostRuntime } from "./host/clientRowFormulaHostRuntime.js"
 import { createClientRowFormulaTableHostRuntime } from "./host/clientRowFormulaTableHostRuntime.js"
+import { createClientRowDisposeHostRuntime } from "./host/clientRowDisposeHostRuntime.js"
 import {
   createClientRowComputedExecutionRuntime,
   type ApplyComputedFieldsToSourceRowsOptions,
@@ -883,6 +884,26 @@ export function createClientRowModel<T>(
     readProjectionRowField: (row, key) => readProjectionRowField(row, key),
     materializeOutputRows,
   })
+  const disposeHostRuntime = createClientRowDisposeHostRuntime<T>({
+    lifecycle,
+    formulaHostRuntime,
+    computeHostRuntime,
+    clearSourceRowsState,
+    clearSourceColumnValuesCache,
+    runtimeState,
+    materializationRuntime,
+    resetPivotColumns,
+    rowVersionRuntime,
+    projectionIntegrationHostRuntime,
+    projectionTransientStateRuntime,
+    treePivotIntegrationRuntime,
+    expansionHostRuntime,
+    derivedCacheRuntime,
+    computedRegistry,
+    computedRegistryRef,
+    formulaDiagnosticsRuntime,
+    runtimeStateStore,
+  })
 
   runtimeStateStore.setProjectionInvalidation(["rowsChanged"])
   if (!flatIdentityProjectionRefreshRuntime.tryApply()) {
@@ -1124,38 +1145,7 @@ export function createClientRowModel<T>(
       return computeHostRuntime.getDiagnostics()
     },
     dispose() {
-      if (!lifecycle.dispose()) {
-        return
-      }
-      formulaHostRuntime.dispose()
-      computeHostRuntime.dispose()
-      clearSourceRowsState()
-      clearSourceColumnValuesCache()
-      runtimeState.rows = []
-      runtimeState.filteredRowsProjection = []
-      runtimeState.sortedRowsProjection = []
-      runtimeState.groupedRowsProjection = []
-      runtimeState.pivotedRowsProjection = []
-      runtimeState.aggregatedRowsProjection = []
-      runtimeState.paginatedRowsProjection = []
-      materializationRuntime.clearMaterializedSourceRowsCache()
-      resetPivotColumns()
-      rowVersionRuntime.clear()
-      projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()
-      projectionTransientStateRuntime.resetGroupedProjectionGroupIndexByRowId()
-      treePivotIntegrationRuntime.resetPivotExpansionState()
-      expansionHostRuntime.resetExpansionState()
-      derivedCacheRuntime.clearSortValueCache()
-      derivedCacheRuntime.clearGroupValueCache()
-      computedRegistry.clear()
-      computedRegistryRef.current = null
-      formulaDiagnosticsRuntime.commitFormulaComputeStageDiagnostics(
-        createEmptyFormulaComputeStageDiagnostics(),
-      )
-      formulaDiagnosticsRuntime.commitFormulaRowRecomputeDiagnostics({ rows: [] })
-      runtimeStateStore.setProjectionFormulaDiagnostics(null)
-      projectionIntegrationHostRuntime.invalidateTreeProjectionCaches()
-      derivedCacheRuntime.clearFilterPredicateCache()
+      disposeHostRuntime.dispose()
     },
   }
 }

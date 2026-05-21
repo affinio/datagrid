@@ -7641,13 +7641,16 @@ describe("DataGrid app facade contract", () => {
 
     const bodyViewport = wrapper.find(".grid-body-viewport")
     expect(bodyViewport.exists()).toBe(true)
-    const bodyShell = bodyViewport.element.parentElement as HTMLElement | null
+    const bodyViewportEl = bodyViewport.element as HTMLElement
+    const bodyShell = bodyViewportEl.parentElement as HTMLElement | null
     expect(bodyShell).toBeTruthy()
-    setElementClientWidth(bodyViewport.element as HTMLElement, 720)
+    setElementClientWidth(bodyViewportEl, 720)
     if (bodyShell) {
       setElementClientWidth(bodyShell, 792)
     }
+    bodyViewportEl.scrollLeft = 1
     await bodyViewport.trigger("scroll")
+    await flushAnimationFrame()
     await flushRuntimeTasks()
 
     const ownerHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
@@ -7675,13 +7678,16 @@ describe("DataGrid app facade contract", () => {
 
     const bodyViewport = wrapper.find(".grid-body-viewport")
     expect(bodyViewport.exists()).toBe(true)
-    const bodyShell = bodyViewport.element.parentElement as HTMLElement | null
+    const bodyViewportEl = bodyViewport.element as HTMLElement
+    const bodyShell = bodyViewportEl.parentElement as HTMLElement | null
     expect(bodyShell).toBeTruthy()
-    setElementClientWidth(bodyViewport.element as HTMLElement, 300)
+    setElementClientWidth(bodyViewportEl, 300)
     if (bodyShell) {
       setElementClientWidth(bodyShell, 720)
     }
+    bodyViewportEl.scrollLeft = 1
     await bodyViewport.trigger("scroll")
+    await flushAnimationFrame()
     await flushRuntimeTasks()
 
     const ownerHeaderCell = wrapper.find('.grid-header-pane--left .grid-cell--header[data-column-key="owner"]')

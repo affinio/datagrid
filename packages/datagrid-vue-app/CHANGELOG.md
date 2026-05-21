@@ -231,7 +231,7 @@
   ## Migration
   - No migration required.
   - Optional adoption: pass `toolbar-modules` / `toolbarModules` to `DataGrid` instead of replacing the whole renderer when you only need additive toolbar customization.
-  - Optional adoption: use `row-selection-state` / `rowSelectionState` with `update:rowSelectionState` when a host page wants a stable controlled selected-row snapshot without diffing `row-select` and unified-state emissions.
+  - Optional adoption: use `row-selection-state` / `rowSelectionState` with `update:rowSelectionState` when a host page wants a stable controlled selected-row snapshot without diffing `row-selection-change` and unified-state emissions.
 
   ## Validation
   - public facade contract updated for `toolbarModules`

@@ -1929,7 +1929,6 @@ body.datagrid-fill-drag-cursor * {
   opacity: 0.9;
 }
 
-.col-head--row-select,
 .col-head--index {
   justify-content: center;
   padding-right: 0;
