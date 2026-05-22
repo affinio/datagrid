@@ -25,7 +25,12 @@ function createRenderModel(): DataGridChromeRenderModel {
   }
 }
 
-function createCanvasContext(): CanvasRenderingContext2D {
+type CanvasContextStub = CanvasRenderingContext2D & {
+  moveTo: ReturnType<typeof vi.fn>
+  lineTo: ReturnType<typeof vi.fn>
+}
+
+function createCanvasContext(): CanvasContextStub {
   return {
     setTransform: vi.fn(),
     clearRect: vi.fn(),
@@ -39,7 +44,13 @@ function createCanvasContext(): CanvasRenderingContext2D {
     set strokeStyle(_value: string) {},
     set fillStyle(_value: string) {},
     set lineWidth(_value: number) {},
-  } as unknown as CanvasRenderingContext2D
+  } as unknown as CanvasContextStub
+}
+
+function installCanvasContextMock(): CanvasContextStub {
+  const context = createCanvasContext()
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context)
+  return context
 }
 
 function createChromeCanvasApi(perfTraceEnabled = false) {
@@ -82,7 +93,7 @@ describe("useDataGridStageChromeCanvas", () => {
   beforeEach(() => {
     document.body.innerHTML = ""
     delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(createCanvasContext())
+    installCanvasContextMock()
   })
 
   it("does not record chrome draw telemetry by default", () => {
@@ -108,5 +119,15 @@ describe("useDataGridStageChromeCanvas", () => {
       bodyBandCount: 3,
       pinnedBottomBandCount: 3,
     })
+  })
+
+  it("draws body pinned pane vertical dividers through the full viewport height", () => {
+    const context = installCanvasContextMock()
+    const api = createChromeCanvasApi()
+
+    api.flushGridChromeRedraw("full")
+
+    const fullHeightVerticalLineCount = context.lineTo.mock.calls.filter((call: unknown[]) => call[1] === 48).length
+    expect(fullHeightVerticalLineCount).toBeGreaterThanOrEqual(6)
   })
 })

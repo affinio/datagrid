@@ -368,7 +368,7 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
       : null
     if (leftContext) {
-      drawGridChromeBodyPane(options.stageRootEl, leftContext, renderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
+      drawGridChromeBodyPane(options.stageRootEl, leftContext, renderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
     }
 
     const centerContext = prepareGridChromeCanvas(options.centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
@@ -378,14 +378,14 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
       : null
     if (rightContext) {
-      drawGridChromeBodyPane(options.stageRootEl, rightContext, renderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
+      drawGridChromeBodyPane(options.stageRootEl, rightContext, renderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
     }
 
     const leftBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftBottomChromeCanvasEl.value, bottomRenderModel.left.width, bottomRenderModel.left.height)
       : null
     if (leftBottomContext) {
-      drawGridChromeBodyPane(options.stageRootEl, leftBottomContext, bottomRenderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
+      drawGridChromeBodyPane(options.stageRootEl, leftBottomContext, bottomRenderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
     }
 
     const centerBottomContext = prepareGridChromeCanvas(options.centerBottomChromeCanvasEl.value, bottomRenderModel.center.width, bottomRenderModel.center.height)
@@ -395,7 +395,7 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.rightBottomChromeCanvasEl.value, bottomRenderModel.right.width, bottomRenderModel.right.height)
       : null
     if (rightBottomContext) {
-      drawGridChromeBodyPane(options.stageRootEl, rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, 0)
+      drawGridChromeBodyPane(options.stageRootEl, rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
     }
 
     if (options.perfTraceEnabled) {

@@ -29,14 +29,6 @@ describe("ensureDataGridAppStyles", () => {
     expect(headerFallbackRule).not.toContain("border-bottom:")
   })
 
-  it("keeps fill-layout pinned body panes stretched for short content chrome", () => {
-    ensureDataGridAppStyles()
-
-    const style = document.getElementById(STYLE_ID)
-    expect(style?.textContent).toContain(".grid-body-pane--layout-fill")
-    expect(style?.textContent).toContain("height: 100%")
-  })
-
   it("keeps the grid viewport on native touch panning by default", () => {
     ensureDataGridAppStyles()
 

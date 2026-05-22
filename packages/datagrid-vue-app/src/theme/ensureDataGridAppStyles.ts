@@ -1063,10 +1063,6 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
-.grid-body-pane--layout-fill {
-  height: 100%;
-}
-
 .grid-body-pane--layout-auto-height {
   min-height: 100%;
 }
