@@ -2169,7 +2169,7 @@ export function useDataGridAppInteractionController<
 
   const pointerAutoScroll = useDataGridPointerAutoScroll({
     resolveInteractionState: () => ({
-      isDragSelecting: options.mode.value === "base" && isPointerSelectingCells.value,
+      isDragSelecting: supportsCellSelectionMode() && isPointerSelectingCells.value,
       isFillDragging: options.mode.value === "base" && isFillDragging.value,
       isRangeMoving: options.mode.value === "base" && isRangeMoving.value,
     }),

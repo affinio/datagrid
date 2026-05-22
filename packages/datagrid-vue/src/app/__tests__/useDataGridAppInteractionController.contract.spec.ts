@@ -794,6 +794,70 @@ describe("useDataGridAppInteractionController contract", () => {
     )
   })
 
+  it("keeps worker-mode drag selection active during pointer auto-scroll", () => {
+    let frame: FrameRequestCallback | null = null
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      frame = callback
+      return 1
+    })
+    const cancelRafSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined)
+    const { controller, row, bodyViewport, selectionSnapshot } = createControllerHarness({
+      mode: "worker",
+      rowCount: 100,
+      columnWidths: [100, 100],
+      shellWidth: 200,
+      shellHeight: 100,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(99, Math.floor(offset / 24))),
+    })
+    Object.defineProperty(bodyViewport, "scrollHeight", { configurable: true, value: 2_400 })
+    Object.defineProperty(bodyViewport, "scrollWidth", { configurable: true, value: 200 })
+    bodyViewport.getBoundingClientRect = () => ({
+      left: 0,
+      top: 0,
+      width: 200,
+      height: 100,
+      right: 200,
+      bottom: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    try {
+      const cell = createCell(0, 0)
+      controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+        button: 0,
+        clientX: 20,
+        clientY: 10,
+      }), row, 0, 0)
+      controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+        buttons: 1,
+        clientX: 20,
+        clientY: 96,
+      }))
+
+      const runFrame = frame as FrameRequestCallback | null
+      expect(runFrame).not.toBeNull()
+      if (!runFrame) {
+        throw new Error("Expected worker drag autoscroll to schedule a frame")
+      }
+      runFrame(0)
+
+      expect(bodyViewport.scrollTop).toBeGreaterThan(0)
+      expect(selectionSnapshot.value?.ranges[0]).toMatchObject({
+        startRow: 0,
+        endRow: expect.any(Number),
+        startCol: 0,
+        endCol: 0,
+        anchor: { rowIndex: 0, colIndex: 0 },
+      })
+      expect(selectionSnapshot.value?.ranges[0]?.endRow ?? 0).toBeGreaterThan(0)
+    } finally {
+      rafSpy.mockRestore()
+      cancelRafSpy.mockRestore()
+    }
+  })
+
   it("keeps drag selection in the current column until the pointer actually crosses the boundary", () => {
     const { controller, row, applyCellSelectionByCoord, selectionSnapshot } = createControllerHarness({
       rowCount: 3,
