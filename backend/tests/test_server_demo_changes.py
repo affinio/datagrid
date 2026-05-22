@@ -181,3 +181,76 @@ async def test_change_feed_falls_back_to_dataset_invalidation_when_gap_is_too_la
             "session_id": None,
         }
     ]
+
+
+async def test_change_feed_websocket_sends_change_feed_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import WebSocketDisconnect
+
+    from app.features.server_demo import changes_router
+    from app.features.server_demo.schemas import (
+        ServerDemoChangeFeedChange,
+        ServerDemoChangeFeedResponse,
+        ServerDemoMutationInvalidation,
+    )
+
+    class FakeSessionContext:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class FakeRepository:
+        def __init__(self, _session: object, workspace_id: str | None = None):
+            self.workspace_id = workspace_id
+
+        async def change_feed(self, since_version: int) -> ServerDemoChangeFeedResponse:
+            assert since_version == 0
+            return ServerDemoChangeFeedResponse(
+                datasetVersion=3,
+                changes=[
+                    ServerDemoChangeFeedChange(
+                        type="dataset",
+                        invalidation=ServerDemoMutationInvalidation(type="dataset"),
+                    ),
+                ],
+            )
+
+    class FakeWebSocket:
+        headers = {"x-workspace-id": "ws-workspace"}
+
+        def __init__(self) -> None:
+            self.accepted = False
+            self.sent: list[dict[str, object]] = []
+
+        async def accept(self) -> None:
+            self.accepted = True
+
+        async def send_json(self, payload: dict[str, object]) -> None:
+            self.sent.append(payload)
+
+    async def stop_after_first_send(_delay: float) -> None:
+        raise WebSocketDisconnect
+
+    monkeypatch.setattr(changes_router, "AsyncSessionLocal", lambda: FakeSessionContext())
+    monkeypatch.setattr(changes_router, "ServerDemoRepository", FakeRepository)
+    monkeypatch.setattr(changes_router.asyncio, "sleep", stop_after_first_send)
+
+    websocket = FakeWebSocket()
+    await changes_router.changes_websocket(websocket, since_version=0, interval_ms=250)  # type: ignore[arg-type]
+
+    assert websocket.accepted is True
+    assert websocket.sent == [
+        {
+            "datasetVersion": 3,
+            "changes": [
+                {
+                    "type": "dataset",
+                    "invalidation": {"type": "dataset", "cells": [], "rows": [], "range": None},
+                    "operationId": None,
+                    "user_id": None,
+                    "session_id": None,
+                }
+            ],
+        }
+    ]

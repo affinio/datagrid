@@ -656,8 +656,10 @@ Client live-update lifecycle:
 
 - `@affino/datagrid-server-client` exposes a transport-neutral live-update boundary.
 - Polling remains the default implementation through `createPollingLiveUpdateTransport`.
+- `createWebSocketLiveUpdateTransport()` and `createWebSocketLiveUpdateTransportFactory()` provide the built-in WebSocket transport for backends that expose a compatible push endpoint.
+- The FastAPI server-demo exposes `GET /api/changes?sinceVersion=...` for polling and `WS /api/changes/ws?sinceVersion=...` for WebSocket live updates.
 - `startLiveUpdates` / `stopLiveUpdates` are the neutral client lifecycle calls; `startChangeFeedPolling` / `stopChangeFeedPolling` remain compatibility aliases.
-- A future websocket/SSE transport must emit the same mapped row snapshots, invalidations, dataset-version updates, invalid-since-version recovery, and diagnostics path as polling.
+- Every live transport must emit the same mapped row snapshots, invalidations, dataset-version updates, invalid-since-version recovery, and diagnostics path as polling.
 
 ## Retry And Backoff
 
@@ -752,8 +754,8 @@ Current behavior:
 - server-side grouping, tree projection, and pivot projection are not implemented in the current FastAPI demo pull path
 - stack history is the normal undo/redo path
 - full off-viewport materialization may be bounded
-- polling/change feed is available as the current fallback path
-- concrete websocket/SSE transport is not implemented yet; the client transport boundary exists
+- polling/change feed is available as the default fallback path
+- WebSocket live transport is implemented for the server-demo change feed; SSE remains custom/host-owned
 - offline mutation replay is not implemented; reconnect is read/live recovery only
 - operation-id undo/redo remains available as low-level diagnostics/manual replay
 - change feed may return dataset invalidation fallback when the event window is incomplete or the gap is too large

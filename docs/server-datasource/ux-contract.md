@@ -56,7 +56,7 @@ The backend integration must provide:
 
 Current unsupported behavior:
 
-- concrete websocket/SSE transport; use polling-backed live updates today
+- WebSocket live transport is available for compatible change-feed endpoints; use polling-backed live updates as the default fallback, and treat SSE as custom/host-owned
 - offline mutation queue and mutation replay after reconnect
 - server-side grouping/tree/pivot projection in the FastAPI demo pull path
 - server-side series fill

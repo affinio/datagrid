@@ -8,9 +8,15 @@ export {
 export {
   createChangeFeedPoller,
   type ServerDatasourceChangeFeedDiagnostics,
+  type ServerDatasourceLiveUpdateDiagnosticsKind,
   type ServerDatasourceChangeFeedPoller,
   type ServerDatasourceChangeFeedPollerOptions,
 } from "./changeFeedPoller"
+export {
+  createWebSocketLiveUpdateTransport,
+  createWebSocketLiveUpdateTransportFactory,
+  type ServerDatasourceWebSocketLiveUpdateTransportOptions,
+} from "./webSocketLiveUpdateTransport"
 export {
   createPollingLiveUpdateTransport,
   type ServerDatasourceLiveUpdateTransport,

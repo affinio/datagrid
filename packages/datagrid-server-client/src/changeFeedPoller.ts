@@ -4,9 +4,12 @@ import {
   type ServerDatasourceRetryOptions,
 } from "./http"
 
+export type ServerDatasourceLiveUpdateDiagnosticsKind = "polling" | "websocket" | "custom"
+
 export interface ServerDatasourceChangeFeedDiagnostics {
   currentDatasetVersion: number | null
   lastSeenVersion: number | null
+  transportKind?: ServerDatasourceLiveUpdateDiagnosticsKind
   polling: boolean
   pending: boolean
   appliedChanges: number
@@ -66,6 +69,7 @@ export function createChangeFeedPoller<TResponse>(
     return {
       currentDatasetVersion: null,
       lastSeenVersion,
+      transportKind: "polling",
       polling: pollingActive,
       pending: pollInFlight,
       appliedChanges: appliedChangeCount,

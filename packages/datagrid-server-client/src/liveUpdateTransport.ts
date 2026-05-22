@@ -4,7 +4,7 @@ import {
   type ServerDatasourceChangeFeedPollerOptions,
 } from "./changeFeedPoller"
 
-export type ServerDatasourceLiveUpdateTransportKind = "polling" | "custom"
+export type ServerDatasourceLiveUpdateTransportKind = "polling" | "websocket" | "custom"
 
 export interface ServerDatasourceLiveUpdateTransport {
   kind: ServerDatasourceLiveUpdateTransportKind

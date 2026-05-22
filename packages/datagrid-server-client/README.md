@@ -44,7 +44,7 @@ Use `createChangeFeedPoller()` to manage polling lifecycle concerns:
 
 ### Live Update Transport
 
-Use `createPollingLiveUpdateTransport()` for the default polling-backed live-update transport. Custom websocket or server-sent-event transports can be supplied through `liveUpdateTransportFactory` as long as they feed the same response, invalid-since-version, diagnostics, and applied-change callbacks.
+Use `createPollingLiveUpdateTransport()` for the default polling-backed live-update transport. Use `createWebSocketLiveUpdateTransportFactory()` when the backend exposes a compatible WebSocket change-feed endpoint. Custom server-sent-event transports can also be supplied through `liveUpdateTransportFactory` as long as they feed the same response, invalid-since-version, diagnostics, and applied-change callbacks.
 
 ### Row Snapshots
 
@@ -61,6 +61,7 @@ Use `createServerDatasourceHttpClient()` when you want a reusable low-level clie
 - viewport `pull`
 - column histogram reads
 - change-feed polling
+- WebSocket live-update transport
 - transport-neutral live-update lifecycle
 - row snapshot application
 - diagnostics
@@ -82,6 +83,7 @@ Set `retry: false` to disable read retries, or pass `retry` options to tune `max
 import {
   createChangeFeedPoller,
   createPollingLiveUpdateTransport,
+  createWebSocketLiveUpdateTransportFactory,
   createServerDatasourceHttpClient,
   mapServerChangeEvent,
   normalizeDatasetVersion,
@@ -156,7 +158,7 @@ const client = createServerDatasourceHttpClient({
 client.startChangeFeedPolling()
 ```
 
-`startLiveUpdates()` and `stopLiveUpdates()` are transport-neutral aliases. `startChangeFeedPolling()` and `stopChangeFeedPolling()` remain available for existing polling integrations.
+`startLiveUpdates()` and `stopLiveUpdates()` are transport-neutral lifecycle calls. `startChangeFeedPolling()` and `stopChangeFeedPolling()` remain available for existing polling integrations.
 
 If you need edits, fill, or history, build those in an adapter or host-specific wrapper that composes this client with backend write endpoints.
 

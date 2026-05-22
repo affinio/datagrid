@@ -229,6 +229,7 @@ export function createServerDatasourceHttpClient<TRow>(
     const diagnostics = liveUpdateTransport.diagnostics()
     return {
       ...diagnostics,
+      transportKind: diagnostics.transportKind ?? liveUpdateTransport.kind,
       currentDatasetVersion: latestDatasetVersion,
       lastSeenVersion,
     }

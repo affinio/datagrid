@@ -20,6 +20,13 @@
         <button type="button" class="server-grid__button" @click="simulateCommitFailure">Simulate commit failure</button>
         <button type="button" class="server-grid__button" @click="jumpToRow(50_000)">Jump 50k</button>
         <button type="button" class="server-grid__button" @click="jumpToRow(99_500)">Jump tail</button>
+        <label class="server-grid__transport-select">
+          Transport
+          <select :value="liveUpdateTransport" @change="handleLiveUpdateTransportChange">
+            <option value="polling">Current</option>
+            <option value="websocket">WebSocket</option>
+          </select>
+        </label>
         <button
           type="button"
           class="server-grid__button"
@@ -132,8 +139,8 @@
               <dd>{{ lastSeenVersionLabel }}</dd>
             </div>
             <div class="server-grid__diagnostics-card">
-              <dt>Change feed</dt>
-              <dd>{{ changeFeedPollingLabel }} / {{ changeFeedPendingLabel }}</dd>
+              <dt>Live transport</dt>
+              <dd>{{ liveUpdateTransportLabel }} / {{ changeFeedPendingLabel }}</dd>
             </div>
             <div class="server-grid__diagnostics-card">
               <dt>Applied changes</dt>
@@ -648,6 +655,12 @@ import {
   resolveServerDemoChangeFeedPollingEnabled,
 } from "../serverDatasourceDemo/serverDemoChangeFeedPolling"
 import {
+  createPollingLiveUpdateTransport,
+  createWebSocketLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransport,
+  type ServerDatasourceLiveUpdateTransportFactory,
+} from "@affino/datagrid-server-client"
+import {
   normalizeServerDemoHistoryState,
 } from "../serverDatasourceDemo/serverDemoHistoryState"
 import {
@@ -685,6 +698,8 @@ const failureMode = ref(false)
 const commitFailureMode = ref(false)
 type ServerDemoLatencyProfile = "steady" | "jitter" | "slow"
 const latencyProfile = ref<ServerDemoLatencyProfile>("jitter")
+type ServerDemoLiveUpdateTransport = "polling" | "websocket"
+const liveUpdateTransport = ref<ServerDemoLiveUpdateTransport>("polling")
 const lastLatencyMs = ref(LATENCY_MS)
 const lastViewportRange = ref<{ start: number; end: number }>({ start: 0, end: 0 })
 const totalRows = ref(0)
@@ -695,6 +710,7 @@ const error = ref<Error | null>(null)
 const changeFeedDiagnostics = ref<ServerDemoChangeFeedDiagnostics>({
   currentDatasetVersion: null,
   lastSeenVersion: null,
+  transportKind: "polling",
   polling: false,
   pending: false,
   appliedChanges: 0,
@@ -951,7 +967,7 @@ function isHttpUnavailableError(caught: unknown): boolean {
 
 function markHttpDatasourceUnavailable(): void {
   serverDatasourceUnavailable.value = true
-  httpDatasource?.stopChangeFeedPolling()
+  httpDatasource?.stopLiveUpdates()
   error.value = new Error(serverDatasourceUnavailableMessage)
 }
 
@@ -1265,10 +1281,60 @@ const forceFakeDatasource = typeof window !== "undefined"
   && new URLSearchParams(window.location.search).get("datasource") === "fake"
 const serverDemoHttpDatasourceEnabled = import.meta.env.VITE_SERVER_DEMO_HTTP_DATA_SOURCE === "true" && !forceFakeDatasource
 const serverDemoHttpDatasourceBaseUrl = import.meta.env.VITE_SERVER_DEMO_API_BASE_URL?.trim()
+
+function resolveServerDemoWebSocketUrl(baseUrl: string, sinceVersion: number): string {
+  const url = new URL(`/api/changes/ws?tableId=server-demo&sinceVersion=${encodeURIComponent(String(sinceVersion))}`, baseUrl)
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+  return url.toString()
+}
+
+function createServerDemoLiveUpdateTransportFactory(baseUrl: string): ServerDatasourceLiveUpdateTransportFactory<unknown> {
+  return options => {
+    let activeTransport: ServerDatasourceLiveUpdateTransport | null = null
+
+    function createTransport(): ServerDatasourceLiveUpdateTransport {
+      return liveUpdateTransport.value === "websocket"
+        ? createWebSocketLiveUpdateTransport(options, {
+            url: sinceVersion => resolveServerDemoWebSocketUrl(baseUrl, sinceVersion),
+          })
+        : createPollingLiveUpdateTransport(options)
+    }
+
+    function ensureTransport(): ServerDatasourceLiveUpdateTransport {
+      if (!activeTransport) {
+        activeTransport = createTransport()
+      }
+      return activeTransport
+    }
+
+    return {
+      kind: "custom",
+      start(startOptions) {
+        activeTransport?.stop()
+        activeTransport = createTransport()
+        activeTransport.start(startOptions)
+      },
+      stop() {
+        activeTransport?.stop()
+      },
+      pollNow(signal) {
+        return ensureTransport().pollNow(signal)
+      },
+      diagnostics() {
+        return ensureTransport().diagnostics()
+      },
+      incrementAppliedChanges(count) {
+        ensureTransport().incrementAppliedChanges(count)
+      },
+    }
+  }
+}
+
 const serverDemoHttpDatasource: ServerDemoHttpDatasource | null = serverDemoHttpDatasourceEnabled && serverDemoHttpDatasourceBaseUrl
   ? createAffinoDatasource<ServerDemoRow>({
       baseUrl: serverDemoHttpDatasourceBaseUrl,
       tableId: "server-demo",
+      liveUpdateTransportFactory: createServerDemoLiveUpdateTransportFactory(serverDemoHttpDatasourceBaseUrl),
     })
   : null
 const httpDatasource = serverDemoHttpDatasource
@@ -1729,9 +1795,29 @@ const lastSeenVersionLabel = computed(() => {
   const value = changeFeedDiagnostics.value.lastSeenVersion
   return value === null ? "none" : String(value)
 })
-const changeFeedPollingLabel = computed(() => changeFeedDiagnostics.value.polling ? "yes" : "no")
+const liveUpdateTransportLabel = computed(() => `${changeFeedDiagnostics.value.transportKind ?? liveUpdateTransport.value}:${changeFeedDiagnostics.value.polling ? "on" : "off"}`)
 const changeFeedPendingLabel = computed(() => changeFeedDiagnostics.value.pending ? "yes" : "no")
 const appliedChangeCountLabel = computed(() => String(changeFeedDiagnostics.value.appliedChanges))
+
+function startServerDemoLiveUpdates(): void {
+  if (!serverDemoChangeFeedPollingEnabled || serverDatasourceUnavailable.value) {
+    return
+  }
+  httpDatasource?.startLiveUpdates({
+    intervalMs: serverDemoChangeFeedPollingIntervalMs,
+  })
+}
+
+function handleLiveUpdateTransportChange(event: Event): void {
+  const target = event.target as HTMLSelectElement | null
+  const nextTransport = target?.value === "websocket" ? "websocket" : "polling"
+  if (liveUpdateTransport.value === nextTransport) {
+    return
+  }
+  liveUpdateTransport.value = nextTransport
+  httpDatasource?.stopLiveUpdates()
+  startServerDemoLiveUpdates()
+}
 
 function refreshVisibleRange(): void {
   resetHttpDatasourceAvailability()
@@ -2240,11 +2326,7 @@ onMounted(() => {
   handleStateUpdate(rowModel.getSnapshot())
   void refreshHistoryStatus()
   void rowModel.refresh("mount").then(() => {
-    if (serverDemoChangeFeedPollingEnabled && !serverDatasourceUnavailable.value) {
-      httpDatasource?.startChangeFeedPolling({
-        intervalMs: serverDemoChangeFeedPollingIntervalMs,
-      })
-    }
+    startServerDemoLiveUpdates()
   }).catch((caught: unknown) => {
     if (isHttpUnavailableError(caught)) {
       markHttpDatasourceUnavailable()
@@ -2258,7 +2340,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  httpDatasource?.stopChangeFeedPolling()
+  httpDatasource?.stopLiveUpdates()
   if (unsubscribeChangeFeedDiagnostics) {
     unsubscribeChangeFeedDiagnostics()
     unsubscribeChangeFeedDiagnostics = null
@@ -2274,6 +2356,28 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
+}
+
+.server-grid__transport-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0 0.55rem;
+  border: 1px solid rgba(35, 42, 48, 0.14);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.68);
+  color: rgba(35, 42, 48, 0.82);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.server-grid__transport-select select {
+  min-width: 7.5rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 
 .server-grid__button[aria-pressed="true"] {

@@ -207,6 +207,7 @@ export interface ServerDemoDatasourceHooks {
 export interface ServerDemoChangeFeedDiagnostics {
   currentDatasetVersion: number | null
   lastSeenVersion: number | null
+  transportKind?: "polling" | "websocket" | "custom"
   polling: boolean
   pending: boolean
   appliedChanges: number

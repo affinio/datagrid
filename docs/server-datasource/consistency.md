@@ -317,16 +317,16 @@ Practical rule:
 
 The current server datasource implementation does not provide these enterprise behaviors yet:
 
-- websocket or server-sent-events live transport
+- server-sent-events live transport
 - offline mutation queue or durable reconnect replay
 - server-side grouping/tree/pivot projection in the FastAPI demo pull path
 - server-side series fill
 
-Integrations must treat these as unsupported unless they implement and test an explicit backend capability. The existing polling change feed is the supported live-update fallback, and dataset invalidation is the supported recovery path for incomplete event replay.
+Integrations must treat these as unsupported unless they implement and test an explicit backend capability. The existing polling change feed remains the default live-update fallback, the server-demo WebSocket endpoint is available for push live updates, and dataset invalidation is the supported recovery path for incomplete event replay.
 
 ## Change Feed
 
-`GET /api/changes?sinceVersion=...` is the current polling/change-feed path.
+`GET /api/changes?sinceVersion=...` is the polling/change-feed path. `WS /api/changes/ws?sinceVersion=...` streams the same response shape for WebSocket live updates in the server-demo backend.
 
 Behavior:
 
@@ -340,7 +340,8 @@ The frontend can use this as the fallback path when websocket transport is unava
 `@affino/datagrid-server-client` exposes a transport-neutral live-update lifecycle:
 
 - `createPollingLiveUpdateTransport()` wraps the current polling implementation.
-- `createServerDatasourceHttpClient()` accepts `liveUpdateTransportFactory` for future websocket/SSE transports.
+- `createWebSocketLiveUpdateTransport()` and `createWebSocketLiveUpdateTransportFactory()` provide the built-in WebSocket implementation.
+- `createServerDatasourceHttpClient()` accepts `liveUpdateTransportFactory` for WebSocket, SSE, or host-specific transports.
 - `startLiveUpdates()` / `stopLiveUpdates()` are the transport-neutral lifecycle calls.
 - existing `startChangeFeedPolling()` / `stopChangeFeedPolling()` calls remain polling-compatible aliases.
 - every transport must preserve the same `datasetVersion`, `lastSeenVersion`, invalid-since-version reset, row snapshot, invalidation, and diagnostics semantics.
@@ -409,7 +410,7 @@ the backend must:
 - server-side series fill is not implemented yet
 - the workspace scope is still demo/env/header driven unless the host app binds it to auth
 - the host app must still enforce authorization
-- concrete websocket/SSE transport is not implemented yet; the client transport boundary exists
+- WebSocket live transport is implemented for compatible change-feed endpoints; SSE remains custom/host-owned
 - offline mutation replay is not implemented; reconnect is read/live recovery only
 - operation-id undo/redo remains available as low-level diagnostics/manual replay
 - full off-viewport materialization may be bounded
