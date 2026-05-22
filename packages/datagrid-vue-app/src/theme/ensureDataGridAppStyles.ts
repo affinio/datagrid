@@ -464,7 +464,7 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-app-quick-filter__input {
   min-width: 0;
-  width: 160px;
+  width: 192px;
   border: 0;
   outline: 0;
   background: transparent;

@@ -48,7 +48,7 @@ export default defineComponent({
       }, "Quick filter"),
       h("input", {
         class: "datagrid-app-quick-filter__input",
-        type: "search",
+        type: "text",
         value: props.value,
         placeholder: props.placeholder,
         "aria-label": "Quick filter",

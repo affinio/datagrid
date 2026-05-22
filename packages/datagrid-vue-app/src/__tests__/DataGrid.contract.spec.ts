@@ -3964,6 +3964,7 @@ describe("DataGrid app facade contract", () => {
 
     const input = wrapper.find<HTMLInputElement>('[data-datagrid-quick-filter-input="true"]')
     expect(input.exists()).toBe(true)
+    expect(input.element.type).toBe("text")
     expect(input.element.placeholder).toBe("Search owner")
 
     await input.setValue("Payments")
