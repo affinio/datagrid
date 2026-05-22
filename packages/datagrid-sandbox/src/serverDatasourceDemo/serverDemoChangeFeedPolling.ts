@@ -1,14 +1,22 @@
 export interface ServerDemoChangeFeedPollingConfig {
   httpModeEnabled: boolean
   envValue?: string | null
+  legacyPollingEnvValue?: string | null
   intervalValue?: string | number | null
+}
+
+export function resolveServerDemoLiveUpdatesEnabled(config: ServerDemoChangeFeedPollingConfig): boolean {
+  if (!config.httpModeEnabled) {
+    return false
+  }
+  return config.envValue !== "false"
 }
 
 export function resolveServerDemoChangeFeedPollingEnabled(config: ServerDemoChangeFeedPollingConfig): boolean {
   if (!config.httpModeEnabled) {
     return false
   }
-  return config.envValue !== "false"
+  return (config.envValue ?? config.legacyPollingEnvValue) !== "false"
 }
 
 export function resolveServerDemoChangeFeedPollingIntervalMs(intervalValue: string | number | null | undefined): number {

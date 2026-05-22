@@ -653,6 +653,7 @@ import {
 import {
   resolveServerDemoChangeFeedPollingIntervalMs,
   resolveServerDemoChangeFeedPollingEnabled,
+  resolveServerDemoLiveUpdatesEnabled,
 } from "../serverDatasourceDemo/serverDemoChangeFeedPolling"
 import {
   createPollingLiveUpdateTransport,
@@ -1344,9 +1345,13 @@ if (httpDatasource) {
     changeFeedDiagnostics.value = diagnosticsState
   })
 }
+const serverDemoLiveUpdatesEnabled = resolveServerDemoLiveUpdatesEnabled({
+  httpModeEnabled: serverDemoHttpDatasourceEnabled,
+  envValue: import.meta.env.VITE_SERVER_DEMO_LIVE_UPDATES_ENABLED,
+})
 const serverDemoChangeFeedPollingEnabled = resolveServerDemoChangeFeedPollingEnabled({
   httpModeEnabled: serverDemoHttpDatasourceEnabled,
-  envValue: import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLLING_ENABLED,
+  legacyPollingEnvValue: import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLLING_ENABLED,
 })
 const serverDemoChangeFeedPollingIntervalMs = resolveServerDemoChangeFeedPollingIntervalMs(
   import.meta.env.VITE_SERVER_DEMO_CHANGE_FEED_POLL_INTERVAL_MS,
@@ -1800,7 +1805,10 @@ const changeFeedPendingLabel = computed(() => changeFeedDiagnostics.value.pendin
 const appliedChangeCountLabel = computed(() => String(changeFeedDiagnostics.value.appliedChanges))
 
 function startServerDemoLiveUpdates(): void {
-  if (!serverDemoChangeFeedPollingEnabled || serverDatasourceUnavailable.value) {
+  if (!serverDemoLiveUpdatesEnabled || serverDatasourceUnavailable.value) {
+    return
+  }
+  if (liveUpdateTransport.value === "polling" && !serverDemoChangeFeedPollingEnabled) {
     return
   }
   httpDatasource?.startLiveUpdates({
