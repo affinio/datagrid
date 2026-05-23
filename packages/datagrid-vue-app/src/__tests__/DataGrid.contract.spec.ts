@@ -3423,9 +3423,7 @@ describe("DataGrid app facade contract", () => {
 
     expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).toContain("grid-row--clipboard-pending")
 
-    const viewport = wrapper.find(".grid-body-viewport")
-    expect(viewport.exists()).toBe(true)
-    await viewport.trigger("keydown", { key: "Escape" })
+    await rowIndexCell.trigger("keydown", { key: "Escape" })
     await flushRuntimeTasks()
 
     expect(wrapper.find('.grid-body-pane--left .grid-row').classes()).not.toContain("grid-row--clipboard-pending")

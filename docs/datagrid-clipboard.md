@@ -90,7 +90,7 @@ Structured permission diagnostics beyond the user-facing status message remain p
 
 ## Accessibility And Mobile
 
-The current app exposes visual pending clipboard outlines and routes grid status messages through a polite `role="status"` live region. Clipboard fallback failures are covered at the app contract level; broader permission-denied browser cases and partial paste announcements remain planned validation work.
+The current app exposes visual pending clipboard outlines and routes grid status messages through a polite `role="status"` live region. Clipboard fallback failures are covered at the app contract level; broader permission-denied browser cases and partial paste announcements remain planned validation work. Escape clears pending cell and row-index clipboard intent from either the body grid or a focused row-index cell.
 
 Touch selection remains scroll-first. Coarse-pointer browser coverage verifies long-press cell selection followed by keyboard copy/paste while body touch pan remains native-first. Real-device mobile clipboard behavior should use explicit affordances or OS-native behavior rather than body-cell drag gestures.
 

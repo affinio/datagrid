@@ -3456,6 +3456,16 @@ export function useDataGridAppInteractionController<
     rowOffset: number,
   ): void => {
     void rowOffset
+    if (event.key === "Escape") {
+      const clearedCellClipboard = options.clearPendingClipboardOperation(true, true)
+      const clearedExternalClipboard = options.clearExternalPendingClipboardOperation?.() === true
+      if (clearedCellClipboard || clearedExternalClipboard) {
+        event.preventDefault()
+        event.stopPropagation()
+        recordPreventDefault("keydown", "clipboard-clear-escape", "clipboard")
+        return
+      }
+    }
     if (row.rowId == null || !options.runRowIndexKeyboardAction) {
       return
     }
