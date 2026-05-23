@@ -3127,6 +3127,44 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("writes row-index copy as spreadsheet TSV fallback instead of raw JSON", async () => {
+    const originalClipboard = navigator.clipboard
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowIndexMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const firstRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+      expect(firstRowIndexCell.exists()).toBe(true)
+
+      await firstRowIndexCell.trigger("click")
+      await firstRowIndexCell.trigger("keydown", { key: "c", ctrlKey: true })
+      await flushRuntimeTasks()
+
+      expect(writeText).toHaveBeenCalledWith("NOC\teu-west\t10")
+      expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining("rowId"))
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("copies a shift-clicked row-index selection range when row selection is enabled", async () => {
     const wrapper = mount(DataGrid, {
       props: {

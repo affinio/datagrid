@@ -495,6 +495,102 @@ function serializeRowClipboardRows(rows: readonly Record<string, unknown>[]): st
   }
 }
 
+const AFFINO_ROW_CLIPBOARD_MIME = "application/x-affino-datagrid-rows+json"
+const ROW_CLIPBOARD_KIND = "affino.datagrid.rows"
+const ROW_CLIPBOARD_VERSION = 1
+
+type RowClipboardOperation = "copy" | "cut"
+
+type AffinoRowClipboardPayload = {
+  kind: typeof ROW_CLIPBOARD_KIND
+  version: typeof ROW_CLIPBOARD_VERSION
+  operation: RowClipboardOperation
+  sourceGridId: string
+  sourceInstanceId: string
+  token: string
+  schema: {
+    columnKeys: readonly string[]
+  }
+  rows: readonly {
+    rowId: string
+    data: Record<string, unknown>
+  }[]
+}
+
+function serializeClipboardTsvField(value: unknown): string {
+  const normalized = value == null ? "" : String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  if (normalized.includes("\t") || normalized.includes("\n") || normalized.includes("\"")) {
+    return "\"" + normalized.replace(/"/g, "\"\"") + "\""
+  }
+  return normalized
+}
+
+function parseClipboardTsv(payload: string): string[][] {
+  const normalized = payload.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ""
+  let inQuotedField = false
+  let atFieldStart = true
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index]
+    if (inQuotedField) {
+      if (char === "\"") {
+        if (normalized[index + 1] === "\"") {
+          field += "\""
+          index += 1
+        } else {
+          inQuotedField = false
+          atFieldStart = false
+        }
+      } else {
+        field += char
+      }
+      continue
+    }
+    if (char === "\"" && atFieldStart) {
+      inQuotedField = true
+      atFieldStart = false
+      continue
+    }
+    if (char === "\t") {
+      row.push(field)
+      field = ""
+      atFieldStart = true
+      continue
+    }
+    if (char === "\n") {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ""
+      atFieldStart = true
+      continue
+    }
+    field += char
+    atFieldStart = false
+  }
+
+  row.push(field)
+  rows.push(row)
+  if (normalized.endsWith("\n") && rows.length > 1) {
+    const trailing = rows[rows.length - 1]
+    if (trailing?.length === 1 && trailing[0] === "") {
+      rows.pop()
+    }
+  }
+  return rows
+}
+
+function escapeHtmlText(value: unknown): string {
+  return (value == null ? "" : String(value))
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+}
+
 function cloneAggregationModelState<TRow>(
   model: DataGridAggregationModel<TRow> | null | undefined,
 ): DataGridAggregationModel<TRow> | null {
@@ -1993,10 +2089,15 @@ export default defineComponent({
     }
 
     const stageHostRef = ref<HTMLElement | null>(null)
+    const rowClipboardSourceInstanceId = `datagrid-row-clipboard-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const rowClipboardSourceGridId = rowClipboardSourceInstanceId
     const rowClipboardBuffer = ref<{
+      payload: AffinoRowClipboardPayload
       rows: readonly Record<string, unknown>[]
-      operation: "copy" | "cut"
+      operation: RowClipboardOperation
       sourceRowIds: readonly string[]
+      token: string
+      schemaColumnKeys: readonly string[]
     } | null>(null)
     let generatedRowIdentitySequence = 0
     type MenuCoord = { rowIndex: number; columnIndex: number }
@@ -2440,6 +2541,95 @@ export default defineComponent({
       return normalizedVisualRowIndex
     }
 
+    const resolveRowClipboardColumnKeys = (): readonly string[] => {
+      return visibleColumns.value
+        .filter(column => column.key !== "select")
+        .map(column => column.key)
+    }
+
+    const isRowClipboardSchemaCompatible = (columnKeys: readonly string[]): boolean => {
+      const currentColumnKeys = resolveRowClipboardColumnKeys()
+      return columnKeys.length > 0
+        && columnKeys.length === currentColumnKeys.length
+        && columnKeys.every((columnKey, index) => columnKey === currentColumnKeys[index])
+    }
+
+    const buildRowClipboardTsv = (rows: readonly Record<string, unknown>[]): string => {
+      const columnKeys = resolveRowClipboardColumnKeys()
+      return rows
+        .map(row => columnKeys.map(columnKey => serializeClipboardTsvField(row[columnKey])).join("\t"))
+        .join("\n")
+    }
+
+    const buildRowClipboardHtml = (rows: readonly Record<string, unknown>[]): string => {
+      const columnKeys = resolveRowClipboardColumnKeys()
+      const body = rows.map(row => (
+        `<tr>${columnKeys.map(columnKey => `<td>${escapeHtmlText(row[columnKey])}</td>`).join("")}</tr>`
+      )).join("")
+      return `<table><tbody>${body}</tbody></table>`
+    }
+
+    const createRowClipboardPayload = (
+      rows: readonly Record<string, unknown>[],
+      operation: RowClipboardOperation,
+      sourceRowIds: readonly string[],
+      token: string,
+      schemaColumnKeys: readonly string[],
+    ): AffinoRowClipboardPayload => ({
+      kind: ROW_CLIPBOARD_KIND,
+      version: ROW_CLIPBOARD_VERSION,
+      operation,
+      sourceGridId: rowClipboardSourceGridId,
+      sourceInstanceId: rowClipboardSourceInstanceId,
+      token,
+      schema: {
+        columnKeys: [...schemaColumnKeys],
+      },
+      rows: rows.map((row, index) => ({
+        rowId: sourceRowIds[index] ?? resolveDataRowId(row) ?? String(index),
+        data: cloneRowData(row),
+      })),
+    })
+
+    const writeRowClipboardPayload = async (payload: AffinoRowClipboardPayload, tsv: string, html: string): Promise<boolean> => {
+      const serializedPayload = serializeRowClipboardRows([payload as unknown as Record<string, unknown>])
+      const customPayload = serializedPayload?.startsWith("[") && serializedPayload.endsWith("]")
+        ? serializedPayload.slice(1, -1)
+        : null
+      const clipboard = globalThis.navigator?.clipboard as (Clipboard | {
+        write?: (items: ClipboardItem[]) => Promise<void>
+        writeText?: (payload: string) => Promise<void>
+      } | undefined)
+      const ClipboardItemCtor = globalThis.ClipboardItem
+      if (clipboard?.write && ClipboardItemCtor && customPayload) {
+        try {
+          await clipboard.write([new ClipboardItemCtor({
+            [AFFINO_ROW_CLIPBOARD_MIME]: new Blob([customPayload], { type: AFFINO_ROW_CLIPBOARD_MIME }),
+            "text/plain": new Blob([tsv], { type: "text/plain" }),
+            "text/html": new Blob([html], { type: "text/html" }),
+          })])
+          return true
+        }
+        catch {
+          // Fall back to plain text for browsers that reject custom clipboard MIME types.
+        }
+      }
+      return writeClipboardText(tsv)
+    }
+
+    const buildRowsFromSpreadsheetMatrix = (matrix: readonly (readonly string[])[]): readonly Record<string, unknown>[] => {
+      const columnKeys = resolveRowClipboardColumnKeys()
+      if (columnKeys.length === 0) {
+        return []
+      }
+      return matrix
+        .filter(row => row.some(value => value !== ""))
+        .map(row => columnKeys.reduce<Record<string, unknown>>((result, columnKey, index) => {
+          result[columnKey] = row[index] ?? ""
+          return result
+        }, {}))
+    }
+
     const writeClipboardText = async (payload: string): Promise<boolean> => {
       try {
         if (!globalThis.navigator?.clipboard?.writeText) {
@@ -2465,46 +2655,97 @@ export default defineComponent({
       }
     }
 
-    const readRowClipboardRows = async (): Promise<readonly Record<string, unknown>[] | null> => {
-      if (rowClipboardBuffer.value?.rows.length) {
-        return rowClipboardBuffer.value.rows.map(row => cloneRowData(row))
-      }
-      const payload = (await readClipboardText()).trim()
-      if (!payload) {
+    const resolveTrustedRowClipboardPayload = (): {
+      rows: readonly Record<string, unknown>[]
+      operation: RowClipboardOperation
+      sourceRowIds: readonly string[]
+    } | null => {
+      const pending = rowClipboardBuffer.value
+      if (!pending || pending.payload.token !== pending.token) {
         return null
       }
+      if (pending.payload.sourceInstanceId !== rowClipboardSourceInstanceId) {
+        return null
+      }
+      if (!isRowClipboardSchemaCompatible(pending.schemaColumnKeys)) {
+        return null
+      }
+      return {
+        rows: pending.rows.map(row => cloneRowData(row)),
+        operation: pending.operation,
+        sourceRowIds: [...pending.sourceRowIds],
+      }
+    }
+
+    const readLegacyJsonRowClipboardRows = (payload: string): readonly Record<string, unknown>[] | null => {
       try {
         const parsed = JSON.parse(payload)
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
-            .map(row => cloneRowData(row))
-        }
-        if (parsed && typeof parsed === "object") {
-          return [cloneRowData(parsed as Record<string, unknown>)]
-        }
+        const rows = Array.isArray(parsed)
+          ? parsed
+          : parsed && typeof parsed === "object"
+            ? [parsed]
+            : []
+        const normalizedRows = rows
+          .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
+          .map(row => cloneRowData(row))
+        return normalizedRows.length > 0 ? normalizedRows : null
       }
       catch {
         return null
       }
-      return null
+    }
+
+    const readSpreadsheetClipboardRows = async (): Promise<readonly Record<string, unknown>[] | null> => {
+      const payload = (await readClipboardText()).trimEnd()
+      if (!payload) {
+        return null
+      }
+      const legacyRows = readLegacyJsonRowClipboardRows(payload)
+      if (legacyRows?.length) {
+        return legacyRows
+      }
+      const rows = buildRowsFromSpreadsheetMatrix(parseClipboardTsv(payload))
+      return rows.length > 0 ? rows : null
+    }
+
+    const readRowClipboardRows = async (): Promise<{
+      rows: readonly Record<string, unknown>[]
+      operation: RowClipboardOperation
+      sourceRowIds: readonly string[]
+      trusted: boolean
+    } | null> => {
+      const trustedPayload = resolveTrustedRowClipboardPayload()
+      if (trustedPayload) {
+        return {
+          ...trustedPayload,
+          trusted: true,
+        }
+      }
+      const spreadsheetRows = await readSpreadsheetClipboardRows()
+      return spreadsheetRows?.length
+        ? { rows: spreadsheetRows, operation: "copy", sourceRowIds: [], trusted: false }
+        : null
     }
 
     const setRowClipboardRows = async (
       rows: readonly Record<string, unknown>[],
-      operation: "copy" | "cut",
+      operation: RowClipboardOperation,
       sourceRowIds: readonly string[] = [],
     ): Promise<boolean> => {
       const clonedRows = rows.map(row => cloneRowData(row))
+      const normalizedSourceRowIds = sourceRowIds.map(rowId => String(rowId))
+      const token = `row-clipboard-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const schemaColumnKeys = resolveRowClipboardColumnKeys()
+      const payload = createRowClipboardPayload(clonedRows, operation, normalizedSourceRowIds, token, schemaColumnKeys)
       rowClipboardBuffer.value = {
+        payload,
         rows: clonedRows,
         operation,
-        sourceRowIds: sourceRowIds.map(rowId => String(rowId)),
+        sourceRowIds: normalizedSourceRowIds,
+        token,
+        schemaColumnKeys,
       }
-      const clipboardPayload = serializeRowClipboardRows(clonedRows)
-      if (clipboardPayload) {
-        await writeClipboardText(clipboardPayload)
-      }
+      await writeRowClipboardPayload(payload, buildRowClipboardTsv(clonedRows), buildRowClipboardHtml(clonedRows))
       return true
     }
 
@@ -3606,13 +3847,14 @@ export default defineComponent({
           if (!canInsertRows()) {
             return false
           }
-          const rows = await readRowClipboardRows()
-          if (!rows || rows.length === 0) {
+          const rowClipboard = await readRowClipboardRows()
+          if (!rowClipboard || rowClipboard.rows.length === 0) {
             return false
           }
+          const rows = rowClipboard.rows
           const beforeSnapshot = captureHistorySnapshot()
-          const pendingCutSourceRowIds = rowClipboardBuffer.value?.operation === "cut"
-            ? rowClipboardBuffer.value.sourceRowIds
+          const pendingCutSourceRowIds = rowClipboard.trusted && rowClipboard.operation === "cut"
+            ? rowClipboard.sourceRowIds
             : []
           const sourceRows = materializePlaceholderRowsUpTo(placeholderVisualRowIndex + 1)
           if (!sourceRows) {
@@ -3628,7 +3870,7 @@ export default defineComponent({
                 insertIndex,
                 rows.map(row => cloneRowWithFreshIdentity(row, sourceRowTemplate)),
               )
-          if (inserted && rowClipboardBuffer.value?.operation === "cut") {
+          if (inserted && rowClipboard.trusted && rowClipboard.operation === "cut") {
             rowClipboardBuffer.value = null
           }
           if (inserted) {
@@ -3669,13 +3911,14 @@ export default defineComponent({
         if (!canInsertRows()) {
           return false
         }
-        const rows = await readRowClipboardRows()
-        if (!rows || rows.length === 0) {
+        const rowClipboard = await readRowClipboardRows()
+        if (!rowClipboard || rowClipboard.rows.length === 0) {
           return false
         }
+        const rows = rowClipboard.rows
         const beforeSnapshot = captureHistorySnapshot()
-        const pendingCutSourceRowIds = rowClipboardBuffer.value?.operation === "cut"
-          ? rowClipboardBuffer.value.sourceRowIds
+        const pendingCutSourceRowIds = rowClipboard.trusted && rowClipboard.operation === "cut"
+          ? rowClipboard.sourceRowIds
           : []
         const sourceRowTemplate = resolveSourceRowTemplateByRowId(
           pendingCutSourceRowIds[0] ?? normalizedRowId,
@@ -3686,7 +3929,7 @@ export default defineComponent({
               rowId,
               rows.map(row => cloneRowWithFreshIdentity(row, sourceRowTemplate)),
             )
-        if (inserted && rowClipboardBuffer.value?.operation === "cut") {
+        if (inserted && rowClipboard.trusted && rowClipboard.operation === "cut") {
           rowClipboardBuffer.value = null
         }
         if (inserted) {

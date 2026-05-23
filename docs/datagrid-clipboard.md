@@ -19,7 +19,7 @@ This document defines the enterprise clipboard contract for the mounted DataGrid
 - `Ctrl/Cmd+V` and the cell context menu paste a parsed clipboard matrix at the active cell or selected target range.
 - `Paste special -> Values only` uses the same app clipboard pipeline and can reuse an internal copied range when available.
 - Scalar paste into multiple committed ranges is supported; the scalar value is applied to each normalized target range.
-- Row-index copy/cut/paste actions are app-renderer operations and use internal row JSON semantics rather than spreadsheet text semantics.
+- Row-index copy/cut/paste actions are app-renderer row operations. They keep a trusted same-session row payload for DataGrid paste and write external TSV/HTML fallbacks for spreadsheet paste.
 
 Clipboard behavior is active only in base table mode.
 
@@ -34,11 +34,11 @@ Before copying or cutting, the app blocks local materialized operations when the
 - placeholder rows that cannot be read safely
 - grouped/tree projection rows
 
-Current cell copy writes plain text TSV to the system clipboard when permitted and always stores the copied payload in the in-memory fallback. The TSV writer quotes fields that contain tabs, newlines, or quotes and escapes embedded quotes by doubling them.
+Current cell copy writes plain text TSV to the system clipboard when permitted and always stores the copied payload in the in-memory fallback. Row-index copy writes `application/x-affino-datagrid-rows+json` when the browser supports custom clipboard MIME types, keeps a same-session tokenized row payload in memory, and writes `text/plain` TSV plus `text/html` table fallbacks over visible copyable data columns. The row index/system columns are excluded, and raw row JSON must not be written as `text/plain`. The TSV writer quotes fields that contain tabs, newlines, or quotes and escapes embedded quotes by doubling them.
 
 ## Paste Contract
 
-Paste reads from the system clipboard when permitted and falls back to the last in-memory payload. Empty payloads do not paste.
+Paste reads from the system clipboard when permitted and falls back to the last in-memory payload. Row-index paste prefers a trusted compatible row payload; `cut` becomes a move only when the same-session token, source instance, and schema match. Custom or legacy row payloads without a matching session token are treated as copy/import, and spreadsheet text falls back to matrix paste semantics. Empty payloads do not paste.
 
 The app parses the payload into a matrix, resolves target ranges, blocks unsafe virtual/group/unloaded targets, materializes editable placeholder rows when the host provides `ensureEditableRowAtIndex`, and applies row patches through `rows.applyEdits` or a host-provided `applyClipboardEdits`.
 
@@ -105,8 +105,8 @@ Browser validation covers copied and cut clipboard outlines across vertical remo
 The mounted table-stage DataGrid does not currently provide:
 
 - CSV parser/writer compatibility
-- multi-MIME clipboard payloads
-- rich HTML clipboard payloads
+- full multi-MIME browser compatibility across all engines
+- rich HTML clipboard modes beyond the row-index table fallback
 - formula/format paste modes beyond values
 - built-in HTTP routes for server-delegated copy/export/cut/clear/paste over unloaded virtual ranges
 - rendered async paste retry/cancel UI
