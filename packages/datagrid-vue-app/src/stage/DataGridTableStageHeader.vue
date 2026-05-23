@@ -1,5 +1,5 @@
 <template>
-  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle">
+  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture">
     <slot name="center-chrome" />
 
     <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
@@ -672,8 +672,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, type CSSProperties, type PropType } from "vue"
+import { computed, onBeforeUnmount, ref, type CSSProperties, type PropType } from "vue"
 import type { DataGridColumnPin } from "@affino/datagrid-vue"
+import { useDataGridResizeClickGuard } from "@affino/datagrid-vue/advanced"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import type {
   DataGridColumnMenuActionOptions,
@@ -812,6 +813,10 @@ const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
 let suppressHeaderClick = false
 let activeTouchResizeId: number | null = null
+const resizeClickGuard = useDataGridResizeClickGuard()
+onBeforeUnmount(() => {
+  resizeClickGuard.dispose()
+})
 
 function hasColumnMenu(): boolean {
   if (columns.value.columnMenuEnabled === true) {
@@ -1010,6 +1015,7 @@ function startResize(event: MouseEvent, columnKey: string): void {
   if (shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)) {
     return
   }
+  resizeClickGuard.armResizeGuard()
   event.preventDefault()
   columns.value.startResize(event, columnKey)
 }
@@ -1046,6 +1052,7 @@ function startTouchResize(event: TouchEvent, columnKey: string): void {
     activeTouchResizeId = null
     return
   }
+  resizeClickGuard.armResizeGuard()
   event.preventDefault()
   activeTouchResizeId = touch.identifier
   columns.value.startResize(createTouchResizeMouseEvent("mousedown", touch), columnKey)
@@ -1066,10 +1073,12 @@ function handleTouchResizeMove(event: TouchEvent): void {
 function handleTouchResizeEnd(event: TouchEvent): void {
   if (activeTouchResizeId == null || typeof window === "undefined") {
     activeTouchResizeId = null
+    resizeClickGuard.releaseResizeGuard()
     return
   }
   const touch = readTouchAt(event.changedTouches, activeTouchResizeId)
   activeTouchResizeId = null
+  resizeClickGuard.releaseResizeGuard()
   if (!touch) {
     return
   }

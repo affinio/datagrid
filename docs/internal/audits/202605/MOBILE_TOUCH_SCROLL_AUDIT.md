@@ -23,6 +23,7 @@ Completed in Phase 1:
 - Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
 - Touch long-press prep: touch-generated `contextmenu` events no longer open the desktop grid context menu, leaving long press available for the future touch selection model.
 - Prevent-default cleanup: row resize handle clicks stop row-index selection without unconditionally preventing the click default.
+- Header resize click guard: column resize handle gestures suppress the follow-up header click so resize release cannot trigger sorting.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
 - Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.

@@ -184,6 +184,8 @@ function createStageProps(
     firstRowGroupKey?: string
     toggleGroupRow?: (row: DataGridTableRow<DemoRow>) => void
     isRowFocused?: (row: DataGridTableRow<DemoRow>) => boolean
+    toggleSortForColumn?: (columnKey: string, additive?: boolean) => void
+    startResize?: (event: MouseEvent, columnKey: string) => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
@@ -244,10 +246,10 @@ function createStageProps(
       visibleColumns,
       renderedColumns,
       columnFilterTextByKey: {},
-      toggleSortForColumn: () => undefined,
+      toggleSortForColumn: options?.toggleSortForColumn ?? (() => undefined),
       sortIndicator: () => "",
       setColumnFilterText: () => undefined,
-      startResize: () => undefined,
+      startResize: options?.startResize ?? (() => undefined),
       handleResizeDoubleClick: () => undefined,
     },
     rows: {
@@ -1095,6 +1097,37 @@ describe("DataGridTableStage contract", () => {
     expect(lastRowIndexCell.classes()).toContain("grid-cell--index-selected-single")
     expect(selectedHeader.classes()).toContain("grid-cell--header-selected")
     expect(unselectedHeader.classes()).not.toContain("grid-cell--header-selected")
+
+    wrapper.unmount()
+  })
+
+  it("does not sort when a column resize click bubbles through the header", async () => {
+    const toggleSortForColumn = vi.fn()
+    const startResize = vi.fn((event: MouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+    })
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, {
+        toggleSortForColumn,
+        startResize,
+      }),
+      attachTo: document.body,
+    })
+
+    await nextTick()
+
+    const header = wrapper.find(".grid-header-viewport .grid-cell--header[data-column-key=\"centerA\"]")
+    const resizeHandle = header.find(".col-resize")
+    expect(header.exists()).toBe(true)
+    expect(resizeHandle.exists()).toBe(true)
+
+    await resizeHandle.trigger("mousedown", { button: 0, clientX: 190 })
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: 130 }))
+    header.element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+
+    expect(startResize).toHaveBeenCalledTimes(1)
+    expect(toggleSortForColumn).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
