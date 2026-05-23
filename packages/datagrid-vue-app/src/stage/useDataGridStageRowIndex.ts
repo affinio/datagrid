@@ -48,38 +48,6 @@ export interface UseDataGridStageRowIndexResult {
 
 const DEFAULT_INDEX_COLUMN_WIDTH = 72
 
-function resolveInlineRowStateFill(
-  isHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean,
-  isStripedRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean,
-  row: DataGridTableStageBodyRow,
-  rowOffset: number,
-  options: { fullBleed?: boolean } = {},
-): CSSProperties | null {
-  let overlayColor: string | null = null
-  if (isHoveredRow(row, rowOffset)) {
-    overlayColor = "var(--datagrid-row-band-hover-bg)"
-  } else if (isStripedRow(row, rowOffset)) {
-    overlayColor = "var(--datagrid-row-band-striped-bg)"
-  }
-  if (!overlayColor) {
-    return null
-  }
-  if (options.fullBleed === true) {
-    return {
-      backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
-      backgroundSize: "100% calc(100% - var(--datagrid-row-divider-size))",
-      backgroundPosition: "top left",
-      backgroundRepeat: "no-repeat",
-    }
-  }
-  return {
-    backgroundImage: `linear-gradient(${overlayColor}, ${overlayColor})`,
-    backgroundSize: "calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size))",
-    backgroundPosition: "top left",
-    backgroundRepeat: "no-repeat",
-  }
-}
-
 function parsePixelValue(value: unknown, fallback: number): number {
   const parsed = Number.parseFloat(String(value ?? ""))
   return Number.isFinite(parsed) ? parsed : fallback
@@ -233,13 +201,7 @@ export function useDataGridStageRowIndex(
   }
 
   function rowIndexCellStyle(row: DataGridTableStageBodyRow, rowOffset: number): CSSProperties {
-    const rowStateFill = resolveInlineRowStateFill(
-      options.isHoveredRow,
-      options.isStripedRow,
-      row,
-      rowOffset,
-      { fullBleed: true },
-    )
+    const rowStateFill = options.resolveInlineRowStateFill(row, rowOffset, { fullBleed: true })
     if (!rowStateFill) {
       return resolvedRowIndexColumnStyle.value
     }

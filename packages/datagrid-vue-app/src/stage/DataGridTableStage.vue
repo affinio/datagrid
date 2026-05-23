@@ -499,6 +499,7 @@ const bodyViewportTabIndex = computed(() => (
 
 const pinnedBottomViewportTabIndex = computed(() => -1)
 const pinnedTopViewportTabIndex = computed(() => -1)
+const useCanvasChrome = computed(() => true)
 
 function resolveViewportRowStart(): number {
   return viewport.value?.viewportRowStart ?? 0
@@ -1280,6 +1281,7 @@ const rowStateRuntime = useDataGridStageRowState({
   startInlineEditIfAllowed,
   handleCellClick: (row, rowOffset, column, columnIndex) => interaction.value.handleCellClick(row, rowOffset, column, columnIndex),
   hasExplicitGroupCellRenderer,
+  useCanvasChrome,
   cells: computed(() => ({
     isSelectionAnchorCell: cells.value.isSelectionAnchorCell,
     isCellInFillPreview: cells.value.isCellInFillPreview,

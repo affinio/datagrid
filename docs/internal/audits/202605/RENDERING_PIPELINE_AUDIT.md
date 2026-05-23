@@ -79,7 +79,7 @@ Vue app viewport and rendering:
 - rAF batching exists at both viewport and stage levels. `useDataGridAppViewport.ts` batches row/column window commits; `useDataGridStageViewportRuntime.ts` batches scroll refs, pinned pane transforms, pinned-bottom scroll sync, and chrome redraw.
 - Row and cell identity are stable for ordinary body rendering. Center cells key by `row.rowId` plus `column.key`; pinned cells include pane side as well.
 - Horizontal rendering scales better than a full-table DOM. `useDataGridAppViewport.ts` uses prefix widths, binary search, spacer widths, active horizontal overscan, and idle precise sync for rendered columns.
-- Chrome rendering is separated from cells. `useDataGridStageChromeCanvas.ts` draws row bands and grid lines to canvas instead of adding per-cell divider DOM.
+- Chrome rendering is separated from cells. `useDataGridStageChromeCanvas.ts` draws row bands and grid lines to canvas instead of adding per-cell divider DOM; canvas mode keeps body cells, including pinned body cells, transparent and reserves DOM band/divider fallback for coarse-pointer CSS fallback.
 - Canvas drawing is device-pixel-aware. `dataGridChromeCanvasMath` is used by `useDataGridStageChromeCanvas.ts`, and tests cover line alignment.
 - Overlay rendering is separated from cell content. `useDataGridStageOverlays.ts` builds lane/segment models, and `DataGridTableStageOverlayLayer.vue` renders overlays independently of cells.
 - Auto-height row metrics are handled deliberately. `useDataGridStageChromeModel.ts` can derive visible row metrics from DOM only in base auto-height mode, with fallback estimated metrics.

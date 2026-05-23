@@ -31,6 +31,7 @@ export interface UseDataGridStageRowStateOptions {
   startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number) => void
   handleCellClick: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => void
   hasExplicitGroupCellRenderer: Readonly<Ref<boolean>>
+  useCanvasChrome?: Readonly<Ref<boolean>>
   cells: Readonly<Ref<{
     isSelectionAnchorCell?: (rowOffset: number, columnIndex: number) => boolean
     isCellInFillPreview?: (rowOffset: number, columnIndex: number) => boolean
@@ -187,6 +188,9 @@ export function useDataGridStageRowState(
     rowOffset: number,
     fillOptions: { fullBleed?: boolean } = {},
   ): CSSProperties | null {
+    if (options.useCanvasChrome?.value === true) {
+      return null
+    }
     let overlayColor: string | null = null
     if (options.isHoveredRow(row, rowOffset)) {
       overlayColor = "var(--datagrid-row-band-hover-bg)"

@@ -29,6 +29,25 @@ describe("ensureDataGridAppStyles", () => {
     expect(headerFallbackRule).not.toContain("border-bottom:")
   })
 
+  it("keeps canvas chrome body cells transparent outside coarse fallback", () => {
+    ensureDataGridAppStyles()
+
+    const styleText = document.getElementById(STYLE_ID)?.textContent ?? ""
+    const pinnedOverrideStart = styleText.indexOf(".grid-stage--canvas-chrome .grid-body-shell .grid-cell--pinned-left")
+    const pinnedOverrideEnd = styleText.indexOf("@media (hover: none) and (pointer: coarse)", pinnedOverrideStart)
+    const pinnedOverrideRule = pinnedOverrideStart >= 0 && pinnedOverrideEnd > pinnedOverrideStart
+      ? styleText.slice(pinnedOverrideStart, pinnedOverrideEnd)
+      : ""
+
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--striped .grid-cell")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell")
+    expect(styleText).toContain("background-image: none")
+    expect(pinnedOverrideRule).toContain("background: transparent")
+    expect(pinnedOverrideRule).toContain("box-shadow: none")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-cell--pinned-divider-right")
+    expect(styleText).toContain("box-shadow: inset calc(-1 * var(--datagrid-column-divider-size))")
+  })
+
   it("keeps the grid viewport on native touch panning by default", () => {
     ensureDataGridAppStyles()
 

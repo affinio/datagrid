@@ -1577,6 +1577,26 @@ body.datagrid-fill-drag-cursor * {
   box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
 }
 
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell--pinned-left,
+.grid-stage--canvas-chrome .grid-body-shell .grid-cell--pinned-right {
+  background: transparent;
+}
+
+.grid-stage--canvas-chrome .grid-cell--pinned-divider-right,
+.grid-stage--canvas-chrome .grid-cell--pinned-divider-left {
+  box-shadow: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .grid-stage--canvas-chrome .grid-cell--pinned-divider-right {
+    box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
+  }
+
+  .grid-stage--canvas-chrome .grid-cell--pinned-divider-left {
+    box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
+  }
+}
+
 .sort-indicator {
   width: 12px;
   text-align: center;
@@ -1802,20 +1822,33 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
-.grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index {
-  background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg));
-  background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
-  background-position: top left;
-  background-repeat: no-repeat;
-}
-
+.grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index,
 .grid-stage--canvas-chrome .grid-row--striped .grid-cell,
 .grid-stage--canvas-chrome .grid-row--striped .grid-cell--index {
-  background-image: linear-gradient(var(--datagrid-row-band-striped-bg), var(--datagrid-row-band-striped-bg));
-  background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
-  background-position: top left;
-  background-repeat: no-repeat;
+  background-image: none;
+  background-size: auto;
+  background-position: initial;
+  background-repeat: repeat;
 }
+
+@media (hover: none) and (pointer: coarse) {
+  .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
+  .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index {
+    background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg));
+    background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
+    background-position: top left;
+    background-repeat: no-repeat;
+  }
+
+  .grid-stage--canvas-chrome .grid-row--striped .grid-cell,
+  .grid-stage--canvas-chrome .grid-row--striped .grid-cell--index {
+    background-image: linear-gradient(var(--datagrid-row-band-striped-bg), var(--datagrid-row-band-striped-bg));
+    background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
+    background-position: top left;
+    background-repeat: no-repeat;
+  }
+}
+
 
 .grid-row--clipboard-pending::after {
   content: "";

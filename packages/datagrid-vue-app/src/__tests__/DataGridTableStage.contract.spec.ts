@@ -2931,14 +2931,13 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.find(".grid-body-viewport .grid-row").classes()).toContain("grid-row--hovered")
     expect(wrapper.find(".grid-body-pane--right .grid-row").classes()).toContain("grid-row--hovered")
 
-  const pinnedLeftCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__cell[data-column-key="left"]').attributes("style")
-  const centerCellStyle = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"]').attributes("style")
-  const rowIndexCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell').attributes("style")
+    const pinnedLeftCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__cell[data-column-key="left"]').attributes("style") ?? ""
+    const centerCellStyle = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"]').attributes("style") ?? ""
+    const rowIndexCellStyle = wrapper.find('.grid-body-pane--left .datagrid-stage__row-index-cell').attributes("style") ?? ""
 
-  expect(pinnedLeftCellStyle).toContain("background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg))")
-  expect(pinnedLeftCellStyle).toContain("background-size: 100% calc(100% - var(--datagrid-row-divider-size))")
-  expect(centerCellStyle).toContain("background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size))")
-  expect(rowIndexCellStyle).toContain("background-size: 100% calc(100% - var(--datagrid-row-divider-size))")
+    expect(pinnedLeftCellStyle).not.toContain("background-image")
+    expect(centerCellStyle).not.toContain("background-image")
+    expect(rowIndexCellStyle).not.toContain("background-image")
 
     await wrapper.find(".grid-body-shell").trigger("mouseleave")
 
@@ -2962,6 +2961,11 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.findAll(".grid-body-pane--left .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-viewport .grid-row")[1]?.classes()).toContain("grid-row--striped")
     expect(wrapper.findAll(".grid-body-pane--right .grid-row")[1]?.classes()).toContain("grid-row--striped")
+
+    const stripedPinnedCellStyle = wrapper.findAll(".grid-body-pane--left .datagrid-stage__cell")[1]?.attributes("style") ?? ""
+    const stripedCenterCellStyle = wrapper.findAll(".grid-body-viewport .datagrid-stage__cell")[2]?.attributes("style") ?? ""
+    expect(stripedPinnedCellStyle).not.toContain("background-image")
+    expect(stripedCenterCellStyle).not.toContain("background-image")
 
     wrapper.unmount()
   })

@@ -103,7 +103,7 @@ describe("useDataGridStageRowIndex", () => {
     })
     expect(service.rowIndexCellStyle(row1, 1)).toMatchObject({
       width: "88px",
-      backgroundImage: "linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg))",
+      backgroundImage: "linear-gradient(red, red)",
     })
     expect(service.isRowIndexDraggable(row0)).toBe(true)
     expect(service.isRowIndexDraggable(groupRow)).toBe(false)
