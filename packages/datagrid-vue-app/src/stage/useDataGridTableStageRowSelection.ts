@@ -56,7 +56,10 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
   const rowSelectionExcludedSet = computed(() => new Set(options.rowSelectionSnapshot.value?.excludedRows ?? []))
   const isAllRowsSelectionMode = computed(() => options.rowSelectionSnapshot.value?.mode === "all")
-  const shouldUseVirtualAllRowsSelection = computed(() => {
+  const shouldUseVisibleRowsForAllSelectionState = computed(() => {
+    if (isAllRowsSelectionMode.value) {
+      return true
+    }
     const snapshot = options.runtime.api.rows.getSnapshot()
     return snapshot.kind === "server"
   })
@@ -94,7 +97,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   }
 
   const selectableRowIds = computed<DataGridRowId[]>(() => {
-    if (shouldUseVirtualAllRowsSelection.value) {
+    if (shouldUseVisibleRowsForAllSelectionState.value) {
       return selectableVisibleRowIds.value
     }
     const rowCount = options.runtime.api.rows.getCount()
@@ -158,30 +161,24 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     if (!options.runtime.api.rowSelection.hasSupport()) {
       return
     }
-    if (shouldUseVirtualAllRowsSelection.value) {
-      applyRowSelectionMutation(rowSelectionApi => {
-        if (isAllRowsSelectionMode.value && areAllVisibleRowsSelected.value) {
-          rowSelectionApi.clearSelectedRows()
-          return
-        }
-        rowSelectionApi.setSnapshot({
-          focusedRow: options.rowSelectionSnapshot.value?.focusedRow ?? null,
-          selectedRows: [],
-          mode: "all",
-          excludedRows: [],
-        })
-      })
-      return
-    }
-    const rowIds = selectableRowIds.value
-    if (!areAllVisibleRowsSelected.value) {
-      applyRowSelectionMutation(rowSelectionApi => {
-        rowSelectionApi.selectRows(rowIds)
-      })
+    const hasSelectableVisibleRows = selectableVisibleRowIds.value.length > 0
+    if (!hasSelectableVisibleRows) {
       return
     }
     applyRowSelectionMutation(rowSelectionApi => {
-      rowSelectionApi.deselectRows(rowIds)
+      const shouldClearSelection = isAllRowsSelectionMode.value
+        ? areAllVisibleRowsSelected.value
+        : rowSelectionSet.value.size > 0 && areAllVisibleRowsSelected.value
+      if (shouldClearSelection) {
+        rowSelectionApi.clearSelectedRows()
+        return
+      }
+      rowSelectionApi.setSnapshot({
+        focusedRow: options.rowSelectionSnapshot.value?.focusedRow ?? null,
+        selectedRows: [],
+        mode: "all",
+        excludedRows: [],
+      })
     })
   }
 

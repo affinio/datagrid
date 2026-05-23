@@ -6654,7 +6654,9 @@ describe("DataGrid app facade contract", () => {
     expect(headerCheckbox.attributes("aria-checked")).toBe("true")
     expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toEqual({
       focusedRow: null,
-      selectedRows: ["r1", "r2", "r3"],
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
     })
 
     await headerCheckbox.trigger("click")
@@ -6693,7 +6695,9 @@ describe("DataGrid app facade contract", () => {
     expect(rowSelectionChangeEvents.at(-1)?.[0]).toEqual({
       snapshot: {
         focusedRow: null,
-        selectedRows: ["r1", "r2", "r3"],
+        selectedRows: [],
+        mode: "all",
+        excludedRows: [],
       },
     })
 
@@ -6702,7 +6706,9 @@ describe("DataGrid app facade contract", () => {
     expect(stateUpdates.at(-1)?.[0]).toMatchObject({
       rowSelection: {
         focusedRow: null,
-        selectedRows: ["r1", "r2", "r3"],
+        selectedRows: [],
+        mode: "all",
+        excludedRows: [],
       },
     })
 
@@ -6741,7 +6747,9 @@ describe("DataGrid app facade contract", () => {
     expect(controlledState.value).toMatchObject({
       rowSelection: {
         focusedRow: null,
-        selectedRows: ["r1", "r2", "r3"],
+        selectedRows: [],
+        mode: "all",
+        excludedRows: [],
       },
     })
     expect(headerCheckbox.attributes("aria-checked")).toBe("true")
@@ -6758,7 +6766,9 @@ describe("DataGrid app facade contract", () => {
     expect(controlledState.value).toMatchObject({
       rowSelection: {
         focusedRow: null,
-        selectedRows: ["r1", "r2", "r3"],
+        selectedRows: [],
+        mode: "all",
+        excludedRows: [],
       },
     })
 
@@ -6808,8 +6818,12 @@ describe("DataGrid app facade contract", () => {
     await headerCheckbox.trigger("click")
     await flushRuntimeTasks()
 
-    expect(controlledRowSelection.value?.focusedRow).toBeNull()
-    expect([...(controlledRowSelection.value?.selectedRows ?? [])].sort()).toEqual(["r1", "r2", "r3"])
+    expect(controlledRowSelection.value).toEqual({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    })
 
     wrapper.unmount()
   })

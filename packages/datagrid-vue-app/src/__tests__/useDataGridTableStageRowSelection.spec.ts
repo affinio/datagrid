@@ -45,6 +45,7 @@ function createRuntime(rows: readonly ReturnType<typeof createRow>[], kind: "cli
         deselectRows,
         setFocusedRow,
         setSelected,
+        clearSelectedRows: vi.fn(),
       },
     },
   } as unknown as Pick<UseDataGridRuntimeResult<DemoRow>, "api">
@@ -103,7 +104,7 @@ describe("useDataGridTableStageRowSelection", () => {
   it("toggles all filtered rows, not just visible viewport rows", () => {
     const filteredRows = [createRow("r1"), createRow("r2"), createRow("r3")]
     const visibleRows = [filteredRows[0], filteredRows[1]]
-    const { runtime, selectRows } = createRuntime(filteredRows)
+    const { runtime, setSnapshot, getCount, get } = createRuntime(filteredRows)
     const rowSelectionSnapshot = ref<DataGridRowSelectionSnapshot | null>(null)
     const applyRowSelectionMutation = vi.fn((mutator: (api: typeof runtime.api.rowSelection) => void) => {
       mutator(runtime.api.rowSelection)
@@ -124,12 +125,19 @@ describe("useDataGridTableStageRowSelection", () => {
     selection.toggleVisibleRowsSelected()
 
     expect(applyRowSelectionMutation).toHaveBeenCalledTimes(1)
-    expect(selectRows).toHaveBeenCalledWith(["r1", "r2", "r3"])
+    expect(setSnapshot).toHaveBeenCalledWith({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    })
+    expect(getCount).not.toHaveBeenCalled()
+    expect(get).not.toHaveBeenCalled()
   })
 
   it("excludes group rows from the header bulk-selection set", () => {
     const filteredRows = [createRow("group-1", "group"), createRow("r1"), createRow("r2")]
-    const { runtime, selectRows } = createRuntime(filteredRows)
+    const { runtime, setSnapshot } = createRuntime(filteredRows)
     const rowSelectionSnapshot = ref<DataGridRowSelectionSnapshot | null>(null)
 
     const selection = useDataGridTableStageRowSelection<DemoRow>({
@@ -148,12 +156,27 @@ describe("useDataGridTableStageRowSelection", () => {
 
     selection.toggleVisibleRowsSelected()
 
-    expect(selectRows).toHaveBeenCalledWith(["r1", "r2"])
+    expect(setSnapshot).toHaveBeenCalledWith({
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    })
+
+    rowSelectionSnapshot.value = {
+      focusedRow: null,
+      selectedRows: [],
+      mode: "all",
+      excludedRows: [],
+    }
+
+    expect(selection.isRowCheckboxSelected(filteredRows[0] as never)).toBe(false)
+    expect(selection.isRowCheckboxSelected(filteredRows[1] as never)).toBe(true)
   })
 
   it("syncs the snapshot after deselecting all filtered rows", () => {
     const filteredRows = [createRow("r1"), createRow("r2"), createRow("r3")]
-    const { runtime, deselectRows } = createRuntime(filteredRows)
+    const { runtime } = createRuntime(filteredRows)
     const rowSelectionSnapshot = ref<DataGridRowSelectionSnapshot | null>({
       focusedRow: null,
       selectedRows: ["r1", "r2", "r3"],
@@ -177,7 +200,7 @@ describe("useDataGridTableStageRowSelection", () => {
     selection.toggleVisibleRowsSelected()
 
     expect(applyRowSelectionMutation).toHaveBeenCalledTimes(1)
-    expect(deselectRows).toHaveBeenCalledWith(["r1", "r2", "r3"])
+    expect(runtime.api.rowSelection.clearSelectedRows).toHaveBeenCalledTimes(1)
   })
 
   it("treats off-screen filtered rows as part of all-selected state", () => {

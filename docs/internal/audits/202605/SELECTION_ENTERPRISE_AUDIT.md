@@ -209,7 +209,7 @@ Tests and benchmarks sampled:
 ## Server-Backed Selection Risks
 
 - `rowSelection.ts` has an enterprise-friendly all-selection shape with `mode: "all"` and `excludedRows`.
-- `useDataGridTableStageRowSelection.ts` uses all/excluded mode for server row selection, which is the right direction.
+- `useDataGridTableStageRowSelection.ts` uses all/excluded mode for header all-row selection on client and server rows, so bulk checkbox selection no longer materializes every row id before scroll/render checks.
 - Cell-range virtual selection has operation decisions, but the app does not yet expose complete server-delegated handlers for all enterprise operations.
 - Local copy blocks unloaded rows and tells the user to load rows or use server export. This is safe, not complete.
 - Server fill has dedicated boundary and commit plumbing in `useDataGridAppInteractionController.ts`; stale virtual guards now protect clipboard, clear/delete, and local range move, but server copy/cut/clear/delete/range-move equivalents still need runtime handlers.
