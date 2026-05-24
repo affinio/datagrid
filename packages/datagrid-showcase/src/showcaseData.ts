@@ -1,3 +1,4 @@
+import { h } from "vue"
 import type { DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import type { DataGridDataSource } from "@affino/datagrid-vue"
 
@@ -30,6 +31,19 @@ export type CapacityRow = {
   cost: number
   owner: string
   status: string
+  environment: string
+  tier: string
+  version: string
+  deployState: string
+  incidents: number
+  saturation: number
+  throughput: number
+  queueDepth: number
+  availability: number
+  errorBudget: number
+  lastDeploy: string
+  zone: string
+  plan: string
 }
 
 export type ForecastRow = {
@@ -67,6 +81,10 @@ const stages = ["Expansion", "Renewal", "Implementation", "Executive review", "P
 const risks = ["Low", "Medium", "High"]
 const nextSteps = ["Finalize rollout plan", "Review adoption report", "Schedule stakeholder call", "Confirm security review", "Approve commercial terms"]
 const services = ["Checkout API", "Billing Ledger", "Search Index", "Events Pipeline", "Risk Scoring", "Identity Graph", "Reporting Warehouse"]
+const environments = ["Production", "Staging", "Canary"]
+const tiers = ["Critical", "Standard", "Batch", "Analytics"]
+const deployStates = ["Current", "Rolling", "Pinned", "Blocked"]
+const plans = ["Autoscale", "Observe", "Rebalance", "Patch", "Capacity review"]
 const products = ["Usage Platform", "Workflow Suite", "Analytics Add-on", "Compliance Pack", "Automation Runtime", "Support Desk"]
 
 function dateFor(index: number): string {
@@ -112,7 +130,47 @@ export function createCapacityRow(index: number): CapacityRow {
     cost: 120 + ((index * 31) % 8800),
     owner: owners[index % owners.length] ?? "Owner",
     status: errors > 260 || latencyP95 > 520 ? "Investigate" : latencyP95 > 360 ? "Watch" : "Healthy",
+    environment: environments[index % environments.length] ?? "Production",
+    tier: tiers[index % tiers.length] ?? "Standard",
+    version: `v${2 + (index % 4)}.${index % 12}.${index % 18}`,
+    deployState: deployStates[(index + 1) % deployStates.length] ?? "Current",
+    incidents: (index * 3) % 9,
+    saturation: 22 + ((index * 19) % 73),
+    throughput: 900 + ((index * 233) % 18000),
+    queueDepth: (index * 29) % 4800,
+    availability: 99 + (((index * 17) % 95) / 100),
+    errorBudget: 4 + ((index * 5) % 92),
+    lastDeploy: dateFor(index + 17),
+    zone: `${region.toLowerCase()}-${1 + (index % 4)}`,
+    plan: plans[index % plans.length] ?? "Observe",
   }
+}
+
+function badge(value: unknown, tone: "success" | "warning" | "danger" | "info" | "neutral") {
+  return h("span", { class: ["showcase-cell-badge", `showcase-cell-badge--${tone}`] }, String(value ?? ""))
+}
+
+function statusTone(status: unknown): "success" | "warning" | "danger" {
+  if (status === "Investigate") {
+    return "danger"
+  }
+  if (status === "Watch") {
+    return "warning"
+  }
+  return "success"
+}
+
+function deployTone(state: unknown): "success" | "warning" | "danger" | "neutral" {
+  if (state === "Blocked") {
+    return "danger"
+  }
+  if (state === "Rolling") {
+    return "warning"
+  }
+  if (state === "Current") {
+    return "success"
+  }
+  return "neutral"
 }
 
 export const scaleRows: CapacityRow[] = Array.from({ length: 100_000 }, (_unused, index) => createCapacityRow(index))
@@ -130,16 +188,29 @@ export const forecastRows: ForecastRow[] = Array.from({ length: 180 }, (_unused,
 
 export const scaleColumns: DataGridAppColumnInput[] = [
   { key: "service", label: "Service", initialState: { width: 190, pin: "left" } },
+  { key: "status", label: "Status", initialState: { width: 140 }, cellRenderer: ({ displayValue }) => badge(displayValue, statusTone(displayValue)) },
+  { key: "environment", label: "Environment", initialState: { width: 140 }, cellRenderer: ({ displayValue }) => badge(displayValue, displayValue === "Production" ? "info" : "neutral") },
+  { key: "tier", label: "Tier", initialState: { width: 120 }, cellRenderer: ({ displayValue }) => badge(displayValue, displayValue === "Critical" ? "danger" : "neutral") },
   { key: "region", label: "Region", initialState: { width: 100 } },
+  { key: "zone", label: "Zone", initialState: { width: 100 } },
   { key: "shard", label: "Shard", initialState: { width: 120 } },
+  { key: "version", label: "Version", initialState: { width: 110 } },
+  { key: "deployState", label: "Deploy", initialState: { width: 120 }, cellRenderer: ({ displayValue }) => badge(displayValue, deployTone(displayValue)) },
   { key: "requests", label: "Requests", dataType: "number", initialState: { width: 130 } },
+  { key: "throughput", label: "Throughput/s", dataType: "number", initialState: { width: 140 } },
   { key: "errors", label: "Errors", dataType: "number", initialState: { width: 110 } },
+  { key: "incidents", label: "Incidents", dataType: "number", initialState: { width: 110 } },
   { key: "latencyP95", label: "P95 latency", dataType: "number", initialState: { width: 130 } },
+  { key: "queueDepth", label: "Queue depth", dataType: "number", initialState: { width: 130 } },
   { key: "cpu", label: "CPU %", dataType: "number", initialState: { width: 100 } },
   { key: "memory", label: "Memory %", dataType: "number", initialState: { width: 120 } },
+  { key: "saturation", label: "Saturation %", dataType: "number", initialState: { width: 130 } },
+  { key: "availability", label: "Availability", dataType: "number", initialState: { width: 130 } },
+  { key: "errorBudget", label: "Error budget %", dataType: "number", initialState: { width: 140 } },
   { key: "cost", label: "Hourly cost", dataType: "currency", initialState: { width: 130 } },
   { key: "owner", label: "Owner", initialState: { width: 130 } },
-  { key: "status", label: "Status", initialState: { width: 130 } },
+  { key: "lastDeploy", label: "Last deploy", dataType: "date", initialState: { width: 130 } },
+  { key: "plan", label: "Plan", initialState: { width: 150 }, cellRenderer: ({ displayValue }) => badge(displayValue, "info") },
 ]
 
 export const revenueColumns: DataGridAppColumnInput[] = [
