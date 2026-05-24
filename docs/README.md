@@ -7,6 +7,12 @@ This folder separates user-facing documentation from internal planning material.
 - [Codex reference map](./codex-reference-map.md) - focused reading path for code-review, quality, interaction, virtualization, and server datasource changes.
 - [Server datasource](./server-datasource/README.md) - production integration path for backend-owned tables.
 - [Server datasource integration map](./server-datasource/integration-docs-map.md) - ordered reading path for package users and Codex agents.
+- [External adoption audit](./datagrid-external-adoption-audit.md) - ranked first-time adoption frictions and slice roadmap.
+- [README entry flow audit](./datagrid-readme-entry-flow-audit.md) - proposed external README structure and onboarding flow.
+- [Positioning strategy audit](./datagrid-positioning-strategy-audit.md) - competitive positioning, OSS/enterprise messaging, and demo priorities.
+- [Stable API ergonomics audit](./datagrid-stable-api-ergonomics-audit.md) - adoption-focused review of core, Vue, and Vue app stable API complexity.
+- [Sandbox demo audit](./datagrid-sandbox-demo-audit.md) - adoption-focused review of sandbox first impression, demo hierarchy, and enterprise showcase gaps.
+- [OSS ecosystem audit](./datagrid-oss-ecosystem-audit.md) - open-source maturity review covering package boundaries, semver, contributors, and trust signals.
 - [Product report RU](./datagrid-product-report.ru.md) - simple product-oriented overview for engineers evaluating Affino DataGrid.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
 - [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.
