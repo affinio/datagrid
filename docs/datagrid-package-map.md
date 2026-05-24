@@ -43,6 +43,7 @@ Move to lower-level packages only when your integration needs runtime ownership,
 | `@affino/datagrid-formula-engine-enterprise` | Enterprise formula/runtime teams | You need premium formula packs or enterprise formula runtime configuration. | Enterprise formula extension | Enterprise | Additive over `@affino/datagrid-formula-engine`. | Not a beginner package. |
 | `@affino/datagrid-laravel` | Laravel/Livewire integration engineers | You need Laravel-facing DataGrid integration contracts. | Stable framework facade | Community | Use for Laravel integrations, not Vue-only apps. | Framework-specific. |
 | `@affino/datagrid-laravel-app` | Laravel app engineers | You need app-facing Laravel DataGrid integration. | App facade | Community/planned app boundary | Use only for Laravel app path. | Framework-specific. |
+| `@affino/datagrid-showcase` | Maintainers and evaluators | You need the product-shaped external demo app without sandbox validation/debug controls. | Internal/private demo app | Internal tooling | Private workspace package; run with `pnpm run showcase:dev`. | Do not install in apps. |
 | `@affino/datagrid-sandbox` | Maintainers | You need local demos, validation scenarios, or manual/e2e sandbox flows. | Internal/private app | Internal tooling | Package is private. | Do not install in apps. |
 
 ## Entrypoint Tier Rules

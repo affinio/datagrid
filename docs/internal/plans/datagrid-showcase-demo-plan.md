@@ -6,6 +6,7 @@ Scope: `packages/datagrid-sandbox` route and navigation productization.
 
 ## Implementation Status
 
+- 2026-05-24: Slice 7 split the product-shaped showcase into private package `@affino/datagrid-showcase`, independent from sandbox validation/debug components.
 - 2026-05-24: Slice 6 added an additive `/showcase` landing route, grouped sandbox navigation, and outcome-based demo labels.
 - Existing route paths and the `/` redirect to `/vue/base-grid` remain unchanged.
 - Hero cards currently link to existing stable routes; `/showcase/*` aliases remain a follow-up slice.
@@ -221,6 +222,7 @@ Expected improvement after the first two implementation slices:
 
 ## Open Risks
 
+- Standalone product showcase now lives in `packages/datagrid-showcase`; sandbox `/showcase` remains a validation-adjacent landing until it is redirected or deprecated in a later slice.
 - Root redirect change may break tests or expectations; keep it out of the first UI slice.
 - Performance Stress Grid needs a careful preset so it demonstrates scale without making `/showcase` heavy.
 - Duplicate tree/pivot routes need naming discipline; avoid hiding adapter routes from maintainers.

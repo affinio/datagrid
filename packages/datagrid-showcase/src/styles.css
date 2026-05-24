@@ -1,0 +1,267 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #eef2f6;
+  color: #18212f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: #eef2f6;
+}
+
+button {
+  font: inherit;
+}
+
+#app {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.showcase-shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.showcase-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 18px;
+  border-right: 1px solid #d7dee8;
+  background: #172033;
+  color: #f8fafc;
+}
+
+.showcase-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.showcase-brand__mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: #2dd4bf;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.showcase-brand strong,
+.showcase-brand span {
+  display: block;
+}
+
+.showcase-brand span {
+  margin-top: 2px;
+  color: #aab6c8;
+  font-size: 12px;
+}
+
+.showcase-nav {
+  display: grid;
+  gap: 6px;
+}
+
+.showcase-nav button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-nav button span {
+  display: block;
+  margin-bottom: 2px;
+  color: #7dd3fc;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.showcase-nav button:hover,
+.showcase-nav button.active {
+  background: #26344d;
+  color: #fff;
+}
+
+.showcase-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  overflow: hidden;
+}
+
+.showcase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.showcase-header p {
+  margin: 0 0 4px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.showcase-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.showcase-header div > span {
+  display: block;
+  max-width: 920px;
+  margin-top: 8px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.showcase-header__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.showcase-header__actions button {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.showcase-header__actions .primary {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
+.showcase-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.showcase-metrics article {
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.showcase-metrics span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.showcase-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.showcase-grid-panel {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.showcase-grid-panel > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.showcase-grid-panel .affino-datagrid-app-root {
+  height: 100%;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .showcase-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .showcase-sidebar {
+    gap: 14px;
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid #d7dee8;
+  }
+
+  .showcase-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .showcase-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .showcase-main {
+    padding: 16px;
+  }
+
+  .showcase-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .showcase-header__actions,
+  .showcase-header__actions button {
+    width: 100%;
+  }
+
+  .showcase-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .showcase-metrics {
+    grid-template-columns: 1fr;
+  }
+}

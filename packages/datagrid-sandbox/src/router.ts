@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router"
 import CoreGridCard from "./components/CoreGridCard.vue"
 import AnalyticsChartsDemo from "./features/charts/AnalyticsChartsDemo.vue"
 import ChartsDemo from "./features/charts/ChartsDemo.vue"
+import ShowcaseLanding from "./components/ShowcaseLanding.vue"
 import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
@@ -16,6 +17,10 @@ const routes = [
   {
     path: "/",
     redirect: "/vue/base-grid",
+  },
+  {
+    path: "/showcase",
+    component: ShowcaseLanding,
   },
   {
     path: "/vue/base-grid",

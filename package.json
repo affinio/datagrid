@@ -127,7 +127,10 @@
     "quality:lock:datagrid": "pnpm run quality:architecture:datagrid && pnpm run quality:facade:datagrid && pnpm run quality:perf:datagrid && pnpm run test:datagrid:strict-contracts && pnpm run quality:gates:datagrid && pnpm run quality:gates:datagrid:tree",
     "quality:lock:datagrid:parity": "pnpm run quality:lock:datagrid && pnpm run test:e2e:datagrid:parity",
     "quality:lock:datagrid:parity:full": "pnpm run quality:lock:datagrid:parity && pnpm run bench:regression",
-    "bench:regression": "pnpm run bench:datagrid:harness:ci:gate"
+    "bench:regression": "pnpm run bench:datagrid:harness:ci:gate",
+    "showcase:dev": "pnpm --filter @affino/datagrid-showcase dev",
+    "showcase:build": "pnpm --filter @affino/datagrid-showcase build",
+    "showcase:type-check": "pnpm --filter @affino/datagrid-showcase type-check"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -155,7 +158,6 @@
       "@vue/compiler-dom": "3.4.38",
       "@vue/compiler-sfc": "3.4.38",
       "@vue/server-renderer": "3.4.38",
-
       "braces": "^3.0.3",
       "minimatch": "^10.2.3",
       "serialize-javascript": "^7.0.3",
@@ -164,12 +166,10 @@
       "esbuild": "^0.25.0",
       "rollup": "^4.59.0",
       "qs": "^6.15.0",
-
       "flatted": "3.4.2",
       "undici": "7.24.0",
       "picomatch": "4.0.4",
       "vite": "7.3.2",
-
       "brace-expansion": "5.0.5",
       "postcss": "8.5.10"
     }
