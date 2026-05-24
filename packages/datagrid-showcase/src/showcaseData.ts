@@ -2,7 +2,7 @@ import { h } from "vue"
 import type { DataGridAppColumnInput } from "@affino/datagrid-vue-app"
 import type { DataGridDataSource } from "@affino/datagrid-vue"
 
-export type ScenarioId = "scale" | "backend" | "spreadsheet" | "filters"
+export type ScenarioId = "scale" | "backend" | "spreadsheet" | "filters" | "aggregation" | "pivot" | "tree" | "gantt"
 
 export type RevenueRow = {
   rowId: string
@@ -60,6 +60,26 @@ export type ForecastRow = {
   total?: number
   margin?: number
   marginPct?: number
+}
+
+export type PortfolioTreeRow = RevenueRow & {
+  path: string[]
+  portfolioType: string
+}
+
+export type PlanningRow = {
+  rowId: string
+  id: string
+  name: string
+  owner: string
+  start: string
+  end: string
+  baselineStart: string
+  baselineEnd: string
+  progress: number
+  dependencies: string[]
+  critical: boolean
+  workstream: string
 }
 
 const accounts = [
@@ -186,6 +206,33 @@ export const forecastRows: ForecastRow[] = Array.from({ length: 180 }, (_unused,
   cost: 1600 + ((index * 113) % 36000),
 }))
 
+export const treeRows: PortfolioTreeRow[] = revenueRows.slice(0, 360).map((row, index) => ({
+  ...row,
+  rowId: `portfolio-${index + 1}`,
+  path: [row.region, row.segment, row.owner, row.account],
+  portfolioType: index % 2 === 0 ? "Retain" : "Expand",
+}))
+
+export const planningRows: PlanningRow[] = Array.from({ length: 72 }, (_unused, index) => {
+  const startDay = 1 + (index % 22)
+  const duration = 4 + (index % 14)
+  const id = `task-${index + 1}`
+  return {
+    rowId: id,
+    id,
+    name: `${products[index % products.length] ?? "Program"} milestone ${index + 1}`,
+    owner: owners[index % owners.length] ?? "Owner",
+    start: `2026-06-${String(startDay).padStart(2, "0")}`,
+    end: `2026-06-${String(Math.min(28, startDay + duration)).padStart(2, "0")}`,
+    baselineStart: `2026-06-${String(Math.max(1, startDay - 1)).padStart(2, "0")}`,
+    baselineEnd: `2026-06-${String(Math.min(28, startDay + duration + 2)).padStart(2, "0")}`,
+    progress: (index * 17) % 100,
+    dependencies: index > 0 && index % 4 !== 0 ? [`task-${index}`] : [],
+    critical: index % 9 === 0 || index % 13 === 0,
+    workstream: ["Platform", "Revenue", "Data", "Operations"][index % 4] ?? "Platform",
+  }
+})
+
 export const scaleColumns: DataGridAppColumnInput[] = [
   { key: "service", label: "Service", initialState: { width: 190, pin: "left" } },
   { key: "status", label: "Status", initialState: { width: 140 }, cellRenderer: ({ displayValue }) => badge(displayValue, statusTone(displayValue)) },
@@ -224,6 +271,27 @@ export const revenueColumns: DataGridAppColumnInput[] = [
   { key: "margin", label: "Margin %", dataType: "number", initialState: { width: 120 } },
   { key: "renewal", label: "Renewal", dataType: "date", initialState: { width: 130 } },
   { key: "nextStep", label: "Next step", initialState: { width: 260 } },
+]
+
+export const treeColumns: DataGridAppColumnInput[] = [
+  { key: "account", label: "Account", initialState: { width: 230, pin: "left" } },
+  { key: "region", label: "Region", initialState: { width: 110 } },
+  { key: "segment", label: "Segment", initialState: { width: 140 } },
+  { key: "owner", label: "Owner", initialState: { width: 130 } },
+  { key: "portfolioType", label: "Type", initialState: { width: 120 }, cellRenderer: ({ displayValue }) => badge(displayValue, displayValue === "Expand" ? "info" : "neutral") },
+  { key: "arr", label: "ARR", dataType: "currency", initialState: { width: 130 } },
+  { key: "risk", label: "Risk", initialState: { width: 110 }, cellRenderer: ({ displayValue }) => badge(displayValue, displayValue === "High" ? "danger" : displayValue === "Medium" ? "warning" : "success") },
+  { key: "nextStep", label: "Next step", initialState: { width: 260 } },
+]
+
+export const planningColumns: DataGridAppColumnInput[] = [
+  { key: "name", label: "Task", initialState: { width: 260, pin: "left" } },
+  { key: "workstream", label: "Workstream", initialState: { width: 130 }, cellRenderer: ({ displayValue }) => badge(displayValue, "info") },
+  { key: "owner", label: "Owner", initialState: { width: 130 } },
+  { key: "start", label: "Start", dataType: "date", initialState: { width: 120 } },
+  { key: "end", label: "End", dataType: "date", initialState: { width: 120 } },
+  { key: "progress", label: "Progress", dataType: "number", initialState: { width: 110 } },
+  { key: "critical", label: "Critical", initialState: { width: 110 }, cellRenderer: ({ displayValue }) => badge(displayValue ? "Critical" : "Normal", displayValue ? "danger" : "neutral") },
 ]
 
 export const forecastColumns: DataGridAppColumnInput[] = [

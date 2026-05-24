@@ -202,6 +202,7 @@ button {
   display: flex;
   min-height: 0;
   min-width: 0;
+  position: relative;
   flex: 1;
   border: 1px solid #dbe3ee;
   border-radius: 8px;
@@ -220,6 +221,24 @@ button {
   min-height: 0;
 }
 
+
+.showcase-selection-summary {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+  pointer-events: none;
+}
 
 .showcase-cell-badge {
   display: inline-flex;

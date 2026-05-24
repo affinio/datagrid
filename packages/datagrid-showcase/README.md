@@ -16,6 +16,10 @@ This package is intentionally separate from `@affino/datagrid-sandbox`:
 - Backend-owned model: 250k-row sparse datasource using `createDataSourceBackedRowModel`, viewport pulls, and histogram support.
 - Spreadsheet formulas: editable planning inputs with computed subtotal, tax, total, margin, and margin percent columns.
 - Advanced filter review: account review workflow with advanced filter, quick filter, column menus, and selection.
+- Aggregation groups: grouped revenue rollups with aggregation-backed parent rows.
+- Pivot analysis: owner-by-region revenue matrix.
+- Tree portfolio: hierarchical account portfolio with intrinsic tree paths.
+- Gantt planning: timeline planning with dependencies, baselines, progress, and critical path.
 
 ## Commands
 
