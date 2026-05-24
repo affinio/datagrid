@@ -5,12 +5,14 @@ import type { DataGridTableRow } from "./dataGridTableStage.types"
 
 const DEFAULT_COLUMN_WIDTH = 140
 const ROW_SELECTION_COLUMN_WIDTH = 108
+const ROW_SELECTION_COLUMN_MIN_WIDTH = 40
 const ROW_SELECTION_COLUMN_KEY = "__datagrid_row_selection__"
 
 export interface UseDataGridTableStageColumnsOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   showRowSelection?: Ref<boolean>
+  rowSelectionColumnWidth?: Ref<number>
   isCellEditable?: DataGridCellEditablePredicate<TRow>
 }
 
@@ -32,20 +34,29 @@ export function useDataGridTableStageColumns<TRow extends Record<string, unknown
   const hasRowSelectionSupport = computed(() => {
     return (options.showRowSelection?.value ?? true) && options.runtime.api.rowSelection.hasSupport()
   })
+  const resolvedRowSelectionColumnWidth = computed(() => {
+    const width = options.rowSelectionColumnWidth?.value
+    if (typeof width !== "number" || !Number.isFinite(width)) {
+      return ROW_SELECTION_COLUMN_WIDTH
+    }
+    return Math.max(ROW_SELECTION_COLUMN_MIN_WIDTH, Math.trunc(width))
+  })
+
   const rowSelectionColumn = computed<DataGridColumnSnapshot | null>(() => {
     if (!hasRowSelectionSupport.value) {
       return null
     }
+    const width = resolvedRowSelectionColumnWidth.value
     return {
       key: ROW_SELECTION_COLUMN_KEY,
       state: {
         visible: true,
         pin: "left",
-        width: ROW_SELECTION_COLUMN_WIDTH,
+        width,
       },
       visible: true,
       pin: "left",
-      width: ROW_SELECTION_COLUMN_WIDTH,
+      width,
       groupPath: [],
       column: {
         key: ROW_SELECTION_COLUMN_KEY,
@@ -67,8 +78,8 @@ export function useDataGridTableStageColumns<TRow extends Record<string, unknown
             )
           },
         },
-        minWidth: ROW_SELECTION_COLUMN_WIDTH,
-        maxWidth: ROW_SELECTION_COLUMN_WIDTH,
+        minWidth: width,
+        maxWidth: width,
         capabilities: {
           editable: true,
           sortable: false,

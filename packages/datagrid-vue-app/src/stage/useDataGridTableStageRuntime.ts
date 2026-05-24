@@ -260,6 +260,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   chromeSignature?: Ref<string | undefined>
   showRowIndex?: Ref<boolean>
   showRowSelection?: Ref<boolean>
+  rowSelectionColumnWidth?: Ref<number>
   isRowInPendingClipboardCut?: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>) => boolean
   syncRowSelectionSnapshotFromRuntime?: () => void
   flushRowSelectionSnapshotUpdates?: () => void
@@ -422,6 +423,7 @@ export function useDataGridTableStageRuntime<
     runtime: options.runtime,
     visibleColumns: options.visibleColumns,
     showRowSelection: options.showRowSelection,
+    rowSelectionColumnWidth: options.rowSelectionColumnWidth,
     isCellEditable: options.isCellEditable,
   })
   const {

@@ -1101,6 +1101,10 @@ export default defineComponent({
       type: Boolean,
       default: true,
     },
+    rowSelectionColumnWidth: {
+      type: Number,
+      default: 108,
+    },
     rowReorder: {
       type: Object as PropType<DataGridRowReorderOptions>,
       required: true,
@@ -3419,6 +3423,7 @@ export default defineComponent({
       onCellEdit: props.onCellEdit,
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
+      rowSelectionColumnWidth: computed(() => props.rowSelectionColumnWidth),
       isRowInPendingClipboardCut,
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,
       syncRowSelectionSnapshotFromRuntime: props.syncRowSelectionSnapshotFromRuntime,

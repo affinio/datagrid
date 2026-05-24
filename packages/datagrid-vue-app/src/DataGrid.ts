@@ -138,6 +138,11 @@ import {
   type DataGridRowReorderProp,
 } from "./config/dataGridRowReorder"
 import {
+  resolveDataGridRowSelection,
+  type DataGridResolvedRowSelectionOptions,
+  type DataGridRowSelectionProp,
+} from "./config/dataGridRowSelection"
+import {
   resolveDataGridAggregations,
   type DataGridAggregationsOptions,
   type DataGridAggregationsProp,
@@ -648,7 +653,7 @@ const dataGridProps = {
     default: true,
   },
   rowSelection: {
-    type: Boolean,
+    type: [Boolean, Object] as PropType<DataGridRowSelectionProp>,
     default: true,
   },
   rowReorder: {
@@ -1146,12 +1151,15 @@ const DataGridRuntimeComponent = defineComponent({
       const pinnedBottomIndex = bodyRowIndex - bodyRowCount
       return rowPartition.pinnedBottomRows[pinnedBottomIndex] ?? null
     }
+    const resolvedRowSelection = computed<DataGridResolvedRowSelectionOptions>(() => resolveDataGridRowSelection(props.rowSelection))
+    const showRowSelection = computed(() => resolvedRowSelection.value.enabled)
+    const rowSelectionColumnWidth = computed(() => resolvedRowSelection.value.columnWidth)
     const selectionOptions = {
       mode: computed(() => inferredMode.value),
       resolveRuntime: () => dataGridRef.value,
       visibleColumns,
       totalRows,
-      showRowSelection: computed(() => props.rowSelection),
+      showRowSelection,
       readSelectionCell: props.readSelectionCell,
       resolveSelectionRowAtIndex,
     } as Parameters<typeof useDataGridAppSelection<unknown>>[0]
@@ -1172,7 +1180,7 @@ const DataGridRuntimeComponent = defineComponent({
       resolveRuntime: () => dataGridRef.value,
     })
     const resolvedRowSelectionService = computed<DataGridSelectionService>(() => {
-      return props.rowSelection ? rowSelectionService : createDisabledRowSelectionService()
+      return showRowSelection.value ? rowSelectionService : createDisabledRowSelectionService()
     })
     const resolvedServices = computed<DataGridRuntimeOverrides>(() => ({
       ...(props.services ?? {}),
@@ -1694,7 +1702,8 @@ const DataGridRuntimeComponent = defineComponent({
         cellStyle: props.cellStyle,
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
-        rowSelection: props.rowSelection,
+        rowSelection: showRowSelection.value,
+        rowSelectionColumnWidth: rowSelectionColumnWidth.value,
         rowReorder: resolvedRowReorder.value,
         viewMode: currentViewMode.value,
         gantt: props.gantt,

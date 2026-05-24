@@ -34,6 +34,7 @@ The API report reads emitted declarations from package `dist` folders. Run the r
 - Any new package export path must be classified in `scripts/check-datagrid-public-api-inventory.mjs`.
 - Any changed source entrypoint or export declaration must refresh `docs/quality/datagrid-public-api-inventory.json` with `node ./scripts/check-datagrid-public-api-inventory.mjs --write-baseline` after review.
 - Public API movement between stable, advanced, and internal tiers requires migration notes in `docs/datagrid-migration-guide.md` or the domain-specific guide.
+- `@affino/datagrid-vue-app` `DataGrid` row selection is a stable app-facing prop surface: `rowSelection` accepts `boolean | { enabled?: boolean; columnWidth?: number }`, where `columnWidth` configures the synthetic row-selection checkbox column width without making the system column user-resizable.
 - The generated inventory is an export-map and source-entrypoint snapshot.
 - The generated API report is the declaration-level gate. Public type changes must refresh `docs/quality/datagrid-api-report.json` with `node ./scripts/check-datagrid-api-report.mjs --write-baseline` after semver review.
 

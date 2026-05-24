@@ -3061,7 +3061,9 @@ describe("DataGridTableStage contract", () => {
       },
     })
 
-    expect(wrapper.find(".grid-header-pane--left .grid-cell--row-selection").exists()).toBe(true)
+    const rowSelectionHeader = wrapper.find(".grid-header-pane--left .grid-cell--row-selection")
+    expect(rowSelectionHeader.exists()).toBe(true)
+    expect(rowSelectionHeader.find(".col-resize").exists()).toBe(false)
     expect(wrapper.find(".grid-body-pane--left .grid-cell--row-selection[role='checkbox']").exists()).toBe(true)
 
     const indexCell = wrapper.find(".grid-body-pane--left .grid-cell--index-number")

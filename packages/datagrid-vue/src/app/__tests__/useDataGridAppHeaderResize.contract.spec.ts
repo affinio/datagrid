@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppHeaderResize } from "../useDataGridAppHeaderResize"
 
+function createColumnSnapshot(
+  key: string,
+  width: number,
+  column: DataGridColumnSnapshot["column"],
+): DataGridColumnSnapshot {
+  return {
+    key,
+    state: { visible: true, pin: "none", width },
+    visible: true,
+    pin: "none",
+    width,
+    groupPath: [],
+    column,
+  }
+}
+
 function createHeaderResize(options: {
   isFillDragging?: () => boolean
   stopFillSelection?: () => void
@@ -14,14 +30,10 @@ function createHeaderResize(options: {
   const stopDragSelection = options.stopDragSelection ?? vi.fn()
   const headerResize = useDataGridAppHeaderResize({
     visibleColumns: ref([
-      {
+      createColumnSnapshot("service", 120, {
         key: "service",
-        width: 120,
-        column: {
-          key: "service",
-          label: "Service",
-        },
-      } as DataGridColumnSnapshot,
+        label: "Service",
+      }),
     ]),
     rows: ref<Array<Record<string, string>>>([{ service: "API" }, { service: "Longer service name" }]),
     persistColumnWidth,
@@ -82,6 +94,36 @@ describe("useDataGridAppHeaderResize contract", () => {
     })
     headerResize.stopColumnResize()
     expect(headerResize.interactionOwnerSnapshot.value.activeOwners).toEqual([])
+  })
+
+  it("does not start resize or autosize for system columns", () => {
+    const persistColumnWidth = vi.fn()
+    const headerResize = useDataGridAppHeaderResize({
+      visibleColumns: ref([
+        createColumnSnapshot("__datagrid_row_selection__", 108, {
+          key: "__datagrid_row_selection__",
+          label: "",
+          meta: { isSystem: true, rowSelection: true },
+        }),
+      ]),
+      rows: ref<Array<Record<string, string>>>([]),
+      persistColumnWidth,
+      isFillDragging: () => false,
+      stopFillSelection: vi.fn(),
+      isDragSelecting: () => false,
+      stopDragSelection: vi.fn(),
+      readCellText: (row, columnKey) => String(row[columnKey] ?? ""),
+    })
+    const mouseDown = new MouseEvent("mousedown", { cancelable: true, button: 0, clientX: 120 })
+    const dblClick = new MouseEvent("dblclick", { cancelable: true })
+
+    headerResize.startResize(mouseDown, "__datagrid_row_selection__")
+    headerResize.handleResizeDoubleClick(dblClick, "__datagrid_row_selection__")
+
+    expect(mouseDown.defaultPrevented).toBe(false)
+    expect(dblClick.defaultPrevented).toBe(false)
+    expect(headerResize.isColumnResizing.value).toBe(false)
+    expect(persistColumnWidth).not.toHaveBeenCalled()
   })
 
   it("ignores touch-generated column autosize double-click events", () => {

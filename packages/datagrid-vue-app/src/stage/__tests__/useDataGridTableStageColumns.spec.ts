@@ -60,6 +60,35 @@ describe("useDataGridTableStageColumns", () => {
     expect(setSelected).toHaveBeenCalledWith("r1", false)
   })
 
+  it("uses the configured row-selection system column width", () => {
+    const service = useDataGridTableStageColumns({
+      runtime: {
+        api: {
+          rowSelection: {
+            hasSupport: () => true,
+            isSelected: () => false,
+            setSelected: vi.fn(),
+          },
+        },
+      } as never,
+      visibleColumns: ref([]),
+      showRowSelection: ref(true),
+      rowSelectionColumnWidth: ref(64),
+    })
+
+    const column = service.rowSelectionColumn.value
+
+    expect(column?.width).toBe(64)
+    expect(column?.state.width).toBe(64)
+    expect(column?.column.minWidth).toBe(64)
+    expect(column?.column.maxWidth).toBe(64)
+    expect(service.stageColumnStyle("__datagrid_row_selection__")).toEqual({
+      width: "64px",
+      minWidth: "64px",
+      maxWidth: "64px",
+    })
+  })
+
   it("keeps header and pane column projection in pinned-left, center, pinned-right order", () => {
     const service = useDataGridTableStageColumns({
       runtime: {

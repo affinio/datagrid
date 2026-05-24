@@ -19,6 +19,9 @@ export type {
   DataGridFilterCellReader,
   DataGridInstance,
   DataGridProps,
+  DataGridResolvedRowSelectionOptions,
+  DataGridRowSelectionOptions,
+  DataGridRowSelectionProp,
   DataGridSelectionCellReader,
 } from "@affino/datagrid-vue-app"
 export type {

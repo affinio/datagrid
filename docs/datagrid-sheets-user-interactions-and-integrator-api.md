@@ -113,6 +113,7 @@ Server-backed grids use the operation matrix in `docs/server-datasource/selectio
 - Unloaded or placeholder rows must use a server-delegated operation when that capability exists; otherwise the operation is blocked with a clear user-facing state.
 - Stale virtual selections must not run local materialized operations. The user must refresh/reselect or the app must delegate to a backend operation that validates `baseRevision` and projection identity.
 - Row selection `all` mode represents all rows in the current projection with exclusions; server-backed workflows must not enumerate unloaded row ids just to represent all-row selection.
+- `rowSelection` accepts either a boolean or `{ enabled?: boolean; columnWidth?: number }`. `columnWidth` declaratively sizes the system checkbox column while keeping it non-resizable by user drag/autosize gestures. Example: `<DataGrid :row-selection="{ enabled: true, columnWidth: 64 }" />`; sandbox route: `/vue/shell/base-grid?rowSelectionColumnWidth=64`.
 
 ### Event policy
 
@@ -126,7 +127,7 @@ Mouse, touch-generated mouse, touch, wheel, keyboard, and context-menu events fo
 | Touch selection handle start | Stage touch selection handle bridge and app interaction controller | Touch range extension is allowed only from the explicit selection handle; the handle isolates/cancels its touch gesture and forwards selection extension through the existing interaction lifecycle. |
 | Fill handle mouse/touch start | Stage pointer interactions and fill lifecycle | Desktop mouse may prevent default on the explicit handle. Touch fill is allowed only from the explicit handle and isolates/cancels that handle gesture. |
 | Range move | App interaction controller and range-move lifecycle | Desktop selected-cell body range move is movement-threshold gated. Touch range move must use explicit touch affordances, not body-cell drag. |
-| Column/row resize handles | Header resize orchestration and row sizing | Resize handles may prevent default after ownership is accepted; touch-generated desktop mouse fallback is ignored unless routed by an explicit touch affordance. |
+| Column/row resize handles | Header resize orchestration and row sizing | Resize handles may prevent default after ownership is accepted; touch-generated desktop mouse fallback is ignored unless routed by an explicit touch affordance. System columns, including the row-selection checkbox column, do not accept header resize/autosize ownership. |
 | Linked header/pinned touch pan | `installDataGridTouchPanGuard()` | `touchstart`, `touchend`, and `touchcancel` stay passive. The non-passive `touchmove` listener is installed only after a handled linked-surface touch start and removed when the gesture ends. |
 | Header wheel / linked wheel | Stage scroll sync | May prevent default only when translating the linked wheel gesture into body viewport scroll. |
 | Keyboard commands | Keyboard command router | Prevents default for handled grid commands such as copy/paste/cut, clear, undo/redo, select all, context menu, and navigation. |

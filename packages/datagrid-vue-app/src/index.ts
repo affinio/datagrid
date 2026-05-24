@@ -146,6 +146,11 @@ export type {
   DataGridRowReorderOptions,
   DataGridRowReorderProp,
 } from "./config/dataGridRowReorder"
+export type {
+  DataGridResolvedRowSelectionOptions,
+  DataGridRowSelectionOptions,
+  DataGridRowSelectionProp,
+} from "./config/dataGridRowSelection"
 export {
   clearDataGridSavedViewInStorage,
   migrateDataGridSavedView,

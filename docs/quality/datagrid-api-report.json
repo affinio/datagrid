@@ -5,7 +5,7 @@
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.3.33",
+      "version": "0.4.0",
       "exportCount": 3,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -968,7 +968,7 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.3.46",
+      "version": "0.4.1",
       "exportCount": 13,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -2590,7 +2590,7 @@
     {
       "packageName": "@affino/datagrid-vue-app",
       "packageDir": "packages/datagrid-vue-app",
-      "version": "0.1.64",
+      "version": "0.4.6",
       "exportCount": 7,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -3125,7 +3125,7 @@
     {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.3.24",
+      "version": "0.4.0",
       "exportCount": 1,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -3615,7 +3615,7 @@
     {
       "packageName": "@affino/datagrid-server-adapters",
       "packageDir": "packages/datagrid-server-adapters",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "exportCount": 1,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -3674,7 +3674,7 @@
     {
       "packageName": "@affino/datagrid-server-client",
       "packageDir": "packages/datagrid-server-client",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "exportCount": 1,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -3685,14 +3685,15 @@
           "types": "./dist/src/index.d.ts",
           "declarationFile": "packages/datagrid-server-client/dist/src/index.d.ts",
           "declarationExists": true,
-          "declarationFileCount": 9,
-          "declarationHash": "19d34111b1d6380cd52309d0b8511d5fd85247a682a452f8a76f2c6178e2b2a8",
-          "entrypointExportCount": 8,
+          "declarationFileCount": 10,
+          "declarationHash": "6ae3d111e43b44294762292a15a99a3b85ded3e55c8ea56e7bf5c509be4e0455",
+          "entrypointExportCount": 9,
           "entrypointExports": [
             "export { DEFAULT_SERVER_DATASOURCE_READ_RETRY_OPTIONS, HttpError, isRetryableServerDatasourceReadError, normalizeServerDatasourceRetryOptions, runWithServerDatasourceRetry, type ServerDatasourceResolvedRetryOptions, type ServerDatasourceRetryEvent, type ServerDatasourceRetryOptions, } from \"./http\"",
-            "export { createChangeFeedPoller, type ServerDatasourceChangeFeedDiagnostics, type ServerDatasourceChangeFeedPoller, type ServerDatasourceChangeFeedPollerOptions, } from \"./changeFeedPoller\"",
+            "export { createChangeFeedPoller, type ServerDatasourceChangeFeedDiagnostics, type ServerDatasourceLiveUpdateDiagnosticsKind, type ServerDatasourceChangeFeedPoller, type ServerDatasourceChangeFeedPollerOptions, } from \"./changeFeedPoller\"",
             "export { createPollingLiveUpdateTransport, type ServerDatasourceLiveUpdateTransport, type ServerDatasourceLiveUpdateTransportFactory, type ServerDatasourceLiveUpdateTransportKind, } from \"./liveUpdateTransport\"",
             "export { createServerDatasourceHttpClient, type ServerDatasourceHttpClientOptions, } from \"./client\"",
+            "export { createWebSocketLiveUpdateTransport, createWebSocketLiveUpdateTransportFactory, type ServerDatasourceWebSocketLiveUpdateTransportOptions, } from \"./webSocketLiveUpdateTransport\"",
             "export { mapServerChangeEvent, type ServerChangeEventLike, type ServerChangeMappingResult, } from \"./changeFeedMapping\"",
             "export { normalizeDatasetVersion } from \"./normalize\"",
             "export { normalizeDatasourceInvalidation } from \"./invalidation\"",
@@ -3705,7 +3706,7 @@
             },
             {
               "path": "packages/datagrid-server-client/dist/src/changeFeedPoller.d.ts",
-              "hash": "f97f445dc6748883838b8cddb5307bd16be27601dcf3e7d5c20612707788c7ed"
+              "hash": "46f0336039ad304002c063ebfd677dd0a32bcb752b358714f18511931d4c9664"
             },
             {
               "path": "packages/datagrid-server-client/dist/src/client.d.ts",
@@ -3717,7 +3718,7 @@
             },
             {
               "path": "packages/datagrid-server-client/dist/src/index.d.ts",
-              "hash": "dd66711b9f3e82e2dbef72e7bd08a83b412504eaa53f5c3cae5d76d965808c2f"
+              "hash": "bf56a44731d22df89d5e870750d5424a49bb626ccde0217db6b44355fed57d1d"
             },
             {
               "path": "packages/datagrid-server-client/dist/src/invalidation.d.ts",
@@ -3725,7 +3726,7 @@
             },
             {
               "path": "packages/datagrid-server-client/dist/src/liveUpdateTransport.d.ts",
-              "hash": "47fe527bbb437bd92967a288c05c6edb8d9b8b15d8668ff2c7369a44eb36c5bc"
+              "hash": "b539dbf8e70cc10ff95762ae2f69102c8acab3402e9004c2d3077918f2224e5e"
             },
             {
               "path": "packages/datagrid-server-client/dist/src/normalize.d.ts",
@@ -3734,6 +3735,10 @@
             {
               "path": "packages/datagrid-server-client/dist/src/rowSnapshot.d.ts",
               "hash": "6e9ef8d9a41acba95cd2712ffd8d13075868b3f0ba1a0dffaae673bdb8bfc72c"
+            },
+            {
+              "path": "packages/datagrid-server-client/dist/src/webSocketLiveUpdateTransport.d.ts",
+              "hash": "c040137bb24a9b97e42811bdd6e2047f20e0bb296fffd6a949bb372e219e4104"
             }
           ]
         }

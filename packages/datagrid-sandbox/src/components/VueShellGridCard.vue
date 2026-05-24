@@ -319,7 +319,7 @@
         :grid-lines="gridLines"
         :custom-overlays="benchmarkCustomOverlays"
         :show-row-index="true"
-        :row-selection="!props.timesheetShowcase"
+        :row-selection="rowSelection"
         :row-reorder="rowReorder"
         :placeholder-rows="placeholderRows"
         :is-cell-editable="timesheetIsCellEditable"
@@ -532,6 +532,15 @@ function readShellBenchmarkSearchParam(name: string): string | null {
     return null;
   }
   return new URLSearchParams(window.location.search).get(name);
+}
+
+function readShellBenchmarkNumberSearchParam(name: string): number | null {
+  const value = readShellBenchmarkSearchParam(name);
+  if (value == null || value.trim().length === 0) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function resolveShellBenchmarkRenderProfile(): ShellBenchmarkRenderProfile {
@@ -1472,6 +1481,16 @@ const sandboxViewportPersistence = computed(() => {
   return sandboxViewportPersistenceEnabled.value
     ? "affino-datagrid-sandbox:vue-shell-base-grid:state-with-viewport"
     : null;
+});
+
+const rowSelection = computed(() => {
+  if (props.timesheetShowcase) {
+    return false;
+  }
+  const columnWidth = readShellBenchmarkNumberSearchParam("rowSelectionColumnWidth");
+  return columnWidth == null
+    ? true
+    : { enabled: true, columnWidth };
 });
 
 function buildSandboxPlaceholderRow(visualRowIndex: number): Record<string, unknown> {

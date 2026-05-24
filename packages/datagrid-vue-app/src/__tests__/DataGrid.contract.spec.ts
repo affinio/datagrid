@@ -1686,6 +1686,30 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("applies declarative row-selection column width", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        rowSelection: {
+          enabled: true,
+          columnWidth: 64,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const header = wrapper.find('.grid-header-pane--left .grid-cell--row-selection[data-column-key="__datagrid_row_selection__"]')
+    const bodyCell = wrapper.find('.grid-body-pane--left .grid-cell--row-selection[data-column-key="__datagrid_row_selection__"]')
+    expect(header.attributes("style")).toContain("width: 64px")
+    expect(bodyCell.attributes("style")).toContain("width: 64px")
+    expect(header.find(".col-resize").exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it("keeps a cell read-only when the column is explicitly non-editable even if the predicate returns true", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

@@ -35,6 +35,10 @@ export interface UseDataGridAppHeaderResizeResult {
   dispose: () => void
 }
 
+function isHeaderResizableColumn(column: DataGridColumnSnapshot): boolean {
+  return column.column.meta?.isSystem !== true
+}
+
 export function useDataGridAppHeaderResize<TRow>(
   options: UseDataGridAppHeaderResizeOptions<TRow>,
 ): UseDataGridAppHeaderResizeResult {
@@ -58,7 +62,9 @@ export function useDataGridAppHeaderResize<TRow>(
     applyColumnWidth: (columnKey, width) => {
       options.persistColumnWidth?.(columnKey, width)
     },
-    isColumnResizable: (columnKey) => options.visibleColumns.value.some(column => column.key === columnKey),
+    isColumnResizable: (columnKey) => options.visibleColumns.value.some(column => (
+      column.key === columnKey && isHeaderResizableColumn(column)
+    )),
     isFillDragging: () => options.isFillDragging(),
     stopFillSelection: () => {
       options.stopFillSelection()
