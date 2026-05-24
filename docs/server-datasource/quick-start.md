@@ -1,12 +1,20 @@
 # Server Datasource Quick Start
 
-This is the golden path for wiring Affino DataGrid to a backend-owned table.
+This is the shortest path for wiring Affino DataGrid to a backend-owned table.
+
+First success only requires one read endpoint:
+
+```text
+POST /api/{tableId}/pull
+```
 
 Use `@affino/datagrid-server-adapters` first. It provides the current app-facing datasource factory for the Affino HTTP endpoint shape. Reach for `@affino/datagrid-server-client` only when you need lower-level polling, invalidation, or custom transport helpers.
 
 For sandbox-equivalent behavior, follow the [server datasource UX contract](./ux-contract.md). In short: keep one datasource-backed row model alive, let server sort/filter state flow through `pull(request)`, and do not replace it with app-level reloads for normal filtering.
 
-## Install
+## 1. Read-Only In 10 Minutes
+
+### Install
 
 Frontend:
 
@@ -14,7 +22,7 @@ Frontend:
 pnpm add @affino/datagrid-vue-app @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
-Backend:
+Backend package, when using the Affino Python backend helpers:
 
 ```bash
 uv add affino-grid-backend
@@ -32,23 +40,13 @@ See also:
 - [Backend FastAPI reference](./backend-fastapi.md)
 - [Backend template](./backend-template.md)
 
-## Minimal Backend Contract
+### Minimal Backend Contract
 
 `createAffinoDatasource({ tableId })` calls endpoints under `/api/{tableId}`.
 
-It also accepts a few optional adapter-level controls:
-
-- `headers` to forward request headers on all adapter requests
-- `historyScope` to forward workspace and user/session scope into edit, fill, and history bodies
-- `histogram.ignoreSelfFilter` as a default for histogram requests when you want the adapter to exclude the active column unless a call-site override is provided
-
-For a read-only grid, implement:
+For a read-only grid, implement only:
 
 - `POST /api/{tableId}/pull`
-
-For histogram-backed column filter UI, also implement:
-
-- `POST /api/{tableId}/histogram`
 
 The pull request body is:
 
@@ -75,39 +73,7 @@ Minimal raw-row response:
 }
 ```
 
-Histogram request body:
-
-```json
-{
-  "columnId": "status",
-  "filterModel": null,
-  "options": {
-    "ignoreSelfFilter": true,
-    "search": "op",
-    "orderBy": "valueAsc",
-    "limit": 25
-  }
-}
-```
-
-Histogram response:
-
-```json
-{
-  "entries": [
-    { "value": "open", "text": "Open", "count": 12 },
-    { "value": "closed", "text": "Closed", "count": 4 }
-  ]
-}
-```
-
-The reference backend implementation is in:
-
-- [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py)
-- [`backend/app/features/server_demo/repository.py`](../../backend/app/features/server_demo/repository.py)
-- [`backend/app/features/server_demo/schemas.py`](../../backend/app/features/server_demo/schemas.py)
-
-## Minimal Frontend Usage
+### Minimal Frontend Usage
 
 Create the datasource with `createAffinoDatasource`, wrap it in a datasource-backed row model, and pass that row model to `DataGrid`.
 
@@ -162,24 +128,97 @@ onBeforeUnmount(() => {
 </template>
 ```
 
-With the minimal contract above, the grid can:
+With this minimal contract, the grid can:
 
 - pull viewport rows from the backend
 - send sort model changes to `POST /api/{tableId}/pull`
 - send filter model changes to `POST /api/{tableId}/pull`
-- request histograms through `POST /api/{tableId}/histogram` when the backend supports that endpoint
 
-## Optional Capabilities
+The reference backend implementation is in:
 
-`createAffinoDatasource` also wires the current Affino endpoint names for write and history-related operations. These only work when your backend implements the matching endpoints.
+- [`backend/app/features/server_demo/router.py`](../../backend/app/features/server_demo/router.py)
+- [`backend/app/features/server_demo/repository.py`](../../backend/app/features/server_demo/repository.py)
+- [`backend/app/features/server_demo/schemas.py`](../../backend/app/features/server_demo/schemas.py)
 
-When `historyScope` is provided, the adapter forwards it into edit, fill, and history request bodies as `workspace_id`, `user_id`, and `session_id`, while still keeping `table_id` on the table-scoped endpoints.
+## 2. Add Histograms
+
+Add histograms when the column filter UI should show server-backed value lists.
+
+Add:
+
+- `POST /api/{tableId}/histogram`
+
+Histogram request body:
+
+```json
+{
+  "columnId": "status",
+  "filterModel": null,
+  "options": {
+    "ignoreSelfFilter": true,
+    "search": "op",
+    "orderBy": "valueAsc",
+    "limit": 25
+  }
+}
+```
+
+Histogram response:
+
+```json
+{
+  "entries": [
+    { "value": "open", "text": "Open", "count": 12 },
+    { "value": "closed", "text": "Closed", "count": 4 }
+  ]
+}
+```
+
+Adapter-level controls that affect histogram and request behavior:
+
+- `headers` forwards request headers on all adapter requests
+- `histogram.ignoreSelfFilter` sets the default for histogram requests
+
+## 3. Add Edits
+
+Add edits when user changes should be committed through the backend.
+
+Add:
+
+- `POST /api/{tableId}/edits`
+
+`createAffinoDatasource` wires this through `DataGridDataSource.commitEdits` when the backend implements the endpoint.
+
+If your edits need workspace, user, or session scope, pass `historyScope` to `createAffinoDatasource`. The adapter forwards it into edit, fill, and history request bodies as `workspace_id`, `user_id`, and `session_id`, while keeping `table_id` on table-scoped endpoints.
+
+Read next:
+
+- [UX contract](./ux-contract.md)
+- [Integration playbook](./integration-playbook.md)
+- [Protocol](./protocol.md)
+
+## 4. Add Fill
+
+Add fill when spreadsheet-style fill handle operations should be resolved by the backend, especially across unloaded ranges.
+
+Add:
+
+- `POST /api/{tableId}/fill-boundary`
+- `POST /api/{tableId}/fill/commit`
+
+Use these when you want server-backed fill handle operations through the datasource.
+
+Read next:
+
+- [Protocol](./protocol.md)
+- [Backend FastAPI reference](./backend-fastapi.md)
+
+## 5. Add Server History
+
+Add server history when undo/redo must be durable and backend-owned.
 
 Optional table-scoped endpoints:
 
-- `POST /api/{tableId}/edits`
-- `POST /api/{tableId}/fill-boundary`
-- `POST /api/{tableId}/fill/commit`
 - `POST /api/{tableId}/operations/{operationId}/undo`
 - `POST /api/{tableId}/operations/{operationId}/redo`
 
@@ -188,19 +227,43 @@ Optional shared endpoints:
 - `POST /api/history/undo`
 - `POST /api/history/redo`
 - `POST /api/history/status`
+
+Use these when you want stack undo/redo backed by the server.
+
+Read next:
+
+- [History](../datagrid-history.md)
+- [Consistency](./consistency.md)
+- [Protocol](./protocol.md)
+
+## 6. Add Live Updates
+
+Add live updates when the client should observe backend changes after the initial pull.
+
+Optional endpoint:
+
 - `GET /api/changes?sinceVersion=...`
 
-Use these when you want:
+Use this for polling-based change feed updates. The `server_demo` backend also documents WebSocket-style live updates where available.
 
-- edits committed through `DataGridDataSource.commitEdits`
-- server-backed fill handle operations
-- stack undo/redo backed by the server
-- polling-based change feed updates
+Read next:
+
+- [Consistency](./consistency.md)
+- [Frontend adapter reference](./frontend-adapter.md)
+- [HTTP protocol](./protocol.md)
+
+## 7. Advanced Protocol And Consistency
+
+Use the advanced docs when your integration needs revisions, dataset versions, invalidation, conflict behavior, retries, selection semantics, or server-side operation guarantees.
+
+- [HTTP protocol](./protocol.md)
+- [Consistency](./consistency.md)
+- [Server selection operations](./selection-operations.md)
+- [Integration checklist](./checklist.md)
 
 The `server_demo` backend shows the full shape:
 
 - [Backend FastAPI reference](./backend-fastapi.md)
-- [HTTP protocol](./protocol.md)
 - [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py)
 - [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py)
 

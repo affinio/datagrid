@@ -13,6 +13,8 @@ This folder separates user-facing documentation from internal planning material.
 - [Stable API ergonomics audit](./datagrid-stable-api-ergonomics-audit.md) - adoption-focused review of core, Vue, and Vue app stable API complexity.
 - [Sandbox demo audit](./datagrid-sandbox-demo-audit.md) - adoption-focused review of sandbox first impression, demo hierarchy, and enterprise showcase gaps.
 - [OSS ecosystem audit](./datagrid-oss-ecosystem-audit.md) - open-source maturity review covering package boundaries, semver, contributors, and trust signals.
+- [Package map](./datagrid-package-map.md) - package roles, entrypoint tiers, install paths, and beginner recommendations.
+- [API start here](./datagrid-api-start-here.md) - stable API starter path, mutation choices, selection terminology, and server datasource pointers.
 - [Product report RU](./datagrid-product-report.ru.md) - simple product-oriented overview for engineers evaluating Affino DataGrid.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
 - [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.

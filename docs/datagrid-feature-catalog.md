@@ -100,9 +100,10 @@ Use it as a single decision sheet to understand whether the platform fits your p
 
 ## Package Entry Map
 
+For install paths, tiering, and community/enterprise status, see the [DataGrid Package Map](./datagrid-package-map.md).
+
 | Package | Intended consumer | Typical use |
 | --- | --- | --- |
-| `@affino/datagrid` | App teams | Stable application-facing DataGrid facade. |
 | `@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
 | `@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
 | `@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
