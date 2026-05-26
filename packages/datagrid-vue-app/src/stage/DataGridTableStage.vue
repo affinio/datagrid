@@ -1629,6 +1629,9 @@ function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   if (bodyViewportEl.value?.contains(target)) {
     return false
   }
+  if (pinnedNativeScrollPrototypeEnabled.value && verticalBodyViewportEl.value?.contains(target)) {
+    return false
+  }
   const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
   return linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)
 }

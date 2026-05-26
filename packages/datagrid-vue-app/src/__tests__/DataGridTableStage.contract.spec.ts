@@ -2792,6 +2792,69 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("lets pinned body touch panning use the prototype shared vertical scroll owner natively", () => {
+    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 20,
+      }),
+    })
+    const stage = wrapper.find(".grid-stage").element as HTMLElement
+    const addEventListener = vi.spyOn(stage, "addEventListener")
+    const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
+    const pinnedCell = wrapper.find('.grid-body-pane--left .grid-cell[data-column-key="left"]').element
+
+    defineScrollMetrics(sharedShell, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+      scrollWidth: 250,
+      clientWidth: 250,
+    })
+    sharedShell.scrollTop = 100
+
+    pinnedCell.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+    const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
+    pinnedCell.dispatchEvent(moveEvent)
+
+    expect(addEventListener).not.toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(sharedShell.scrollTop).toBe(100)
+
+    addEventListener.mockRestore()
+    wrapper.unmount()
+  })
+
+  it("routes header touch panning into the prototype shared vertical scroll owner", () => {
+    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 20,
+      }),
+    })
+
+    const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
+    defineScrollMetrics(sharedShell, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+      scrollWidth: 250,
+      clientWidth: 250,
+    })
+    sharedShell.scrollTop = 100
+
+    const headerCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]').element
+    headerCell.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+
+    const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
+    headerCell.dispatchEvent(moveEvent)
+
+    expect(moveEvent.defaultPrevented).toBe(true)
+    expect(sharedShell.scrollTop).toBe(150)
+
+    wrapper.unmount()
+  })
+
   it("shows fill action menu and reapplies the selected behavior", async () => {
     const applyFillActionBehavior = vi.fn()
     const wrapper = mount(DataGridTableStage, {
