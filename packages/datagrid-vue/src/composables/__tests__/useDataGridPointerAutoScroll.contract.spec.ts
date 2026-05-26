@@ -64,6 +64,48 @@ describe("useDataGridPointerAutoScroll contract", () => {
     expect(raf.handles().length).toBe(1)
   })
 
+  it("keeps horizontal auto-scroll active when the pointer exits past the horizontal edge", () => {
+    const raf = createRafHarness()
+    const setScrollPosition = vi.fn()
+    const viewport = {
+      scrollTop: 100,
+      scrollLeft: 120,
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollWidth: 1800,
+      clientWidth: 500,
+      getBoundingClientRect: () => ({ top: 100, bottom: 500, left: 50, right: 550 }),
+    } as unknown as HTMLElement
+
+    const composable = useDataGridPointerAutoScroll({
+      resolveInteractionState: () => ({ isDragSelecting: true, isFillDragging: false, isRangeMoving: false }),
+      resolveRangeMovePointer: () => null,
+      resolveFillPointer: () => null,
+      resolveDragPointer: () => ({ clientX: 570, clientY: 496 }),
+      resolveViewportElement: () => viewport,
+      resolveHeaderHeight: () => 32,
+      resolveAxisAutoScrollDelta(pointer, min, max) {
+        if (pointer < min + 20) return -10
+        if (pointer > max - 20) return 10
+        return 0
+      },
+      setScrollPosition,
+      applyRangeMovePreviewFromPointer: vi.fn(),
+      applyFillPreviewFromPointer: vi.fn(),
+      applyDragSelectionFromPointer: vi.fn(),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    composable.startInteractionAutoScroll()
+    const [frame] = raf.handles()
+    raf.run(frame ?? -1)
+
+    expect(viewport.scrollTop).toBe(110)
+    expect(viewport.scrollLeft).toBe(130)
+    expect(setScrollPosition).toHaveBeenCalledWith({ top: 110, left: 130 })
+  })
+
   it("updates viewport scroll and dispatches active interaction preview", () => {
     const raf = createRafHarness()
     const applyRangeMovePreviewFromPointer = vi.fn()

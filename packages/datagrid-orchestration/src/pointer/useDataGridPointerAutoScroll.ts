@@ -83,9 +83,9 @@ export function useDataGridPointerAutoScroll(
       const topBoundary = rect.top + options.resolveHeaderHeight()
       const deltaY = options.resolveAxisAutoScrollDelta(pointer.clientY, topBoundary, rect.bottom)
       const allowHorizontalAutoScroll = options.resolveAllowHorizontalAutoScroll?.() ?? true
-      const deltaX = !allowHorizontalAutoScroll || pointer.clientX < rect.left || pointer.clientX > rect.right
-        ? 0
-        : options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
+      const deltaX = allowHorizontalAutoScroll
+        ? options.resolveAxisAutoScrollDelta(pointer.clientX, rect.left, rect.right)
+        : 0
       frameDeltaX = deltaX
       frameDeltaY = deltaY
 

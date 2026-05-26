@@ -813,7 +813,7 @@ describe("useDataGridAppInteractionController contract", () => {
       }), row, 0, 0)
       controller.handleWindowMouseMove(new MouseEvent("mousemove", {
         buttons: 1,
-        clientX: 196,
+        clientX: 220,
         clientY: 96,
       }))
 
