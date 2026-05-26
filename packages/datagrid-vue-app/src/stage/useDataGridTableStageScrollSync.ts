@@ -28,9 +28,30 @@ export interface UseDataGridTableStageScrollSyncResult {
 export function useDataGridTableStageScrollSync(
   options: UseDataGridTableStageScrollSyncOptions,
 ): UseDataGridTableStageScrollSyncResult {
-  const createSyntheticScrollEvent = (target: HTMLElement): Event => {
+  interface CompositeViewportScrollTarget {
+    scrollTop: number
+    scrollLeft: number
+    clientWidth: number
+    clientHeight: number
+    parentElement: HTMLElement | null
+    __datagridCompositeViewportTarget: true
+  }
+
+  const createSyntheticScrollEvent = (target: HTMLElement | CompositeViewportScrollTarget): Event => {
     return { target } as unknown as Event
   }
+
+  const createSplitOwnerSyntheticScrollEvent = (
+    verticalViewport: HTMLElement,
+    horizontalViewport: HTMLElement,
+  ): Event => createSyntheticScrollEvent({
+    scrollTop: verticalViewport.scrollTop,
+    scrollLeft: horizontalViewport.scrollLeft,
+    clientWidth: horizontalViewport.clientWidth,
+    clientHeight: verticalViewport.clientHeight,
+    parentElement: horizontalViewport.parentElement,
+    __datagridCompositeViewportTarget: true,
+  })
 
   const handleWindowMouseMove = (event: MouseEvent): void => {
     if (options.isColumnResizing.value) {
@@ -69,7 +90,9 @@ export function useDataGridTableStageScrollSync(
     if (verticalDelta !== 0) {
       bodyViewport.scrollTop += verticalDelta
     }
-    options.syncViewport(createSyntheticScrollEvent(horizontalDelta !== 0 ? horizontalViewport : bodyViewport))
+    options.syncViewport(horizontalDelta !== 0 && horizontalViewport !== bodyViewport
+      ? createSplitOwnerSyntheticScrollEvent(bodyViewport, horizontalViewport)
+      : createSyntheticScrollEvent(bodyViewport))
   }
 
   const handleHeaderScroll = (event: Event): void => {

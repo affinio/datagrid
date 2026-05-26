@@ -86,7 +86,14 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(centerHorizontalViewport.scrollLeft).toBe(36)
     expect(bodyViewport.scrollLeft).toBe(0)
     expect(syncViewport).toHaveBeenCalledTimes(1)
-    expect(syncViewport.mock.calls[0]?.[0].target).toBe(centerHorizontalViewport)
+    expect(syncViewport.mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: bodyViewport.scrollTop,
+      scrollLeft: centerHorizontalViewport.scrollLeft,
+      clientWidth: centerHorizontalViewport.clientWidth,
+      clientHeight: bodyViewport.clientHeight,
+      parentElement: centerHorizontalViewport.parentElement,
+    }))
   })
 
   it("routes prototype vertical header wheel to the shared vertical owner", () => {
