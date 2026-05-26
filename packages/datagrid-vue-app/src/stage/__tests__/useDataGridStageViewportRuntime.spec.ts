@@ -327,6 +327,13 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(sharedVerticalViewport.scrollTop).toBe(80)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: 80,
+      scrollLeft: 104,
+      clientWidth: 320,
+      clientHeight: 240,
+    }))
 
     harness.unmount()
   })
@@ -407,6 +414,30 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
     expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+
+    harness.unmount()
+  })
+
+  it("routes prototype pinned bottom scroll sync through a composite viewport event", () => {
+    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 12 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    const pinnedBottomViewport = createViewportElement({ scrollLeft: 64 })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    harness.runtime.handlePinnedBottomViewportScroll({ target: pinnedBottomViewport } as unknown as Event)
+
+    expect(bodyViewport.scrollLeft).toBe(64)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: 80,
+      scrollLeft: 64,
+      clientWidth: 320,
+      clientHeight: 240,
+    }))
 
     harness.unmount()
   })

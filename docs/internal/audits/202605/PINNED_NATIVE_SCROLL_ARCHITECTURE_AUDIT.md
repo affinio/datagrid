@@ -339,6 +339,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 24 split header touch-pan fallback by locked axis for the native-scroll prototype. Routed header gestures now select the shared vertical owner for vertical pans and the center horizontal owner for horizontal pans, so the compatibility fallback follows the same split-owner model as wheel and programmatic scroll.
 - 2026-05-26: Slice 25 split legacy header wheel fallback by axis for the native-scroll prototype. Header wheel deltas now write horizontal movement to the center horizontal owner and vertical movement to the shared vertical owner, preventing hidden `scrollLeft` writes on the shared vertical shell when this fallback path is used.
 - 2026-05-26: Slice 26 made prototype header-wheel fallback publish a composite viewport event for horizontal movement. The app viewport layer now receives shared-vertical `scrollTop` together with center-horizontal `scrollLeft`, avoiding accidental vertical snapshot resets when this legacy fallback commits a horizontal header wheel.
+- 2026-05-26: Slice 27 extended composite viewport events to runtime fallback scroll notifications. Managed horizontal wheel over linked panes and pinned-bottom horizontal scroll sync now publish shared-vertical `scrollTop` with center-horizontal `scrollLeft` in the prototype path, keeping app viewport snapshots split-owner safe outside native center scroll events.
 
 ## Recommended Fallback/Intermediate Approach
 

@@ -247,7 +247,7 @@ export function useDataGridStageViewportRuntime(
         return
       }
       markBodyViewportScrolling()
-      options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(verticalViewport))
+      options.viewport.value.handleViewportScroll(createActiveViewportScrollEvent(verticalViewport))
     },
   })
 
@@ -282,6 +282,12 @@ export function useDataGridStageViewportRuntime(
     sharedViewportScrollEventTarget.clientHeight = verticalViewport.clientHeight
     sharedViewportScrollEventTarget.parentElement = horizontalViewport.parentElement
     return { target: sharedViewportScrollEventTarget } as unknown as Event
+  }
+
+  function createActiveViewportScrollEvent(fallbackViewport: HTMLElement): Event {
+    return isSharedVerticalScrollEnabled()
+      ? createSharedViewportScrollEvent(fallbackViewport)
+      : createSyntheticScrollEvent(fallbackViewport)
   }
 
   function trackObservedBodyViewportScrollState(state: Pick<BodyViewportScrollState, "scrollTop" | "scrollLeft">): void {
@@ -503,7 +509,7 @@ export function useDataGridStageViewportRuntime(
     horizontalViewport.scrollLeft = element.scrollLeft
     syncSharedHorizontalPeers(element.scrollLeft, element)
     markBodyViewportScrolling()
-    options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(verticalViewport))
+    options.viewport.value.handleViewportScroll(createActiveViewportScrollEvent(verticalViewport))
     scheduleBodyViewportScrollStateSync(readBodyViewportScrollState(verticalViewport))
     scheduleScrollGridChromeRedraw("center-scroll")
   }
