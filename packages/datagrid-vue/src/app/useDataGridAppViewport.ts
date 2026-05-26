@@ -714,6 +714,9 @@ export function useDataGridAppViewport<TRow>(
   }
 
   const captureViewportSnapshot = (element: HTMLElement): ViewportSnapshot => {
+    if (isSharedVerticalPrototypeViewport(element)) {
+      return captureSplitOwnerViewportSnapshot(element, resolveHorizontalViewportForOwner(element))
+    }
     const dimensions = captureViewportDimensions(element)
     cacheViewportDimensions(element, dimensions)
     pendingViewportScrollTop = element.scrollTop

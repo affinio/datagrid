@@ -381,6 +381,33 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("does not mirror shared vertical scrollLeft into header while vertically scrolling at the right edge", () => {
+    const stageRoot = document.createElement("section")
+    const headerViewport = createViewportElement({ scrollLeft: 96 })
+    headerViewport.className = "grid-header-viewport"
+    stageRoot.append(headerViewport)
+    const harness = createHarness({ stageRoot, sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 96 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80, scrollLeft: 0 })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    sharedVerticalViewport.scrollTop = 128
+    harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
+
+    expect(headerViewport.scrollLeft).toBe(96)
+    expect(headerViewport.dataset.datagridSkipNextHeaderScrollSync).toBeUndefined()
+    expect(bodyViewport.scrollLeft).toBe(96)
+    expect(sharedVerticalViewport.scrollLeft).toBe(0)
+    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: 128,
+      scrollLeft: 96,
+    }))
+
+    harness.unmount()
+  })
+
   it("syncs prototype header and pinned bottom from the center horizontal owner", () => {
     const stageRoot = document.createElement("section")
     const headerViewport = createViewportElement()

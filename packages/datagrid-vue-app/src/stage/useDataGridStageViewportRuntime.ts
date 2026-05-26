@@ -468,7 +468,7 @@ export function useDataGridStageViewportRuntime(
     if (!element) {
       return
     }
-    if (isSharedVerticalScrollEnabled()) {
+    if (isSharedVerticalScrollEnabled() && element === resolveCenterHorizontalViewport()) {
       syncSharedHorizontalPeers(element.scrollLeft, element)
     }
     const previousScrollTop = observedBodyViewportScrollTop
