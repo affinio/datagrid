@@ -11,6 +11,7 @@ const BENCH_BROWSER_ROUTE = process.env.BENCH_BROWSER_ROUTE ?? "/vue/base-grid"
 const BENCH_BROWSER_SESSIONS = Number.parseInt(process.env.BENCH_BROWSER_SESSIONS ?? "3", 10)
 const BENCH_BROWSER_SCROLL_STEPS = Number.parseInt(process.env.BENCH_BROWSER_SCROLL_STEPS ?? "180", 10)
 const BENCH_BROWSER_STEP_DELAY_MS = Number.parseInt(process.env.BENCH_BROWSER_STEP_DELAY_MS ?? "8", 10)
+const BENCH_BROWSER_SCROLL_AXIS = (process.env.BENCH_BROWSER_SCROLL_AXIS ?? "combined").trim().toLowerCase()
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
 const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
@@ -29,6 +30,9 @@ const PERF_BUDGET_VARIANCE_MIN_MEAN_MS = Number.parseFloat(process.env.PERF_BUDG
 assertPositiveInteger(BENCH_BROWSER_SESSIONS, "BENCH_BROWSER_SESSIONS")
 assertPositiveInteger(BENCH_BROWSER_SCROLL_STEPS, "BENCH_BROWSER_SCROLL_STEPS")
 assertPositiveInteger(BENCH_BROWSER_STEP_DELAY_MS, "BENCH_BROWSER_STEP_DELAY_MS")
+if (!["combined", "vertical", "horizontal"].includes(BENCH_BROWSER_SCROLL_AXIS)) {
+  throw new Error("BENCH_BROWSER_SCROLL_AXIS must be combined, vertical, or horizontal")
+}
 
 function assertPositiveInteger(value, label) {
   if (!Number.isFinite(value) || value <= 0 || !Number.isInteger(value)) {
@@ -92,14 +96,19 @@ function computeFrameMetrics(frameDeltas) {
 }
 
 async function runSession(page, index) {
-  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector }) => {
+  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector, scrollAxis }) => {
     const viewport = document.querySelector(viewportSelector)
     if (!(viewport instanceof HTMLElement)) {
       throw new Error(`Datagrid viewport not found (${viewportSelector})`)
     }
+    const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
+    const sharedVerticalViewport = stageRoot?.querySelector('[data-datagrid-scroll-owner="shared-vertical-prototype"]')
+    const centerHorizontalViewport = stageRoot?.querySelector(".grid-body-center-horizontal-scrollport--active")
+    const verticalViewport = sharedVerticalViewport instanceof HTMLElement ? sharedVerticalViewport : viewport
+    const horizontalViewport = centerHorizontalViewport instanceof HTMLElement ? centerHorizontalViewport : viewport
 
-    const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-    const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const maxTop = Math.max(0, verticalViewport.scrollHeight - verticalViewport.clientHeight)
+    const maxLeft = Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth)
     const frameDeltas = []
 
     let running = true
@@ -118,14 +127,13 @@ async function runSession(page, index) {
 
     for (let step = 1; step <= steps; step += 1) {
       const phase = ((step + index) % 4)
-      if (phase === 0 || phase === 1) {
-        if (maxTop > 0) {
-          viewport.scrollTop = Math.round((maxTop * step) / steps)
-        }
-      } else {
-        if (maxLeft > 0) {
-          viewport.scrollLeft = Math.round((maxLeft * step) / steps)
-        }
+      const shouldScrollVertical = scrollAxis === "vertical" || (scrollAxis === "combined" && (phase === 0 || phase === 1))
+      const shouldScrollHorizontal = scrollAxis === "horizontal" || (scrollAxis === "combined" && !shouldScrollVertical)
+      if (shouldScrollVertical && maxTop > 0) {
+        verticalViewport.scrollTop = Math.round((maxTop * step) / steps)
+      }
+      if (shouldScrollHorizontal && maxLeft > 0) {
+        horizontalViewport.scrollLeft = Math.round((maxLeft * step) / steps)
       }
       await pause(stepDelayMs)
     }
@@ -138,14 +146,20 @@ async function runSession(page, index) {
       frameDeltas,
       maxTop,
       maxLeft,
-      finalTop: viewport.scrollTop,
-      finalLeft: viewport.scrollLeft,
+      finalTop: verticalViewport.scrollTop,
+      finalLeft: horizontalViewport.scrollLeft,
+      scrollOwners: {
+        split: verticalViewport !== horizontalViewport,
+        vertical: verticalViewport === viewport ? "viewport" : "shared-vertical-prototype",
+        horizontal: horizontalViewport === centerHorizontalViewport ? "center-horizontal-prototype" : "viewport",
+      },
     }
   }, {
     steps: BENCH_BROWSER_SCROLL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     index,
     viewportSelector: BENCH_VIEWPORT_SELECTOR,
+    scrollAxis: BENCH_BROWSER_SCROLL_AXIS,
   })
 
   const metrics = computeFrameMetrics(result.frameDeltas)
@@ -155,6 +169,7 @@ async function runSession(page, index) {
     maxLeft: result.maxLeft,
     finalTop: result.finalTop,
     finalLeft: result.finalLeft,
+    scrollOwners: result.scrollOwners,
   }
 }
 
@@ -163,7 +178,7 @@ const varianceSkippedChecks = []
 const startedAt = performance.now()
 
 console.log("\nAffino DataGrid Browser Frame Benchmark")
-console.log(`baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} steps=${BENCH_BROWSER_SCROLL_STEPS}`)
+console.log(`baseUrl=${BENCH_BROWSER_BASE_URL} route=${BENCH_BROWSER_ROUTE} sessions=${BENCH_BROWSER_SESSIONS} steps=${BENCH_BROWSER_SCROLL_STEPS} axis=${BENCH_BROWSER_SCROLL_AXIS}`)
 
 const sandboxServer = await ensureSandboxServer(BENCH_BROWSER_BASE_URL, BENCH_BROWSER_ROUTE, "browser-frames")
 
@@ -257,6 +272,7 @@ const summary = {
     sessions: BENCH_BROWSER_SESSIONS,
     steps: BENCH_BROWSER_SCROLL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
+    scrollAxis: BENCH_BROWSER_SCROLL_AXIS,
     headless: BENCH_BROWSER_HEADLESS,
   },
   budgets: {
