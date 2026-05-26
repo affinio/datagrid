@@ -15,6 +15,7 @@ export interface UseDataGridStageChromeCanvasOptions {
   stageRootEl: Ref<HTMLElement | null>
   bodyShellRef: Ref<HTMLElement | null>
   bodyViewportEl: Ref<HTMLElement | null>
+  verticalBodyViewportEl: Ref<HTMLElement | null>
   bottomViewportEl: Ref<HTMLElement | null>
   leftHeaderChromeCanvasEl: Ref<HTMLCanvasElement | null>
   centerHeaderChromeCanvasEl: Ref<HTMLCanvasElement | null>
@@ -315,15 +316,16 @@ export function useDataGridStageChromeCanvas(
 
   function syncBodyViewportMetrics(): void {
     const viewport = options.bodyViewportEl.value
+    const verticalViewport = options.verticalBodyViewportEl.value ?? viewport
     const shell = options.bodyShellRef.value
-    if (!viewport || !shell) {
+    if (!viewport || !verticalViewport || !shell) {
       return
     }
-    options.bodyViewportScrollTop.value = viewport.scrollTop
+    options.bodyViewportScrollTop.value = verticalViewport.scrollTop
     options.bodyViewportScrollLeft.value = viewport.scrollLeft
     options.bodyViewportClientWidth.value = viewport.clientWidth
-    options.bodyViewportClientHeight.value = viewport.clientHeight
-    const viewportRect = viewport.getBoundingClientRect()
+    options.bodyViewportClientHeight.value = verticalViewport.clientHeight
+    const viewportRect = verticalViewport.getBoundingClientRect()
     const shellRect = shell.getBoundingClientRect()
     options.bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
     options.headerShellHeight.value = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell")?.getBoundingClientRect().height ?? 0
@@ -455,6 +457,9 @@ export function useDataGridStageChromeCanvas(
     gridChromeResizeObserver.disconnect()
     if (options.bodyViewportEl.value) {
       gridChromeResizeObserver.observe(options.bodyViewportEl.value)
+    }
+    if (options.verticalBodyViewportEl.value && options.verticalBodyViewportEl.value !== options.bodyViewportEl.value) {
+      gridChromeResizeObserver.observe(options.verticalBodyViewportEl.value)
     }
     if (options.bottomViewportEl.value) {
       gridChromeResizeObserver.observe(options.bottomViewportEl.value)

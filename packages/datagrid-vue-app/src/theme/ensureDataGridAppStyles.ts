@@ -1011,7 +1011,17 @@ const DATA_GRID_APP_STYLES = `
   grid-column: 1 / -1;
   min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   position: relative;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .grid-body-shell--pinned-bottom {

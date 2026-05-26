@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
+import { onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type Ref } from "vue"
 import {
   useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
@@ -31,6 +31,7 @@ export interface UseDataGridStageViewportRuntimeOptions {
   gridChromeSyncers: Readonly<Ref<UseDataGridStageViewportRuntimeSyncers>>
   leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
   rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
+  sharedVerticalScrollEnabled?: Readonly<Ref<boolean>>
   perfTraceEnabled?: boolean
 }
 
@@ -38,6 +39,7 @@ export interface UseDataGridStageViewportRuntimeResult {
   bodyViewportEl: Ref<HTMLElement | null>
   verticalBodyViewportEl: Ref<HTMLElement | null>
   centerHorizontalViewportEl: Ref<HTMLElement | null>
+  sharedVerticalViewportEl: Ref<HTMLElement | null>
   topViewportEl: Ref<HTMLElement | null>
   bottomViewportEl: Ref<HTMLElement | null>
   bodyViewportScrollTop: Ref<number>
@@ -53,9 +55,11 @@ export interface UseDataGridStageViewportRuntimeResult {
   isBodyViewportScrollIdle: Ref<boolean>
   runWhenBodyViewportScrollIdle: (callback: () => void) => void
   captureBodyViewportRef: (value: Element | ComponentPublicInstance | null) => void
+  captureSharedVerticalViewportRef: (value: Element | ComponentPublicInstance | null) => void
   capturePinnedTopViewportRef: (value: Element | ComponentPublicInstance | null) => void
   capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
   handleCenterViewportScroll: (event: Event) => void
+  handleSharedVerticalViewportScroll: (event: Event) => void
   handlePinnedTopViewportScroll: (event: Event) => void
   handlePinnedBottomViewportScroll: (event: Event) => void
   handleLinkedViewportWheel: (event: WheelEvent) => void
@@ -90,8 +94,9 @@ export function useDataGridStageViewportRuntime(
   options: UseDataGridStageViewportRuntimeOptions,
 ): UseDataGridStageViewportRuntimeResult {
   const bodyViewportEl = ref<HTMLElement | null>(null)
-  const verticalBodyViewportEl = bodyViewportEl
-  const centerHorizontalViewportEl = bodyViewportEl
+  const verticalBodyViewportEl = ref<HTMLElement | null>(null)
+  const centerHorizontalViewportEl = ref<HTMLElement | null>(null)
+  const sharedVerticalViewportEl = ref<HTMLElement | null>(null)
   const topViewportEl = ref<HTMLElement | null>(null)
   const bottomViewportEl = ref<HTMLElement | null>(null)
   const headerShellHeight = ref(0)
@@ -114,6 +119,17 @@ export function useDataGridStageViewportRuntime(
   let observedBodyViewportScrollTop = 0
   let observedBodyViewportScrollLeft = 0
   const perfTraceEnabled = options.perfTraceEnabled ?? resolveDataGridPerfTraceEnabled()
+
+  function isSharedVerticalScrollEnabled(): boolean {
+    return options.sharedVerticalScrollEnabled?.value === true
+  }
+
+  function syncScrollOwnerRefs(): void {
+    centerHorizontalViewportEl.value = bodyViewportEl.value
+    verticalBodyViewportEl.value = isSharedVerticalScrollEnabled()
+      ? sharedVerticalViewportEl.value ?? bodyViewportEl.value
+      : bodyViewportEl.value
+  }
 
   const resolveVerticalBodyViewport = (): HTMLElement | null => verticalBodyViewportEl.value
   const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
@@ -334,11 +350,17 @@ export function useDataGridStageViewportRuntime(
 
   function captureBodyViewportRef(value: Element | ComponentPublicInstance | null): void {
     bodyViewportEl.value = resolveElementRef(value)
+    syncScrollOwnerRefs()
     options.viewport.value.bodyViewportRef(value)
     const syncers = options.gridChromeSyncers.value
     syncers.syncBodyViewportMetrics()
     syncers.connectGridChromeResizeObserver()
     syncers.scheduleGridChromeRedraw()
+  }
+
+  function captureSharedVerticalViewportRef(value: Element | ComponentPublicInstance | null): void {
+    sharedVerticalViewportEl.value = resolveElementRef(value)
+    syncScrollOwnerRefs()
   }
 
   function capturePinnedBottomViewportRef(value: Element | ComponentPublicInstance | null): void {
@@ -380,6 +402,10 @@ export function useDataGridStageViewportRuntime(
     scheduleScrollGridChromeRedraw("full")
   }
 
+  function handleSharedVerticalViewportScroll(event: Event): void {
+    handleCenterViewportScroll(event)
+  }
+
   function handlePinnedBottomViewportScroll(event: Event): void {
     const element = event.target as HTMLElement | null
     const verticalViewport = resolveVerticalBodyViewport()
@@ -406,7 +432,15 @@ export function useDataGridStageViewportRuntime(
     managedWheelScroll.onBodyViewportWheel(event)
   }
 
+  watch(
+    () => options.sharedVerticalScrollEnabled?.value === true,
+    () => {
+      syncScrollOwnerRefs()
+    },
+  )
+
   onMounted(() => {
+    syncScrollOwnerRefs()
     options.gridChromeSyncers.value.syncBodyViewportMetrics()
     options.gridChromeSyncers.value.connectGridChromeResizeObserver()
     options.gridChromeSyncers.value.scheduleGridChromeRedraw()
@@ -435,6 +469,7 @@ export function useDataGridStageViewportRuntime(
     bodyViewportEl,
     verticalBodyViewportEl,
     centerHorizontalViewportEl,
+    sharedVerticalViewportEl,
     topViewportEl,
     bottomViewportEl,
     bodyViewportScrollTop,
@@ -450,9 +485,11 @@ export function useDataGridStageViewportRuntime(
     isBodyViewportScrollIdle,
     runWhenBodyViewportScrollIdle,
     captureBodyViewportRef,
+    captureSharedVerticalViewportRef,
     capturePinnedTopViewportRef,
     capturePinnedBottomViewportRef,
     handleCenterViewportScroll,
+    handleSharedVerticalViewportScroll,
     handlePinnedTopViewportScroll,
     handlePinnedBottomViewportScroll,
     handleLinkedViewportWheel,

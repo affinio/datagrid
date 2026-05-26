@@ -109,9 +109,11 @@
       />
       <div
         v-if="pinnedNativeScrollPrototypeEnabled"
+        :ref="captureSharedVerticalViewportRef"
         class="grid-body-shared-vertical-scroll-shell"
         :style="paneLayoutStyle"
         data-datagrid-scroll-owner="shared-vertical-prototype"
+        @scroll.passive="handleSharedVerticalViewportScroll"
       >
         <DataGridTableStagePinnedPane
           :pane="leftPinnedPane"
@@ -126,6 +128,7 @@
 
         <DataGridTableStageCenterPane
           :display-rows="rows.displayRows"
+          viewport-class="grid-body-viewport table-wrap grid-body-viewport--shared-vertical-prototype"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
           :top-spacer-height="viewport.topSpacerHeight"
@@ -1190,6 +1193,7 @@ const rightPaneWidth = computed(() => {
 
 const {
   bodyViewportEl,
+  verticalBodyViewportEl,
   bottomViewportEl,
   bodyViewportScrollTop,
   bodyViewportScrollLeft,
@@ -1202,9 +1206,11 @@ const {
   isBodyViewportScrolling: runtimeBodyViewportScrolling,
   runWhenBodyViewportScrollIdle,
   captureBodyViewportRef,
+  captureSharedVerticalViewportRef,
   capturePinnedTopViewportRef,
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll,
+  handleSharedVerticalViewportScroll,
   handlePinnedTopViewportScroll,
   handlePinnedBottomViewportScroll,
   handleLinkedViewportWheel,
@@ -1215,6 +1221,7 @@ const {
   leftPaneContentRef,
   rightPaneContentRef,
   gridChromeSyncers,
+  sharedVerticalScrollEnabled: pinnedNativeScrollPrototypeEnabled,
 })
 
 watch(runtimeBodyViewportScrolling, value => {
@@ -1431,6 +1438,7 @@ const {
   stageRootEl,
   bodyShellRef,
   bodyViewportEl,
+  verticalBodyViewportEl,
   bottomViewportEl,
   leftHeaderChromeCanvasEl,
   centerHeaderChromeCanvasEl,
@@ -1663,7 +1671,7 @@ onMounted(() => {
     stageRootEl.value.addEventListener("focusout", handleStageFocusOut)
     teardownTouchPanGuard = installDataGridTouchPanGuard({
       root: stageRootEl.value,
-      resolveScrollContainers: () => [bodyViewportEl.value],
+      resolveScrollContainers: () => [verticalBodyViewportEl.value, bodyViewportEl.value],
       shouldHandleTarget: shouldRouteTableTouchPan,
     })
   }
