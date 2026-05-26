@@ -326,6 +326,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 11 hardened header/scroll event routing for the split-owner prototype. Programmatic header sync now marks the next header scroll event as handled, header fallback scroll routes to the center horizontal owner instead of the shared vertical owner, and the shared vertical handler ignores bubbled center scroll events.
 - 2026-05-26: Slice 12 removed linked vertical transform synchronization from the split-owner prototype body layers. The shared vertical path now renders body panes from a zero visual row origin, normalizes chrome/overlay row metrics for the current virtual row window, and keeps the shared scroll spacer as the only vertical scroll-height source.
 - 2026-05-26: Slice 13 routed active-cell programmatic horizontal reveal through the center horizontal owner when the body ref is the shared vertical prototype owner. Vertical reveal still writes the shared vertical owner; center-column DOM and estimated horizontal reveal now dispatch scroll on the center horizontal scrollport without writing `scrollLeft` into the shared vertical shell.
+- 2026-05-26: Slice 14 routed runtime viewport-position restoration through the split-owner model. State import and viewport snapshot restore now write vertical offsets to the shared vertical owner and horizontal offsets to the center horizontal owner, while committing a composite viewport snapshot for virtualization/header sync.
 
 ## Recommended Fallback/Intermediate Approach
 

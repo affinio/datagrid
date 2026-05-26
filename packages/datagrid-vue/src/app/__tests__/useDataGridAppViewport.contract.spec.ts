@@ -1494,6 +1494,65 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.renderedViewportRange.value).toEqual({ start: 42, end: 46 })
   })
 
+  it("restores split-owner scroll from runtime viewport position after state import", () => {
+    const rows = makeRows(100)
+    const events = createEventHarness()
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 40, end: 45 },
+      anchor: {
+        rowId: "r42",
+        rowIndex: 42,
+        columnKey: "col-3",
+        columnIndex: 3,
+      },
+      scroll: { top: 10, left: 10 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        getViewportPosition: () => viewportPosition,
+        getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] as never,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(8, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const sharedVerticalViewport = document.createElement("div")
+    sharedVerticalViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    const centerHorizontalViewport = document.createElement("div")
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    Object.defineProperty(sharedVerticalViewport, "clientHeight", { configurable: true, value: 100 })
+    Object.defineProperty(sharedVerticalViewport, "clientWidth", { configurable: true, value: 500 })
+    Object.defineProperty(centerHorizontalViewport, "clientHeight", { configurable: true, value: 100 })
+    Object.defineProperty(centerHorizontalViewport, "clientWidth", { configurable: true, value: 300 })
+    stage.append(sharedVerticalViewport, centerHorizontalViewport)
+    document.body.appendChild(stage)
+    viewport.bodyViewportRef.value = sharedVerticalViewport
+
+    events.emit("state:import:end")
+
+    expect(sharedVerticalViewport.scrollTop).toBe(840)
+    expect(sharedVerticalViewport.scrollLeft).toBe(0)
+    expect(centerHorizontalViewport.scrollLeft).toBe(300)
+    expect(viewport.renderedViewportRange.value).toEqual({ start: 42, end: 46 })
+    expect(viewport.viewportColumnStart.value).toBe(3)
+  })
+
   it("restores columnKey anchors after visible columns are reordered", () => {
     const rows = makeRows(10)
     const events = createEventHarness()

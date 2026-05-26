@@ -676,6 +676,38 @@ export function useDataGridAppViewport<TRow>(
     shellClientWidth: Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth),
   })
 
+  const isSharedVerticalPrototypeViewport = (element: HTMLElement): boolean => (
+    element.dataset?.datagridScrollOwner === "shared-vertical-prototype"
+  )
+
+  const resolveHorizontalViewportForOwner = (verticalViewport: HTMLElement): HTMLElement => {
+    if (!isSharedVerticalPrototypeViewport(verticalViewport)) {
+      return verticalViewport
+    }
+    return verticalViewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?? verticalViewport
+  }
+
+  const captureSplitOwnerViewportSnapshot = (
+    verticalViewport: HTMLElement,
+    horizontalViewport: HTMLElement,
+  ): ViewportSnapshot => {
+    const dimensions = {
+      clientWidth: horizontalViewport.clientWidth,
+      clientHeight: verticalViewport.clientHeight,
+      shellClientWidth: Math.max(horizontalViewport.parentElement?.clientWidth ?? 0, horizontalViewport.clientWidth),
+    }
+    cacheViewportDimensions(verticalViewport, dimensions)
+    pendingViewportScrollTop = verticalViewport.scrollTop
+    pendingViewportScrollLeft = horizontalViewport.scrollLeft
+    return {
+      scrollTop: pendingViewportScrollTop,
+      scrollLeft: pendingViewportScrollLeft,
+      ...dimensions,
+    }
+  }
+
   const cacheViewportDimensions = (element: HTMLElement, dimensions: ViewportDimensions): void => {
     cachedViewportElement = element
     cachedViewportDimensions = dimensions
@@ -1742,13 +1774,17 @@ export function useDataGridAppViewport<TRow>(
     cancelScheduledViewportSync()
     isApplyingRuntimeViewportPosition = true
     try {
+      const horizontalElement = resolveHorizontalViewportForOwner(element)
       if (nextScrollTop != null && element.scrollTop !== nextScrollTop) {
         element.scrollTop = nextScrollTop
       }
-      if (nextScrollLeft != null && element.scrollLeft !== nextScrollLeft) {
-        element.scrollLeft = nextScrollLeft
+      if (nextScrollLeft != null && horizontalElement.scrollLeft !== nextScrollLeft) {
+        horizontalElement.scrollLeft = nextScrollLeft
       }
-      commitViewportSnapshot(captureViewportSnapshot(element), {
+      const snapshot = horizontalElement === element
+        ? captureViewportSnapshot(element)
+        : captureSplitOwnerViewportSnapshot(element, horizontalElement)
+      commitViewportSnapshot(snapshot, {
         forceVisibleRows: true,
         measureVisibleRowHeights: true,
       })
