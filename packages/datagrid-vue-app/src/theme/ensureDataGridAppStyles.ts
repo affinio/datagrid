@@ -1007,10 +1007,11 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-body-shared-vertical-scroll-shell {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
+  display: grid;
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
 }
 
 .grid-body-shell--pinned-bottom {

@@ -110,57 +110,108 @@
       <div
         v-if="pinnedNativeScrollPrototypeEnabled"
         class="grid-body-shared-vertical-scroll-shell"
+        :style="paneLayoutStyle"
         data-datagrid-scroll-owner="shared-vertical-prototype"
-        aria-hidden="true"
-      />
-      <DataGridTableStagePinnedPane
-        :pane="leftPinnedPane"
-        :render-api="pinnedPaneRenderApi"
-        :handle-context-menu="onViewportContextMenu"
-        :perf-trace-enabled="perfTraceEnabled"
       >
-        <template #chrome>
-          <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
-        </template>
-      </DataGridTableStagePinnedPane>
+        <DataGridTableStagePinnedPane
+          :pane="leftPinnedPane"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
 
-      <DataGridTableStageCenterPane
-        :display-rows="rows.displayRows"
-        :runtime-revision="rows.runtimeRevision"
-        :body-rows-revision="rows.displayRowsRevision"
-        :top-spacer-height="viewport.topSpacerHeight"
-        :bottom-spacer-height="viewport.bottomSpacerHeight"
-        :viewport-ref="captureBodyViewportRef"
-        :viewport-tab-index="bodyViewportTabIndex"
-        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
-        :report-fill-plumbing-state="props.reportFillPlumbingState"
-        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
-        :perf-trace-enabled="perfTraceEnabled"
-        :handle-context-menu="onViewportContextMenu"
-        :selection-overlay-segments="centerSelectionOverlaySegments"
-        :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
-        :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
-        :overlay-lanes="centerCustomOverlayLanes"
-        :render-api="centerPaneRenderApi"
-      />
+        <DataGridTableStageCenterPane
+          :display-rows="rows.displayRows"
+          :runtime-revision="rows.runtimeRevision"
+          :body-rows-revision="rows.displayRowsRevision"
+          :top-spacer-height="viewport.topSpacerHeight"
+          :bottom-spacer-height="viewport.bottomSpacerHeight"
+          :viewport-ref="captureBodyViewportRef"
+          :viewport-tab-index="bodyViewportTabIndex"
+          :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+          :report-fill-plumbing-state="props.reportFillPlumbingState"
+          :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+          :perf-trace-enabled="perfTraceEnabled"
+          :handle-context-menu="onViewportContextMenu"
+          :selection-overlay-segments="centerSelectionOverlaySegments"
+          :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
+          :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
+          :overlay-lanes="centerCustomOverlayLanes"
+          :render-api="centerPaneRenderApi"
+        />
 
-      <DataGridTableStagePinnedPane
-        :pane="rightPinnedPane"
-        :render-api="pinnedPaneRenderApi"
-        :handle-context-menu="onViewportContextMenu"
-        :perf-trace-enabled="perfTraceEnabled"
-      >
-        <template #chrome>
-          <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
-        </template>
-      </DataGridTableStagePinnedPane>
+        <DataGridTableStagePinnedPane
+          :pane="rightPinnedPane"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
 
-      <DataGridTableStageFillActionMenu
-        :is-open="fillActionMenuOpen"
-        :style="floatingFillActionStyle"
-        @toggle="toggleFloatingFillActionMenu"
-        @selected="handleFillActionSelection"
-      />
+        <DataGridTableStageFillActionMenu
+          :is-open="fillActionMenuOpen"
+          :style="floatingFillActionStyle"
+          @toggle="toggleFloatingFillActionMenu"
+          @selected="handleFillActionSelection"
+        />
+      </div>
+      <template v-else>
+        <DataGridTableStagePinnedPane
+          :pane="leftPinnedPane"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
+
+        <DataGridTableStageCenterPane
+          :display-rows="rows.displayRows"
+          :runtime-revision="rows.runtimeRevision"
+          :body-rows-revision="rows.displayRowsRevision"
+          :top-spacer-height="viewport.topSpacerHeight"
+          :bottom-spacer-height="viewport.bottomSpacerHeight"
+          :viewport-ref="captureBodyViewportRef"
+          :viewport-tab-index="bodyViewportTabIndex"
+          :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+          :report-fill-plumbing-state="props.reportFillPlumbingState"
+          :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+          :perf-trace-enabled="perfTraceEnabled"
+          :handle-context-menu="onViewportContextMenu"
+          :selection-overlay-segments="centerSelectionOverlaySegments"
+          :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
+          :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
+          :overlay-lanes="centerCustomOverlayLanes"
+          :render-api="centerPaneRenderApi"
+        />
+
+        <DataGridTableStagePinnedPane
+          :pane="rightPinnedPane"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
+
+        <DataGridTableStageFillActionMenu
+          :is-open="fillActionMenuOpen"
+          :style="floatingFillActionStyle"
+          @toggle="toggleFloatingFillActionMenu"
+          @selected="handleFillActionSelection"
+        />
+      </template>
     </div>
 
     <div

@@ -489,8 +489,13 @@ describe("DataGridTableStage contract", () => {
 
     expect(prototypeWrapper.find(".grid-stage").classes()).toContain("grid-stage--pinned-native-scroll-prototype")
     expect(prototypeWrapper.find(".grid-stage").attributes("data-datagrid-pinned-native-scroll")).toBe("prototype")
-    expect(prototypeWrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical-prototype"]').exists()).toBe(true)
-    expect(prototypeWrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shell")).toBe(true)
+    const sharedShell = prototypeWrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical-prototype"]')
+
+    expect(sharedShell.exists()).toBe(true)
+    expect(sharedShell.find(".grid-body-pane--left").exists()).toBe(true)
+    expect(sharedShell.find(".grid-body-viewport").exists()).toBe(true)
+    expect(sharedShell.find(".grid-body-pane--right").exists()).toBe(true)
+    expect(prototypeWrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shared-vertical-scroll-shell")).toBe(true)
 
     prototypeWrapper.unmount()
   })
