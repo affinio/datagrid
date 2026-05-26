@@ -204,7 +204,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("does not transform body content in the shared vertical prototype", () => {
+  it("directly transforms body content in the shared vertical prototype", () => {
     const centerContent = document.createElement("div")
     const harness = createHarness({
       centerBodyContent: centerContent,
@@ -217,7 +217,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(centerContent.style.transform).toBe("")
+    expect(centerContent.style.transform).toBe("translate3d(0, -128px, 0)")
     expect(bodyViewport.scrollTop).toBe(0)
 
     harness.unmount()
@@ -254,20 +254,32 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("updates the prototype content scroll offset on shared vertical scroll", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("updates the prototype content transform on shared vertical scroll", () => {
+    const leftPaneContent = document.createElement("div")
+    const centerBodyContent = document.createElement("div")
+    const rightPaneContent = document.createElement("div")
+    const harness = createHarness({
+      leftPaneContent,
+      centerBodyContent,
+      rightPaneContent,
+      sharedVerticalScrollEnabled: true,
+    })
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
 
     harness.runtime.captureBodyViewportRef(bodyViewport)
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
 
-    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-prototype-scroll-top")).toBe("80px")
+    expect(leftPaneContent.style.transform).toBe("translate3d(0, -80px, 0)")
+    expect(centerBodyContent.style.transform).toBe("translate3d(0, -80px, 0)")
+    expect(rightPaneContent.style.transform).toBe("translate3d(0, -80px, 0)")
 
     sharedVerticalViewport.scrollTop = 128
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-prototype-scroll-top")).toBe("128px")
+    expect(leftPaneContent.style.transform).toBe("translate3d(0, -128px, 0)")
+    expect(centerBodyContent.style.transform).toBe("translate3d(0, -128px, 0)")
+    expect(rightPaneContent.style.transform).toBe("translate3d(0, -128px, 0)")
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
 
     harness.unmount()

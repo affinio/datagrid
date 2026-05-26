@@ -142,6 +142,7 @@ async function runSession(page, index) {
     running = false
     await pause(24)
 
+    const perfStore = window.__AFFINO_DATAGRID_PERF__
     return {
       frameDeltas,
       maxTop,
@@ -153,6 +154,8 @@ async function runSession(page, index) {
         vertical: verticalViewport === viewport ? "viewport" : "shared-vertical-prototype",
         horizontal: horizontalViewport === centerHorizontalViewport ? "center-horizontal-prototype" : "viewport",
       },
+      appPerfSummary: typeof perfStore?.summary === "function" ? perfStore.summary() : [],
+      appPerfSamples: Array.isArray(perfStore?.samples) ? perfStore.samples.slice(-80) : [],
     }
   }, {
     steps: BENCH_BROWSER_SCROLL_STEPS,
@@ -170,6 +173,8 @@ async function runSession(page, index) {
     finalTop: result.finalTop,
     finalLeft: result.finalLeft,
     scrollOwners: result.scrollOwners,
+    appPerfSummary: result.appPerfSummary,
+    appPerfSamples: result.appPerfSamples,
   }
 }
 

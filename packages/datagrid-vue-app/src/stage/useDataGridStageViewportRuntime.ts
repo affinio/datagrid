@@ -163,11 +163,20 @@ export function useDataGridStageViewportRuntime(
     if (!isSharedVerticalScrollEnabled()) {
       return
     }
-    const verticalViewport = resolveVerticalBodyViewport()
-    if (!verticalViewport) {
-      return
+    const rowOrigin = Math.max(
+      0,
+      Number.isFinite(options.viewport.value.topSpacerHeight) ? options.viewport.value.topSpacerHeight : 0,
+    )
+    const transform = `translate3d(0, ${rowOrigin - Math.max(0, scrollTop)}px, 0)`
+    for (const element of [
+      options.leftPaneContentRef.value,
+      options.centerBodyContentRef?.value ?? null,
+      options.rightPaneContentRef.value,
+    ]) {
+      if (element && element.style.transform !== transform) {
+        element.style.transform = transform
+      }
     }
-    verticalViewport.style.setProperty("--datagrid-prototype-scroll-top", `${Math.max(0, scrollTop)}px`)
   }
 
   function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
@@ -495,7 +504,6 @@ export function useDataGridStageViewportRuntime(
       verticalViewport.scrollLeft = 0
     }
     syncSharedVerticalContentOffset(verticalViewport.scrollTop)
-    syncSharedHorizontalPeers(horizontalViewport.scrollLeft, verticalViewport)
     handleCenterViewportScroll(event)
   }
 
