@@ -157,12 +157,9 @@ export function useDataGridStageViewportRuntime(
     if (!isSharedVerticalScrollEnabled()) {
       return
     }
-    const verticalViewport = resolveVerticalBodyViewport()
-    if (verticalViewport && verticalViewport !== source && verticalViewport.scrollLeft !== scrollLeft) {
-      verticalViewport.scrollLeft = scrollLeft
-    }
     const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
     if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
+      headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
       headerViewport.scrollLeft = scrollLeft
     }
     const pinnedBottomViewport = bottomViewportEl.value
@@ -468,11 +465,11 @@ export function useDataGridStageViewportRuntime(
   function handleSharedVerticalViewportScroll(event: Event): void {
     const verticalViewport = event.target as HTMLElement | null
     const horizontalViewport = resolveCenterHorizontalViewport()
-    if (!verticalViewport || !horizontalViewport) {
+    if (!verticalViewport || !horizontalViewport || verticalViewport !== resolveVerticalBodyViewport()) {
       return
     }
-    if (verticalViewport.scrollLeft !== horizontalViewport.scrollLeft) {
-      verticalViewport.scrollLeft = horizontalViewport.scrollLeft
+    if (verticalViewport.scrollLeft !== 0) {
+      verticalViewport.scrollLeft = 0
     }
     syncSharedHorizontalPeers(horizontalViewport.scrollLeft, verticalViewport)
     handleCenterViewportScroll(event)

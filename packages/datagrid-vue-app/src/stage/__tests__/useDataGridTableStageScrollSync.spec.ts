@@ -51,6 +51,24 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(syncViewport).toHaveBeenCalledTimes(1)
   })
 
+  it("routes prototype header scroll to the center horizontal owner", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const bodyViewport = createViewport(0)
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    const centerHorizontalViewport = createViewport(12)
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    stage.append(bodyViewport, centerHorizontalViewport)
+    const headerViewport = createViewport(96)
+    const { service, syncViewport } = createService(bodyViewport)
+
+    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
+
+    expect(centerHorizontalViewport.scrollLeft).toBe(96)
+    expect(bodyViewport.scrollLeft).toBe(0)
+    expect(syncViewport).not.toHaveBeenCalled()
+  })
+
   it("samples header scrollLeft once when syncing the body viewport", () => {
     const bodyViewport = createViewport(12)
     const headerViewport = createViewport(0)

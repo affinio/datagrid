@@ -62,17 +62,30 @@ export function useDataGridTableStageScrollSync(
     options.syncViewport(createSyntheticScrollEvent(bodyViewport))
   }
 
+  function resolveHeaderHorizontalViewport(bodyViewport: HTMLElement): HTMLElement {
+    if (bodyViewport.dataset.datagridScrollOwner !== "shared-vertical-prototype") {
+      return bodyViewport
+    }
+    return bodyViewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?? bodyViewport
+  }
+
   const handleHeaderScroll = (event: Event): void => {
     const headerViewport = event.target as HTMLElement | null
     const bodyViewport = options.bodyViewportRef.value
     if (!headerViewport || !bodyViewport) {
       return
     }
+    const horizontalViewport = resolveHeaderHorizontalViewport(bodyViewport)
     const nextScrollLeft = headerViewport.scrollLeft
-    if (bodyViewport.scrollLeft === nextScrollLeft) {
+    if (horizontalViewport.scrollLeft === nextScrollLeft) {
       return
     }
-    bodyViewport.scrollLeft = nextScrollLeft
+    horizontalViewport.scrollLeft = nextScrollLeft
+    if (horizontalViewport !== bodyViewport) {
+      return
+    }
     options.syncViewport(createSyntheticScrollEvent(bodyViewport))
   }
 
