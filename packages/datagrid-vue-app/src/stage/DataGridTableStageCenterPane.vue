@@ -1,18 +1,30 @@
 <template>
   <div
-    :ref="viewportRef ?? undefined"
+    :ref="captureOuterViewportRef"
     :class="resolvedViewportClass"
-    role="grid"
-    :aria-rowcount="gridAriaRowCount"
-    :aria-colcount="gridAriaColumnCount"
-    aria-multiselectable="true"
-    :tabindex="viewportTabIndex"
-    @scroll.passive="handleScroll"
-    @wheel="handleWheel"
-    @contextmenu="handleContextMenu"
-    @keydown.stop="handleKeydown"
+    :role="innerHorizontalScrollport ? undefined : 'grid'"
+    :aria-rowcount="innerHorizontalScrollport ? undefined : gridAriaRowCount"
+    :aria-colcount="innerHorizontalScrollport ? undefined : gridAriaColumnCount"
+    :aria-multiselectable="innerHorizontalScrollport ? undefined : 'true'"
+    :tabindex="innerHorizontalScrollport ? undefined : viewportTabIndex"
+    @scroll.passive="handleOuterScroll"
+    @wheel="handleOuterWheel"
+    @contextmenu="handleOuterContextMenu"
+    @keydown.stop="handleOuterKeydown"
   >
-    <div class="grid-body-content" :style="layout.gridContentStyle">
+    <div
+      :ref="captureInnerHorizontalScrollportRef"
+      :class="centerHorizontalScrollportClass"
+      :role="innerHorizontalScrollport ? 'grid' : undefined"
+      :aria-rowcount="innerHorizontalScrollport ? gridAriaRowCount : undefined"
+      :aria-colcount="innerHorizontalScrollport ? gridAriaColumnCount : undefined"
+      :aria-multiselectable="innerHorizontalScrollport ? 'true' : undefined"
+      :tabindex="innerHorizontalScrollport ? viewportTabIndex : undefined"
+      @wheel="handleInnerWheel"
+      @contextmenu="handleInnerContextMenu"
+      @keydown.stop="handleInnerKeydown"
+    >
+      <div :ref="contentRef ?? undefined" class="grid-body-content" :style="layout.gridContentStyle">
       <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
       <div
         v-for="(row, rowOffset) in displayRows"
@@ -30,9 +42,9 @@
         @mouseenter="renderApi.setHoveredRow(row, rowOffset)"
       >
         <div
-          v-if="viewport.leftColumnSpacerWidth > 0"
+          v-if="leftColumnSpacerWidth > 0"
           class="grid-column-spacer"
-          :style="renderApi.spacerStyle(viewport.leftColumnSpacerWidth)"
+          :style="renderApi.spacerStyle(leftColumnSpacerWidth)"
         />
         <div
           v-for="{ column, columnIndex } in renderedColumnSlots"
@@ -173,9 +185,9 @@
           />
         </div>
         <div
-          v-if="viewport.rightColumnSpacerWidth > 0"
+          v-if="rightColumnSpacerWidth > 0"
           class="grid-column-spacer"
-          :style="renderApi.spacerStyle(viewport.rightColumnSpacerWidth)"
+          :style="renderApi.spacerStyle(rightColumnSpacerWidth)"
         />
       </div>
       <div v-if="bottomSpacerHeight > 0" class="grid-spacer" :style="{ height: `${bottomSpacerHeight}px` }" />
@@ -185,12 +197,13 @@
         :move-preview-segments="movePreviewOverlaySegments"
         :lanes="overlayLanes"
       />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, toRefs, watch, type PropType } from "vue"
+import { computed, onBeforeUnmount, onMounted, toRefs, watch, type ComponentPublicInstance, type PropType } from "vue"
 import DataGridCellComboboxEditor from "../overlays/DataGridCellComboboxEditor.vue"
 import {
   recordDataGridPerfSample,
@@ -224,6 +237,10 @@ const props = defineProps({
     type: Function as PropType<DataGridElementRefHandler>,
     default: undefined,
   },
+  contentRef: {
+    type: Function as PropType<DataGridElementRefHandler>,
+    default: undefined,
+  },
   displayRows: {
     type: Array as PropType<readonly DataGridTableStageBodyRow[]>,
     required: true,
@@ -251,6 +268,10 @@ const props = defineProps({
   viewportTabIndex: {
     type: Number,
     default: 0,
+  },
+  innerHorizontalScrollport: {
+    type: Boolean,
+    default: false,
   },
   handleScroll: {
     type: Function as PropType<(event: Event) => void>,
@@ -317,7 +338,7 @@ const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const {
   displayRows,
   viewportClass,
-  viewportRef,
+  contentRef,
   selectionOverlaySegments,
   fillPreviewOverlaySegments,
   movePreviewOverlaySegments,
@@ -331,13 +352,135 @@ const handleScroll = computed(() => props.handleScroll ?? renderApi.value.handle
 const handleWheel = computed(() => props.handleWheel ?? renderApi.value.handleBodyViewportWheel)
 const handleKeydown = computed(() => props.handleKeydown ?? renderApi.value.handleViewportKeydown)
 const handleContextMenu = computed(() => props.handleContextMenu)
+const centerHorizontalScrollportClass = computed(() => [
+  "grid-body-center-horizontal-scrollport",
+  props.innerHorizontalScrollport ? "grid-body-center-horizontal-scrollport--active table-wrap" : null,
+])
+let connectedInnerHorizontalScrollport: HTMLElement | null = null
+
+function disconnectInnerHorizontalScrollport(): void {
+  if (!connectedInnerHorizontalScrollport) {
+    return
+  }
+  connectedInnerHorizontalScrollport.removeEventListener("scroll", handleInnerScroll)
+  connectedInnerHorizontalScrollport = null
+}
+
+function connectInnerHorizontalScrollport(element: HTMLElement): void {
+  if (connectedInnerHorizontalScrollport === element) {
+    return
+  }
+  disconnectInnerHorizontalScrollport()
+  connectedInnerHorizontalScrollport = element
+  element.addEventListener("scroll", handleInnerScroll, { passive: true })
+}
+
+function captureOuterViewportRef(value: Element | ComponentPublicInstance | null): void {
+  if (!props.innerHorizontalScrollport) {
+    props.viewportRef?.(value)
+  }
+}
+
+function captureInnerHorizontalScrollportRef(value: Element | ComponentPublicInstance | null): void {
+  if (!props.innerHorizontalScrollport) {
+    return
+  }
+  props.viewportRef?.(value)
+  const element = value instanceof HTMLElement ? value : value && "$el" in value && value.$el instanceof HTMLElement ? value.$el : null
+  if (element) {
+    connectInnerHorizontalScrollport(element)
+  }
+  else {
+    disconnectInnerHorizontalScrollport()
+  }
+}
+
+onBeforeUnmount(() => {
+  disconnectInnerHorizontalScrollport()
+})
+
 const resolvedViewportClass = computed(() => [
   viewportClass.value,
   layoutMode.value === "auto-height"
     ? "grid-body-viewport--layout-auto-height"
     : "grid-body-viewport--layout-fill",
 ])
-const renderedColumnSlots = computed(() => columns.value.renderedColumns.map(column => ({
+
+function handleOuterScroll(event: Event): void {
+  if (!props.innerHorizontalScrollport) {
+    handleScroll.value(event)
+  }
+}
+
+function handleOuterWheel(event: WheelEvent): void {
+  if (!props.innerHorizontalScrollport) {
+    handleWheel.value(event)
+  }
+}
+
+function handleOuterContextMenu(event: MouseEvent): void {
+  if (!props.innerHorizontalScrollport) {
+    handleContextMenu.value?.(event)
+  }
+}
+
+function handleOuterKeydown(event: KeyboardEvent): void {
+  if (!props.innerHorizontalScrollport) {
+    handleKeydown.value(event)
+  }
+}
+
+function handleInnerScroll(event: Event): void {
+  if (!props.innerHorizontalScrollport) {
+    return
+  }
+  const element = event.target as HTMLElement | null
+  if (element) {
+    const scrollLeft = element.scrollLeft
+    const stage = element.closest<HTMLElement>(".grid-stage")
+    const headerViewport = stage?.querySelector<HTMLElement>(".grid-header-viewport") ?? document.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+    if (headerViewport && headerViewport.scrollLeft !== scrollLeft) {
+      headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
+      headerViewport.scrollLeft = scrollLeft
+    }
+    handleScroll.value(event)
+    globalThis.requestAnimationFrame?.(() => {
+      if (headerViewport && headerViewport.scrollLeft !== scrollLeft) {
+        headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
+        headerViewport.scrollLeft = scrollLeft
+      }
+    })
+    return
+  }
+  handleScroll.value(event)
+}
+
+function handleInnerWheel(event: WheelEvent): void {
+  if (props.innerHorizontalScrollport) {
+    handleWheel.value(event)
+  }
+}
+
+function handleInnerContextMenu(event: MouseEvent): void {
+  if (props.innerHorizontalScrollport) {
+    handleContextMenu.value?.(event)
+  }
+}
+
+function handleInnerKeydown(event: KeyboardEvent): void {
+  if (props.innerHorizontalScrollport) {
+    handleKeydown.value(event)
+  }
+}
+
+const renderedCenterColumns = computed(() => (
+  props.innerHorizontalScrollport
+    ? columns.value.visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
+    : columns.value.renderedColumns
+))
+const leftColumnSpacerWidth = computed(() => (props.innerHorizontalScrollport ? 0 : viewport.value.leftColumnSpacerWidth))
+const rightColumnSpacerWidth = computed(() => (props.innerHorizontalScrollport ? 0 : viewport.value.rightColumnSpacerWidth))
+const renderedColumnSlots = computed(() => renderedCenterColumns.value.map(column => ({
   column,
   columnIndex: renderApi.value.columnIndexByKey(column.key),
 })))

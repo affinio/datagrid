@@ -27,6 +27,7 @@ export interface UseDataGridStageChromeModelOptions {
   rows: Ref<DataGridTableStageRowsSection<Record<string, unknown>>>
   visibleColumns: Ref<readonly DataGridTableStageBodyColumn[]>
   renderedColumns: Ref<readonly DataGridTableStageBodyColumn[]>
+  pinnedNativeScrollPrototypeEnabled?: Ref<boolean>
   displayRows: Ref<readonly DataGridTableStageBodyRow[]>
   pinnedBottomRows: Ref<readonly DataGridTableStageBodyRow[]>
   selectionTotalRowCount: Ref<number | null | undefined>
@@ -142,6 +143,22 @@ export function useDataGridStageChromeModel(
 
   const chromeColumnsRevision = ref(0)
   const chromeRowsRevision = ref(0)
+
+  const centerChromeColumns = computed(() => (
+    options.pinnedNativeScrollPrototypeEnabled?.value === true
+      ? options.visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
+      : options.renderedColumns.value
+  ))
+
+  const centerChromeColumnWidths = computed(() => (
+    options.pinnedNativeScrollPrototypeEnabled?.value === true
+      ? centerChromeColumns.value.map(options.resolveColumnWidth).filter(width => width > 0)
+      : [
+        options.resolveLeftColumnSpacerWidth(),
+        ...centerChromeColumns.value.map(options.resolveColumnWidth),
+        options.resolveRightColumnSpacerWidth(),
+      ].filter(width => width > 0)
+  ))
 
   const buildEstimatedVisibleRowMetrics = (): readonly { top: number; height: number }[] => {
     const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
@@ -292,11 +309,7 @@ export function useDataGridStageChromeModel(
         options.indexColumnWidthPx.value,
         ...(options.pinnedLeftColumns.value ?? []).map(options.resolveColumnWidth),
       ].filter(width => width > 0),
-      centerColumnWidths: [
-        options.resolveLeftColumnSpacerWidth(),
-        ...(options.renderedColumns.value ?? []).map(options.resolveColumnWidth),
-        options.resolveRightColumnSpacerWidth(),
-      ].filter(width => width > 0),
+      centerColumnWidths: centerChromeColumnWidths.value,
       rightColumnWidths: (options.pinnedRightColumns.value ?? []).map(options.resolveColumnWidth),
       centerScrollLeft: options.bodyViewportScrollLeft.value,
     })
@@ -317,11 +330,7 @@ export function useDataGridStageChromeModel(
         options.indexColumnWidthPx.value,
         ...(options.pinnedLeftColumns.value ?? []).map(options.resolveColumnWidth),
       ].filter(width => width > 0),
-      centerColumnWidths: [
-        options.resolveLeftColumnSpacerWidth(),
-        ...(options.renderedColumns.value ?? []).map(options.resolveColumnWidth),
-        options.resolveRightColumnSpacerWidth(),
-      ].filter(width => width > 0),
+      centerColumnWidths: centerChromeColumnWidths.value,
       rightColumnWidths: (options.pinnedRightColumns.value ?? []).map(options.resolveColumnWidth),
       centerScrollLeft: options.bodyViewportScrollLeft.value,
     })
@@ -340,11 +349,7 @@ export function useDataGridStageChromeModel(
         options.indexColumnWidthPx.value,
         ...(options.pinnedLeftColumns.value ?? []).map(options.resolveColumnWidth),
       ].filter(width => width > 0),
-      centerColumnWidths: [
-        options.resolveLeftColumnSpacerWidth(),
-        ...(options.renderedColumns.value ?? []).map(options.resolveColumnWidth),
-        options.resolveRightColumnSpacerWidth(),
-      ].filter(width => width > 0),
+      centerColumnWidths: centerChromeColumnWidths.value,
       rightColumnWidths: (options.pinnedRightColumns.value ?? []).map(options.resolveColumnWidth),
       centerScrollLeft: options.bodyViewportScrollLeft.value,
     })
@@ -355,13 +360,13 @@ export function useDataGridStageChromeModel(
       options.leftPaneWidth.value,
       options.rightPaneWidth.value,
       options.visibleColumns.value,
-      options.renderedColumns.value,
+      centerChromeColumns.value,
       options.pinnedLeftColumns.value,
       options.pinnedRightColumns.value,
       hasPivotHeaderGroups.value,
       options.resolveLeftColumnSpacerWidth(),
       options.resolveRightColumnSpacerWidth(),
-      ...options.renderedColumns.value.map(options.resolveColumnWidth),
+      ...centerChromeColumns.value.map(options.resolveColumnWidth),
       ...options.pinnedLeftColumns.value.map(options.resolveColumnWidth),
       ...options.pinnedRightColumns.value.map(options.resolveColumnWidth),
       ...(hasPivotHeaderGroups.value
@@ -413,9 +418,7 @@ export function useDataGridStageChromeModel(
 
   const centerChromeColumnsSignature = computed(() => (
     [
-      options.resolveLeftColumnSpacerWidth(),
-      ...(options.renderedColumns.value ?? []).map(options.resolveColumnWidth),
-      options.resolveRightColumnSpacerWidth(),
+      ...centerChromeColumnWidths.value,
     ].join("|")
   ))
 

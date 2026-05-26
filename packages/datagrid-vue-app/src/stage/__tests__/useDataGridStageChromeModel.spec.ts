@@ -69,6 +69,12 @@ describe("useDataGridStageChromeModel", () => {
         column: { meta: { affinoPivotHeader: { groupLabels: ["group-a", "group-b"] } } },
       } as unknown as DataGridTableStageBodyColumn,
       {
+        key: "center-extra",
+        pin: "none",
+        width: 140,
+        column: { meta: {} },
+      } as unknown as DataGridTableStageBodyColumn,
+      {
         key: "right",
         pin: "right",
         width: 90,
@@ -77,7 +83,7 @@ describe("useDataGridStageChromeModel", () => {
     ]))
     const renderedColumns = computed<readonly DataGridTableStageBodyColumn[]>(() => [visibleColumns.value[1]!])
     const pinnedLeftColumns = computed(() => [visibleColumns.value[0]!])
-    const pinnedRightColumns = computed(() => [visibleColumns.value[2]!])
+    const pinnedRightColumns = computed(() => [visibleColumns.value[3]!])
 
     const layout = computed(() => ({
       columnStyle: (key: string) => ({ width: key === "left" ? "72px" : "120px" }),
@@ -197,6 +203,78 @@ describe("useDataGridStageChromeModel", () => {
 
     mode.value = "pivot"
     expect(result.hasPivotHeaderGroups.value).toBe(true)
-    expect(result.headerPivotGroupsSignature.value).toBe("left:|center:group-a>group-b|right:")
+    expect(result.headerPivotGroupsSignature.value).toBe("left:|center:group-a>group-b|center-extra:|right:")
   })
+
+  it("uses full center columns for pinned native prototype chrome", () => {
+    const columns = computed<readonly DataGridTableStageBodyColumn[]>(() => ([
+      { key: "left", pin: "left", width: 72, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
+      { key: "center-a", pin: "none", width: 120, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
+      { key: "center-b", pin: "none", width: 140, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
+      { key: "right", pin: "right", width: 90, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
+    ]))
+    const result = useDataGridStageChromeModel({
+      mode: ref("base"),
+      rowHeightMode: ref("fixed"),
+      layout: computed(() => ({
+        columnStyle: () => ({}),
+        gridContentStyle: {},
+        mainTrackStyle: {},
+        indexColumnStyle: {},
+        stageStyle: {},
+        bodyShellStyle: {},
+      } as DataGridTableStageLayoutSection)),
+      viewport: computed(() => ({
+        topSpacerHeight: 0,
+        bottomSpacerHeight: 0,
+        viewportRowStart: 0,
+        viewportRowEnd: 0,
+        columnWindowStart: 0,
+        leftColumnSpacerWidth: 24,
+        rightColumnSpacerWidth: 48,
+        headerViewportRef: () => {},
+        bodyViewportRef: () => {},
+        handleHeaderWheel: () => {},
+        handleHeaderScroll: () => {},
+        handleViewportScroll: () => {},
+        handleViewportKeydown: () => {},
+      } as DataGridTableStageViewportSection)),
+      rows: computed(() => ({
+        rowStyle: () => ({ height: "31px" }),
+        rowClass: () => "",
+      } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)),
+      visibleColumns: columns,
+      renderedColumns: computed(() => [columns.value[1]!]),
+      pinnedNativeScrollPrototypeEnabled: ref(true),
+      displayRows: computed(() => []),
+      pinnedBottomRows: computed(() => []),
+      selectionTotalRowCount: computed(() => 0),
+      leftPaneWidth: computed(() => 72),
+      rightPaneWidth: computed(() => 90),
+      bodyViewportScrollTop: ref(0),
+      bodyViewportScrollLeft: ref(0),
+      bodyViewportClientWidth: ref(320),
+      bodyViewportClientHeight: ref(180),
+      pinnedBottomViewportClientHeight: ref(0),
+      headerShellHeight: ref(28),
+      headerViewportClientWidth: ref(320),
+      bodyViewportEl: ref(null),
+      indexColumnWidthPx: computed(() => 0),
+      pinnedLeftColumns: computed(() => [columns.value[0]!]),
+      pinnedRightColumns: computed(() => [columns.value[3]!]),
+      resolveColumnWidth: column => column.width ?? 0,
+      resolveLeftColumnSpacerWidth: () => 24,
+      resolveRightColumnSpacerWidth: () => 48,
+      resolveAbsoluteRowIndex: () => 0,
+      resolveViewportRowOffset: () => 0,
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      readPivotHeaderMeta: () => null,
+    })
+
+    expect(result.centerChromeColumnsSignature.value).toBe("120|140")
+    expect(result.chromeRenderModel.value.center.width).toBe(320)
+    expect(result.headerChromeRenderModel.value.center.width).toBe(320)
+  })
+
 })

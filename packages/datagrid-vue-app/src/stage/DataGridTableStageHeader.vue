@@ -313,7 +313,7 @@
         />
         <template v-if="shouldUseColumnMenus()">
           <DataGridColumnMenu
-            v-for="column in renderedColumns"
+            v-for="column in centerHeaderColumns"
             :key="resolveColumnMenuInstanceKey(column.key)"
             :row-count="sourceRows.length"
             :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
@@ -421,7 +421,7 @@
         </template>
         <template v-else>
           <div
-            v-for="column in renderedColumns"
+            v-for="column in centerHeaderColumns"
             :key="`header-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable"
             :class="resolveHeaderCellClasses(column)"
@@ -755,6 +755,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  pinnedNativeScrollPrototypeEnabled: {
+    type: Boolean,
+    default: false,
+  },
   onLinkedViewportWheel: {
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
@@ -771,6 +775,10 @@ const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>
 const sourceRows = computed(() => rows.value.sourceRows ?? [])
 const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
+const centerVisibleColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
+const centerHeaderColumns = computed(() => (
+  props.pinnedNativeScrollPrototypeEnabled ? centerVisibleColumns.value : renderedColumns.value
+))
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 const interactionModeInput = computed(() => ({
@@ -792,11 +800,11 @@ const columnHeaderGroupDepth = computed(() => visibleColumns.value.reduce((maxDe
 const headerGroupDepth = computed(() => Math.max(pivotHeaderGroupDepth.value, columnHeaderGroupDepth.value))
 const hasHeaderGroups = computed(() => headerGroupDepth.value > 0)
 const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedLeftColumns.value))
-const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(renderedColumns.value))
+const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(centerHeaderColumns.value))
 const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
 const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
-const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
-const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
+const leftColumnSpacerWidth = computed(() => (props.pinnedNativeScrollPrototypeEnabled ? 0 : viewport.value.leftColumnSpacerWidth))
+const rightColumnSpacerWidth = computed(() => (props.pinnedNativeScrollPrototypeEnabled ? 0 : viewport.value.rightColumnSpacerWidth))
 const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey)
 const columnMenuMaxFilterValues = computed(() => (
   typeof columns.value.columnMenuMaxFilterValues === "number"
@@ -1102,6 +1110,11 @@ function headerViewportRef(value: Element | { $el?: unknown } | null): void {
 }
 
 function handleHeaderScroll(event: Event): void {
+  const element = event.target as HTMLElement | null
+  if (element?.dataset.datagridSkipNextHeaderScrollSync === "true") {
+    delete element.dataset.datagridSkipNextHeaderScrollSync
+    return
+  }
   viewport.value.handleHeaderScroll(event)
 }
 

@@ -1019,6 +1019,10 @@ const DATA_GRID_APP_STYLES = `
   -webkit-overflow-scrolling: touch;
 }
 
+.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell {
+  z-index: 4;
+}
+
 .grid-body-shared-vertical-scroll-spacer {
   grid-column: 1 / -1;
   grid-row: 1;
@@ -1040,8 +1044,26 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype {
+  background: transparent;
+  overflow: visible;
+}
+
+.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane {
+  background: transparent;
+}
+
+.grid-body-center-horizontal-scrollport {
+  min-width: 0;
+  min-height: 0;
+}
+
+.grid-stage--pinned-native-scroll-prototype .grid-body-center-horizontal-scrollport--active {
+  height: 100%;
+  max-height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
 }
 
 .grid-body-shell--pinned-bottom {
@@ -1313,6 +1335,17 @@ const DATA_GRID_APP_STYLES = `
     color: var(--datagrid-header-text-color) !important;
     background: var(--datagrid-header-cell-bg) !important;
     border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  }
+
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-chrome-canvas {
+    display: block !important;
+  }
+
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell,
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+    background: transparent !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
   }
 
   .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,

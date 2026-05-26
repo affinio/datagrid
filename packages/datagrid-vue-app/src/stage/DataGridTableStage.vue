@@ -29,6 +29,7 @@
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
       :is-coarse-pointer="isCoarsePointer"
+      :pinned-native-scroll-prototype-enabled="pinnedNativeScrollPrototypeEnabled"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #center-chrome>
@@ -133,17 +134,22 @@
 
         <DataGridTableStageCenterPane
           :display-rows="rows.displayRows"
-          viewport-class="grid-body-viewport table-wrap grid-body-viewport--shared-vertical-prototype"
+          viewport-class="grid-body-viewport grid-body-viewport--shared-vertical-prototype"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
           :top-spacer-height="viewport.topSpacerHeight"
           :bottom-spacer-height="viewport.bottomSpacerHeight"
           :viewport-ref="captureBodyViewportRef"
+          :content-ref="captureCenterBodyContentRef"
+          inner-horizontal-scrollport
           :viewport-tab-index="bodyViewportTabIndex"
           :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
           :report-fill-plumbing-state="props.reportFillPlumbingState"
           :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
           :perf-trace-enabled="perfTraceEnabled"
+          :handle-scroll="handleCenterViewportScroll"
+          :handle-wheel="handleBodyViewportWheel"
+          :handle-keydown="viewport.handleViewportKeydown"
           :handle-context-menu="onViewportContextMenu"
           :selection-overlay-segments="centerSelectionOverlaySegments"
           :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
@@ -282,7 +288,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -1065,6 +1071,7 @@ const stageRootEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
+const centerBodyContentRef = ref<HTMLElement | null>(null)
 const leftTopPaneContentRef = ref<HTMLElement | null>(null)
 const rightTopPaneContentRef = ref<HTMLElement | null>(null)
 const leftBottomPaneContentRef = ref<HTMLElement | null>(null)
@@ -1248,6 +1255,7 @@ const {
   viewport,
   leftPaneContentRef,
   rightPaneContentRef,
+  centerBodyContentRef,
   gridChromeSyncers,
   sharedVerticalScrollEnabled: pinnedNativeScrollPrototypeEnabled,
 })
@@ -1281,6 +1289,7 @@ const {
   rows,
   visibleColumns,
   renderedColumns,
+  pinnedNativeScrollPrototypeEnabled,
   displayRows,
   pinnedBottomRows,
   selectionTotalRowCount: computed(() => selection.value?.totalRowCount ?? null),
@@ -1649,6 +1658,14 @@ function syncCoarsePointerState(): void {
   isCoarsePointer.value = coarsePointerQuery?.matches === true
 }
 
+function captureCenterBodyContentRef(value: Element | ComponentPublicInstance | null): void {
+  centerBodyContentRef.value = value instanceof HTMLElement
+    ? value
+    : value && "$el" in value && value.$el instanceof HTMLElement
+      ? value.$el
+      : null
+}
+
 function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   const root = stageRootEl.value
   if (!root || !(target instanceof Element) || !root.contains(target)) {
@@ -1881,18 +1898,24 @@ function handlePinnedTopViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)
 }
 
+const centerOverlayColumns = computed(() => (
+  pinnedNativeScrollPrototypeEnabled.value
+    ? visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
+    : renderedColumns.value
+))
+
 const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
   bodyViewportClientHeight: bodyViewportClientHeight.value,
   indexColumnWidthPx: indexColumnWidthPx.value,
   leftPaneWidth: leftPaneWidth.value,
   rightPaneWidth: rightPaneWidth.value,
-  renderedColumns: renderedColumns.value,
+  renderedColumns: centerOverlayColumns.value,
   pinnedLeftColumns: pinnedLeftColumns.value,
   pinnedRightColumns: pinnedRightColumns.value,
   layoutGridContentWidth: parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
   columnIndexByKey,
   resolveColumnWidth,
-  resolveLeftColumnSpacerWidth,
+  resolveLeftColumnSpacerWidth: pinnedNativeScrollPrototypeEnabled.value ? () => 0 : resolveLeftColumnSpacerWidth,
 }))
 
 const visibleColumnIndexByKey = computed(() => {

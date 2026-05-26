@@ -156,4 +156,44 @@ describe("dataGridStageOverlayGeometry", () => {
     expect(seamSegments).toHaveLength(1)
     expect(lane?.segments).toHaveLength(2)
   })
+
+  it("builds center overlay from full center track without virtual spacer", () => {
+    const context = createGeometryContext()
+    const fullCenterColumns = [
+      { key: "center-a", column: {} },
+      { key: "center-b", column: {} },
+      { key: "center-c", column: {} },
+    ] as unknown as DataGridStageOverlayGeometryContext["renderedColumns"]
+    const fullTrackContext: DataGridStageOverlayGeometryContext = {
+      ...context,
+      renderedColumns: fullCenterColumns,
+      layoutGridContentWidth: 360,
+      columnIndexByKey(key: string): number {
+        return { "center-a": 1, "center-b": 2, "center-c": 3 }[key as "center-a" | "center-b" | "center-c"] ?? -1
+      },
+      resolveColumnWidth(column) {
+        return { "center-a": 100, "center-b": 120, "center-c": 140 }[column.key as "center-a" | "center-b" | "center-c"] ?? 0
+      },
+      resolveLeftColumnSpacerWidth() {
+        return 0
+      },
+    }
+
+    const segments = buildPaneOverlaySegments(fullTrackContext, {
+      startRowOffset: 0,
+      endRowOffset: 0,
+      startColumnIndex: 3,
+      endColumnIndex: 3,
+      top: 0,
+      height: 31,
+    }, "center", "selection")
+
+    expect(segments).toHaveLength(1)
+    expect(segments[0]?.style).toMatchObject({
+      left: "219px",
+      width: "141px",
+      height: "32px",
+    })
+  })
+
 })
