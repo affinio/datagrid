@@ -154,6 +154,49 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
   })
 
+  it("routes prototype horizontal active-cell scroll to the center scroll owner", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const viewport = createViewport()
+    viewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    const horizontalViewport = createViewport()
+    horizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    horizontalViewport.scrollLeft = 120
+    stage.append(viewport, horizontalViewport)
+    document.body.appendChild(stage)
+
+    const centerCell = appendStageCell(stage, 1, 1, {
+      left: 84,
+      right: 184,
+      width: 100,
+    })
+    const syncViewport = vi.fn()
+    const bodyScrollListener = vi.fn()
+    const horizontalScrollListener = vi.fn()
+    viewport.addEventListener("scroll", bodyScrollListener)
+    horizontalViewport.addEventListener("scroll", horizontalScrollListener)
+
+    const { ensureKeyboardActiveCellVisible } = useDataGridAppActiveCellViewport({
+      bodyViewportRef: ref(viewport),
+      visibleColumns: ref([
+        { key: "centerA", pin: "center", width: 140 },
+        { key: "centerB", pin: "center", width: 140 },
+      ] as unknown as readonly DataGridColumnSnapshot[]),
+      columnWidths: ref({ centerA: 140, centerB: 140 }),
+      normalizedBaseRowHeight: ref(31),
+      syncViewport,
+    })
+
+    ensureKeyboardActiveCellVisible(1, 1)
+
+    expect(horizontalViewport.scrollLeft).toBe(102)
+    expect(viewport.scrollLeft).toBe(0)
+    expect(syncViewport).not.toHaveBeenCalled()
+    expect(bodyScrollListener).not.toHaveBeenCalled()
+    expect(horizontalScrollListener).toHaveBeenCalledTimes(1)
+    expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
+  })
+
   it("falls back to viewport focus with preventScroll when the active cell is not mounted", () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"

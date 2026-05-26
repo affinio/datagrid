@@ -29,8 +29,23 @@ export function useDataGridAppActiveCellViewport(
     return Math.max(18, Math.min(96, Math.floor(size * 0.18)))
   }
 
-  const syncViewportAfterProgrammaticScroll = (viewport: HTMLElement): void => {
-    options.syncViewport()
+  const isSharedVerticalPrototypeViewport = (viewport: HTMLElement): boolean => (
+    viewport.dataset.datagridScrollOwner === "shared-vertical-prototype"
+  )
+
+  const resolveHorizontalViewport = (verticalViewport: HTMLElement): HTMLElement => {
+    if (!isSharedVerticalPrototypeViewport(verticalViewport)) {
+      return verticalViewport
+    }
+    return verticalViewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?? verticalViewport
+  }
+
+  const syncViewportAfterProgrammaticScroll = (viewport: HTMLElement, optionsOverride?: { syncViewport?: boolean }): void => {
+    if (optionsOverride?.syncViewport !== false) {
+      options.syncViewport()
+    }
     if (typeof viewport.dispatchEvent === "function" && typeof globalThis.Event === "function") {
       viewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
     }
@@ -159,7 +174,7 @@ export function useDataGridAppActiveCellViewport(
     }
 
     viewport.scrollLeft = nextScrollLeft
-    syncViewportAfterProgrammaticScroll(viewport)
+    syncViewportAfterProgrammaticScroll(viewport, { syncViewport: !isSharedVerticalPrototypeViewport(options.bodyViewportRef.value ?? viewport) })
     return true
   }
 
@@ -186,7 +201,7 @@ export function useDataGridAppActiveCellViewport(
     nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
     if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
       viewport.scrollLeft = nextScrollLeft
-      syncViewportAfterProgrammaticScroll(viewport)
+      syncViewportAfterProgrammaticScroll(viewport, { syncViewport: !isSharedVerticalPrototypeViewport(options.bodyViewportRef.value ?? viewport) })
     }
   }
 
@@ -205,6 +220,7 @@ export function useDataGridAppActiveCellViewport(
     if (!viewport) {
       return
     }
+    const horizontalViewport = resolveHorizontalViewport(viewport)
     const targetColumn = options.visibleColumns.value[columnIndex]
     ensureEstimatedRowVisible(viewport, rowIndex, 0)
 
@@ -213,26 +229,26 @@ export function useDataGridAppActiveCellViewport(
       return
     }
 
-    const usedDomScrollAlignment = ensureCenterCellVisibleByDomRect(viewport, rowIndex, columnIndex)
+    const usedDomScrollAlignment = ensureCenterCellVisibleByDomRect(horizontalViewport, rowIndex, columnIndex)
 
     if (!usedDomScrollAlignment) {
       const centerMetrics = resolveCenterColumnMetrics(columnIndex)
       if (centerMetrics) {
-        const visibleLeft = viewport.scrollLeft
-        const visibleRight = visibleLeft + viewport.clientWidth
-        const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - viewport.clientWidth)
+        const visibleLeft = horizontalViewport.scrollLeft
+        const visibleRight = visibleLeft + horizontalViewport.clientWidth
+        const maxScrollLeft = Math.max(0, centerMetrics.totalWidth - horizontalViewport.clientWidth)
         let nextScrollLeft = visibleLeft
 
         if (centerMetrics.start < visibleLeft) {
           nextScrollLeft = centerMetrics.start
         } else if (centerMetrics.end > visibleRight) {
-          nextScrollLeft = centerMetrics.end - viewport.clientWidth
+          nextScrollLeft = centerMetrics.end - horizontalViewport.clientWidth
         }
 
         nextScrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft))
-        if (Math.abs(nextScrollLeft - viewport.scrollLeft) >= 1) {
-          viewport.scrollLeft = nextScrollLeft
-          syncViewportAfterProgrammaticScroll(viewport)
+        if (Math.abs(nextScrollLeft - horizontalViewport.scrollLeft) >= 1) {
+          horizontalViewport.scrollLeft = nextScrollLeft
+          syncViewportAfterProgrammaticScroll(horizontalViewport, { syncViewport: !isSharedVerticalPrototypeViewport(viewport) })
         }
       }
     }
@@ -247,6 +263,7 @@ export function useDataGridAppActiveCellViewport(
     if (!viewport) {
       return
     }
+    const horizontalViewport = resolveHorizontalViewport(viewport)
     const targetColumn = options.visibleColumns.value[columnIndex]
     const verticalComfortMarginPx = resolveComfortMarginPx(viewport.clientHeight)
     ensureEstimatedRowVisible(viewport, rowIndex, verticalComfortMarginPx)
@@ -256,15 +273,15 @@ export function useDataGridAppActiveCellViewport(
       return
     }
 
-    const horizontalComfortMarginPx = resolveComfortMarginPx(viewport.clientWidth)
+    const horizontalComfortMarginPx = resolveComfortMarginPx(horizontalViewport.clientWidth)
     const usedDomScrollAlignment = ensureCenterCellVisibleByDomRect(
-      viewport,
+      horizontalViewport,
       rowIndex,
       columnIndex,
       horizontalComfortMarginPx,
     )
     if (!usedDomScrollAlignment) {
-      ensureEstimatedCenterColumnVisible(viewport, columnIndex, horizontalComfortMarginPx)
+      ensureEstimatedCenterColumnVisible(horizontalViewport, columnIndex, horizontalComfortMarginPx)
     }
 
     await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
