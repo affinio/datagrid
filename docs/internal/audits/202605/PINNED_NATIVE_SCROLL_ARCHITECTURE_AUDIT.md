@@ -335,6 +335,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 20 hardened auto-height row metrics for the split-owner prototype. DOM-measured row heights now add the shared vertical `scrollTop` when the body DOM root is the center horizontal scrollport, preserving absolute row tops for chrome/overlay math instead of double-subtracting vertical scroll.
 - 2026-05-26: Slice 21 moved fallback viewport keyboard ownership to the shared vertical shell in the split-owner prototype. The shared vertical owner now carries the body `tabindex` and viewport keydown handler, while the center horizontal scrollport is removed from the tab order, preserving one fallback tab stop without making the horizontal owner a competing focus surface.
 - 2026-05-26: Slice 22 consolidated prototype horizontal peer synchronization under the stage viewport runtime. The center horizontal scrollport now only emits its scroll event; header and pinned-bottom `scrollLeft` mirroring are owned by the runtime, reducing duplicate DOM querying and keeping one horizontal sync path for the split-owner prototype.
+- 2026-05-26: Slice 23 aligned prototype accessibility ownership with scroll ownership. The shared vertical body owner now carries the grid role/count metadata and fallback tabindex, while the center horizontal scrollport is no longer exposed as a nested grid, keeping one accessible body grid surface in the split-owner path.
 
 ## Recommended Fallback/Intermediate Approach
 

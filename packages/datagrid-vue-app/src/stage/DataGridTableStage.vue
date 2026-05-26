@@ -114,6 +114,10 @@
         class="grid-body-shared-vertical-scroll-shell"
         :style="[paneLayoutStyle, prototypeSharedVerticalScrollStyle]"
         data-datagrid-scroll-owner="shared-vertical-prototype"
+        role="grid"
+        :aria-rowcount="gridAriaRowCount"
+        :aria-colcount="gridAriaColumnCount"
+        aria-multiselectable="true"
         :tabindex="bodyViewportTabIndex"
         @scroll.passive="handleSharedVerticalViewportScroll"
         @keydown.stop="viewport.handleViewportKeydown"
@@ -458,6 +462,12 @@ const bodyOverlayRowOrigin = computed(() => (pinnedNativeScrollPrototypeEnabled.
   ? Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)
   : 0
 ))
+
+const gridAriaRowCount = computed(() => Math.max(
+  0,
+  selection.value?.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length,
+))
+const gridAriaColumnCount = computed(() => Math.max(0, visibleColumns.value.length))
 
 const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
   const section = viewport.value
