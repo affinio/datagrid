@@ -473,13 +473,9 @@ function handleInnerKeydown(event: KeyboardEvent): void {
   }
 }
 
-const renderedCenterColumns = computed(() => (
-  props.innerHorizontalScrollport
-    ? columns.value.visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
-    : columns.value.renderedColumns
-))
-const leftColumnSpacerWidth = computed(() => (props.innerHorizontalScrollport ? 0 : viewport.value.leftColumnSpacerWidth))
-const rightColumnSpacerWidth = computed(() => (props.innerHorizontalScrollport ? 0 : viewport.value.rightColumnSpacerWidth))
+const renderedCenterColumns = computed(() => columns.value.renderedColumns)
+const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
+const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
 const renderedColumnSlots = computed(() => renderedCenterColumns.value.map(column => ({
   column,
   columnIndex: renderApi.value.columnIndexByKey(column.key),

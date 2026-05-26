@@ -97,6 +97,7 @@ interface SharedViewportScrollEventTarget {
   clientWidth: number
   clientHeight: number
   parentElement: HTMLElement | null
+  __datagridCompositeViewportTarget: true
 }
 
 
@@ -134,6 +135,7 @@ export function useDataGridStageViewportRuntime(
     clientWidth: 0,
     clientHeight: 0,
     parentElement: null,
+    __datagridCompositeViewportTarget: true,
   }
   const perfTraceEnabled = options.perfTraceEnabled ?? resolveDataGridPerfTraceEnabled()
 

@@ -775,10 +775,7 @@ const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>
 const sourceRows = computed(() => rows.value.sourceRows ?? [])
 const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
-const centerVisibleColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
-const centerHeaderColumns = computed(() => (
-  props.pinnedNativeScrollPrototypeEnabled ? centerVisibleColumns.value : renderedColumns.value
-))
+const centerHeaderColumns = computed(() => renderedColumns.value)
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 const interactionModeInput = computed(() => ({
@@ -803,8 +800,8 @@ const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedLeftColumn
 const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(centerHeaderColumns.value))
 const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
 const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
-const leftColumnSpacerWidth = computed(() => (props.pinnedNativeScrollPrototypeEnabled ? 0 : viewport.value.leftColumnSpacerWidth))
-const rightColumnSpacerWidth = computed(() => (props.pinnedNativeScrollPrototypeEnabled ? 0 : viewport.value.rightColumnSpacerWidth))
+const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
+const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
 const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey)
 const columnMenuMaxFilterValues = computed(() => (
   typeof columns.value.columnMenuMaxFilterValues === "number"

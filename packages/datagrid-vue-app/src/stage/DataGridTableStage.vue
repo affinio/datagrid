@@ -1898,24 +1898,18 @@ function handlePinnedTopViewportKeydown(event: KeyboardEvent): void {
   viewport.value.handleViewportKeydown(event)
 }
 
-const centerOverlayColumns = computed(() => (
-  pinnedNativeScrollPrototypeEnabled.value
-    ? visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
-    : renderedColumns.value
-))
-
 const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
   bodyViewportClientHeight: bodyViewportClientHeight.value,
   indexColumnWidthPx: indexColumnWidthPx.value,
   leftPaneWidth: leftPaneWidth.value,
   rightPaneWidth: rightPaneWidth.value,
-  renderedColumns: centerOverlayColumns.value,
+  renderedColumns: renderedColumns.value,
   pinnedLeftColumns: pinnedLeftColumns.value,
   pinnedRightColumns: pinnedRightColumns.value,
   layoutGridContentWidth: parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
   columnIndexByKey,
   resolveColumnWidth,
-  resolveLeftColumnSpacerWidth: pinnedNativeScrollPrototypeEnabled.value ? () => 0 : resolveLeftColumnSpacerWidth,
+  resolveLeftColumnSpacerWidth,
 }))
 
 const visibleColumnIndexByKey = computed(() => {

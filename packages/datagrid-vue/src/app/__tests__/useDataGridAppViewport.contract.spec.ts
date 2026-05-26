@@ -974,6 +974,46 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.renderedColumns.value).toBe(firstRenderedColumns)
   })
 
+  it("commits horizontal virtualization from a composite scroll target", () => {
+    const raf = createRafHarness()
+    const viewport = makeViewport({
+      visibleColumns: ref(makeColumns(20, 100)),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    const bodyViewport = makeBodyViewport(0, 800)
+    viewport.bodyViewportRef.value = bodyViewport
+    viewport.syncViewportFromDom()
+
+    const compositeTarget = {
+      scrollTop: 0,
+      scrollLeft: 320,
+      clientWidth: 800,
+      clientHeight: 600,
+      parentElement: { clientWidth: 800 },
+      __datagridCompositeViewportTarget: true,
+    } as HTMLElement & { __datagridCompositeViewportTarget: true }
+    viewport.handleViewportScroll(createScrollEvent(compositeTarget))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(bodyViewport.scrollLeft).toBe(0)
+        expect(viewport.viewportColumnStart.value).toBe(3)
+    expect(viewport.renderedColumns.value.map(column => column.key)).toEqual([
+      "col-3",
+      "col-4",
+      "col-5",
+      "col-6",
+      "col-7",
+      "col-8",
+      "col-9",
+      "col-10",
+      "col-11",
+    ])
+  })
+
   it("syncs header scrollLeft from the viewport RAF commit", () => {
     const raf = createRafHarness()
     const viewport = makeViewport({

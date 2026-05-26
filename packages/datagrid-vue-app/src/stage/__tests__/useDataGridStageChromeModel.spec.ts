@@ -206,7 +206,7 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.headerPivotGroupsSignature.value).toBe("left:|center:group-a>group-b|center-extra:|right:")
   })
 
-  it("uses full center columns for pinned native prototype chrome", () => {
+  it("uses virtualized center columns for pinned native prototype chrome", () => {
     const columns = computed<readonly DataGridTableStageBodyColumn[]>(() => ([
       { key: "left", pin: "left", width: 72, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
       { key: "center-a", pin: "none", width: 120, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
@@ -272,7 +272,7 @@ describe("useDataGridStageChromeModel", () => {
       readPivotHeaderMeta: () => null,
     })
 
-    expect(result.centerChromeColumnsSignature.value).toBe("120|140")
+    expect(result.centerChromeColumnsSignature.value).toBe("24|120|48")
     expect(result.chromeRenderModel.value.center.width).toBe(320)
     expect(result.headerChromeRenderModel.value.center.width).toBe(320)
   })

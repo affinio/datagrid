@@ -144,21 +144,13 @@ export function useDataGridStageChromeModel(
   const chromeColumnsRevision = ref(0)
   const chromeRowsRevision = ref(0)
 
-  const centerChromeColumns = computed(() => (
-    options.pinnedNativeScrollPrototypeEnabled?.value === true
-      ? options.visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right")
-      : options.renderedColumns.value
-  ))
+  const centerChromeColumns = computed(() => options.renderedColumns.value)
 
-  const centerChromeColumnWidths = computed(() => (
-    options.pinnedNativeScrollPrototypeEnabled?.value === true
-      ? centerChromeColumns.value.map(options.resolveColumnWidth).filter(width => width > 0)
-      : [
-        options.resolveLeftColumnSpacerWidth(),
-        ...centerChromeColumns.value.map(options.resolveColumnWidth),
-        options.resolveRightColumnSpacerWidth(),
-      ].filter(width => width > 0)
-  ))
+  const centerChromeColumnWidths = computed(() => [
+    options.resolveLeftColumnSpacerWidth(),
+    ...centerChromeColumns.value.map(options.resolveColumnWidth),
+    options.resolveRightColumnSpacerWidth(),
+  ].filter(width => width > 0))
 
   const buildEstimatedVisibleRowMetrics = (): readonly { top: number; height: number }[] => {
     const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({

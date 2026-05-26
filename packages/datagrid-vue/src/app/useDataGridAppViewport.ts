@@ -697,11 +697,14 @@ export function useDataGridAppViewport<TRow>(
     element: HTMLElement,
     commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean; syncRuntimePosition?: boolean },
   ): ViewportSnapshot => {
+    const cachedCompositeTarget = cachedViewportElement as (HTMLElement & { __datagridCompositeViewportTarget?: boolean }) | null
+    const shouldUseQueuedCompositeSnapshot = cachedViewportElement !== element
+      && cachedCompositeTarget?.__datagridCompositeViewportTarget === true
     if (
       commitOptions.forceVisibleRows
       || commitOptions.measureVisibleRowHeights
       || cachedViewportDimensions == null
-      || cachedViewportElement !== element
+      || (!shouldUseQueuedCompositeSnapshot && cachedViewportElement !== element)
     ) {
       return captureViewportSnapshot(element)
     }
