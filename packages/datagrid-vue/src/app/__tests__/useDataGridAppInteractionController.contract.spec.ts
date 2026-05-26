@@ -766,6 +766,81 @@ describe("useDataGridAppInteractionController contract", () => {
     }
   })
 
+  it("routes split-owner drag selection autoscroll through shared vertical and center horizontal owners", () => {
+    let frame: FrameRequestCallback | null = null
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      frame = callback
+      return 1
+    })
+    const cancelRafSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined)
+    const { controller, row, bodyViewport, syncViewport, applyCellSelectionByCoord } = createControllerHarness({
+      rowCount: 100,
+      columnCount: 12,
+      columnWidths: Array.from({ length: 12 }, () => 100),
+      shellWidth: 200,
+      shellHeight: 100,
+      resolveRowIndexAtOffset: offset => Math.max(0, Math.min(99, Math.floor(offset / 24))),
+    })
+    const bodyShell = bodyViewport.closest(".grid-body-shell")
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    if (bodyShell) {
+      stage.appendChild(bodyShell)
+    }
+    const centerHorizontalViewport = document.createElement("div")
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    Object.defineProperty(centerHorizontalViewport, "scrollLeft", { configurable: true, writable: true, value: 0 })
+    Object.defineProperty(centerHorizontalViewport, "scrollWidth", { configurable: true, value: 1_200 })
+    Object.defineProperty(centerHorizontalViewport, "clientWidth", { configurable: true, value: 200 })
+    Object.defineProperty(centerHorizontalViewport, "scrollHeight", { configurable: true, value: 100 })
+    Object.defineProperty(centerHorizontalViewport, "clientHeight", { configurable: true, value: 100 })
+    stage.appendChild(centerHorizontalViewport)
+    document.body.appendChild(stage)
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    Object.defineProperty(bodyViewport, "scrollHeight", { configurable: true, value: 2_400 })
+    Object.defineProperty(bodyViewport, "scrollWidth", { configurable: true, value: 200 })
+    const bodyScrollListener = vi.fn()
+    const centerScrollListener = vi.fn()
+    bodyViewport.addEventListener("scroll", bodyScrollListener)
+    centerHorizontalViewport.addEventListener("scroll", centerScrollListener)
+
+    try {
+      const cell = createCell(0, 0)
+      controller.handleCellMouseDown(createMouseEvent("mousedown", cell, {
+        button: 0,
+        clientX: 20,
+        clientY: 10,
+      }), row, 0, 0)
+      controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+        buttons: 1,
+        clientX: 196,
+        clientY: 96,
+      }))
+
+      const runFrame = frame as FrameRequestCallback | null
+      expect(runFrame).not.toBeNull()
+      if (!runFrame) {
+        throw new Error("Expected split-owner drag autoscroll to schedule a frame")
+      }
+      runFrame(0)
+
+      expect(bodyViewport.scrollTop).toBeGreaterThan(0)
+      expect(bodyViewport.scrollLeft).toBe(0)
+      expect(centerHorizontalViewport.scrollLeft).toBeGreaterThan(0)
+      expect(bodyScrollListener).toHaveBeenCalledTimes(1)
+      expect(centerScrollListener).toHaveBeenCalledTimes(1)
+      expect(syncViewport).not.toHaveBeenCalled()
+      expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(
+        expect.objectContaining({ columnIndex: 2 }),
+        true,
+        undefined,
+      )
+    } finally {
+      rafSpy.mockRestore()
+      cancelRafSpy.mockRestore()
+    }
+  })
+
   it("enables worker-mode drag selection like base mode", () => {
     const { controller, row, applyCellSelectionByCoord } = createControllerHarness({
       mode: "worker",

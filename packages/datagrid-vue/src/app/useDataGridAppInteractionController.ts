@@ -917,9 +917,80 @@ export function useDataGridAppInteractionController<
     return Math.max(deltaX, deltaY) >= DRAG_SELECTION_POINTER_THRESHOLD_PX
   }
 
+  function isSharedVerticalPrototypeViewport(viewport: HTMLElement | null): boolean {
+    return viewport?.dataset?.datagridScrollOwner === "shared-vertical-prototype"
+  }
+
+  function resolveCenterHorizontalViewport(bodyViewport: HTMLElement | null): HTMLElement | null {
+    if (!bodyViewport || !isSharedVerticalPrototypeViewport(bodyViewport)) {
+      return bodyViewport
+    }
+    return bodyViewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?? bodyViewport
+  }
+
+  function createInteractionViewportAdapter(bodyViewport: HTMLElement, horizontalViewport: HTMLElement): HTMLElement {
+    const bodyShell = bodyViewport.closest(".grid-body-shell")
+    const resolveRect = () => {
+      const rect = bodyShell instanceof HTMLElement
+        ? bodyShell.getBoundingClientRect()
+        : bodyViewport.getBoundingClientRect()
+      const indexInset = Math.max(0, Math.min(options.indexColumnWidth ?? 0, rect.width))
+      const width = Math.max(0, rect.width - indexInset)
+      const left = rect.left + indexInset
+      return {
+        left,
+        top: rect.top,
+        width,
+        height: rect.height,
+        right: left + width,
+        bottom: rect.bottom,
+        x: left,
+        y: rect.top,
+        toJSON: () => ({}),
+      }
+    }
+    return {
+      get scrollTop() { return bodyViewport.scrollTop },
+      set scrollTop(value: number) { bodyViewport.scrollTop = value },
+      get scrollLeft() { return horizontalViewport.scrollLeft },
+      set scrollLeft(value: number) { horizontalViewport.scrollLeft = value },
+      get scrollHeight() { return bodyViewport.scrollHeight },
+      get scrollWidth() { return horizontalViewport.scrollWidth },
+      get clientHeight() { return bodyViewport.clientHeight },
+      get clientWidth() { return horizontalViewport.clientWidth },
+      getBoundingClientRect: resolveRect,
+    } as unknown as HTMLElement
+  }
+
+  function resolveInteractionViewportElement(): HTMLElement | null {
+    const bodyViewport = options.bodyViewportRef.value
+    if (!bodyViewport) {
+      return null
+    }
+    const horizontalViewport = resolveCenterHorizontalViewport(bodyViewport)
+    const bodyShell = bodyViewport.closest(".grid-body-shell")
+    if (!horizontalViewport) {
+      return bodyViewport
+    }
+    if (horizontalViewport !== bodyViewport || bodyShell instanceof HTMLElement) {
+      return createInteractionViewportAdapter(bodyViewport, horizontalViewport)
+    }
+    return bodyViewport
+  }
+
   const syncViewportAfterProgrammaticScroll = (): void => {
-    options.syncViewport()
     const viewport = options.bodyViewportRef.value
+    const horizontalViewport = resolveCenterHorizontalViewport(viewport)
+    if (viewport && horizontalViewport && horizontalViewport !== viewport) {
+      if (typeof globalThis.Event === "function") {
+        viewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
+        horizontalViewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
+      }
+      return
+    }
+    options.syncViewport()
     if (viewport && typeof viewport.dispatchEvent === "function" && typeof globalThis.Event === "function") {
       viewport.dispatchEvent(new globalThis.Event("scroll", { bubbles: true }))
     }
@@ -1944,34 +2015,7 @@ export function useDataGridAppInteractionController<
   }
 
   const pointerCellCoordResolver = useDataGridPointerCellCoordResolver<DataGridAppCellCoord>({
-    resolveViewportElement: () => {
-      const bodyViewport = options.bodyViewportRef.value
-      const bodyShell = bodyViewport?.closest(".grid-body-shell")
-      if (!(bodyViewport instanceof HTMLElement) || !(bodyShell instanceof HTMLElement)) {
-        return bodyViewport
-      }
-      return {
-        scrollTop: bodyViewport.scrollTop,
-        scrollLeft: bodyViewport.scrollLeft,
-        getBoundingClientRect: () => {
-          const rect = bodyShell.getBoundingClientRect()
-          const indexInset = Math.max(0, Math.min(options.indexColumnWidth ?? 0, rect.width))
-          const width = Math.max(0, rect.width - indexInset)
-          const left = rect.left + indexInset
-          return {
-            left,
-            top: rect.top,
-            width,
-            height: rect.height,
-            right: left + width,
-            bottom: rect.bottom,
-            x: left,
-            y: rect.top,
-            toJSON: () => ({}),
-          }
-        },
-      } as unknown as HTMLElement
-    },
+    resolveViewportElement: resolveInteractionViewportElement,
     resolveColumnMetrics: () => {
       let currentOffset = 0
       return options.visibleColumns.value.map((column, columnIndex) => {
@@ -2182,7 +2226,7 @@ export function useDataGridAppInteractionController<
       }
       return dragSelectionOriginPin.value === null || dragSelectionOriginPin.value === "center"
     },
-    resolveViewportElement: () => options.bodyViewportRef.value,
+    resolveViewportElement: resolveInteractionViewportElement,
     resolveHeaderHeight: () => 0,
     resolveAxisAutoScrollDelta: axisAutoScroll.resolveAxisAutoScrollDelta,
     setScrollPosition: () => {
