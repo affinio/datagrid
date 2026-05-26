@@ -90,6 +90,19 @@ describe("useDataGridStageViewportRuntime", () => {
     globalThis.cancelAnimationFrame = originalCancelAnimationFrame
   })
 
+  it("exposes current body viewport as both vertical and horizontal owners", () => {
+    const harness = createHarness()
+    const bodyViewport = createViewportElement()
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+
+    expect(harness.runtime.bodyViewportEl.value).toBe(bodyViewport)
+    expect(harness.runtime.verticalBodyViewportEl.value).toBe(bodyViewport)
+    expect(harness.runtime.centerHorizontalViewportEl.value).toBe(bodyViewport)
+
+    harness.unmount()
+  })
+
   it("flushes center chrome redraw in the scroll frame for horizontal body scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

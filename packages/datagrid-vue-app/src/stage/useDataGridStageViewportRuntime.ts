@@ -36,6 +36,8 @@ export interface UseDataGridStageViewportRuntimeOptions {
 
 export interface UseDataGridStageViewportRuntimeResult {
   bodyViewportEl: Ref<HTMLElement | null>
+  verticalBodyViewportEl: Ref<HTMLElement | null>
+  centerHorizontalViewportEl: Ref<HTMLElement | null>
   topViewportEl: Ref<HTMLElement | null>
   bottomViewportEl: Ref<HTMLElement | null>
   bodyViewportScrollTop: Ref<number>
@@ -88,6 +90,8 @@ export function useDataGridStageViewportRuntime(
   options: UseDataGridStageViewportRuntimeOptions,
 ): UseDataGridStageViewportRuntimeResult {
   const bodyViewportEl = ref<HTMLElement | null>(null)
+  const verticalBodyViewportEl = bodyViewportEl
+  const centerHorizontalViewportEl = bodyViewportEl
   const topViewportEl = ref<HTMLElement | null>(null)
   const bottomViewportEl = ref<HTMLElement | null>(null)
   const headerShellHeight = ref(0)
@@ -423,6 +427,8 @@ export function useDataGridStageViewportRuntime(
 
   return {
     bodyViewportEl,
+    verticalBodyViewportEl,
+    centerHorizontalViewportEl,
     topViewportEl,
     bottomViewportEl,
     bodyViewportScrollTop,

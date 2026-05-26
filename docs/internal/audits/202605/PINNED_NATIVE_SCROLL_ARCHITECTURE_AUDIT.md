@@ -310,6 +310,11 @@ Not as an immediate production refactor. The UX goal is valid: native touch iner
 
 The migration is worth pursuing only as a staged, feature-flagged architecture prototype with explicit mobile and desktop validation gates.
 
+## Implementation Progress
+
+- 2026-05-26: Slice 1 started the guarded prototype path. `@affino/datagrid-vue-app` now has an internal `dgPinnedNativeScroll` / `affino:datagrid:pinned-native-scroll` feature flag and marks the table stage with `grid-stage--pinned-native-scroll-prototype` plus `data-datagrid-pinned-native-scroll="prototype"` when enabled. The default layout and scroll ownership are unchanged; this only creates the safe branch point for later DOM/ref migration slices.
+- 2026-05-26: Slice 2 introduced internal owner aliases in `useDataGridStageViewportRuntime`: the current body viewport is exposed as both `verticalBodyViewportEl` and `centerHorizontalViewportEl`. They intentionally point to the same element today, preserving current behavior while making the future vertical/horizontal split explicit and test-covered.
+
 ## Recommended Fallback/Intermediate Approach
 
 Keep the current center-native layout as the default. Keep `installDataGridTouchPanGuard()` limited to linked non-scroll surfaces and do not add fake inertial physics.

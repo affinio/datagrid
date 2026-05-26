@@ -15,8 +15,10 @@
       'grid-stage--interaction-desktop': interactionMode === 'desktop',
       'grid-stage--single-cell-selection': isSingleSelectedCell,
       'grid-stage--additive-selection': isAdditiveSelection,
+      'grid-stage--pinned-native-scroll-prototype': pinnedNativeScrollPrototypeEnabled,
     }"
     :style="layout.stageStyle"
+    :data-datagrid-pinned-native-scroll="pinnedNativeScrollPrototypeEnabled ? 'prototype' : undefined"
   >
     <DataGridTableStageHeader
       :pane-layout-style="paneLayoutStyle"
@@ -268,6 +270,7 @@ import {
   shouldPrioritizeNativeScrollForMouseDown,
 } from "./dataGridMouseEventGuards"
 import { resolveDataGridStageCellId } from "./dataGridTableStageA11y"
+import { resolveDataGridPinnedNativeScrollPrototypeEnabled } from "./dataGridPinnedNativeScroll"
 
 ensureDataGridAppStyles()
 
@@ -275,6 +278,7 @@ const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 const TOUCH_LONG_PRESS_DELAY_MS = 520
 const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
+const pinnedNativeScrollPrototypeEnabled = resolveDataGridPinnedNativeScrollPrototypeEnabled()
 
 const props = defineProps({
   mode: {
