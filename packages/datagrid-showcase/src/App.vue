@@ -191,6 +191,7 @@ const showFormulaChrome = computed(() => activeScenarioId.value === "spreadsheet
 const showSelectionSummary = computed(() => activeScenarioId.value === "scale")
 const showAggregationModeControl = computed(() => activeScenarioId.value === "aggregation")
 const showPivotModeControl = computed(() => activeScenarioId.value === "pivot")
+const showHeaderActions = computed(() => showAggregationModeControl.value || showPivotModeControl.value)
 const gridUxLabel = computed(() => {
   if (showFormulaChrome.value) return "Formulas"
   if (showAdvancedFilter.value) return "Filters"
@@ -292,7 +293,7 @@ function syncSelectionSummary() {
           <h1 id="showcase-title">{{ activeScenario.title }}</h1>
           <span>{{ activeScenario.description }}</span>
         </div>
-        <div class="showcase-header__actions">
+        <div v-if="showHeaderActions" class="showcase-header__actions">
           <label v-if="showAggregationModeControl" class="showcase-mode-select">
             <span>View</span>
             <select v-model="aggregationViewMode" aria-label="Aggregation view mode">
@@ -307,8 +308,6 @@ function syncSelectionSummary() {
               <option value="pivot">Pivot</option>
             </select>
           </label>
-          <button type="button">Export view</button>
-          <button class="primary" type="button">Review changes</button>
         </div>
       </header>
 
