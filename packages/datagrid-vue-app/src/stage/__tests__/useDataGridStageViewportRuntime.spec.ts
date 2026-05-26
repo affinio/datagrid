@@ -279,7 +279,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("releases vertical wheel over the center body to native scrolling", () => {
+  it("routes vertical wheel over the center body to the shared vertical owner", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
@@ -296,11 +296,18 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleBodyViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(false)
-    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(sharedVerticalViewport.scrollTop).toBe(128)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollLeft).toBe(24)
-    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: 128,
+      scrollLeft: 24,
+      clientWidth: 320,
+      clientHeight: 240,
+    }))
 
     harness.unmount()
   })

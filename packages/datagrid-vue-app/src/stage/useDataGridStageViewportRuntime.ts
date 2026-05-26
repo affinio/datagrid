@@ -518,10 +518,6 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleBodyViewportWheel(event: WheelEvent): void {
-    if (!isHorizontalWheelGesture(event)) {
-      managedWheelScroll.reset()
-      return
-    }
     managedWheelScroll.onBodyViewportWheel(event)
   }
 
