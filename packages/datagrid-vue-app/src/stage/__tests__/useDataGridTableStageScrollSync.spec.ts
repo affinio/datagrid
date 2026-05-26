@@ -69,6 +69,47 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(syncViewport).not.toHaveBeenCalled()
   })
 
+  it("routes prototype horizontal header wheel to the center horizontal owner", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const bodyViewport = createViewport(0)
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    const centerHorizontalViewport = createViewport(12)
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    stage.append(bodyViewport, centerHorizontalViewport)
+    const { service, syncViewport } = createService(bodyViewport)
+    const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaX: 24 })
+
+    service.handleHeaderWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(centerHorizontalViewport.scrollLeft).toBe(36)
+    expect(bodyViewport.scrollLeft).toBe(0)
+    expect(syncViewport).toHaveBeenCalledTimes(1)
+    expect(syncViewport.mock.calls[0]?.[0].target).toBe(centerHorizontalViewport)
+  })
+
+  it("routes prototype vertical header wheel to the shared vertical owner", () => {
+    const stage = document.createElement("section")
+    stage.className = "grid-stage"
+    const bodyViewport = createViewport(0)
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    const centerHorizontalViewport = createViewport(12)
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    stage.append(bodyViewport, centerHorizontalViewport)
+    bodyViewport.scrollTop = 40
+    const { service, syncViewport } = createService(bodyViewport)
+    const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaY: 24 })
+
+    service.handleHeaderWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollTop).toBe(64)
+    expect(centerHorizontalViewport.scrollLeft).toBe(12)
+    expect(syncViewport).toHaveBeenCalledTimes(1)
+    expect(syncViewport.mock.calls[0]?.[0].target).toBe(bodyViewport)
+  })
+
   it("samples header scrollLeft once when syncing the body viewport", () => {
     const bodyViewport = createViewport(12)
     const headerViewport = createViewport(0)

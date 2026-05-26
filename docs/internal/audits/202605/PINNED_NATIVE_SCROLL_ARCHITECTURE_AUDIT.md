@@ -337,6 +337,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 22 consolidated prototype horizontal peer synchronization under the stage viewport runtime. The center horizontal scrollport now only emits its scroll event; header and pinned-bottom `scrollLeft` mirroring are owned by the runtime, reducing duplicate DOM querying and keeping one horizontal sync path for the split-owner prototype.
 - 2026-05-26: Slice 23 aligned prototype accessibility ownership with scroll ownership. The shared vertical body owner now carries the grid role/count metadata and fallback tabindex, while the center horizontal scrollport is no longer exposed as a nested grid, keeping one accessible body grid surface in the split-owner path.
 - 2026-05-26: Slice 24 split header touch-pan fallback by locked axis for the native-scroll prototype. Routed header gestures now select the shared vertical owner for vertical pans and the center horizontal owner for horizontal pans, so the compatibility fallback follows the same split-owner model as wheel and programmatic scroll.
+- 2026-05-26: Slice 25 split legacy header wheel fallback by axis for the native-scroll prototype. Header wheel deltas now write horizontal movement to the center horizontal owner and vertical movement to the shared vertical owner, preventing hidden `scrollLeft` writes on the shared vertical shell when this fallback path is used.
 
 ## Recommended Fallback/Intermediate Approach
 
