@@ -319,6 +319,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 5 moved the main pinned-left, center, and pinned-right body layer components under the flagged shared vertical shell. The shell spans the existing body grid and receives the same pane layout tracks; default DOM remains unchanged and actual scroll ownership still stays on the current body viewport until later slices.
 - 2026-05-26: Slice 6 made the flagged shared shell the prototype vertical scroll owner while keeping horizontal ownership on the center body viewport. Runtime owner refs, scroll handling, touch guard containers, and chrome metric reads now use separate vertical/horizontal owners under the flag; the default path still resolves both owners to the body viewport.
 - 2026-05-26: Slice 7 hardened touch gesture ownership for the prototype: touch starts inside the shared vertical body shell, including pinned-left and pinned-right cells, are no longer claimed by the manual touch pan guard, so the browser can own native vertical panning. Header touch panning remains routed as a compatibility fallback into the active vertical owner.
+- 2026-05-26: Slice 8 added prototype wheel/trackpad owner coverage: linked pinned-pane wheel deltas now have contract tests proving vertical deltas write only to the shared vertical owner and horizontal deltas write only to the center horizontal owner. This keeps desktop linked-wheel fallback aligned with the split-owner architecture while preserving the default path.
 
 ## Recommended Fallback/Intermediate Approach
 

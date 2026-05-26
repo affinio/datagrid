@@ -13,15 +13,45 @@ function createViewportElement({ scrollTop = 0, scrollLeft = 0 } = {}): HTMLElem
   const element = document.createElement("div")
   element.scrollTop = scrollTop
   element.scrollLeft = scrollLeft
+  defineScrollMetrics(element, {
+    clientWidth: 320,
+    clientHeight: 240,
+    scrollWidth: 320,
+    scrollHeight: 240,
+  })
+  return element
+}
+
+function defineScrollMetrics(
+  element: HTMLElement,
+  metrics: { clientWidth: number; clientHeight: number; scrollWidth: number; scrollHeight: number },
+): void {
   Object.defineProperty(element, "clientWidth", {
     configurable: true,
-    value: 320,
+    value: metrics.clientWidth,
   })
   Object.defineProperty(element, "clientHeight", {
     configurable: true,
-    value: 240,
+    value: metrics.clientHeight,
   })
-  return element
+  Object.defineProperty(element, "scrollWidth", {
+    configurable: true,
+    value: metrics.scrollWidth,
+  })
+  Object.defineProperty(element, "scrollHeight", {
+    configurable: true,
+    value: metrics.scrollHeight,
+  })
+}
+
+function createWheelEvent(delta: { deltaX?: number; deltaY?: number; deltaMode?: number } = {}): WheelEvent {
+  return new WheelEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    deltaX: delta.deltaX ?? 0,
+    deltaY: delta.deltaY ?? 0,
+    deltaMode: delta.deltaMode ?? 0,
+  })
 }
 
 function createHarness(options: {
@@ -145,6 +175,64 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(128)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(44)
+
+    harness.unmount()
+  })
+
+  it("routes vertical wheel over linked panes to the prototype shared vertical owner", () => {
+    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaY: 48 })
+
+    harness.runtime.handleLinkedViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(sharedVerticalViewport.scrollTop).toBe(128)
+    expect(bodyViewport.scrollTop).toBe(0)
+    expect(bodyViewport.scrollLeft).toBe(24)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("routes horizontal wheel over linked panes to the center horizontal owner", () => {
+    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 40 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: 64 })
+
+    harness.runtime.handleLinkedViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(104)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(bodyViewport.scrollTop).toBe(0)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
 
     harness.unmount()
   })
