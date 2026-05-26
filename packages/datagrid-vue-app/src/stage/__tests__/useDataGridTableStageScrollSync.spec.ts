@@ -51,13 +51,13 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(syncViewport).toHaveBeenCalledTimes(1)
   })
 
-  it("routes prototype header scroll to the center horizontal owner", () => {
+  it("routes header scroll to the center horizontal owner", () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"
     const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
     const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
     stage.append(bodyViewport, centerHorizontalViewport)
     const headerViewport = createViewport(96)
     const { service, syncViewport } = createService(bodyViewport)
@@ -69,13 +69,13 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(syncViewport).not.toHaveBeenCalled()
   })
 
-  it("routes prototype horizontal header wheel to the center horizontal owner", () => {
+  it("routes horizontal header wheel to the center horizontal owner", () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"
     const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
     const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
     stage.append(bodyViewport, centerHorizontalViewport)
     const { service, syncViewport } = createService(bodyViewport)
     const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaX: 24 })
@@ -96,13 +96,13 @@ describe("useDataGridTableStageScrollSync", () => {
     }))
   })
 
-  it("routes prototype vertical header wheel to the shared vertical owner", () => {
+  it("routes vertical header wheel to the shared vertical owner", () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"
     const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
     const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
     stage.append(bodyViewport, centerHorizontalViewport)
     bodyViewport.scrollTop = 40
     const { service, syncViewport } = createService(bodyViewport)

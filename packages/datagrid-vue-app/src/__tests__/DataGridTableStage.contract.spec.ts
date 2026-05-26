@@ -9,7 +9,6 @@ import {
   resolveDataGridPerfStore,
 } from "../perf/dataGridPerfTrace"
 import DataGridTableStage from "../DataGridTableStage.vue"
-import { DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY } from "../stage/dataGridPinnedNativeScroll"
 
 type DemoRow = Record<string, unknown>
 
@@ -345,15 +344,18 @@ async function applyViewportLayoutMetrics(
 ): Promise<void> {
   const shell = wrapper.find(".grid-body-shell").element as HTMLElement
   const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+  const verticalViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
 
-  Object.defineProperty(viewport, "clientHeight", {
-    configurable: true,
-    value: options.viewportHeight,
-  })
-  Object.defineProperty(viewport, "clientWidth", {
-    configurable: true,
-    value: 250,
-  })
+  for (const element of [viewport, verticalViewport]) {
+    Object.defineProperty(element, "clientHeight", {
+      configurable: true,
+      value: options.viewportHeight,
+    })
+    Object.defineProperty(element, "clientWidth", {
+      configurable: true,
+      value: 250,
+    })
+  }
 
   shell.getBoundingClientRect = () => ({
     x: 0,
@@ -367,7 +369,7 @@ async function applyViewportLayoutMetrics(
     toJSON: () => ({}),
   }) as DOMRect
 
-  viewport.getBoundingClientRect = () => ({
+  const viewportRect = () => ({
     x: 72,
     y: options.viewportTop,
     left: 72,
@@ -378,6 +380,8 @@ async function applyViewportLayoutMetrics(
     height: options.viewportHeight,
     toJSON: () => ({}),
   }) as DOMRect
+  viewport.getBoundingClientRect = viewportRect
+  verticalViewport.getBoundingClientRect = viewportRect
 
   for (const [rowIndexText, rowBottom] of Object.entries(options.rowBottomsByIndex ?? {})) {
     const rowCell = wrapper.find(`.grid-cell[data-row-index="${rowIndexText}"]`).element as HTMLElement | undefined
@@ -435,6 +439,7 @@ async function applyViewportLayoutMetrics(
   }
 
   window.dispatchEvent(new Event("resize"))
+  await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
   await nextTick()
 }
 
@@ -442,7 +447,6 @@ afterEach(() => {
   vi.useRealTimers()
   document.body.innerHTML = ""
   delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
-  window.localStorage.removeItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY)
   window.history.replaceState({}, "", "/")
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -469,29 +473,15 @@ function mockCoarsePointer(matches: boolean): void {
 }
 
 describe("DataGridTableStage contract", () => {
-  it("mounts the shared vertical scroll shell only for the pinned native scroll prototype", async () => {
-    const defaultWrapper = mount(DataGridTableStage, {
+  it("mounts the shared vertical scroll shell as the main body scroll owner", async () => {
+    const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false),
     })
 
     await nextTick()
 
-    expect(defaultWrapper.find(".grid-body-shared-vertical-scroll-shell").exists()).toBe(false)
-    expect(defaultWrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(true)
-    defaultWrapper.unmount()
-
-    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
-    const prototypeWrapper = mount(DataGridTableStage, {
-      attachTo: document.body,
-      props: createStageProps(() => false),
-    })
-
-    await nextTick()
-
-    expect(prototypeWrapper.find(".grid-stage").classes()).toContain("grid-stage--pinned-native-scroll-prototype")
-    expect(prototypeWrapper.find(".grid-stage").attributes("data-datagrid-pinned-native-scroll")).toBe("prototype")
-    const sharedShell = prototypeWrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical-prototype"]')
+    const sharedShell = wrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical"]')
 
     expect(sharedShell.exists()).toBe(true)
     expect(sharedShell.find(".grid-body-shared-vertical-scroll-spacer").exists()).toBe(true)
@@ -499,27 +489,26 @@ describe("DataGridTableStage contract", () => {
     expect(sharedShell.find(".grid-body-pane--left").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-viewport").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-pane--right").exists()).toBe(true)
-    const prototypeCenterCanvas = sharedShell.find(".grid-chrome-canvas--center-shell")
-    expect(prototypeCenterCanvas.exists()).toBe(true)
-    expect(prototypeCenterCanvas.attributes("style")).toContain("left: 0px")
-    expect(prototypeWrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(false)
+    const centerCanvas = sharedShell.find(".grid-chrome-canvas--center-shell")
+    expect(centerCanvas.exists()).toBe(true)
+    expect(centerCanvas.attributes("style")).toContain("left: 0px")
+    expect(wrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(false)
     expect(sharedShell.attributes("role")).toBe("grid")
     expect(sharedShell.attributes("aria-rowcount")).toBe("1")
     expect(sharedShell.attributes("aria-colcount")).toBe("4")
     expect(sharedShell.attributes("aria-multiselectable")).toBe("true")
     expect(sharedShell.attributes("tabindex")).toBe("-1")
-    const centerHorizontal = sharedShell.find(".grid-body-center-horizontal-scrollport--active")
+    const centerHorizontal = sharedShell.find(".grid-body-center-horizontal-scrollport--scroll-owner")
     expect(centerHorizontal.attributes("tabindex")).toBe("-1")
     expect(centerHorizontal.attributes("role")).toBeUndefined()
     expect(centerHorizontal.attributes("aria-rowcount")).toBeUndefined()
     expect(centerHorizontal.attributes("aria-colcount")).toBeUndefined()
-    expect(prototypeWrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shared-vertical-scroll-shell")).toBe(true)
+    expect(wrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shared-vertical-scroll-shell")).toBe(true)
 
-    prototypeWrapper.unmount()
+    wrapper.unmount()
   })
 
-  it("keeps the prototype shared vertical shell as fallback keyboard owner", async () => {
-    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+  it("keeps the shared vertical shell as fallback keyboard owner", async () => {
     const handleViewportKeydown = vi.fn((event: KeyboardEvent) => {
       event.preventDefault()
     })
@@ -536,7 +525,7 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell")
-    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--active")
+    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner")
     const tabbableCells = wrapper.findAll('.datagrid-stage__cell[tabindex="0"]')
 
     expect(sharedShell.attributes("tabindex")).toBe("0")
@@ -606,7 +595,7 @@ describe("DataGridTableStage contract", () => {
     expect(wrapper.find(".test-status-pill").text()).toBe("Status: A1")
     cellRenderer.mockClear()
 
-    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
     Object.defineProperty(viewport, "scrollTop", {
       configurable: true,
       writable: true,
@@ -1843,7 +1832,7 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    const viewport = wrapper.find(".grid-body-viewport")
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell")
     const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="0"]')
     const inactiveCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="1"]')
     const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
@@ -1870,7 +1859,7 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    const viewport = wrapper.find(".grid-body-viewport")
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell")
     const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="0"]')
     const focusedRowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
 
@@ -1894,7 +1883,7 @@ describe("DataGridTableStage contract", () => {
       ),
     })
 
-    const viewport = wrapper.find(".grid-body-viewport")
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell")
     const tabbableCells = wrapper.findAll('.datagrid-stage__cell[tabindex="0"]')
     const tabbableRowIndexes = wrapper.findAll('.datagrid-stage__row-index-cell[tabindex="0"]')
 
@@ -2685,6 +2674,7 @@ describe("DataGridTableStage contract", () => {
     const shell = wrapper.find(".grid-body-shell").element as HTMLElement
     const headerShell = wrapper.find(".grid-header-shell").element as HTMLElement
     const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const verticalViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
     const rowElements = wrapper.findAll(".grid-body-viewport .grid-row")
 
     const shellRectSpy = vi.fn(() => ({
@@ -2746,18 +2736,23 @@ describe("DataGridTableStage contract", () => {
     viewportRectSpy.mockClear()
     rowRectSpies.forEach(spy => spy.mockClear())
 
-    Object.defineProperty(viewport, "scrollTop", {
+    Object.defineProperty(verticalViewport, "scrollTop", {
       configurable: true,
       writable: true,
       value: 31,
     })
-    viewport.dispatchEvent(new Event("scroll"))
+    verticalViewport.dispatchEvent(new Event("scroll"))
     await nextTick()
 
-    expect(viewportRectSpy).toHaveBeenCalled()
-    expect(rowRectSpies.some(spy => spy.mock.calls.length > 0)).toBe(true)
-    expect(shellRectSpy).toHaveBeenCalledTimes(1)
-    expect(headerShellRectSpy).toHaveBeenCalledTimes(1)
+    const sampledMetrics = (wrapper.vm as unknown as { getVisibleRowMetrics: () => readonly { top: number; height: number }[] }).getVisibleRowMetrics()
+
+    expect(sampledMetrics).toEqual([
+      { top: 12, height: 31 },
+      { top: 43, height: 31 },
+      { top: 74, height: 31 },
+    ])
+    expect(shellRectSpy).not.toHaveBeenCalled()
+    expect(headerShellRectSpy).not.toHaveBeenCalled()
 
     rafSpy.mockRestore()
     wrapper.unmount()
@@ -2821,7 +2816,7 @@ describe("DataGridTableStage contract", () => {
       }),
     })
 
-    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
     defineScrollMetrics(viewport, {
       scrollHeight: 1200,
       clientHeight: 200,
@@ -2842,8 +2837,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("lets pinned body touch panning use the prototype shared vertical scroll owner natively", () => {
-    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+  it("lets pinned body touch panning use the shared vertical scroll owner natively", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2875,8 +2869,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("routes header touch panning into the prototype shared vertical scroll owner", () => {
-    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+  it("routes header touch panning into the shared vertical scroll owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2905,8 +2898,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("routes horizontal header touch panning into the prototype center horizontal owner", () => {
-    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+  it("routes horizontal header touch panning into the center horizontal owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2915,7 +2907,7 @@ describe("DataGridTableStage contract", () => {
     })
 
     const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
-    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--active").element as HTMLElement
+    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner").element as HTMLElement
     defineScrollMetrics(sharedShell, {
       scrollHeight: 1200,
       clientHeight: 200,

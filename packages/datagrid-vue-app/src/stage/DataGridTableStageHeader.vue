@@ -755,10 +755,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  pinnedNativeScrollPrototypeEnabled: {
-    type: Boolean,
-    default: false,
-  },
   onLinkedViewportWheel: {
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,

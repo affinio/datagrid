@@ -15,10 +15,8 @@
       'grid-stage--interaction-desktop': interactionMode === 'desktop',
       'grid-stage--single-cell-selection': isSingleSelectedCell,
       'grid-stage--additive-selection': isAdditiveSelection,
-      'grid-stage--pinned-native-scroll-prototype': pinnedNativeScrollPrototypeEnabled,
     }"
     :style="layout.stageStyle"
-    :data-datagrid-pinned-native-scroll="pinnedNativeScrollPrototypeEnabled ? 'prototype' : undefined"
   >
     <DataGridTableStageHeader
       :pane-layout-style="paneLayoutStyle"
@@ -29,7 +27,6 @@
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
       :is-coarse-pointer="isCoarsePointer"
-      :pinned-native-scroll-prototype-enabled="pinnedNativeScrollPrototypeEnabled"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #center-chrome>
@@ -102,19 +99,11 @@
       @touchcancel.passive="handleBodyTouchEnd"
       @contextmenu.capture="handleBodyContextMenuCapture"
     >
-      <canvas
-        v-if="!pinnedNativeScrollPrototypeEnabled"
-        ref="centerChromeCanvasEl"
-        class="grid-chrome-canvas grid-chrome-canvas--center-shell"
-        :style="centerChromeCanvasStyle"
-        aria-hidden="true"
-      />
       <div
-        v-if="pinnedNativeScrollPrototypeEnabled"
         :ref="captureSharedVerticalViewportRef"
         class="grid-body-shared-vertical-scroll-shell"
-        :style="[paneLayoutStyle, prototypeSharedVerticalScrollStyle]"
-        data-datagrid-scroll-owner="shared-vertical-prototype"
+        :style="[paneLayoutStyle, sharedVerticalScrollStyle]"
+        data-datagrid-scroll-owner="shared-vertical"
         role="grid"
         :aria-rowcount="gridAriaRowCount"
         :aria-colcount="gridAriaColumnCount"
@@ -129,7 +118,7 @@
           aria-hidden="true"
         />
         <DataGridTableStagePinnedPane
-          :pane="prototypeLeftPinnedPane"
+          :pane="bodyLeftPinnedPane"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -141,7 +130,7 @@
 
         <DataGridTableStageCenterPane
           :display-rows="rows.displayRows"
-          viewport-class="grid-body-viewport grid-body-viewport--shared-vertical-prototype"
+          viewport-class="grid-body-viewport grid-body-viewport--shared-vertical"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
           :top-spacer-height="0"
@@ -168,14 +157,14 @@
             <canvas
               ref="centerChromeCanvasEl"
               class="grid-chrome-canvas grid-chrome-canvas--center-shell"
-              :style="prototypeCenterChromeCanvasStyle"
+              :style="bodyCenterChromeCanvasStyle"
               aria-hidden="true"
             />
           </template>
         </DataGridTableStageCenterPane>
 
         <DataGridTableStagePinnedPane
-          :pane="prototypeRightPinnedPane"
+          :pane="bodyRightPinnedPane"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -192,56 +181,6 @@
           @selected="handleFillActionSelection"
         />
       </div>
-      <template v-else>
-        <DataGridTableStagePinnedPane
-          :pane="leftPinnedPane"
-          :render-api="pinnedPaneRenderApi"
-          :handle-context-menu="onViewportContextMenu"
-          :perf-trace-enabled="perfTraceEnabled"
-        >
-          <template #chrome>
-            <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
-          </template>
-        </DataGridTableStagePinnedPane>
-
-        <DataGridTableStageCenterPane
-          :display-rows="rows.displayRows"
-          :runtime-revision="rows.runtimeRevision"
-          :body-rows-revision="rows.displayRowsRevision"
-          :top-spacer-height="viewport.topSpacerHeight"
-          :bottom-spacer-height="viewport.bottomSpacerHeight"
-          :viewport-ref="captureBodyViewportRef"
-          :viewport-tab-index="bodyViewportTabIndex"
-          :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
-          :report-fill-plumbing-state="props.reportFillPlumbingState"
-          :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
-          :perf-trace-enabled="perfTraceEnabled"
-          :handle-context-menu="onViewportContextMenu"
-          :selection-overlay-segments="centerSelectionOverlaySegments"
-          :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
-          :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
-          :overlay-lanes="centerCustomOverlayLanes"
-          :render-api="centerPaneRenderApi"
-        />
-
-        <DataGridTableStagePinnedPane
-          :pane="rightPinnedPane"
-          :render-api="pinnedPaneRenderApi"
-          :handle-context-menu="onViewportContextMenu"
-          :perf-trace-enabled="perfTraceEnabled"
-        >
-          <template #chrome>
-            <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
-          </template>
-        </DataGridTableStagePinnedPane>
-
-        <DataGridTableStageFillActionMenu
-          :is-open="fillActionMenuOpen"
-          :style="floatingFillActionStyle"
-          @toggle="toggleFloatingFillActionMenu"
-          @selected="handleFillActionSelection"
-        />
-      </template>
     </div>
 
     <div
@@ -357,7 +296,6 @@ import {
   shouldPrioritizeNativeScrollForMouseDown,
 } from "./dataGridMouseEventGuards"
 import { resolveDataGridStageCellId } from "./dataGridTableStageA11y"
-import { resolveDataGridPinnedNativeScrollPrototypeEnabled } from "./dataGridPinnedNativeScroll"
 
 ensureDataGridAppStyles()
 
@@ -365,7 +303,6 @@ const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 const TOUCH_LONG_PRESS_DELAY_MS = 520
 const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
-const pinnedNativeScrollPrototypeEnabled = computed(() => resolveDataGridPinnedNativeScrollPrototypeEnabled())
 
 const props = defineProps({
   mode: {
@@ -463,18 +400,18 @@ const interaction = stageContext.interaction
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
 const displayRows = computed(() => rows.value?.displayRows ?? [])
-const prototypeSharedVerticalScrollStyle = computed<CSSProperties>(() => ({
-  "--datagrid-prototype-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
+const sharedVerticalScrollStyle = computed<CSSProperties>(() => ({
+  "--datagrid-body-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
 }) as CSSProperties)
 
-const prototypeCenterChromeCanvasStyle = computed<CSSProperties>(() => ({
+const bodyCenterChromeCanvasStyle = computed<CSSProperties>(() => ({
   ...centerChromeCanvasStyle.value,
   left: "0px",
 }))
 
-const bodyOverlayRowOrigin = computed(() => (pinnedNativeScrollPrototypeEnabled.value
-  ? Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)
-  : 0
+const bodyOverlayRowOrigin = computed(() => Math.max(
+  0,
+  Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0,
 ))
 
 const gridAriaRowCount = computed(() => Math.max(
@@ -1293,7 +1230,6 @@ const {
   rightPaneContentRef,
   centerBodyContentRef,
   gridChromeSyncers,
-  sharedVerticalScrollEnabled: pinnedNativeScrollPrototypeEnabled,
 })
 
 watch(runtimeBodyViewportScrolling, value => {
@@ -1325,7 +1261,6 @@ const {
   rows,
   visibleColumns,
   renderedColumns,
-  pinnedNativeScrollPrototypeEnabled,
   displayRows,
   pinnedBottomRows,
   selectionTotalRowCount: computed(() => selection.value?.totalRowCount ?? null),
@@ -1710,7 +1645,7 @@ function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   if (bodyViewportEl.value?.contains(target)) {
     return false
   }
-  if (pinnedNativeScrollPrototypeEnabled.value && verticalBodyViewportEl.value?.contains(target)) {
+  if (verticalBodyViewportEl.value?.contains(target)) {
     return false
   }
   const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
@@ -2209,12 +2144,12 @@ const {
   overlayRuntime,
 })
 
-const prototypeLeftPinnedPane = computed(() => ({
+const bodyLeftPinnedPane = computed(() => ({
   ...leftPinnedPane.value,
   topSpacerHeight: 0,
   bottomSpacerHeight: 0,
 }))
-const prototypeRightPinnedPane = computed(() => ({
+const bodyRightPinnedPane = computed(() => ({
   ...rightPinnedPane.value,
   topSpacerHeight: 0,
   bottomSpacerHeight: 0,

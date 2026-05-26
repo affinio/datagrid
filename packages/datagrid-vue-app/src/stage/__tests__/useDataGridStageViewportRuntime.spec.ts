@@ -59,7 +59,6 @@ function createHarness(options: {
   rightPaneContent?: HTMLElement | null
   centerBodyContent?: HTMLElement | null
   stageRoot?: HTMLElement | null
-  sharedVerticalScrollEnabled?: boolean
   perfTraceEnabled?: boolean
 } = {}) {
   const viewport: DataGridTableStageViewportSection = {
@@ -87,7 +86,6 @@ function createHarness(options: {
     disconnectGridChromeResizeObserver: vi.fn(),
   }
   let runtime: UseDataGridStageViewportRuntimeResult | null = null
-  const sharedVerticalScrollEnabled = ref(options.sharedVerticalScrollEnabled ?? false)
   const wrapper = mount(defineComponent({
     setup() {
       runtime = useDataGridStageViewportRuntime({
@@ -97,7 +95,6 @@ function createHarness(options: {
         leftPaneContentRef: ref(options.leftPaneContent ?? null),
         rightPaneContentRef: ref(options.rightPaneContent ?? null),
         centerBodyContentRef: ref(options.centerBodyContent ?? null),
-        sharedVerticalScrollEnabled,
         perfTraceEnabled: options.perfTraceEnabled,
       })
       return () => null
@@ -111,7 +108,6 @@ function createHarness(options: {
     runtime: runtime as UseDataGridStageViewportRuntimeResult,
     syncers,
     viewport,
-    sharedVerticalScrollEnabled,
     unmount: () => wrapper.unmount(),
   }
 }
@@ -140,8 +136,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("uses the shared vertical viewport as vertical owner when the prototype is enabled", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("uses the shared vertical viewport as vertical owner as the app body viewport", () => {
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 32 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 96 })
 
@@ -156,8 +152,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("registers the shared vertical viewport as the app body viewport when the prototype is enabled", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("registers the shared vertical viewport as the app body viewport as the app body viewport", () => {
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 32 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 96 })
 
@@ -178,7 +174,7 @@ describe("useDataGridStageViewportRuntime", () => {
       return frameCallbacks.length
     })
     globalThis.cancelAnimationFrame = vi.fn()
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 44 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 128, scrollLeft: 12 })
     const scrollEvent = { target: sharedVerticalViewport } as unknown as Event
@@ -204,12 +200,11 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("directly transforms body content in the shared vertical prototype", () => {
+  it("directly transforms body content in the shared vertical", () => {
     const centerContent = document.createElement("div")
     const harness = createHarness({
       centerBodyContent: centerContent,
-      sharedVerticalScrollEnabled: true,
-    })
+          })
     const bodyViewport = createViewportElement({ scrollLeft: 44 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 128 })
 
@@ -223,8 +218,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("releases vertical wheel over linked panes to native prototype scrolling", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("releases vertical wheel over linked panes to native scrolling", () => {
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     defineScrollMetrics(sharedVerticalViewport, {
@@ -254,7 +249,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("updates the prototype content transform on shared vertical scroll", () => {
+  it("updates the content transform on shared vertical scroll", () => {
     const leftPaneContent = document.createElement("div")
     const centerBodyContent = document.createElement("div")
     const rightPaneContent = document.createElement("div")
@@ -262,8 +257,7 @@ describe("useDataGridStageViewportRuntime", () => {
       leftPaneContent,
       centerBodyContent,
       rightPaneContent,
-      sharedVerticalScrollEnabled: true,
-    })
+          })
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
 
@@ -285,8 +279,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("releases vertical wheel over the center body to native prototype scrolling", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("releases vertical wheel over the center body to native scrolling", () => {
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     defineScrollMetrics(sharedVerticalViewport, {
@@ -312,7 +306,7 @@ describe("useDataGridStageViewportRuntime", () => {
   })
 
   it("routes horizontal wheel over linked panes to the center horizontal owner", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 40 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     defineScrollMetrics(bodyViewport, {
@@ -351,7 +345,7 @@ describe("useDataGridStageViewportRuntime", () => {
   })
 
   it("ignores bubbled center scroll events on the shared vertical handler", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 96 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
 
@@ -367,7 +361,7 @@ describe("useDataGridStageViewportRuntime", () => {
   })
 
   it("keeps the shared vertical owner out of horizontal scroll mirroring", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 96 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
 
@@ -386,7 +380,7 @@ describe("useDataGridStageViewportRuntime", () => {
     const headerViewport = createViewportElement({ scrollLeft: 96 })
     headerViewport.className = "grid-header-viewport"
     stageRoot.append(headerViewport)
-    const harness = createHarness({ stageRoot, sharedVerticalScrollEnabled: true })
+    const harness = createHarness({ stageRoot })
     const bodyViewport = createViewportElement({ scrollLeft: 96 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80, scrollLeft: 0 })
 
@@ -408,12 +402,12 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs prototype header and pinned bottom from the center horizontal owner", () => {
+  it("syncs header and pinned bottom from the center horizontal owner", () => {
     const stageRoot = document.createElement("section")
     const headerViewport = createViewportElement()
     headerViewport.className = "grid-header-viewport"
     stageRoot.append(headerViewport)
-    const harness = createHarness({ stageRoot, sharedVerticalScrollEnabled: true })
+    const harness = createHarness({ stageRoot })
     const bodyViewport = createViewportElement({ scrollLeft: 96 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     const pinnedBottomViewport = createViewportElement()
@@ -457,8 +451,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("routes prototype pinned bottom scroll sync through a composite viewport event", () => {
-    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+  it("routes pinned bottom scroll sync through a composite viewport event", () => {
+    const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 12 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     const pinnedBottomViewport = createViewportElement({ scrollLeft: 64 })
@@ -510,7 +504,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs linked pinned pane transforms during raw body scroll", () => {
+  it("syncs body pane transforms during shared vertical scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
@@ -518,17 +512,24 @@ describe("useDataGridStageViewportRuntime", () => {
     })
     globalThis.cancelAnimationFrame = vi.fn()
     const leftPane = document.createElement("div")
+    const centerPane = document.createElement("div")
     const rightPane = document.createElement("div")
     const harness = createHarness({
       leftPaneContent: leftPane,
+      centerBodyContent: centerPane,
       rightPaneContent: rightPane,
     })
-    const bodyViewport = createViewportElement({ scrollTop: 120 })
+    const centerViewport = createViewportElement()
+    const sharedViewport = createViewportElement({ scrollTop: 120 })
+    harness.runtime.captureBodyViewportRef(centerViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedViewport)
+    vi.mocked(globalThis.requestAnimationFrame).mockClear()
 
-    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    harness.runtime.handleSharedVerticalViewportScroll({ target: sharedViewport } as unknown as Event)
 
     expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
     expect(leftPane.style.transform).toBe("translate3d(0, -120px, 0)")
+    expect(centerPane.style.transform).toBe("translate3d(0, -120px, 0)")
     expect(rightPane.style.transform).toBe("translate3d(0, -120px, 0)")
 
     harness.unmount()
@@ -701,8 +702,8 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(72)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(16)
     expect(dimensionReads).toEqual({
-      clientWidth: 0,
-      clientHeight: 0,
+      clientWidth: 1,
+      clientHeight: 1,
     })
 
     harness.unmount()
@@ -779,6 +780,8 @@ describe("useDataGridStageViewportRuntime", () => {
     globalThis.cancelAnimationFrame = vi.fn()
     const harness = createHarness()
     vi.mocked(harness.syncers.syncBodyViewportMetrics).mockClear()
+    vi.mocked(globalThis.requestAnimationFrame).mockClear()
+    frameCallbacks.length = 0
 
     window.dispatchEvent(new Event("resize"))
     window.dispatchEvent(new Event("resize"))

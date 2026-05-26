@@ -62,11 +62,11 @@ export function useDataGridTableStageScrollSync(
   }
 
   function resolveHeaderHorizontalViewport(bodyViewport: HTMLElement): HTMLElement {
-    if (bodyViewport.dataset.datagridScrollOwner !== "shared-vertical-prototype") {
+    if (bodyViewport.dataset.datagridScrollOwner !== "shared-vertical") {
       return bodyViewport
     }
     return bodyViewport.closest(".grid-stage")
-      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
       ?? bodyViewport
   }
 

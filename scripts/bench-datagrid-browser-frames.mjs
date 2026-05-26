@@ -102,8 +102,8 @@ async function runSession(page, index) {
       throw new Error(`Datagrid viewport not found (${viewportSelector})`)
     }
     const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
-    const sharedVerticalViewport = stageRoot?.querySelector('[data-datagrid-scroll-owner="shared-vertical-prototype"]')
-    const centerHorizontalViewport = stageRoot?.querySelector(".grid-body-center-horizontal-scrollport--active")
+    const sharedVerticalViewport = stageRoot?.querySelector('[data-datagrid-scroll-owner="shared-vertical"]')
+    const centerHorizontalViewport = stageRoot?.querySelector(".grid-body-center-horizontal-scrollport--scroll-owner")
     const verticalViewport = sharedVerticalViewport instanceof HTMLElement ? sharedVerticalViewport : viewport
     const horizontalViewport = centerHorizontalViewport instanceof HTMLElement ? centerHorizontalViewport : viewport
 
@@ -151,8 +151,8 @@ async function runSession(page, index) {
       finalLeft: horizontalViewport.scrollLeft,
       scrollOwners: {
         split: verticalViewport !== horizontalViewport,
-        vertical: verticalViewport === viewport ? "viewport" : "shared-vertical-prototype",
-        horizontal: horizontalViewport === centerHorizontalViewport ? "center-horizontal-prototype" : "viewport",
+        vertical: verticalViewport === viewport ? "viewport" : "shared-vertical",
+        horizontal: horizontalViewport === centerHorizontalViewport ? "center-horizontal" : "viewport",
       },
       appPerfSummary: typeof perfStore?.summary === "function" ? perfStore.summary() : [],
       appPerfSamples: Array.isArray(perfStore?.samples) ? perfStore.samples.slice(-80) : [],

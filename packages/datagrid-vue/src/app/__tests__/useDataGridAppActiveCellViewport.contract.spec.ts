@@ -154,13 +154,13 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     expect((centerCell.focus as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1)
   })
 
-  it("routes prototype horizontal active-cell scroll to the center scroll owner", () => {
+  it("routes horizontal active-cell scroll to the center scroll owner", () => {
     const stage = document.createElement("section")
     stage.className = "grid-stage"
     const viewport = createViewport()
-    viewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    viewport.dataset.datagridScrollOwner = "shared-vertical"
     const horizontalViewport = createViewport()
-    horizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    horizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
     horizontalViewport.scrollLeft = 120
     stage.append(viewport, horizontalViewport)
     document.body.appendChild(stage)

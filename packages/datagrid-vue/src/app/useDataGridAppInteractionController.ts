@@ -918,7 +918,7 @@ export function useDataGridAppInteractionController<
   }
 
   function isSharedVerticalPrototypeViewport(viewport: HTMLElement | null): boolean {
-    return viewport?.dataset?.datagridScrollOwner === "shared-vertical-prototype"
+    return viewport?.dataset?.datagridScrollOwner === "shared-vertical"
   }
 
   function resolveCenterHorizontalViewport(bodyViewport: HTMLElement | null): HTMLElement | null {
@@ -926,7 +926,7 @@ export function useDataGridAppInteractionController<
       return bodyViewport
     }
     return bodyViewport.closest(".grid-stage")
-      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
       ?? bodyViewport
   }
 

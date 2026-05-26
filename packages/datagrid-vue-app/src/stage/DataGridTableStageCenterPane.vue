@@ -355,7 +355,7 @@ const handleKeydown = computed(() => props.handleKeydown ?? renderApi.value.hand
 const handleContextMenu = computed(() => props.handleContextMenu)
 const centerHorizontalScrollportClass = computed(() => [
   "grid-body-center-horizontal-scrollport",
-  props.innerHorizontalScrollport ? "grid-body-center-horizontal-scrollport--active table-wrap" : null,
+  props.innerHorizontalScrollport ? "grid-body-center-horizontal-scrollport--scroll-owner table-wrap" : null,
 ])
 let connectedInnerHorizontalScrollport: HTMLElement | null = null
 

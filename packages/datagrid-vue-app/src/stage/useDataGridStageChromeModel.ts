@@ -27,7 +27,6 @@ export interface UseDataGridStageChromeModelOptions {
   rows: Ref<DataGridTableStageRowsSection<Record<string, unknown>>>
   visibleColumns: Ref<readonly DataGridTableStageBodyColumn[]>
   renderedColumns: Ref<readonly DataGridTableStageBodyColumn[]>
-  pinnedNativeScrollPrototypeEnabled?: Ref<boolean>
   displayRows: Ref<readonly DataGridTableStageBodyRow[]>
   pinnedBottomRows: Ref<readonly DataGridTableStageBodyRow[]>
   selectionTotalRowCount: Ref<number | null | undefined>
@@ -221,7 +220,7 @@ export function useDataGridStageChromeModel(
         options.bodyViewportEl,
         options.displayRows,
         estimated,
-        options.pinnedNativeScrollPrototypeEnabled?.value === true ? options.bodyViewportScrollTop.value : null,
+        options.bodyViewportScrollTop.value,
       )
       : estimated
     if (options.mode.value === "base" && options.rowHeightMode.value === "auto") {

@@ -345,9 +345,9 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 
 ## Recommended Fallback/Intermediate Approach
 
-Keep the current center-native layout as the default. Keep `installDataGridTouchPanGuard()` limited to linked non-scroll surfaces and do not add fake inertial physics.
+Superseded by Slice 31: the shared vertical scroll shell is now the default table-stage architecture rather than a flagged fallback. Keep `installDataGridTouchPanGuard()` limited to linked non-scroll surfaces and do not add fake inertial physics.
 
-For an intermediate improvement, build a flagged shared vertical scroll shell prototype:
+The original intermediate target was:
 
 - one native vertical owner covering pinned and center body hit areas
 - center-owned horizontal scroll retained as a separate owner
@@ -358,3 +358,4 @@ For an intermediate improvement, build a flagged shared vertical scroll shell pr
 If that prototype cannot preserve overlay alignment, horizontal scroll stability, and pinned bottom behavior with bounded changes, defer the migration and document the current limitation as pinned-zone touch panning without native momentum.
 - 2026-05-26: Slice 30 added split-owner browser-frame benchmark support and reduced prototype vertical scroll hot-path work. The benchmark now records separate vertical/horizontal scroll owners plus `BENCH_BROWSER_SCROLL_AXIS`; the prototype no longer patches the shared-shell scroll CSS variable through Vue on every frame, no longer runs horizontal peer sync on pure vertical scroll, and applies live row movement as direct transforms on pinned/center content refs. Latest 5-session vertical comparison improved the prototype from roughly 66.7ms p95 median before optimization to 33.4ms p95 median after direct transforms; horizontal remains at 60 FPS. Combined alternating-axis benchmark is still below baseline and remains a cleanup blocker before making the prototype default.
 - 2026-05-26: Mixed-axis benchmark follow-up tested two transaction strategies for the split-owner prototype. A full rAF-deferred viewport notification path preserved horizontal parity but regressed vertical p95 to roughly 50ms, so it was not kept. A narrower second-event deferral and CSS containment on transformed content layers also failed to improve the combined benchmark and were reverted. Current evidence points to prototype mixed-axis cost in the row-window/render flush path rather than chrome draw or overlay compute; combined mode remains the blocker before making the prototype default.
+- 2026-05-26: Slice 31 promoted the split-owner native-scroll architecture to the default DataGrid table-stage path. The `dgPinnedNativeScroll` URL/localStorage flag, prototype stage class/data marker, and resolver tests were removed; body rendering now always uses one shared vertical scroll owner and one center horizontal scroll owner. Stage/runtime/chrome contracts were updated to use `shared-vertical` and `grid-body-center-horizontal-scrollport--scroll-owner` as the stable owner markers, and stable function refs no longer resync viewport metrics during scroll-driven rerenders.

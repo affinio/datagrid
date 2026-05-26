@@ -788,7 +788,7 @@ describe("useDataGridAppInteractionController contract", () => {
       stage.appendChild(bodyShell)
     }
     const centerHorizontalViewport = document.createElement("div")
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--active"
+    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
     Object.defineProperty(centerHorizontalViewport, "scrollLeft", { configurable: true, writable: true, value: 0 })
     Object.defineProperty(centerHorizontalViewport, "scrollWidth", { configurable: true, value: 1_200 })
     Object.defineProperty(centerHorizontalViewport, "clientWidth", { configurable: true, value: 200 })
@@ -796,7 +796,7 @@ describe("useDataGridAppInteractionController contract", () => {
     Object.defineProperty(centerHorizontalViewport, "clientHeight", { configurable: true, value: 100 })
     stage.appendChild(centerHorizontalViewport)
     document.body.appendChild(stage)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical-prototype"
+    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
     Object.defineProperty(bodyViewport, "scrollHeight", { configurable: true, value: 2_400 })
     Object.defineProperty(bodyViewport, "scrollWidth", { configurable: true, value: 200 })
     const bodyScrollListener = vi.fn()

@@ -206,7 +206,7 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.headerPivotGroupsSignature.value).toBe("left:|center:group-a>group-b|center-extra:|right:")
   })
 
-  it("uses shared scrollTop when measuring auto-height prototype rows from DOM", () => {
+  it("uses shared scrollTop when measuring auto-height rows from DOM", () => {
     const rowHeightMode = ref("auto")
     const bodyViewportScrollTop = ref(400)
     const bodyViewportEl = ref<HTMLElement | null>(null)
@@ -265,7 +265,6 @@ describe("useDataGridStageChromeModel", () => {
       } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)),
       visibleColumns: columns,
       renderedColumns: columns,
-      pinnedNativeScrollPrototypeEnabled: ref(true),
       displayRows,
       pinnedBottomRows: computed(() => []),
       selectionTotalRowCount: computed(() => 20),
@@ -299,7 +298,7 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.chromeRenderModel.value.center.horizontalLines.map(line => line.position)).toEqual([12, 64])
   })
 
-  it("uses virtualized center columns for pinned native prototype chrome", () => {
+  it("uses virtualized center columns for pinned native chrome", () => {
     const columns = computed<readonly DataGridTableStageBodyColumn[]>(() => ([
       { key: "left", pin: "left", width: 72, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
       { key: "center-a", pin: "none", width: 120, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
@@ -338,7 +337,6 @@ describe("useDataGridStageChromeModel", () => {
       } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)),
       visibleColumns: columns,
       renderedColumns: computed(() => [columns.value[1]!]),
-      pinnedNativeScrollPrototypeEnabled: ref(true),
       displayRows: computed(() => [{ rowId: "row-10", kind: "leaf", data: {} }] as unknown as readonly DataGridTableStageBodyRow[]),
       pinnedBottomRows: computed(() => []),
       selectionTotalRowCount: computed(() => 0),

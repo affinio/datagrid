@@ -30,7 +30,7 @@ export function useDataGridAppActiveCellViewport(
   }
 
   const isSharedVerticalPrototypeViewport = (viewport: HTMLElement): boolean => (
-    viewport.dataset.datagridScrollOwner === "shared-vertical-prototype"
+    viewport.dataset.datagridScrollOwner === "shared-vertical"
   )
 
   const resolveHorizontalViewport = (verticalViewport: HTMLElement): HTMLElement => {
@@ -38,7 +38,7 @@ export function useDataGridAppActiveCellViewport(
       return verticalViewport
     }
     return verticalViewport.closest(".grid-stage")
-      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--active")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
       ?? verticalViewport
   }
 

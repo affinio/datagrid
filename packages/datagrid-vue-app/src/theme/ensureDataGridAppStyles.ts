@@ -1019,7 +1019,7 @@ const DATA_GRID_APP_STYLES = `
   -webkit-overflow-scrolling: touch;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell {
+.grid-body-shared-vertical-scroll-shell {
   z-index: 4;
 }
 
@@ -1034,8 +1034,8 @@ const DATA_GRID_APP_STYLES = `
   width: 1px;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane,
-.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-viewport--shared-vertical-prototype {
+.grid-body-shared-vertical-scroll-shell > .grid-body-pane,
+.grid-body-shared-vertical-scroll-shell > .grid-body-viewport--shared-vertical {
   align-self: start;
   height: 100%;
   max-height: 100%;
@@ -1043,18 +1043,18 @@ const DATA_GRID_APP_STYLES = `
   top: 0;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype {
+.grid-body-viewport--shared-vertical {
   background: transparent;
   overflow: visible;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane > .grid-pane-content,
-.grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype .grid-body-content {
-  transform: translate3d(0, calc(var(--datagrid-prototype-row-origin, 0px) - var(--datagrid-prototype-scroll-top, 0px)), 0);
+.grid-body-shared-vertical-scroll-shell > .grid-body-pane > .grid-pane-content,
+.grid-body-viewport--shared-vertical .grid-body-content {
+  transform: translate3d(0, calc(var(--datagrid-body-row-origin, 0px) - var(--datagrid-body-scroll-top, 0px)), 0);
   will-change: transform;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane {
+.grid-body-shared-vertical-scroll-shell > .grid-body-pane {
   background: transparent;
 }
 
@@ -1063,7 +1063,7 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
-.grid-stage--pinned-native-scroll-prototype .grid-body-center-horizontal-scrollport--active {
+.grid-body-center-horizontal-scrollport--scroll-owner {
   height: 100%;
   max-height: 100%;
   overflow-x: auto;
@@ -1361,12 +1361,12 @@ const DATA_GRID_APP_STYLES = `
     background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
     background-repeat: no-repeat;
   }
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-chrome-canvas {
+  .grid-stage--canvas-chrome .grid-chrome-canvas {
     display: block !important;
   }
 
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell,
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+  .grid-stage--canvas-chrome .grid-body-shell .grid-cell,
+  .grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
     background: transparent !important;
     border-right: 0 !important;
     border-bottom: 0 !important;
