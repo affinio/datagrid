@@ -332,6 +332,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 17 restored live vertical visual movement for the split-owner prototype. Shared vertical scroll now updates a scroll-offset CSS variable on the native scroll event, and sticky center/pinned content layers translate by `topSpacerHeight - scrollTop`, so trackpad wheel movement visibly moves rows between virtual window commits instead of jumping only when the row window changes.
 - 2026-05-26: Slice 18 realigned body chrome canvas row metrics with native vertical positioning. The prototype chrome model now keeps absolute virtual row tops and subtracts the real shared `scrollTop`, matching the body content formula `rowTop - scrollTop` instead of the earlier zero-origin transition model.
 - 2026-05-26: Slice 19 split body overlay metrics from seam overlay metrics for the native vertical prototype. Body selection/fill/move/custom overlays now use content-local row tops (`absoluteTop - rowOrigin`) because they live inside the transformed content layer, while pinned-pane seam overlays stay viewport-local (`absoluteTop - scrollTop`) because they live outside that layer.
+- 2026-05-26: Slice 20 hardened auto-height row metrics for the split-owner prototype. DOM-measured row heights now add the shared vertical `scrollTop` when the body DOM root is the center horizontal scrollport, preserving absolute row tops for chrome/overlay math instead of double-subtracting vertical scroll.
 
 ## Recommended Fallback/Intermediate Approach
 

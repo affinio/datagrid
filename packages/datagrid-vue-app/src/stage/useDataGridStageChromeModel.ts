@@ -78,6 +78,7 @@ function resolveVisibleRowMetricsFromDom(
   bodyViewportEl: Ref<HTMLElement | null>,
   displayRows: Ref<readonly DataGridTableStageBodyRow[]>,
   fallbackMetrics: readonly { top: number; height: number }[],
+  scrollTopOverride?: number | null,
 ): readonly { top: number; height: number }[] {
   if (displayRows.value.length !== fallbackMetrics.length) {
     return fallbackMetrics
@@ -93,10 +94,13 @@ function resolveVisibleRowMetricsFromDom(
   if (rowElements.length !== displayRows.value.length) {
     return fallbackMetrics
   }
+  const scrollTop = Number.isFinite(scrollTopOverride)
+    ? Math.max(0, scrollTopOverride ?? 0)
+    : viewport.scrollTop
   return rowElements.map(rowElement => {
     const rowRect = rowElement.getBoundingClientRect()
     return {
-      top: viewport.scrollTop + (rowRect.top - viewportRect.top),
+      top: scrollTop + (rowRect.top - viewportRect.top),
       height: rowRect.height,
     }
   })
@@ -213,7 +217,12 @@ export function useDataGridStageChromeModel(
   const rowMetrics = computed(() => {
     const estimated = buildEstimatedVisibleRowMetrics()
     const metrics = options.mode.value === "base" && options.rowHeightMode.value === "auto"
-      ? resolveVisibleRowMetricsFromDom(options.bodyViewportEl, options.displayRows, estimated)
+      ? resolveVisibleRowMetricsFromDom(
+        options.bodyViewportEl,
+        options.displayRows,
+        estimated,
+        options.pinnedNativeScrollPrototypeEnabled?.value === true ? options.bodyViewportScrollTop.value : null,
+      )
       : estimated
     if (options.mode.value === "base" && options.rowHeightMode.value === "auto") {
       options.bodyViewportScrollTop.value

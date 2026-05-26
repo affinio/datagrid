@@ -206,6 +206,99 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.headerPivotGroupsSignature.value).toBe("left:|center:group-a>group-b|center-extra:|right:")
   })
 
+  it("uses shared scrollTop when measuring auto-height prototype rows from DOM", () => {
+    const rowHeightMode = ref("auto")
+    const bodyViewportScrollTop = ref(400)
+    const bodyViewportEl = ref<HTMLElement | null>(null)
+    const displayRows = computed<readonly DataGridTableStageBodyRow[]>(() => ([
+      { rowId: "row-12", displayIndex: 12 } as unknown as DataGridTableStageBodyRow,
+      { rowId: "row-13", displayIndex: 13 } as unknown as DataGridTableStageBodyRow,
+    ]))
+    const columns = computed<readonly DataGridTableStageBodyColumn[]>(() => ([
+      { key: "center", pin: "none", width: 120, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
+    ]))
+
+    const row12 = document.createElement("div")
+    row12.className = "grid-row"
+    const row13 = document.createElement("div")
+    row13.className = "grid-row"
+    const content = document.createElement("div")
+    content.className = "grid-body-content"
+    content.append(row12, row13)
+    const viewportEl = document.createElement("div")
+    viewportEl.scrollTop = 0
+    setRect(viewportEl, 100, 180)
+    setRect(row12, 72, 40)
+    setRect(row13, 112, 52)
+    viewportEl.append(content)
+    bodyViewportEl.value = viewportEl
+
+    const result = useDataGridStageChromeModel({
+      mode: ref("base"),
+      rowHeightMode,
+      layout: computed(() => ({
+        columnStyle: () => ({}),
+        gridContentStyle: {},
+        mainTrackStyle: {},
+        indexColumnStyle: {},
+        stageStyle: {},
+        bodyShellStyle: {},
+      } as DataGridTableStageLayoutSection)),
+      viewport: computed(() => ({
+        topSpacerHeight: 372,
+        bottomSpacerHeight: 0,
+        viewportRowStart: 12,
+        viewportRowEnd: 13,
+        columnWindowStart: 0,
+        leftColumnSpacerWidth: 0,
+        rightColumnSpacerWidth: 0,
+        headerViewportRef: () => {},
+        bodyViewportRef: () => {},
+        handleHeaderWheel: () => {},
+        handleHeaderScroll: () => {},
+        handleViewportScroll: () => {},
+        handleViewportKeydown: () => {},
+      } as DataGridTableStageViewportSection)),
+      rows: computed(() => ({
+        rowStyle: () => ({ minHeight: "31px" }),
+        rowClass: () => "",
+      } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)),
+      visibleColumns: columns,
+      renderedColumns: columns,
+      pinnedNativeScrollPrototypeEnabled: ref(true),
+      displayRows,
+      pinnedBottomRows: computed(() => []),
+      selectionTotalRowCount: computed(() => 20),
+      leftPaneWidth: computed(() => 0),
+      rightPaneWidth: computed(() => 0),
+      bodyViewportScrollTop,
+      bodyViewportScrollLeft: ref(0),
+      bodyViewportClientWidth: ref(320),
+      bodyViewportClientHeight: ref(180),
+      pinnedBottomViewportClientHeight: ref(0),
+      headerShellHeight: ref(28),
+      headerViewportClientWidth: ref(320),
+      bodyViewportEl,
+      indexColumnWidthPx: computed(() => 0),
+      pinnedLeftColumns: computed(() => []),
+      pinnedRightColumns: computed(() => []),
+      resolveColumnWidth: column => column.width ?? 0,
+      resolveLeftColumnSpacerWidth: () => 0,
+      resolveRightColumnSpacerWidth: () => 0,
+      resolveAbsoluteRowIndex: row => row.displayIndex ?? 0,
+      resolveViewportRowOffset: row => (row.displayIndex ?? 0) - 12,
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      readPivotHeaderMeta: () => null,
+    })
+
+    expect(result.rowMetrics.value).toEqual([
+      { top: 372, height: 40 },
+      { top: 412, height: 52 },
+    ])
+    expect(result.chromeRenderModel.value.center.horizontalLines.map(line => line.position)).toEqual([12, 64])
+  })
+
   it("uses virtualized center columns for pinned native prototype chrome", () => {
     const columns = computed<readonly DataGridTableStageBodyColumn[]>(() => ([
       { key: "left", pin: "left", width: 72, column: { meta: {} } } as unknown as DataGridTableStageBodyColumn,
