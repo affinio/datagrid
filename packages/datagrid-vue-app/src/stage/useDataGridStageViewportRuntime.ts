@@ -403,6 +403,11 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleSharedVerticalViewportScroll(event: Event): void {
+    const element = event.target as HTMLElement | null
+    const horizontalViewport = resolveCenterHorizontalViewport()
+    if (element && horizontalViewport && horizontalViewport.scrollTop !== element.scrollTop) {
+      horizontalViewport.scrollTop = element.scrollTop
+    }
     handleCenterViewportScroll(event)
   }
 

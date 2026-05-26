@@ -115,6 +115,11 @@
         data-datagrid-scroll-owner="shared-vertical-prototype"
         @scroll.passive="handleSharedVerticalViewportScroll"
       >
+        <div
+          class="grid-body-shared-vertical-scroll-spacer"
+          :style="sharedVerticalScrollSpacerStyle"
+          aria-hidden="true"
+        />
         <DataGridTableStagePinnedPane
           :pane="leftPinnedPane"
           :render-api="pinnedPaneRenderApi"
@@ -436,6 +441,29 @@ const interaction = stageContext.interaction
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
 const displayRows = computed(() => rows.value?.displayRows ?? [])
+const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
+  const section = viewport.value
+  const topSpacerHeight = Number.isFinite(section.topSpacerHeight) ? Math.max(0, section.topSpacerHeight) : 0
+  const bottomSpacerHeight = Number.isFinite(section.bottomSpacerHeight) ? Math.max(0, section.bottomSpacerHeight) : 0
+  const totalRows = Number.isFinite(section.virtualRowTotal)
+    ? Math.max(0, Math.trunc(section.virtualRowTotal as number))
+    : null
+  if (totalRows !== null) {
+    if (typeof section.resolveRowOffset === "function") {
+      return { height: `${Math.max(0, section.resolveRowOffset(totalRows))}px` }
+    }
+    if (Number.isFinite(section.baseRowHeight)) {
+      return { height: `${Math.max(0, totalRows * (section.baseRowHeight as number))}px` }
+    }
+  }
+  const rowHeight = Number.isFinite(section.baseRowHeight) ? Math.max(0, section.baseRowHeight as number) : 31
+  const renderedRowsHeight = displayRows.value.reduce((sum, _row, rowOffset) => {
+    const rowIndex = section.viewportRowStart + rowOffset
+    const resolvedHeight = typeof section.resolveRowHeight === "function" ? section.resolveRowHeight(rowIndex) : rowHeight
+    return sum + (Number.isFinite(resolvedHeight) ? Math.max(0, resolvedHeight) : rowHeight)
+  }, 0)
+  return { height: `${topSpacerHeight + renderedRowsHeight + bottomSpacerHeight}px` }
+})
 const pinnedTopRows = computed(() => rows.value?.pinnedTopRows ?? [])
 const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
 const selectionRange = computed(() => selection.value?.selectionRange ?? null)

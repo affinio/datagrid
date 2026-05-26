@@ -1019,6 +1019,26 @@ const DATA_GRID_APP_STYLES = `
   -webkit-overflow-scrolling: touch;
 }
 
+.grid-body-shared-vertical-scroll-spacer {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+  width: 1px;
+}
+
+.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane,
+.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-viewport--shared-vertical-prototype {
+  align-self: start;
+  height: 100%;
+  max-height: 100%;
+  position: sticky;
+  top: 0;
+}
+
 .grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype {
   overflow-x: auto;
   overflow-y: hidden;

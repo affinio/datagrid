@@ -171,6 +171,8 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalledWith(scrollEvent)
 
+    expect(bodyViewport.scrollTop).toBe(128)
+
     frameCallbacks.forEach(callback => callback(performance.now()))
 
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(128)
