@@ -314,6 +314,8 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 
 - 2026-05-26: Slice 1 started the guarded prototype path. `@affino/datagrid-vue-app` now has an internal `dgPinnedNativeScroll` / `affino:datagrid:pinned-native-scroll` feature flag and marks the table stage with `grid-stage--pinned-native-scroll-prototype` plus `data-datagrid-pinned-native-scroll="prototype"` when enabled. The default layout and scroll ownership are unchanged; this only creates the safe branch point for later DOM/ref migration slices.
 - 2026-05-26: Slice 2 introduced internal owner aliases in `useDataGridStageViewportRuntime`: the current body viewport is exposed as both `verticalBodyViewportEl` and `centerHorizontalViewportEl`. They intentionally point to the same element today, preserving current behavior while making the future vertical/horizontal split explicit and test-covered.
+- 2026-05-26: Slice 3 added the first flagged DOM anchor for the future shared vertical scroll shell: `.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical-prototype"]`. It is inert (`position: absolute`, `pointer-events: none`) and does not wrap or reparent the existing body viewport yet, so current scroll ownership remains unchanged while the prototype DOM path is now contract-tested.
+- 2026-05-26: Slice 4 started axis ownership separation inside `useDataGridStageViewportRuntime`: vertical reads/writes now go through the vertical owner alias and horizontal reads/writes go through the center-horizontal owner alias. Both aliases still resolve to the current body viewport, so behavior remains unchanged while the hot-path code no longer assumes one named owner for both axes.
 
 ## Recommended Fallback/Intermediate Approach
 

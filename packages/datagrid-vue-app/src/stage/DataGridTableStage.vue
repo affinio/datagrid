@@ -107,6 +107,12 @@
         :style="centerChromeCanvasStyle"
         aria-hidden="true"
       />
+      <div
+        v-if="pinnedNativeScrollPrototypeEnabled"
+        class="grid-body-shared-vertical-scroll-shell"
+        data-datagrid-scroll-owner="shared-vertical-prototype"
+        aria-hidden="true"
+      />
       <DataGridTableStagePinnedPane
         :pane="leftPinnedPane"
         :render-api="pinnedPaneRenderApi"
@@ -278,7 +284,7 @@ const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 const TOUCH_LONG_PRESS_DELAY_MS = 520
 const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
-const pinnedNativeScrollPrototypeEnabled = resolveDataGridPinnedNativeScrollPrototypeEnabled()
+const pinnedNativeScrollPrototypeEnabled = computed(() => resolveDataGridPinnedNativeScrollPrototypeEnabled())
 
 const props = defineProps({
   mode: {

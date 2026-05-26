@@ -1006,6 +1006,13 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
 }
 
+.grid-body-shared-vertical-scroll-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .grid-body-shell--pinned-bottom {
   border-top: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
   flex: 0 0 auto;

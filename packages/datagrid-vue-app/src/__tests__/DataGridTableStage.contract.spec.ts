@@ -9,6 +9,7 @@ import {
   resolveDataGridPerfStore,
 } from "../perf/dataGridPerfTrace"
 import DataGridTableStage from "../DataGridTableStage.vue"
+import { DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY } from "../stage/dataGridPinnedNativeScroll"
 
 type DemoRow = Record<string, unknown>
 
@@ -440,6 +441,7 @@ afterEach(() => {
   vi.useRealTimers()
   document.body.innerHTML = ""
   delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
+  window.localStorage.removeItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY)
   window.history.replaceState({}, "", "/")
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
@@ -466,6 +468,33 @@ function mockCoarsePointer(matches: boolean): void {
 }
 
 describe("DataGridTableStage contract", () => {
+  it("mounts the shared vertical scroll shell only for the pinned native scroll prototype", async () => {
+    const defaultWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false),
+    })
+
+    await nextTick()
+
+    expect(defaultWrapper.find(".grid-body-shared-vertical-scroll-shell").exists()).toBe(false)
+    defaultWrapper.unmount()
+
+    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+    const prototypeWrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false),
+    })
+
+    await nextTick()
+
+    expect(prototypeWrapper.find(".grid-stage").classes()).toContain("grid-stage--pinned-native-scroll-prototype")
+    expect(prototypeWrapper.find(".grid-stage").attributes("data-datagrid-pinned-native-scroll")).toBe("prototype")
+    expect(prototypeWrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical-prototype"]').exists()).toBe(true)
+    expect(prototypeWrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shell")).toBe(true)
+
+    prototypeWrapper.unmount()
+  })
+
   it("renders custom Vue cell content when a column cellRenderer is provided", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

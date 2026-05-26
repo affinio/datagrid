@@ -115,8 +115,11 @@ export function useDataGridStageViewportRuntime(
   let observedBodyViewportScrollLeft = 0
   const perfTraceEnabled = options.perfTraceEnabled ?? resolveDataGridPerfTraceEnabled()
 
+  const resolveVerticalBodyViewport = (): HTMLElement | null => verticalBodyViewportEl.value
+  const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
+
   const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
-    resolveSourceScrollTop: () => bodyViewportEl.value?.scrollTop ?? 0,
+    resolveSourceScrollTop: () => resolveVerticalBodyViewport()?.scrollTop ?? 0,
     mode: "direct-transform",
     resolvePaneElements: () => [options.leftPaneContentRef.value, options.rightPaneContentRef.value],
   })
@@ -151,28 +154,30 @@ export function useDataGridStageViewportRuntime(
     : null
 
   const managedWheelScroll = useDataGridManagedWheelScroll({
-    resolveBodyViewport: () => bodyViewportEl.value,
-    resolveMainViewport: () => bodyViewportEl.value,
+    resolveBodyViewport: resolveVerticalBodyViewport,
+    resolveMainViewport: resolveCenterHorizontalViewport,
     setHandledScrollTop: (value: number) => {
-      if (bodyViewportEl.value) {
-        bodyViewportEl.value.scrollTop = value
+      const verticalViewport = resolveVerticalBodyViewport()
+      if (verticalViewport) {
+        verticalViewport.scrollTop = value
       }
     },
     setHandledScrollLeft: (value: number) => {
-      if (bodyViewportEl.value) {
-        bodyViewportEl.value.scrollLeft = value
+      const horizontalViewport = resolveCenterHorizontalViewport()
+      if (horizontalViewport) {
+        horizontalViewport.scrollLeft = value
       }
     },
     syncLinkedScroll: linkedPaneScrollSync.onSourceScroll,
     scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,
     isLinkedScrollSyncLoopScheduled: linkedPaneScrollSync.isSyncLoopScheduled,
     onWheelConsumed: () => {
-      const bodyViewport = bodyViewportEl.value
-      if (!bodyViewport) {
+      const verticalViewport = resolveVerticalBodyViewport()
+      if (!verticalViewport) {
         return
       }
       markBodyViewportScrolling()
-      options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
+      options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(verticalViewport))
     },
   })
 
@@ -191,10 +196,10 @@ export function useDataGridStageViewportRuntime(
     globalThis.clearTimeout(handle)
   }
 
-  function readBodyViewportScrollState(viewport: HTMLElement): BodyViewportScrollState {
+  function readBodyViewportScrollState(fallbackViewport?: HTMLElement | null): BodyViewportScrollState {
     return {
-      scrollTop: viewport.scrollTop,
-      scrollLeft: viewport.scrollLeft,
+      scrollTop: (resolveVerticalBodyViewport() ?? fallbackViewport)?.scrollTop ?? 0,
+      scrollLeft: (resolveCenterHorizontalViewport() ?? fallbackViewport)?.scrollLeft ?? 0,
     }
   }
 
@@ -377,14 +382,15 @@ export function useDataGridStageViewportRuntime(
 
   function handlePinnedBottomViewportScroll(event: Event): void {
     const element = event.target as HTMLElement | null
-    const bodyViewport = bodyViewportEl.value
-    if (!element || !bodyViewport || bodyViewport.scrollLeft === element.scrollLeft) {
+    const verticalViewport = resolveVerticalBodyViewport()
+    const horizontalViewport = resolveCenterHorizontalViewport()
+    if (!element || !verticalViewport || !horizontalViewport || horizontalViewport.scrollLeft === element.scrollLeft) {
       return
     }
-    bodyViewport.scrollLeft = element.scrollLeft
+    horizontalViewport.scrollLeft = element.scrollLeft
     markBodyViewportScrolling()
-    options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(bodyViewport))
-    scheduleBodyViewportScrollStateSync(readBodyViewportScrollState(bodyViewport))
+    options.viewport.value.handleViewportScroll(createSyntheticScrollEvent(verticalViewport))
+    scheduleBodyViewportScrollStateSync(readBodyViewportScrollState(verticalViewport))
     scheduleScrollGridChromeRedraw("center-scroll")
   }
 
