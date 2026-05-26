@@ -12,6 +12,7 @@
     @contextmenu="handleOuterContextMenu"
     @keydown.stop="handleOuterKeydown"
   >
+    <slot name="chrome" />
     <div
       :ref="captureInnerHorizontalScrollportRef"
       :class="centerHorizontalScrollportClass"

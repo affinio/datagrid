@@ -1170,6 +1170,10 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-body-viewport:focus,
 .grid-body-viewport:focus-visible,
+.grid-body-center-horizontal-scrollport:focus,
+.grid-body-center-horizontal-scrollport:focus-visible,
+.grid-body-shared-vertical-scroll-shell:focus,
+.grid-body-shared-vertical-scroll-shell:focus-visible,
 .grid-header-viewport:focus,
 .grid-header-viewport:focus-visible,
 .grid-stage:focus,
@@ -1343,16 +1347,6 @@ const DATA_GRID_APP_STYLES = `
     border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
   }
 
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-chrome-canvas {
-    display: block !important;
-  }
-
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell,
-  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
-    background: transparent !important;
-    border-right: 0 !important;
-    border-bottom: 0 !important;
-  }
 
   .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
   .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell--index {
@@ -1367,6 +1361,17 @@ const DATA_GRID_APP_STYLES = `
     background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
     background-repeat: no-repeat;
   }
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-chrome-canvas {
+    display: block !important;
+  }
+
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell,
+  .grid-stage--pinned-native-scroll-prototype.grid-stage--canvas-chrome .grid-body-shell .grid-cell--index {
+    background: transparent !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+  }
+
 }
 
 .grid-cell:focus,

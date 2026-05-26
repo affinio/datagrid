@@ -103,6 +103,7 @@
       @contextmenu.capture="handleBodyContextMenuCapture"
     >
       <canvas
+        v-if="!pinnedNativeScrollPrototypeEnabled"
         ref="centerChromeCanvasEl"
         class="grid-chrome-canvas grid-chrome-canvas--center-shell"
         :style="centerChromeCanvasStyle"
@@ -162,7 +163,16 @@
           :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
           :overlay-lanes="centerCustomOverlayLanes"
           :render-api="centerPaneRenderApi"
-        />
+        >
+          <template #chrome>
+            <canvas
+              ref="centerChromeCanvasEl"
+              class="grid-chrome-canvas grid-chrome-canvas--center-shell"
+              :style="prototypeCenterChromeCanvasStyle"
+              aria-hidden="true"
+            />
+          </template>
+        </DataGridTableStageCenterPane>
 
         <DataGridTableStagePinnedPane
           :pane="prototypeRightPinnedPane"
@@ -457,6 +467,11 @@ const prototypeSharedVerticalScrollStyle = computed<CSSProperties>(() => ({
   "--datagrid-prototype-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
   "--datagrid-prototype-scroll-top": `${Math.max(0, bodyViewportScrollTop.value)}px`,
 }) as CSSProperties)
+
+const prototypeCenterChromeCanvasStyle = computed<CSSProperties>(() => ({
+  ...centerChromeCanvasStyle.value,
+  left: "0px",
+}))
 
 const bodyOverlayRowOrigin = computed(() => (pinnedNativeScrollPrototypeEnabled.value
   ? Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)

@@ -478,6 +478,7 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     expect(defaultWrapper.find(".grid-body-shared-vertical-scroll-shell").exists()).toBe(false)
+    expect(defaultWrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(true)
     defaultWrapper.unmount()
 
     window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
@@ -498,6 +499,10 @@ describe("DataGridTableStage contract", () => {
     expect(sharedShell.find(".grid-body-pane--left").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-viewport").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-pane--right").exists()).toBe(true)
+    const prototypeCenterCanvas = sharedShell.find(".grid-chrome-canvas--center-shell")
+    expect(prototypeCenterCanvas.exists()).toBe(true)
+    expect(prototypeCenterCanvas.attributes("style")).toContain("left: 0px")
+    expect(prototypeWrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(false)
     expect(sharedShell.attributes("role")).toBe("grid")
     expect(sharedShell.attributes("aria-rowcount")).toBe("1")
     expect(sharedShell.attributes("aria-colcount")).toBe("4")
