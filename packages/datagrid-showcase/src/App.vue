@@ -3,9 +3,11 @@ import { computed, onBeforeUnmount, ref } from "vue"
 import { DataGrid, type DataGridExposed } from "@affino/datagrid-vue-app"
 import { createDataSourceBackedRowModel, type DataGridAggregationModel, type DataGridPivotSpec } from "@affino/datagrid-vue"
 import {
+  aggregationColumns,
   createBackendDataSource,
   forecastColumns,
   forecastRows,
+  pivotColumns,
   planningColumns,
   planningRows,
   revenueColumns,
@@ -128,6 +130,8 @@ const scenarios: Array<{
 ]
 
 const activeScenarioId = ref<ScenarioId>("scale")
+const aggregationViewMode = ref<"table" | "aggregation">("aggregation")
+const pivotViewMode = ref<"table" | "pivot">("pivot")
 const gridRef = ref<DataGridExposed | null>(null)
 const selectionSummary = ref("Select cells to see summary")
 const fallbackScenario = scenarios[0]!
@@ -169,7 +173,13 @@ const activeColumns = computed(() => {
   if (activeScenarioId.value === "gantt") {
     return planningColumns
   }
-  if (["filters", "aggregation", "pivot"].includes(activeScenarioId.value)) {
+  if (activeScenarioId.value === "aggregation") {
+    return aggregationViewMode.value === "aggregation" ? aggregationColumns : revenueColumns
+  }
+  if (activeScenarioId.value === "pivot") {
+    return pivotViewMode.value === "pivot" ? pivotColumns : revenueColumns
+  }
+  if (activeScenarioId.value === "filters") {
     return revenueColumns
   }
   return scaleColumns
@@ -179,29 +189,31 @@ const useBackendModel = computed(() => activeScenarioId.value === "backend")
 const showAdvancedFilter = computed(() => activeScenarioId.value === "filters" || activeScenarioId.value === "backend")
 const showFormulaChrome = computed(() => activeScenarioId.value === "spreadsheet")
 const showSelectionSummary = computed(() => activeScenarioId.value === "scale")
+const showAggregationModeControl = computed(() => activeScenarioId.value === "aggregation")
+const showPivotModeControl = computed(() => activeScenarioId.value === "pivot")
 const gridUxLabel = computed(() => {
   if (showFormulaChrome.value) return "Formulas"
   if (showAdvancedFilter.value) return "Filters"
-  if (activeScenarioId.value === "aggregation") return "Rollups"
-  if (activeScenarioId.value === "pivot") return "Pivot"
+  if (activeScenarioId.value === "aggregation") return aggregationViewMode.value === "aggregation" ? "Rollups" : "Table"
+  if (activeScenarioId.value === "pivot") return pivotViewMode.value === "pivot" ? "Pivot" : "Table"
   if (activeScenarioId.value === "tree") return "Tree"
   if (activeScenarioId.value === "gantt") return "Gantt"
   return "Virtual"
 })
 const groupBy = computed(() => {
-  if (activeScenarioId.value === "aggregation") {
+  if (activeScenarioId.value === "aggregation" && aggregationViewMode.value === "aggregation") {
     return { fields: ["region", "stage"], expandedByDefault: true }
   }
   return null
 })
 const aggregationModel = computed<DataGridAggregationModel<Record<string, unknown>> | null>(() => {
-  if (activeScenarioId.value === "aggregation") {
+  if (activeScenarioId.value === "aggregation" && aggregationViewMode.value === "aggregation") {
     return { columns: [{ key: "arr", op: "sum" }, { key: "margin", op: "avg" }], basis: "filtered" }
   }
   return null
 })
 const pivotModel = computed<DataGridPivotSpec | null>(() => {
-  if (activeScenarioId.value === "pivot") {
+  if (activeScenarioId.value === "pivot" && pivotViewMode.value === "pivot") {
     return { rows: ["owner"], columns: ["region"], values: [{ field: "arr", agg: "sum" }, { field: "arr", agg: "count" }] }
   }
   return null
@@ -241,7 +253,7 @@ const ganttOptions = computed(() => {
   }
 })
 
-const gridKey = computed(() => activeScenarioId.value)
+const gridKey = computed(() => `${activeScenarioId.value}:${aggregationViewMode.value}:${pivotViewMode.value}`)
 
 function syncSelectionSummary() {
   selectionSummary.value = gridRef.value?.getSelectionAggregatesLabel?.() || "Select cells to see summary"
@@ -281,6 +293,20 @@ function syncSelectionSummary() {
           <span>{{ activeScenario.description }}</span>
         </div>
         <div class="showcase-header__actions">
+          <label v-if="showAggregationModeControl" class="showcase-mode-select">
+            <span>View</span>
+            <select v-model="aggregationViewMode" aria-label="Aggregation view mode">
+              <option value="table">Table</option>
+              <option value="aggregation">Aggregation</option>
+            </select>
+          </label>
+          <label v-if="showPivotModeControl" class="showcase-mode-select">
+            <span>View</span>
+            <select v-model="pivotViewMode" aria-label="Pivot view mode">
+              <option value="table">Table</option>
+              <option value="pivot">Pivot</option>
+            </select>
+          </label>
           <button type="button">Export view</button>
           <button class="primary" type="button">Review changes</button>
         </div>

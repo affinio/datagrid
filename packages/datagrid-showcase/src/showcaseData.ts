@@ -166,8 +166,38 @@ export function createCapacityRow(index: number): CapacityRow {
   }
 }
 
+function isBlankCellValue(value: unknown): boolean {
+  return value == null || (typeof value === "string" && value.trim().length === 0)
+}
+
 function badge(value: unknown, tone: "success" | "warning" | "danger" | "info" | "neutral") {
-  return h("span", { class: ["showcase-cell-badge", `showcase-cell-badge--${tone}`] }, String(value ?? ""))
+  if (isBlankCellValue(value)) {
+    return null
+  }
+  return h("span", { class: ["showcase-cell-badge", `showcase-cell-badge--${tone}`] }, String(value))
+}
+
+function treeGroupLabel({ group }: Parameters<NonNullable<DataGridAppColumnInput["groupCellRenderer"]>>[0]) {
+  const expanded = group.renderMeta.isExpanded === true
+  return h("button", {
+    type: "button",
+    class: "showcase-tree-group",
+    style: { "--showcase-tree-depth": String(Math.max(0, group.renderMeta.level)) },
+    "aria-label": `${expanded ? "Collapse" : "Expand"} ${group.value}`,
+    "aria-expanded": expanded ? "true" : "false",
+    onClick: (event: MouseEvent) => {
+      event.stopPropagation()
+      group.toggle()
+    },
+  }, [
+    h("span", {
+      class: "showcase-tree-group__node",
+      "data-expanded": expanded ? "true" : "false",
+      "aria-hidden": "true",
+    }),
+    h("span", { class: "showcase-tree-group__label" }, group.value),
+    h("span", { class: "showcase-tree-group__count" }, String(group.childrenCount)),
+  ])
 }
 
 function statusTone(status: unknown): "success" | "warning" | "danger" {
@@ -273,8 +303,21 @@ export const revenueColumns: DataGridAppColumnInput[] = [
   { key: "nextStep", label: "Next step", initialState: { width: 260 } },
 ]
 
+export const aggregationColumns: DataGridAppColumnInput[] = [
+  { key: "region", label: "Region", initialState: { width: 170, pin: "left" } },
+  { key: "stage", label: "Stage", initialState: { width: 210 } },
+  { key: "arr", label: "ARR", dataType: "currency", initialState: { width: 150 } },
+  { key: "margin", label: "Margin %", dataType: "number", initialState: { width: 130 } },
+]
+
+export const pivotColumns: DataGridAppColumnInput[] = [
+  { key: "owner", label: "Owner", initialState: { width: 180, pin: "left" } },
+  { key: "region", label: "Region", initialState: { visible: false } },
+  { key: "arr", label: "ARR", dataType: "currency", initialState: { visible: false } },
+]
+
 export const treeColumns: DataGridAppColumnInput[] = [
-  { key: "account", label: "Account", initialState: { width: 230, pin: "left" } },
+  { key: "account", label: "Account", initialState: { width: 230, pin: "left" }, groupCellRenderer: treeGroupLabel },
   { key: "region", label: "Region", initialState: { width: 110 } },
   { key: "segment", label: "Segment", initialState: { width: 140 } },
   { key: "owner", label: "Owner", initialState: { width: 130 } },

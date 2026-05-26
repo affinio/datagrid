@@ -150,10 +150,12 @@ button {
 
 .showcase-header__actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.showcase-header__actions button {
+.showcase-header__actions button,
+.showcase-mode-select select {
   height: 34px;
   padding: 0 12px;
   border: 1px solid #cbd5e1;
@@ -161,6 +163,24 @@ button {
   background: #fff;
   color: #1e293b;
   cursor: pointer;
+}
+
+.showcase-mode-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.showcase-mode-select select {
+  min-width: 136px;
+  padding-right: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
 }
 
 .showcase-header__actions .primary {
@@ -276,6 +296,71 @@ button {
 .showcase-cell-badge--neutral {
   background: #e2e8f0;
   color: #334155;
+}
+
+.showcase-tree-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 0 0 calc(var(--showcase-tree-depth, 0) * 14px);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-tree-group__node {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+  flex: 0 0 auto;
+}
+
+.showcase-tree-group__node::before,
+.showcase-tree-group__node::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: #334155;
+}
+
+.showcase-tree-group__node::after {
+  left: 7px;
+  right: auto;
+  top: 4px;
+  width: 2px;
+  height: 8px;
+}
+
+.showcase-tree-group__node[data-expanded="true"]::after {
+  display: none;
+}
+
+.showcase-tree-group__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-tree-group__count {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
