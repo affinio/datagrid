@@ -431,28 +431,9 @@ function handleOuterKeydown(event: KeyboardEvent): void {
 }
 
 function handleInnerScroll(event: Event): void {
-  if (!props.innerHorizontalScrollport) {
-    return
-  }
-  const element = event.target as HTMLElement | null
-  if (element) {
-    const scrollLeft = element.scrollLeft
-    const stage = element.closest<HTMLElement>(".grid-stage")
-    const headerViewport = stage?.querySelector<HTMLElement>(".grid-header-viewport") ?? document.querySelector<HTMLElement>(".grid-header-viewport") ?? null
-    if (headerViewport && headerViewport.scrollLeft !== scrollLeft) {
-      headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
-      headerViewport.scrollLeft = scrollLeft
-    }
+  if (props.innerHorizontalScrollport) {
     handleScroll.value(event)
-    globalThis.requestAnimationFrame?.(() => {
-      if (headerViewport && headerViewport.scrollLeft !== scrollLeft) {
-        headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
-        headerViewport.scrollLeft = scrollLeft
-      }
-    })
-    return
   }
-  handleScroll.value(event)
 }
 
 function handleInnerWheel(event: WheelEvent): void {

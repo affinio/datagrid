@@ -114,7 +114,9 @@
         class="grid-body-shared-vertical-scroll-shell"
         :style="[paneLayoutStyle, prototypeSharedVerticalScrollStyle]"
         data-datagrid-scroll-owner="shared-vertical-prototype"
+        :tabindex="bodyViewportTabIndex"
         @scroll.passive="handleSharedVerticalViewportScroll"
+        @keydown.stop="viewport.handleViewportKeydown"
       >
         <div
           class="grid-body-shared-vertical-scroll-spacer"
@@ -142,7 +144,7 @@
           :viewport-ref="captureBodyViewportRef"
           :content-ref="captureCenterBodyContentRef"
           inner-horizontal-scrollport
-          :viewport-tab-index="bodyViewportTabIndex"
+          :viewport-tab-index="-1"
           :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
           :report-fill-plumbing-state="props.reportFillPlumbingState"
           :report-fill-plumbing-detail="props.reportFillPlumbingDetail"

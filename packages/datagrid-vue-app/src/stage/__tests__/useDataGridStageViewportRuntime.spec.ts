@@ -58,6 +58,7 @@ function createHarness(options: {
   leftPaneContent?: HTMLElement | null
   rightPaneContent?: HTMLElement | null
   centerBodyContent?: HTMLElement | null
+  stageRoot?: HTMLElement | null
   sharedVerticalScrollEnabled?: boolean
   perfTraceEnabled?: boolean
 } = {}) {
@@ -90,7 +91,7 @@ function createHarness(options: {
   const wrapper = mount(defineComponent({
     setup() {
       runtime = useDataGridStageViewportRuntime({
-        stageRootEl: ref(null),
+        stageRootEl: ref(options.stageRoot ?? null),
         viewport: shallowRef(viewport),
         gridChromeSyncers: shallowRef(syncers),
         leftPaneContentRef: ref(options.leftPaneContent ?? null),
@@ -357,6 +358,30 @@ describe("useDataGridStageViewportRuntime", () => {
 
     expect(sharedVerticalViewport.scrollLeft).toBe(0)
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("syncs prototype header and pinned bottom from the center horizontal owner", () => {
+    const stageRoot = document.createElement("section")
+    const headerViewport = createViewportElement()
+    headerViewport.className = "grid-header-viewport"
+    stageRoot.append(headerViewport)
+    const harness = createHarness({ stageRoot, sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 96 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    const pinnedBottomViewport = createViewportElement()
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    harness.runtime.capturePinnedBottomViewportRef(pinnedBottomViewport)
+    vi.mocked(harness.syncers.syncPinnedBottomViewportScrollLeft).mockClear()
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    expect(headerViewport.scrollLeft).toBe(96)
+    expect(headerViewport.dataset.datagridSkipNextHeaderScrollSync).toBe("true")
+    expect(pinnedBottomViewport.scrollLeft).toBe(96)
+    expect(sharedVerticalViewport.scrollLeft).toBe(0)
 
     harness.unmount()
   })

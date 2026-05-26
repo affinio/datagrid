@@ -187,6 +187,7 @@ function createStageProps(
     isRowFocused?: (row: DataGridTableRow<DemoRow>) => boolean
     toggleSortForColumn?: (columnKey: string, additive?: boolean) => void
     startResize?: (event: MouseEvent, columnKey: string) => void
+    handleViewportKeydown?: (event: KeyboardEvent) => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
@@ -241,7 +242,7 @@ function createStageProps(
       handleHeaderWheel: () => undefined,
       handleHeaderScroll: () => undefined,
       handleViewportScroll: () => undefined,
-      handleViewportKeydown: () => undefined,
+      handleViewportKeydown: options?.handleViewportKeydown ?? (() => undefined),
     },
     columns: {
       visibleColumns,
@@ -497,9 +498,43 @@ describe("DataGridTableStage contract", () => {
     expect(sharedShell.find(".grid-body-pane--left").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-viewport").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-pane--right").exists()).toBe(true)
+    expect(sharedShell.attributes("tabindex")).toBe("-1")
+    expect(sharedShell.find(".grid-body-center-horizontal-scrollport--active").attributes("tabindex")).toBe("-1")
     expect(prototypeWrapper.find(".grid-body-viewport").element.parentElement?.classList.contains("grid-body-shared-vertical-scroll-shell")).toBe(true)
 
     prototypeWrapper.unmount()
+  })
+
+  it("keeps the prototype shared vertical shell as fallback keyboard owner", async () => {
+    window.localStorage.setItem(DATA_GRID_PINNED_NATIVE_SCROLL_STORAGE_KEY, "true")
+    const handleViewportKeydown = vi.fn((event: KeyboardEvent) => {
+      event.preventDefault()
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+        selectionRange: { startRow: 25, endRow: 25, startColumn: 1, endColumn: 1 },
+        selectionAnchorCell: { rowIndex: 25, columnIndex: 1 },
+        handleViewportKeydown,
+      }),
+    })
+
+    await nextTick()
+
+    const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell")
+    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--active")
+    const tabbableCells = wrapper.findAll('.datagrid-stage__cell[tabindex="0"]')
+
+    expect(sharedShell.attributes("tabindex")).toBe("0")
+    expect(centerHorizontal.attributes("tabindex")).toBe("-1")
+    expect(tabbableCells).toHaveLength(0)
+
+    await sharedShell.trigger("keydown", { key: "ArrowDown" })
+
+    expect(handleViewportKeydown).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
   })
 
   it("renders custom Vue cell content when a column cellRenderer is provided", async () => {
