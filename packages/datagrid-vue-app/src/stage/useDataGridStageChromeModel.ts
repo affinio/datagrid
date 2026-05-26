@@ -152,23 +152,6 @@ export function useDataGridStageChromeModel(
     options.resolveRightColumnSpacerWidth(),
   ].filter(width => width > 0))
 
-  function shouldUseSharedVerticalFlowRows(): boolean {
-    return options.pinnedNativeScrollPrototypeEnabled?.value === true
-  }
-
-  function normalizeRowMetricsForSharedFlow(
-    metrics: readonly { top: number; height: number }[],
-  ): readonly { top: number; height: number }[] {
-    if (!shouldUseSharedVerticalFlowRows() || metrics.length === 0) {
-      return metrics
-    }
-    const origin = metrics[0]?.top ?? 0
-    return metrics.map(metric => ({
-      top: metric.top - origin,
-      height: metric.height,
-    }))
-  }
-
   const buildEstimatedVisibleRowMetrics = (): readonly { top: number; height: number }[] => {
     const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
       rowStart: resolveViewportRowStart(),
@@ -235,7 +218,7 @@ export function useDataGridStageChromeModel(
     if (options.mode.value === "base" && options.rowHeightMode.value === "auto") {
       options.bodyViewportScrollTop.value
     }
-    return normalizeRowMetricsForSharedFlow(metrics)
+    return metrics
   })
 
   const pinnedBottomRowMetrics = computed(() => {
@@ -311,7 +294,7 @@ export function useDataGridStageChromeModel(
     buildDataGridChromeRenderModel({
       rowMetrics: rowMetrics.value,
       rowBands: rowBands.value,
-      scrollTop: shouldUseSharedVerticalFlowRows() ? 0 : options.bodyViewportScrollTop.value,
+      scrollTop: options.bodyViewportScrollTop.value,
       leftPaneWidth: options.leftPaneWidth.value,
       centerPaneWidth: options.bodyViewportClientWidth.value,
       rightPaneWidth: options.rightPaneWidth.value,

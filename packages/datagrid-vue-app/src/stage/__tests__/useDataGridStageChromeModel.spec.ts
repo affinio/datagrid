@@ -273,7 +273,7 @@ describe("useDataGridStageChromeModel", () => {
     })
 
     expect(result.centerChromeColumnsSignature.value).toBe("24|120|48")
-    expect(result.rowMetrics.value[0]).toEqual({ top: 0, height: 31 })
+    expect(result.rowMetrics.value[0]).toEqual({ top: 360, height: 31 })
     expect(result.chromeRenderModel.value.center.horizontalLines[0]?.position).toBe(31)
     expect(result.chromeRenderModel.value.center.width).toBe(320)
     expect(result.headerChromeRenderModel.value.center.width).toBe(320)

@@ -91,6 +91,12 @@ function createSyntheticScrollEvent(target: HTMLElement): Event {
   return { target } as unknown as Event
 }
 
+function isHorizontalWheelGesture(event: WheelEvent): boolean {
+  const absX = Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0)
+  const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
+  return absX > 0 && absX > absY
+}
+
 interface SharedViewportScrollEventTarget {
   scrollTop: number
   scrollLeft: number
@@ -153,6 +159,17 @@ export function useDataGridStageViewportRuntime(
   const resolveVerticalBodyViewport = (): HTMLElement | null => verticalBodyViewportEl.value
   const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
 
+  function syncSharedVerticalContentOffset(scrollTop: number): void {
+    if (!isSharedVerticalScrollEnabled()) {
+      return
+    }
+    const verticalViewport = resolveVerticalBodyViewport()
+    if (!verticalViewport) {
+      return
+    }
+    verticalViewport.style.setProperty("--datagrid-prototype-scroll-top", `${Math.max(0, scrollTop)}px`)
+  }
+
   function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
     if (!isSharedVerticalScrollEnabled()) {
       return
@@ -212,6 +229,7 @@ export function useDataGridStageViewportRuntime(
       const verticalViewport = resolveVerticalBodyViewport()
       if (verticalViewport) {
         verticalViewport.scrollTop = value
+        syncSharedVerticalContentOffset(value)
       }
     },
     setHandledScrollLeft: (value: number) => {
@@ -410,6 +428,7 @@ export function useDataGridStageViewportRuntime(
   function captureSharedVerticalViewportRef(value: Element | ComponentPublicInstance | null): void {
     sharedVerticalViewportEl.value = resolveElementRef(value)
     syncScrollOwnerRefs()
+    syncSharedVerticalContentOffset(sharedVerticalViewportEl.value?.scrollTop ?? 0)
     if (isSharedVerticalScrollEnabled()) {
       options.viewport.value.bodyViewportRef(value)
     }
@@ -469,6 +488,7 @@ export function useDataGridStageViewportRuntime(
     if (verticalViewport.scrollLeft !== 0) {
       verticalViewport.scrollLeft = 0
     }
+    syncSharedVerticalContentOffset(verticalViewport.scrollTop)
     syncSharedHorizontalPeers(horizontalViewport.scrollLeft, verticalViewport)
     handleCenterViewportScroll(event)
   }
@@ -493,10 +513,18 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleLinkedViewportWheel(event: WheelEvent): void {
+    if (isSharedVerticalScrollEnabled() && !isHorizontalWheelGesture(event)) {
+      managedWheelScroll.reset()
+      return
+    }
     managedWheelScroll.onLinkedViewportWheel(event)
   }
 
   function handleBodyViewportWheel(event: WheelEvent): void {
+    if (isSharedVerticalScrollEnabled() && !isHorizontalWheelGesture(event)) {
+      managedWheelScroll.reset()
+      return
+    }
     managedWheelScroll.onBodyViewportWheel(event)
   }
 

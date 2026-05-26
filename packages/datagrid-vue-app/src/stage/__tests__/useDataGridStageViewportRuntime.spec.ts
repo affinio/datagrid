@@ -222,7 +222,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("routes vertical wheel over linked panes to the prototype shared vertical owner", () => {
+  it("releases vertical wheel over linked panes to native prototype scrolling", () => {
     const harness = createHarness({ sharedVerticalScrollEnabled: true })
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
@@ -239,11 +239,61 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleLinkedViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(sharedVerticalViewport.scrollTop).toBe(128)
+    expect(wheelEvent.defaultPrevented).toBe(false)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollLeft).toBe(24)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+
+    sharedVerticalViewport.scrollTop = 128
+    harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
+
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("updates the prototype content scroll offset on shared vertical scroll", () => {
+    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+
+    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-prototype-scroll-top")).toBe("80px")
+
+    sharedVerticalViewport.scrollTop = 128
+    harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
+
+    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-prototype-scroll-top")).toBe("128px")
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("releases vertical wheel over the center body to native prototype scrolling", () => {
+    const harness = createHarness({ sharedVerticalScrollEnabled: true })
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaY: 48 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(false)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(bodyViewport.scrollTop).toBe(0)
+    expect(bodyViewport.scrollLeft).toBe(24)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
 
     harness.unmount()
   })

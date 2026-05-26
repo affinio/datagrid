@@ -112,7 +112,7 @@
         v-if="pinnedNativeScrollPrototypeEnabled"
         :ref="captureSharedVerticalViewportRef"
         class="grid-body-shared-vertical-scroll-shell"
-        :style="paneLayoutStyle"
+        :style="[paneLayoutStyle, prototypeSharedVerticalScrollStyle]"
         data-datagrid-scroll-owner="shared-vertical-prototype"
         @scroll.passive="handleSharedVerticalViewportScroll"
       >
@@ -447,6 +447,11 @@ const interaction = stageContext.interaction
 const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
 const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
 const displayRows = computed(() => rows.value?.displayRows ?? [])
+const prototypeSharedVerticalScrollStyle = computed<CSSProperties>(() => ({
+  "--datagrid-prototype-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
+  "--datagrid-prototype-scroll-top": `${Math.max(0, bodyViewportScrollTop.value)}px`,
+}) as CSSProperties)
+
 const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
   const section = viewport.value
   const topSpacerHeight = Number.isFinite(section.topSpacerHeight) ? Math.max(0, section.topSpacerHeight) : 0

@@ -1048,6 +1048,12 @@ const DATA_GRID_APP_STYLES = `
   overflow: visible;
 }
 
+.grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane > .grid-pane-content,
+.grid-stage--pinned-native-scroll-prototype .grid-body-viewport--shared-vertical-prototype .grid-body-content {
+  transform: translate3d(0, calc(var(--datagrid-prototype-row-origin, 0px) - var(--datagrid-prototype-scroll-top, 0px)), 0);
+  will-change: transform;
+}
+
 .grid-stage--pinned-native-scroll-prototype .grid-body-shared-vertical-scroll-shell > .grid-body-pane {
   background: transparent;
 }
