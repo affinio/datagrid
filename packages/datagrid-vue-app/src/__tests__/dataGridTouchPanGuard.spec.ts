@@ -156,6 +156,44 @@ describe("dataGridTouchPanGuard", () => {
     teardown()
   })
 
+  it("selects the scroll container by locked pan axis", () => {
+    const root = document.createElement("div")
+    const header = document.createElement("div")
+    const verticalContainer = document.createElement("div")
+    const horizontalContainer = document.createElement("div")
+    root.append(header)
+    defineScrollMetrics(verticalContainer, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+      scrollWidth: 200,
+      clientWidth: 200,
+    })
+    defineScrollMetrics(horizontalContainer, {
+      scrollHeight: 200,
+      clientHeight: 200,
+      scrollWidth: 1200,
+      clientWidth: 200,
+    })
+    verticalContainer.scrollTop = 100
+    horizontalContainer.scrollLeft = 100
+
+    const teardown = installDataGridTouchPanGuard({
+      root,
+      resolveScrollContainers: () => [verticalContainer, horizontalContainer],
+      shouldHandleTarget: target => target === header,
+    })
+
+    header.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 20 }))
+    const moveEvent = createTouchEvent("touchmove", { clientX: 50, clientY: 20 })
+    header.dispatchEvent(moveEvent)
+
+    expect(moveEvent.defaultPrevented).toBe(true)
+    expect(horizontalContainer.scrollLeft).toBe(150)
+    expect(verticalContainer.scrollTop).toBe(100)
+
+    teardown()
+  })
+
   it("does not cancel non-cancelable routed touchmove events", () => {
     const root = document.createElement("div")
     const pinnedPane = document.createElement("div")

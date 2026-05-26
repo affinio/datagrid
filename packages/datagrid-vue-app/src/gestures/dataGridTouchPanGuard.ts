@@ -10,6 +10,7 @@ interface ActiveTouchGesture {
   startScrollLeft: number
   startScrollTop: number
   container: HTMLElement | null
+  containers: readonly HTMLElement[]
   lockedAxis: DataGridTouchPanAxis | null
 }
 
@@ -64,16 +65,26 @@ export function installDataGridTouchPanGuard(
     return options.resolveScrollContainers().filter((value): value is HTMLElement => value instanceof HTMLElement)
   }
 
-  const resolveContainerForTarget = (target: EventTarget | null): HTMLElement | null => {
+  const resolveContainersForTarget = (target: EventTarget | null): HTMLElement[] => {
+    const containers = resolveContainers()
     if (!(target instanceof Node)) {
-      return resolveContainers()[0] ?? null
+      return containers
     }
-    for (const container of resolveContainers()) {
-      if (container.contains(target)) {
+    const containing = containers.filter(container => container.contains(target))
+    return containing.length > 0 ? containing : containers
+  }
+
+  const resolveMaxScrollLeft = (container: HTMLElement): number => Math.max(0, container.scrollWidth - container.clientWidth)
+  const resolveMaxScrollTop = (container: HTMLElement): number => Math.max(0, container.scrollHeight - container.clientHeight)
+
+  const resolveContainerForAxis = (containers: readonly HTMLElement[], axis: DataGridTouchPanAxis): HTMLElement | null => {
+    for (const container of containers) {
+      const maxScroll = axis === "x" ? resolveMaxScrollLeft(container) : resolveMaxScrollTop(container)
+      if (maxScroll > EDGE_TOLERANCE_PX) {
         return container
       }
     }
-    return resolveContainers()[0] ?? null
+    return containers[0] ?? null
   }
 
   const addTouchMoveListener = (): void => {
@@ -111,18 +122,18 @@ export function installDataGridTouchPanGuard(
       resetGesture()
       return
     }
+    const containers = resolveContainersForTarget(event.target)
     activeGesture = {
       identifier: touch.identifier,
       startX: touch.clientX,
       startY: touch.clientY,
-      container: resolveContainerForTarget(event.target),
+      container: null,
+      containers,
       startScrollLeft: 0,
       startScrollTop: 0,
       lockedAxis: null,
     }
-    if (activeGesture.container) {
-      activeGesture.startScrollLeft = activeGesture.container.scrollLeft
-      activeGesture.startScrollTop = activeGesture.container.scrollTop
+    if (containers.length > 0) {
       addTouchMoveListener()
     }
   }
@@ -137,17 +148,15 @@ export function installDataGridTouchPanGuard(
       return
     }
 
-    const container = activeGesture.container?.isConnected
-      ? activeGesture.container
-      : resolveContainerForTarget(event.target)
-    if (!container) {
+    const containers = activeGesture.containers
+    if (containers.length === 0) {
       return
     }
 
     const deltaX = touch.clientX - activeGesture.startX
     const deltaY = touch.clientY - activeGesture.startY
-    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-    const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+    const maxScrollLeft = Math.max(0, ...containers.map(resolveMaxScrollLeft))
+    const maxScrollTop = Math.max(0, ...containers.map(resolveMaxScrollTop))
 
     if (!activeGesture.lockedAxis) {
       activeGesture.lockedAxis = resolveDataGridTouchPanAxis({
@@ -159,15 +168,28 @@ export function installDataGridTouchPanGuard(
       if (!activeGesture.lockedAxis) {
         return
       }
+      activeGesture.container = resolveContainerForAxis(containers, activeGesture.lockedAxis)
+      activeGesture.startScrollLeft = activeGesture.container?.scrollLeft ?? 0
+      activeGesture.startScrollTop = activeGesture.container?.scrollTop ?? 0
     }
+
+    const container = activeGesture.container?.isConnected
+      ? activeGesture.container
+      : resolveContainerForAxis(containers, activeGesture.lockedAxis)
+    if (!container) {
+      return
+    }
+
+    const targetMaxScrollLeft = resolveMaxScrollLeft(container)
+    const targetMaxScrollTop = resolveMaxScrollTop(container)
 
     event.preventDefault()
 
-    if (activeGesture.lockedAxis === "x" && maxScrollLeft > EDGE_TOLERANCE_PX) {
-      container.scrollLeft = clampScroll(activeGesture.startScrollLeft - deltaX, maxScrollLeft)
+    if (activeGesture.lockedAxis === "x" && targetMaxScrollLeft > EDGE_TOLERANCE_PX) {
+      container.scrollLeft = clampScroll(activeGesture.startScrollLeft - deltaX, targetMaxScrollLeft)
     }
-    if (activeGesture.lockedAxis === "y" && maxScrollTop > EDGE_TOLERANCE_PX) {
-      container.scrollTop = clampScroll(activeGesture.startScrollTop - deltaY, maxScrollTop)
+    if (activeGesture.lockedAxis === "y" && targetMaxScrollTop > EDGE_TOLERANCE_PX) {
+      container.scrollTop = clampScroll(activeGesture.startScrollTop - deltaY, targetMaxScrollTop)
     }
   }
 
