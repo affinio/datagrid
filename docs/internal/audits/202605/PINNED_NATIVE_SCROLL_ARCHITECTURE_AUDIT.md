@@ -331,6 +331,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 16 restored native vertical wheel ownership in the split-owner prototype. Vertical-dominant wheel/trackpad gestures over body and linked panes are no longer consumed by the managed wheel path; they bubble to the shared vertical scroll owner, while horizontal-dominant wheel gestures still route to the center horizontal owner.
 - 2026-05-26: Slice 17 restored live vertical visual movement for the split-owner prototype. Shared vertical scroll now updates a scroll-offset CSS variable on the native scroll event, and sticky center/pinned content layers translate by `topSpacerHeight - scrollTop`, so trackpad wheel movement visibly moves rows between virtual window commits instead of jumping only when the row window changes.
 - 2026-05-26: Slice 18 realigned body chrome canvas row metrics with native vertical positioning. The prototype chrome model now keeps absolute virtual row tops and subtracts the real shared `scrollTop`, matching the body content formula `rowTop - scrollTop` instead of the earlier zero-origin transition model.
+- 2026-05-26: Slice 19 split body overlay metrics from seam overlay metrics for the native vertical prototype. Body selection/fill/move/custom overlays now use content-local row tops (`absoluteTop - rowOrigin`) because they live inside the transformed content layer, while pinned-pane seam overlays stay viewport-local (`absoluteTop - scrollTop`) because they live outside that layer.
 
 ## Recommended Fallback/Intermediate Approach
 

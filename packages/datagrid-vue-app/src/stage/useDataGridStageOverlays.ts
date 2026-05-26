@@ -29,6 +29,7 @@ export interface UseDataGridStageOverlaysOptions {
   overlayGeometryContext: ComputedRef<DataGridStageOverlayGeometryContext>
   bodyViewportClientHeight: Ref<number>
   bodyViewportScrollTop: Ref<number>
+  bodyOverlayRowOrigin?: Ref<number>
   bottomViewportClientHeight: Ref<number>
   visibleColumns: ComputedRef<readonly DataGridTableStageBodyColumn[]>
   displayRows: ComputedRef<readonly unknown[]>
@@ -141,6 +142,30 @@ function rangesEqual(left: DataGridOverlayRange | null, right: DataGridOverlayRa
     && left.startColumn === right.startColumn
     && left.endColumn === right.endColumn
   )
+}
+
+function normalizeBodyOverlayMetricsList<TMetrics extends DataGridStageOverlayMetricsSource>(
+  metricsList: readonly TMetrics[],
+  origin: number,
+): TMetrics[] {
+  const topOrigin = Math.max(0, Number.isFinite(origin) ? origin : 0)
+  if (topOrigin <= 0) {
+    return [...metricsList]
+  }
+  return metricsList.map(metrics => ({
+    ...metrics,
+    top: metrics.top - topOrigin,
+  }))
+}
+
+function normalizeBodyOverlayMetric<TMetrics extends DataGridStageOverlayMetricsSource>(
+  metrics: TMetrics | null,
+  origin: number,
+): TMetrics | null {
+  if (!metrics) {
+    return null
+  }
+  return normalizeBodyOverlayMetricsList([metrics], origin)[0] ?? null
 }
 
 function normalizeBodyPinnedPaneSeamMetricsList<TMetrics extends DataGridStageOverlayMetricsSource>(
@@ -323,6 +348,16 @@ export function useDataGridStageOverlays(
 
   const bodyViewportHeight = computed(() => Math.max(0, options.bodyViewportClientHeight.value))
   const bottomViewportHeight = computed(() => Math.max(0, options.bottomViewportClientHeight.value))
+  const bodyOverlayRowOrigin = computed(() => Math.max(0, options.bodyOverlayRowOrigin?.value ?? 0))
+  const bodySelectionOverlayMetricsList = computed(() => (
+    normalizeBodyOverlayMetricsList(visibleSelectionOverlayMetricsList.value, bodyOverlayRowOrigin.value)
+  ))
+  const bodyFillPreviewOverlayMetrics = computed(() => (
+    normalizeBodyOverlayMetric(visibleFillPreviewOverlayMetrics.value, bodyOverlayRowOrigin.value)
+  ))
+  const bodyMovePreviewOverlayMetrics = computed(() => (
+    normalizeBodyOverlayMetric(visibleMovePreviewOverlayMetrics.value, bodyOverlayRowOrigin.value)
+  ))
   const bodyPinnedPaneSeamSelectionOverlayMetricsList = computed(() => (
     normalizeBodyPinnedPaneSeamMetricsList(visibleSelectionOverlayMetricsList.value, options.bodyViewportScrollTop.value)
   ))
@@ -335,7 +370,7 @@ export function useDataGridStageOverlays(
 
   const leftSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "left", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
-    visibleSelectionOverlayMetricsList.value,
+    bodySelectionOverlayMetricsList.value,
     "left",
     "selection",
     selectionOverlayOptions,
@@ -351,7 +386,7 @@ export function useDataGridStageOverlays(
 
   const centerSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "center", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
-    visibleSelectionOverlayMetricsList.value,
+    bodySelectionOverlayMetricsList.value,
     "center",
     "selection",
     selectionOverlayOptions,
@@ -359,7 +394,7 @@ export function useDataGridStageOverlays(
 
   const rightSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "right", () => buildPaneOverlaySegmentsForMetricsList(
     options.overlayGeometryContext.value,
-    visibleSelectionOverlayMetricsList.value,
+    bodySelectionOverlayMetricsList.value,
     "right",
     "selection",
     selectionOverlayOptions,
@@ -420,7 +455,7 @@ export function useDataGridStageOverlays(
 
   const leftFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleFillPreviewOverlayMetrics.value,
+    bodyFillPreviewOverlayMetrics.value,
     "left",
     "fill-preview",
     fillPreviewOverlayOptions,
@@ -438,7 +473,7 @@ export function useDataGridStageOverlays(
 
   const centerFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleFillPreviewOverlayMetrics.value,
+    bodyFillPreviewOverlayMetrics.value,
     "center",
     "fill-preview",
     fillPreviewOverlayOptions,
@@ -447,7 +482,7 @@ export function useDataGridStageOverlays(
 
   const rightFillPreviewOverlaySegments = computedOverlaySegments(options, "fill-preview", "body", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleFillPreviewOverlayMetrics.value,
+    bodyFillPreviewOverlayMetrics.value,
     "right",
     "fill-preview",
     fillPreviewOverlayOptions,
@@ -510,7 +545,7 @@ export function useDataGridStageOverlays(
 
   const leftMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "left", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleMovePreviewOverlayMetrics.value,
+    bodyMovePreviewOverlayMetrics.value,
     "left",
     "move-preview",
     movePreviewOverlayOptions,
@@ -528,7 +563,7 @@ export function useDataGridStageOverlays(
 
   const centerMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "center", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleMovePreviewOverlayMetrics.value,
+    bodyMovePreviewOverlayMetrics.value,
     "center",
     "move-preview",
     movePreviewOverlayOptions,
@@ -537,7 +572,7 @@ export function useDataGridStageOverlays(
 
   const rightMovePreviewOverlaySegments = computedOverlaySegments(options, "move-preview", "body", "right", () => buildPaneOverlaySegments(
     options.overlayGeometryContext.value,
-    visibleMovePreviewOverlayMetrics.value,
+    bodyMovePreviewOverlayMetrics.value,
     "right",
     "move-preview",
     movePreviewOverlayOptions,
@@ -602,7 +637,7 @@ export function useDataGridStageOverlays(
     const body = resolveOverlayMetricsList(overlay.ranges, options.resolveVisibleRangeBounds, options.rowMetrics.value)
     return {
       overlay,
-      body,
+      body: normalizeBodyOverlayMetricsList(body, bodyOverlayRowOrigin.value),
       bodyPinnedPaneSeam: normalizeBodyPinnedPaneSeamMetricsList(body, options.bodyViewportScrollTop.value),
       pinnedBottom: resolveOverlayMetricsList(
         overlay.ranges,

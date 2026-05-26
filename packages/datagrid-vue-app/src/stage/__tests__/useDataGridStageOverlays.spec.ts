@@ -236,6 +236,107 @@ describe("useDataGridStageOverlays", () => {
     expect(result.leftSelectionSeamOverlaySegments.value[0]?.style.top).toBe("30px")
   })
 
+  it("uses content-local body overlays and viewport-local seam overlays with a native scroll row origin", () => {
+    const geometryContext = computed(() => createGeometryContext())
+    const range: DataGridOverlayRange = {
+      startRow: 12,
+      endRow: 12,
+      startColumn: 1,
+      endColumn: 2,
+    }
+
+    const result = useDataGridStageOverlays({
+      overlayGeometryContext: geometryContext,
+      bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(400),
+      bodyOverlayRowOrigin: ref(124),
+      bottomViewportClientHeight: ref(120),
+      visibleColumns: computed(() => createGeometryContext().renderedColumns),
+      displayRows: computed(() => Array.from({ length: 20 }, () => ({}))),
+      selectionRanges: computed(() => [range]),
+      selectionRange: computed(() => range),
+      fillPreviewRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rowMetrics: computed(() => Array.from({ length: 20 }, (_unused, offset) => ({
+        top: 124 + offset * 31,
+        height: 31,
+      }))),
+      pinnedBottomRowMetrics: computed(() => []),
+      isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset === 8 && columnIndex >= 1 && columnIndex <= 2,
+      isCellInFillPreviewSafe: () => false,
+      isAdditiveSelection: computed(() => false),
+      isFillDragging: computed(() => false),
+      isRangeMoving: computed(() => false),
+      resolveVisibleRangeBounds(rangeValue) {
+        if (!rangeValue) {
+          return null
+        }
+        return {
+          startRowOffset: 8,
+          endRowOffset: 8,
+          startColumnIndex: rangeValue.startColumn,
+          endColumnIndex: rangeValue.endColumn,
+        }
+      },
+      resolvePinnedBottomVisibleRangeBounds() {
+        return null
+      },
+      customOverlays: computed(() => [{
+        key: "custom",
+        ranges: [range],
+      }]),
+    })
+
+    expect(result.centerSelectionOverlaySegments.value[0]?.style.top).toBe("247px")
+    expect(result.centerCustomOverlayLanes.value[0]?.segments[0]?.style.top).toBe("247px")
+    expect(result.rightSelectionSeamOverlaySegments.value).toHaveLength(0)
+
+    const leftRange: DataGridOverlayRange = {
+      startRow: 12,
+      endRow: 12,
+      startColumn: 0,
+      endColumn: 0,
+    }
+    const seamResult = useDataGridStageOverlays({
+      overlayGeometryContext: geometryContext,
+      bodyViewportClientHeight: ref(120),
+      bodyViewportScrollTop: ref(400),
+      bodyOverlayRowOrigin: ref(124),
+      bottomViewportClientHeight: ref(120),
+      visibleColumns: computed(() => createGeometryContext().renderedColumns),
+      displayRows: computed(() => Array.from({ length: 20 }, () => ({}))),
+      selectionRanges: computed(() => [leftRange]),
+      selectionRange: computed(() => leftRange),
+      fillPreviewRange: computed(() => null),
+      rangeMovePreviewRange: computed(() => null),
+      rowMetrics: computed(() => Array.from({ length: 20 }, (_unused, offset) => ({
+        top: 124 + offset * 31,
+        height: 31,
+      }))),
+      pinnedBottomRowMetrics: computed(() => []),
+      isCellSelectedSafe: (rowOffset, columnIndex) => rowOffset === 8 && columnIndex === 0,
+      isCellInFillPreviewSafe: () => false,
+      isAdditiveSelection: computed(() => false),
+      isFillDragging: computed(() => false),
+      isRangeMoving: computed(() => false),
+      resolveVisibleRangeBounds() {
+        return {
+          startRowOffset: 8,
+          endRowOffset: 8,
+          startColumnIndex: 0,
+          endColumnIndex: 0,
+        }
+      },
+      resolvePinnedBottomVisibleRangeBounds() {
+        return null
+      },
+      customOverlays: computed(() => []),
+    })
+
+    expect(seamResult.leftSelectionOverlaySegments.value[0]?.style.top).toBe("247px")
+    expect(seamResult.leftSelectionSeamOverlaySegments.value[0]?.style.top).toBe("-28px")
+  })
+
   it("limits additive selection overlay lanes to the active range across body and pinned-bottom panes", () => {
     const geometryContext = computed(() => createGeometryContext())
     const inactiveRange: DataGridOverlayRange = {

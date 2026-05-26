@@ -452,6 +452,11 @@ const prototypeSharedVerticalScrollStyle = computed<CSSProperties>(() => ({
   "--datagrid-prototype-scroll-top": `${Math.max(0, bodyViewportScrollTop.value)}px`,
 }) as CSSProperties)
 
+const bodyOverlayRowOrigin = computed(() => (pinnedNativeScrollPrototypeEnabled.value
+  ? Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)
+  : 0
+))
+
 const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
   const section = viewport.value
   const topSpacerHeight = Number.isFinite(section.topSpacerHeight) ? Math.max(0, section.topSpacerHeight) : 0
@@ -2068,6 +2073,7 @@ const {
   overlayGeometryContext,
   bodyViewportClientHeight,
   bodyViewportScrollTop,
+  bodyOverlayRowOrigin,
   bottomViewportClientHeight: pinnedBottomViewportClientHeight,
   visibleColumns,
   displayRows,
