@@ -152,6 +152,23 @@ export function useDataGridStageChromeModel(
     options.resolveRightColumnSpacerWidth(),
   ].filter(width => width > 0))
 
+  function shouldUseSharedVerticalFlowRows(): boolean {
+    return options.pinnedNativeScrollPrototypeEnabled?.value === true
+  }
+
+  function normalizeRowMetricsForSharedFlow(
+    metrics: readonly { top: number; height: number }[],
+  ): readonly { top: number; height: number }[] {
+    if (!shouldUseSharedVerticalFlowRows() || metrics.length === 0) {
+      return metrics
+    }
+    const origin = metrics[0]?.top ?? 0
+    return metrics.map(metric => ({
+      top: metric.top - origin,
+      height: metric.height,
+    }))
+  }
+
   const buildEstimatedVisibleRowMetrics = (): readonly { top: number; height: number }[] => {
     const virtualMetrics = resolveDataGridVirtualChromeRowMetrics({
       rowStart: resolveViewportRowStart(),
@@ -212,11 +229,13 @@ export function useDataGridStageChromeModel(
 
   const rowMetrics = computed(() => {
     const estimated = buildEstimatedVisibleRowMetrics()
+    const metrics = options.mode.value === "base" && options.rowHeightMode.value === "auto"
+      ? resolveVisibleRowMetricsFromDom(options.bodyViewportEl, options.displayRows, estimated)
+      : estimated
     if (options.mode.value === "base" && options.rowHeightMode.value === "auto") {
       options.bodyViewportScrollTop.value
-      return resolveVisibleRowMetricsFromDom(options.bodyViewportEl, options.displayRows, estimated)
     }
-    return estimated
+    return normalizeRowMetricsForSharedFlow(metrics)
   })
 
   const pinnedBottomRowMetrics = computed(() => {
@@ -292,7 +311,7 @@ export function useDataGridStageChromeModel(
     buildDataGridChromeRenderModel({
       rowMetrics: rowMetrics.value,
       rowBands: rowBands.value,
-      scrollTop: options.bodyViewportScrollTop.value,
+      scrollTop: shouldUseSharedVerticalFlowRows() ? 0 : options.bodyViewportScrollTop.value,
       leftPaneWidth: options.leftPaneWidth.value,
       centerPaneWidth: options.bodyViewportClientWidth.value,
       rightPaneWidth: options.rightPaneWidth.value,

@@ -225,10 +225,10 @@ describe("useDataGridStageChromeModel", () => {
         bodyShellStyle: {},
       } as DataGridTableStageLayoutSection)),
       viewport: computed(() => ({
-        topSpacerHeight: 0,
+        topSpacerHeight: 360,
         bottomSpacerHeight: 0,
-        viewportRowStart: 0,
-        viewportRowEnd: 0,
+        viewportRowStart: 10,
+        viewportRowEnd: 10,
         columnWindowStart: 0,
         leftColumnSpacerWidth: 24,
         rightColumnSpacerWidth: 48,
@@ -246,12 +246,12 @@ describe("useDataGridStageChromeModel", () => {
       visibleColumns: columns,
       renderedColumns: computed(() => [columns.value[1]!]),
       pinnedNativeScrollPrototypeEnabled: ref(true),
-      displayRows: computed(() => []),
+      displayRows: computed(() => [{ rowId: "row-10", kind: "leaf", data: {} }] as unknown as readonly DataGridTableStageBodyRow[]),
       pinnedBottomRows: computed(() => []),
       selectionTotalRowCount: computed(() => 0),
       leftPaneWidth: computed(() => 72),
       rightPaneWidth: computed(() => 90),
-      bodyViewportScrollTop: ref(0),
+      bodyViewportScrollTop: ref(360),
       bodyViewportScrollLeft: ref(0),
       bodyViewportClientWidth: ref(320),
       bodyViewportClientHeight: ref(180),
@@ -273,6 +273,8 @@ describe("useDataGridStageChromeModel", () => {
     })
 
     expect(result.centerChromeColumnsSignature.value).toBe("24|120|48")
+    expect(result.rowMetrics.value[0]).toEqual({ top: 0, height: 31 })
+    expect(result.chromeRenderModel.value.center.horizontalLines[0]?.position).toBe(31)
     expect(result.chromeRenderModel.value.center.width).toBe(320)
     expect(result.headerChromeRenderModel.value.center.width).toBe(320)
   })

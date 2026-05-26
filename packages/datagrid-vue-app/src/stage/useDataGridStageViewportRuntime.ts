@@ -171,11 +171,9 @@ export function useDataGridStageViewportRuntime(
   const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
     resolveSourceScrollTop: () => resolveVerticalBodyViewport()?.scrollTop ?? 0,
     mode: "direct-transform",
-    resolvePaneElements: () => [
-      options.leftPaneContentRef.value,
-      isSharedVerticalScrollEnabled() ? options.centerBodyContentRef?.value : null,
-      options.rightPaneContentRef.value,
-    ],
+    resolvePaneElements: () => (isSharedVerticalScrollEnabled()
+      ? []
+      : [options.leftPaneContentRef.value, options.rightPaneContentRef.value]),
   })
 
   const bodyViewportScrollIdleGate = useDataGridScrollIdleGate({

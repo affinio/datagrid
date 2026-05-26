@@ -203,7 +203,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs center body content transform from the shared vertical owner", () => {
+  it("does not transform body content in the shared vertical prototype", () => {
     const centerContent = document.createElement("div")
     const harness = createHarness({
       centerBodyContent: centerContent,
@@ -216,7 +216,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(centerContent.style.transform).toBe("translate3d(0, -128px, 0)")
+    expect(centerContent.style.transform).toBe("")
     expect(bodyViewport.scrollTop).toBe(0)
 
     harness.unmount()

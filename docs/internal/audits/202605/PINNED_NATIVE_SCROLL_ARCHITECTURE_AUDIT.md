@@ -324,6 +324,7 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 9 restored horizontal column virtualization inside the split-owner prototype. App viewport rAF commits now preserve composite scroll targets that read `scrollTop` from the shared vertical owner and `scrollLeft` from the center horizontal owner, so body cells, header cells, chrome canvas, and selection overlays all materialize from the same virtualized center window instead of a temporary full center-track renderer.
 - 2026-05-26: Slice 10 removed shared vertical shell participation from horizontal mirroring. The shared vertical owner now stays at horizontal offset zero while header and pinned-bottom sync continue to follow the center horizontal owner, reducing hidden cross-axis coupling in the prototype path.
 - 2026-05-26: Slice 11 hardened header/scroll event routing for the split-owner prototype. Programmatic header sync now marks the next header scroll event as handled, header fallback scroll routes to the center horizontal owner instead of the shared vertical owner, and the shared vertical handler ignores bubbled center scroll events.
+- 2026-05-26: Slice 12 removed linked vertical transform synchronization from the split-owner prototype body layers. The shared vertical path now renders body panes from a zero visual row origin, normalizes chrome/overlay row metrics for the current virtual row window, and keeps the shared scroll spacer as the only vertical scroll-height source.
 
 ## Recommended Fallback/Intermediate Approach
 

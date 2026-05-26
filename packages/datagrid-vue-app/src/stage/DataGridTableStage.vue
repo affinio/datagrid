@@ -122,7 +122,7 @@
           aria-hidden="true"
         />
         <DataGridTableStagePinnedPane
-          :pane="leftPinnedPane"
+          :pane="prototypeLeftPinnedPane"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -137,8 +137,8 @@
           viewport-class="grid-body-viewport grid-body-viewport--shared-vertical-prototype"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
-          :top-spacer-height="viewport.topSpacerHeight"
-          :bottom-spacer-height="viewport.bottomSpacerHeight"
+          :top-spacer-height="0"
+          :bottom-spacer-height="0"
           :viewport-ref="captureBodyViewportRef"
           :content-ref="captureCenterBodyContentRef"
           inner-horizontal-scrollport
@@ -159,7 +159,7 @@
         />
 
         <DataGridTableStagePinnedPane
-          :pane="rightPinnedPane"
+          :pane="prototypeRightPinnedPane"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -2171,6 +2171,17 @@ const {
   paneRuntime,
   overlayRuntime,
 })
+
+const prototypeLeftPinnedPane = computed(() => ({
+  ...leftPinnedPane.value,
+  topSpacerHeight: 0,
+  bottomSpacerHeight: 0,
+}))
+const prototypeRightPinnedPane = computed(() => ({
+  ...rightPinnedPane.value,
+  topSpacerHeight: 0,
+  bottomSpacerHeight: 0,
+}))
 
 const {
   pinnedPaneRenderApi,
