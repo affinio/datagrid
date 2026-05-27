@@ -18,7 +18,7 @@ Completed in Phase 1:
 - Native body/header viewport panning: `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, and `.grid-header-viewport` use `touch-action: pan-x pan-y`; the body viewport keeps `-webkit-overflow-scrolling: touch`.
 - Table-stage touch fallback routing removed: `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()`, so table-stage body/header touch pan is not translated through non-passive `touchmove` handlers.
 - Native overscroll restored: table-stage body/header scrollports no longer set `overscroll-behavior: none`, allowing the browser/page to own boundary behavior instead of a grid workaround.
-- Native body horizontal wheel restored: actual horizontal scroll owners now leave wheel default behavior to the browser; managed wheel remains limited to linked non-scroll surfaces that need to forward horizontal intent into the center owner.
+- Center body horizontal wheel ownership unified: horizontal wheel over the center body now uses the same managed horizontal path as linked pinned/header surfaces, while vertical body wheel remains native; this avoids macOS elastic drift against the separately rendered header.
 - Native Gantt timeline horizontal wheel restored on real timeline scrollports; managed Gantt wheel remains limited to canvas fallback and vertical forwarding into the table viewport.
 - Native Gantt horizontal overscroll restored: timeline scrollports no longer set `overscroll-behavior-x: contain`, leaving horizontal boundary behavior to the browser/page.
 - Gantt touch fallback scoping: the remaining Gantt touch-pan guard is scoped to the timeline zone, so embedded table-pane touches stay with the table stage's native scroll owner.
@@ -40,10 +40,10 @@ Completed in Phase 1:
 - Center body chrome ownership: center-body row bands and dividers now render in a scroll-owned `grid-body-content` layer with content-local row coordinates, so horizontal touch momentum, vertical virtualization, and macOS boundary movement use the same compositor owner as cells and selection overlays; canvas chrome remains for header, pinned panes, and pinned bottom.
 - Scroll-frame telemetry: when `dgPerfTrace` is enabled, the stage records `stageScrollFrame` samples with total rAF work, scroll offsets, pinned-bottom sync, and chrome redraw mode, plus `stageScrollPerf` samples with FPS, dropped-frame, and long-task counters.
 - Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
-- Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for owner-level scroll CSS var sync, pinned-bottom sync, and chrome redraw mode selection.
+- Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for owner-level vertical offset sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
-- Header scroll ownership cleanup: the center header no longer owns native `scrollLeft` or forwards header scroll events into the body; horizontal header wheel intent routes through the linked-wheel path into the center owner.
-- Center header horizontal sync: the center header track now follows the body horizontal owner through a shared compositor transform and native cell dividers; the table stage explicitly marks header scrollLeft sync as externally owned, avoiding double horizontal movement during fast scroll.
+- Header scroll ownership cleanup: the center body remains the horizontal owner; the header no longer forwards header-origin scroll events into the body, and horizontal header wheel intent routes through the linked-wheel path into the center owner.
+- Center header horizontal sync: the center header is externally owned by the table stage and mirrors the center horizontal owner through native `scrollLeft` with native cell dividers; horizontal overscroll is contained on grid scroll surfaces to avoid macOS elastic drift and browser history navigation.
 
 Still open:
 - Real-device validation execution: the matrix is documented below, but still needs runs on iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.

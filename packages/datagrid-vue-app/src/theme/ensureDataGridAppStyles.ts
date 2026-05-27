@@ -1066,6 +1066,7 @@ const DATA_GRID_APP_STYLES = `
   max-height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
   touch-action: pan-x pan-y;
 }
 
@@ -1078,6 +1079,7 @@ const DATA_GRID_APP_STYLES = `
 .grid-body-pane {
   min-width: 0;
   overflow: hidden;
+  overscroll-behavior-x: contain;
   position: relative;
 }
 
@@ -1134,14 +1136,10 @@ const DATA_GRID_APP_STYLES = `
   position: relative;
   overflow-x: hidden;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
   touch-action: pan-x pan-y;
-}
-
-.grid-header-viewport .grid-center-track {
-  transform: translate3d(calc(-1 * var(--datagrid-body-scroll-left, 0px)), 0, 0);
-  will-change: transform;
 }
 
 .grid-body-viewport {
@@ -1157,6 +1155,7 @@ const DATA_GRID_APP_STYLES = `
 .grid-body-viewport--pinned-bottom {
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
@@ -1390,8 +1389,13 @@ const DATA_GRID_APP_STYLES = `
 .grid-stage--canvas-chrome .grid-header-viewport .grid-cell,
 .grid-stage--canvas-chrome .grid-header-viewport .grid-column-spacer {
   background: var(--datagrid-header-cell-bg);
-  border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  border-right: 0;
   box-sizing: border-box;
+}
+
+.grid-stage--canvas-chrome .grid-header-viewport .grid-cell:not(:first-child),
+.grid-stage--canvas-chrome .grid-header-viewport .grid-column-spacer:not(:first-child) {
+  border-left: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
 }
 
 @media (hover: none) and (pointer: coarse) {

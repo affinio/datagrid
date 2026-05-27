@@ -334,7 +334,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("leaves horizontal wheel over the center body to native horizontal scrolling", () => {
+  it("routes horizontal wheel over the center body through the managed horizontal owner", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
@@ -351,9 +351,90 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleBodyViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(false)
-    expect(bodyViewport.scrollLeft).toBe(24)
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(72)
     expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
+      __datagridCompositeViewportTarget: true,
+      scrollTop: 80,
+      scrollLeft: 72,
+      clientWidth: 320,
+      clientHeight: 240,
+    }))
+
+    harness.unmount()
+  })
+
+  it("retains horizontal body wheel ownership at the left boundary", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 0 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: -48 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(0)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("retains horizontal body wheel ownership at the right boundary", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 880 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: 48 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(880)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("retains horizontal wheel ownership at the left boundary over linked panes", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 0 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: -64 })
+
+    harness.runtime.handleLinkedViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(0)
     expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
 
     harness.unmount()
@@ -455,7 +536,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs horizontal CSS offset and pinned bottom from the center owner", () => {
+  it("syncs header and pinned bottom from the center owner", () => {
     const stageRoot = document.createElement("section")
     const headerViewport = createViewportElement()
     headerViewport.className = "grid-header-viewport"
@@ -471,8 +552,7 @@ describe("useDataGridStageViewportRuntime", () => {
     vi.mocked(harness.syncers.syncPinnedBottomViewportScrollLeft).mockClear()
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
-    expect(stageRoot.style.getPropertyValue("--datagrid-body-scroll-left")).toBe("96px")
-    expect(headerViewport.scrollLeft).toBe(0)
+    expect(headerViewport.scrollLeft).toBe(96)
     expect(pinnedBottomViewport.scrollLeft).toBe(96)
     expect(sharedVerticalViewport.scrollLeft).toBe(0)
 

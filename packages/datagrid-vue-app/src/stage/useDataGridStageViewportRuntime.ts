@@ -89,10 +89,14 @@ function resolveElementRef(value: Element | ComponentPublicInstance | null): HTM
   return null
 }
 
+function getFiniteWheelDeltaX(event: WheelEvent): number {
+  return Number.isFinite(event.deltaX) ? event.deltaX : 0
+}
+
 function isHorizontalWheelGesture(event: WheelEvent): boolean {
-  const absX = Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0)
+  const absX = Math.abs(getFiniteWheelDeltaX(event))
   const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
-  return absX > 0 && absX > absY
+  return absX > 0 && absX >= absY
 }
 
 interface SharedViewportScrollEventTarget {
@@ -166,19 +170,11 @@ export function useDataGridStageViewportRuntime(
     }
   }
 
-  function syncSharedHorizontalScrollOffset(scrollLeft: number): void {
-    const element = options.stageRootEl.value
-    if (!element) {
-      return
-    }
-    const scrollLeftValue = `${Math.max(0, scrollLeft)}px`
-    if (element.style.getPropertyValue("--datagrid-body-scroll-left") !== scrollLeftValue) {
-      element.style.setProperty("--datagrid-body-scroll-left", scrollLeftValue)
-    }
-  }
-
   function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
-    syncSharedHorizontalScrollOffset(scrollLeft)
+    const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+    if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
+      headerViewport.scrollLeft = scrollLeft
+    }
     const pinnedBottomViewport = bottomViewportEl.value
     if (pinnedBottomViewport && pinnedBottomViewport !== source && pinnedBottomViewport.scrollLeft !== scrollLeft) {
       pinnedBottomViewport.scrollLeft = scrollLeft
@@ -217,6 +213,7 @@ export function useDataGridStageViewportRuntime(
   const managedWheelScroll = useDataGridManagedWheelScroll({
     resolveBodyViewport: resolveVerticalBodyViewport,
     resolveMainViewport: resolveCenterHorizontalViewport,
+    resolveWheelAxisLockMode: () => "horizontal-preferred",
     setHandledScrollTop: (value: number) => {
       const verticalViewport = resolveVerticalBodyViewport()
       if (verticalViewport) {
@@ -418,7 +415,6 @@ export function useDataGridStageViewportRuntime(
     }
     bodyViewportEl.value = nextElement
     syncScrollOwnerRefs()
-    syncSharedHorizontalScrollOffset(nextElement?.scrollLeft ?? 0)
     const syncers = options.gridChromeSyncers.value
     syncers.syncBodyViewportMetrics()
     syncers.connectGridChromeResizeObserver()
@@ -524,8 +520,12 @@ export function useDataGridStageViewportRuntime(
     managedWheelScroll.onLinkedViewportWheel(event)
   }
 
-  function handleBodyViewportWheel(_event: WheelEvent): void {
-    managedWheelScroll.reset()
+  function handleBodyViewportWheel(event: WheelEvent): void {
+    if (!isHorizontalWheelGesture(event)) {
+      managedWheelScroll.reset()
+      return
+    }
+    managedWheelScroll.onBodyViewportWheel(event)
   }
 
 
