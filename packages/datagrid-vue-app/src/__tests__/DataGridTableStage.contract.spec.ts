@@ -482,6 +482,8 @@ describe("DataGridTableStage contract", () => {
     const sharedShell = wrapper.find('.grid-body-shared-vertical-scroll-shell[data-datagrid-scroll-owner="shared-vertical"]')
 
     expect(sharedShell.exists()).toBe(true)
+    const exposed = wrapper.vm as unknown as { getBodyViewportElement: () => HTMLElement | null }
+    expect(exposed.getBodyViewportElement()).toBe(sharedShell.element)
     expect(sharedShell.find(".grid-body-shared-vertical-scroll-spacer").exists()).toBe(true)
     expect(sharedShell.find(".grid-body-shared-vertical-scroll-spacer").attributes("style")).toContain("height: 31px")
     expect(sharedShell.find(".grid-body-pane--left").exists()).toBe(true)

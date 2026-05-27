@@ -2127,7 +2127,7 @@ const {
 defineExpose({
   getStageRootElement: () => stageRootEl.value,
   getHeaderElement: () => stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null,
-  getBodyViewportElement: () => bodyViewportEl.value,
+  getBodyViewportElement: () => verticalBodyViewportEl.value ?? bodyViewportEl.value,
   getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(rowMetrics.value),
 })
 </script>

@@ -401,7 +401,7 @@ describe("DataGridGanttStage contract", () => {
 
     const stageRoot = wrapper.find(".datagrid-gantt-stage").element as HTMLElement
     const headerShell = wrapper.find(".grid-header-shell").element as HTMLElement
-    const tableViewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const tableViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
     const timelineHeaderViewport = wrapper.find(".datagrid-gantt-timeline__viewport--header").element as HTMLElement
     const timelineBodyViewport = wrapper.find(".datagrid-gantt-timeline__viewport--body").element as HTMLElement
 
@@ -464,6 +464,85 @@ describe("DataGridGanttStage contract", () => {
     ))).toBe(false)
 
     contextSpy.mockRestore()
+    rafSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it("routes gantt vertical wheel through the shared vertical table scroll owner", async () => {
+    const rows = createGanttRows()
+    const table = createTableProps({ rows })
+    const stageContext = createDataGridTableStageContext({
+      mode: ref(table.mode),
+      rowHeightMode: ref(table.rowHeightMode),
+      layoutMode: ref("fill"),
+      layout: ref(table.layout),
+      viewport: ref(table.viewport),
+      columns: ref(table.columns),
+      rows: ref(table.rows),
+      selection: ref(table.selection),
+      editing: ref(table.editing),
+      cells: ref(table.cells),
+      interaction: ref(table.interaction),
+    })
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      callback(0)
+      return 1
+    })
+
+    const wrapper = mount(DataGridGanttStage, {
+      props: {
+        stageContext,
+        runtime: createRuntimeWithRows(rows) as never,
+        gantt: normalizeDataGridGanttOptions({
+          startKey: "start",
+          endKey: "end",
+          labelKey: "task",
+          idKey: "id",
+          timelineStart: "2026-03-01",
+          timelineEnd: "2026-03-06",
+        }),
+        baseRowHeight: 31,
+        rowVersion: 0,
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    await flushPromises()
+
+    const stageRoot = wrapper.find(".datagrid-gantt-stage").element as HTMLElement
+    const headerShell = wrapper.find(".grid-header-shell").element as HTMLElement
+    const sharedVerticalViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
+    const centerBodyViewport = wrapper.find(".grid-body-viewport--shared-vertical").element as HTMLElement
+    const timelineBodyViewport = wrapper.find(".datagrid-gantt-timeline__viewport--body").element as HTMLElement
+    const bodyCanvas = wrapper.find(".datagrid-gantt-timeline__canvas--body").element as HTMLCanvasElement
+
+    Object.defineProperty(stageRoot, "clientWidth", { configurable: true, value: 920 })
+    Object.defineProperty(headerShell, "offsetHeight", { configurable: true, value: 48 })
+    Object.defineProperty(headerShell, "clientHeight", { configurable: true, value: 48 })
+    Object.defineProperty(sharedVerticalViewport, "clientHeight", { configurable: true, value: 120 })
+    Object.defineProperty(sharedVerticalViewport, "scrollTop", { configurable: true, writable: true, value: 0 })
+    Object.defineProperty(centerBodyViewport, "scrollTop", { configurable: true, writable: true, value: 0 })
+    Object.defineProperty(timelineBodyViewport, "clientWidth", { configurable: true, value: 360 })
+    Object.defineProperty(timelineBodyViewport, "clientHeight", { configurable: true, value: 120 })
+    Object.defineProperty(timelineBodyViewport, "scrollLeft", { configurable: true, writable: true, value: 0 })
+
+    window.dispatchEvent(new Event("resize"))
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const wheelEvent = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: 44,
+    })
+    bodyCanvas.dispatchEvent(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(sharedVerticalViewport.scrollTop).toBe(44)
+    expect(centerBodyViewport.scrollTop).toBe(0)
+
     rafSpy.mockRestore()
     wrapper.unmount()
   })
@@ -576,7 +655,7 @@ describe("DataGridGanttStage contract", () => {
 
     const stageRoot = wrapper.find(".datagrid-gantt-stage").element as HTMLElement
     const headerShell = wrapper.find(".grid-header-shell").element as HTMLElement
-    const tableViewport = wrapper.find(".grid-body-viewport").element as HTMLElement
+    const tableViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
     const timelineHeaderViewport = wrapper.find(".datagrid-gantt-timeline__viewport--header").element as HTMLElement
     const timelineBodyViewport = wrapper.find(".datagrid-gantt-timeline__viewport--body").element as HTMLElement
     const bodyCanvas = wrapper.find(".datagrid-gantt-timeline__canvas--body").element as HTMLCanvasElement
