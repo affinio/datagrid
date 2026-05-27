@@ -25,6 +25,8 @@ const DATA_GRID_VERTICAL_SCROLL_IDLE_MS = 120
 const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
+const DATA_GRID_TOUCH_ROW_OVERSCAN_VIEWPORT_RATIO = 0.75
+const DATA_GRID_TOUCH_ROW_OVERSCAN_MAX = 64
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
@@ -365,6 +367,16 @@ export function useDataGridAppViewport<TRow>(
     }
     return effectiveColumnWidths.value[column.key] ?? resolveBaseColumnWidth(column)
   }
+  const headerViewportRef = ref<HTMLElement | null>(null)
+  const bodyViewportRef = ref<HTMLElement | null>(null)
+  const viewportScrollTop = ref(0)
+  const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
+  const displayRowsRevision = ref(0)
+  const renderedViewportRange = ref<DataGridViewportRange | null>(null)
+  const viewportScrollLeft = ref(0)
+  const viewportClientWidth = ref(0)
+  const viewportClientHeight = ref(0)
+  const viewportShellClientWidth = ref(0)
   let coarsePointerQuery: MediaQueryList | null = null
   let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
 
@@ -382,10 +394,17 @@ export function useDataGridAppViewport<TRow>(
     if (!isCoarsePointer.value) {
       return baseOverscan
     }
+    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
+    const viewportRows = Math.ceil(Math.max(1, viewportClientHeight.value) / estimatedRowHeight)
+    const viewportRelativeOverscan = Math.min(
+      DATA_GRID_TOUCH_ROW_OVERSCAN_MAX,
+      Math.ceil(viewportRows * DATA_GRID_TOUCH_ROW_OVERSCAN_VIEWPORT_RATIO),
+    )
     return Math.max(
       baseOverscan,
       DATA_GRID_TOUCH_ROW_OVERSCAN_MIN,
       Math.ceil(baseOverscan * DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER),
+      viewportRelativeOverscan,
     )
   })
   let adaptiveRowOverscan = 0
@@ -491,15 +510,6 @@ export function useDataGridAppViewport<TRow>(
     return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 2
   })
 
-  const headerViewportRef = ref<HTMLElement | null>(null)
-  const bodyViewportRef = ref<HTMLElement | null>(null)
-  const viewportScrollTop = ref(0)
-  const displayRows = shallowRef<readonly DataGridRowNode<TRow>[]>([])
-  const displayRowsRevision = ref(0)
-  const renderedViewportRange = ref<DataGridViewportRange | null>(null)
-  const viewportScrollLeft = ref(0)
-  const viewportClientWidth = ref(0)
-  const viewportShellClientWidth = ref(0)
   let lastSyncedRange: DataGridViewportRange | null = null
   let lastViewportScrollTop = 0
   let viewportSyncRafHandle: number | null = null
@@ -1263,7 +1273,8 @@ export function useDataGridAppViewport<TRow>(
     if (!lastSyncedRange) {
       return false
     }
-    const hysteresis = Math.max(1, Math.floor(resolveEffectiveRowOverscan() / 2))
+    const hysteresisRatio = isCoarsePointer.value ? 0.25 : 0.5
+    const hysteresis = Math.max(1, Math.floor(resolveEffectiveRowOverscan() * hysteresisRatio))
     return visibleRange.start >= lastSyncedRange.start + hysteresis
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }
@@ -1524,6 +1535,7 @@ export function useDataGridAppViewport<TRow>(
     viewportScrollLeft.value = snapshot.scrollLeft
     viewportScrollTop.value = snapshot.scrollTop
     viewportClientWidth.value = snapshot.clientWidth
+    viewportClientHeight.value = snapshot.clientHeight
     viewportShellClientWidth.value = snapshot.shellClientWidth
     syncHeaderScrollLeftFromBody(snapshot.scrollLeft)
 
@@ -1699,6 +1711,9 @@ export function useDataGridAppViewport<TRow>(
       const dimensions = captureViewportDimensions(element)
       if (viewportClientWidth.value !== dimensions.clientWidth) {
         viewportClientWidth.value = dimensions.clientWidth
+      }
+      if (viewportClientHeight.value !== dimensions.clientHeight) {
+        viewportClientHeight.value = dimensions.clientHeight
       }
       if (viewportShellClientWidth.value !== dimensions.shellClientWidth) {
         viewportShellClientWidth.value = dimensions.shellClientWidth

@@ -424,6 +424,62 @@ describe("useDataGridAppViewport contract", () => {
     expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 36 })
   })
 
+  it("retains large touch viewport windows during smooth one-row scrolls", () => {
+    mockCoarsePointer(true)
+
+    const raf = createRafHarness()
+    const rows = makeRows(400)
+    const syncRowsInRange = vi.fn(({ start, end }: { start: number; end: number }) => rows.slice(start, end + 1))
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const setViewportRange = vi.fn()
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        setViewportRange,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: 400, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 8),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 400,
+      scrollLeft: 0,
+      clientHeight: 1000,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.syncViewportFromDom()
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 0, end: 125 })
+
+    syncRowsInRange.mockClear()
+    getBodyRowAtIndex.mockClear()
+    setViewportRange.mockClear()
+
+    for (let rowStep = 1; rowStep <= 20; rowStep += 1) {
+      element.scrollTop = 400 + (rowStep * 20)
+      viewport.handleViewportScroll(createScrollEvent(element))
+      raf.run(getScheduledFrameHandle(raf))
+    }
+
+    expect(syncRowsInRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(setViewportRange).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(0, 126).map(row => row.rowId))
+  })
+
   it("expands row overscan during fast scroll bursts", () => {
     vi.useFakeTimers()
     vi.spyOn(performance, "now")

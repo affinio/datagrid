@@ -25,8 +25,9 @@ Completed in Phase 1:
 - Prevent-default cleanup: row resize handle clicks stop row-index selection without unconditionally preventing the click default.
 - Header resize click guard: column resize handle gestures suppress the follow-up header click so resize release cannot trigger sorting.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
-- App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers and adds velocity-based adaptive row overscan with idle decay.
+- App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers, scales touch overscan with viewport height, and adds velocity-based adaptive row overscan with idle decay.
 - Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.
+- Large touch viewport retention: coarse-pointer smooth scroll uses a viewport-relative retained row window, reducing periodic renderer churn and badge/style flicker while the finger remains down.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-pane vertical sync: left/right pinned pane content now applies the latest body `scrollTop` transform from the raw body scroll sample, while reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched. This avoids a visible one-frame pinned-column lag on real touch devices.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
