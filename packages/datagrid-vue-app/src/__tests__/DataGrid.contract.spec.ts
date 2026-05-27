@@ -13,6 +13,7 @@ import type {
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
+import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import {
   defineDataGridCellClassResolver,
   defineDataGridCellStyleResolver,
@@ -1813,16 +1814,15 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     const ownerHeader = wrapper.find('.grid-cell--header[data-column-key="owner"]')
-    const ownerMenuButton = ownerHeader.find('[data-datagrid-column-menu-button="true"]')
 
     expect(ownerHeader.exists()).toBe(true)
-    expect(ownerMenuButton.exists()).toBe(true)
+    expect(ownerHeader.find('[data-datagrid-column-menu-button="true"]').exists()).toBe(true)
 
     await ownerHeader.trigger("click")
     await flushRuntimeTasks()
     expect(queryColumnMenuRoot()).toBeFalsy()
 
-    await ownerMenuButton.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
     expect(queryColumnMenuRoot()).toBeTruthy()
     expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Sort A to Z")
@@ -1853,7 +1853,7 @@ describe("DataGrid app facade contract", () => {
     })
     expect(wrapper.find(".datagrid-app-status[role='status']").text()).toContain("Owner sorted descending")
 
-    await ownerMenuButton.trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
     queryColumnMenuAction("pin-submenu")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
@@ -1896,6 +1896,75 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(queryColumnMenuRoot()).toBeTruthy()
+
+    wrapper.unmount()
+  })
+
+  it("uses a single active column menu overlay across pinned and center headers", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: PINNED_FLEX_COLUMNS,
+        columnMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.find('.grid-header-pane--left [data-datagrid-column-menu-button="true"][data-column-key="owner"]').exists()).toBe(true)
+    expect(wrapper.findAllComponents(DataGridColumnMenu)).toHaveLength(0)
+
+    const ownerButton = queryColumnMenuButton("owner")
+    expect(ownerButton?.getAttribute("aria-haspopup")).toBe("menu")
+    expect(ownerButton?.getAttribute("aria-expanded")).toBe("false")
+
+    ownerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAllComponents(DataGridColumnMenu)).toHaveLength(1)
+    expect(queryColumnMenuRoot()?.textContent).toContain("Owner")
+    expect(ownerButton?.getAttribute("aria-expanded")).toBe("true")
+
+    const regionButton = queryColumnMenuButton("region")
+    regionButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAllComponents(DataGridColumnMenu)).toHaveLength(1)
+    expect(queryColumnMenuRoot()?.textContent).toContain("Region")
+    expect(ownerButton?.getAttribute("aria-expanded")).toBe("false")
+    expect(regionButton?.getAttribute("aria-expanded")).toBe("true")
+
+    wrapper.unmount()
+  })
+
+  it("closes the active column menu on grid scroll", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+      attachTo: document.body,
+    })
+
+    await flushRuntimeTasks()
+
+    const ownerButton = queryColumnMenuButton("owner")
+    ownerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()).toBeTruthy()
+    expect(wrapper.findAllComponents(DataGridColumnMenu)).toHaveLength(1)
+
+    const sharedScrollShell = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
+    sharedScrollShell.scrollTop = 24
+    sharedScrollShell.dispatchEvent(new Event("scroll", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()).toBeNull()
+    expect(wrapper.findAllComponents(DataGridColumnMenu)).toHaveLength(0)
+    expect(queryColumnMenuButton("owner")?.getAttribute("aria-expanded")).toBe("false")
 
     wrapper.unmount()
   })

@@ -1,6 +1,8 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from "vue"
 import {
+  buildDataGridChromePaneModel,
   buildDataGridChromeRenderModel,
+  type DataGridChromePaneModel,
   type DataGridChromeRowBand,
   type DataGridChromeRenderModel,
 } from "@affino/datagrid-chrome"
@@ -57,6 +59,7 @@ export interface UseDataGridStageChromeModelResult {
   chromeRenderModel: ComputedRef<DataGridChromeRenderModel>
   headerChromeRenderModel: ComputedRef<DataGridChromeRenderModel>
   pinnedBottomChromeRenderModel: ComputedRef<DataGridChromeRenderModel>
+  bodyCenterChromeLayerModel: ComputedRef<DataGridChromePaneModel>
   hasPivotHeaderGroups: ComputedRef<boolean>
   rowMetrics: ComputedRef<readonly { top: number; height: number }[]>
   pinnedBottomRowMetrics: ComputedRef<readonly { top: number; height: number }[]>
@@ -132,6 +135,51 @@ function resolveChromeRowBandKind(
     return "striped"
   }
   return "base"
+}
+
+function resolveChromeContentWidth(columnWidths: readonly number[], fallbackWidth: number): number {
+  const width = columnWidths.reduce((total, width) => (
+    Number.isFinite(width) && width > 0 ? total + width : total
+  ), 0)
+  return Math.max(0, fallbackWidth, width)
+}
+
+function resolveChromeContentRowOrigin(viewport: DataGridTableStageViewportSection | null | undefined): number {
+  const topSpacerHeight = viewport?.topSpacerHeight ?? 0
+  return Number.isFinite(topSpacerHeight) && topSpacerHeight > 0 ? topSpacerHeight : 0
+}
+
+function resolveChromeContentRowMetrics(
+  rowMetrics: readonly { top: number; height: number }[],
+  rowOrigin: number,
+): readonly { top: number; height: number }[] {
+  return rowMetrics.map(metric => ({
+    top: metric.top - rowOrigin,
+    height: metric.height,
+  }))
+}
+
+function resolveChromeContentRowBands(
+  rowBands: readonly DataGridChromeRowBand[],
+  rowOrigin: number,
+): readonly DataGridChromeRowBand[] {
+  return rowBands.map(band => ({
+    ...band,
+    top: band.top - rowOrigin,
+  }))
+}
+
+function resolveChromeContentHeight(
+  rowMetrics: readonly { top: number; height: number }[],
+  fallbackHeight: number,
+): number {
+  const bottom = rowMetrics.reduce((max, metric) => {
+    if (!Number.isFinite(metric.top) || !Number.isFinite(metric.height) || metric.height <= 0) {
+      return max
+    }
+    return Math.max(max, metric.top + metric.height)
+  }, 0)
+  return Math.max(0, fallbackHeight, bottom)
 }
 
 export function useDataGridStageChromeModel(
@@ -357,6 +405,20 @@ export function useDataGridStageChromeModel(
     })
   ))
 
+  const bodyCenterChromeLayerModel = computed(() => {
+    const rowOrigin = resolveChromeContentRowOrigin(options.viewport.value)
+    const contentRowMetrics = resolveChromeContentRowMetrics(rowMetrics.value, rowOrigin)
+    return buildDataGridChromePaneModel({
+      rowMetrics: contentRowMetrics,
+      rowBands: resolveChromeContentRowBands(rowBands.value, rowOrigin),
+      scrollTop: 0,
+      width: resolveChromeContentWidth(centerChromeColumnWidths.value, options.bodyViewportClientWidth.value),
+      height: resolveChromeContentHeight(contentRowMetrics, options.bodyViewportClientHeight.value),
+      columnWidths: centerChromeColumnWidths.value,
+      scrollLeft: 0,
+    })
+  })
+
   watch(
     () => [
       options.leftPaneWidth.value,
@@ -440,6 +502,7 @@ export function useDataGridStageChromeModel(
     chromeRenderModel,
     headerChromeRenderModel,
     pinnedBottomChromeRenderModel,
+    bodyCenterChromeLayerModel,
     hasPivotHeaderGroups,
     rowMetrics,
     pinnedBottomRowMetrics,

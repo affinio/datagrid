@@ -26,6 +26,7 @@
       @keydown.stop="handleInnerKeydown"
     >
       <div :ref="contentRef ?? undefined" class="grid-body-content" :style="layout.gridContentStyle">
+        <slot name="content-chrome" />
       <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
       <div
         v-for="(row, rowOffset) in displayRows"

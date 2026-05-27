@@ -63,6 +63,7 @@ function createChromeCanvasApi(perfTraceEnabled = false) {
     stageRootEl: ref(stageRoot),
     bodyShellRef: ref(document.createElement("div")),
     bodyViewportEl: ref(document.createElement("div")),
+    verticalBodyViewportEl: ref(document.createElement("div")),
     bottomViewportEl: ref(document.createElement("div")),
     leftHeaderChromeCanvasEl: canvasRefs[0]!,
     centerHeaderChromeCanvasEl: canvasRefs[1]!,

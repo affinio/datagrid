@@ -63,6 +63,8 @@ import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageVi
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
 import { resolveDataGridTableStageAutoSizeRows } from "./dataGridTableStageAutoSizeRows"
 import type {
+  DataGridActiveColumnMenuState,
+  DataGridColumnMenuOpenReason,
   DataGridColumnMenuValueEntriesResult,
   DataGridTableRow,
   DataGridTableStageCellClass,
@@ -298,6 +300,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
+  activeColumnMenu?: Ref<DataGridActiveColumnMenuState | null>
+  openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
+  closeColumnMenu?: () => void
   onCellEdit?: (payload: {
     rowId: string | number
     columnKey: string
@@ -2105,6 +2110,9 @@ export function useDataGridTableStageRuntime<
     applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,
     applyColumnMenuFilter: options.applyColumnMenuFilter,
     clearColumnMenuFilter: options.clearColumnMenuFilter,
+    activeColumnMenu: options.activeColumnMenu,
+    openColumnMenu: options.openColumnMenu,
+    closeColumnMenu: options.closeColumnMenu,
     handleViewportScroll,
     handleViewportKeydown: stageServices.viewportKeyboard.handleViewportKeydown,
     rowClass,

@@ -96,6 +96,9 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     applyColumnMenuGroupBy: unref(options.applyColumnMenuGroupBy),
     applyColumnMenuFilter: unref(options.applyColumnMenuFilter),
     clearColumnMenuFilter: unref(options.clearColumnMenuFilter),
+    activeColumnMenu: unref(options.activeColumnMenu),
+    openColumnMenu: unref(options.openColumnMenu),
+    closeColumnMenu: unref(options.closeColumnMenu),
     startResize: unref(options.startResize),
     handleResizeDoubleClick: unref(options.handleResizeDoubleClick),
   }))

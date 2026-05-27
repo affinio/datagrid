@@ -192,6 +192,10 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.leftChromeColumnsSignature.value).toBe("72|72")
     expect(result.centerChromeColumnsSignature.value).toBe("12|120|8")
     expect(result.rightChromeColumnsSignature.value).toBe("90")
+    expect(result.bodyCenterChromeLayerModel.value.width).toBe(320)
+    expect(result.bodyCenterChromeLayerModel.value.height).toBe(180)
+    expect(result.bodyCenterChromeLayerModel.value.verticalLines.map(line => line.position)).toEqual([12, 132, 140])
+    expect(result.bodyCenterChromeLayerModel.value.horizontalLines.map(line => line.position)).toEqual([79, 110])
     expect(result.rowMetricsSignature.value).toBe("108:31|139:31")
     expect(result.pinnedBottomRowMetricsSignature.value).toBe("0:42")
     expect(result.rowBandsSignature.value).toContain("pivot-group:108:31")
@@ -292,6 +296,7 @@ describe("useDataGridStageChromeModel", () => {
       { top: 412, height: 52 },
     ])
     expect(result.chromeRenderModel.value.center.horizontalLines.map(line => line.position)).toEqual([12, 64])
+    expect(result.bodyCenterChromeLayerModel.value.horizontalLines.map(line => line.position)).toEqual([40, 92])
   })
 
   it("uses virtualized center columns for pinned native chrome", () => {

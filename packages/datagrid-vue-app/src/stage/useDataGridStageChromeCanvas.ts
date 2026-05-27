@@ -257,29 +257,6 @@ function drawGridChromeHeaderPane(
   drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
 }
 
-function countGridChromeDrawnPanes(
-  mode: GridChromeRedrawMode,
-  headerRenderModel: DataGridChromeRenderModel,
-  renderModel: DataGridChromeRenderModel,
-  bottomRenderModel: DataGridChromeRenderModel,
-): number {
-  const centerPanes = [
-    headerRenderModel.center,
-    renderModel.center,
-    bottomRenderModel.center,
-  ].filter(pane => pane.width > 0 && pane.height > 0).length
-  if (mode !== "full") {
-    return centerPanes
-  }
-  return centerPanes + [
-    headerRenderModel.left,
-    headerRenderModel.right,
-    renderModel.left,
-    renderModel.right,
-    bottomRenderModel.left,
-    bottomRenderModel.right,
-  ].filter(pane => pane.width > 0 && pane.height > 0).length
-}
 
 function countGridChromePaneLines(model: DataGridChromeRenderModel): number {
   return model.left.horizontalLines.length
@@ -401,13 +378,24 @@ export function useDataGridStageChromeCanvas(
     }
 
     if (options.perfTraceEnabled) {
+      const drawnPaneCount = [
+        leftHeaderContext,
+        centerHeaderContext,
+        rightHeaderContext,
+        leftContext,
+        centerContext,
+        rightContext,
+        leftBottomContext,
+        centerBottomContext,
+        rightBottomContext,
+      ].filter(Boolean).length
       const finishedAt = resolveDataGridPerfNow()
       recordDataGridPerfSample({
         scope: "chromeDraw",
         ts: finishedAt,
         totalMs: finishedAt - startedAt,
         redrawMode: mode,
-        drawnPaneCount: countGridChromeDrawnPanes(mode, headerRenderModel, renderModel, bottomRenderModel),
+        drawnPaneCount,
         bodyLineCount: countGridChromePaneLines(renderModel),
         headerLineCount: countGridChromePaneLines(headerRenderModel),
         pinnedBottomLineCount: countGridChromePaneLines(bottomRenderModel),

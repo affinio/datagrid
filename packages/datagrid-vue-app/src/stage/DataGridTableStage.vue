@@ -153,12 +153,10 @@
           :overlay-lanes="centerCustomOverlayLanes"
           :render-api="centerPaneRenderApi"
         >
-          <template #chrome>
-            <canvas
-              ref="centerChromeCanvasEl"
-              class="grid-chrome-canvas grid-chrome-canvas--center-shell"
-              :style="bodyCenterChromeCanvasStyle"
-              aria-hidden="true"
+          <template #content-chrome>
+            <DataGridTableStageChromeLayer
+              class="grid-chrome-layer--body-center"
+              :model="bodyCenterChromeLayerModel"
             />
           </template>
         </DataGridTableStageCenterPane>
@@ -247,6 +245,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch,
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
+import DataGridTableStageChromeLayer from "./DataGridTableStageChromeLayer.vue"
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
 import type {
   DataGridTableStageBodyColumn as TableColumn,
@@ -402,11 +401,6 @@ const displayRows = computed(() => rows.value?.displayRows ?? [])
 const sharedVerticalScrollStyle = computed<CSSProperties>(() => ({
   "--datagrid-body-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
 }) as CSSProperties)
-
-const bodyCenterChromeCanvasStyle = computed<CSSProperties>(() => ({
-  ...centerChromeCanvasStyle.value,
-  left: "0px",
-}))
 
 const bodyOverlayRowOrigin = computed(() => Math.max(
   0,
@@ -1208,11 +1202,11 @@ const {
   captureSharedVerticalViewportRef,
   capturePinnedTopViewportRef,
   capturePinnedBottomViewportRef,
-  handleCenterViewportScroll,
-  handleSharedVerticalViewportScroll,
-  handleHeaderViewportScroll,
-  handlePinnedTopViewportScroll,
-  handlePinnedBottomViewportScroll,
+  handleCenterViewportScroll: handleCenterViewportScrollRaw,
+  handleSharedVerticalViewportScroll: handleSharedVerticalViewportScrollRaw,
+  handleHeaderViewportScroll: handleHeaderViewportScrollRaw,
+  handlePinnedTopViewportScroll: handlePinnedTopViewportScrollRaw,
+  handlePinnedBottomViewportScroll: handlePinnedBottomViewportScrollRaw,
   handleLinkedViewportWheel,
   handleBodyViewportWheel,
 } = useDataGridStageViewportRuntime({
@@ -1220,6 +1214,59 @@ const {
   viewport,
   gridChromeSyncers,
 })
+
+function readScrollEventElement(event: Event): HTMLElement | null {
+  return event.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : event.target instanceof HTMLElement
+      ? event.target
+      : null
+}
+
+function closeColumnMenuForViewportScroll(
+  event: Event,
+  axes: { horizontal?: boolean; vertical?: boolean },
+): void {
+  if (!columns.value.activeColumnMenu) {
+    return
+  }
+  const target = readScrollEventElement(event)
+  if (!target) {
+    return
+  }
+  const movedHorizontally = axes.horizontal === true
+    && Math.abs(target.scrollLeft - bodyViewportScrollLeft.value) > 0.5
+  const movedVertically = axes.vertical === true
+    && Math.abs(target.scrollTop - bodyViewportScrollTop.value) > 0.5
+  if (movedHorizontally || movedVertically) {
+    columns.value.closeColumnMenu?.()
+  }
+}
+
+function handleCenterViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handleCenterViewportScrollRaw(event)
+}
+
+function handleSharedVerticalViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { vertical: true })
+  handleSharedVerticalViewportScrollRaw(event)
+}
+
+function handleHeaderViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handleHeaderViewportScrollRaw(event)
+}
+
+function handlePinnedTopViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handlePinnedTopViewportScrollRaw(event)
+}
+
+function handlePinnedBottomViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handlePinnedBottomViewportScrollRaw(event)
+}
 
 watch(runtimeBodyViewportScrolling, value => {
   isBodyViewportScrolling.value = value
@@ -1236,6 +1283,7 @@ const {
   chromeRenderModel,
   headerChromeRenderModel,
   pinnedBottomChromeRenderModel,
+  bodyCenterChromeLayerModel,
   hasPivotHeaderGroups,
   rowMetrics,
   pinnedBottomRowMetrics,
@@ -1671,6 +1719,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  columns.value.closeColumnMenu?.()
   stageRootEl.value?.removeEventListener("focusin", handleStageFocusIn)
   stageRootEl.value?.removeEventListener("focusout", handleStageFocusOut)
   clearTouchClickSuppressionTimer()
@@ -2089,7 +2138,6 @@ const {
   leftTrackStyle,
   rightTrackStyle,
   centerHeaderChromeCanvasStyle,
-  centerChromeCanvasStyle,
   centerBottomChromeCanvasStyle,
   leftPinnedPane,
   rightPinnedPane,

@@ -55,6 +55,7 @@ import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
 import DataGridQuickFilterInput from "./DataGridQuickFilterInput"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
+import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import {
   resolveDataGridAdvancedFilterOperatorLabel,
   type DataGridAdvancedFilterOptions,
@@ -121,6 +122,8 @@ import type {
   DataGridStructuralRowActionId,
 } from "../dataGridStructuralRowActions"
 import type {
+  DataGridActiveColumnMenuState,
+  DataGridColumnMenuOpenReason,
   DataGridColumnMenuValueEntriesResult,
   DataGridTableStageCenterPaneDiagnostics,
   DataGridTableStageCellClass,
@@ -1292,6 +1295,31 @@ export default defineComponent({
       return props.runtime.api.rows.getSnapshot().rowCount
     })
     const visibleColumns = computed(() => props.runtime.columnSnapshot.value.visibleColumns)
+    const activeColumnMenu = shallowRef<DataGridActiveColumnMenuState | null>(null)
+    const activeColumnMenuColumn = computed(() => {
+      const active = activeColumnMenu.value
+      return active ? visibleColumns.value.find(column => column.key === active.columnId) ?? null : null
+    })
+    const activeColumnMenuLayoutSignature = computed(() => visibleColumns.value.map(column => [
+      column.key,
+      column.pin,
+      column.visible === false ? "hidden" : "visible",
+      column.width ?? "",
+    ].join(":")).join("|"))
+    const openColumnMenu = (
+      columnKey: string,
+      anchorEl: HTMLElement,
+      reason: DataGridColumnMenuOpenReason,
+    ): void => {
+      activeColumnMenu.value = {
+        columnId: columnKey,
+        anchorEl,
+        reason,
+      }
+    }
+    const closeColumnMenu = (): void => {
+      activeColumnMenu.value = null
+    }
     const allColumns = computed(() => props.runtime.columnSnapshot.value.columns ?? [])
     const advancedFilterColumns = computed<readonly DataGridAppAdvancedFilterColumnOption[]>(() => {
       return visibleColumns.value
@@ -1527,6 +1555,16 @@ export default defineComponent({
     const resolveColumnMenuCustomItems = (columnKey: string) => {
       return resolveDataGridColumnMenuCustomItems(props.columnMenu, columnKey)
     }
+
+    watch(activeColumnMenuLayoutSignature, () => {
+      if (activeColumnMenu.value) {
+        closeColumnMenu()
+      }
+    })
+
+    watch(() => props.viewMode, () => {
+      closeColumnMenu()
+    })
 
     const resolveColumnGroupOrder = (columnKey: string): number | null => {
       const index = currentGroupBy.value?.fields.findIndex(field => field === columnKey) ?? -1
@@ -3459,6 +3497,9 @@ export default defineComponent({
       applyColumnMenuGroupBy,
       applyColumnMenuFilter,
       clearColumnMenuFilter,
+      activeColumnMenu,
+      openColumnMenu,
+      closeColumnMenu,
       applyRowHeightSettings,
       cloneRowData,
       readSelectionCell: props.readSelectionCell,
@@ -3539,6 +3580,7 @@ export default defineComponent({
     )
 
     onBeforeUnmount(() => {
+      closeColumnMenu()
       props.registerHistoryController?.(null)
       props.registerStructuralRowActionRunner?.(null)
     })
@@ -4461,6 +4503,9 @@ export default defineComponent({
         applyColumnMenuGroupBy,
         applyColumnMenuFilter,
         clearColumnMenuFilter,
+        activeColumnMenu: activeColumnMenu.value,
+        openColumnMenu,
+        closeColumnMenu,
       },
       rows: {
         ...tableStageProps.value.rows,
@@ -4469,6 +4514,60 @@ export default defineComponent({
         stripedRows: props.stripedRows,
       },
     }))
+    const renderActiveColumnMenu = () => {
+      const active = activeColumnMenu.value
+      const column = activeColumnMenuColumn.value
+      if (!active || !column) {
+        return null
+      }
+      const stageColumns = tableStageProps.value.columns
+      const valueFilterRowLimit = typeof stageColumns.columnMenuValueFilterRowLimit === "number"
+        ? stageColumns.columnMenuValueFilterRowLimit
+        : Number.MAX_SAFE_INTEGER
+      return h(DataGridColumnMenu as Component, {
+        key: [
+          "active-column-menu",
+          column.key,
+          stageColumns.columnMenuValueFilterEnabled === false ? "text-only" : "value-filter",
+          valueFilterRowLimit,
+        ].join(":"),
+        rowCount: tableStageProps.value.rows.sourceRows?.length ?? props.rows.length,
+        resolveValueEntries: (search?: string) => resolveColumnMenuValueEntries(column.key, search),
+        items: resolveColumnMenuItems(column.key),
+        disabledItems: resolveColumnMenuDisabledItems(column.key),
+        disabledReasons: resolveColumnMenuDisabledReasons(column.key),
+        labels: resolveColumnMenuLabels(column.key),
+        actionOptions: resolveColumnMenuActionOptions(column.key),
+        customItems: resolveColumnMenuCustomItems(column.key),
+        triggerMode: "button",
+        columnKey: column.key,
+        columnLabel: column.column.label ?? column.key,
+        columnDataType: column.column.dataType,
+        sortDirection: resolveColumnMenuSortDirection(column.key),
+        sortEnabled: column.column.capabilities?.sortable !== false,
+        pin: column.pin,
+        grouped: isColumnGrouped(column.key),
+        groupOrder: resolveColumnGroupOrder(column.key),
+        groupEnabled: column.column.capabilities?.groupable !== false,
+        filterEnabled: column.column.capabilities?.filterable !== false && stageColumns.columnMenuValueFilterEnabled !== false,
+        valueFilterRowLimit,
+        textFilterEnabled: column.column.capabilities?.filterable !== false,
+        textFilterValue: columnFilterTextByKey.value[column.key] ?? "",
+        filterActive: isColumnFilterActive(column.key),
+        selectedFilterTokens: resolveCurrentValueFilterTokens(column.key),
+        maxFilterValues: props.columnMenu.maxFilterValues,
+        anchorElement: active.anchorEl,
+        openReason: active.reason,
+        onSort: (direction: "asc" | "desc" | null) => applyColumnMenuSort(column.key, direction),
+        onPin: (pin: DataGridColumnPin) => applyColumnMenuPin(column.key, pin),
+        onGroup: (grouped: boolean) => applyColumnMenuGroupBy(column.key, grouped),
+        onApplyFilter: (tokens: readonly string[]) => applyColumnMenuFilter(column.key, tokens),
+        onUpdateTextFilter: (value: string) => setColumnFilterText(column.key, value),
+        onClearFilter: () => clearColumnMenuFilter(column.key),
+        onClose: closeColumnMenu,
+      })
+    }
+
     const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
       const modules: DataGridAppToolbarModule[] = []
       if (props.history.enabled && props.history.controls === "toolbar") {
@@ -4705,6 +4804,7 @@ export default defineComponent({
               }),
               renderSortingPending(),
               renderGridStatus(),
+              renderActiveColumnMenu(),
               renderContextMenu(),
             ]),
           ])
@@ -4735,6 +4835,7 @@ export default defineComponent({
             }),
             renderSortingPending(),
             renderGridStatus(),
+            renderActiveColumnMenu(),
             renderContextMenu(),
           ]),
         props.inspectorPanel

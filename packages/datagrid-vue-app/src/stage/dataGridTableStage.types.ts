@@ -18,6 +18,7 @@ import type {
 } from "../overlays/dataGridColumnMenu"
 
 export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
+export type DataGridColumnMenuOpenReason = "button" | "contextmenu" | "keyboard"
 export type DataGridColumnMenuValueEntriesResult =
   | readonly DataGridColumnHistogramEntry[]
   | Promise<readonly DataGridColumnHistogramEntry[]>
@@ -40,6 +41,12 @@ export interface DataGridTableStageCustomOverlay {
   borderStyle?: "solid" | "dashed"
   hideSingleCell?: boolean
   zIndex?: number
+}
+
+export interface DataGridActiveColumnMenuState {
+  columnId: string
+  anchorEl: HTMLElement
+  reason: DataGridColumnMenuOpenReason
 }
 
 export interface DataGridTableStageCenterPaneDiagnostics {
@@ -121,6 +128,9 @@ export interface DataGridTableStageColumnsSection {
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
+  activeColumnMenu?: DataGridActiveColumnMenuState | null
+  openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
+  closeColumnMenu?: () => void
   startResize: (event: MouseEvent, columnKey: string) => void
   handleResizeDoubleClick: (event: MouseEvent, columnKey: string) => void
 }

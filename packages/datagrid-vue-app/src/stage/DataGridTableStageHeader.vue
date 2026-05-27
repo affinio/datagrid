@@ -78,105 +78,75 @@
                 </button>
               </div>
             </div>
-            <DataGridColumnMenu
+            <div
               v-else
-              :key="resolveColumnMenuInstanceKey(column.key)"
-              :row-count="sourceRows.length"
-              :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
-              :items="resolveColumnMenuItemsSafe(column.key)"
-              :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
-              :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
-              :labels="resolveColumnMenuLabelsSafe(column.key)"
-              :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
-              :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
-              :trigger-mode="resolveColumnMenuTriggerModeSafe()"
-              :column-key="column.key"
-              :column-label="column.column.label ?? column.key"
-              :column-data-type="column.column.dataType"
-              :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
-              :sort-enabled="isColumnSortable(column)"
-              :pin="column.pin"
-              :grouped="isColumnGroupedSafe(column.key)"
-              :group-order="resolveColumnGroupOrderSafe(column.key)"
-              :group-enabled="isColumnGroupable(column)"
-              :filter-enabled="isColumnMenuValueFilterEnabled(column)"
-              :value-filter-row-limit="columnMenuValueFilterRowLimit"
-              :text-filter-enabled="isColumnFilterable(column)"
-              :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
-              :filter-active="isColumnFilterActiveSafe(column.key)"
-              :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
-              :max-filter-values="columnMenuMaxFilterValues"
-              @sort="applyColumnMenuSortSafe(column.key, $event)"
-              @pin="applyColumnMenuPinSafe(column.key, $event)"
-              @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
-              @group="applyColumnMenuGroupBySafe(column.key, $event)"
-              @update-text-filter="setColumnFilterText(column.key, $event)"
-              @clear-filter="clearColumnMenuFilterSafe(column.key)"
-              v-slot="{ open, toggleMenuFromElement }"
+              class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
+              :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
+              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :data-column-key="column.key"
+              :id="headerCellId(column)"
+              v-bind="headerCellA11y(column)"
+              :draggable="isHeaderColumnDraggable(column)"
+              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
+              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+              @dragover.stop="handleHeaderColumnDragOver($event, column)"
+              @drop.stop="handleHeaderColumnDrop($event, column)"
+              @dragend.stop="handleHeaderColumnDragEnd"
             >
-              <div
-                class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
-                :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
-                :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-                :data-column-key="column.key"
-                :id="headerCellId(column)"
-                v-bind="headerCellA11y(column)"
-                :draggable="isHeaderColumnDraggable(column)"
-                @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
-                @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-                @dragover.stop="handleHeaderColumnDragOver($event, column)"
-                @drop.stop="handleHeaderColumnDrop($event, column)"
-                @dragend.stop="handleHeaderColumnDragEnd"
-              >
-                <div class="col-head">
-                  <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
-                  <button
-                    v-if="shouldShowColumnMenuButton()"
-                    type="button"
-                    class="col-menu-trigger"
-                    :class="resolveColumnMenuTriggerClass(column.key, open)"
-                    :aria-label="resolveColumnMenuButtonLabel(column)"
-                    :title="resolveColumnMenuButtonLabel(column)"
-                    :data-column-key="column.key"
-                    data-datagrid-column-menu-trigger="true"
-                    data-datagrid-column-menu-button="true"
-                    @mousedown.stop
-                    @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
-                  >
-                    <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
-                      <path
-                        v-if="shouldShowColumnMenuFilterIcon(column.key)"
-                        d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
-                      />
-                      <path
-                        v-if="shouldShowColumnMenuSortAscIcon(column.key)"
-                        d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
-                      />
-                      <path
-                        v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
-                        d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
-                      />
-                      <path
-                        v-else
-                        d="M5.5 6.5 8 9l2.5-2.5"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="col-resize"
-                    :aria-label="resolveColumnResizeLabel(column)"
-                    @mousedown.stop="startResize($event, column.key)"
-                    @touchstart.stop.passive="startTouchResize($event, column.key)"
-                    @touchmove.stop.passive="handleTouchResizeMove($event)"
-                    @touchend.stop.passive="handleTouchResizeEnd($event)"
-                    @touchcancel.stop.passive="handleTouchResizeEnd($event)"
-                    @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                    @click.stop
-                  />
-                </div>
+              <div class="col-head">
+                <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+                <button
+                  v-if="shouldShowColumnMenuButton()"
+                  type="button"
+                  class="col-menu-trigger"
+                  :class="resolveColumnMenuTriggerClass(column.key, isColumnMenuOpen(column.key))"
+                  :aria-label="resolveColumnMenuButtonLabel(column)"
+                  :title="resolveColumnMenuButtonLabel(column)"
+                  aria-haspopup="menu"
+                  :aria-expanded="isColumnMenuOpen(column.key) ? 'true' : 'false'"
+                  :data-column-key="column.key"
+                  data-datagrid-column-menu-trigger="true"
+                  data-datagrid-column-menu-button="true"
+                  @mousedown.stop
+                  @click.stop="handleColumnMenuButtonClick(column, $event)"
+                  @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+                  @keydown.space.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+                >
+                  <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                      d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                    />
+                    <path
+                      v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                      d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                    />
+                    <path
+                      v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                      d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                    />
+                    <path
+                      v-else
+                      d="M5.5 6.5 8 9l2.5-2.5"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="col-resize"
+                  :aria-label="resolveColumnResizeLabel(column)"
+                  @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @touchmove.stop.passive="handleTouchResizeMove($event)"
+                  @touchend.stop.passive="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
+                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                  @click.stop
+                />
               </div>
-            </DataGridColumnMenu>
+            </div>
+
           </template>
         </template>
         <template v-else>
@@ -217,6 +187,7 @@
               v-bind="headerCellA11y(column)"
               :draggable="isHeaderColumnDraggable(column)"
               @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
               @dragstart.stop="handleHeaderColumnDragStart($event, column)"
               @dragover.stop="handleHeaderColumnDragOver($event, column)"
               @drop.stop="handleHeaderColumnDrop($event, column)"
@@ -312,112 +283,83 @@
           :style="spacerStyle(leftColumnSpacerWidth)"
         />
         <template v-if="shouldUseColumnMenus()">
-          <DataGridColumnMenu
+          <div
             v-for="column in centerHeaderColumns"
-            :key="resolveColumnMenuInstanceKey(column.key)"
-            :row-count="sourceRows.length"
-            :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
-            :items="resolveColumnMenuItemsSafe(column.key)"
-            :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
-            :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
-            :labels="resolveColumnMenuLabelsSafe(column.key)"
-            :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
-            :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
-            :trigger-mode="resolveColumnMenuTriggerModeSafe()"
-            :column-key="column.key"
-            :column-label="column.column.label ?? column.key"
-            :column-data-type="column.column.dataType"
-            :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
-            :sort-enabled="isColumnSortable(column)"
-            :pin="column.pin"
-            :grouped="isColumnGroupedSafe(column.key)"
-            :group-order="resolveColumnGroupOrderSafe(column.key)"
-            :group-enabled="isColumnGroupable(column)"
-            :filter-enabled="isColumnMenuValueFilterEnabled(column)"
-            :value-filter-row-limit="columnMenuValueFilterRowLimit"
-            :text-filter-enabled="isColumnFilterable(column)"
-            :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
-            :filter-active="isColumnFilterActiveSafe(column.key)"
-            :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
-            :max-filter-values="columnMenuMaxFilterValues"
-            @sort="applyColumnMenuSortSafe(column.key, $event)"
-            @pin="applyColumnMenuPinSafe(column.key, $event)"
-            @group="applyColumnMenuGroupBySafe(column.key, $event)"
-            @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
-            @update-text-filter="setColumnFilterText(column.key, $event)"
-            @clear-filter="clearColumnMenuFilterSafe(column.key)"
-            v-slot="{ open, toggleMenuFromElement }"
+            :key="`header-${column.key}`"
+            class="grid-cell grid-cell--header grid-cell--header-sortable"
+            :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
+            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :data-column-key="column.key"
+            :id="headerCellId(column)"
+            v-bind="headerCellA11y(column)"
+            :draggable="isHeaderColumnDraggable(column)"
+            @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
+            @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+            @dragover.stop="handleHeaderColumnDragOver($event, column)"
+            @drop.stop="handleHeaderColumnDrop($event, column)"
+            @dragend.stop="handleHeaderColumnDragEnd"
           >
-            <div
-              class="grid-cell grid-cell--header grid-cell--header-sortable"
-              :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-              :data-column-key="column.key"
-              :id="headerCellId(column)"
-              v-bind="headerCellA11y(column)"
-              :draggable="isHeaderColumnDraggable(column)"
-              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
-              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-              @dragover.stop="handleHeaderColumnDragOver($event, column)"
-              @drop.stop="handleHeaderColumnDrop($event, column)"
-              @dragend.stop="handleHeaderColumnDragEnd"
-            >
-              <div class="col-head">
-                <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
-                <span
-                  v-if="resolveColumnGroupBadgeLabel(column.key)"
-                  class="col-head__group-badge"
-                  :title="resolveColumnGroupBadgeTitle(column.key)"
-                >
-                  {{ resolveColumnGroupBadgeLabel(column.key) }}
-                </span>
-                <button
-                  v-if="shouldShowColumnMenuButton()"
-                  type="button"
-                  class="col-menu-trigger"
-                  :class="resolveColumnMenuTriggerClass(column.key, open)"
-                  :aria-label="resolveColumnMenuButtonLabel(column)"
-                  :title="resolveColumnMenuButtonLabel(column)"
-                  :data-column-key="column.key"
-                  data-datagrid-column-menu-trigger="true"
-                  data-datagrid-column-menu-button="true"
-                  @mousedown.stop
-                  @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
-                >
-                  <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
-                    <path
-                      v-if="shouldShowColumnMenuFilterIcon(column.key)"
-                      d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
-                    />
-                    <path
-                      v-if="shouldShowColumnMenuSortAscIcon(column.key)"
-                      d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
-                    />
-                    <path
-                      v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
-                      d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
-                    />
-                    <path
-                      v-else
-                      d="M5.5 6.5 8 9l2.5-2.5"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="col-resize"
-                  :aria-label="resolveColumnResizeLabel(column)"
-                  @mousedown.stop="startResize($event, column.key)"
-                  @touchstart.stop.passive="startTouchResize($event, column.key)"
-                  @touchmove.stop.passive="handleTouchResizeMove($event)"
-                  @touchend.stop.passive="handleTouchResizeEnd($event)"
-                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
-                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                  @click.stop
-                />
-              </div>
+            <div class="col-head">
+              <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+              <span
+                v-if="resolveColumnGroupBadgeLabel(column.key)"
+                class="col-head__group-badge"
+                :title="resolveColumnGroupBadgeTitle(column.key)"
+              >
+                {{ resolveColumnGroupBadgeLabel(column.key) }}
+              </span>
+              <button
+                v-if="shouldShowColumnMenuButton()"
+                type="button"
+                class="col-menu-trigger"
+                :class="resolveColumnMenuTriggerClass(column.key, isColumnMenuOpen(column.key))"
+                :aria-label="resolveColumnMenuButtonLabel(column)"
+                :title="resolveColumnMenuButtonLabel(column)"
+                aria-haspopup="menu"
+                :aria-expanded="isColumnMenuOpen(column.key) ? 'true' : 'false'"
+                :data-column-key="column.key"
+                data-datagrid-column-menu-trigger="true"
+                data-datagrid-column-menu-button="true"
+                @mousedown.stop
+                @click.stop="handleColumnMenuButtonClick(column, $event)"
+                @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+                @keydown.space.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+              >
+                <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                    d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                  />
+                  <path
+                    v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                    d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                  />
+                  <path
+                    v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                    d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                  />
+                  <path
+                    v-else
+                    d="M5.5 6.5 8 9l2.5-2.5"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="col-resize"
+                :aria-label="resolveColumnResizeLabel(column)"
+                @mousedown.stop="startResize($event, column.key)"
+                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @touchmove.stop.passive="handleTouchResizeMove($event)"
+                @touchend.stop.passive="handleTouchResizeEnd($event)"
+                @touchcancel.stop.passive="handleTouchResizeEnd($event)"
+                @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                @click.stop
+              />
             </div>
-          </DataGridColumnMenu>
+          </div>
+
         </template>
         <template v-else>
           <div
@@ -431,6 +373,7 @@
             v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
             @dragover.stop="handleHeaderColumnDragOver($event, column)"
             @drop.stop="handleHeaderColumnDrop($event, column)"
@@ -511,112 +454,83 @@
       </div>
       <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
         <template v-if="shouldUseColumnMenus()">
-          <DataGridColumnMenu
+          <div
             v-for="column in pinnedRightColumns"
-            :key="resolveColumnMenuInstanceKey(column.key)"
-            :row-count="sourceRows.length"
-            :resolve-value-entries="(search) => resolveColumnMenuValueEntriesSafe(column.key, search)"
-            :items="resolveColumnMenuItemsSafe(column.key)"
-            :disabled-items="resolveColumnMenuDisabledItemsSafe(column.key)"
-            :disabled-reasons="resolveColumnMenuDisabledReasonsSafe(column.key)"
-            :labels="resolveColumnMenuLabelsSafe(column.key)"
-            :action-options="resolveColumnMenuActionOptionsSafe(column.key)"
-            :custom-items="resolveColumnMenuCustomItemsSafe(column.key)"
-            :trigger-mode="resolveColumnMenuTriggerModeSafe()"
-            :column-key="column.key"
-            :column-label="column.column.label ?? column.key"
-            :column-data-type="column.column.dataType"
-            :sort-direction="resolveColumnMenuSortDirectionSafe(column.key)"
-            :sort-enabled="isColumnSortable(column)"
-            :pin="column.pin"
-            :grouped="isColumnGroupedSafe(column.key)"
-            :group-order="resolveColumnGroupOrderSafe(column.key)"
-            :group-enabled="isColumnGroupable(column)"
-            :filter-enabled="isColumnMenuValueFilterEnabled(column)"
-            :value-filter-row-limit="columnMenuValueFilterRowLimit"
-            :text-filter-enabled="isColumnFilterable(column)"
-            :text-filter-value="columnFilterTextByKey[column.key] ?? ''"
-            :filter-active="isColumnFilterActiveSafe(column.key)"
-            :selected-filter-tokens="resolveColumnMenuSelectedTokensSafe(column.key)"
-            :max-filter-values="columnMenuMaxFilterValues"
-            @sort="applyColumnMenuSortSafe(column.key, $event)"
-            @pin="applyColumnMenuPinSafe(column.key, $event)"
-            @apply-filter="applyColumnMenuFilterSafe(column.key, $event)"
-            @group="applyColumnMenuGroupBySafe(column.key, $event)"
-            @update-text-filter="setColumnFilterText(column.key, $event)"
-            @clear-filter="clearColumnMenuFilterSafe(column.key)"
-            v-slot="{ open, toggleMenuFromElement }"
+            :key="`header-right-${column.key}`"
+            class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
+            :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
+            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :data-column-key="column.key"
+            :id="headerCellId(column)"
+            v-bind="headerCellA11y(column)"
+            :draggable="isHeaderColumnDraggable(column)"
+            @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
+            @dragstart.stop="handleHeaderColumnDragStart($event, column)"
+            @dragover.stop="handleHeaderColumnDragOver($event, column)"
+            @drop.stop="handleHeaderColumnDrop($event, column)"
+            @dragend.stop="handleHeaderColumnDragEnd"
           >
-            <div
-              class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
-              :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: open })"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
-              :data-column-key="column.key"
-              :id="headerCellId(column)"
-              v-bind="headerCellA11y(column)"
-              :draggable="isHeaderColumnDraggable(column)"
-              @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
-              @dragstart.stop="handleHeaderColumnDragStart($event, column)"
-              @dragover.stop="handleHeaderColumnDragOver($event, column)"
-              @drop.stop="handleHeaderColumnDrop($event, column)"
-              @dragend.stop="handleHeaderColumnDragEnd"
-            >
-              <div class="col-head">
-                <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
-                <span
-                  v-if="resolveColumnGroupBadgeLabel(column.key)"
-                  class="col-head__group-badge"
-                  :title="resolveColumnGroupBadgeTitle(column.key)"
-                >
-                  {{ resolveColumnGroupBadgeLabel(column.key) }}
-                </span>
-                <button
-                  v-if="shouldShowColumnMenuButton()"
-                  type="button"
-                  class="col-menu-trigger"
-                  :class="resolveColumnMenuTriggerClass(column.key, open)"
-                  :aria-label="resolveColumnMenuButtonLabel(column)"
-                  :title="resolveColumnMenuButtonLabel(column)"
-                  :data-column-key="column.key"
-                  data-datagrid-column-menu-trigger="true"
-                  data-datagrid-column-menu-button="true"
-                  @mousedown.stop
-                  @click.stop="handleColumnMenuButtonClick(toggleMenuFromElement, $event)"
-                >
-                  <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
-                    <path
-                      v-if="shouldShowColumnMenuFilterIcon(column.key)"
-                      d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
-                    />
-                    <path
-                      v-if="shouldShowColumnMenuSortAscIcon(column.key)"
-                      d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
-                    />
-                    <path
-                      v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
-                      d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
-                    />
-                    <path
-                      v-else
-                      d="M5.5 6.5 8 9l2.5-2.5"
-                    />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="col-resize"
-                  :aria-label="resolveColumnResizeLabel(column)"
-                  @mousedown.stop="startResize($event, column.key)"
-                  @touchstart.stop.passive="startTouchResize($event, column.key)"
-                  @touchmove.stop.passive="handleTouchResizeMove($event)"
-                  @touchend.stop.passive="handleTouchResizeEnd($event)"
-                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
-                  @dblclick.stop="handleResizeDoubleClick($event, column.key)"
-                  @click.stop
-                />
-              </div>
+            <div class="col-head">
+              <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+              <span
+                v-if="resolveColumnGroupBadgeLabel(column.key)"
+                class="col-head__group-badge"
+                :title="resolveColumnGroupBadgeTitle(column.key)"
+              >
+                {{ resolveColumnGroupBadgeLabel(column.key) }}
+              </span>
+              <button
+                v-if="shouldShowColumnMenuButton()"
+                type="button"
+                class="col-menu-trigger"
+                :class="resolveColumnMenuTriggerClass(column.key, isColumnMenuOpen(column.key))"
+                :aria-label="resolveColumnMenuButtonLabel(column)"
+                :title="resolveColumnMenuButtonLabel(column)"
+                aria-haspopup="menu"
+                :aria-expanded="isColumnMenuOpen(column.key) ? 'true' : 'false'"
+                :data-column-key="column.key"
+                data-datagrid-column-menu-trigger="true"
+                data-datagrid-column-menu-button="true"
+                @mousedown.stop
+                @click.stop="handleColumnMenuButtonClick(column, $event)"
+                @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+                @keydown.space.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
+              >
+                <svg class="col-menu-trigger__icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    v-if="shouldShowColumnMenuFilterIcon(column.key)"
+                    d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"
+                  />
+                  <path
+                    v-if="shouldShowColumnMenuSortAscIcon(column.key)"
+                    d="M9 11V6.75M9 6.75 7.25 8.5M9 6.75 10.75 8.5"
+                  />
+                  <path
+                    v-else-if="shouldShowColumnMenuSortDescIcon(column.key)"
+                    d="M9 5v4.25M9 9.25 7.25 7.5M9 9.25 10.75 7.5"
+                  />
+                  <path
+                    v-else
+                    d="M5.5 6.5 8 9l2.5-2.5"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="col-resize"
+                :aria-label="resolveColumnResizeLabel(column)"
+                @mousedown.stop="startResize($event, column.key)"
+                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @touchmove.stop.passive="handleTouchResizeMove($event)"
+                @touchend.stop.passive="handleTouchResizeEnd($event)"
+                @touchcancel.stop.passive="handleTouchResizeEnd($event)"
+                @dblclick.stop="handleResizeDoubleClick($event, column.key)"
+                @click.stop
+              />
             </div>
-          </DataGridColumnMenu>
+          </div>
+
         </template>
         <template v-else>
           <div
@@ -630,6 +544,7 @@
             v-bind="headerCellA11y(column)"
             :draggable="isHeaderColumnDraggable(column)"
             @click="handleHeaderColumnClick(column, { additive: $event.ctrlKey || $event.metaKey, extend: $event.shiftKey })"
+            @contextmenu="handleHeaderColumnContextMenu(column, $event)"
             @dragstart.stop="handleHeaderColumnDragStart($event, column)"
             @dragover.stop="handleHeaderColumnDragOver($event, column)"
             @drop.stop="handleHeaderColumnDrop($event, column)"
@@ -673,19 +588,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, type CSSProperties, type PropType } from "vue"
-import type { DataGridColumnPin } from "@affino/datagrid-vue"
 import { useDataGridResizeClickGuard } from "@affino/datagrid-vue/advanced"
-import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
-import type {
-  DataGridColumnMenuActionOptions,
-  DataGridColumnMenuCustomItem,
-  DataGridColumnMenuDisabledReasons,
-  DataGridColumnMenuItemKey,
-  DataGridColumnMenuItemLabels,
-  DataGridColumnMenuTriggerMode,
-} from "../overlays/dataGridColumnMenu"
+import type { DataGridColumnMenuTriggerMode } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
-import type { DataGridColumnMenuValueEntriesResult } from "./dataGridTableStage.types"
+import type { DataGridColumnMenuOpenReason } from "./dataGridTableStage.types"
 import {
   useDataGridTableStageMode,
   useDataGridTableStageColumnsSection,
@@ -772,7 +678,6 @@ const columns = useDataGridTableStageColumnsSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 
-const sourceRows = computed(() => rows.value.sourceRows ?? [])
 const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const centerHeaderColumns = computed(() => renderedColumns.value)
@@ -803,16 +708,6 @@ const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
 const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
 const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
 const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey)
-const columnMenuMaxFilterValues = computed(() => (
-  typeof columns.value.columnMenuMaxFilterValues === "number"
-    ? columns.value.columnMenuMaxFilterValues
-    : 250
-))
-const columnMenuValueFilterRowLimit = computed(() => (
-  typeof columns.value.columnMenuValueFilterRowLimit === "number"
-    ? columns.value.columnMenuValueFilterRowLimit
-    : Number.MAX_SAFE_INTEGER
-))
 const draggedHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
@@ -1119,14 +1014,6 @@ function isColumnFilterable(column: TableColumn): boolean {
   return column.column.capabilities?.filterable !== false
 }
 
-function isColumnGroupable(column: TableColumn): boolean {
-  return column.column.capabilities?.groupable !== false
-}
-
-function isColumnMenuValueFilterEnabled(column: TableColumn): boolean {
-  return isColumnFilterable(column) && columns.value.columnMenuValueFilterEnabled !== false
-}
-
 function headerCellPresentationStyle(column: TableColumn): CSSProperties {
   const textAlign = resolveTextAlign(
     column.column.presentation?.headerAlign ?? column.column.presentation?.align,
@@ -1370,21 +1257,60 @@ function resolveColumnMenuButtonLabel(column: TableColumn): string {
   return `Open column menu for ${column.column.label ?? column.key}${suffix}`
 }
 
-function handleColumnMenuButtonClick(
-  toggleMenuFromElement: (element: HTMLElement | null) => void,
-  event: MouseEvent,
+function isColumnMenuOpen(columnKey: string): boolean {
+  return columns.value.activeColumnMenu?.columnId === columnKey
+}
+
+function openColumnMenuFromElement(
+  column: TableColumn,
+  element: HTMLElement | null,
+  reason: DataGridColumnMenuOpenReason,
 ): void {
-  toggleMenuFromElement(event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+  if (!element || !shouldUseColumnMenus()) {
+    return
+  }
+  columns.value.openColumnMenu?.(column.key, element, reason)
 }
 
-function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
-  const resolve = columns.value.resolveColumnMenuSelectedTokens
-  return typeof resolve === "function" ? resolve(columnKey) : []
+function toggleColumnMenuFromElement(
+  column: TableColumn,
+  element: HTMLElement | null,
+  reason: DataGridColumnMenuOpenReason,
+): void {
+  if (isColumnMenuOpen(column.key)) {
+    columns.value.closeColumnMenu?.()
+    return
+  }
+  openColumnMenuFromElement(column, element, reason)
 }
 
-function resolveColumnMenuValueEntriesSafe(columnKey: string, search?: string): DataGridColumnMenuValueEntriesResult {
-  const resolve = columns.value.resolveColumnMenuValueEntries
-  return typeof resolve === "function" ? resolve(columnKey, search) : []
+function handleColumnMenuButtonClick(column: TableColumn, event: MouseEvent): void {
+  toggleColumnMenuFromElement(
+    column,
+    event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
+    "button",
+  )
+}
+
+function handleColumnMenuButtonKeydown(column: TableColumn, event: KeyboardEvent): void {
+  toggleColumnMenuFromElement(
+    column,
+    event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
+    "keyboard",
+  )
+}
+
+function handleHeaderColumnContextMenu(column: TableColumn, event: MouseEvent): void {
+  if (resolveColumnMenuTriggerModeSafe() === "button" || isRowSelectionColumn(column)) {
+    return
+  }
+  const element = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  if (!element || !shouldUseColumnMenus()) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  openColumnMenuFromElement(column, element, "contextmenu")
 }
 
 function resolveColumnMenuTriggerModeSafe(): DataGridColumnMenuTriggerMode {
@@ -1393,64 +1319,6 @@ function resolveColumnMenuTriggerModeSafe(): DataGridColumnMenuTriggerMode {
 
 function shouldShowColumnMenuButton(): boolean {
   return resolveColumnMenuTriggerModeSafe() !== "contextmenu"
-}
-
-function resolveColumnMenuItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
-  const resolve = columns.value.resolveColumnMenuItems
-  return typeof resolve === "function" ? resolve(columnKey) : ["sort", "group", "pin", "filter"]
-}
-
-function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
-  const resolve = columns.value.resolveColumnMenuDisabledItems
-  return typeof resolve === "function" ? resolve(columnKey) : []
-}
-
-function resolveColumnMenuDisabledReasonsSafe(columnKey: string): DataGridColumnMenuDisabledReasons {
-  const resolve = columns.value.resolveColumnMenuDisabledReasons
-  return typeof resolve === "function" ? resolve(columnKey) : {}
-}
-
-function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemLabels {
-  const resolve = columns.value.resolveColumnMenuLabels
-  return typeof resolve === "function" ? resolve(columnKey) : {}
-}
-
-function resolveColumnMenuActionOptionsSafe(columnKey: string): DataGridColumnMenuActionOptions {
-  const resolve = columns.value.resolveColumnMenuActionOptions
-  return typeof resolve === "function" ? resolve(columnKey) : {}
-}
-
-function resolveColumnMenuCustomItemsSafe(columnKey: string): readonly DataGridColumnMenuCustomItem[] {
-  const resolve = columns.value.resolveColumnMenuCustomItems
-  return typeof resolve === "function" ? resolve(columnKey) : []
-}
-
-function resolveColumnMenuInstanceKey(columnKey: string): string {
-  return [
-    columnKey,
-    columns.value.columnMenuValueFilterEnabled === false ? "text-only" : "value-filter",
-    columnMenuValueFilterRowLimit.value,
-  ].join(":")
-}
-
-function applyColumnMenuSortSafe(columnKey: string, direction: "asc" | "desc" | null): void {
-  columns.value.applyColumnMenuSort?.(columnKey, direction)
-}
-
-function applyColumnMenuPinSafe(columnKey: string, pin: DataGridColumnPin): void {
-  columns.value.applyColumnMenuPin?.(columnKey, pin)
-}
-
-function applyColumnMenuGroupBySafe(columnKey: string, grouped: boolean): void {
-  columns.value.applyColumnMenuGroupBy?.(columnKey, grouped)
-}
-
-function applyColumnMenuFilterSafe(columnKey: string, tokens: readonly string[]): void {
-  columns.value.applyColumnMenuFilter?.(columnKey, tokens)
-}
-
-function clearColumnMenuFilterSafe(columnKey: string): void {
-  columns.value.clearColumnMenuFilter?.(columnKey)
 }
 
 function isAllVisibleRowsSelectedSafe(): boolean {

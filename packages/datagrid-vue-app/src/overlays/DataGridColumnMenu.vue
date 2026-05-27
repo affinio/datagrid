@@ -341,7 +341,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch } from "vue"
+import { computed, inject, nextTick, onMounted, ref, watch } from "vue"
 import type { DataGridColumnHistogramEntry } from "@affino/datagrid-vue"
 import {
   UiMenu,
@@ -371,6 +371,8 @@ import type {
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
 
 type DataGridColumnPin = "left" | "right" | "none"
+type DataGridColumnMenuOpenReason = "button" | "contextmenu" | "keyboard"
+type UiMenuControllerOpenReason = "pointer" | "keyboard" | "programmatic"
 
 interface DataGridColumnMenuValueEntry {
   token: string
@@ -389,9 +391,9 @@ type DataGridColumnMenuValueEntriesResult =
 
 interface UiMenuRef {
   controller?: {
-    open: (reason?: "pointer" | "keyboard" | "programmatic") => void
+    open: (reason?: UiMenuControllerOpenReason) => void
     setAnchor: (rect: { x: number; y: number; width: number; height: number } | null) => void
-    close: (reason?: "pointer" | "keyboard" | "programmatic") => void
+    close: (reason?: UiMenuControllerOpenReason) => void
   }
 }
 
@@ -425,6 +427,8 @@ const props = defineProps<{
   filterActive: boolean
   selectedFilterTokens: readonly string[]
   maxFilterValues: number
+  anchorElement?: HTMLElement | null
+  openReason?: DataGridColumnMenuOpenReason
 }>()
 
 const emit = defineEmits<{
@@ -434,6 +438,7 @@ const emit = defineEmits<{
   (event: "apply-filter", tokens: readonly string[]): void
   (event: "clear-filter"): void
   (event: "update-text-filter", value: string): void
+  (event: "close"): void
 }>()
 
 const menuRef = ref<UiMenuRef | null>(null)
@@ -675,6 +680,7 @@ const menuCallbacks: MenuCallbacks = {
   onClose: () => {
     open.value = false
     cancelValueEntriesLoad({ resetLoading: true })
+    emit("close")
   },
 }
 
@@ -698,6 +704,27 @@ watch(rootElementRef, () => {
     syncMenuThemeVars()
   }
 })
+
+onMounted(() => {
+  void nextTick().then(() => {
+    openMenuFromElement(props.anchorElement ?? null, props.openReason)
+  })
+})
+
+watch(
+  () => [props.anchorElement, props.columnKey, props.openReason] as const,
+  async ([element]) => {
+    if (!element) {
+      return
+    }
+    await nextTick()
+    if (props.anchorElement !== element) {
+      return
+    }
+    openMenuFromElement(element, props.openReason)
+  },
+  { flush: "post" },
+)
 
 watch(
   () => [
@@ -843,7 +870,17 @@ async function handleCustomItemSelect(item: DataGridColumnMenuCustomLeafItem): P
   })
 }
 
-function openMenuFromElement(element: HTMLElement | null): void {
+function resolveUiMenuOpenReason(reason?: DataGridColumnMenuOpenReason): UiMenuControllerOpenReason {
+  if (reason === "keyboard") {
+    return "keyboard"
+  }
+  if (reason === "contextmenu") {
+    return "pointer"
+  }
+  return "programmatic"
+}
+
+function openMenuFromElement(element: HTMLElement | null, reason?: DataGridColumnMenuOpenReason): void {
   if (!element) {
     return
   }
@@ -858,7 +895,7 @@ function openMenuFromElement(element: HTMLElement | null): void {
     width: rect.width,
     height: 0,
   })
-  controller.open("programmatic")
+  controller.open(resolveUiMenuOpenReason(reason))
 }
 
 function toggleMenuFromElement(element: HTMLElement | null): void {

@@ -1261,6 +1261,67 @@ const DATA_GRID_APP_STYLES = `
   bottom: auto;
 }
 
+.grid-chrome-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  min-width: 100%;
+  pointer-events: none;
+  z-index: 0;
+  contain: layout paint style;
+}
+
+.grid-chrome-layer__band,
+.grid-chrome-layer__line {
+  box-sizing: border-box;
+  position: absolute;
+  pointer-events: none;
+}
+
+.grid-chrome-layer__band {
+  left: 0;
+  right: 0;
+}
+
+.grid-chrome-layer__band--base {
+  background: var(--datagrid-row-band-base-bg);
+}
+
+.grid-chrome-layer__band--hover {
+  background: var(--datagrid-row-band-hover-bg);
+}
+
+.grid-chrome-layer__band--striped {
+  background: var(--datagrid-row-band-striped-bg);
+}
+
+.grid-chrome-layer__band--group {
+  background: var(--datagrid-row-band-group-bg);
+}
+
+.grid-chrome-layer__band--tree {
+  background: var(--datagrid-row-band-tree-bg);
+}
+
+.grid-chrome-layer__band--pivot {
+  background: var(--datagrid-row-band-pivot-bg);
+}
+
+.grid-chrome-layer__band--pivot-group {
+  background: var(--datagrid-row-band-pivot-group-bg);
+}
+
+.grid-chrome-layer__line--horizontal {
+  left: 0;
+  right: 0;
+  border-top: var(--datagrid-row-divider-size) solid var(--datagrid-row-divider-color);
+}
+
+.grid-chrome-layer__line--vertical {
+  top: 0;
+  border-left: var(--datagrid-column-divider-size) solid var(--datagrid-column-divider-color);
+}
+
 .grid-header-shell .grid-chrome-canvas {
   z-index: 5;
 }
