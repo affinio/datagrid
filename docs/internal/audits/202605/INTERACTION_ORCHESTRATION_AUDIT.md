@@ -126,7 +126,7 @@ Tests:
 - Fill handle and range move starts explicitly stop competing interactions. `useDataGridFillHandleStart` stops range move and drag selection; `useDataGridRangeMoveStart` stops drag selection and fill.
 - Header resize stops fill and drag selection before taking ownership, and `useDataGridResizeClickGuard` blocks the synthetic post-resize click.
 - Keyboard commands are centralized in `useDataGridKeyboardCommandRouter` for undo/redo, copy/paste/cut, select all, clear, context menu, and range-move cancellation.
-- Touch scroll has a safer policy than before. The main body viewport remains native, while `installDataGridTouchPanGuard` only handles linked non-scroll surfaces and lazily installs the non-passive `touchmove` listener.
+- Touch scroll has a safer policy than before. The main body viewport remains native, while the remaining `installDataGridTouchPanGuard` fallback is limited to the Gantt timeline zone and lazily installs the non-passive `touchmove` listener.
 - Touch-generated mouse events are guarded in app interaction, fill handle, header resize, row/column drag, and context-menu paths.
 
 ## Findings by severity
