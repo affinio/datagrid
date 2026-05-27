@@ -52,6 +52,7 @@ Performance rules:
 - horizontal scroll belongs to the timeline viewport
 - horizontal wheel over real timeline scrollports is native; canvas wheel remains a fallback that forwards into the timeline viewport
 - horizontal overscroll/boundary behavior is left to the browser; the timeline viewport does not force `overscroll-behavior-x`
+- the remaining touch-pan fallback is scoped to the timeline zone; the embedded table pane keeps native table-stage touch scrolling
 
 ## Summary Tasks
 

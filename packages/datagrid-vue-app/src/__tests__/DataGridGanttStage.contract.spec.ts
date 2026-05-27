@@ -184,6 +184,22 @@ function createRuntime() {
   } as const
 }
 
+function createTouchEvent(type: string, touch: { identifier?: number; clientX: number; clientY: number }): TouchEvent {
+  const event = new Event(type, {
+    bubbles: true,
+    cancelable: true,
+  }) as TouchEvent
+  Object.defineProperty(event, "touches", {
+    configurable: true,
+    value: [{
+      identifier: touch.identifier ?? 1,
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+    }],
+  })
+  return event
+}
+
 function createRuntimeWithRows(rows: ReturnType<typeof createRows>) {
   const setSelectionSnapshot = vi.fn()
   const setFocusedRow = vi.fn()
@@ -450,6 +466,69 @@ describe("DataGridGanttStage contract", () => {
     contextSpy.mockRestore()
     rafSpy.mockRestore()
     wrapper.unmount()
+  })
+
+  it("keeps the gantt touch pan guard out of the embedded table pane", async () => {
+    const addEventListener = vi.spyOn(HTMLElement.prototype, "addEventListener")
+    const rows = createGanttRows()
+    const table = createTableProps({ rows })
+    const stageContext = createDataGridTableStageContext({
+      mode: ref(table.mode),
+      rowHeightMode: ref(table.rowHeightMode),
+      layoutMode: ref("fill"),
+      layout: ref(table.layout),
+      viewport: ref(table.viewport),
+      columns: ref(table.columns),
+      rows: ref(table.rows),
+      selection: ref(table.selection),
+      editing: ref(table.editing),
+      cells: ref(table.cells),
+      interaction: ref(table.interaction),
+    })
+
+    const wrapper = mount(DataGridGanttStage, {
+      props: {
+        stageContext,
+        runtime: createRuntimeWithRows(rows) as never,
+        gantt: normalizeDataGridGanttOptions({
+          startKey: "start",
+          endKey: "end",
+          labelKey: "task",
+          idKey: "id",
+        }),
+        baseRowHeight: 31,
+        rowVersion: 0,
+      },
+      attachTo: document.body,
+    })
+
+    try {
+      await nextTick()
+      await flushPromises()
+      await nextTick()
+
+      const stageRoot = wrapper.find(".datagrid-gantt-stage").element as HTMLElement
+      const tableCell = wrapper.find('.grid-body-shared-vertical-scroll-shell .grid-cell[data-column-key="task"]')
+      const timelineBodyViewport = wrapper.find(".datagrid-gantt-timeline__viewport--body")
+      expect(tableCell.exists()).toBe(true)
+      expect(timelineBodyViewport.exists()).toBe(true)
+
+      const rootTouchMoveCallCount = () => addEventListener.mock.calls
+        .map((call, index) => ({ call, target: addEventListener.mock.contexts[index] }))
+        .filter(({ call, target }) => target === stageRoot && call[0] === "touchmove")
+        .length
+      const initialTouchMoveCallCount = rootTouchMoveCallCount()
+
+      tableCell.element.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+      expect(rootTouchMoveCallCount()).toBe(initialTouchMoveCallCount)
+
+      timelineBodyViewport.element.dispatchEvent(createTouchEvent("touchstart", { clientX: 20, clientY: 100 }))
+      expect(rootTouchMoveCallCount()).toBe(initialTouchMoveCallCount + 1)
+    }
+    finally {
+      addEventListener.mockRestore()
+      wrapper.unmount()
+    }
   })
 
   it("maps gantt bar clicks back to full-row table selection", async () => {

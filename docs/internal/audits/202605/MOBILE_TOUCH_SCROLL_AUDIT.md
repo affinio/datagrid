@@ -21,6 +21,7 @@ Completed in Phase 1:
 - Native body horizontal wheel restored: actual horizontal scroll owners now leave wheel default behavior to the browser; managed wheel remains limited to linked non-scroll surfaces that need to forward horizontal intent into the center owner.
 - Native Gantt timeline horizontal wheel restored on real timeline scrollports; managed Gantt wheel remains limited to canvas fallback and vertical forwarding into the table viewport.
 - Native Gantt horizontal overscroll restored: timeline scrollports no longer set `overscroll-behavior-x: contain`, leaving horizontal boundary behavior to the browser/page.
+- Gantt touch fallback scoping: the remaining Gantt touch-pan guard is scoped to the timeline zone, so embedded table-pane touches stay with the table stage's native scroll owner.
 - Header scroll sync cleanup: header scroll-left feedback now routes through `useDataGridStageViewportRuntime.ts`; the legacy header wheel path and DOM `data-*` skip flag were removed.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
@@ -372,6 +373,7 @@ Current state:
 - Body horizontal wheel over the center and pinned-bottom horizontal scroll owners is native.
 - Gantt timeline horizontal wheel over header/body timeline scrollports is native; wheel over the canvas still uses the managed fallback because the canvas is not a scroll owner.
 - Gantt timeline horizontal boundary behavior is native; the timeline CSS no longer contains `overscroll-behavior-x: contain`.
+- The remaining Gantt touch-pan fallback is timeline-scoped and no longer claims touch starts in the embedded table pane.
 - Managed wheel remains limited to linked/header/pinned surfaces that are not themselves horizontal scroll owners.
 
 Recommended fix:

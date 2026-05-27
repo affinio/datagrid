@@ -1401,6 +1401,15 @@ function handleTimelineHeaderScroll(event: Event): void {
   syncTimelineScroll(element.scrollLeft, "header")
 }
 
+function isTimelineTouchPanTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) {
+    return false
+  }
+  return stageRootRef.value
+    ?.querySelector<HTMLElement>(".datagrid-gantt-stage__timeline")
+    ?.contains(target) === true
+}
+
 function isTimelineNativeHorizontalWheelTarget(event: WheelEvent): boolean {
   if (!(event.target instanceof Node)) {
     return false
@@ -1841,6 +1850,7 @@ onMounted(() => {
         timelineBodyViewportRef.value,
         timelineHeaderViewportRef.value,
       ],
+      shouldHandleTarget: isTimelineTouchPanTarget,
     })
   }
   void nextTick(() => {
