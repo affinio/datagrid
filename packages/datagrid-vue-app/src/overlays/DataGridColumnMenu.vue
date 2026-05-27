@@ -1,25 +1,24 @@
 <template>
-  <UiMenu ref="menuRef" :callbacks="menuCallbacks" :options="rootMenuOptions">
-    <UiMenuTrigger v-if="contextMenuEnabled" as-child trigger="contextmenu">
+  <DataGridMenuOverlay
+    ref="menuRef"
+    :context-menu-enabled="contextMenuEnabled"
+    :options="rootMenuOptions"
+    content-class-name="ui-menu-content datagrid-column-menu__panel"
+    align="start"
+    :gutter="6"
+    :content-style="menuThemeVars"
+    :content-attrs="columnMenuContentAttrs"
+    @open="handleMenuOpen"
+    @close="handleMenuClose"
+  >
+    <template #trigger="{ open: menuOpen, toggleMenuFromElement }">
       <slot
-        :open="open"
+        :open="menuOpen"
         :toggle-menu-from-element="toggleMenuFromElement"
       />
-    </UiMenuTrigger>
-    <slot
-      v-else
-      :open="open"
-      :toggle-menu-from-element="toggleMenuFromElement"
-    />
+    </template>
 
-    <UiMenuContent
-      class-name="ui-menu-content datagrid-column-menu__panel"
-      align="start"
-      :gutter="6"
-      :style="menuThemeVars"
-      data-affino-menu-root
-      data-datagrid-column-menu-panel="true"
-    >
+    <template #content>
       <UiMenuLabel class="datagrid-column-menu__title">
         {{ columnLabel }}
       </UiMenuLabel>
@@ -336,27 +335,24 @@
           @select="handleCustomItemSelect"
         />
       </template>
-    </UiMenuContent>
-  </UiMenu>
+    </template>
+  </DataGridMenuOverlay>
 </template>
 
 <script setup lang="ts">
 import { computed, inject, nextTick, onMounted, ref, watch } from "vue"
 import type { DataGridColumnHistogramEntry } from "@affino/datagrid-vue"
 import {
-  UiMenu,
-  UiMenuContent,
   UiMenuItem,
   UiMenuLabel,
   UiMenuSeparator,
-  UiMenuTrigger,
   UiSubMenu,
   UiSubMenuContent,
   UiSubMenuTrigger,
-  type MenuCallbacks,
   type MenuOptions,
 } from "@affino/menu-vue"
 import DataGridColumnMenuCustomEntry from "./DataGridColumnMenuCustomEntry.vue"
+import DataGridMenuOverlay from "./DataGridMenuOverlay.vue"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type {
   DataGridColumnMenuActionKey,
@@ -369,10 +365,10 @@ import type {
   DataGridColumnMenuTriggerMode,
 } from "./dataGridColumnMenu"
 import { readDataGridOverlayThemeVars } from "./dataGridOverlayThemeVars"
+import type { DataGridMenuOverlayController, DataGridMenuOverlayOpenReason } from "./dataGridMenuOverlay"
 
 type DataGridColumnPin = "left" | "right" | "none"
-type DataGridColumnMenuOpenReason = "button" | "contextmenu" | "keyboard"
-type UiMenuControllerOpenReason = "pointer" | "keyboard" | "programmatic"
+type DataGridColumnMenuOpenReason = DataGridMenuOverlayOpenReason
 
 interface DataGridColumnMenuValueEntry {
   token: string
@@ -389,13 +385,6 @@ type DataGridColumnMenuValueEntriesResult =
   | readonly DataGridColumnHistogramEntry[]
   | Promise<readonly DataGridColumnHistogramEntry[]>
 
-interface UiMenuRef {
-  controller?: {
-    open: (reason?: UiMenuControllerOpenReason) => void
-    setAnchor: (rect: { x: number; y: number; width: number; height: number } | null) => void
-    close: (reason?: UiMenuControllerOpenReason) => void
-  }
-}
 
 const DATAGRID_COLUMN_MENU_VALUE_FILTER_HARD_ROW_LIMIT = 100_000
 const DATAGRID_COLUMN_MENU_DEFER_VALUE_LOAD_ROW_THRESHOLD = 10_000
@@ -441,7 +430,7 @@ const emit = defineEmits<{
   (event: "close"): void
 }>()
 
-const menuRef = ref<UiMenuRef | null>(null)
+const menuRef = ref<DataGridMenuOverlayController | null>(null)
 const rootElementRef = inject(dataGridAppRootElementKey, ref<HTMLElement | null>(null))
 const open = ref(false)
 const query = ref("")
@@ -663,6 +652,11 @@ const rootMenuOptions: MenuOptions = {
   closeDelay: 90,
 }
 
+const columnMenuContentAttrs = Object.freeze({
+  "data-affino-menu-root": "",
+  "data-datagrid-column-menu-panel": "true",
+})
+
 const submenuOptions: MenuOptions = {
   mousePrediction: {},
   loopFocus: true,
@@ -671,17 +665,16 @@ const submenuOptions: MenuOptions = {
   closeDelay: 120,
 }
 
-const menuCallbacks: MenuCallbacks = {
-  onOpen: () => {
-    open.value = true
-    syncMenuThemeVars()
-    resetFilterDraft()
-  },
-  onClose: () => {
-    open.value = false
-    cancelValueEntriesLoad({ resetLoading: true })
-    emit("close")
-  },
+function handleMenuOpen(): void {
+  open.value = true
+  syncMenuThemeVars()
+  resetFilterDraft()
+}
+
+function handleMenuClose(): void {
+  open.value = false
+  cancelValueEntriesLoad({ resetLoading: true })
+  emit("close")
 }
 
 watch(query, value => {
@@ -851,7 +844,7 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 }
 
 function closeMenu(): void {
-  menuRef.value?.controller?.close("programmatic")
+  menuRef.value?.closeMenu()
 }
 
 function handleSortSelect(direction: "asc" | "desc" | null): void {
@@ -870,40 +863,8 @@ async function handleCustomItemSelect(item: DataGridColumnMenuCustomLeafItem): P
   })
 }
 
-function resolveUiMenuOpenReason(reason?: DataGridColumnMenuOpenReason): UiMenuControllerOpenReason {
-  if (reason === "keyboard") {
-    return "keyboard"
-  }
-  if (reason === "contextmenu") {
-    return "pointer"
-  }
-  return "programmatic"
-}
-
 function openMenuFromElement(element: HTMLElement | null, reason?: DataGridColumnMenuOpenReason): void {
-  if (!element) {
-    return
-  }
-  const controller = menuRef.value?.controller
-  if (!controller) {
-    return
-  }
-  const rect = element.getBoundingClientRect()
-  controller.setAnchor({
-    x: rect.left,
-    y: rect.bottom,
-    width: rect.width,
-    height: 0,
-  })
-  controller.open(resolveUiMenuOpenReason(reason))
-}
-
-function toggleMenuFromElement(element: HTMLElement | null): void {
-  if (open.value) {
-    closeMenu()
-    return
-  }
-  openMenuFromElement(element)
+  menuRef.value?.openMenuFromElement(element, reason)
 }
 
 function syncMenuThemeVars(): void {

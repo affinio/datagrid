@@ -74,7 +74,7 @@ function resolveBandStyle(band: DataGridChromeBand): CSSProperties {
 
 function resolveHorizontalLineStyle(line: DataGridChromeLine): CSSProperties {
   return {
-    top: px(line.position),
+    top: `calc(${px(line.position)} - var(--datagrid-row-divider-size))`,
   }
 }
 
