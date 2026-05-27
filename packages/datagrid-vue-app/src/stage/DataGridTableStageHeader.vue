@@ -238,7 +238,6 @@
     <div
       :ref="headerViewportRef"
       class="grid-header-viewport"
-      @scroll.passive="handleHeaderScroll"
       @wheel="onLinkedViewportWheel"
     >
       <div
@@ -665,10 +664,6 @@ const props = defineProps({
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
   },
-  onHeaderViewportScroll: {
-    type: Function as PropType<(event: Event) => void>,
-    required: true,
-  },
 })
 
 const mode = useDataGridTableStageMode<Record<string, unknown>>()
@@ -995,11 +990,17 @@ function setColumnFilterText(columnKey: string, value: string): void {
 }
 
 function headerViewportRef(value: Element | { $el?: unknown } | null): void {
+  const element = typeof HTMLElement === "undefined"
+    ? null
+    : value instanceof HTMLElement
+      ? value
+      : value && "$el" in value && value.$el instanceof HTMLElement
+        ? value.$el
+        : null
+  if (element && element.scrollLeft !== 0) {
+    element.scrollLeft = 0
+  }
   viewport.value.headerViewportRef(value as never)
-}
-
-function handleHeaderScroll(event: Event): void {
-  props.onHeaderViewportScroll(event)
 }
 
 function isRowSelectionColumn(column: TableColumn): boolean {

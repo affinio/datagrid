@@ -1139,6 +1139,11 @@ const DATA_GRID_APP_STYLES = `
   touch-action: pan-x pan-y;
 }
 
+.grid-header-viewport .grid-center-track {
+  transform: translate3d(calc(-1 * var(--datagrid-body-scroll-left, 0px)), 0, 0);
+  will-change: transform;
+}
+
 .grid-body-viewport {
   overflow: auto;
   position: relative;
@@ -1380,6 +1385,13 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-stage--canvas-chrome .grid-header-viewport {
   background: transparent;
+}
+
+.grid-stage--canvas-chrome .grid-header-viewport .grid-cell,
+.grid-stage--canvas-chrome .grid-header-viewport .grid-column-spacer {
+  background: var(--datagrid-header-cell-bg);
+  border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  box-sizing: border-box;
 }
 
 @media (hover: none) and (pointer: coarse) {

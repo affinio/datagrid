@@ -28,16 +28,7 @@
       :show-index-column="showRowIndex"
       :is-coarse-pointer="isCoarsePointer"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
-      :on-header-viewport-scroll="handleHeaderViewportScroll"
     >
-      <template #center-chrome>
-        <canvas
-          ref="centerHeaderChromeCanvasEl"
-          class="grid-chrome-canvas grid-chrome-canvas--header-center"
-          :style="centerHeaderChromeCanvasStyle"
-          aria-hidden="true"
-        />
-      </template>
       <template #left-chrome>
         <canvas ref="leftHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
       </template>
@@ -1425,10 +1416,9 @@ const {
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll: handleCenterViewportScrollRaw,
   handleSharedVerticalViewportScroll: handleSharedVerticalViewportScrollRaw,
-  handleHeaderViewportScroll: handleHeaderViewportScrollRaw,
   handlePinnedTopViewportScroll: handlePinnedTopViewportScrollRaw,
   handlePinnedBottomViewportScroll: handlePinnedBottomViewportScrollRaw,
-  handleLinkedViewportWheel,
+  handleLinkedViewportWheel: handleLinkedViewportWheelRaw,
   handleBodyViewportWheel,
 } = useDataGridStageViewportRuntime({
   stageRootEl,
@@ -1474,14 +1464,22 @@ function handleSharedVerticalViewportScroll(event: Event): void {
   handleSharedVerticalViewportScrollRaw(event)
 }
 
-function handleHeaderViewportScroll(event: Event): void {
-  closeColumnMenuForViewportScroll(event, { horizontal: true })
-  handleHeaderViewportScrollRaw(event)
-}
-
 function handlePinnedTopViewportScroll(event: Event): void {
   closeColumnMenuForViewportScroll(event, { horizontal: true })
   handlePinnedTopViewportScrollRaw(event)
+}
+
+function isHorizontalWheelGesture(event: WheelEvent): boolean {
+  const absX = Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0)
+  const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
+  return absX > 0 && absX > absY
+}
+
+function handleLinkedViewportWheel(event: WheelEvent): void {
+  if (isHorizontalWheelGesture(event)) {
+    closeColumnMenuForViewportScroll(event, { horizontal: true })
+  }
+  handleLinkedViewportWheelRaw(event)
 }
 
 function handlePinnedBottomViewportScroll(event: Event): void {
@@ -2359,7 +2357,6 @@ const {
   rightPaneStyle,
   leftTrackStyle,
   rightTrackStyle,
-  centerHeaderChromeCanvasStyle,
   centerBottomChromeCanvasStyle,
   leftPinnedPane,
   rightPinnedPane,

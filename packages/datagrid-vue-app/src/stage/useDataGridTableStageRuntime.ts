@@ -574,6 +574,7 @@ export function useDataGridTableStageRuntime<
     resolveRowOffset: rowHeightMetrics.resolveRowOffset,
     resolveRowIndexAtOffset: rowHeightMetrics.resolveRowIndexAtOffset,
     resolveTotalRowHeight: rowHeightMetrics.resolveTotalHeight,
+    headerScrollSyncMode: "external",
   })
 
   const runtimeRowModelRevision = computed(() => {

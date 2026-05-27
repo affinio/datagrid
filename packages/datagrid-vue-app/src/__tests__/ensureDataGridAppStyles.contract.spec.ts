@@ -29,6 +29,18 @@ describe("ensureDataGridAppStyles", () => {
     expect(headerFallbackRule).not.toContain("border-bottom:")
   })
 
+  it("keeps center header synced by transform with native dividers", () => {
+    ensureDataGridAppStyles()
+
+    const styleText = document.getElementById(STYLE_ID)?.textContent ?? ""
+
+    expect(styleText).toContain(".grid-header-viewport .grid-center-track")
+    expect(styleText).toContain("transform: translate3d(calc(-1 * var(--datagrid-body-scroll-left, 0px)), 0, 0)")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-header-viewport .grid-cell,")
+    expect(styleText).toContain("border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color)")
+    expect(styleText).toContain("box-sizing: border-box")
+  })
+
   it("keeps canvas chrome body cells transparent outside coarse fallback", () => {
     ensureDataGridAppStyles()
 

@@ -455,7 +455,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs header and pinned bottom from the center horizontal owner", () => {
+  it("syncs horizontal CSS offset and pinned bottom from the center owner", () => {
     const stageRoot = document.createElement("section")
     const headerViewport = createViewportElement()
     headerViewport.className = "grid-header-viewport"
@@ -471,57 +471,10 @@ describe("useDataGridStageViewportRuntime", () => {
     vi.mocked(harness.syncers.syncPinnedBottomViewportScrollLeft).mockClear()
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
-    expect(headerViewport.scrollLeft).toBe(96)
+    expect(stageRoot.style.getPropertyValue("--datagrid-body-scroll-left")).toBe("96px")
+    expect(headerViewport.scrollLeft).toBe(0)
     expect(pinnedBottomViewport.scrollLeft).toBe(96)
     expect(sharedVerticalViewport.scrollLeft).toBe(0)
-
-    vi.mocked(harness.viewport.handleViewportScroll).mockClear()
-    harness.runtime.handleHeaderViewportScroll({ target: headerViewport } as unknown as Event)
-
-    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
-
-    harness.unmount()
-  })
-
-  it("routes header scroll through the center horizontal owner", () => {
-    const frameCallbacks: FrameRequestCallback[] = []
-    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      frameCallbacks.push(callback)
-      return frameCallbacks.length
-    })
-    globalThis.cancelAnimationFrame = vi.fn()
-    const stageRoot = document.createElement("section")
-    const headerViewport = createViewportElement({ scrollLeft: 96 })
-    headerViewport.className = "grid-header-viewport"
-    stageRoot.append(headerViewport)
-    const harness = createHarness({ stageRoot })
-    const bodyViewport = createViewportElement({ scrollLeft: 12 })
-    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
-    const pinnedBottomViewport = createViewportElement()
-
-    harness.runtime.captureBodyViewportRef(bodyViewport)
-    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
-    harness.runtime.capturePinnedBottomViewportRef(pinnedBottomViewport)
-    vi.mocked(harness.syncers.syncPinnedBottomViewportScrollLeft).mockClear()
-
-    harness.runtime.handleHeaderViewportScroll({ target: headerViewport } as unknown as Event)
-
-    expect(bodyViewport.scrollLeft).toBe(96)
-    expect(pinnedBottomViewport.scrollLeft).toBe(96)
-    expect(harness.viewport.handleViewportScroll).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
-      __datagridCompositeViewportTarget: true,
-      scrollTop: 80,
-      scrollLeft: 96,
-      clientWidth: 320,
-      clientHeight: 240,
-    }))
-    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
-
-    frameCallbacks.forEach(callback => callback(performance.now()))
-
-    expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
 
     harness.unmount()
   })

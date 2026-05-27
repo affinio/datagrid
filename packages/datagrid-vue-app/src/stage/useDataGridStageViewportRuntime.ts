@@ -57,7 +57,6 @@ export interface UseDataGridStageViewportRuntimeResult {
   capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
   handleCenterViewportScroll: (event: Event) => void
   handleSharedVerticalViewportScroll: (event: Event) => void
-  handleHeaderViewportScroll: (event: Event) => void
   handlePinnedTopViewportScroll: (event: Event) => void
   handlePinnedBottomViewportScroll: (event: Event) => void
   handleLinkedViewportWheel: (event: WheelEvent) => void
@@ -136,7 +135,6 @@ export function useDataGridStageViewportRuntime(
   let pendingGridChromeRedrawMode: GridChromeRedrawMode | null = null
   let observedBodyViewportScrollTop = 0
   let observedBodyViewportScrollLeft = 0
-  const programmaticHeaderScrollLeft = new WeakMap<HTMLElement, number>()
   const sharedViewportScrollEventTarget: SharedViewportScrollEventTarget = {
     scrollTop: 0,
     scrollLeft: 0,
@@ -168,13 +166,19 @@ export function useDataGridStageViewportRuntime(
     }
   }
 
-  function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
-    const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
-    if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
-      programmaticHeaderScrollLeft.set(headerViewport, scrollLeft)
-      headerViewport.scrollLeft = scrollLeft
-      programmaticHeaderScrollLeft.set(headerViewport, headerViewport.scrollLeft)
+  function syncSharedHorizontalScrollOffset(scrollLeft: number): void {
+    const element = options.stageRootEl.value
+    if (!element) {
+      return
     }
+    const scrollLeftValue = `${Math.max(0, scrollLeft)}px`
+    if (element.style.getPropertyValue("--datagrid-body-scroll-left") !== scrollLeftValue) {
+      element.style.setProperty("--datagrid-body-scroll-left", scrollLeftValue)
+    }
+  }
+
+  function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
+    syncSharedHorizontalScrollOffset(scrollLeft)
     const pinnedBottomViewport = bottomViewportEl.value
     if (pinnedBottomViewport && pinnedBottomViewport !== source && pinnedBottomViewport.scrollLeft !== scrollLeft) {
       pinnedBottomViewport.scrollLeft = scrollLeft
@@ -224,6 +228,7 @@ export function useDataGridStageViewportRuntime(
       const horizontalViewport = resolveCenterHorizontalViewport()
       if (horizontalViewport) {
         horizontalViewport.scrollLeft = value
+        syncSharedHorizontalPeers(horizontalViewport.scrollLeft, horizontalViewport)
       }
     },
     onWheelConsumed: () => {
@@ -413,6 +418,7 @@ export function useDataGridStageViewportRuntime(
     }
     bodyViewportEl.value = nextElement
     syncScrollOwnerRefs()
+    syncSharedHorizontalScrollOffset(nextElement?.scrollLeft ?? 0)
     const syncers = options.gridChromeSyncers.value
     syncers.syncBodyViewportMetrics()
     syncers.connectGridChromeResizeObserver()
@@ -506,39 +512,6 @@ export function useDataGridStageViewportRuntime(
     scheduleScrollGridChromeRedraw("center-scroll")
   }
 
-  function handleHeaderViewportScroll(event: Event): void {
-    const element = event.target as HTMLElement | null
-    const verticalViewport = resolveVerticalBodyViewport()
-    const horizontalViewport = resolveCenterHorizontalViewport()
-    if (!element || !verticalViewport || !horizontalViewport) {
-      return
-    }
-    const expectedProgrammaticScrollLeft = programmaticHeaderScrollLeft.get(element)
-    if (expectedProgrammaticScrollLeft !== undefined) {
-      programmaticHeaderScrollLeft.delete(element)
-      if (element.scrollLeft === expectedProgrammaticScrollLeft) {
-        return
-      }
-    }
-    const nextScrollLeft = element.scrollLeft
-    const previousScrollLeft = observedBodyViewportScrollLeft
-    if (horizontalViewport.scrollLeft !== nextScrollLeft) {
-      horizontalViewport.scrollLeft = nextScrollLeft
-    }
-    syncSharedHorizontalPeers(nextScrollLeft, element)
-    const scrollState = readBodyViewportScrollState(verticalViewport)
-    if (scrollState.scrollLeft === previousScrollLeft && !hasBodyViewportScrollStateChanged(scrollState)) {
-      return
-    }
-    markBodyViewportScrolling()
-    options.viewport.value.handleViewportScroll(createSharedViewportScrollEvent(verticalViewport, scrollState))
-    scheduleBodyViewportScrollStateSync(scrollState)
-    if (scrollState.scrollLeft !== previousScrollLeft) {
-      schedulePinnedBottomViewportScrollLeftSync()
-    }
-    scheduleScrollGridChromeRedraw("center-scroll")
-  }
-
   function handlePinnedTopViewportScroll(event: Event): void {
     handlePinnedBottomViewportScroll(event)
   }
@@ -607,7 +580,6 @@ export function useDataGridStageViewportRuntime(
     capturePinnedBottomViewportRef,
     handleCenterViewportScroll,
     handleSharedVerticalViewportScroll,
-    handleHeaderViewportScroll,
     handlePinnedTopViewportScroll,
     handlePinnedBottomViewportScroll,
     handleLinkedViewportWheel,

@@ -493,6 +493,7 @@ describe("DataGridTableStage contract", () => {
     expect(centerChromeLayer.exists()).toBe(true)
     expect(sharedShell.find(".grid-chrome-canvas--center-shell").exists()).toBe(false)
     expect(wrapper.find(".grid-body-shell > .grid-chrome-canvas--center-shell").exists()).toBe(false)
+    expect(wrapper.find(".grid-chrome-canvas--header-center").exists()).toBe(false)
     expect(sharedShell.attributes("role")).toBe("grid")
     expect(sharedShell.attributes("aria-rowcount")).toBe("1")
     expect(sharedShell.attributes("aria-colcount")).toBe("4")

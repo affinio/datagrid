@@ -215,6 +215,7 @@ export interface UseDataGridAppViewportOptions<TRow> {
   resolveTotalRowHeight?: () => number
   requestAnimationFrame?: (callback: FrameRequestCallback) => number
   cancelAnimationFrame?: (handle: number) => void
+  headerScrollSyncMode?: MaybeRef<"scroll-left" | "external">
 }
 
 export interface UseDataGridAppViewportResult<TRow> {
@@ -1590,6 +1591,9 @@ export function useDataGridAppViewport<TRow>(
   const syncHeaderScrollLeftFromBody = (bodyScrollLeft: number): void => {
     const headerViewport = headerViewportRef.value
     if (!headerViewport) {
+      return
+    }
+    if (options.headerScrollSyncMode != null && resolveMaybeRef(options.headerScrollSyncMode) === "external") {
       return
     }
     const nextHeaderScrollLeft = resolveDataGridHeaderScrollSyncLeft(headerViewport.scrollLeft, bodyScrollLeft)

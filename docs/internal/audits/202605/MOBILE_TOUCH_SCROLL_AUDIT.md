@@ -42,7 +42,8 @@ Completed in Phase 1:
 - Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
 - Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for owner-level scroll CSS var sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
-- Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
+- Header scroll ownership cleanup: the center header no longer owns native `scrollLeft` or forwards header scroll events into the body; horizontal header wheel intent routes through the linked-wheel path into the center owner.
+- Center header horizontal sync: the center header track now follows the body horizontal owner through a shared compositor transform and native cell dividers; the table stage explicitly marks header scrollLeft sync as externally owned, avoiding double horizontal movement during fast scroll.
 
 Still open:
 - Real-device validation execution: the matrix is documented below, but still needs runs on iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
