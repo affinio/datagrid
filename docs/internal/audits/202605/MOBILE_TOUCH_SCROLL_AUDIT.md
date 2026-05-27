@@ -29,7 +29,7 @@ Completed in Phase 1:
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers, scales touch overscan with viewport height using a larger bounded active window, and adds velocity-based adaptive row overscan with idle decay.
 - Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.
-- Large touch viewport retention: coarse-pointer smooth scroll uses a larger viewport-relative retained row window plus fixed-row browser containment, reducing periodic renderer/layout churn and badge/style flicker while the finger remains down.
+- Large touch viewport retention: coarse-pointer smooth scroll uses a larger viewport-relative retained row window plus fixed-row browser containment; when the retained buffer edge is crossed, the row window advances in bounded chunks instead of jumping by a full overscan block, reducing periodic renderer/layout churn and badge/style flicker while the finger remains down.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-pane vertical sync: the shared vertical scroll owner now hosts the inherited `--datagrid-body-scroll-top` CSS variable, so center and pinned sticky layers share one owner-level scroll-offset write instead of three per-pane writes. Reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
@@ -70,7 +70,7 @@ Interaction audit closure:
 - Double tap can open inline editing when the viewport is idle; scroll-active double tap is suppressed.
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
-- During active touch scroll, visible custom cell/group renderers remain active; scroll savings come from native panning, native overscroll propagation, hover suppression, rAF batching, larger retained touch windows, fixed-row containment, and adaptive overscan.
+- During active touch scroll, visible custom cell/group renderers remain active; scroll savings come from native panning, native overscroll propagation, hover suppression, rAF batching, larger retained touch windows with bounded chunk shifts, fixed-row containment, and adaptive overscan.
 - Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and hardware traces may require threshold adjustments for scroll-frame, scroll-quality, and interaction-frame telemetry.
 
 ## Current Architecture Summary

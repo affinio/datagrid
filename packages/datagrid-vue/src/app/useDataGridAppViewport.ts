@@ -27,6 +27,9 @@ const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
 const DATA_GRID_TOUCH_ROW_OVERSCAN_VIEWPORT_RATIO = 2
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MAX = 192
+const DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_MIN = 8
+const DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_VIEWPORT_RATIO = 0.5
+const DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_MAX = 32
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
@@ -1280,6 +1283,66 @@ export function useDataGridAppViewport<TRow>(
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }
 
+  const resolveCoarseRowWindowShiftLimit = (clientHeight: number): number => {
+    const estimatedRowHeight = Math.max(1, options.normalizedBaseRowHeight.value)
+    const viewportRows = Math.ceil(Math.max(1, clientHeight) / estimatedRowHeight)
+    return Math.max(
+      DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_MIN,
+      Math.min(
+        DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_MAX,
+        Math.ceil(viewportRows * DATA_GRID_TOUCH_ROW_WINDOW_SHIFT_VIEWPORT_RATIO),
+      ),
+    )
+  }
+
+  const resolveCoarseViewportRangeShift = (
+    targetRange: DataGridViewportRange,
+    visibleRange: DataGridViewportRange,
+    snapshot: Pick<ViewportSnapshot, "clientHeight">,
+  ): DataGridViewportRange => {
+    if (!isCoarsePointer.value || !lastSyncedRange) {
+      return targetRange
+    }
+    const total = resolveScrollableBodyRowCount()
+    const previousRange = lastSyncedRange
+    const targetLength = targetRange.end >= targetRange.start
+      ? targetRange.end - targetRange.start + 1
+      : 0
+    const previousLength = previousRange.end >= previousRange.start
+      ? previousRange.end - previousRange.start + 1
+      : 0
+    if (total <= 0 || targetLength <= 0 || previousLength <= 0) {
+      return targetRange
+    }
+
+    const shift = targetRange.start - previousRange.start
+    const shiftLimit = resolveCoarseRowWindowShiftLimit(snapshot.clientHeight)
+    if (Math.abs(shift) <= shiftLimit) {
+      return targetRange
+    }
+
+    const maxStart = Math.max(0, total - targetLength)
+    let start = shift > 0
+      ? Math.min(targetRange.start, previousRange.start + shiftLimit)
+      : Math.max(targetRange.start, previousRange.start - shiftLimit)
+    start = Math.max(0, Math.min(start, maxStart))
+    let end = Math.min(total - 1, start + targetLength - 1)
+
+    if (visibleRange.start < start) {
+      start = Math.max(0, Math.min(visibleRange.start, maxStart))
+      end = Math.min(total - 1, start + targetLength - 1)
+    }
+    if (visibleRange.end > end) {
+      end = Math.min(total - 1, visibleRange.end)
+      start = Math.max(0, end - targetLength + 1)
+    }
+
+    if (visibleRange.start < start || visibleRange.end > end) {
+      return targetRange
+    }
+    return { start, end }
+  }
+
   const resolveIndexedVisibleRows = (
     range: DataGridViewportRange,
   ): { rows: readonly DataGridRowNode<TRow>[]; mode: "indexed" | "incremental" } | null => {
@@ -1570,10 +1633,13 @@ export function useDataGridAppViewport<TRow>(
       }
       else {
         const rangeResolveStart = perfTraceEnabled ? resolveDataGridPerfNow() : 0
-        const viewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
+        const targetViewportRange = resolveViewportRangeFromSnapshot(nextViewportSnapshot)
         if (perfTraceEnabled) {
           lastViewportRangeResolveMs += resolveDataGridPerfNow() - rangeResolveStart
         }
+        const viewportRange = commitOptions.forceVisibleRows
+          ? targetViewportRange
+          : resolveCoarseViewportRangeShift(targetViewportRange, visibleRange, nextViewportSnapshot)
         syncVisibleRows(viewportRange, commitOptions.forceVisibleRows)
       }
       if (shouldDeferFarJumpRows) {
