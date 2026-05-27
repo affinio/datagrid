@@ -856,6 +856,8 @@ async function handleCustomItemSelect(item: DataGridColumnMenuCustomLeafItem): P
   if (isCustomItemDisabled(item)) {
     return
   }
+  emit("close")
+  closeMenu()
   await item.onSelect?.({
     columnKey: props.columnKey,
     columnLabel: props.columnLabel,
