@@ -92,6 +92,19 @@ function isHorizontalWheelGesture(event: WheelEvent): boolean {
   return absX > 0 && absX > absY
 }
 
+function normalizeWheelDelta(delta: number, deltaMode: number, pageSize: number): number {
+  if (!Number.isFinite(delta)) {
+    return 0
+  }
+  if (deltaMode === 1) {
+    return delta * 16
+  }
+  if (deltaMode === 2) {
+    return delta * Math.max(1, pageSize)
+  }
+  return delta
+}
+
 interface SharedViewportScrollEventTarget {
   scrollTop: number
   scrollLeft: number
@@ -509,15 +522,43 @@ export function useDataGridStageViewportRuntime(
     handlePinnedBottomViewportScroll(event)
   }
 
+  function preventVerticalBoundaryWheel(event: WheelEvent): boolean {
+    if (isHorizontalWheelGesture(event)) {
+      return false
+    }
+    const verticalViewport = resolveVerticalBodyViewport()
+    if (!verticalViewport) {
+      return false
+    }
+    const deltaY = normalizeWheelDelta(event.deltaY, event.deltaMode, verticalViewport.clientHeight)
+    if (deltaY === 0) {
+      return false
+    }
+    const maxTop = Math.max(0, verticalViewport.scrollHeight - verticalViewport.clientHeight)
+    const currentTop = verticalViewport.scrollTop
+    const atBoundary = (deltaY < 0 && currentTop <= 0) || (deltaY > 0 && currentTop >= maxTop)
+    if (!atBoundary) {
+      return false
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    return true
+  }
+
   function handleLinkedViewportWheel(event: WheelEvent): void {
     if (!isHorizontalWheelGesture(event)) {
       managedWheelScroll.reset()
+      preventVerticalBoundaryWheel(event)
       return
     }
     managedWheelScroll.onLinkedViewportWheel(event)
   }
 
   function handleBodyViewportWheel(event: WheelEvent): void {
+    if (preventVerticalBoundaryWheel(event)) {
+      managedWheelScroll.reset()
+      return
+    }
     managedWheelScroll.onBodyViewportWheel(event)
   }
 

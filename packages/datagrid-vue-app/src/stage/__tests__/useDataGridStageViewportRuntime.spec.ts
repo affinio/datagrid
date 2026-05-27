@@ -249,6 +249,31 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("prevents vertical wheel overscroll over linked panes at the shared top boundary", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 0 })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaY: -48 })
+
+    harness.runtime.handleLinkedViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(sharedVerticalViewport.scrollTop).toBe(0)
+    expect(bodyViewport.scrollTop).toBe(0)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
   it("updates the content transform on shared vertical scroll", () => {
     const leftPaneContent = document.createElement("div")
     const centerBodyContent = document.createElement("div")
@@ -308,6 +333,32 @@ describe("useDataGridStageViewportRuntime", () => {
       clientWidth: 320,
       clientHeight: 240,
     }))
+
+    harness.unmount()
+  })
+
+  it("prevents vertical wheel overscroll over the center body at the shared top boundary", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 0 })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaY: -48 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(sharedVerticalViewport.scrollTop).toBe(0)
+    expect(bodyViewport.scrollTop).toBe(0)
+    expect(bodyViewport.scrollLeft).toBe(24)
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
 
     harness.unmount()
   })

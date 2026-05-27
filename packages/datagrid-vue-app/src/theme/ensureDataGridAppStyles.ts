@@ -1013,7 +1013,7 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   position: relative;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
@@ -1068,7 +1068,7 @@ const DATA_GRID_APP_STYLES = `
   max-height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
 
@@ -1139,7 +1139,7 @@ const DATA_GRID_APP_STYLES = `
   overflow-y: hidden;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
-  overscroll-behavior-x: contain;
+  overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
 
@@ -1149,7 +1149,7 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
   min-height: 0;
   background: var(--datagrid-viewport-bg);
-  overscroll-behavior: contain;
+  overscroll-behavior: none;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
 }
