@@ -22,7 +22,8 @@ const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").tr
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-worker-browser-frames.json")
-const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_VIEWPORT_SELECTOR = "[data-datagrid-scroll-owner=\"shared-vertical\"], .grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_HORIZONTAL_VIEWPORT_SELECTOR = ".grid-body-center-horizontal-scrollport--scroll-owner, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
 
 const PERF_BUDGET_TOTAL_MS = Number.parseFloat(process.env.PERF_BUDGET_TOTAL_MS ?? "Infinity")
 const PERF_BUDGET_MAX_MAIN_FRAME_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_FRAME_P95_MS ?? "Infinity")
@@ -157,15 +158,17 @@ async function runSession(page, mode, index) {
 
   await page.waitForTimeout(120)
 
-  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector, scrollMode }) => {
+  const result = await page.evaluate(async ({ steps, stepDelayMs, index, viewportSelector, horizontalViewportSelector, scrollMode }) => {
     const viewport = document.querySelector(viewportSelector)
     if (!(viewport instanceof HTMLElement)) {
       throw new Error(`Datagrid viewport not found (${viewportSelector})`)
     }
 
     const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
+    const horizontalViewportCandidate = stageRoot?.querySelector(horizontalViewportSelector) ?? document.querySelector(horizontalViewportSelector)
+    const horizontalViewport = horizontalViewportCandidate instanceof HTMLElement ? horizontalViewportCandidate : viewport
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-    const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const maxLeft = Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth)
     const frameDeltas = []
     const telemetrySamples = []
 
@@ -184,7 +187,7 @@ async function runSession(page, mode, index) {
         usedHeapMb: usedHeap,
         totalHeapMb: totalHeap,
         scrollTop: viewport.scrollTop,
-        scrollLeft: viewport.scrollLeft,
+        scrollLeft: horizontalViewport.scrollLeft,
       })
     }
 
@@ -209,7 +212,8 @@ async function runSession(page, mode, index) {
         const dominantVertical = phase === 0 || phase === 1
         const deltaY = dominantVertical ? (phase === 0 ? 56 : 88) : 0
         const deltaX = dominantVertical ? 0 : (phase === 2 ? 24 : 40)
-        viewport.dispatchEvent(new WheelEvent("wheel", {
+        const wheelTarget = dominantVertical ? viewport : horizontalViewport
+        wheelTarget.dispatchEvent(new WheelEvent("wheel", {
           deltaMode: WheelEvent.DOM_DELTA_PIXEL,
           deltaX,
           deltaY,
@@ -221,7 +225,7 @@ async function runSession(page, mode, index) {
           viewport.scrollTop = Math.round((maxTop * step) / steps)
         }
       } else if (maxLeft > 0) {
-        viewport.scrollLeft = Math.round((maxLeft * step) / steps)
+        horizontalViewport.scrollLeft = Math.round((maxLeft * step) / steps)
       }
       if (step === 1 || step === steps || step % 12 === 0) {
         captureTelemetry(`step:${step}`)
@@ -253,13 +257,14 @@ async function runSession(page, mode, index) {
       maxTop,
       maxLeft,
       finalTop: viewport.scrollTop,
-      finalLeft: viewport.scrollLeft,
+      finalLeft: horizontalViewport.scrollLeft,
     }
   }, {
     steps: BENCH_BROWSER_SCROLL_STEPS,
     stepDelayMs: BENCH_BROWSER_STEP_DELAY_MS,
     index,
     viewportSelector: BENCH_VIEWPORT_SELECTOR,
+    horizontalViewportSelector: BENCH_HORIZONTAL_VIEWPORT_SELECTOR,
     scrollMode: BENCH_BROWSER_SCROLL_MODE,
   })
 

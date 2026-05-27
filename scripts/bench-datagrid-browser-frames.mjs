@@ -13,7 +13,7 @@ const BENCH_BROWSER_SCROLL_STEPS = Number.parseInt(process.env.BENCH_BROWSER_SCR
 const BENCH_BROWSER_STEP_DELAY_MS = Number.parseInt(process.env.BENCH_BROWSER_STEP_DELAY_MS ?? "8", 10)
 const BENCH_BROWSER_SCROLL_AXIS = (process.env.BENCH_BROWSER_SCROLL_AXIS ?? "combined").trim().toLowerCase()
 const BENCH_BROWSER_HEADLESS = (process.env.BENCH_BROWSER_HEADLESS ?? "true").trim().toLowerCase() !== "false"
-const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_VIEWPORT_SELECTOR = "[data-datagrid-scroll-owner=\"shared-vertical\"], .grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-browser-frames.json")
@@ -151,7 +151,7 @@ async function runSession(page, index) {
       finalLeft: horizontalViewport.scrollLeft,
       scrollOwners: {
         split: verticalViewport !== horizontalViewport,
-        vertical: verticalViewport === viewport ? "viewport" : "shared-vertical",
+        vertical: verticalViewport === sharedVerticalViewport ? "shared-vertical" : "viewport",
         horizontal: horizontalViewport === centerHorizontalViewport ? "center-horizontal" : "viewport",
       },
       appPerfSummary: typeof perfStore?.summary === "function" ? perfStore.summary() : [],

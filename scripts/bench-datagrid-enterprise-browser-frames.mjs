@@ -35,7 +35,8 @@ const BENCH_ENABLE_SORT = (process.env.BENCH_BROWSER_ENABLE_SORT ?? "true").trim
 const BENCH_ENABLE_CELL_UPDATES = (
   process.env.BENCH_BROWSER_ENABLE_CELL_UPDATES ?? "true"
 ).trim().toLowerCase() !== "false"
-const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_VERTICAL_VIEWPORT_SELECTOR = "[data-datagrid-scroll-owner=\"shared-vertical\"], .grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_HORIZONTAL_VIEWPORT_SELECTOR = ".grid-body-center-horizontal-scrollport--scroll-owner, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-enterprise-browser-frames.json")
@@ -783,6 +784,8 @@ async function runScenario(page, sessionIndex, scenario) {
       throw new Error(`Datagrid viewport not found (${input.viewportSelector})`)
     }
 
+    const horizontalViewportCandidate = document.querySelector(input.horizontalViewportSelector)
+    const horizontalViewport = horizontalViewportCandidate instanceof HTMLElement ? horizontalViewportCandidate : viewport
     const stageRoot = viewport.closest(".grid-stage") ?? document.querySelector(".grid-stage")
     const frameDeltas = []
     const frameSamples = []
@@ -999,7 +1002,7 @@ async function runScenario(page, sessionIndex, scenario) {
         label,
         atMs: performance.now(),
         scrollTop: viewport.scrollTop,
-        scrollLeft: viewport.scrollLeft,
+        scrollLeft: horizontalViewport.scrollLeft,
         rowNodes: rowElements.length,
         cellNodes: cellElements.length,
         stageNodes: stageRoot instanceof HTMLElement ? stageRoot.querySelectorAll("*").length : 0,
@@ -1078,7 +1081,7 @@ async function runScenario(page, sessionIndex, scenario) {
         usedHeapMb: usedHeap,
         totalHeapMb: totalHeap,
         scrollTop: viewport.scrollTop,
-        scrollLeft: viewport.scrollLeft,
+        scrollLeft: horizontalViewport.scrollLeft,
       })
     }
     const captureA11yDiagnostics = (label) => {
@@ -1196,10 +1199,13 @@ async function runScenario(page, sessionIndex, scenario) {
         return
       }
       const style = window.getComputedStyle(viewport)
+      const horizontalStyle = window.getComputedStyle(horizontalViewport)
       const bodyContent = viewport.querySelector(".grid-body-content")
       const rect = viewport.getBoundingClientRect()
+      const horizontalRect = horizontalViewport.getBoundingClientRect()
       verticalDiagnostics.scrollContainer = {
         viewport: resolveElementDescriptor(viewport),
+        horizontalViewport: resolveElementDescriptor(horizontalViewport),
         stageRoot: resolveElementDescriptor(stageRoot),
         dimensions: {
           clientWidth: viewport.clientWidth,
@@ -1209,9 +1215,20 @@ async function runScenario(page, sessionIndex, scenario) {
           offsetWidth: viewport.offsetWidth,
           offsetHeight: viewport.offsetHeight,
           maxTop: Math.max(0, viewport.scrollHeight - viewport.clientHeight),
-          maxLeft: Math.max(0, viewport.scrollWidth - viewport.clientWidth),
+          maxLeft: Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth),
           rectWidth: rect.width,
           rectHeight: rect.height,
+        },
+        horizontalDimensions: {
+          clientWidth: horizontalViewport.clientWidth,
+          clientHeight: horizontalViewport.clientHeight,
+          scrollWidth: horizontalViewport.scrollWidth,
+          scrollHeight: horizontalViewport.scrollHeight,
+          offsetWidth: horizontalViewport.offsetWidth,
+          offsetHeight: horizontalViewport.offsetHeight,
+          maxLeft: Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth),
+          rectWidth: horizontalRect.width,
+          rectHeight: horizontalRect.height,
         },
         style: {
           overflowX: style.overflowX,
@@ -1220,6 +1237,14 @@ async function runScenario(page, sessionIndex, scenario) {
           contain: style.contain,
           willChange: style.willChange,
           transform: style.transform,
+        },
+        horizontalStyle: {
+          overflowX: horizontalStyle.overflowX,
+          overflowY: horizontalStyle.overflowY,
+          position: horizontalStyle.position,
+          contain: horizontalStyle.contain,
+          willChange: horizontalStyle.willChange,
+          transform: horizontalStyle.transform,
         },
         bodyContent: bodyContent instanceof HTMLElement
           ? {
@@ -1304,7 +1329,7 @@ async function runScenario(page, sessionIndex, scenario) {
       const sample = {
         atMs: performance.now(),
         scrollTop: viewport.scrollTop,
-        scrollLeft: viewport.scrollLeft,
+        scrollLeft: horizontalViewport.scrollLeft,
       }
       verticalDiagnostics.scrollEvents.count += 1
       verticalDiagnostics.scrollEvents.first ??= sample
@@ -1372,7 +1397,7 @@ async function runScenario(page, sessionIndex, scenario) {
     await waitForPaint()
 
     const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-    const maxLeft = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const maxLeft = Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth)
 
     const runOverlayStress = async () => {
       const elementCenter = (element) => {
@@ -1653,7 +1678,7 @@ async function runScenario(page, sessionIndex, scenario) {
         const position = phase === 0
           ? Math.round((maxLeft * step) / input.horizontalSteps)
           : Math.round(maxLeft - (maxLeft * step) / input.horizontalSteps)
-        viewport.scrollLeft = position
+        horizontalViewport.scrollLeft = position
         interactions.horizontalScrollSteps += 1
         if (step === 1 || step === input.horizontalSteps || step % 32 === 0) {
           captureTelemetry(`horizontal:${step}`)
@@ -1665,7 +1690,7 @@ async function runScenario(page, sessionIndex, scenario) {
     }
 
     if (maxLeft > 0 && (input.scenario.filter || input.scenario.sort || input.scenario.cellUpdates)) {
-      viewport.scrollLeft = 0
+      horizontalViewport.scrollLeft = 0
       captureTelemetry("horizontal:reset")
       await waitForPaint()
     }
@@ -1931,7 +1956,7 @@ async function runScenario(page, sessionIndex, scenario) {
           return translateMatch ? Number.parseFloat(translateMatch[1]) : null
         }
         const headerDrift = headerViewport instanceof HTMLElement
-          ? Math.abs(headerViewport.scrollLeft - viewport.scrollLeft)
+          ? Math.abs(headerViewport.scrollLeft - horizontalViewport.scrollLeft)
           : 0
         const leftPaneTransformY = parseTransformY(leftPaneContent)
         const pinnedVerticalDrift = leftPaneTransformY == null
@@ -2487,7 +2512,7 @@ async function runScenario(page, sessionIndex, scenario) {
       maxTop,
       maxLeft,
       finalTop: viewport.scrollTop,
-      finalLeft: viewport.scrollLeft,
+      finalLeft: horizontalViewport.scrollLeft,
       verticalDiagnostics,
       sortDiagnostics,
       editDiagnostics,
@@ -2497,7 +2522,8 @@ async function runScenario(page, sessionIndex, scenario) {
     }
   }, {
     scenario,
-    viewportSelector: BENCH_VIEWPORT_SELECTOR,
+    viewportSelector: BENCH_VERTICAL_VIEWPORT_SELECTOR,
+    horizontalViewportSelector: BENCH_HORIZONTAL_VIEWPORT_SELECTOR,
     scrollSteps: BENCH_BROWSER_SCROLL_STEPS,
     smoothScrollSteps: BENCH_BROWSER_SMOOTH_SCROLL_STEPS,
     smoothScrollDeltaPx: BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX,
@@ -3234,7 +3260,7 @@ try {
         waitUntil: "networkidle",
         timeout: 120000,
       })
-      await page.waitForSelector(BENCH_VIEWPORT_SELECTOR, { timeout: 30000 })
+      await page.waitForSelector(BENCH_VERTICAL_VIEWPORT_SELECTOR, { timeout: 30000 })
       const setupResult = await configureSandbox(page, {
         rowCount: resolveScenarioRowCount(scenario),
         columnCount: resolveScenarioColumnCount(scenario),

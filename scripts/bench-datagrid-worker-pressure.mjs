@@ -24,7 +24,7 @@ const BENCH_HEADLESS = (process.env.BENCH_WORKER_PRESSURE_HEADLESS ?? "true").tr
 const BENCH_OUTPUT_JSON = process.env.BENCH_OUTPUT_JSON
   ? resolve(process.env.BENCH_OUTPUT_JSON)
   : resolve("artifacts/performance/bench-datagrid-worker-pressure.json")
-const BENCH_VIEWPORT_SELECTOR = ".table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
+const BENCH_VIEWPORT_SELECTOR = "[data-datagrid-scroll-owner=\"shared-vertical\"], .grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap, .datagrid-sugar-stage__viewport, .datagrid-stage__viewport"
 
 const PERF_BUDGET_TOTAL_MS = Number.parseFloat(process.env.PERF_BUDGET_TOTAL_MS ?? "Infinity")
 const PERF_BUDGET_MAX_MAIN_FRAME_P95_MS = Number.parseFloat(process.env.PERF_BUDGET_MAX_MAIN_FRAME_P95_MS ?? "Infinity")
