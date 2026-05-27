@@ -4,7 +4,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("@a11y vue base grid exposes mounted grid semantics after scroll and pinning", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=32")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(page.getByRole("grid").first()).toBeVisible({ timeout: 20_000 })
     await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBeGreaterThanOrEqual(32)
@@ -40,7 +40,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("vue base grid updates viewport window on long vertical scroll", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const before = await viewportRangeStart(page)
@@ -56,7 +56,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("vue base grid does not expose blank vertical viewport bands during fast scroll", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=50000")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     await assertNoBlankVerticalViewport(page)
@@ -67,7 +67,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("vue base grid does not expose blank horizontal viewport bands with column virtualization", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=10000")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await selectGridOption(page, "Cols", "32")
     await expect.poll(async () => totalColumns(page)).toBeGreaterThanOrEqual(32)
@@ -80,7 +80,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("vue base grid keeps a bounded horizontal window on a 1000-column grid", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=1000")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1000)
 
@@ -96,7 +96,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
     await gotoSandboxRoute(page, "/core/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const before = await viewportRangeStart(page)
@@ -109,7 +109,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("server data source settles below the viewport loading budget after fast scroll", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Steady latency" }).click()
     await expect.poll(async () => serverViewportLoadingRatio(page)).toBeLessThanOrEqual(0.05)
@@ -125,7 +125,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
   test("server data source does not expose blank viewport bands during visible refresh", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Slow backend" }).click()
     await expect.poll(async () => serverViewportLoadingRatio(page), {
@@ -155,7 +155,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await clearServerDatasourceGridState(page)
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
-    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-shared-vertical-scroll-shell, .sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const regionMenuButton = page
@@ -197,7 +197,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await clearServerDatasourceGridState(page)
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
-    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-shared-vertical-scroll-shell, .sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Steady latency" }).click()
 
@@ -236,7 +236,7 @@ test.describe("sandbox resize and fractional viewport contracts", () => {
   test("vue base grid stays covered after high-DPI viewport resize while scrolled", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=50000&cols=128")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(128)
 
@@ -255,7 +255,7 @@ test.describe("sandbox resize and fractional viewport contracts", () => {
   test("server data source keeps viewport covered when resized during loading", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Slow backend" }).click()
     await expect.poll(async () => serverViewportLoadingRatio(page), {
@@ -284,7 +284,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toHaveCSS("touch-action", "pan-x pan-y")
 
@@ -304,7 +304,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const beforeSelection = await selectionAnchorSignature(page)
@@ -320,7 +320,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const cell = firstEditableAmountCell(page)
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -348,7 +348,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const headerViewport = page.locator(".grid-header-viewport").first()
     const leftPaneContent = page.locator(".grid-body-pane--left .grid-pane-content").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -358,7 +358,7 @@ test.describe("sandbox touch scroll contracts", () => {
     const scrollState = await setViewportScroll(viewport, { top: 180, left: 260 })
 
     await expect.poll(async () => viewportScrollLeft(headerViewport)).toBe(scrollState.left)
-    await expect.poll(async () => inlineTransformY(leftPaneContent)).toBe(-scrollState.top)
+    await expect.poll(async () => inlineScrollTopVar(leftPaneContent)).toBe(scrollState.top)
   })
 
   test("body scroll keeps dynamically pinned right pane synchronized", async ({ page }) => {
@@ -366,21 +366,21 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
-    const rightPaneContent = page.locator(".grid-stage:visible .grid-body-pane--right .grid-pane-content").first()
-    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap").first()
+    const rightPaneContent = page.locator(".grid-body-pane--right .grid-pane-content").first()
+    await expect(page.locator(".grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
     await expect(rightPaneContent).toBeVisible({ timeout: 20_000 })
 
     const scrollState = await setViewportScroll(viewport, { top: 180, left: 120 })
 
-    await expect.poll(async () => inlineTransformY(rightPaneContent)).toBe(-scrollState.top)
+    await expect.poll(async () => inlineScrollTopVar(rightPaneContent)).toBe(scrollState.top)
   })
 
   test("touch pan on pinned pane routes into the body viewport", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const pinnedPane = page.locator(".grid-body-pane--left").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
@@ -399,7 +399,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const pinnedPane = page.locator(".grid-body-pane--left").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
@@ -419,9 +419,9 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
-    const pinnedPane = page.locator(".grid-stage:visible .grid-body-pane--right").first()
-    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap").first()
+    const pinnedPane = page.locator(".grid-body-pane--right").first()
+    await expect(page.locator(".grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
     await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
 
     const beforeTop = await viewportScrollTop(viewport)
@@ -439,9 +439,9 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
-    const pinnedPane = page.locator(".grid-stage:visible .grid-body-pane--right").first()
-    await expect(page.locator(".grid-stage:visible .grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap").first()
+    const pinnedPane = page.locator(".grid-body-pane--right").first()
+    await expect(page.locator(".grid-body-viewport .grid-row").first()).toBeVisible({ timeout: 20_000 })
     await expect(pinnedPane).toBeVisible({ timeout: 20_000 })
 
     const beforeLeft = await viewportScrollLeft(viewport)
@@ -458,7 +458,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const headerShell = page.locator(".grid-header-shell").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(headerShell).toBeVisible({ timeout: 20_000 })
@@ -477,7 +477,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const headerShell = page.locator(".grid-header-shell").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(headerShell).toBeVisible({ timeout: 20_000 })
@@ -496,7 +496,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
 
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
     const scrollState = await setViewportScroll(viewport, { top: 220, left: 180 })
@@ -548,7 +548,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Steady latency" }).click()
@@ -584,7 +584,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
@@ -609,7 +609,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
@@ -637,7 +637,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
@@ -672,7 +672,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
@@ -684,14 +684,15 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect(rangeMoveHandle).toBeVisible({ timeout: 20_000 })
 
     const beforeTop = await viewportScrollTop(viewport)
-    const touchDrag = await dispatchTouchDragStartAndMove(rangeMoveHandle, targetCell)
+    const targetPoint = await elementCenter(targetCell)
+    const touchDrag = await dispatchTouchDragStartAndMove(rangeMoveHandle, targetPoint)
 
     expect(touchDrag.startPrevented).toBe(true)
     expect(touchDrag.movePrevented).toBe(true)
     await expect(stage).toHaveClass(/grid-stage--range-moving/)
     await expect(page.locator(".grid-selection-overlay__segment--move-preview").first()).toBeVisible()
 
-    await dispatchMouseUpAt(targetCell)
+    await dispatchMouseUpAtPoint(page, targetPoint)
     await expect(stage).not.toHaveClass(/grid-stage--range-moving/)
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
@@ -701,7 +702,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     const targetCell = amountCellByViewportRow(page, 1)
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
@@ -739,7 +740,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const header = page.locator('.grid-cell--header[data-column-key="name"]').first()
     const resizeHandle = header.locator(".col-resize")
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
@@ -769,7 +770,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage").first()
-    const viewport = page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
     const row = page.locator('.grid-body-pane--left .grid-row[data-row-index="0"]').first()
     const resizeHandle = row.locator(".row-resize-handle")
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
@@ -803,7 +804,7 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   try {
     await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
   } catch {
-    await expect(page.locator(".grid-body-viewport.table-wrap:visible, .table-wrap:visible").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-body-shared-vertical-scroll-shell:visible, .grid-body-viewport.table-wrap:visible, .table-wrap:visible").first()).toBeVisible({ timeout: 20_000 })
   }
 }
 
@@ -839,30 +840,64 @@ async function forceCoarsePointer(page: Page): Promise<void> {
 }
 
 async function viewportScrollTop(viewport: Locator): Promise<number> {
-  return await viewport.evaluate(element => element.scrollTop)
+  return await viewport.evaluate(element => {
+    const verticalViewport = element.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell") ?? element
+    return verticalViewport.scrollTop
+  })
 }
 
 async function viewportScrollLeft(viewport: Locator): Promise<number> {
-  return await viewport.evaluate(element => element.scrollLeft)
+  return await viewport.evaluate(element => {
+    const usesSplitBodyScroll = element.classList.contains("grid-body-shared-vertical-scroll-shell")
+      || element.classList.contains("grid-body-viewport")
+      || element.classList.contains("table-wrap")
+    const horizontalViewport = usesSplitBodyScroll
+      ? element.closest(".grid-stage")?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? element
+      : element
+    return horizontalViewport.scrollLeft
+  })
+}
+
+async function viewportMaxScrollTop(viewport: Locator): Promise<number> {
+  return await viewport.evaluate(element => {
+    const verticalViewport = element.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell") ?? element
+    return Math.max(0, verticalViewport.scrollHeight - verticalViewport.clientHeight)
+  })
+}
+
+async function viewportMaxScrollLeft(viewport: Locator): Promise<number> {
+  return await viewport.evaluate(element => {
+    const horizontalViewport = element.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? element
+    return Math.max(0, horizontalViewport.scrollWidth - horizontalViewport.clientWidth)
+  })
 }
 
 async function setViewportScroll(viewport: Locator, scroll: { top: number; left: number }): Promise<{ top: number; left: number }> {
   return await viewport.evaluate((element, nextScroll) => {
-    element.scrollTop = nextScroll.top
-    element.scrollLeft = nextScroll.left
-    element.dispatchEvent(new Event("scroll", { bubbles: true }))
+    const stage = element.closest(".grid-stage")
+    const verticalViewport = stage?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell") ?? element
+    const horizontalViewport = stage?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? element
+    verticalViewport.scrollTop = nextScroll.top
+    horizontalViewport.scrollLeft = nextScroll.left
+    verticalViewport.dispatchEvent(new Event("scroll", { bubbles: true }))
+    if (horizontalViewport !== verticalViewport) {
+      horizontalViewport.dispatchEvent(new Event("scroll", { bubbles: true }))
+    }
     return {
-      top: element.scrollTop,
-      left: element.scrollLeft,
+      top: verticalViewport.scrollTop,
+      left: horizontalViewport.scrollLeft,
     }
   }, scroll)
 }
 
-async function inlineTransformY(locator: Locator): Promise<number | null> {
+async function inlineScrollTopVar(locator: Locator): Promise<number | null> {
   return await locator.evaluate(element => {
-    const transform = (element as HTMLElement).style.transform
-    const match = /translate3d\([^,]+,\s*(-?\d+(?:\.\d+)?)px,/.exec(transform)
-    return match ? Number(match[1]) : null
+    const raw = (element as HTMLElement).style.getPropertyValue("--datagrid-body-scroll-top")
+    const value = Number.parseFloat(raw)
+    return Number.isFinite(value) ? value : null
   })
 }
 
@@ -891,13 +926,31 @@ async function perfSummary(page: Page, scope: string): Promise<Record<string, un
   }, scope)
 }
 
+async function dispatchElementClick(target: Locator): Promise<void> {
+  await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    element.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+    }))
+  })
+}
+
 async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
   const menuButton = page.locator(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]:visible`).first()
   await expect(menuButton).toBeVisible({ timeout: 20_000 })
-  await menuButton.click()
-  await page.locator('[data-datagrid-column-menu-action="pin-submenu"]').click()
-  await page.locator('[data-datagrid-column-menu-action="pin-right"]').click()
-  await expect(page.locator(`.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).first()).toBeVisible({ timeout: 20_000 })
+  await dispatchElementClick(menuButton)
+  const pinSubmenu = page.locator('[data-datagrid-column-menu-action="pin-submenu"]').first()
+  await expect(pinSubmenu).toBeVisible({ timeout: 20_000 })
+  await pinSubmenu.click({ force: true })
+  const pinRight = page.locator('[data-datagrid-column-menu-action="pin-right"]').first()
+  await expect(pinRight).toBeVisible({ timeout: 20_000 })
+  await pinRight.click({ force: true })
+  await expect.poll(async () => page.locator(`.grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).count(), {
+    timeout: 20_000,
+  }).toBeGreaterThan(0)
 }
 
 interface MountedGridA11yCellSnapshot {
@@ -940,7 +993,7 @@ async function mountedGridA11ySnapshot(page: Page): Promise<MountedGridA11ySnaps
     if (!stage) {
       throw new Error("missing visible grid stage")
     }
-    const grid = stage.querySelector<HTMLElement>(".grid-body-viewport[role='grid']")
+    const grid = stage.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell[role='grid'], .grid-body-viewport[role='grid']")
     if (!grid) {
       throw new Error("missing grid viewport")
     }
@@ -999,28 +1052,27 @@ function amountCellByViewportRow(page: Page, rowIndex: number): Locator {
 }
 
 async function markViewportScrolling(viewport: Locator): Promise<void> {
-  await viewport.evaluate(element => {
-    element.scrollTop += 80
-    element.dispatchEvent(new Event("scroll", { bubbles: true }))
-  })
+  const top = await viewportScrollTop(viewport)
+  const left = await viewportScrollLeft(viewport)
+  await setViewportScroll(viewport, { top: top + 80, left })
 }
 
 async function runLongVerticalSession(viewport: Locator): Promise<void> {
-  await viewport.evaluate(async element => {
-    const maxTop = Math.max(0, element.scrollHeight - element.clientHeight)
-    if (maxTop <= 0) {
-      return
-    }
-    const pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
-    for (let step = 1; step <= 12; step += 1) {
-      element.scrollTop = Math.round((maxTop * step) / 12)
-      await pause(18)
-    }
-  })
+  const maxTop = await viewportMaxScrollTop(viewport)
+  if (maxTop <= 0) {
+    return
+  }
+  for (let step = 1; step <= 12; step += 1) {
+    await setViewportScroll(viewport, {
+      top: Math.round((maxTop * step) / 12),
+      left: await viewportScrollLeft(viewport),
+    })
+    await new Promise<void>(resolve => setTimeout(resolve, 18))
+  }
 }
 
 async function runFastVerticalDetectionSession(page: Page, viewport: Locator): Promise<void> {
-  const maxTop = await viewport.evaluate(element => Math.max(0, element.scrollHeight - element.clientHeight))
+  const maxTop = await viewportMaxScrollTop(viewport)
   expect(maxTop).toBeGreaterThan(0)
   const positions = [0.12, 0.35, 0.68, 0.92, 0.54, 0.18, 0.76, 0.98]
   for (const ratio of positions) {
@@ -1031,7 +1083,7 @@ async function runFastVerticalDetectionSession(page: Page, viewport: Locator): P
 }
 
 async function runFastHorizontalDetectionSession(page: Page, viewport: Locator): Promise<void> {
-  const maxLeft = await viewport.evaluate(element => Math.max(0, element.scrollWidth - element.clientWidth))
+  const maxLeft = await viewportMaxScrollLeft(viewport)
   expect(maxLeft).toBeGreaterThan(0)
   const positions = [0.16, 0.42, 0.74, 0.96, 0.58, 0.22, 0.86, 1]
   for (const ratio of positions) {
@@ -1349,8 +1401,8 @@ async function serverPlaceholderExposureMaxMs(page: Page): Promise<number> {
   return Number.isFinite(value) ? value : 0
 }
 
-async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
-  const result = await page.evaluate(() => {
+async function readVerticalViewportCoverage(page: Page) {
+  return await page.evaluate(() => {
     const findVisibleElement = (selector: string): HTMLElement | null => {
       for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
         const rect = element.getBoundingClientRect()
@@ -1366,14 +1418,16 @@ async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
       }
       return null
     }
-    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    const viewport = findVisibleElement(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap")
     if (!viewport) {
       return { ok: false, reason: "missing viewport" }
     }
+    const rowRoot = viewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-viewport--shared-vertical") ?? viewport
     const viewportRect = viewport.getBoundingClientRect()
     const top = viewportRect.top
     const bottom = viewportRect.top + viewport.clientHeight
-    const rows = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+    const rows = Array.from(rowRoot.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
       .map(row => {
         const rect = row.getBoundingClientRect()
         return {
@@ -1418,6 +1472,15 @@ async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
       viewport: { top, bottom, scrollTop: viewport.scrollTop, clientHeight: viewport.clientHeight },
     }
   })
+}
+
+async function assertNoBlankVerticalViewport(page: Page): Promise<void> {
+  let result = await readVerticalViewportCoverage(page)
+  const deadline = Date.now() + 5_000
+  while ((result.ok !== true || (result.renderedRows ?? 0) <= 0) && Date.now() < deadline) {
+    await page.waitForTimeout(50)
+    result = await readVerticalViewportCoverage(page)
+  }
 
   expect(result, JSON.stringify(result, null, 2)).toMatchObject({
     ok: true,
@@ -1444,16 +1507,18 @@ async function assertNoBlankHorizontalViewport(page: Page): Promise<void> {
       }
       return null
     }
-    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    const viewport = findVisibleElement(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap")
     if (!viewport) {
       return { ok: false, reason: "missing viewport" }
     }
-    const viewportRect = viewport.getBoundingClientRect()
+    const horizontalViewport = viewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? viewport
+    const viewportRect = horizontalViewport.getBoundingClientRect()
     const left = viewportRect.left
-    const right = viewportRect.left + viewport.clientWidth
+    const right = viewportRect.left + horizontalViewport.clientWidth
     const top = viewportRect.top
-    const bottom = viewportRect.top + viewport.clientHeight
-    const row = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+    const bottom = viewportRect.top + horizontalViewport.clientHeight
+    const row = Array.from(horizontalViewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
       .find(candidate => {
         const rect = candidate.getBoundingClientRect()
         return rect.bottom > top + 1 && rect.top < bottom - 1
@@ -1506,7 +1571,7 @@ async function assertNoBlankHorizontalViewport(page: Page): Promise<void> {
       columnIndexes,
       duplicateColumnIndexes,
       gaps,
-      viewport: { left, right, scrollLeft: viewport.scrollLeft, clientWidth: viewport.clientWidth },
+      viewport: { left, right, scrollLeft: horizontalViewport.scrollLeft, clientWidth: horizontalViewport.clientWidth },
     }
   })
 
@@ -1535,12 +1600,14 @@ async function renderedCenterCellsInFirstVisibleRow(page: Page): Promise<number>
       }
       return null
     }
-    const viewport = findVisibleElement(".grid-body-viewport.table-wrap, .table-wrap")
+    const viewport = findVisibleElement(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap")
     if (!viewport) {
       return 0
     }
-    const viewportRect = viewport.getBoundingClientRect()
-    const row = Array.from(viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
+    const horizontalViewport = viewport.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? viewport
+    const viewportRect = horizontalViewport.getBoundingClientRect()
+    const row = Array.from(horizontalViewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row[data-row-index]"))
       .find(candidate => {
         const rect = candidate.getBoundingClientRect()
         return rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1

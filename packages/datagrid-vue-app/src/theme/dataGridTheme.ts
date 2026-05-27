@@ -79,16 +79,32 @@ function resolveThemeStyleConfig(theme: DataGridThemeProp): DataGridStyleConfig 
   if (isStyleConfig(theme)) {
     return mergeStyleConfigs(defaultStyleConfig, theme)
   }
-  return mergeStyleConfigs(defaultStyleConfig, {
-    tokens: theme,
-  })
+  return defaultStyleConfig
+}
+
+function isThemeTokenOverride(theme: DataGridThemeProp): theme is Partial<DataGridThemeTokens> {
+  return theme != null && typeof theme === "object" && !isStyleConfig(theme)
+}
+
+function mergeDefinedThemeTokenOverrides(
+  tokens: DataGridThemeTokens,
+  override: Partial<DataGridThemeTokens>,
+): DataGridThemeTokens {
+  const merged: DataGridThemeTokens = { ...tokens }
+  for (const [key, value] of Object.entries(override)) {
+    if (value != null) {
+      merged[key as keyof DataGridThemeTokens] = value
+    }
+  }
+  return merged
 }
 
 export function resolveDataGridThemeTokens(theme: DataGridThemeProp): DataGridThemeTokens {
   const styleConfig = resolveThemeStyleConfig(theme)
-  return resolveGridThemeTokens(styleConfig ?? defaultStyleConfig, {
+  const tokens = resolveGridThemeTokens(styleConfig ?? defaultStyleConfig, {
     document: typeof document === "undefined" ? undefined : document,
   })
+  return isThemeTokenOverride(theme) ? mergeDefinedThemeTokenOverrides(tokens, theme) : tokens
 }
 
 export function applyDataGridTheme(rootElement: HTMLElement, theme: DataGridThemeProp): DataGridThemeTokens {

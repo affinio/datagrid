@@ -119,7 +119,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await pinColumnRight(page, "amount")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -145,7 +145,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -178,7 +178,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   test("virtualized cells keep aria indexes after scroll and keyboard navigation", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
@@ -211,7 +211,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await pinColumnRight(page, "amount")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -241,7 +241,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -265,7 +265,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   test("keyboard navigation past the rendered range keeps the active cell focused", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
@@ -287,7 +287,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -316,7 +316,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -351,7 +351,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await pinColumnRight(page, "amount")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -377,7 +377,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -412,7 +412,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await pinColumnRight(page, "amount")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-pane--right .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -438,7 +438,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -467,7 +467,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const previousCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="name"]').first()
     const activeCell = page.locator('.grid-stage:visible .grid-body-viewport .grid-cell[data-row-index="2"][data-column-key="amount"]').first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
@@ -509,7 +509,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await page.locator('.controls label:has-text("Placeholder tail") input[type="checkbox"]').check()
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await setViewportScroll(viewport, { top: 100_000, left: 0 })
@@ -520,7 +520,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(placeholderAmountCell).toBeVisible({ timeout: 20_000 })
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
 
-    await placeholderAmountCell.dblclick()
+    await dispatchElementDoubleClick(placeholderAmountCell)
     const editor = placeholderAmountCell.locator("input.cell-editor-input").first()
     await expect(editor).toBeVisible({ timeout: 20_000 })
     await editor.fill("4321")
@@ -539,7 +539,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/server-data-source-grid?datasource=fake")
 
     const stage = page.locator(".sandbox-server-data-source-grid .grid-stage:visible").first()
-    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".sandbox-server-data-source-grid .grid-body-shared-vertical-scroll-shell, .sandbox-server-data-source-grid .grid-body-viewport.table-wrap").first()
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
@@ -584,7 +584,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -616,7 +616,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     await expect(stage).toBeVisible({ timeout: 20_000 })
     await expect(viewport).toBeVisible({ timeout: 20_000 })
@@ -646,7 +646,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     const targetCell = amountCellByViewportRow(page, 1)
     await expect(stage).toBeVisible({ timeout: 20_000 })
@@ -674,7 +674,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await gotoSandboxRoute(page, "/vue/base-grid?dgPerfTrace=1")
 
     const stage = page.locator(".grid-stage:visible").first()
-    const viewport = page.locator(".grid-stage:visible .grid-body-viewport.table-wrap").first()
+    const viewport = page.locator(".grid-stage:visible .grid-body-shared-vertical-scroll-shell, .grid-stage:visible .grid-body-viewport.table-wrap").first()
     const sourceCell = firstEditableAmountCell(page)
     const targetCell = amountCellByViewportRow(page, 1)
     await expect(stage).toBeVisible({ timeout: 20_000 })
@@ -752,7 +752,7 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   try {
     await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
   } catch {
-    await expect(page.locator(".grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
   }
 }
 
@@ -785,7 +785,8 @@ async function selectionAnchorMeta(page: Page): Promise<{
       rowIndex: anchorCell?.getAttribute("data-row-index") ?? null,
       columnIndex: anchorCell?.getAttribute("data-column-index") ?? null,
       columnKey: anchorCell?.getAttribute("data-column-key") ?? null,
-      focusOwnedByGrid: document.activeElement?.classList.contains("grid-body-viewport") === true,
+      focusOwnedByGrid: document.activeElement?.classList.contains("grid-body-viewport") === true
+        || document.activeElement?.classList.contains("grid-body-shared-vertical-scroll-shell") === true,
     }
   })
 }
@@ -799,32 +800,80 @@ function amountCellByViewportRow(page: Page, rowIndex: number): Locator {
 }
 
 async function viewportScrollTop(viewport: Locator): Promise<number> {
-  return await viewport.evaluate(element => element.scrollTop)
+  return await viewport.evaluate(element => {
+    const verticalViewport = element.closest(".grid-stage")
+      ?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell") ?? element
+    return verticalViewport.scrollTop
+  })
 }
 
 async function viewportScrollLeft(viewport: Locator): Promise<number> {
-  return await viewport.evaluate(element => element.scrollLeft)
+  return await viewport.evaluate(element => {
+    const usesSplitBodyScroll = element.classList.contains("grid-body-shared-vertical-scroll-shell")
+      || element.classList.contains("grid-body-viewport")
+      || element.classList.contains("table-wrap")
+    const horizontalViewport = usesSplitBodyScroll
+      ? element.closest(".grid-stage")?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? element
+      : element
+    return horizontalViewport.scrollLeft
+  })
 }
 
 async function setViewportScroll(viewport: Locator, scroll: { top: number; left: number }): Promise<{ top: number; left: number }> {
   return await viewport.evaluate((element, nextScroll) => {
-    element.scrollTop = nextScroll.top
-    element.scrollLeft = nextScroll.left
-    element.dispatchEvent(new Event("scroll", { bubbles: true }))
+    const stage = element.closest(".grid-stage")
+    const verticalViewport = stage?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell") ?? element
+    const horizontalViewport = stage?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner") ?? element
+    verticalViewport.scrollTop = nextScroll.top
+    horizontalViewport.scrollLeft = nextScroll.left
+    verticalViewport.dispatchEvent(new Event("scroll", { bubbles: true }))
+    if (horizontalViewport !== verticalViewport) {
+      horizontalViewport.dispatchEvent(new Event("scroll", { bubbles: true }))
+    }
     return {
-      top: element.scrollTop,
-      left: element.scrollLeft,
+      top: verticalViewport.scrollTop,
+      left: horizontalViewport.scrollLeft,
     }
   }, scroll)
+}
+
+async function dispatchElementClick(target: Locator): Promise<void> {
+  await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    element.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+    }))
+  })
+}
+
+async function dispatchElementDoubleClick(target: Locator): Promise<void> {
+  await target.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    element.dispatchEvent(new MouseEvent("dblclick", {
+      bubbles: true,
+      cancelable: true,
+      clientX: Math.round(rect.left + rect.width / 2),
+      clientY: Math.round(rect.top + rect.height / 2),
+    }))
+  })
 }
 
 async function pinColumnRight(page: Page, columnKey: string): Promise<void> {
   const menuButton = page.locator(`[data-datagrid-column-menu-button="true"][data-column-key="${columnKey}"]:visible`).first()
   await expect(menuButton).toBeVisible({ timeout: 20_000 })
-  await menuButton.click()
-  await page.locator('[data-datagrid-column-menu-action="pin-submenu"]').click()
-  await page.locator('[data-datagrid-column-menu-action="pin-right"]').click()
-  await expect(page.locator(`.grid-stage:visible .grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).first()).toBeVisible({ timeout: 20_000 })
+  await dispatchElementClick(menuButton)
+  const pinSubmenu = page.locator('[data-datagrid-column-menu-action="pin-submenu"]').first()
+  await expect(pinSubmenu).toBeVisible({ timeout: 20_000 })
+  await pinSubmenu.click({ force: true })
+  const pinRight = page.locator('[data-datagrid-column-menu-action="pin-right"]').first()
+  await expect(pinRight).toBeVisible({ timeout: 20_000 })
+  await pinRight.click({ force: true })
+  await expect.poll(async () => page.locator(`.grid-body-pane--right .grid-cell[data-column-key="${columnKey}"]`).count(), {
+    timeout: 20_000,
+  }).toBeGreaterThan(0)
 }
 
 async function copyCellAndExpectPending(page: Page, cell: Locator): Promise<void> {

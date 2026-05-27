@@ -25,8 +25,10 @@ import type {
   DataGridSelectionSnapshot,
 } from "@affino/datagrid-vue"
 import { useDataGridRuntime } from "@affino/datagrid-vue"
+import { THEME_TOKEN_VARIABLE_MAP, type DataGridThemeTokens } from "@affino/datagrid-theme"
 import {
   applyDataGridTheme,
+  resolveDataGridThemeTokens,
   type DataGridThemeProp,
 } from "../theme/dataGridTheme"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
@@ -37,6 +39,20 @@ type DataGridRuntimeOverrides = Omit<
   "rowModel" | "columnModel" | "viewport"
 > & {
   viewport?: DataGridCoreServiceRegistry["viewport"]
+}
+
+type DataGridThemeStyleVars = Record<string, string>
+
+function resolveDataGridThemeStyleVars(theme: DataGridThemeProp): DataGridThemeStyleVars {
+  const tokens = resolveDataGridThemeTokens(theme)
+  const style: DataGridThemeStyleVars = {}
+  for (const [tokenKey, cssVar] of Object.entries(THEME_TOKEN_VARIABLE_MAP)) {
+    const value = tokens[tokenKey as keyof DataGridThemeTokens]
+    if (value != null) {
+      style[cssVar] = value
+    }
+  }
+  return style
 }
 
 export interface DataGridFocusAnchor<TRowKey = DataGridRowId> {
@@ -504,6 +520,7 @@ export default defineComponent({
             : "affino-datagrid-app-root--fill",
         ],
         style: {
+          ...resolveDataGridThemeStyleVars(props.theme),
           display: "flex",
           width: "100%",
           minHeight: "0",

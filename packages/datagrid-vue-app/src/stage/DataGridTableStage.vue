@@ -1642,14 +1642,17 @@ function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
   if (!root || !(target instanceof Element) || !root.contains(target)) {
     return false
   }
+  const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
+  if (linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)) {
+    return true
+  }
   if (bodyViewportEl.value?.contains(target)) {
     return false
   }
   if (verticalBodyViewportEl.value?.contains(target)) {
     return false
   }
-  const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
-  return linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)
+  return false
 }
 
 function isBodyGridFocusTarget(target: EventTarget | null): boolean {
@@ -1692,6 +1695,7 @@ onMounted(() => {
       root: stageRootEl.value,
       resolveScrollContainers: () => [verticalBodyViewportEl.value, bodyViewportEl.value],
       shouldHandleTarget: shouldRouteTableTouchPan,
+      useAllScrollContainersForTarget: true,
     })
   }
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {

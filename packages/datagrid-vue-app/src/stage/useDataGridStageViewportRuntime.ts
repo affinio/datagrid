@@ -163,18 +163,20 @@ export function useDataGridStageViewportRuntime(
   const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
 
   function syncSharedVerticalContentOffset(scrollTop: number): void {
-    const rowOrigin = Math.max(
-      0,
-      Number.isFinite(options.viewport.value.topSpacerHeight) ? options.viewport.value.topSpacerHeight : 0,
-    )
-    const transform = `translate3d(0, ${rowOrigin - Math.max(0, scrollTop)}px, 0)`
+    const scrollTopValue = `${Math.max(0, scrollTop)}px`
     for (const element of [
       options.leftPaneContentRef.value,
       options.centerBodyContentRef?.value ?? null,
       options.rightPaneContentRef.value,
     ]) {
-      if (element && element.style.transform !== transform) {
-        element.style.transform = transform
+      if (!element) {
+        continue
+      }
+      if (element.style.transform) {
+        element.style.removeProperty("transform")
+      }
+      if (element.style.getPropertyValue("--datagrid-body-scroll-top") !== scrollTopValue) {
+        element.style.setProperty("--datagrid-body-scroll-top", scrollTopValue)
       }
     }
   }

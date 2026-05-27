@@ -2837,7 +2837,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("lets pinned body touch panning use the shared vertical scroll owner natively", () => {
+  it("routes pinned body touch panning into the shared vertical scroll owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2861,11 +2861,48 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
     pinnedCell.dispatchEvent(moveEvent)
 
-    expect(addEventListener).not.toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
-    expect(moveEvent.defaultPrevented).toBe(false)
-    expect(sharedShell.scrollTop).toBe(100)
+    expect(addEventListener).toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
+    expect(moveEvent.defaultPrevented).toBe(true)
+    expect(sharedShell.scrollTop).toBe(150)
 
     addEventListener.mockRestore()
+    wrapper.unmount()
+  })
+
+  it("routes horizontal pinned body touch panning into the center horizontal owner", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 20,
+      }),
+    })
+    const sharedShell = wrapper.find(".grid-body-shared-vertical-scroll-shell").element as HTMLElement
+    const centerHorizontal = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner").element as HTMLElement
+    const pinnedCell = wrapper.find('.grid-body-pane--left .grid-cell[data-column-key="left"]').element
+
+    defineScrollMetrics(sharedShell, {
+      scrollHeight: 1200,
+      clientHeight: 200,
+      scrollWidth: 250,
+      clientWidth: 250,
+    })
+    defineScrollMetrics(centerHorizontal, {
+      scrollHeight: 200,
+      clientHeight: 200,
+      scrollWidth: 1200,
+      clientWidth: 250,
+    })
+    sharedShell.scrollTop = 100
+    centerHorizontal.scrollLeft = 100
+
+    pinnedCell.dispatchEvent(createTouchEvent("touchstart", { clientX: 100, clientY: 20 }))
+    const moveEvent = createTouchEvent("touchmove", { clientX: 50, clientY: 20 })
+    pinnedCell.dispatchEvent(moveEvent)
+
+    expect(moveEvent.defaultPrevented).toBe(true)
+    expect(centerHorizontal.scrollLeft).toBe(150)
+    expect(sharedShell.scrollTop).toBe(100)
+
     wrapper.unmount()
   })
 

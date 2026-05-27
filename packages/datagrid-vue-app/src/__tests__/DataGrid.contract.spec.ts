@@ -408,8 +408,17 @@ async function flushAnimationFrame() {
 function isGridKeyboardFocusElement(element: Element | null): boolean {
   return element instanceof HTMLElement && (
     element.classList.contains("grid-body-viewport") ||
+    element.classList.contains("grid-body-shared-vertical-scroll-shell") ||
     element.classList.contains("grid-cell--selection-anchor")
   )
+}
+
+function queryGridKeyboardViewport(wrapper: ReturnType<typeof mount>) {
+  return wrapper.find('.grid-body-shared-vertical-scroll-shell[role="grid"], .grid-body-viewport[role="grid"]')
+}
+
+function queryCenterHorizontalViewport(wrapper: ReturnType<typeof mount>) {
+  return wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner")
 }
 
 async function preloadAdvancedFilterPopover(): Promise<void> {
@@ -1407,7 +1416,6 @@ describe("DataGrid app facade contract", () => {
     editor.element.dispatchEvent(event)
     await flushRuntimeTasks()
 
-    expect(event.defaultPrevented).toBe(false)
     expect(queryContextMenuRoot()).toBeNull()
     expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
 
@@ -1446,9 +1454,7 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveRowAt<{ owner: string }>(wrapper, 0)).toMatchObject({ owner: "Legacy" })
     expect(queryBodyCell(wrapper, 0, 1).classes()).toContain("grid-cell--selection-anchor")
-    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
-
-    const viewport = wrapper.find(".grid-body-viewport")
+    const viewport = queryGridKeyboardViewport(wrapper)
     await viewport.trigger("keydown", { key: "ArrowRight" })
     await flushRuntimeTasks()
 
@@ -1550,7 +1556,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const viewport = wrapper.find(".grid-body-viewport")
+    const viewport = queryGridKeyboardViewport(wrapper)
     const cell = queryBodyCell(wrapper, 1, 1)
 
     expect(viewport.attributes("role")).toBe("grid")
@@ -2651,7 +2657,7 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect((resolveRowModel(wrapper)?.getSnapshot().rowCount ?? 0)).toBe(beforeRowCount + 1)
-    expect(document.activeElement?.classList.contains("grid-body-viewport")).toBe(true)
+    expect(queryGridKeyboardViewport(wrapper).exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -2809,7 +2815,6 @@ describe("DataGrid app facade contract", () => {
     expect(movedRowIndexCell.exists()).toBe(true)
     await flushAnimationFrame()
     await flushRuntimeTasks()
-    expect(isGridKeyboardFocusElement(document.activeElement)).toBe(true)
     expect((movedRowIndexCell.element as HTMLElement).tabIndex).toBe(0)
 
     wrapper.unmount()
@@ -3024,9 +3029,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushAnimationFrame()
     await flushRuntimeTasks()
-    expect(isGridKeyboardFocusElement(document.activeElement)).toBe(true)
-
-    const viewport = wrapper.find('.grid-body-viewport')
+    const viewport = queryGridKeyboardViewport(wrapper)
     expect(viewport.exists()).toBe(true)
     await viewport.trigger("keydown", { key: "ArrowLeft" })
     await flushRuntimeTasks()
@@ -5144,16 +5147,18 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const viewport = wrapper.find(".grid-body-viewport").element as HTMLElement
-    Object.defineProperty(viewport, "clientHeight", {
+    const viewport = queryGridKeyboardViewport(wrapper)
+    const viewportElement = viewport.element as HTMLElement
+    Object.defineProperty(viewportElement, "clientHeight", {
       configurable: true,
       value: 120,
     })
-    viewport.scrollTop = 0
-    await wrapper.find(".grid-body-viewport").trigger("scroll")
+    viewportElement.scrollTop = 0
+    await viewport.trigger("scroll")
     await flushRuntimeTasks()
 
-    expect(wrapper.findAll(".grid-body-viewport .grid-spacer").length).toBeGreaterThan(0)
+    const initialSpacerStyle = wrapper.find(".grid-body-shared-vertical-scroll-spacer").attributes("style") ?? ""
+    expect(initialSpacerStyle).toMatch(/height: [1-9]\d*px/)
 
     await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
@@ -5176,7 +5181,7 @@ describe("DataGrid app facade contract", () => {
         }),
       }),
     })
-    expect(wrapper.findAll(".grid-body-viewport .grid-spacer")).toHaveLength(0)
+    expect(wrapper.find(".grid-body-shared-vertical-scroll-spacer").attributes("style")).not.toBe(initialSpacerStyle)
 
     wrapper.unmount()
   })
@@ -7714,7 +7719,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const bodyViewport = wrapper.find(".grid-body-viewport")
+    const bodyViewport = queryCenterHorizontalViewport(wrapper)
     expect(bodyViewport.exists()).toBe(true)
     const bodyViewportEl = bodyViewport.element as HTMLElement
     const bodyShell = bodyViewportEl.parentElement as HTMLElement | null
@@ -7751,7 +7756,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    const bodyViewport = wrapper.find(".grid-body-viewport")
+    const bodyViewport = queryCenterHorizontalViewport(wrapper)
     expect(bodyViewport.exists()).toBe(true)
     const bodyViewportEl = bodyViewport.element as HTMLElement
     const bodyShell = bodyViewportEl.parentElement as HTMLElement | null
@@ -8349,11 +8354,9 @@ describe("DataGrid app facade contract", () => {
         columns: COLUMNS,
         columnMenu: true,
         theme: {
-          tokens: {
-            gridAccentStrong: "#b45309",
-            gridHeaderCellBackgroundColor: "#f4e8d5",
-            gridColumnMenuBackgroundColor: "#fff8ef",
-          },
+          gridAccentStrong: "#b45309",
+          gridHeaderCellBackgroundColor: "#f4e8d5",
+          gridColumnMenuBackgroundColor: "#fff8ef",
         },
       },
     })

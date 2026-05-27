@@ -25,6 +25,7 @@ export interface InstallDataGridTouchPanGuardOptions {
   root: HTMLElement
   resolveScrollContainers: () => readonly (HTMLElement | null | undefined)[]
   shouldHandleTarget?: (target: EventTarget | null) => boolean
+  useAllScrollContainersForTarget?: boolean
 }
 
 function clampScroll(value: number, maxScroll: number): number {
@@ -67,7 +68,7 @@ export function installDataGridTouchPanGuard(
 
   const resolveContainersForTarget = (target: EventTarget | null): HTMLElement[] => {
     const containers = resolveContainers()
-    if (!(target instanceof Node)) {
+    if (options.useAllScrollContainersForTarget || !(target instanceof Node)) {
       return containers
     }
     const containing = containers.filter(container => container.contains(target))

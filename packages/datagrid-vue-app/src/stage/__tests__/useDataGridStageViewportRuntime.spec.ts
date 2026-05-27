@@ -200,7 +200,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("directly transforms body content in the shared vertical", () => {
+  it("directly updates body content scroll CSS var in the shared vertical", () => {
     const centerContent = document.createElement("div")
     const harness = createHarness({
       centerBodyContent: centerContent,
@@ -212,7 +212,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(centerContent.style.transform).toBe("translate3d(0, -128px, 0)")
+    expect(centerContent.style.transform).toBe("")
+    expect(centerContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
     expect(bodyViewport.scrollTop).toBe(0)
 
     harness.unmount()
@@ -274,7 +275,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("updates the content transform on shared vertical scroll", () => {
+  it("updates the content scroll CSS var on shared vertical scroll", () => {
     const leftPaneContent = document.createElement("div")
     const centerBodyContent = document.createElement("div")
     const rightPaneContent = document.createElement("div")
@@ -289,16 +290,16 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.captureBodyViewportRef(bodyViewport)
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
 
-    expect(leftPaneContent.style.transform).toBe("translate3d(0, -80px, 0)")
-    expect(centerBodyContent.style.transform).toBe("translate3d(0, -80px, 0)")
-    expect(rightPaneContent.style.transform).toBe("translate3d(0, -80px, 0)")
+    expect(leftPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
+    expect(centerBodyContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
+    expect(rightPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
 
     sharedVerticalViewport.scrollTop = 128
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(leftPaneContent.style.transform).toBe("translate3d(0, -128px, 0)")
-    expect(centerBodyContent.style.transform).toBe("translate3d(0, -128px, 0)")
-    expect(rightPaneContent.style.transform).toBe("translate3d(0, -128px, 0)")
+    expect(leftPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
+    expect(centerBodyContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
+    expect(rightPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
 
     harness.unmount()
@@ -562,7 +563,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs body pane transforms during shared vertical scroll", () => {
+  it("syncs body pane scroll CSS vars during shared vertical scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
@@ -586,9 +587,9 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedViewport } as unknown as Event)
 
     expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
-    expect(leftPane.style.transform).toBe("translate3d(0, -120px, 0)")
-    expect(centerPane.style.transform).toBe("translate3d(0, -120px, 0)")
-    expect(rightPane.style.transform).toBe("translate3d(0, -120px, 0)")
+    expect(leftPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
+    expect(centerPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
+    expect(rightPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
 
     harness.unmount()
   })
