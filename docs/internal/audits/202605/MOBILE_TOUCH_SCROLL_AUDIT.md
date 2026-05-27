@@ -6,7 +6,7 @@ Date: 2026-05-16
 
 Affino DataGrid already has strong desktop scroll foundations: scroll work is mostly rAF-batched, core viewport IO avoids broad DOM reads in hot paths, header and pinned panes have dedicated sync paths, and server-backed row models include cache and prefetch support.
 
-The first mobile/touch quick wins are now implemented in the Vue app-stage path: the center body viewport exposes native touch panning, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
+The first mobile/touch quick wins are now implemented in the Vue app-stage path: the shared body scroll surface exposes native touch panning and native overscroll propagation, coarse-pointer mode suppresses hover work, touch-generated mouse gestures are ignored by desktop drag/fill/resize starts, app-stage row overscan is higher and adaptive on fast scroll, and stage scroll-state refs are batched through `requestAnimationFrame`.
 
 The remaining mobile/touch gap is now primarily validation and performance-hardening work: real-device testing and server/data-source prefetch tuning from real velocity and latency traces. Interaction orchestration implementation slices are closed as of 2026-05-17, and selection enterprise slices are closed as of 2026-05-18. Automated Chromium desktop and touch-emulated interaction thresholds are hard-fail gates, while hardware-specific mobile risk is tracked as device execution and threshold review from real traces.
 
@@ -15,9 +15,9 @@ Current virtualization support status for touch/mobile, server-backed rows, and 
 ## Implementation Status
 
 Completed in Phase 1:
-- Native body/header viewport panning: `.grid-body-viewport` and `.grid-header-viewport` use `touch-action: pan-x pan-y`; the body viewport keeps `-webkit-overflow-scrolling: touch`.
-- Table-stage touch fallback routing: `installDataGridTouchPanGuard()` is installed on `DataGridTableStage.vue` only to route touch pan from linked non-scroll surfaces (`.grid-body-pane`, `.grid-header-shell`) into the body viewport. It does not claim touch gestures that start inside the native body viewport.
-- Lazy canceling touch listener: `dataGridTouchPanGuard.ts` installs the non-passive `touchmove` listener only after a handled target starts a gesture, instead of keeping the canceling listener active for the whole root.
+- Native body/header viewport panning: `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, and `.grid-header-viewport` use `touch-action: pan-x pan-y`; the body viewport keeps `-webkit-overflow-scrolling: touch`.
+- Table-stage touch fallback routing removed: `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()`, so table-stage body/header touch pan is not translated through non-passive `touchmove` handlers.
+- Native overscroll restored: table-stage body/header scrollports no longer set `overscroll-behavior: none`, allowing the browser/page to own boundary behavior instead of a grid workaround.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
 - Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
@@ -25,9 +25,9 @@ Completed in Phase 1:
 - Prevent-default cleanup: row resize handle clicks stop row-index selection without unconditionally preventing the click default.
 - Header resize click guard: column resize handle gestures suppress the follow-up header click so resize release cannot trigger sorting.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
-- App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers, scales touch overscan with viewport height, and adds velocity-based adaptive row overscan with idle decay.
+- App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers, scales touch overscan with viewport height using a larger bounded active window, and adds velocity-based adaptive row overscan with idle decay.
 - Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.
-- Large touch viewport retention: coarse-pointer smooth scroll uses a viewport-relative retained row window, reducing periodic renderer churn and badge/style flicker while the finger remains down.
+- Large touch viewport retention: coarse-pointer smooth scroll uses a larger viewport-relative retained row window plus fixed-row browser containment, reducing periodic renderer/layout churn and badge/style flicker while the finger remains down.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-pane vertical sync: left/right pinned pane content now applies the latest body `scrollTop` transform from the raw body scroll sample, while reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched. This avoids a visible one-frame pinned-column lag on real touch devices.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
@@ -62,20 +62,20 @@ Interaction audit closure:
 
 ## Current Mobile Capability
 
-- One-finger body scrolling is native-first on the center viewport; linked pinned/header surfaces route scroll into the body viewport without claiming or preventing gestures that start inside the native scroll surface.
-- Left/right pinned-pane and header-shell touch pan are covered by Playwright and route into the body viewport, including horizontal pinned-left/right and header pan, matching the touchpad behavior users expect on linked zones.
+- One-finger body scrolling is native-first on the shared body scroll surface; table-stage touch pan is no longer manually routed through `touchmove` cancellation.
+- Left/right pinned-pane touch starts participate in the shared native body scroll surface. Header touch pan is no longer emulated by the table stage and should be validated on real devices for expected page/grid boundary behavior.
 - Single tap selects/focuses cells; stationary long press selects/focuses a body cell and suppresses the desktop context menu; movement before long press cancels selection intent.
 - Double tap can open inline editing when the viewport is idle; scroll-active double tap is suppressed.
 - Fill drag, selection extension, range move, and column resize are available from explicit touch handles only; body-cell touch drag remains scroll-first.
 - Coarse-pointer mode expands fill, fill action, row resize, and column resize hit targets while keeping desktop visuals.
-- During active touch scroll, visible custom cell/group renderers remain active; scroll savings come from native panning, hover suppression, rAF batching, and adaptive overscan.
+- During active touch scroll, visible custom cell/group renderers remain active; scroll savings come from native panning, native overscroll propagation, hover suppression, rAF batching, larger retained touch windows, fixed-row containment, and adaptive overscan.
 - Remaining limits: no public `interactionMode` API yet, the real-device matrix is documented but not executed, and hardware traces may require threshold adjustments for scroll-frame, scroll-quality, and interaction-frame telemetry.
 
 ## Current Architecture Summary
 
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, links pinned panes via transforms, wires managed wheel scrolling, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
+- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, keeps vertical wheel/overscroll native, wires horizontal linked-wheel fallback, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
 - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; visible renderer output is preserved during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
@@ -151,22 +151,22 @@ None found that makes desktop scrolling unusable or prevents incremental mobile 
 #### 1. Native touch panning was disabled on the main grid viewport
 
 Files/functions:
-- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts` selectors `.grid-body-viewport`, `.grid-header-viewport`, `.datagrid-gantt-timeline__viewport`
-- `packages/datagrid-vue-app/src/gestures/dataGridTouchPanGuard.ts` `installDataGridTouchPanGuard`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` `shouldRouteTableTouchPan`
+- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts` selectors `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, `.grid-header-viewport`, `.datagrid-gantt-timeline__viewport`
+- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` shared vertical body scroll shell
+- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` vertical wheel/touch ownership
 
 Problem:
 - This was the original highest-risk mobile issue: the body viewport used to rely on JavaScript touch panning instead of browser-native scroll.
 
 Current state:
-- `.grid-body-viewport` and `.grid-header-viewport` now use `touch-action: pan-x pan-y`.
-- `installDataGridTouchPanGuard()` now lazily installs the non-passive `touchmove` listener only for handled linked surfaces.
-- `DataGridTableStage.vue` routes touch pan that starts on `.grid-body-pane` or `.grid-header-shell` into the central body viewport, but lets body-viewport gestures stay native.
+- `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, and `.grid-header-viewport` now use `touch-action: pan-x pan-y`.
+- `DataGridTableStage.vue` no longer installs the table-stage `installDataGridTouchPanGuard()` fallback for touch panning.
+- Table-stage body/header scrollports no longer set `overscroll-behavior: none`; boundary behavior is left to the browser/page.
 
 Recommended fix:
-- Keep the current policy and verify on real devices.
-- Do not broaden the fallback touch guard to native body viewport gestures.
-- Keep the current Playwright gates and verify the same behavior on real devices, especially header/pinned momentum feel.
+- Keep table-stage touch pan native/passive and verify on real devices.
+- Do not reintroduce fake inertial touch routing; use explicit touch handles only for non-scroll gestures.
+- Keep the current Playwright gates and verify header/pinned momentum feel on hardware.
 
 #### 2. Touch gestures compete with cell selection and range move
 
@@ -365,8 +365,8 @@ Problem:
 - Precision touchpads can feel closer to touch scrolling than mouse wheels, so this should be reviewed separately from classic wheel behavior.
 
 Recommended fix:
-- Keep managed wheel for desktop where needed.
-- Add a native wheel mode for coarse-pointer/touchpad-heavy environments if testing shows preventDefault harms momentum-like wheel input.
+- Keep managed wheel only for horizontal linked/header synchronization where needed.
+- Keep vertical wheel and overscroll boundary behavior native unless hardware traces prove a specific regression.
 
 #### 11. Header, pinned pane, and canvas chrome sync are stable but need scroll-time budget limits
 
@@ -382,7 +382,7 @@ Problem:
 
 Recommended fix:
 - Coalesce all linked pane, header, pinned-bottom, and chrome updates in one scroll rAF.
-- Add targeted `contain` only after visual regression checks; do not blindly apply it where overlays/focus rings can escape.
+- Keep fixed-row containment targeted to body/pane rows and exclude auto-height rows; validate overlays/focus rings visually.
 
 ### Low
 
@@ -418,8 +418,8 @@ Gap:
 
 ## Recommended Fixes
 
-1. Keep native one-finger touch scroll as the default on `.grid-body-viewport`.
-2. Keep JavaScript touch pan limited to linked non-scroll surfaces that need routing into the body viewport.
+1. Keep native one-finger touch scroll as the default on the shared body scroll surface.
+2. Keep table-stage touch pan free of non-passive JavaScript routing; explicit handles remain the only touch gestures that may cancel their own events.
 3. Complete the internal interaction mode policy before exposing public API.
 4. Keep hover and range-edge hover suppressed while coarse pointer or scroll-active.
 5. Tune touch/adaptive overscan using real device traces.

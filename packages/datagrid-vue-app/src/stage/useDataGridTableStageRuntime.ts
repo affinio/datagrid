@@ -471,10 +471,14 @@ export function useDataGridTableStageRuntime<
     return Math.max(0, Math.trunc(resolvedHeight))
   })
   const stageStyle = computed<CSSProperties>(() => {
+    const baseStyle = {
+      "--datagrid-base-row-height": `${Math.max(1, Math.trunc(options.normalizedBaseRowHeight.value))}px`,
+    } as CSSProperties
     if (options.layoutMode.value !== "auto-height") {
-      return {}
+      return baseStyle
     }
     return {
+      ...baseStyle,
       height: "auto",
     }
   })

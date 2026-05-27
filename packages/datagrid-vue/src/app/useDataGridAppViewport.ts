@@ -25,8 +25,8 @@ const DATA_GRID_VERTICAL_SCROLL_IDLE_MS = 120
 const DATA_GRID_ACTIVE_HORIZONTAL_OVERSCAN_MULTIPLIER = 3
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_TOUCH_ROW_OVERSCAN_MULTIPLIER = 2
-const DATA_GRID_TOUCH_ROW_OVERSCAN_VIEWPORT_RATIO = 0.75
-const DATA_GRID_TOUCH_ROW_OVERSCAN_MAX = 64
+const DATA_GRID_TOUCH_ROW_OVERSCAN_VIEWPORT_RATIO = 2
+const DATA_GRID_TOUCH_ROW_OVERSCAN_MAX = 192
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_LOOKAHEAD_MS = 160
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MIN = 16
 const DATA_GRID_ADAPTIVE_ROW_OVERSCAN_MAX = 64
@@ -1273,8 +1273,9 @@ export function useDataGridAppViewport<TRow>(
     if (!lastSyncedRange) {
       return false
     }
-    const hysteresisRatio = isCoarsePointer.value ? 0.25 : 0.5
-    const hysteresis = Math.max(1, Math.floor(resolveEffectiveRowOverscan() * hysteresisRatio))
+    const hysteresis = isCoarsePointer.value
+      ? 1
+      : Math.max(1, Math.floor(resolveEffectiveRowOverscan() * 0.5))
     return visibleRange.start >= lastSyncedRange.start + hysteresis
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }

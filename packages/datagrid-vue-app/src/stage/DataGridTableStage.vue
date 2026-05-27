@@ -289,7 +289,6 @@ import { useDataGridStageRenderApis } from "./useDataGridStageRenderApis.grouped
 import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
 import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
 import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
-import { installDataGridTouchPanGuard } from "../gestures/dataGridTouchPanGuard"
 import {
   isTouchGeneratedMouseEvent,
   resolveDataGridInteractionMode,
@@ -853,7 +852,6 @@ function createTouchRangeMoveMouseEvent(type: "mousedown" | "mousemove" | "mouse
 }
 
 function handleTouchSelectionHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
-  event.preventDefault()
   clearPendingTouchLongPress()
   bodyTouchStart = null
   const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
@@ -883,7 +881,6 @@ function handleTouchSelectionHandleTouchMove(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchSelectionMouseEvent("mousemove", touch))
 }
 
@@ -897,7 +894,6 @@ function handleTouchSelectionHandleTouchEnd(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchSelectionMouseEvent("mouseup", touch))
 }
 
@@ -909,7 +905,6 @@ function handleTouchRangeMoveHandleMouseDown(event: MouseEvent): void {
 }
 
 function handleTouchRangeMoveHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
-  event.preventDefault()
   clearPendingTouchLongPress()
   bodyTouchStart = null
   const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
@@ -939,7 +934,6 @@ function handleTouchRangeMoveHandleTouchMove(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchRangeMoveMouseEvent("mousemove", touch))
 }
 
@@ -953,7 +947,6 @@ function handleTouchRangeMoveHandleTouchEnd(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchRangeMoveMouseEvent("mouseup", touch))
 }
 
@@ -1070,7 +1063,6 @@ const interactionMode = computed(() => resolveDataGridInteractionMode(interactio
 const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
 let coarsePointerQuery: MediaQueryList | null = null
 let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
-let teardownTouchPanGuard: (() => void) | null = null
 let bodyTouchStart: { identifier: number; clientX: number; clientY: number } | null = null
 let pendingTouchLongPress: {
   identifier: number
@@ -1637,24 +1629,6 @@ function captureCenterBodyContentRef(value: Element | ComponentPublicInstance | 
       : null
 }
 
-function shouldRouteTableTouchPan(target: EventTarget | null): boolean {
-  const root = stageRootEl.value
-  if (!root || !(target instanceof Element) || !root.contains(target)) {
-    return false
-  }
-  const linkedScrollSurface = target.closest(".grid-body-pane, .grid-header-shell")
-  if (linkedScrollSurface instanceof HTMLElement && root.contains(linkedScrollSurface)) {
-    return true
-  }
-  if (bodyViewportEl.value?.contains(target)) {
-    return false
-  }
-  if (verticalBodyViewportEl.value?.contains(target)) {
-    return false
-  }
-  return false
-}
-
 function isBodyGridFocusTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Node)) {
     return false
@@ -1691,12 +1665,6 @@ onMounted(() => {
   if (stageRootEl.value) {
     stageRootEl.value.addEventListener("focusin", handleStageFocusIn)
     stageRootEl.value.addEventListener("focusout", handleStageFocusOut)
-    teardownTouchPanGuard = installDataGridTouchPanGuard({
-      root: stageRootEl.value,
-      resolveScrollContainers: () => [verticalBodyViewportEl.value, bodyViewportEl.value],
-      shouldHandleTarget: shouldRouteTableTouchPan,
-      useAllScrollContainersForTarget: true,
-    })
   }
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return
@@ -1716,8 +1684,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stageRootEl.value?.removeEventListener("focusin", handleStageFocusIn)
   stageRootEl.value?.removeEventListener("focusout", handleStageFocusOut)
-  teardownTouchPanGuard?.()
-  teardownTouchPanGuard = null
   clearTouchClickSuppressionTimer()
   clearPendingTouchLongPress()
   bodyTouchStart = null

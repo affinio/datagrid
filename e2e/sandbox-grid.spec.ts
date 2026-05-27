@@ -376,7 +376,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect.poll(async () => inlineScrollTopVar(rightPaneContent)).toBe(scrollState.top)
   })
 
-  test("touch pan on pinned pane routes into the body viewport", async ({ page }) => {
+  test("touch pan on pinned pane stays native and unclaimed", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -390,12 +390,12 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaY: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
-  test("horizontal touch pan on pinned pane routes into the body viewport", async ({ page }) => {
+  test("horizontal touch pan on pinned pane stays native and unclaimed", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -409,12 +409,12 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaX: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(beforeLeft)
+    expect(await viewportScrollLeft(viewport)).toBe(beforeLeft)
   })
 
-  test("touch pan on right pinned pane routes into the body viewport", async ({ page }) => {
+  test("touch pan on right pinned pane stays native and unclaimed", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
@@ -429,12 +429,12 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaY: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
-  test("horizontal touch pan on right pinned pane routes into the body viewport", async ({ page }) => {
+  test("horizontal touch pan on right pinned pane stays native and unclaimed", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
     await pinColumnRight(page, "amount")
@@ -449,12 +449,12 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(pinnedPane, { deltaX: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(beforeLeft)
+    expect(await viewportScrollLeft(viewport)).toBe(beforeLeft)
   })
 
-  test("touch pan on header shell routes into the body viewport", async ({ page }) => {
+  test("touch pan on header shell is not translated by table fallback", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -468,12 +468,12 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(headerShell, { deltaY: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollTop(viewport)).toBeGreaterThan(beforeTop)
+    expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
-  test("horizontal touch pan on header shell routes into the body viewport", async ({ page }) => {
+  test("horizontal touch pan on header shell is not translated by table fallback", async ({ page }) => {
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -487,9 +487,9 @@ test.describe("sandbox touch scroll contracts", () => {
     const pan = await dispatchRoutedTouchPan(headerShell, { deltaX: 180 })
 
     expect(pan.startPrevented).toBe(false)
-    expect(pan.movePrevented).toBe(true)
+    expect(pan.movePrevented).toBe(false)
     expect(await selectionAnchorSignature(page)).toBe(beforeSelection)
-    await expect.poll(async () => viewportScrollLeft(viewport)).toBeGreaterThan(beforeLeft)
+    expect(await viewportScrollLeft(viewport)).toBe(beforeLeft)
   })
 
   test("touch scroll records stage scroll telemetry", async ({ page }) => {

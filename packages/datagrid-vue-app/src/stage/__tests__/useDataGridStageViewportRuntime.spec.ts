@@ -250,7 +250,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("prevents vertical wheel overscroll over linked panes at the shared top boundary", () => {
+  it("leaves vertical wheel overscroll over linked panes to native scrolling", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 0 })
@@ -267,7 +267,7 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleLinkedViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(wheelEvent.defaultPrevented).toBe(false)
     expect(sharedVerticalViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
@@ -305,7 +305,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("routes vertical wheel over the center body to the shared vertical owner", () => {
+  it("releases vertical wheel over the center body to native scrolling", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
@@ -322,23 +322,16 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleBodyViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(sharedVerticalViewport.scrollTop).toBe(128)
+    expect(wheelEvent.defaultPrevented).toBe(false)
+    expect(sharedVerticalViewport.scrollTop).toBe(80)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollLeft).toBe(24)
-    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
-    expect(vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
-      __datagridCompositeViewportTarget: true,
-      scrollTop: 128,
-      scrollLeft: 24,
-      clientWidth: 320,
-      clientHeight: 240,
-    }))
+    expect(harness.viewport.handleViewportScroll).not.toHaveBeenCalled()
 
     harness.unmount()
   })
 
-  it("prevents vertical wheel overscroll over the center body at the shared top boundary", () => {
+  it("leaves vertical wheel overscroll over the center body to native scrolling", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 0 })
@@ -355,7 +348,7 @@ describe("useDataGridStageViewportRuntime", () => {
 
     harness.runtime.handleBodyViewportWheel(wheelEvent)
 
-    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(wheelEvent.defaultPrevented).toBe(false)
     expect(sharedVerticalViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollTop).toBe(0)
     expect(bodyViewport.scrollLeft).toBe(24)

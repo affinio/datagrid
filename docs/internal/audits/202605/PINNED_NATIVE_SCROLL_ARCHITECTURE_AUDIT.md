@@ -4,15 +4,15 @@ Date: 2026-05-16
 
 ## Executive Summary
 
-Moving pinned body zones into the same native vertical scroll surface as the center body viewport is technically desirable, but it is not a small CSS change. The current table stage has one native vertical scroll owner: the center `.grid-body-viewport` rendered by `DataGridTableStageCenterPane.vue`. Pinned left and right panes are sibling panes outside that scroll owner. Their body content is vertically synchronized with `translate3d(0, -scrollTop, 0)` through `useDataGridLinkedPaneScrollSync`.
+Moving pinned body zones into the same native vertical scroll surface as the center body viewport was technically desirable but not a small CSS change. The table stage now uses a shared native vertical scroll shell for pinned-left, center, and pinned-right body layers while keeping horizontal scroll center-owned through a separate horizontal owner.
 
-That architecture gives native inertia when touch starts in the center body viewport. Touch that starts on pinned panes is routed by `installDataGridTouchPanGuard()` into the center body viewport by setting `scrollTop` and `scrollLeft` from touch deltas. That routing is useful as a compatibility fallback, but it is not browser-native inertial scrolling and cannot meet the target behavior by itself.
+The old `installDataGridTouchPanGuard()` table-stage fallback is no longer installed for touch panning. Vertical touch/wheel and overscroll boundary behavior are left to the browser, while horizontal linked-wheel synchronization remains center-owned.
 
-The target design is feasible only by making a shared body scroll viewport the vertical owner for pinned-left, center, and pinned-right body layers. Horizontal scroll should remain center-owned through a separate horizontal center viewport or equivalent scroll-left owner. This crosses table-stage DOM shape, viewport runtime refs, header sync, pinned bottom sync, chrome canvas sizing, overlay coordinate systems, auto row-height measurement, and existing tests that query `.grid-body-viewport` as the body scroll owner.
+The migration crossed table-stage DOM shape, viewport runtime refs, header sync, pinned bottom sync, chrome canvas sizing, overlay coordinate systems, auto row-height measurement, and tests that query `.grid-body-viewport` as the body scroll owner.
 
-Migration difficulty: **high**.
+Migration difficulty: **high**, completed incrementally through the shared vertical scroll shell slices.
 
-Recommendation: do not ship the full migration immediately as a direct refactor. First run a feature-flagged prototype that introduces a shared vertical scroll shell while preserving the existing center horizontal scroll owner. Keep the current touch-pan routing as fallback for the existing layout until the prototype proves native pinned touch inertia, exact row synchronization, overlay alignment, and desktop wheel/trackpad behavior on real devices.
+Recommendation: keep the shared native vertical owner as the default, avoid fake inertial routing, and use real-device validation to tune remaining frame budgets.
 
 ## Current Architecture Summary
 
@@ -169,20 +169,19 @@ Target ownership:
 
 2. **Which element is the true native vertical scroll owner today?**
 
-   The center pane root, `.grid-body-viewport.table-wrap`, is the true native vertical scroll owner for main body rows.
+   `.grid-body-shared-vertical-scroll-shell` is the true native vertical scroll owner for main body rows. The center `.grid-body-viewport` is now a vertical participant and the inner center horizontal scrollport owns horizontal scroll.
 
 3. **Are pinned panes outside that scroll owner?**
 
-   Yes. Pinned panes are sibling elements outside `.grid-body-viewport`.
+   No for the main body. Pinned-left, center, and pinned-right body panes participate in the shared vertical scroll shell. Pinned top/bottom shells remain separate by design.
 
 4. **When touching pinned zones, how is scroll handled today?**
 
-   Center touches scroll natively. Pinned touches are not browser-native scroll because the pinned pane is not a scroll container. `shouldRouteTableTouchPan()` excludes targets inside the body viewport and routes targets on `.grid-body-pane` or `.grid-header-shell` to `installDataGridTouchPanGuard()`. The guard manually updates the center body viewport's `scrollTop` and `scrollLeft` from touch deltas and calls `preventDefault()` after axis lock. Wheel events on pinned/header linked surfaces are similarly routed through managed wheel scroll. If a pinned touch target is not accepted by the guard, the pinned pane itself has no native vertical scrolling to perform.
+   Pinned body touches are handled by the shared native vertical scroll surface. `DataGridTableStage.vue` no longer routes table touch pan through `installDataGridTouchPanGuard()` or calls `preventDefault()` from a non-passive `touchmove` fallback. Vertical wheel and boundary overscroll are also released to native browser behavior.
 
-5. **What would need to change to make pinned zones part of the same native vertical scroll surface?**
+5. **What changed to make pinned zones part of the same native vertical scroll surface?**
 
-   The body stage needs a new shared vertical scroll viewport that wraps the pinned-left, center, and pinned-right body layers. `bodyViewportEl` and app viewport refs would need to point to that shared vertical owner for `scrollTop`, `clientHeight`, row range computation, runtime viewport position, and performance sampling. Horizontal scroll-left would need a separate center-owned ref used by header sync, horizontal virtualization, center spacers, `scrollToColumn`, pinned-bottom sync, and chrome redraw.
-
+   The body stage uses a shared vertical scroll viewport that wraps the pinned-left, center, and pinned-right body layers. `bodyViewportEl` and app viewport refs point to that shared vertical owner for `scrollTop`, `clientHeight`, row range computation, runtime viewport position, and performance sampling. Horizontal scroll-left remains center-owned through a separate center horizontal owner used by header sync, horizontal virtualization, center spacers, `scrollToColumn`, pinned-bottom sync, and chrome redraw.
 6. **Would this require a broad stage layout refactor or can it be done incrementally?**
 
    The full target requires a broad stage layout refactor. It can be phased, but the phase that changes the native vertical owner touches several coupled systems at once: DOM layout, viewport runtime refs, CSS overflow rules, header sync, pinned bottom, chrome canvas, overlay geometry, and tests. A feature-flagged incremental prototype is realistic; a narrow one-file change is not.
@@ -255,9 +254,9 @@ The target conflicts with the current layout in one central place: pinned panes 
 
    Recheck focus target, keyboard handlers, long press, touch selection handles, range move, fill drag, resize handles, context menu routing, ARIA relationships, and tab order.
 
-8. **Remove fallback path only after proof**
+8. **Remove fallback path after proof**
 
-   Keep `installDataGridTouchPanGuard()` for the old layout and possibly for header linked surfaces until native behavior is proven. Do not replace it with fake inertial scrolling.
+   Completed for the table stage: `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()` for touch panning. Do not replace it with fake inertial scrolling.
 
 ## Risks And Mitigations
 
@@ -343,9 +342,11 @@ The migration is worth pursuing only as a staged, feature-flagged architecture p
 - 2026-05-26: Slice 28 fixed two browser-visible prototype polish issues found in sandbox validation. The center horizontal scrollport/shared vertical owner now suppress native focus outlines like the legacy body viewport, and the center chrome canvas is mounted inside the prototype center pane so macOS rubber-band overscroll moves the center grid overlay with the same compositor layer as center content and pinned overlays.
 - 2026-05-26: Slice 29 corrected the prototype center chrome canvas offset after moving it into the center pane. The canvas now uses pane-local `left: 0` while retaining center viewport dimensions, preventing double application of the left pinned width and realigning center grid lines with center columns.
 
+- 2026-05-27: Follow-up cleanup removed table-stage touch-pan routing and vertical wheel overscroll suppression, leaving shared body vertical scrolling and boundary behavior to native browser scroll.
+
 ## Recommended Fallback/Intermediate Approach
 
-Superseded by Slice 31: the shared vertical scroll shell is now the default table-stage architecture rather than a flagged fallback. Keep `installDataGridTouchPanGuard()` limited to linked non-scroll surfaces and do not add fake inertial physics.
+Superseded by Slice 31 and follow-up cleanup: the shared vertical scroll shell is now the default table-stage architecture rather than a flagged fallback. `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()` for table touch panning; vertical touch/wheel and overscroll boundary behavior are left to the browser. Do not add fake inertial physics.
 
 The original intermediate target was:
 

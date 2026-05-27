@@ -369,7 +369,7 @@ describe("useDataGridStagePointerInteractions", () => {
     expect(startFillHandleDoubleClick).not.toHaveBeenCalled()
   })
 
-  it("bridges explicit fill-handle touch gestures into the mouse fill lifecycle", () => {
+  it("bridges explicit fill-handle touch gestures without cancelling passive touch events", () => {
     const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(() => {})
     const cell = document.createElement("div")
     cell.className = "grid-cell"
@@ -406,7 +406,7 @@ describe("useDataGridStagePointerInteractions", () => {
     const touchStart = createTouchEvent("touchstart", createTouch(7, 20, 30), handle)
     service.handleFillHandleTouchStart(touchStart)
 
-    expect(touchStart.preventDefault).toHaveBeenCalled()
+    expect(touchStart.preventDefault).not.toHaveBeenCalled()
     expect(fillActionMenuOpen.value).toBe(false)
     expect(focus).toHaveBeenCalled()
     expect(startFillHandleDrag).toHaveBeenCalledTimes(1)
@@ -418,7 +418,7 @@ describe("useDataGridStagePointerInteractions", () => {
 
     const touchMove = createTouchEvent("touchmove", createTouch(7, 25, 35), handle)
     service.handleFillHandleTouchMove(touchMove)
-    expect(touchMove.preventDefault).toHaveBeenCalled()
+    expect(touchMove.preventDefault).not.toHaveBeenCalled()
     expect(mouseMove).toHaveBeenCalledTimes(1)
     expect(mouseMove.mock.calls[0]?.[0]).toMatchObject({
       clientX: 25,
@@ -428,7 +428,7 @@ describe("useDataGridStagePointerInteractions", () => {
 
     const touchEnd = createTouchEvent("touchend", createTouch(7, 28, 38), handle)
     service.handleFillHandleTouchEnd(touchEnd)
-    expect(touchEnd.preventDefault).toHaveBeenCalled()
+    expect(touchEnd.preventDefault).not.toHaveBeenCalled()
     expect(mouseUp).toHaveBeenCalledTimes(1)
     expect(mouseUp.mock.calls[0]?.[0]).toMatchObject({
       clientX: 28,

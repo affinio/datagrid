@@ -167,10 +167,10 @@
                     class="col-resize"
                     :aria-label="resolveColumnResizeLabel(column)"
                     @mousedown.stop="startResize($event, column.key)"
-                    @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                    @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                    @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                    @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                    @touchstart.stop.passive="startTouchResize($event, column.key)"
+                    @touchmove.stop.passive="handleTouchResizeMove($event)"
+                    @touchend.stop.passive="handleTouchResizeEnd($event)"
+                    @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                     @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                     @click.stop
                   />
@@ -237,10 +237,10 @@
                   class="col-resize"
                   :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
-                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @touchmove.stop.passive="handleTouchResizeMove($event)"
+                  @touchend.stop.passive="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -408,10 +408,10 @@
                   class="col-resize"
                   :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
-                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @touchmove.stop.passive="handleTouchResizeMove($event)"
+                  @touchend.stop.passive="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -451,10 +451,10 @@
                 class="col-resize"
                 :aria-label="resolveColumnResizeLabel(column)"
                 @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @touchmove.stop.passive="handleTouchResizeMove($event)"
+                @touchend.stop.passive="handleTouchResizeEnd($event)"
+                @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -607,10 +607,10 @@
                   class="col-resize"
                   :aria-label="resolveColumnResizeLabel(column)"
                   @mousedown.stop="startResize($event, column.key)"
-                  @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                  @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                  @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                  @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @touchmove.stop.passive="handleTouchResizeMove($event)"
+                  @touchend.stop.passive="handleTouchResizeEnd($event)"
+                  @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                   @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                   @click.stop
                 />
@@ -643,10 +643,10 @@
                 class="col-resize"
                 :aria-label="resolveColumnResizeLabel(column)"
                 @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.prevent="startTouchResize($event, column.key)"
-                @touchmove.stop.prevent="handleTouchResizeMove($event)"
-                @touchend.stop.prevent="handleTouchResizeEnd($event)"
-                @touchcancel.stop.prevent="handleTouchResizeEnd($event)"
+                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @touchmove.stop.passive="handleTouchResizeMove($event)"
+                @touchend.stop.passive="handleTouchResizeEnd($event)"
+                @touchcancel.stop.passive="handleTouchResizeEnd($event)"
                 @dblclick.stop="handleResizeDoubleClick($event, column.key)"
                 @click.stop
               />
@@ -1054,7 +1054,6 @@ function startTouchResize(event: TouchEvent, columnKey: string): void {
     return
   }
   resizeClickGuard.armResizeGuard()
-  event.preventDefault()
   activeTouchResizeId = touch.identifier
   columns.value.startResize(createTouchResizeMouseEvent("mousedown", touch), columnKey)
 }
@@ -1067,7 +1066,6 @@ function handleTouchResizeMove(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchResizeMouseEvent("mousemove", touch))
 }
 
@@ -1083,7 +1081,6 @@ function handleTouchResizeEnd(event: TouchEvent): void {
   if (!touch) {
     return
   }
-  event.preventDefault()
   window.dispatchEvent(createTouchResizeMouseEvent("mouseup", touch))
 }
 

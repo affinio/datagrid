@@ -237,8 +237,6 @@ export function useDataGridStagePointerInteractions(
       activeFillHandleTouchId = null
       return
     }
-    event.preventDefault()
-    recordPreventDefault("touchstart", "fill-handle")
     options.fillActionMenuOpen.value = false
     activeFillHandleTouchId = touch.identifier
     const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
@@ -255,8 +253,6 @@ export function useDataGridStagePointerInteractions(
     if (!touch) {
       return
     }
-    event.preventDefault()
-    recordPreventDefault("touchmove", "fill-handle")
     window.dispatchEvent(createFillHandleMouseEvent("mousemove", touch))
   }
 
@@ -270,8 +266,6 @@ export function useDataGridStagePointerInteractions(
     if (!touch) {
       return
     }
-    event.preventDefault()
-    recordPreventDefault("touchend", "fill-handle")
     window.dispatchEvent(createFillHandleMouseEvent("mouseup", touch))
   }
 

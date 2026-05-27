@@ -92,10 +92,10 @@
             tabindex="-1"
             @mousedown.stop="renderApi.handleFillHandleMouseDown($event)"
             @dblclick.stop="renderApi.handleFillHandleDoubleClick($event)"
-            @touchstart.stop.prevent="renderApi.handleFillHandleTouchStart($event)"
-            @touchmove.stop.prevent="renderApi.handleFillHandleTouchMove($event)"
-            @touchend.stop.prevent="renderApi.handleFillHandleTouchEnd($event)"
-            @touchcancel.stop.prevent="renderApi.handleFillHandleTouchEnd($event)"
+            @touchstart.stop.passive="renderApi.handleFillHandleTouchStart($event)"
+            @touchmove.stop.passive="renderApi.handleFillHandleTouchMove($event)"
+            @touchend.stop.passive="renderApi.handleFillHandleTouchEnd($event)"
+            @touchcancel.stop.passive="renderApi.handleFillHandleTouchEnd($event)"
           />
           <button
             v-if="renderApi.isTouchSelectionAnchorHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
@@ -104,10 +104,10 @@
             aria-label="Selection handle"
             tabindex="-1"
             @mousedown.stop.prevent="renderApi.handleTouchSelectionHandleMouseDown($event)"
-            @touchstart.stop.prevent="renderApi.handleTouchSelectionHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
-            @touchmove.stop.prevent="renderApi.handleTouchSelectionHandleTouchMove($event)"
-            @touchend.stop.prevent="renderApi.handleTouchSelectionHandleTouchEnd($event)"
-            @touchcancel.stop.prevent="renderApi.handleTouchSelectionHandleTouchEnd($event)"
+            @touchstart.stop.passive="renderApi.handleTouchSelectionHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
+            @touchmove.stop.passive="renderApi.handleTouchSelectionHandleTouchMove($event)"
+            @touchend.stop.passive="renderApi.handleTouchSelectionHandleTouchEnd($event)"
+            @touchcancel.stop.passive="renderApi.handleTouchSelectionHandleTouchEnd($event)"
             @click.stop.prevent
             @contextmenu.stop.prevent
           />
@@ -118,10 +118,10 @@
             aria-label="Move selection"
             tabindex="-1"
             @mousedown.stop.prevent="renderApi.handleTouchRangeMoveHandleMouseDown($event)"
-            @touchstart.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
-            @touchmove.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchMove($event)"
-            @touchend.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
-            @touchcancel.stop.prevent="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
+            @touchstart.stop.passive="renderApi.handleTouchRangeMoveHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), columnIndex)"
+            @touchmove.stop.passive="renderApi.handleTouchRangeMoveHandleTouchMove($event)"
+            @touchend.stop.passive="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
+            @touchcancel.stop.passive="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
             @click.stop.prevent
             @contextmenu.stop.prevent
           />

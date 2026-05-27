@@ -2341,7 +2341,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("isolates touch selection handle touchstart from body long press selection", async () => {
+  it("isolates passive touch selection handle gestures from body long press selection", async () => {
     vi.useFakeTimers()
     mockCoarsePointer(true)
     const handleCellClick = vi.fn()
@@ -2373,7 +2373,7 @@ describe("DataGridTableStage contract", () => {
     handle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 116, clientY: 104 }))
     handle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 120, clientY: 108 }))
 
-    expect(touchStart.defaultPrevented).toBe(true)
+    expect(touchStart.defaultPrevented).toBe(false)
     expect(handleCellClick).not.toHaveBeenCalled()
     expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
     expect(handleCellMouseDown.mock.calls[0]?.[0]).toMatchObject({
@@ -2397,7 +2397,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("bridges touch range-move handle gestures into the mouse range-move lifecycle", async () => {
+  it("bridges passive touch range-move handle gestures into the mouse range-move lifecycle", async () => {
     mockCoarsePointer(true)
     const handleCellMouseDown = vi.fn()
     const wrapper = mount(DataGridTableStage, {
@@ -2425,7 +2425,7 @@ describe("DataGridTableStage contract", () => {
     handle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 116, clientY: 104 }))
     handle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 120, clientY: 108 }))
 
-    expect(touchStart.defaultPrevented).toBe(true)
+    expect(touchStart.defaultPrevented).toBe(false)
     expect(handleCellMouseDown).toHaveBeenCalledTimes(1)
     expect(handleCellMouseDown.mock.calls[0]?.[0]).toMatchObject({
       clientX: 100,
@@ -2808,7 +2808,7 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("routes touch panning from the header into the body viewport", () => {
+  it("does not translate header touch panning through a table-stage fallback", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2831,13 +2831,13 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
     headerCell.dispatchEvent(moveEvent)
 
-    expect(moveEvent.defaultPrevented).toBe(true)
-    expect(viewport.scrollTop).toBe(150)
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(viewport.scrollTop).toBe(100)
 
     wrapper.unmount()
   })
 
-  it("routes pinned body touch panning into the shared vertical scroll owner", () => {
+  it("leaves pinned body touch panning to the shared native vertical owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2861,15 +2861,15 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
     pinnedCell.dispatchEvent(moveEvent)
 
-    expect(addEventListener).toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
-    expect(moveEvent.defaultPrevented).toBe(true)
-    expect(sharedShell.scrollTop).toBe(150)
+    expect(addEventListener).not.toHaveBeenCalledWith("touchmove", expect.any(Function), { capture: true, passive: false })
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(sharedShell.scrollTop).toBe(100)
 
     addEventListener.mockRestore()
     wrapper.unmount()
   })
 
-  it("routes horizontal pinned body touch panning into the center horizontal owner", () => {
+  it("does not translate horizontal pinned body touch panning through a table-stage fallback", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2899,14 +2899,14 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 50, clientY: 20 })
     pinnedCell.dispatchEvent(moveEvent)
 
-    expect(moveEvent.defaultPrevented).toBe(true)
-    expect(centerHorizontal.scrollLeft).toBe(150)
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(centerHorizontal.scrollLeft).toBe(100)
     expect(sharedShell.scrollTop).toBe(100)
 
     wrapper.unmount()
   })
 
-  it("routes header touch panning into the shared vertical scroll owner", () => {
+  it("does not translate header touch panning into the shared vertical owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2929,13 +2929,13 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 20, clientY: 50 })
     headerCell.dispatchEvent(moveEvent)
 
-    expect(moveEvent.defaultPrevented).toBe(true)
-    expect(sharedShell.scrollTop).toBe(150)
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(sharedShell.scrollTop).toBe(100)
 
     wrapper.unmount()
   })
 
-  it("routes horizontal header touch panning into the center horizontal owner", () => {
+  it("does not translate horizontal header touch panning into the center horizontal owner", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -2966,8 +2966,8 @@ describe("DataGridTableStage contract", () => {
     const moveEvent = createTouchEvent("touchmove", { clientX: 50, clientY: 20 })
     headerCell.dispatchEvent(moveEvent)
 
-    expect(moveEvent.defaultPrevented).toBe(true)
-    expect(centerHorizontal.scrollLeft).toBe(150)
+    expect(moveEvent.defaultPrevented).toBe(false)
+    expect(centerHorizontal.scrollLeft).toBe(100)
     expect(sharedShell.scrollTop).toBe(100)
 
     wrapper.unmount()
@@ -3325,7 +3325,8 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
-  it("bridges touch row resize handle gestures into the mouse row resize lifecycle", async () => {
+  it("bridges passive touch row resize handle gestures into the mouse row resize lifecycle", async () => {
+    const addEventListener = vi.spyOn(HTMLElement.prototype, "addEventListener")
     const startRowResize = vi.fn()
     const baseProps = createStageProps(() => false)
     const wrapper = mount(DataGridTableStage, {
@@ -3341,6 +3342,14 @@ describe("DataGridTableStage contract", () => {
 
     const resizeHandle = wrapper.find(".row-resize-handle")
     expect(resizeHandle.exists()).toBe(true)
+    const resizeHandleTouchOptions = addEventListener.mock.calls
+      .map((call, index) => ({ call, target: addEventListener.mock.contexts[index] }))
+      .filter(({ call, target }) => target === resizeHandle.element && (call[0] === "touchstart" || call[0] === "touchmove"))
+      .map(({ call }) => call[2])
+    expect(resizeHandleTouchOptions).toEqual([
+      expect.objectContaining({ passive: true }),
+      expect.objectContaining({ passive: true }),
+    ])
 
     const mouseMove = vi.fn()
     const mouseUp = vi.fn()
@@ -3352,7 +3361,7 @@ describe("DataGridTableStage contract", () => {
     resizeHandle.element.dispatchEvent(createTouchEvent("touchmove", { clientX: 20, clientY: 56 }))
     resizeHandle.element.dispatchEvent(createTouchEvent("touchend", { clientX: 20, clientY: 60 }))
 
-    expect(touchStart.defaultPrevented).toBe(true)
+    expect(touchStart.defaultPrevented).toBe(false)
     expect(startRowResize).toHaveBeenCalledTimes(1)
     expect(startRowResize).toHaveBeenCalledWith(
       expect.objectContaining({ button: 0, clientY: 32 }),
@@ -3366,6 +3375,7 @@ describe("DataGridTableStage contract", () => {
 
     window.removeEventListener("mousemove", mouseMove)
     window.removeEventListener("mouseup", mouseUp)
+    addEventListener.mockRestore()
     wrapper.unmount()
   })
 })

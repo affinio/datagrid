@@ -1013,7 +1013,6 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: none;
   position: relative;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
@@ -1068,7 +1067,6 @@ const DATA_GRID_APP_STYLES = `
   max-height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
 
@@ -1139,7 +1137,6 @@ const DATA_GRID_APP_STYLES = `
   overflow-y: hidden;
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
-  overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
 
@@ -1149,7 +1146,6 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
   min-height: 0;
   background: var(--datagrid-viewport-bg);
-  overscroll-behavior: none;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
 }
@@ -1237,6 +1233,13 @@ const DATA_GRID_APP_STYLES = `
   position: relative;
   z-index: 4;
   will-change: transform;
+}
+
+.grid-stage:not(.grid-stage--auto-row-height) .grid-body-content > .grid-row,
+.grid-stage:not(.grid-stage--auto-row-height) .grid-pane-content > .grid-row {
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--datagrid-base-row-height, 31px);
 }
 
 .grid-chrome-canvas {

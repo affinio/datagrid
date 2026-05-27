@@ -462,13 +462,13 @@ describe("useDataGridAppViewport contract", () => {
     viewport.syncViewportFromDom()
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
-    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 0, end: 125 })
+    expect(syncRowsInRange).toHaveBeenLastCalledWith({ start: 0, end: 249 })
 
     syncRowsInRange.mockClear()
     getBodyRowAtIndex.mockClear()
     setViewportRange.mockClear()
 
-    for (let rowStep = 1; rowStep <= 20; rowStep += 1) {
+    for (let rowStep = 1; rowStep <= 100; rowStep += 1) {
       element.scrollTop = 400 + (rowStep * 20)
       viewport.handleViewportScroll(createScrollEvent(element))
       raf.run(getScheduledFrameHandle(raf))
@@ -477,7 +477,7 @@ describe("useDataGridAppViewport contract", () => {
     expect(syncRowsInRange).not.toHaveBeenCalled()
     expect(getBodyRowAtIndex).not.toHaveBeenCalled()
     expect(setViewportRange).not.toHaveBeenCalled()
-    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(0, 126).map(row => row.rowId))
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(0, 250).map(row => row.rowId))
   })
 
   it("expands row overscan during fast scroll bursts", () => {

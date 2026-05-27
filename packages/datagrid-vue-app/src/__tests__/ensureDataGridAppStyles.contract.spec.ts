@@ -52,10 +52,19 @@ describe("ensureDataGridAppStyles", () => {
     ensureDataGridAppStyles()
 
     const style = document.getElementById(STYLE_ID)
-    expect(style?.textContent).toContain(".grid-body-viewport")
-    expect(style?.textContent).toContain("overscroll-behavior: contain")
-    expect(style?.textContent).toContain("touch-action: pan-x pan-y")
-    expect(style?.textContent).toContain("-webkit-overflow-scrolling: touch")
+    const styleText = style?.textContent ?? ""
+    const bodyViewportStart = styleText.indexOf(".grid-body-viewport {")
+    const bodyViewportEnd = styleText.indexOf(".grid-body-viewport--pinned-bottom", bodyViewportStart)
+    const bodyViewportRule = bodyViewportStart >= 0 && bodyViewportEnd > bodyViewportStart
+      ? styleText.slice(bodyViewportStart, bodyViewportEnd)
+      : ""
+
+    expect(styleText).toContain(".grid-body-viewport")
+    expect(bodyViewportRule).not.toContain("overscroll-behavior")
+    expect(styleText).toContain("touch-action: pan-x pan-y")
+    expect(styleText).toContain("-webkit-overflow-scrolling: touch")
+    expect(styleText).toContain("content-visibility: auto")
+    expect(styleText).toContain("contain-intrinsic-size: auto var(--datagrid-base-row-height, 31px)")
     expect(style?.textContent).toContain(".cell-fill-handle")
     expect(style?.textContent).toContain(".col-resize")
     expect(style?.textContent).toContain("touch-action: none")
