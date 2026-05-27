@@ -895,7 +895,7 @@ async function setViewportScroll(viewport: Locator, scroll: { top: number; left:
 
 async function inlineScrollTopVar(locator: Locator): Promise<number | null> {
   return await locator.evaluate(element => {
-    const raw = (element as HTMLElement).style.getPropertyValue("--datagrid-body-scroll-top")
+    const raw = window.getComputedStyle(element as HTMLElement).getPropertyValue("--datagrid-body-scroll-top")
     const value = Number.parseFloat(raw)
     return Number.isFinite(value) ? value : null
   })

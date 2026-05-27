@@ -116,12 +116,12 @@ Pinned bottom rows are rendered in a separate `.grid-body-shell--pinned-bottom`.
 
 Current ownership:
 
-- Native vertical scroll owner: `.grid-body-viewport.table-wrap` in the center pane.
-- Native horizontal scroll owner: the same center `.grid-body-viewport.table-wrap`.
-- Pinned left/right body panes: outside the native scroll owner.
-- Pinned left/right vertical sync: `useDataGridLinkedPaneScrollSync`, direct transform mode.
-- Header horizontal sync: center body scroll-left to `.grid-header-viewport`.
-- Pinned bottom horizontal sync: main body center scroll-left to pinned-bottom center viewport.
+- Native vertical scroll owner: `.grid-body-shared-vertical-scroll-shell` across pinned-left, center, and pinned-right body layers.
+- Native horizontal scroll owner: `.grid-body-center-horizontal-scrollport--scroll-owner` in the center pane.
+- Pinned left/right body panes: inside the native vertical scroll owner but not independent scroll containers.
+- Pinned left/right vertical sync: inherited `--datagrid-body-scroll-top` on the shared vertical owner; the table path no longer uses `useDataGridLinkedPaneScrollSync`.
+- Header horizontal sync: center horizontal owner to `.grid-header-viewport`, with feedback handled by the stage viewport runtime.
+- Pinned bottom horizontal sync: center horizontal owner to pinned-bottom center viewport.
 
 ## Target DOM/Scroll Ownership Diagram
 
@@ -357,6 +357,8 @@ The original intermediate target was:
 - telemetry proving pinned touch starts use native scroll rather than manual touchmove forwarding
 
 If that prototype cannot preserve overlay alignment, horizontal scroll stability, and pinned bottom behavior with bounded changes, defer the migration and document the current limitation as pinned-zone touch panning without native momentum.
-- 2026-05-26: Slice 30 added split-owner browser-frame benchmark support and reduced prototype vertical scroll hot-path work. The benchmark now records separate vertical/horizontal scroll owners plus `BENCH_BROWSER_SCROLL_AXIS`; the prototype no longer patches the shared-shell scroll CSS variable through Vue on every frame, no longer runs horizontal peer sync on pure vertical scroll, and applies live row movement as direct transforms on pinned/center content refs. Latest 5-session vertical comparison improved the prototype from roughly 66.7ms p95 median before optimization to 33.4ms p95 median after direct transforms; horizontal remains at 60 FPS. Combined alternating-axis benchmark is still below baseline and remains a cleanup blocker before making the prototype default.
+- 2026-05-26: Slice 30 added split-owner browser-frame benchmark support and reduced prototype vertical scroll hot-path work. The benchmark now records separate vertical/horizontal scroll owners plus `BENCH_BROWSER_SCROLL_AXIS`; the prototype no longer runs horizontal peer sync on pure vertical scroll and keeps live row movement outside Vue reactivity. Latest 5-session vertical comparison improved the prototype from roughly 66.7ms p95 median before optimization to 33.4ms p95 median after direct transforms; horizontal remains at 60 FPS. Combined alternating-axis benchmark is still below baseline and remains a cleanup blocker before making the prototype default.
 - 2026-05-26: Mixed-axis benchmark follow-up tested two transaction strategies for the split-owner prototype. A full rAF-deferred viewport notification path preserved horizontal parity but regressed vertical p95 to roughly 50ms, so it was not kept. A narrower second-event deferral and CSS containment on transformed content layers also failed to improve the combined benchmark and were reverted. Current evidence points to prototype mixed-axis cost in the row-window/render flush path rather than chrome draw or overlay compute; combined mode remains the blocker before making the prototype default.
 - 2026-05-26: Slice 31 promoted the split-owner native-scroll architecture to the default DataGrid table-stage path. The `dgPinnedNativeScroll` URL/localStorage flag, prototype stage class/data marker, and resolver tests were removed; body rendering now always uses one shared vertical scroll owner and one center horizontal scroll owner. Stage/runtime/chrome contracts were updated to use `shared-vertical` and `grid-body-center-horizontal-scrollport--scroll-owner` as the stable owner markers, and stable function refs no longer resync viewport metrics during scroll-driven rerenders.
+
+- 2026-05-27: Follow-up cleanup moved the live body scroll offset from per-pane content style writes to one inherited CSS variable on the shared vertical scroll owner, removed the no-op table-stage `useDataGridLinkedPaneScrollSync` bridge, and kept center/pinned row movement aligned through the existing sticky layer CSS.

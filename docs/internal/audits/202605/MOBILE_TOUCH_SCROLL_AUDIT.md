@@ -31,11 +31,11 @@ Completed in Phase 1:
 - Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.
 - Large touch viewport retention: coarse-pointer smooth scroll uses a larger viewport-relative retained row window plus fixed-row browser containment, reducing periodic renderer/layout churn and badge/style flicker while the finger remains down.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
-- Pinned-pane vertical sync: left/right pinned pane content now applies the latest body `scrollTop` transform from the raw body scroll sample, while reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched. This avoids a visible one-frame pinned-column lag on real touch devices.
+- Pinned-pane vertical sync: the shared vertical scroll owner now hosts the inherited `--datagrid-body-scroll-top` CSS variable, so center and pinned sticky layers share one owner-level scroll-offset write instead of three per-pane writes. Reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched.
 - Scroll-frame chrome redraw: body and pinned-bottom scroll handlers queue canvas chrome redraw mode and flush it from the stage scroll frame, not from the raw scroll event.
 - Scroll-frame telemetry: when `dgPerfTrace` is enabled, the stage records `stageScrollFrame` samples with total rAF work, scroll offsets, pinned-bottom sync, and chrome redraw mode, plus `stageScrollPerf` samples with FPS, dropped-frame, and long-task counters.
 - Stage scroll idle gate: `useDataGridStageViewportRuntime.ts` now exposes explicit body scroll active/idle refs plus a deferred idle callback hook backed by the shared scroll idle utility; anchor focus restoration uses that hook to avoid refocusing cells during active scroll.
-- Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for linked pane sync, pinned-bottom sync, and chrome redraw mode selection.
+- Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for owner-level scroll CSS var sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
 - Header scroll sampling cleanup: header-to-body scroll sync samples header `scrollLeft` once per event before updating the body viewport.
 
@@ -253,13 +253,13 @@ Current state:
 - `useDataGridStageViewportRuntime.ts` now batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-bottom `scrollLeft` sync is now only scheduled when the body `scrollLeft` actually changes, so vertical-only scroll frames avoid that extra sync call.
 - Stage body-scroll sampling now captures only `scrollTop` / `scrollLeft`; viewport dimensions stay on the resize/metrics path instead of being read during every scroll event.
-- The raw body scroll handler now reads `scrollTop` and `scrollLeft` once per event and reuses the captured state for all stage scroll-frame decisions.
+- The raw body scroll handler now reads `scrollTop` and `scrollLeft` once per event and reuses the captured state for owner-level scroll-offset sync and all stage scroll-frame decisions.
 - Grid chrome redraw mode is now queued by the body and pinned-bottom scroll handlers and flushed inside the stage scroll frame, so canvas draw work no longer starts from the raw scroll event.
 - Stage scroll-frame rAF work now emits `stageScrollFrame` perf samples when tracing is enabled, giving future CI/device gates a direct budget signal.
 - Stage scroll activity now feeds the shared scroll perf telemetry helper behind `dgPerfTrace`, producing `stageScrollPerf` samples for FPS, dropped-frame, and long-task monitoring.
 - Window resize metric sync is now batched through `requestAnimationFrame`; resize events no longer call `syncBodyViewportMetrics()` directly.
 - Header scroll sync now captures header `scrollLeft` once per event and delegates body viewport commit into the existing stage scroll-frame path.
-- Linked pinned pane transforms are already scheduled through the linked pane scroll sync rAF loop.
+- The old no-op linked pane scroll sync service is no longer part of the table-stage scroll runtime.
 - `useDataGridAppViewport.ts` now syncs header `scrollLeft` from the viewport rAF commit instead of writing it directly inside the body scroll event.
 
 Recommended fix:
@@ -387,7 +387,7 @@ Problem:
 - CSS has `will-change: transform` on `.grid-pane-content`, but not a complete contain/layer policy around the viewport.
 
 Recommended fix:
-- Keep linked pane, header, pinned-bottom, and chrome updates coalesced in one scroll rAF.
+- Keep owner-level scroll offset, header, pinned-bottom, and chrome updates coalesced or owner-scoped so raw scroll work stays minimal.
 - Keep fixed-row containment targeted to body/pane rows and exclude auto-height rows; validate overlays/focus rings visually.
 
 ### Low
@@ -451,7 +451,7 @@ Gap:
 - Done: skip pinned-bottom `scrollLeft` sync work for vertical-only body scroll frames.
 - Done: remove body viewport dimension reads from the stage raw scroll sampling path.
 - Done: reuse a single captured body `scrollTop` / `scrollLeft` sample across stage scroll-frame scheduling decisions.
-- Done: apply pinned left/right vertical transforms from the raw body scroll sample so real-device pinned columns do not trail native center scrolling by a frame.
+- Done: move live vertical row movement to an owner-level inherited CSS var so pinned/center content does not require per-pane style writes during raw body scroll.
 - Done: move body and pinned-bottom scroll-triggered grid chrome redraw into the stage scroll frame.
 - Done: batch window resize metric sync through rAF.
 - Done: final residual review for header scroll sync before Phase 2.

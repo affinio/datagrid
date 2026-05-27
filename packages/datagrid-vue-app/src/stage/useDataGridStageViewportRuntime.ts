@@ -1,6 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, type ComponentPublicInstance, type Ref } from "vue"
 import {
-  useDataGridLinkedPaneScrollSync,
   useDataGridManagedWheelScroll,
   useDataGridScrollIdleGate,
   useDataGridScrollPerfTelemetry,
@@ -29,9 +28,6 @@ export interface UseDataGridStageViewportRuntimeOptions {
   stageRootEl: Readonly<Ref<HTMLElement | null>>
   viewport: Readonly<Ref<DataGridTableStageViewportSection>>
   gridChromeSyncers: Readonly<Ref<UseDataGridStageViewportRuntimeSyncers>>
-  leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
-  rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
-  centerBodyContentRef?: Readonly<Ref<HTMLElement | null>>
   perfTraceEnabled?: boolean
 }
 
@@ -151,22 +147,14 @@ export function useDataGridStageViewportRuntime(
   const resolveVerticalBodyViewport = (): HTMLElement | null => verticalBodyViewportEl.value
   const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
 
-  function syncSharedVerticalContentOffset(scrollTop: number): void {
+  function syncSharedVerticalScrollOffset(scrollTop: number): void {
+    const element = resolveVerticalBodyViewport()
+    if (!element) {
+      return
+    }
     const scrollTopValue = `${Math.max(0, scrollTop)}px`
-    for (const element of [
-      options.leftPaneContentRef.value,
-      options.centerBodyContentRef?.value ?? null,
-      options.rightPaneContentRef.value,
-    ]) {
-      if (!element) {
-        continue
-      }
-      if (element.style.transform) {
-        element.style.removeProperty("transform")
-      }
-      if (element.style.getPropertyValue("--datagrid-body-scroll-top") !== scrollTopValue) {
-        element.style.setProperty("--datagrid-body-scroll-top", scrollTopValue)
-      }
+    if (element.style.getPropertyValue("--datagrid-body-scroll-top") !== scrollTopValue) {
+      element.style.setProperty("--datagrid-body-scroll-top", scrollTopValue)
     }
   }
 
@@ -182,12 +170,6 @@ export function useDataGridStageViewportRuntime(
       pinnedBottomViewport.scrollLeft = scrollLeft
     }
   }
-
-  const linkedPaneScrollSync = useDataGridLinkedPaneScrollSync({
-    resolveSourceScrollTop: () => resolveVerticalBodyViewport()?.scrollTop ?? 0,
-    mode: "direct-transform",
-    resolvePaneElements: () => [],
-  })
 
   const bodyViewportScrollIdleGate = useDataGridScrollIdleGate({
     resolveIdleDelayMs: () => DATA_GRID_SCROLL_IDLE_MS,
@@ -225,7 +207,7 @@ export function useDataGridStageViewportRuntime(
       const verticalViewport = resolveVerticalBodyViewport()
       if (verticalViewport) {
         verticalViewport.scrollTop = value
-        syncSharedVerticalContentOffset(value)
+        syncSharedVerticalScrollOffset(value)
       }
     },
     setHandledScrollLeft: (value: number) => {
@@ -234,9 +216,6 @@ export function useDataGridStageViewportRuntime(
         horizontalViewport.scrollLeft = value
       }
     },
-    syncLinkedScroll: linkedPaneScrollSync.onSourceScroll,
-    scheduleLinkedScrollSyncLoop: linkedPaneScrollSync.scheduleSyncLoop,
-    isLinkedScrollSyncLoopScheduled: linkedPaneScrollSync.isSyncLoopScheduled,
     onWheelConsumed: () => {
       const verticalViewport = resolveVerticalBodyViewport()
       if (!verticalViewport) {
@@ -434,7 +413,7 @@ export function useDataGridStageViewportRuntime(
     }
     sharedVerticalViewportEl.value = nextElement
     syncScrollOwnerRefs()
-    syncSharedVerticalContentOffset(sharedVerticalViewportEl.value?.scrollTop ?? 0)
+    syncSharedVerticalScrollOffset(sharedVerticalViewportEl.value?.scrollTop ?? 0)
     options.viewport.value.bodyViewportRef(value)
   }
 
@@ -469,7 +448,6 @@ export function useDataGridStageViewportRuntime(
     const viewportScrollEvent = createSharedViewportScrollEvent(element, scrollState)
     options.viewport.value.handleViewportScroll(viewportScrollEvent)
     markBodyViewportScrolling()
-    linkedPaneScrollSync.syncNow(scrollState.scrollTop)
     scheduleBodyViewportScrollStateSync(scrollState)
     if (scrollState.scrollLeft !== previousScrollLeft) {
       schedulePinnedBottomViewportScrollLeftSync()
@@ -490,7 +468,7 @@ export function useDataGridStageViewportRuntime(
     if (verticalViewport.scrollLeft !== 0) {
       verticalViewport.scrollLeft = 0
     }
-    syncSharedVerticalContentOffset(verticalViewport.scrollTop)
+    syncSharedVerticalScrollOffset(verticalViewport.scrollTop)
     handleCenterViewportScroll(event)
   }
 
@@ -571,7 +549,6 @@ export function useDataGridStageViewportRuntime(
   })
 
   onBeforeUnmount(() => {
-    linkedPaneScrollSync.reset()
     managedWheelScroll.reset()
     scrollPerfTelemetry?.dispose()
     bodyViewportScrollIdleGate.dispose()

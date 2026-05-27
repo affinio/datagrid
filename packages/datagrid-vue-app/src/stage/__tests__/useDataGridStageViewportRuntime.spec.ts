@@ -55,9 +55,6 @@ function createWheelEvent(delta: { deltaX?: number; deltaY?: number; deltaMode?:
 }
 
 function createHarness(options: {
-  leftPaneContent?: HTMLElement | null
-  rightPaneContent?: HTMLElement | null
-  centerBodyContent?: HTMLElement | null
   stageRoot?: HTMLElement | null
   perfTraceEnabled?: boolean
 } = {}) {
@@ -90,9 +87,6 @@ function createHarness(options: {
         stageRootEl: ref(options.stageRoot ?? null),
         viewport: shallowRef(viewport),
         gridChromeSyncers: shallowRef(syncers),
-        leftPaneContentRef: ref(options.leftPaneContent ?? null),
-        rightPaneContentRef: ref(options.rightPaneContent ?? null),
-        centerBodyContentRef: ref(options.centerBodyContent ?? null),
         perfTraceEnabled: options.perfTraceEnabled,
       })
       return () => null
@@ -198,11 +192,8 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("directly updates body content scroll CSS var in the shared vertical", () => {
-    const centerContent = document.createElement("div")
-    const harness = createHarness({
-      centerBodyContent: centerContent,
-          })
+  it("updates the shared vertical owner scroll CSS var", () => {
+    const harness = createHarness()
     const bodyViewport = createViewportElement({ scrollLeft: 44 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 128 })
 
@@ -210,8 +201,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(centerContent.style.transform).toBe("")
-    expect(centerContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
+    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
     expect(bodyViewport.scrollTop).toBe(0)
 
     harness.unmount()
@@ -273,31 +263,20 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("updates the content scroll CSS var on shared vertical scroll", () => {
-    const leftPaneContent = document.createElement("div")
-    const centerBodyContent = document.createElement("div")
-    const rightPaneContent = document.createElement("div")
-    const harness = createHarness({
-      leftPaneContent,
-      centerBodyContent,
-      rightPaneContent,
-          })
+  it("keeps the scroll CSS var on the shared vertical owner", () => {
+    const harness = createHarness()
     const bodyViewport = createViewportElement({ scrollLeft: 24 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
 
     harness.runtime.captureBodyViewportRef(bodyViewport)
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
 
-    expect(leftPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
-    expect(centerBodyContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
-    expect(rightPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
+    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("80px")
 
     sharedVerticalViewport.scrollTop = 128
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedVerticalViewport } as unknown as Event)
 
-    expect(leftPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
-    expect(centerBodyContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
-    expect(rightPaneContent.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
+    expect(sharedVerticalViewport.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("128px")
     expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
 
     harness.unmount()
@@ -625,21 +604,14 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs body pane scroll CSS vars during shared vertical scroll", () => {
+  it("syncs the owner scroll CSS var during shared vertical scroll", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
       return frameCallbacks.length
     })
     globalThis.cancelAnimationFrame = vi.fn()
-    const leftPane = document.createElement("div")
-    const centerPane = document.createElement("div")
-    const rightPane = document.createElement("div")
-    const harness = createHarness({
-      leftPaneContent: leftPane,
-      centerBodyContent: centerPane,
-      rightPaneContent: rightPane,
-    })
+    const harness = createHarness()
     const centerViewport = createViewportElement()
     const sharedViewport = createViewportElement({ scrollTop: 120 })
     harness.runtime.captureBodyViewportRef(centerViewport)
@@ -649,9 +621,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.runtime.handleSharedVerticalViewportScroll({ target: sharedViewport } as unknown as Event)
 
     expect(globalThis.requestAnimationFrame).toHaveBeenCalledTimes(1)
-    expect(leftPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
-    expect(centerPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
-    expect(rightPane.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
+    expect(sharedViewport.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("120px")
 
     harness.unmount()
   })

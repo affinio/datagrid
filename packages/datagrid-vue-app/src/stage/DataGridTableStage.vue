@@ -137,7 +137,6 @@
           :top-spacer-height="0"
           :bottom-spacer-height="0"
           :viewport-ref="captureBodyViewportRef"
-          :content-ref="captureCenterBodyContentRef"
           inner-horizontal-scrollport
           :viewport-tab-index="-1"
           :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
@@ -244,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type ComponentPublicInstance, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -1038,7 +1037,6 @@ const stageRootEl = ref<HTMLElement | null>(null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
-const centerBodyContentRef = ref<HTMLElement | null>(null)
 const leftTopPaneContentRef = ref<HTMLElement | null>(null)
 const rightTopPaneContentRef = ref<HTMLElement | null>(null)
 const leftBottomPaneContentRef = ref<HTMLElement | null>(null)
@@ -1220,9 +1218,6 @@ const {
 } = useDataGridStageViewportRuntime({
   stageRootEl,
   viewport,
-  leftPaneContentRef,
-  rightPaneContentRef,
-  centerBodyContentRef,
   gridChromeSyncers,
 })
 
@@ -1621,14 +1616,6 @@ isRangeMoveHandleHoverCellBridge.value = isRangeMoveHandleHoverCellFromPointer
 
 function syncCoarsePointerState(): void {
   isCoarsePointer.value = coarsePointerQuery?.matches === true
-}
-
-function captureCenterBodyContentRef(value: Element | ComponentPublicInstance | null): void {
-  centerBodyContentRef.value = value instanceof HTMLElement
-    ? value
-    : value && "$el" in value && value.$el instanceof HTMLElement
-      ? value.$el
-      : null
 }
 
 function isBodyGridFocusTarget(target: EventTarget | null): boolean {
