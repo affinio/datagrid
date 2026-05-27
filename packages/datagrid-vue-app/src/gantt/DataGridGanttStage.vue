@@ -90,7 +90,7 @@ import {
   resolveDataGridTimelineDateToPixel,
   resolveDataGridTimelineScrollLeftForDate,
 } from "./dataGridGantt"
-import { resolveDataGridGanttWheelIntent } from "./dataGridGanttWheel"
+import { resolveDataGridGanttWheelHandling } from "./dataGridGanttWheel"
 import {
   DATAGRID_GANTT_MIN_TABLE_PANE_WIDTH_PX,
   DATAGRID_GANTT_MIN_TIMELINE_PANE_WIDTH_PX,
@@ -1401,18 +1401,27 @@ function handleTimelineHeaderScroll(event: Event): void {
   syncTimelineScroll(element.scrollLeft, "header")
 }
 
+function isTimelineNativeHorizontalWheelTarget(event: WheelEvent): boolean {
+  if (!(event.target instanceof Node)) {
+    return false
+  }
+  return timelineBodyViewportRef.value?.contains(event.target) === true
+    || timelineHeaderViewportRef.value?.contains(event.target) === true
+}
+
 function handleTimelineWheel(event: WheelEvent): void {
   const tableViewport = tableViewportRef.value
   const timelineBodyViewport = timelineBodyViewportRef.value
   if (!tableViewport || !timelineBodyViewport) {
     return
   }
-  const { horizontalDelta, verticalDelta } = resolveDataGridGanttWheelIntent({
+  const { horizontalDelta, verticalDelta, shouldPreventDefault } = resolveDataGridGanttWheelHandling({
     deltaX: event.deltaX,
     deltaY: event.deltaY,
     shiftKey: event.shiftKey,
+    nativeHorizontalScrollTarget: isTimelineNativeHorizontalWheelTarget(event),
   })
-  if (horizontalDelta === 0 && verticalDelta === 0) {
+  if (!shouldPreventDefault) {
     return
   }
 

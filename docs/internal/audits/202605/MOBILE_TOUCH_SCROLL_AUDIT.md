@@ -19,6 +19,7 @@ Completed in Phase 1:
 - Table-stage touch fallback routing removed: `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()`, so table-stage body/header touch pan is not translated through non-passive `touchmove` handlers.
 - Native overscroll restored: table-stage body/header scrollports no longer set `overscroll-behavior: none`, allowing the browser/page to own boundary behavior instead of a grid workaround.
 - Native body horizontal wheel restored: actual horizontal scroll owners now leave wheel default behavior to the browser; managed wheel remains limited to linked non-scroll surfaces that need to forward horizontal intent into the center owner.
+- Native Gantt timeline horizontal wheel restored on real timeline scrollports; managed Gantt wheel remains limited to canvas fallback and vertical forwarding into the table viewport.
 - Header scroll sync cleanup: header scroll-left feedback now routes through `useDataGridStageViewportRuntime.ts`; the legacy header wheel path and DOM `data-*` skip flag were removed.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
@@ -368,6 +369,7 @@ Problem:
 
 Current state:
 - Body horizontal wheel over the center and pinned-bottom horizontal scroll owners is native.
+- Gantt timeline horizontal wheel over header/body timeline scrollports is native; wheel over the canvas still uses the managed fallback because the canvas is not a scroll owner.
 - Managed wheel remains limited to linked/header/pinned surfaces that are not themselves horizontal scroll owners.
 
 Recommended fix:

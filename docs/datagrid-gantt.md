@@ -50,6 +50,7 @@ Performance rules:
 - only `displayRows` / `visibleRows` are rendered
 - vertical scroll is shared with the grid
 - horizontal scroll belongs to the timeline viewport
+- horizontal wheel over real timeline scrollports is native; canvas wheel remains a fallback that forwards into the timeline viewport
 
 ## Summary Tasks
 

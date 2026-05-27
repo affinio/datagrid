@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveDataGridGanttWheelIntent } from "../gantt/dataGridGanttWheel"
+import { resolveDataGridGanttWheelHandling, resolveDataGridGanttWheelIntent } from "../gantt/dataGridGanttWheel"
 
 describe("dataGridGanttWheel", () => {
   it("treats dominant Y-wheel gestures as vertical scrolling", () => {
@@ -43,6 +43,45 @@ describe("dataGridGanttWheel", () => {
     })).toEqual({
       horizontalDelta: 0,
       verticalDelta: 0,
+    })
+  })
+
+  it("leaves horizontal wheel native on timeline scrollports", () => {
+    expect(resolveDataGridGanttWheelHandling({
+      deltaX: 24,
+      deltaY: 6,
+      shiftKey: false,
+      nativeHorizontalScrollTarget: true,
+    })).toEqual({
+      horizontalDelta: 0,
+      verticalDelta: 0,
+      shouldPreventDefault: false,
+    })
+  })
+
+  it("keeps canvas horizontal wheel on the managed fallback path", () => {
+    expect(resolveDataGridGanttWheelHandling({
+      deltaX: 24,
+      deltaY: 6,
+      shiftKey: false,
+      nativeHorizontalScrollTarget: false,
+    })).toEqual({
+      horizontalDelta: 24,
+      verticalDelta: 0,
+      shouldPreventDefault: true,
+    })
+  })
+
+  it("keeps vertical wheel routed through the table viewport", () => {
+    expect(resolveDataGridGanttWheelHandling({
+      deltaX: 0,
+      deltaY: 18,
+      shiftKey: false,
+      nativeHorizontalScrollTarget: true,
+    })).toEqual({
+      horizontalDelta: 0,
+      verticalDelta: 18,
+      shouldPreventDefault: true,
     })
   })
 })

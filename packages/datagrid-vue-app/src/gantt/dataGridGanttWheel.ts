@@ -9,6 +9,14 @@ export interface DataGridGanttWheelIntent {
   verticalDelta: number
 }
 
+export interface ResolveDataGridGanttWheelHandlingInput extends ResolveDataGridGanttWheelIntentInput {
+  nativeHorizontalScrollTarget: boolean
+}
+
+export interface DataGridGanttWheelHandling extends DataGridGanttWheelIntent {
+  shouldPreventDefault: boolean
+}
+
 const WHEEL_NOISE_THRESHOLD = 0.5
 const HORIZONTAL_DOMINANCE_RATIO = 1.25
 
@@ -44,5 +52,22 @@ export function resolveDataGridGanttWheelIntent(
   return {
     horizontalDelta: 0,
     verticalDelta: input.deltaY,
+  }
+}
+
+export function resolveDataGridGanttWheelHandling(
+  input: ResolveDataGridGanttWheelHandlingInput,
+): DataGridGanttWheelHandling {
+  const intent = resolveDataGridGanttWheelIntent(input)
+  if (input.nativeHorizontalScrollTarget && intent.horizontalDelta !== 0) {
+    return {
+      horizontalDelta: 0,
+      verticalDelta: 0,
+      shouldPreventDefault: false,
+    }
+  }
+  return {
+    ...intent,
+    shouldPreventDefault: intent.horizontalDelta !== 0 || intent.verticalDelta !== 0,
   }
 }
