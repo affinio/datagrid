@@ -759,6 +759,10 @@ const props = defineProps({
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
   },
+  onHeaderViewportScroll: {
+    type: Function as PropType<(event: Event) => void>,
+    required: true,
+  },
 })
 
 const mode = useDataGridTableStageMode<Record<string, unknown>>()
@@ -1100,12 +1104,7 @@ function headerViewportRef(value: Element | { $el?: unknown } | null): void {
 }
 
 function handleHeaderScroll(event: Event): void {
-  const element = event.target as HTMLElement | null
-  if (element?.dataset.datagridSkipNextHeaderScrollSync === "true") {
-    delete element.dataset.datagridSkipNextHeaderScrollSync
-    return
-  }
-  viewport.value.handleHeaderScroll(event)
+  props.onHeaderViewportScroll(event)
 }
 
 function isRowSelectionColumn(column: TableColumn): boolean {

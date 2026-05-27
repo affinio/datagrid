@@ -78,8 +78,6 @@ describe("dataGridPerfTrace", () => {
       rightColumnSpacerWidth: 0,
       headerViewportRef: () => undefined,
       bodyViewportRef: () => undefined,
-      handleHeaderWheel: () => undefined,
-      handleHeaderScroll: () => undefined,
       handleViewportScroll: () => undefined,
       handleViewportKeydown: () => undefined,
     })

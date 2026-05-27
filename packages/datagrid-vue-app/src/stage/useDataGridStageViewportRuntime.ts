@@ -60,6 +60,7 @@ export interface UseDataGridStageViewportRuntimeResult {
   capturePinnedBottomViewportRef: (value: Element | ComponentPublicInstance | null) => void
   handleCenterViewportScroll: (event: Event) => void
   handleSharedVerticalViewportScroll: (event: Event) => void
+  handleHeaderViewportScroll: (event: Event) => void
   handlePinnedTopViewportScroll: (event: Event) => void
   handlePinnedBottomViewportScroll: (event: Event) => void
   handleLinkedViewportWheel: (event: WheelEvent) => void
@@ -130,6 +131,7 @@ export function useDataGridStageViewportRuntime(
   let pendingGridChromeRedrawMode: GridChromeRedrawMode | null = null
   let observedBodyViewportScrollTop = 0
   let observedBodyViewportScrollLeft = 0
+  const programmaticHeaderScrollLeft = new WeakMap<HTMLElement, number>()
   const sharedViewportScrollEventTarget: SharedViewportScrollEventTarget = {
     scrollTop: 0,
     scrollLeft: 0,
@@ -171,8 +173,9 @@ export function useDataGridStageViewportRuntime(
   function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
     const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
     if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
-      headerViewport.dataset.datagridSkipNextHeaderScrollSync = "true"
+      programmaticHeaderScrollLeft.set(headerViewport, scrollLeft)
       headerViewport.scrollLeft = scrollLeft
+      programmaticHeaderScrollLeft.set(headerViewport, headerViewport.scrollLeft)
     }
     const pinnedBottomViewport = bottomViewportEl.value
     if (pinnedBottomViewport && pinnedBottomViewport !== source && pinnedBottomViewport.scrollLeft !== scrollLeft) {
@@ -507,6 +510,39 @@ export function useDataGridStageViewportRuntime(
     scheduleScrollGridChromeRedraw("center-scroll")
   }
 
+  function handleHeaderViewportScroll(event: Event): void {
+    const element = event.target as HTMLElement | null
+    const verticalViewport = resolveVerticalBodyViewport()
+    const horizontalViewport = resolveCenterHorizontalViewport()
+    if (!element || !verticalViewport || !horizontalViewport) {
+      return
+    }
+    const expectedProgrammaticScrollLeft = programmaticHeaderScrollLeft.get(element)
+    if (expectedProgrammaticScrollLeft !== undefined) {
+      programmaticHeaderScrollLeft.delete(element)
+      if (element.scrollLeft === expectedProgrammaticScrollLeft) {
+        return
+      }
+    }
+    const nextScrollLeft = element.scrollLeft
+    const previousScrollLeft = observedBodyViewportScrollLeft
+    if (horizontalViewport.scrollLeft !== nextScrollLeft) {
+      horizontalViewport.scrollLeft = nextScrollLeft
+    }
+    syncSharedHorizontalPeers(nextScrollLeft, element)
+    const scrollState = readBodyViewportScrollState(verticalViewport)
+    if (scrollState.scrollLeft === previousScrollLeft && !hasBodyViewportScrollStateChanged(scrollState)) {
+      return
+    }
+    markBodyViewportScrolling()
+    options.viewport.value.handleViewportScroll(createSharedViewportScrollEvent(verticalViewport, scrollState))
+    scheduleBodyViewportScrollStateSync(scrollState)
+    if (scrollState.scrollLeft !== previousScrollLeft) {
+      schedulePinnedBottomViewportScrollLeftSync()
+    }
+    scheduleScrollGridChromeRedraw("center-scroll")
+  }
+
   function handlePinnedTopViewportScroll(event: Event): void {
     handlePinnedBottomViewportScroll(event)
   }
@@ -519,12 +555,8 @@ export function useDataGridStageViewportRuntime(
     managedWheelScroll.onLinkedViewportWheel(event)
   }
 
-  function handleBodyViewportWheel(event: WheelEvent): void {
-    if (!isHorizontalWheelGesture(event)) {
-      managedWheelScroll.reset()
-      return
-    }
-    managedWheelScroll.onBodyViewportWheel(event)
+  function handleBodyViewportWheel(_event: WheelEvent): void {
+    managedWheelScroll.reset()
   }
 
 
@@ -579,6 +611,7 @@ export function useDataGridStageViewportRuntime(
     capturePinnedBottomViewportRef,
     handleCenterViewportScroll,
     handleSharedVerticalViewportScroll,
+    handleHeaderViewportScroll,
     handlePinnedTopViewportScroll,
     handlePinnedBottomViewportScroll,
     handleLinkedViewportWheel,

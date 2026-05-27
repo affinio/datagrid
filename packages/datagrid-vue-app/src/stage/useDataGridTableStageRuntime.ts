@@ -1999,7 +1999,6 @@ export function useDataGridTableStageRuntime<
   })
 
   const scrollSyncService = useDataGridTableStageScrollSync({
-    bodyViewportRef,
     isColumnResizing,
     applyColumnResizeFromPointer,
     stopColumnResize,
@@ -2009,7 +2008,6 @@ export function useDataGridTableStageRuntime<
     handleInteractionWindowPointerCancel,
     handleInteractionWindowBlur,
     handleInteractionWindowContextMenuCapture,
-    syncViewport: handleViewportScroll,
   })
 
   const stageServices = {
@@ -2107,8 +2105,6 @@ export function useDataGridTableStageRuntime<
     applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,
     applyColumnMenuFilter: options.applyColumnMenuFilter,
     clearColumnMenuFilter: options.clearColumnMenuFilter,
-    handleHeaderWheel: stageServices.scrollSync.handleHeaderWheel,
-    handleHeaderScroll: stageServices.scrollSync.handleHeaderScroll,
     handleViewportScroll,
     handleViewportKeydown: stageServices.viewportKeyboard.handleViewportKeydown,
     rowClass,

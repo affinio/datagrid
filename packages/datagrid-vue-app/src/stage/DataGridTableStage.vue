@@ -28,6 +28,7 @@
       :show-index-column="showRowIndex"
       :is-coarse-pointer="isCoarsePointer"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
+      :on-header-viewport-scroll="handleHeaderViewportScroll"
     >
       <template #center-chrome>
         <canvas
@@ -1211,6 +1212,7 @@ const {
   capturePinnedBottomViewportRef,
   handleCenterViewportScroll,
   handleSharedVerticalViewportScroll,
+  handleHeaderViewportScroll,
   handlePinnedTopViewportScroll,
   handlePinnedBottomViewportScroll,
   handleLinkedViewportWheel,

@@ -82,8 +82,6 @@ export interface DataGridTableStageViewportSection {
   rightColumnSpacerWidth: number
   headerViewportRef: DataGridElementRefHandler
   bodyViewportRef: DataGridElementRefHandler
-  handleHeaderWheel: (event: WheelEvent) => void
-  handleHeaderScroll: (event: Event) => void
   handleViewportScroll: (event: Event) => void
   handleViewportKeydown: (event: KeyboardEvent) => void
 }

@@ -61,8 +61,6 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     rightColumnSpacerWidth: unref(options.rightColumnSpacerWidth),
     headerViewportRef: captureHeaderViewportRef,
     bodyViewportRef: captureBodyViewportRef,
-    handleHeaderWheel: unref(options.handleHeaderWheel),
-    handleHeaderScroll: unref(options.handleHeaderScroll),
     handleViewportScroll: unref(options.handleViewportScroll),
     handleViewportKeydown: unref(options.handleViewportKeydown),
   }))

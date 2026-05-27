@@ -2,19 +2,11 @@ import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
 import { useDataGridTableStageScrollSync } from "../useDataGridTableStageScrollSync"
 
-function createViewport(scrollLeft: number): HTMLElement {
-  const element = document.createElement("div")
-  element.scrollLeft = scrollLeft
-  return element
-}
-
-function createService(bodyViewport: HTMLElement | null) {
-  const syncViewport = vi.fn()
+function createService(options: { isColumnResizing?: boolean } = {}) {
   const stopColumnResize = vi.fn()
   const handleInteractionWindowContextMenuCapture = vi.fn(() => false)
   const service = useDataGridTableStageScrollSync({
-    bodyViewportRef: ref(bodyViewport),
-    isColumnResizing: ref(false),
+    isColumnResizing: ref(options.isColumnResizing === true),
     applyColumnResizeFromPointer: vi.fn(),
     stopColumnResize,
     handleInteractionWindowMouseMove: vi.fn(),
@@ -23,128 +15,16 @@ function createService(bodyViewport: HTMLElement | null) {
     handleInteractionWindowPointerCancel: vi.fn(),
     handleInteractionWindowBlur: vi.fn(),
     handleInteractionWindowContextMenuCapture,
-    syncViewport,
   })
-  return { service, syncViewport, stopColumnResize, handleInteractionWindowContextMenuCapture }
+  return { service, stopColumnResize, handleInteractionWindowContextMenuCapture }
 }
 
 describe("useDataGridTableStageScrollSync", () => {
-  it("does not synthesize a viewport sync when header scrollLeft is already aligned", () => {
-    const bodyViewport = createViewport(48)
-    const headerViewport = createViewport(48)
-    const { service, syncViewport } = createService(bodyViewport)
-
-    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
-
-    expect(syncViewport).not.toHaveBeenCalled()
-    expect(bodyViewport.scrollLeft).toBe(48)
-  })
-
-  it("synthesizes a viewport sync when header scrollLeft changes", () => {
-    const bodyViewport = createViewport(12)
-    const headerViewport = createViewport(96)
-    const { service, syncViewport } = createService(bodyViewport)
-
-    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
-
-    expect(bodyViewport.scrollLeft).toBe(96)
-    expect(syncViewport).toHaveBeenCalledTimes(1)
-  })
-
-  it("routes header scroll to the center horizontal owner", () => {
-    const stage = document.createElement("section")
-    stage.className = "grid-stage"
-    const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
-    const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
-    stage.append(bodyViewport, centerHorizontalViewport)
-    const headerViewport = createViewport(96)
-    const { service, syncViewport } = createService(bodyViewport)
-
-    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
-
-    expect(centerHorizontalViewport.scrollLeft).toBe(96)
-    expect(bodyViewport.scrollLeft).toBe(0)
-    expect(syncViewport).not.toHaveBeenCalled()
-  })
-
-  it("routes horizontal header wheel to the center horizontal owner", () => {
-    const stage = document.createElement("section")
-    stage.className = "grid-stage"
-    const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
-    const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
-    stage.append(bodyViewport, centerHorizontalViewport)
-    const { service, syncViewport } = createService(bodyViewport)
-    const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaX: 24 })
-
-    service.handleHeaderWheel(wheelEvent)
-
-    expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(centerHorizontalViewport.scrollLeft).toBe(36)
-    expect(bodyViewport.scrollLeft).toBe(0)
-    expect(syncViewport).toHaveBeenCalledTimes(1)
-    expect(syncViewport.mock.calls[0]?.[0].target).toEqual(expect.objectContaining({
-      __datagridCompositeViewportTarget: true,
-      scrollTop: bodyViewport.scrollTop,
-      scrollLeft: centerHorizontalViewport.scrollLeft,
-      clientWidth: centerHorizontalViewport.clientWidth,
-      clientHeight: bodyViewport.clientHeight,
-      parentElement: centerHorizontalViewport.parentElement,
-    }))
-  })
-
-  it("routes vertical header wheel to the shared vertical owner", () => {
-    const stage = document.createElement("section")
-    stage.className = "grid-stage"
-    const bodyViewport = createViewport(0)
-    bodyViewport.dataset.datagridScrollOwner = "shared-vertical"
-    const centerHorizontalViewport = createViewport(12)
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
-    stage.append(bodyViewport, centerHorizontalViewport)
-    bodyViewport.scrollTop = 40
-    const { service, syncViewport } = createService(bodyViewport)
-    const wheelEvent = new WheelEvent("wheel", { cancelable: true, deltaY: 24 })
-
-    service.handleHeaderWheel(wheelEvent)
-
-    expect(wheelEvent.defaultPrevented).toBe(true)
-    expect(bodyViewport.scrollTop).toBe(64)
-    expect(centerHorizontalViewport.scrollLeft).toBe(12)
-    expect(syncViewport).toHaveBeenCalledTimes(1)
-    expect(syncViewport.mock.calls[0]?.[0].target).toBe(bodyViewport)
-  })
-
-  it("samples header scrollLeft once when syncing the body viewport", () => {
-    const bodyViewport = createViewport(12)
-    const headerViewport = createViewport(0)
-    let headerScrollLeftReads = 0
-    Object.defineProperty(headerViewport, "scrollLeft", {
-      configurable: true,
-      get() {
-        headerScrollLeftReads += 1
-        return 96
-      },
-    })
-    const { service, syncViewport } = createService(bodyViewport)
-
-    service.handleHeaderScroll({ target: headerViewport } as unknown as Event)
-
-    expect(bodyViewport.scrollLeft).toBe(96)
-    expect(syncViewport).toHaveBeenCalledTimes(1)
-    expect(headerScrollLeftReads).toBe(1)
-  })
-
   it("stops column resize before delegating pointer lifecycle cleanup", () => {
-    const bodyViewport = createViewport(0)
-    const stopColumnResize = vi.fn()
     const handleInteractionWindowPointerCancel = vi.fn()
-    const isColumnResizing = ref(true)
+    const stopColumnResize = vi.fn()
     const service = useDataGridTableStageScrollSync({
-      bodyViewportRef: ref(bodyViewport),
-      isColumnResizing,
+      isColumnResizing: ref(true),
       applyColumnResizeFromPointer: vi.fn(),
       stopColumnResize,
       handleInteractionWindowMouseMove: vi.fn(),
@@ -153,7 +33,6 @@ describe("useDataGridTableStageScrollSync", () => {
       handleInteractionWindowPointerCancel,
       handleInteractionWindowBlur: vi.fn(),
       handleInteractionWindowContextMenuCapture: vi.fn(() => false),
-      syncViewport: vi.fn(),
     })
 
     service.handleWindowPointerCancel(new Event("pointercancel") as PointerEvent)
@@ -162,22 +41,52 @@ describe("useDataGridTableStageScrollSync", () => {
     expect(handleInteractionWindowPointerCancel).toHaveBeenCalledTimes(1)
   })
 
-  it("prevents context menu while column resize owns the gesture", () => {
-    const bodyViewport = createViewport(0)
-    const stopColumnResize = vi.fn()
-    const handleInteractionWindowContextMenuCapture = vi.fn(() => false)
+  it("routes mouse move into column resize while resize owns the gesture", () => {
+    const applyColumnResizeFromPointer = vi.fn()
+    const handleInteractionWindowMouseMove = vi.fn()
     const service = useDataGridTableStageScrollSync({
-      bodyViewportRef: ref(bodyViewport),
       isColumnResizing: ref(true),
-      applyColumnResizeFromPointer: vi.fn(),
-      stopColumnResize,
-      handleInteractionWindowMouseMove: vi.fn(),
+      applyColumnResizeFromPointer,
+      stopColumnResize: vi.fn(),
+      handleInteractionWindowMouseMove,
       handleInteractionWindowMouseUp: vi.fn(),
       handleInteractionWindowPointerUp: vi.fn(),
       handleInteractionWindowPointerCancel: vi.fn(),
       handleInteractionWindowBlur: vi.fn(),
-      handleInteractionWindowContextMenuCapture,
-      syncViewport: vi.fn(),
+      handleInteractionWindowContextMenuCapture: vi.fn(() => false),
+    })
+
+    service.handleWindowMouseMove(new MouseEvent("mousemove", { clientX: 148 }))
+
+    expect(applyColumnResizeFromPointer).toHaveBeenCalledWith(148)
+    expect(handleInteractionWindowMouseMove).not.toHaveBeenCalled()
+  })
+
+  it("delegates mouse move when column resize is idle", () => {
+    const applyColumnResizeFromPointer = vi.fn()
+    const handleInteractionWindowMouseMove = vi.fn()
+    const service = useDataGridTableStageScrollSync({
+      isColumnResizing: ref(false),
+      applyColumnResizeFromPointer,
+      stopColumnResize: vi.fn(),
+      handleInteractionWindowMouseMove,
+      handleInteractionWindowMouseUp: vi.fn(),
+      handleInteractionWindowPointerUp: vi.fn(),
+      handleInteractionWindowPointerCancel: vi.fn(),
+      handleInteractionWindowBlur: vi.fn(),
+      handleInteractionWindowContextMenuCapture: vi.fn(() => false),
+    })
+    const event = new MouseEvent("mousemove", { clientX: 148 })
+
+    service.handleWindowMouseMove(event)
+
+    expect(applyColumnResizeFromPointer).not.toHaveBeenCalled()
+    expect(handleInteractionWindowMouseMove).toHaveBeenCalledWith(event)
+  })
+
+  it("prevents context menu while column resize owns the gesture", () => {
+    const { service, stopColumnResize, handleInteractionWindowContextMenuCapture } = createService({
+      isColumnResizing: true,
     })
     const event = new MouseEvent("contextmenu", { cancelable: true })
 
@@ -185,6 +94,17 @@ describe("useDataGridTableStageScrollSync", () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(stopColumnResize).toHaveBeenCalledTimes(1)
+    expect(handleInteractionWindowContextMenuCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it("delegates context menu when column resize is idle", () => {
+    const { service, stopColumnResize, handleInteractionWindowContextMenuCapture } = createService()
+    const event = new MouseEvent("contextmenu", { cancelable: true })
+
+    expect(service.handleWindowContextMenuCapture(event)).toBe(false)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(stopColumnResize).not.toHaveBeenCalled()
     expect(handleInteractionWindowContextMenuCapture).toHaveBeenCalledTimes(1)
   })
 })

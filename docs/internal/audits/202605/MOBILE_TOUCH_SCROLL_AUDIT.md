@@ -18,6 +18,8 @@ Completed in Phase 1:
 - Native body/header viewport panning: `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, and `.grid-header-viewport` use `touch-action: pan-x pan-y`; the body viewport keeps `-webkit-overflow-scrolling: touch`.
 - Table-stage touch fallback routing removed: `DataGridTableStage.vue` no longer installs `installDataGridTouchPanGuard()`, so table-stage body/header touch pan is not translated through non-passive `touchmove` handlers.
 - Native overscroll restored: table-stage body/header scrollports no longer set `overscroll-behavior: none`, allowing the browser/page to own boundary behavior instead of a grid workaround.
+- Native body horizontal wheel restored: actual horizontal scroll owners now leave wheel default behavior to the browser; managed wheel remains limited to linked non-scroll surfaces that need to forward horizontal intent into the center owner.
+- Header scroll sync cleanup: header scroll-left feedback now routes through `useDataGridStageViewportRuntime.ts`; the legacy header wheel path and DOM `data-*` skip flag were removed.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
 - Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
@@ -75,7 +77,7 @@ Interaction audit closure:
 
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, keeps vertical wheel/overscroll native, wires horizontal linked-wheel fallback, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
+- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, keeps vertical wheel/overscroll and body horizontal wheel native on real scroll owners, wires horizontal linked-wheel fallback only for non-scroll surfaces, owns header scroll-left feedback, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
 - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
 - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; visible renderer output is preserved during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
@@ -361,8 +363,12 @@ Files/functions:
 
 Problem:
 - Managed wheel calls `preventDefault()` when it owns a wheel gesture.
-- This is probably correct for desktop header/pinned synchronization, but it means body/header wheel listeners cannot be passive.
+- This is still needed for desktop header/pinned linked-surface synchronization, but should not run on real body horizontal scroll owners.
 - Precision touchpads can feel closer to touch scrolling than mouse wheels, so this should be reviewed separately from classic wheel behavior.
+
+Current state:
+- Body horizontal wheel over the center and pinned-bottom horizontal scroll owners is native.
+- Managed wheel remains limited to linked/header/pinned surfaces that are not themselves horizontal scroll owners.
 
 Recommended fix:
 - Keep managed wheel only for horizontal linked/header synchronization where needed.
@@ -377,11 +383,11 @@ Files/functions:
 
 Problem:
 - Pinned panes use `translate3d`, which is the right general direction.
-- Canvas chrome redraws are rAF-scheduled in many paths, but horizontal-only scroll can flush synchronously.
+- Canvas chrome redraws, header feedback, and pinned-bottom scroll-left sync are routed through the stage scroll frame for table-stage scroll paths.
 - CSS has `will-change: transform` on `.grid-pane-content`, but not a complete contain/layer policy around the viewport.
 
 Recommended fix:
-- Coalesce all linked pane, header, pinned-bottom, and chrome updates in one scroll rAF.
+- Keep linked pane, header, pinned-bottom, and chrome updates coalesced in one scroll rAF.
 - Keep fixed-row containment targeted to body/pane rows and exclude auto-height rows; validate overlays/focus rings visually.
 
 ### Low

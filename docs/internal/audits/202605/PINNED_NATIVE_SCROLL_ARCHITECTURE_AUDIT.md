@@ -6,7 +6,7 @@ Date: 2026-05-16
 
 Moving pinned body zones into the same native vertical scroll surface as the center body viewport was technically desirable but not a small CSS change. The table stage now uses a shared native vertical scroll shell for pinned-left, center, and pinned-right body layers while keeping horizontal scroll center-owned through a separate horizontal owner.
 
-The old `installDataGridTouchPanGuard()` table-stage fallback is no longer installed for touch panning. Vertical touch/wheel and overscroll boundary behavior are left to the browser, while horizontal linked-wheel synchronization remains center-owned.
+The old `installDataGridTouchPanGuard()` table-stage fallback is no longer installed for touch panning. Vertical touch/wheel, body horizontal wheel on real horizontal scroll owners, and overscroll boundary behavior are left to the browser, while horizontal linked-wheel synchronization remains center-owned for non-scroll linked surfaces.
 
 The migration crossed table-stage DOM shape, viewport runtime refs, header sync, pinned bottom sync, chrome canvas sizing, overlay coordinate systems, auto row-height measurement, and tests that query `.grid-body-viewport` as the body scroll owner.
 
@@ -24,9 +24,9 @@ The main body shell is a CSS grid with three columns:
 - center body viewport
 - right pinned body pane
 
-The center body viewport is the only native vertical scrolling element for the main body. It owns `scrollTop`, `scrollLeft`, row virtualization commits, horizontal column virtualization, header scroll-left synchronization, and runtime viewport position updates.
+The shared vertical body shell is the native vertical scrolling element for the main body. The center horizontal scrollport owns `scrollLeft`, horizontal column virtualization, header scroll-left synchronization, pinned-bottom horizontal sync, and center horizontal wheel default behavior.
 
-Pinned panes are not scroll containers. They are `overflow: hidden` sibling panes. Their `.grid-pane-content` elements render the same visible row window as the center pane and are shifted vertically by transform to match the center viewport's `scrollTop`.
+Pinned panes participate in the shared vertical scroll surface but are not independent scroll containers. Their `.grid-pane-content` elements render the same visible row window as the center pane and are shifted by the shared body scroll offset so the sticky body layers stay aligned during virtualization.
 
 Pinned bottom rows are rendered in a separate `.grid-body-shell--pinned-bottom`. Its center viewport is horizontal-only (`overflow-y: hidden`) and is synchronized to the main body horizontal scroll.
 
@@ -177,11 +177,11 @@ Target ownership:
 
 4. **When touching pinned zones, how is scroll handled today?**
 
-   Pinned body touches are handled by the shared native vertical scroll surface. `DataGridTableStage.vue` no longer routes table touch pan through `installDataGridTouchPanGuard()` or calls `preventDefault()` from a non-passive `touchmove` fallback. Vertical wheel and boundary overscroll are also released to native browser behavior.
+   Pinned body touches are handled by the shared native vertical scroll surface. `DataGridTableStage.vue` no longer routes table touch pan through `installDataGridTouchPanGuard()` or calls `preventDefault()` from a non-passive `touchmove` fallback. Vertical wheel, body horizontal wheel on actual scroll owners, and boundary overscroll are also released to native browser behavior.
 
 5. **What changed to make pinned zones part of the same native vertical scroll surface?**
 
-   The body stage uses a shared vertical scroll viewport that wraps the pinned-left, center, and pinned-right body layers. `bodyViewportEl` and app viewport refs point to that shared vertical owner for `scrollTop`, `clientHeight`, row range computation, runtime viewport position, and performance sampling. Horizontal scroll-left remains center-owned through a separate center horizontal owner used by header sync, horizontal virtualization, center spacers, `scrollToColumn`, pinned-bottom sync, and chrome redraw.
+   The body stage uses a shared vertical scroll viewport that wraps the pinned-left, center, and pinned-right body layers. `bodyViewportEl` and app viewport refs point to that shared vertical owner for `scrollTop`, `clientHeight`, row range computation, runtime viewport position, and performance sampling. Horizontal scroll-left remains center-owned through a separate center horizontal owner used by header sync, horizontal virtualization, center spacers, `scrollToColumn`, pinned-bottom sync, body horizontal wheel, and chrome redraw. Header scroll-left feedback is owned by the stage viewport runtime instead of the legacy table scroll-sync service.
 6. **Would this require a broad stage layout refactor or can it be done incrementally?**
 
    The full target requires a broad stage layout refactor. It can be phased, but the phase that changes the native vertical owner touches several coupled systems at once: DOM layout, viewport runtime refs, CSS overflow rules, header sync, pinned bottom, chrome canvas, overlay geometry, and tests. A feature-flagged incremental prototype is realistic; a narrow one-file change is not.

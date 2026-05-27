@@ -108,8 +108,6 @@ describe("useDataGridStageChromeModel", () => {
       rightColumnSpacerWidth: 8,
       headerViewportRef: () => {},
       bodyViewportRef: () => {},
-      handleHeaderWheel: () => {},
-      handleHeaderScroll: () => {},
       handleViewportScroll: () => {},
       handleViewportKeydown: () => {},
     } as DataGridTableStageViewportSection))
@@ -254,9 +252,7 @@ describe("useDataGridStageChromeModel", () => {
         rightColumnSpacerWidth: 0,
         headerViewportRef: () => {},
         bodyViewportRef: () => {},
-        handleHeaderWheel: () => {},
-        handleHeaderScroll: () => {},
-        handleViewportScroll: () => {},
+            handleViewportScroll: () => {},
         handleViewportKeydown: () => {},
       } as DataGridTableStageViewportSection)),
       rows: computed(() => ({
@@ -326,9 +322,7 @@ describe("useDataGridStageChromeModel", () => {
         rightColumnSpacerWidth: 48,
         headerViewportRef: () => {},
         bodyViewportRef: () => {},
-        handleHeaderWheel: () => {},
-        handleHeaderScroll: () => {},
-        handleViewportScroll: () => {},
+            handleViewportScroll: () => {},
         handleViewportKeydown: () => {},
       } as DataGridTableStageViewportSection)),
       rows: computed(() => ({
