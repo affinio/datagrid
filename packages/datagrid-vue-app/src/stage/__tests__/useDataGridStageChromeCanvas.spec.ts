@@ -78,6 +78,7 @@ function createChromeCanvasApi(perfTraceEnabled = false) {
     bodyViewportScrollLeft: ref(0),
     bodyViewportClientWidth: ref(160),
     bodyViewportClientHeight: ref(48),
+    bodyViewportShellClientWidth: ref(160),
     pinnedBottomViewportClientHeight: ref(48),
     bodyViewportTopOffset: ref(0),
     headerShellHeight: ref(24),
@@ -120,6 +121,19 @@ describe("useDataGridStageChromeCanvas", () => {
       bodyBandCount: 3,
       pinnedBottomBandCount: 3,
     })
+  })
+
+  it("reuses cached chrome styles for body scroll redraws", () => {
+    const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      getPropertyValue: () => "",
+    } as unknown as CSSStyleDeclaration)
+    const api = createChromeCanvasApi()
+
+    api.flushGridChromeRedraw("full")
+    getComputedStyleSpy.mockClear()
+    api.flushGridChromeRedraw("body-scroll")
+
+    expect(getComputedStyleSpy).not.toHaveBeenCalled()
   })
 
   it("draws body pinned pane vertical dividers through the full viewport height", () => {

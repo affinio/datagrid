@@ -237,6 +237,45 @@
         </template>
       </DataGridTableStagePinnedPane>
     </div>
+
+    <DataGridColumnMenu
+      v-if="activeColumnMenu && activeColumnMenuColumn"
+      :key="activeColumnMenuOverlayKey"
+      :row-count="activeColumnMenuRowCount"
+      :resolve-value-entries="resolveActiveColumnMenuValueEntries"
+      :items="activeColumnMenuItems"
+      :disabled-items="activeColumnMenuDisabledItems"
+      :disabled-reasons="activeColumnMenuDisabledReasons"
+      :labels="activeColumnMenuLabels"
+      :action-options="activeColumnMenuActionOptions"
+      :custom-items="activeColumnMenuCustomItems"
+      trigger-mode="button"
+      :column-key="activeColumnMenuColumn.key"
+      :column-label="activeColumnMenuColumn.column.label ?? activeColumnMenuColumn.key"
+      :column-data-type="activeColumnMenuColumn.column.dataType"
+      :sort-direction="activeColumnMenuSortDirection"
+      :sort-enabled="isColumnMenuSortable(activeColumnMenuColumn)"
+      :pin="activeColumnMenuColumn.pin"
+      :grouped="activeColumnMenuGrouped"
+      :group-order="activeColumnMenuGroupOrder"
+      :group-enabled="isColumnMenuGroupable(activeColumnMenuColumn)"
+      :filter-enabled="isColumnMenuFilterable(activeColumnMenuColumn) && activeColumnMenuValueFilterEnabled"
+      :value-filter-row-limit="activeColumnMenuValueFilterRowLimit"
+      :text-filter-enabled="isColumnMenuFilterable(activeColumnMenuColumn)"
+      :text-filter-value="activeColumnMenuTextFilterValue"
+      :filter-active="activeColumnMenuFilterActive"
+      :selected-filter-tokens="activeColumnMenuSelectedTokens"
+      :max-filter-values="activeColumnMenuMaxFilterValues"
+      :anchor-element="activeColumnMenu.anchorEl"
+      :open-reason="activeColumnMenu.reason"
+      @sort="applyActiveColumnMenuSort"
+      @pin="applyActiveColumnMenuPin"
+      @group="applyActiveColumnMenuGroupBy"
+      @apply-filter="applyActiveColumnMenuFilter"
+      @update-text-filter="updateActiveColumnMenuTextFilter"
+      @clear-filter="clearActiveColumnMenuFilter"
+      @close="closeActiveColumnMenu"
+    />
   </section>
 </template>
 
@@ -247,11 +286,21 @@ import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
 import DataGridTableStageChromeLayer from "./DataGridTableStageChromeLayer.vue"
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
+import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
+import {
+  DATAGRID_COLUMN_MENU_ITEM_KEYS,
+  type DataGridColumnMenuActionOptions,
+  type DataGridColumnMenuCustomItem,
+  type DataGridColumnMenuDisabledReasons,
+  type DataGridColumnMenuItemKey,
+  type DataGridColumnMenuItemLabels,
+} from "../overlays/dataGridColumnMenu"
 import type {
   DataGridTableStageBodyColumn as TableColumn,
   DataGridTableStageBodyRow as TableRow,
 } from "./dataGridTableStageBody.types"
 import type {
+  DataGridColumnMenuValueEntriesResult,
   DataGridTableStageCustomOverlay,
   DataGridTableStageProps,
 } from "./dataGridTableStage.types"
@@ -301,6 +350,13 @@ const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
 const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
 const TOUCH_LONG_PRESS_DELAY_MS = 520
 const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
+const DEFAULT_COLUMN_MENU_ITEMS = Object.freeze([...DATAGRID_COLUMN_MENU_ITEM_KEYS])
+const EMPTY_COLUMN_MENU_DISABLED_ITEMS = Object.freeze([]) as readonly DataGridColumnMenuItemKey[]
+const EMPTY_COLUMN_MENU_DISABLED_REASONS = Object.freeze({}) as DataGridColumnMenuDisabledReasons
+const EMPTY_COLUMN_MENU_LABELS = Object.freeze({}) as DataGridColumnMenuItemLabels
+const EMPTY_COLUMN_MENU_ACTION_OPTIONS = Object.freeze({}) as DataGridColumnMenuActionOptions
+const EMPTY_COLUMN_MENU_CUSTOM_ITEMS = Object.freeze([]) as readonly DataGridColumnMenuCustomItem[]
+const DEFAULT_COLUMN_MENU_MAX_FILTER_VALUES = 120
 
 const props = defineProps({
   mode: {
@@ -412,6 +468,170 @@ const gridAriaRowCount = computed(() => Math.max(
   selection.value?.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length,
 ))
 const gridAriaColumnCount = computed(() => Math.max(0, visibleColumns.value.length))
+const activeColumnMenu = computed(() => columns.value.activeColumnMenu ?? null)
+// DataGridColumnMenu closes before emitting some actions, so retain the action column for that synchronous emit.
+const activeColumnMenuActionColumnKey = ref<string | null>(null)
+const activeColumnMenuColumn = computed(() => {
+  const active = activeColumnMenu.value
+  return active ? visibleColumns.value.find(column => column.key === active.columnId) ?? null : null
+})
+watch(activeColumnMenu, active => {
+  if (active) {
+    activeColumnMenuActionColumnKey.value = active.columnId
+  }
+}, { immediate: true })
+const activeColumnMenuRowCount = computed(() => rows.value.sourceRows?.length ?? rows.value.displayRows.length)
+const activeColumnMenuValueFilterEnabled = computed(() => columns.value.columnMenuValueFilterEnabled !== false)
+const activeColumnMenuValueFilterRowLimit = computed(() => {
+  const value = columns.value.columnMenuValueFilterRowLimit
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+})
+const activeColumnMenuMaxFilterValues = computed(() => {
+  const value = columns.value.columnMenuMaxFilterValues
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(20, Math.trunc(value))
+    : DEFAULT_COLUMN_MENU_MAX_FILTER_VALUES
+})
+const activeColumnMenuOverlayKey = computed(() => {
+  const column = activeColumnMenuColumn.value
+  return [
+    "active-column-menu",
+    column?.key ?? "none",
+    activeColumnMenuValueFilterEnabled.value ? "value-filter" : "text-only",
+    activeColumnMenuValueFilterRowLimit.value,
+  ].join(":")
+})
+const activeColumnMenuItems = computed(() => resolveColumnMenuItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuDisabledItems = computed(() => resolveColumnMenuDisabledItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuDisabledReasons = computed(() => resolveColumnMenuDisabledReasonsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuLabels = computed(() => resolveColumnMenuLabelsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuActionOptions = computed(() => resolveColumnMenuActionOptionsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuCustomItems = computed(() => resolveColumnMenuCustomItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuSortDirection = computed(() => resolveColumnMenuSortDirectionSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuGrouped = computed(() => isColumnGroupedSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuGroupOrder = computed(() => resolveColumnGroupOrderSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuFilterActive = computed(() => isColumnFilterActiveSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuSelectedTokens = computed(() => resolveColumnMenuSelectedTokensSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuTextFilterValue = computed(() => {
+  const column = activeColumnMenuColumn.value
+  return column ? columns.value.columnFilterTextByKey[column.key] ?? "" : ""
+})
+
+function resolveColumnMenuItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
+  return columns.value.resolveColumnMenuItems?.(columnKey) ?? DEFAULT_COLUMN_MENU_ITEMS
+}
+
+function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
+  return columns.value.resolveColumnMenuDisabledItems?.(columnKey) ?? EMPTY_COLUMN_MENU_DISABLED_ITEMS
+}
+
+function resolveColumnMenuDisabledReasonsSafe(columnKey: string): DataGridColumnMenuDisabledReasons {
+  return columns.value.resolveColumnMenuDisabledReasons?.(columnKey) ?? EMPTY_COLUMN_MENU_DISABLED_REASONS
+}
+
+function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemLabels {
+  return columns.value.resolveColumnMenuLabels?.(columnKey) ?? EMPTY_COLUMN_MENU_LABELS
+}
+
+function resolveColumnMenuActionOptionsSafe(columnKey: string): DataGridColumnMenuActionOptions {
+  return columns.value.resolveColumnMenuActionOptions?.(columnKey) ?? EMPTY_COLUMN_MENU_ACTION_OPTIONS
+}
+
+function resolveColumnMenuCustomItemsSafe(columnKey: string): readonly DataGridColumnMenuCustomItem[] {
+  return columns.value.resolveColumnMenuCustomItems?.(columnKey) ?? EMPTY_COLUMN_MENU_CUSTOM_ITEMS
+}
+
+function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" | null {
+  return columns.value.resolveColumnMenuSortDirection?.(columnKey) ?? null
+}
+
+function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
+  return columns.value.resolveColumnMenuSelectedTokens?.(columnKey) ?? []
+}
+
+function isColumnFilterActiveSafe(columnKey: string): boolean {
+  return columns.value.isColumnFilterActive?.(columnKey) ?? Boolean(columns.value.columnFilterTextByKey[columnKey])
+}
+
+function isColumnGroupedSafe(columnKey: string): boolean {
+  return columns.value.isColumnGrouped?.(columnKey) ?? false
+}
+
+function resolveColumnGroupOrderSafe(columnKey: string): number | null {
+  return columns.value.resolveColumnGroupOrder?.(columnKey) ?? null
+}
+
+function isColumnMenuSortable(column: TableColumn): boolean {
+  return column.column.capabilities?.sortable !== false
+}
+
+function isColumnMenuFilterable(column: TableColumn): boolean {
+  return column.column.capabilities?.filterable !== false
+}
+
+function isColumnMenuGroupable(column: TableColumn): boolean {
+  return column.column.capabilities?.groupable !== false
+}
+
+function resolveActiveColumnMenuKey(): string | null {
+  return activeColumnMenuColumn.value?.key ?? activeColumnMenu.value?.columnId ?? activeColumnMenuActionColumnKey.value
+}
+
+function resolveActiveColumnMenuValueEntries(search?: string): DataGridColumnMenuValueEntriesResult {
+  const columnKey = resolveActiveColumnMenuKey()
+  return columnKey ? columns.value.resolveColumnMenuValueEntries?.(columnKey, search) ?? [] : []
+}
+
+function applyActiveColumnMenuSort(direction: "asc" | "desc" | null): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuSort?.(columnKey, direction)
+  }
+}
+
+function applyActiveColumnMenuPin(pin: TableColumn["pin"]): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuPin?.(columnKey, pin)
+  }
+}
+
+function applyActiveColumnMenuGroupBy(grouped: boolean): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuGroupBy?.(columnKey, grouped)
+  }
+}
+
+function applyActiveColumnMenuFilter(tokens: readonly string[]): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuFilter?.(columnKey, tokens)
+  }
+}
+
+function updateActiveColumnMenuTextFilter(value: string): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.setColumnFilterText(columnKey, value)
+  }
+}
+
+function clearActiveColumnMenuFilter(): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (!columnKey) {
+    return
+  }
+  if (typeof columns.value.clearColumnMenuFilter === "function") {
+    columns.value.clearColumnMenuFilter(columnKey)
+    return
+  }
+  columns.value.setColumnFilterText(columnKey, "")
+}
+
+function closeActiveColumnMenu(): void {
+  columns.value.closeColumnMenu?.()
+}
 
 const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
   const section = viewport.value
@@ -1192,6 +1412,7 @@ const {
   bodyViewportScrollLeft,
   bodyViewportClientWidth,
   bodyViewportClientHeight,
+  bodyViewportShellClientWidth,
   pinnedBottomViewportClientHeight,
   bodyViewportTopOffset,
   headerShellHeight,
@@ -1498,6 +1719,7 @@ const {
   bodyViewportScrollLeft,
   bodyViewportClientWidth,
   bodyViewportClientHeight,
+  bodyViewportShellClientWidth,
   pinnedBottomViewportClientHeight,
   bodyViewportTopOffset,
   headerShellHeight,

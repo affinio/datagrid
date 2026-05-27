@@ -404,6 +404,32 @@ export function useDataGridTableStageRuntime<
   const flushRowSelectionSnapshotUpdates = options.flushRowSelectionSnapshotUpdates ?? (() => undefined)
   const rowSelectionSnapshotRef = options.rowSelectionSnapshot ?? ref<DataGridRowSelectionSnapshot | null>(null)
   const latestRenderedBodyViewport = ref<DataGridTableStageRenderedBodyViewport | null>(null)
+  const activeColumnMenu = options.activeColumnMenu ?? ref<DataGridActiveColumnMenuState | null>(null)
+  const openColumnMenu = options.openColumnMenu ?? ((
+    columnKey: string,
+    anchorEl: HTMLElement,
+    reason: DataGridColumnMenuOpenReason,
+  ): void => {
+    activeColumnMenu.value = {
+      columnId: columnKey,
+      anchorEl,
+      reason,
+    }
+  })
+  const closeColumnMenu = options.closeColumnMenu ?? (() => {
+    activeColumnMenu.value = null
+  })
+  const activeColumnMenuLayoutSignature = computed(() => options.visibleColumns.value.map(column => [
+    column.key,
+    column.pin,
+    column.visible === false ? "hidden" : "visible",
+    column.width ?? "",
+  ].join(":")).join("|"))
+  watch(activeColumnMenuLayoutSignature, () => {
+    if (activeColumnMenu.value) {
+      closeColumnMenu()
+    }
+  })
   const showRowIndex = computed(() => options.showRowIndex?.value !== false)
   const totalBodyRows = computed(() => options.runtime.rowPartition.value.bodyRowCount)
   const placeholderRows = useDataGridTableStagePlaceholderRows<TRow>({
@@ -2110,9 +2136,9 @@ export function useDataGridTableStageRuntime<
     applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,
     applyColumnMenuFilter: options.applyColumnMenuFilter,
     clearColumnMenuFilter: options.clearColumnMenuFilter,
-    activeColumnMenu: options.activeColumnMenu,
-    openColumnMenu: options.openColumnMenu,
-    closeColumnMenu: options.closeColumnMenu,
+    activeColumnMenu,
+    openColumnMenu,
+    closeColumnMenu,
     handleViewportScroll,
     handleViewportKeydown: stageServices.viewportKeyboard.handleViewportKeydown,
     rowClass,

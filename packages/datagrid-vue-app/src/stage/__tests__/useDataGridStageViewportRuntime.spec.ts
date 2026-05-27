@@ -754,7 +754,7 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(0)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full")
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("body-scroll")
 
     harness.unmount()
   })
@@ -787,14 +787,24 @@ describe("useDataGridStageViewportRuntime", () => {
       },
     })
 
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.bodyViewportClientWidth.value = 320
+    harness.runtime.bodyViewportClientHeight.value = 240
+    harness.runtime.bodyViewportShellClientWidth.value = 360
+    dimensionReads.clientWidth = 0
+    dimensionReads.clientHeight = 0
+
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
     frameCallbacks.forEach(callback => callback(performance.now()))
 
+    const viewportScrollEvent = vi.mocked(harness.viewport.handleViewportScroll).mock.calls[0]?.[0] as Event | undefined
+    const viewportScrollTarget = viewportScrollEvent?.target as (HTMLElement & { __datagridCompositeShellClientWidth?: number }) | null
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(72)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(16)
+    expect(viewportScrollTarget?.__datagridCompositeShellClientWidth).toBe(360)
     expect(dimensionReads).toEqual({
-      clientWidth: 1,
-      clientHeight: 1,
+      clientWidth: 0,
+      clientHeight: 0,
     })
 
     harness.unmount()

@@ -12,7 +12,7 @@ import {
 } from "../perf/dataGridPerfTrace"
 
 const DATA_GRID_SCROLL_IDLE_MS = 120
-type GridChromeRedrawMode = "full" | "center-scroll"
+type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
 
 export interface UseDataGridStageViewportRuntimeSyncers {
   syncBodyViewportMetrics: () => void
@@ -42,6 +42,7 @@ export interface UseDataGridStageViewportRuntimeResult {
   bodyViewportScrollLeft: Ref<number>
   bodyViewportClientWidth: Ref<number>
   bodyViewportClientHeight: Ref<number>
+  bodyViewportShellClientWidth: Ref<number>
   pinnedTopViewportClientHeight: Ref<number>
   pinnedBottomViewportClientHeight: Ref<number>
   bodyViewportTopOffset: Ref<number>
@@ -69,7 +70,13 @@ interface BodyViewportScrollState {
 }
 
 function mergeGridChromeRedrawMode(current: GridChromeRedrawMode, next: GridChromeRedrawMode): GridChromeRedrawMode {
-  return current === "full" || next === "full" ? "full" : "center-scroll"
+  if (current === next) {
+    return current
+  }
+  if (current === "full" || next === "full") {
+    return "full"
+  }
+  return "full"
 }
 
 function resolveElementRef(value: Element | ComponentPublicInstance | null): HTMLElement | null {
@@ -96,6 +103,7 @@ interface SharedViewportScrollEventTarget {
   clientHeight: number
   parentElement: HTMLElement | null
   __datagridCompositeViewportTarget: true
+  __datagridCompositeShellClientWidth: number
 }
 
 
@@ -114,6 +122,7 @@ export function useDataGridStageViewportRuntime(
   const bodyViewportScrollLeft = ref(0)
   const bodyViewportClientWidth = ref(0)
   const bodyViewportClientHeight = ref(0)
+  const bodyViewportShellClientWidth = ref(0)
   const pinnedTopViewportClientHeight = ref(0)
   const pinnedBottomViewportClientHeight = ref(0)
   const bodyViewportTopOffset = ref(0)
@@ -135,6 +144,7 @@ export function useDataGridStageViewportRuntime(
     clientHeight: 0,
     parentElement: null,
     __datagridCompositeViewportTarget: true,
+    __datagridCompositeShellClientWidth: 0,
   }
   const perfTraceEnabled = options.perfTraceEnabled ?? resolveDataGridPerfTraceEnabled()
 
@@ -254,11 +264,15 @@ export function useDataGridStageViewportRuntime(
   ): Event {
     const verticalViewport = resolveVerticalBodyViewport() ?? fallbackViewport
     const horizontalViewport = resolveCenterHorizontalViewport() ?? fallbackViewport
+    const clientWidth = bodyViewportClientWidth.value > 0 ? bodyViewportClientWidth.value : horizontalViewport.clientWidth
+    const clientHeight = bodyViewportClientHeight.value > 0 ? bodyViewportClientHeight.value : verticalViewport.clientHeight
+    const shellClientWidth = bodyViewportShellClientWidth.value > 0 ? bodyViewportShellClientWidth.value : clientWidth
     sharedViewportScrollEventTarget.scrollTop = scrollState?.scrollTop ?? verticalViewport.scrollTop
     sharedViewportScrollEventTarget.scrollLeft = scrollState?.scrollLeft ?? horizontalViewport.scrollLeft
-    sharedViewportScrollEventTarget.clientWidth = horizontalViewport.clientWidth
-    sharedViewportScrollEventTarget.clientHeight = verticalViewport.clientHeight
-    sharedViewportScrollEventTarget.parentElement = horizontalViewport.parentElement
+    sharedViewportScrollEventTarget.clientWidth = clientWidth
+    sharedViewportScrollEventTarget.clientHeight = clientHeight
+    sharedViewportScrollEventTarget.parentElement = null
+    sharedViewportScrollEventTarget.__datagridCompositeShellClientWidth = shellClientWidth
     return { target: sharedViewportScrollEventTarget } as unknown as Event
   }
 
@@ -456,6 +470,10 @@ export function useDataGridStageViewportRuntime(
       scheduleScrollGridChromeRedraw("center-scroll")
       return
     }
+    if (scrollState.scrollLeft === previousScrollLeft && scrollState.scrollTop !== previousScrollTop) {
+      scheduleScrollGridChromeRedraw("body-scroll")
+      return
+    }
     scheduleScrollGridChromeRedraw("full")
   }
 
@@ -574,6 +592,7 @@ export function useDataGridStageViewportRuntime(
     bodyViewportScrollLeft,
     bodyViewportClientWidth,
     bodyViewportClientHeight,
+    bodyViewportShellClientWidth,
     pinnedTopViewportClientHeight,
     pinnedBottomViewportClientHeight,
     bodyViewportTopOffset,

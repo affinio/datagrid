@@ -7797,6 +7797,9 @@ describe("DataGrid app facade contract", () => {
     if (bodyShell) {
       setElementClientWidth(bodyShell, 792)
     }
+    window.dispatchEvent(new Event("resize"))
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
     bodyViewportEl.scrollLeft = 1
     await bodyViewport.trigger("scroll")
     await flushAnimationFrame()
@@ -7834,6 +7837,9 @@ describe("DataGrid app facade contract", () => {
     if (bodyShell) {
       setElementClientWidth(bodyShell, 720)
     }
+    window.dispatchEvent(new Event("resize"))
+    await flushAnimationFrame()
+    await flushRuntimeTasks()
     bodyViewportEl.scrollLeft = 1
     await bodyViewport.trigger("scroll")
     await flushAnimationFrame()

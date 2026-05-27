@@ -683,14 +683,29 @@ export function useDataGridAppViewport<TRow>(
     maybeNodeTimer.unref?.()
   }
 
-  const captureViewportDimensions = (element: HTMLElement): ViewportDimensions => ({
-    clientWidth: element.clientWidth,
-    clientHeight: element.clientHeight,
-    shellClientWidth: Math.max(element.parentElement?.clientWidth ?? 0, element.clientWidth),
-  })
+  const resolveViewportShellClientWidth = (element: HTMLElement, clientWidth: number): number => {
+    const compositeShellClientWidth = (element as HTMLElement & { __datagridCompositeShellClientWidth?: number }).__datagridCompositeShellClientWidth
+    if (Number.isFinite(compositeShellClientWidth) && (compositeShellClientWidth as number) > 0) {
+      return Math.max(clientWidth, compositeShellClientWidth as number)
+    }
+    return Math.max(element.parentElement?.clientWidth ?? 0, clientWidth)
+  }
+
+  const captureViewportDimensions = (element: HTMLElement): ViewportDimensions => {
+    const clientWidth = element.clientWidth
+    return {
+      clientWidth,
+      clientHeight: element.clientHeight,
+      shellClientWidth: resolveViewportShellClientWidth(element, clientWidth),
+    }
+  }
 
   const isSharedVerticalPrototypeViewport = (element: HTMLElement): boolean => (
     element.dataset?.datagridScrollOwner === "shared-vertical"
+  )
+
+  const isCompositeViewportTarget = (element: HTMLElement): boolean => (
+    (element as HTMLElement & { __datagridCompositeViewportTarget?: boolean }).__datagridCompositeViewportTarget === true
   )
 
   const resolveHorizontalViewportForOwner = (verticalViewport: HTMLElement): HTMLElement => {
@@ -745,9 +760,9 @@ export function useDataGridAppViewport<TRow>(
     element: HTMLElement,
     commitOptions: { forceVisibleRows: boolean; measureVisibleRowHeights: boolean; syncRuntimePosition?: boolean },
   ): ViewportSnapshot => {
-    const cachedCompositeTarget = cachedViewportElement as (HTMLElement & { __datagridCompositeViewportTarget?: boolean }) | null
     const shouldUseQueuedCompositeSnapshot = cachedViewportElement !== element
-      && cachedCompositeTarget?.__datagridCompositeViewportTarget === true
+      && cachedViewportElement != null
+      && isCompositeViewportTarget(cachedViewportElement)
     if (
       commitOptions.forceVisibleRows
       || commitOptions.measureVisibleRowHeights
@@ -1768,7 +1783,8 @@ export function useDataGridAppViewport<TRow>(
     const element = event.target as HTMLElement
     pendingViewportScrollTop = element.scrollTop
     pendingViewportScrollLeft = element.scrollLeft
-    const shouldRefreshDimensions = cachedViewportElement !== element
+    const shouldRefreshDimensions = isCompositeViewportTarget(element)
+      || cachedViewportElement !== element
       || cachedViewportDimensions == null
       || cachedViewportDimensions.clientWidth <= 0
       || cachedViewportDimensions.clientHeight <= 0

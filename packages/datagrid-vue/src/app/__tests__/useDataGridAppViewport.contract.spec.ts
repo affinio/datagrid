@@ -1869,7 +1869,7 @@ describe("useDataGridAppViewport contract", () => {
     scrollLeft = 16
 
     viewport.handleViewportScroll(createScrollEvent(element))
-    expect(widthReads.clientWidth).toBe(2)
+    expect(widthReads.clientWidth).toBe(1)
     expect(widthReads.clientHeight).toBe(1)
     expect(widthReads.shellClientWidth).toBe(1)
 
@@ -1879,9 +1879,73 @@ describe("useDataGridAppViewport contract", () => {
 
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(widthReads.clientWidth).toBe(2)
+    expect(widthReads.clientWidth).toBe(1)
     expect(widthReads.clientHeight).toBe(1)
     expect(widthReads.shellClientWidth).toBe(1)
+  })
+
+  it("uses composite shell width without reading the parent during scroll commits", () => {
+    const raf = createRafHarness()
+    let parentWidthReads = 0
+    const parentElement = {} as HTMLElement
+    Object.defineProperty(parentElement, "clientWidth", {
+      configurable: true,
+      get() {
+        parentWidthReads += 1
+        return 640
+      },
+    })
+    const element = {
+      scrollTop: 20,
+      scrollLeft: 0,
+      clientWidth: 600,
+      clientHeight: 400,
+      parentElement,
+      __datagridCompositeViewportTarget: true,
+      __datagridCompositeShellClientWidth: 640,
+    } as unknown as HTMLElement
+    const mutableElement = element as unknown as {
+      scrollTop: number
+      clientWidth: number
+      __datagridCompositeShellClientWidth: number
+    }
+    const visibleColumns = ref([
+      { key: "flex", pin: "center", width: 100, column: { flex: 1 } },
+      { key: "fixed", pin: "center", width: 100 },
+    ] as unknown as readonly DataGridColumnSnapshot[])
+
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: () => [],
+        rowPartition: ref({ bodyRowCount: 100, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns,
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    viewport.bodyViewportRef.value = element
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.columnStyle("flex").width).toBe("540px")
+
+    mutableElement.scrollTop = 40
+    mutableElement.clientWidth = 680
+    mutableElement.__datagridCompositeShellClientWidth = 720
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(viewport.columnStyle("flex").width).toBe("620px")
+    expect(parentWidthReads).toBe(0)
   })
 
   // -------------------------------------------------------------------------

@@ -9,7 +9,7 @@ import {
   resolveDataGridPerfNow,
 } from "../perf/dataGridPerfTrace"
 
-type GridChromeRedrawMode = "full" | "center-scroll"
+type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
 
 export interface UseDataGridStageChromeCanvasOptions {
   stageRootEl: Ref<HTMLElement | null>
@@ -30,6 +30,7 @@ export interface UseDataGridStageChromeCanvasOptions {
   bodyViewportScrollLeft: Ref<number>
   bodyViewportClientWidth: Ref<number>
   bodyViewportClientHeight: Ref<number>
+  bodyViewportShellClientWidth: Ref<number>
   pinnedBottomViewportClientHeight: Ref<number>
   bodyViewportTopOffset: Ref<number>
   headerShellHeight: Ref<number>
@@ -51,8 +52,30 @@ export interface UseDataGridStageChromeCanvasResult {
   disconnectGridChromeResizeObserver: () => void
 }
 
+interface GridChromeResolvedStyle {
+  rowDividerColor: string
+  columnDividerColor: string
+  headerColumnDividerColor: string
+  rowBandBaseColor: string
+  rowBandHoverColor: string
+  rowBandStripedColor: string
+  rowBandGroupColor: string
+  rowBandTreeColor: string
+  rowBandPivotColor: string
+  rowBandPivotGroupColor: string
+  rowDividerWidth: number
+  columnDividerWidth: number
+  headerColumnDividerWidth: number
+}
+
 function mergeGridChromeRedrawMode(current: GridChromeRedrawMode, next: GridChromeRedrawMode): GridChromeRedrawMode {
-  return current === "full" || next === "full" ? "full" : "center-scroll"
+  if (current === next) {
+    return current
+  }
+  if (current === "full" || next === "full") {
+    return "full"
+  }
+  return "full"
 }
 
 function resolveGridChromeDevicePixelRatio(): number {
@@ -148,29 +171,29 @@ function drawGridChromeHorizontalLines(
   context.restore()
 }
 
-function resolveGridChromeBandColor(stageRootEl: Ref<HTMLElement | null>, kind: string): string {
+function resolveGridChromeBandColor(style: GridChromeResolvedStyle, kind: string): string {
   switch (kind) {
     case "hover":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-hover-bg", "rgba(251, 146, 60, 0.18)")
+      return style.rowBandHoverColor
     case "base":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-base-bg", "rgba(255, 255, 255, 1)")
+      return style.rowBandBaseColor
     case "striped":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-striped-bg", "rgba(59, 130, 246, 0.06)")
+      return style.rowBandStripedColor
     case "group":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-group-bg", "rgba(59, 130, 246, 0.08)")
+      return style.rowBandGroupColor
     case "tree":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-tree-bg", "rgba(59, 130, 246, 0.12)")
+      return style.rowBandTreeColor
     case "pivot":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-pivot-bg", "rgba(59, 130, 246, 0.1)")
+      return style.rowBandPivotColor
     case "pivot-group":
-      return resolveGridChromeColor(stageRootEl, "--datagrid-row-band-pivot-group-bg", "rgba(59, 130, 246, 0.14)")
+      return style.rowBandPivotGroupColor
     default:
       return ""
   }
 }
 
 function drawGridChromeBands(
-  stageRootEl: Ref<HTMLElement | null>,
+  style: GridChromeResolvedStyle,
   context: CanvasRenderingContext2D,
   pane: DataGridChromePaneModel,
 ): void {
@@ -179,7 +202,7 @@ function drawGridChromeBands(
   }
   context.save()
   for (const band of pane.bands) {
-    const fillStyle = resolveGridChromeBandColor(stageRootEl, band.kind)
+    const fillStyle = resolveGridChromeBandColor(style, band.kind)
     if (!fillStyle) {
       continue
     }
@@ -228,20 +251,16 @@ function drawGridChromeVerticalLines(
 }
 
 function drawGridChromeBodyPane(
-  stageRootEl: Ref<HTMLElement | null>,
+  style: GridChromeResolvedStyle,
   context: CanvasRenderingContext2D | null,
   pane: DataGridChromePaneModel,
-  rowDividerColor: string,
-  rowDividerWidth: number,
-  columnDividerColor: string,
-  columnDividerWidth: number,
 ): void {
   if (!context) {
     return
   }
-  drawGridChromeBands(stageRootEl, context, pane)
-  drawGridChromeHorizontalLines(context, pane, rowDividerColor, rowDividerWidth)
-  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
+  drawGridChromeBands(style, context, pane)
+  drawGridChromeHorizontalLines(context, pane, style.rowDividerColor, style.rowDividerWidth)
+  drawGridChromeVerticalLines(context, pane, style.columnDividerColor, style.columnDividerWidth)
 }
 
 function drawGridChromeHeaderPane(
@@ -276,8 +295,47 @@ export function useDataGridStageChromeCanvas(
 ): UseDataGridStageChromeCanvasResult {
   let gridChromeAnimationFrame = 0
   let gridChromeResizeObserver: ResizeObserver | null = null
-  type GridChromeRedrawMode = "full" | "center-scroll"
+  type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
   let pendingGridChromeRedrawMode: GridChromeRedrawMode = "full"
+  let cachedGridChromeStyle: GridChromeResolvedStyle | null = null
+
+  function readGridChromeStyle(): GridChromeResolvedStyle {
+    const rowDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
+    const columnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
+    const headerColumnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-header-column-divider-color", columnDividerColor)
+    const rowBandBaseColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-base-bg", "rgba(255, 255, 255, 1)")
+    const rowBandHoverColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-hover-bg", "rgba(251, 146, 60, 0.18)")
+    const rowBandStripedColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-striped-bg", "rgba(59, 130, 246, 0.06)")
+    const rowBandGroupColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-group-bg", "rgba(59, 130, 246, 0.08)")
+    const rowBandTreeColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-tree-bg", "rgba(59, 130, 246, 0.12)")
+    const rowBandPivotColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-pivot-bg", "rgba(59, 130, 246, 0.1)")
+    const rowBandPivotGroupColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-pivot-group-bg", "rgba(59, 130, 246, 0.14)")
+    const rowDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-row-divider-size", 1)
+    const columnDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-column-divider-size", 1)
+    const headerColumnDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-header-column-divider-size", columnDividerWidth)
+    return {
+      rowDividerColor,
+      columnDividerColor,
+      headerColumnDividerColor,
+      rowBandBaseColor,
+      rowBandHoverColor,
+      rowBandStripedColor,
+      rowBandGroupColor,
+      rowBandTreeColor,
+      rowBandPivotColor,
+      rowBandPivotGroupColor,
+      rowDividerWidth,
+      columnDividerWidth,
+      headerColumnDividerWidth,
+    }
+  }
+
+  function resolveGridChromeStyle(mode: GridChromeRedrawMode): GridChromeResolvedStyle {
+    if (mode === "full" || !cachedGridChromeStyle) {
+      cachedGridChromeStyle = readGridChromeStyle()
+    }
+    return cachedGridChromeStyle
+  }
 
   function syncPinnedBottomViewportScrollLeft(): void {
     const viewport = options.bottomViewportEl.value
@@ -300,8 +358,11 @@ export function useDataGridStageChromeCanvas(
     }
     options.bodyViewportScrollTop.value = verticalViewport.scrollTop
     options.bodyViewportScrollLeft.value = viewport.scrollLeft
-    options.bodyViewportClientWidth.value = viewport.clientWidth
+    const viewportClientWidth = viewport.clientWidth
+    const viewportShellClientWidth = viewport.parentElement?.clientWidth ?? shell.clientWidth
+    options.bodyViewportClientWidth.value = viewportClientWidth
     options.bodyViewportClientHeight.value = verticalViewport.clientHeight
+    options.bodyViewportShellClientWidth.value = Math.max(viewportShellClientWidth, viewportClientWidth)
     const viewportRect = verticalViewport.getBoundingClientRect()
     const shellRect = shell.getBoundingClientRect()
     options.bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
@@ -319,62 +380,67 @@ export function useDataGridStageChromeCanvas(
     const headerRenderModel = options.headerChromeRenderModel.value
     const renderModel = options.chromeRenderModel.value
     const bottomRenderModel = options.pinnedBottomChromeRenderModel.value
-    const rowDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
-    const columnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
-    const headerColumnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-header-column-divider-color", columnDividerColor)
-    const rowDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-row-divider-size", 1)
-    const columnDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-column-divider-size", 1)
-    const headerColumnDividerWidth = resolveGridChromeLineWidth(options.stageRootEl, "--datagrid-header-column-divider-size", columnDividerWidth)
+    const style = resolveGridChromeStyle(mode)
+    const shouldDrawHeaderCenter = mode === "full" || mode === "center-scroll"
+    const shouldDrawBodyCenter = mode === "full" || mode === "center-scroll" || mode === "body-scroll"
+    const shouldDrawBodyPinned = mode === "full" || mode === "body-scroll"
+    const shouldDrawBottomCenter = mode === "full" || mode === "center-scroll"
 
     const leftHeaderContext = mode === "full"
-    ? prepareGridChromeCanvas(options.leftHeaderChromeCanvasEl.value, headerRenderModel.left.width, headerRenderModel.left.height)
+      ? prepareGridChromeCanvas(options.leftHeaderChromeCanvasEl.value, headerRenderModel.left.width, headerRenderModel.left.height)
       : null
     if (leftHeaderContext) {
-      drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, headerColumnDividerColor, headerColumnDividerWidth, options.hasPivotHeaderGroups)
+      drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
     }
 
-    const centerHeaderContext = prepareGridChromeCanvas(options.centerHeaderChromeCanvasEl.value, headerRenderModel.center.width, headerRenderModel.center.height)
-    drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, headerColumnDividerColor, headerColumnDividerWidth, options.hasPivotHeaderGroups)
+    const centerHeaderContext = shouldDrawHeaderCenter
+      ? prepareGridChromeCanvas(options.centerHeaderChromeCanvasEl.value, headerRenderModel.center.width, headerRenderModel.center.height)
+      : null
+    drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
 
     const rightHeaderContext = mode === "full"
       ? prepareGridChromeCanvas(options.rightHeaderChromeCanvasEl.value, headerRenderModel.right.width, headerRenderModel.right.height)
       : null
     if (rightHeaderContext) {
-      drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, headerColumnDividerColor, headerColumnDividerWidth, options.hasPivotHeaderGroups)
+      drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
     }
 
-    const leftContext = mode === "full"
+    const leftContext = shouldDrawBodyPinned
       ? prepareGridChromeCanvas(options.leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
       : null
     if (leftContext) {
-      drawGridChromeBodyPane(options.stageRootEl, leftContext, renderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+      drawGridChromeBodyPane(style, leftContext, renderModel.left)
     }
 
-    const centerContext = prepareGridChromeCanvas(options.centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
-    drawGridChromeBodyPane(options.stageRootEl, centerContext, renderModel.center, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+    const centerContext = shouldDrawBodyCenter
+      ? prepareGridChromeCanvas(options.centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
+      : null
+    drawGridChromeBodyPane(style, centerContext, renderModel.center)
 
-    const rightContext = mode === "full"
+    const rightContext = shouldDrawBodyPinned
       ? prepareGridChromeCanvas(options.rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
       : null
     if (rightContext) {
-      drawGridChromeBodyPane(options.stageRootEl, rightContext, renderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+      drawGridChromeBodyPane(style, rightContext, renderModel.right)
     }
 
     const leftBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftBottomChromeCanvasEl.value, bottomRenderModel.left.width, bottomRenderModel.left.height)
       : null
     if (leftBottomContext) {
-      drawGridChromeBodyPane(options.stageRootEl, leftBottomContext, bottomRenderModel.left, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+      drawGridChromeBodyPane(style, leftBottomContext, bottomRenderModel.left)
     }
 
-    const centerBottomContext = prepareGridChromeCanvas(options.centerBottomChromeCanvasEl.value, bottomRenderModel.center.width, bottomRenderModel.center.height)
-    drawGridChromeBodyPane(options.stageRootEl, centerBottomContext, bottomRenderModel.center, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+    const centerBottomContext = shouldDrawBottomCenter
+      ? prepareGridChromeCanvas(options.centerBottomChromeCanvasEl.value, bottomRenderModel.center.width, bottomRenderModel.center.height)
+      : null
+    drawGridChromeBodyPane(style, centerBottomContext, bottomRenderModel.center)
 
     const rightBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.rightBottomChromeCanvasEl.value, bottomRenderModel.right.width, bottomRenderModel.right.height)
       : null
     if (rightBottomContext) {
-      drawGridChromeBodyPane(options.stageRootEl, rightBottomContext, bottomRenderModel.right, rowDividerColor, rowDividerWidth, columnDividerColor, columnDividerWidth)
+      drawGridChromeBodyPane(style, rightBottomContext, bottomRenderModel.right)
     }
 
     if (options.perfTraceEnabled) {
