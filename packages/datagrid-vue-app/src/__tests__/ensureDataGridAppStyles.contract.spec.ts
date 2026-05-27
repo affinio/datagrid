@@ -58,9 +58,16 @@ describe("ensureDataGridAppStyles", () => {
     const bodyViewportRule = bodyViewportStart >= 0 && bodyViewportEnd > bodyViewportStart
       ? styleText.slice(bodyViewportStart, bodyViewportEnd)
       : ""
+    const ganttTimelineViewportStart = styleText.indexOf(".datagrid-gantt-timeline__viewport {")
+    const ganttTimelineViewportEnd = styleText.indexOf(".datagrid-gantt-timeline__viewport--header", ganttTimelineViewportStart)
+    const ganttTimelineViewportRule = ganttTimelineViewportStart >= 0 && ganttTimelineViewportEnd > ganttTimelineViewportStart
+      ? styleText.slice(ganttTimelineViewportStart, ganttTimelineViewportEnd)
+      : ""
 
     expect(styleText).toContain(".grid-body-viewport")
+    expect(styleText).toContain(".datagrid-gantt-timeline__viewport")
     expect(bodyViewportRule).not.toContain("overscroll-behavior")
+    expect(ganttTimelineViewportRule).not.toContain("overscroll-behavior")
     expect(styleText).toContain("touch-action: pan-x pan-y")
     expect(styleText).toContain("-webkit-overflow-scrolling: touch")
     expect(styleText).toContain("content-visibility: auto")

@@ -281,7 +281,6 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
   touch-action: none;
   -webkit-overflow-scrolling: touch;
 }

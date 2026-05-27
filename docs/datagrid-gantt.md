@@ -51,6 +51,7 @@ Performance rules:
 - vertical scroll is shared with the grid
 - horizontal scroll belongs to the timeline viewport
 - horizontal wheel over real timeline scrollports is native; canvas wheel remains a fallback that forwards into the timeline viewport
+- horizontal overscroll/boundary behavior is left to the browser; the timeline viewport does not force `overscroll-behavior-x`
 
 ## Summary Tasks
 
