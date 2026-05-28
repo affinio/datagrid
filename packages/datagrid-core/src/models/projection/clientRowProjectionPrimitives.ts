@@ -759,24 +759,6 @@ function toFastComparableNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function compareUnknown(left: unknown, right: unknown): number {
-  if (left == null && right == null) {
-    return 0
-  }
-  if (left == null) {
-    return 1
-  }
-  if (right == null) {
-    return -1
-  }
-  const leftNumber = toFastComparableNumber(left)
-  const rightNumber = toFastComparableNumber(right)
-  if (leftNumber != null && rightNumber != null) {
-    return leftNumber - rightNumber
-  }
-  return String(left).localeCompare(String(right))
-}
-
 function compareFastNullableNumbers(
   leftValue: unknown,
   rightValue: unknown,
@@ -815,25 +797,65 @@ function shouldUseNumericIntegerBucketSort(rowCount: number, minValue: number, m
   return range <= rangeBudget
 }
 
-function compareRowTieBreakers<T>(
+interface RowTieBreakerEntry {
+  rowId: unknown
+  rowIdNumber: number | null
+  rowIdText: string
+  sourceIndex: number
+}
+
+function createRowTieBreakerComparator<T>(
   rows: readonly DataGridRowNode<T>[],
-  leftIndex: number,
-  rightIndex: number,
-): number {
-  const leftRow = rows[leftIndex]
-  const rightRow = rows[rightIndex]
-  if (!leftRow || !rightRow) {
+): (leftIndex: number, rightIndex: number) => number {
+  const cache = new Array<RowTieBreakerEntry | null | undefined>(rows.length)
+  const readEntry = (index: number): RowTieBreakerEntry | null => {
+    const cached = cache[index]
+    if (typeof cached !== "undefined") {
+      return cached
+    }
+    const row = rows[index]
+    if (!row) {
+      cache[index] = null
+      return null
+    }
+    const rowId = row.rowId
+    const entry: RowTieBreakerEntry = {
+      rowId,
+      rowIdNumber: rowId == null ? null : toFastComparableNumber(rowId),
+      rowIdText: rowId == null ? "" : String(rowId),
+      sourceIndex: row.sourceIndex,
+    }
+    cache[index] = entry
+    return entry
+  }
+
+  return (leftIndex: number, rightIndex: number): number => {
+    const left = readEntry(leftIndex)
+    const right = readEntry(rightIndex)
+    if (!left || !right) {
+      return leftIndex - rightIndex
+    }
+    let rowIdDelta = 0
+    if (left.rowId == null && right.rowId == null) {
+      rowIdDelta = 0
+    } else if (left.rowId == null) {
+      rowIdDelta = 1
+    } else if (right.rowId == null) {
+      rowIdDelta = -1
+    } else if (left.rowIdNumber != null && right.rowIdNumber != null) {
+      rowIdDelta = left.rowIdNumber - right.rowIdNumber
+    } else {
+      rowIdDelta = left.rowIdText.localeCompare(right.rowIdText)
+    }
+    if (rowIdDelta !== 0) {
+      return rowIdDelta
+    }
+    const sourceDelta = left.sourceIndex - right.sourceIndex
+    if (sourceDelta !== 0) {
+      return sourceDelta
+    }
     return leftIndex - rightIndex
   }
-  const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
-  if (rowIdDelta !== 0) {
-    return rowIdDelta
-  }
-  const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
-  if (sourceDelta !== 0) {
-    return sourceDelta
-  }
-  return leftIndex - rightIndex
 }
 
 function sortRowsByIntegerBuckets<T>(
@@ -857,6 +879,7 @@ function sortRowsByIntegerBuckets<T>(
 
   const sortedRows = new Array<DataGridRowNode<T>>(rows.length)
   let outputIndex = 0
+  const compareTieBreakers = createRowTieBreakerComparator(rows)
   const start = direction === -1 ? range - 1 : 0
   const end = direction === -1 ? -1 : range
   for (let bucketIndex = start; bucketIndex !== end; bucketIndex += direction) {
@@ -865,7 +888,7 @@ function sortRowsByIntegerBuckets<T>(
       continue
     }
     if (bucket.length > 1) {
-      bucket.sort((leftIndex, rightIndex) => compareRowTieBreakers(rows, leftIndex, rightIndex))
+      bucket.sort(compareTieBreakers)
     }
     for (let index = 0; index < bucket.length; index += 1) {
       const row = rows[bucket[index] ?? -1]
@@ -961,6 +984,7 @@ export function sortLeafRows<T>(
     for (let index = 0; index < rows.length; index += 1) {
       orderedIndexes[index] = index
     }
+    const compareTieBreakers = createRowTieBreakerComparator(rows)
 
     orderedIndexes.sort((leftIndex, rightIndex) => {
       const leftRow = rows[leftIndex]
@@ -985,7 +1009,7 @@ export function sortLeafRows<T>(
       if (compared !== 0) {
         return compared * direction
       }
-      return compareRowTieBreakers(rows, leftIndex, rightIndex)
+      return compareTieBreakers(leftIndex, rightIndex)
     })
 
     const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)
@@ -1018,6 +1042,7 @@ export function sortLeafRows<T>(
   for (let index = 0; index < rows.length; index += 1) {
     orderedIndexes[index] = index
   }
+  const compareTieBreakers = createRowTieBreakerComparator(rows)
 
   orderedIndexes.sort((leftIndex, rightIndex) => {
     const leftRow = rows[leftIndex]
@@ -1045,7 +1070,7 @@ export function sortLeafRows<T>(
         return compared * direction
       }
     }
-    return compareRowTieBreakers(rows, leftIndex, rightIndex)
+    return compareTieBreakers(leftIndex, rightIndex)
   })
 
   const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)

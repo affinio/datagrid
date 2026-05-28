@@ -131,4 +131,18 @@ describe("client row projection sort primitives", () => {
     const firstValueRows = sortedRows.filter(row => row.data.latencyMs === 0).map(row => String(row.rowId))
     expect(firstValueRows).toEqual([...firstValueRows].sort((left, right) => left.localeCompare(right)))
   })
+
+  it("sorts bounded integer ties with numeric row-id ordering", () => {
+    const rows = Array.from({ length: 5000 }, (_, index) => createRowNode({
+      rowId: String(5000 - index),
+      service: "api",
+      owner: "ops",
+      status: "active",
+      latencyMs: 1,
+    }, index))
+
+    const sortedRows = sortLeafRows(rows, [{ key: "latencyMs", direction: "asc" }])
+    expect(sortedRows.slice(0, 5).map(row => row.rowId)).toEqual(["1", "2", "3", "4", "5"])
+    expect(sortedRows.slice(-3).map(row => row.rowId)).toEqual(["4998", "4999", "5000"])
+  })
 })
