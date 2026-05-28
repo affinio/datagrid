@@ -1531,6 +1531,70 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.displayRows.value.length).toBeGreaterThan(0)
   })
 
+  it("defers scroll-driven runtime viewport position writes until scroll idle", () => {
+    vi.useFakeTimers()
+    const raf = createRafHarness()
+    const rows = makeRows(100)
+    const setViewportPosition = vi.fn()
+    const getBodyRowAtIndex = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: ({ start, end }: { start: number; end: number }) =>
+          rows.slice(start, end + 1) as never,
+        setVirtualWindowRange: () => undefined,
+        setViewportPosition,
+        getBodyRowAtIndex,
+        rowPartition: ref({ bodyRowCount: rows.length, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 9 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => true),
+      visibleColumns: ref(makeColumns(10, 100)),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = { scrollTop: 120, scrollLeft: 250, clientHeight: 100, clientWidth: 300 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(setViewportPosition).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual([
+      "r5",
+      "r6",
+      "r7",
+      "r8",
+      "r9",
+      "r10",
+      "r11",
+    ])
+
+    vi.advanceTimersByTime(119)
+    expect(setViewportPosition).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(setViewportPosition).toHaveBeenCalledTimes(1)
+    expect(setViewportPosition).toHaveBeenLastCalledWith({
+      version: 1,
+      range: { start: 5, end: 11 },
+      anchor: {
+        rowId: "r6",
+        rowIndex: 6,
+        columnKey: "col-2",
+        columnIndex: 2,
+      },
+      scroll: { top: 120, left: 250 },
+    })
+  })
+
   it("defers sparse runtime viewport position writes until scroll idle", () => {
     vi.useFakeTimers()
     const raf = createRafHarness()

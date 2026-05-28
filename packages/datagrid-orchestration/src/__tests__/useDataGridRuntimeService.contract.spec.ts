@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { useDataGridRuntimeService } from "../runtime/useDataGridRuntimeService"
 
 interface Row {
@@ -196,6 +196,38 @@ describe("useDataGridRuntimeService contract", () => {
     expect(runtime.api.plugins.has("runtime-service-plugin")).toBe(true)
     runtime.api.rows.setSortModel([{ key: "name", direction: "asc" }])
     expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
+    runtime.stop()
+  })
+
+  it("uses matching viewport anchor indexes before row id scans", () => {
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: Array.from({ length: 100 }, (_, index) => ({
+        rowId: `r${index}`,
+        name: `row ${index}`,
+      })),
+      columns: [
+        { key: "name", label: "Name" },
+        { key: "status", label: "Status" },
+      ],
+    })
+    const getRowSpy = vi.spyOn(runtime.rowModel, "getRow")
+
+    runtime.setViewportPosition({
+      version: 1,
+      range: { start: 90, end: 95 },
+      anchor: { rowId: "r90", rowIndex: 90, columnKey: "status", columnIndex: 1 },
+      scroll: { top: 900, left: 120 },
+    })
+
+    expect(getRowSpy).toHaveBeenCalledTimes(1)
+    expect(getRowSpy).toHaveBeenCalledWith(90)
+    expect(runtime.getVirtualWindowSnapshot()).toMatchObject({
+      rowStart: 90,
+      rowEnd: 95,
+      colStart: 1,
+      colEnd: 1,
+    })
+
     runtime.stop()
   })
 

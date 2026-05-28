@@ -378,6 +378,6 @@ The demo runtime now includes an adapter-level telemetry primitive:
 - Emits active-scroll snapshot metrics: `fps`, `avgFrameMs`, `droppedFrames`, `longTaskFrames`, and quality (`unknown` | `good` | `degraded`).
 - `recordVirtualizationEvent(...)` is disabled by default and records bounded virtualized viewport events only when `virtualizationTelemetryEnabled` is explicitly set.
 - With `dgPerfTrace=1`, the Vue app viewport records `viewportRaf` samples containing rendered row/column counts, row/column ranges, range resolve time, row/column overscan, placeholder row count, and blank-viewport flags.
-- Worker/sparse viewport scrolling keeps runtime viewport-position persistence out of the active scroll rAF; position snapshots are written on scroll idle so `setViewportPosition` does not duplicate worker viewport-range traffic per frame.
+- Scroll-driven runtime viewport-position persistence stays out of the active scroll rAF; position snapshots are written on scroll idle so `setViewportPosition` does not duplicate viewport-range traffic per frame.
 - `scripts/bench-datagrid-enterprise-browser-frames.mjs` extracts those samples into `virtualizationTelemetry` summaries for vertical diagnostics scenarios, alongside long-task and datasource placeholder/cache/pull-latency diagnostics.
 - Intended for local quality diagnostics and interaction tuning (not a replacement for CI benchmark gates).

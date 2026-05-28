@@ -92,30 +92,36 @@ export function createDataGridRuntime<TRow = unknown>(
 
   const resolveRowIndex = (target: DataGridViewportRowTarget): number | null => {
     const rowId = target.rowId
+    const rowIndex = normalizeIndex(target.rowIndex)
+    const rowCount = rowModel.getRowCount()
     if (rowId != null) {
-      const count = rowModel.getRowCount()
-      for (let index = 0; index < count; index += 1) {
+      if (rowIndex != null && rowIndex < rowCount && rowModel.getRow(rowIndex)?.rowId === rowId) {
+        return rowIndex
+      }
+      for (let index = 0; index < rowCount; index += 1) {
         if (rowModel.getRow(index)?.rowId === rowId) {
           return index
         }
       }
     }
-    const rowIndex = normalizeIndex(target.rowIndex)
     if (rowIndex == null) {
       return null
     }
-    return Math.min(rowIndex, Math.max(0, rowModel.getRowCount() - 1))
+    return Math.min(rowIndex, Math.max(0, rowCount - 1))
   }
 
   const resolveColumnIndex = (target: DataGridViewportColumnTarget): number | null => {
     const visibleColumns = columnModel.getSnapshot().visibleColumns
+    const columnIndex = normalizeIndex(target.columnIndex)
     if (typeof target.columnKey === "string") {
+      if (columnIndex != null && visibleColumns[columnIndex]?.key === target.columnKey) {
+        return columnIndex
+      }
       const keyIndex = visibleColumns.findIndex(column => column.key === target.columnKey)
       if (keyIndex >= 0) {
         return keyIndex
       }
     }
-    const columnIndex = normalizeIndex(target.columnIndex)
     if (columnIndex == null) {
       return null
     }

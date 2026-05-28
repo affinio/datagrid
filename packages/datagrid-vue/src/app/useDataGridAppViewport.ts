@@ -1670,11 +1670,10 @@ export function useDataGridAppViewport<TRow>(
       options.measureVisibleRowHeights?.()
     }
 
-    if (
-      commitOptions.syncRuntimePosition === true
+    const shouldDeferRuntimePositionSync = commitOptions.syncRuntimePosition === true
       && !commitOptions.forceVisibleRows
-      && (shouldDeferFarJumpRows || isSparseViewportRuntime())
-    ) {
+
+    if (shouldDeferRuntimePositionSync) {
       pendingRuntimeViewportPositionIdleSync = true
     }
     else if (commitOptions.syncRuntimePosition !== false) {
@@ -1757,6 +1756,7 @@ export function useDataGridAppViewport<TRow>(
       forceVisibleRows: shouldForceVisibleRows ? 1 : 0,
       measureVisibleRowHeights: shouldMeasureVisibleRowHeights ? 1 : 0,
       syncRuntimePosition: shouldSyncRuntimePosition ? 1 : 0,
+      runtimePositionDeferred: shouldSyncRuntimePosition && !shouldForceVisibleRows ? 1 : 0,
       visibleRowsMs: visibleRowsPerf?.totalMs ?? 0,
       visibleRowsMode: visibleRowsPerf?.mode ?? "none",
       visibleRowsIncrementalResolveMs: visibleRowsPerf?.incrementalResolveMs ?? 0,
