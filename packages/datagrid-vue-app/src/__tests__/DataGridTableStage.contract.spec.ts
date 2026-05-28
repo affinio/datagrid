@@ -698,6 +698,51 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("recycles virtual body row and cell shells across body window replacement", async () => {
+    const initialRows = createRows(3, 0)
+    const nextRows = createRows(3, 3)
+    const stageProps = createStageProps(() => false, {
+      rows: initialRows,
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+
+    await nextTick()
+
+    const bodyShell = () => wrapper.find(".grid-body-shell:not(.grid-body-shell--pinned-top):not(.grid-body-shell--pinned-bottom)")
+    const centerRowsBefore = bodyShell().findAll(".grid-body-viewport--shared-vertical .grid-row").map(row => row.element)
+    const centerCellsBefore = bodyShell().findAll(".grid-body-viewport--shared-vertical .grid-cell[data-column-key=centerA]").map(cell => cell.element)
+    const pinnedRowsBefore = bodyShell().findAll(".grid-body-pane--left .grid-row").map(row => row.element)
+    const pinnedCellsBefore = bodyShell().findAll(".grid-body-pane--left .grid-cell[data-column-key=left]").map(cell => cell.element)
+
+    await wrapper.setProps({
+      rows: {
+        ...stageProps.rows,
+        displayRows: nextRows,
+        displayRowsRevision: 1,
+      },
+    })
+    await nextTick()
+
+    const centerRowsAfter = bodyShell().findAll(".grid-body-viewport--shared-vertical .grid-row")
+    const centerCellsAfter = bodyShell().findAll(".grid-body-viewport--shared-vertical .grid-cell[data-column-key=centerA]")
+    const pinnedRowsAfter = bodyShell().findAll(".grid-body-pane--left .grid-row")
+    const pinnedCellsAfter = bodyShell().findAll(".grid-body-pane--left .grid-cell[data-column-key=left]")
+
+    expect(centerRowsAfter.map(row => row.attributes("data-row-index"))).toEqual(["3", "4", "5"])
+    expect(centerCellsAfter[0]?.attributes("data-row-id")).toBe("r4")
+    expect(centerCellsAfter[0]?.text()).toBe("A4")
+    expect(centerRowsAfter[0]?.element).toBe(centerRowsBefore[0])
+    expect(centerCellsAfter[0]?.element).toBe(centerCellsBefore[0])
+    expect(pinnedRowsAfter[0]?.element).toBe(pinnedRowsBefore[0])
+    expect(pinnedCellsAfter[0]?.element).toBe(pinnedCellsBefore[0])
+    expect(pinnedCellsAfter[0]?.attributes("data-row-id")).toBe("r4")
+
+    wrapper.unmount()
+  })
+
   it("renders grouped rows through groupCellRenderer with structured group context", async () => {
     const toggleGroupRow = vi.fn()
     const wrapper = mount(DataGridTableStage, {

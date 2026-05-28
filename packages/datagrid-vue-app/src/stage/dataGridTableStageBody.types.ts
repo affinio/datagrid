@@ -8,6 +8,7 @@ import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilte
 import type { DataGridTableRow } from "./dataGridTableStage.types"
 
 export type DataGridTableStageBodyRow = DataGridTableRow<Record<string, unknown>>
+export type DataGridTableStageBodyRowKeyMode = "row" | "recycled"
 
 export type DataGridTableStageBodyColumn = DataGridColumnSnapshot & {
   column: DataGridColumnSnapshot["column"] & {
@@ -136,6 +137,7 @@ export interface DataGridTableStageCenterPaneRenderApi extends DataGridTableStag
 
 export interface DataGridTableStagePinnedPaneProps {
   side: "left" | "right"
+  rowKeyMode?: DataGridTableStageBodyRowKeyMode
   width: number
   style: CSSProperties
   contentStyle: CSSProperties

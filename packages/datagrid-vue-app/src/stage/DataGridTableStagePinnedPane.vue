@@ -20,7 +20,7 @@
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div
         v-for="(row, rowOffset) in pane.displayRows"
-        :key="`${String(row.rowId)}-${pane.side}-row`"
+        :key="resolvePaneRowKey(row, rowOffset)"
         class="grid-row"
         role="row"
         :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
@@ -74,7 +74,7 @@
         </div>
         <div
           v-for="(column, columnOffset) in pane.columns"
-          :key="`${String(row.rowId)}-${pane.side}-${column.key}`"
+          :key="resolvePaneCellKey(row, column)"
           class="grid-cell"
           :class="[
             'datagrid-stage__cell',
@@ -210,6 +210,7 @@
           </template>
           <DataGridCellContentRenderer
             v-else
+            :key="resolvePaneCellContentKey(row, column)"
             :content="renderApi.renderResolvedCellContent(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
           />
         </div>
@@ -242,6 +243,7 @@ import {
   useDataGridTableStageViewportSection,
 } from "./dataGridTableStageContext"
 import type {
+  DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
   DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
@@ -272,6 +274,41 @@ const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
+
+function resolveRecycledPaneRowSlotIndex(row: DataGridTableStageBodyRow, rowOffset: number, rowCount: number): number {
+  const poolSize = Math.max(1, rowCount)
+  const absoluteIndex = props.renderApi.absoluteRowIndex(row, rowOffset)
+  const normalizedIndex = Number.isFinite(absoluteIndex)
+    ? Math.trunc(absoluteIndex)
+    : rowOffset
+  return ((normalizedIndex % poolSize) + poolSize) % poolSize
+}
+
+function resolvePaneRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
+  if (props.pane.rowKeyMode !== "recycled") {
+    return `${String(row.rowId)}-${props.pane.side}-row`
+  }
+  return `${props.pane.side}-recycled-row-${resolveRecycledPaneRowSlotIndex(row, rowOffset, props.pane.displayRows.length)}`
+}
+
+function resolvePaneCellKey(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): string {
+  if (props.pane.rowKeyMode !== "recycled") {
+    return `${String(row.rowId)}-${props.pane.side}-${column.key}`
+  }
+  return String(column.key)
+}
+
+function hasAuthoredCellContentRenderer(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): boolean {
+  return typeof column.column.cellRenderer === "function"
+    || (row.kind === "group" && typeof column.column.groupCellRenderer === "function")
+}
+
+function resolvePaneCellContentKey(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): string | undefined {
+  if (props.pane.rowKeyMode !== "recycled" || !hasAuthoredCellContentRenderer(row, column)) {
+    return undefined
+  }
+  return `${String(row.rowId)}-${props.pane.side}-${column.key}`
+}
 
 function resolveRowWindowSignature(rows: readonly DataGridTableStageBodyRow[]): string {
   const rowCount = rows.length

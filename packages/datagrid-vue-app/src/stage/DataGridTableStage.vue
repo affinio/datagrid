@@ -125,6 +125,7 @@
           viewport-class="grid-body-viewport grid-body-viewport--shared-vertical"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
+          row-key-mode="recycled"
           :top-spacer-height="0"
           :bottom-spacer-height="0"
           :viewport-ref="captureBodyViewportRef"
@@ -2372,11 +2373,13 @@ const {
 
 const bodyLeftPinnedPane = computed(() => ({
   ...leftPinnedPane.value,
+  rowKeyMode: "recycled" as const,
   topSpacerHeight: 0,
   bottomSpacerHeight: 0,
 }))
 const bodyRightPinnedPane = computed(() => ({
   ...rightPinnedPane.value,
+  rowKeyMode: "recycled" as const,
   topSpacerHeight: 0,
   bottomSpacerHeight: 0,
 }))

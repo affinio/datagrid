@@ -44,6 +44,7 @@ Completed in Phase 1:
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
 - Header scroll ownership cleanup: the center body remains the horizontal owner; the header no longer forwards header-origin scroll events into the body, and horizontal header wheel intent routes through the linked-wheel path into the center owner.
 - Center header horizontal sync: the center header is externally owned by the table stage and mirrors the center horizontal owner through native `scrollLeft` with native cell dividers; horizontal overscroll is contained on grid scroll surfaces to avoid macOS elastic drift and browser history navigation.
+- Body virtual row shell recycling: center and pinned body panes now use an internal recycled row-key mode for virtual body windows, reducing row/cell DOM mount churn during large vertical window replacement while keeping pinned top/bottom rows row-keyed and renderer content keyed by row identity.
 
 Still open:
 - Real-device validation execution: the matrix is documented below, but still needs runs on iPad Safari/Chrome, Android Chrome, Surface/Windows touch, and macOS precision trackpad.
