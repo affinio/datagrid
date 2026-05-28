@@ -3,7 +3,7 @@ import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
 import { preservePivotProjectionRowIdentity } from "../pivot/clientRowPivotProjectionUtils.js"
 import { serializeSortValueModelForCache, shouldUseFilteredRowsForTreeSort, sortLeafRows } from "./clientRowProjectionPrimitives.js"
 import { assignDisplayIndexes, enforceCacheCap, patchProjectedRowsByIdentity, preserveRowOrder, remapRowsByIdentity } from "../clientRowRuntimeUtils.js"
-import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
+import { compareDataGridValues, type DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface SortValueCacheEntry {
   rowVersion: number
@@ -72,6 +72,8 @@ export interface RunSortProjectionStageParams<T> {
   projectionPolicy: DataGridProjectionPolicy
   sortValueCache: Map<DataGridRowId, SortValueCacheEntry>
   sortValueCacheKey: string
+  sortProjectionKey: string
+  sortInputRowsReference: readonly DataGridRowNode<T>[] | null
   rowVersionById: ReadonlyMap<DataGridRowId, number>
   counters: SortValueCounters
   readRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
@@ -82,9 +84,90 @@ export interface RunSortProjectionStageResult<T> {
   sortedRowsProjection: DataGridRowNode<T>[]
   recomputed: boolean
   sortValueCacheKey: string
+  sortProjectionKey: string
+  sortInputRowsReference: readonly DataGridRowNode<T>[] | null
 }
 
 const EMPTY_SORT_VALUES: readonly unknown[] = Object.freeze([])
+
+type SingleSortValueResolver<T> = (row: DataGridRowNode<T>, descriptor: DataGridSortState) => unknown
+
+function resolveSingleSortDescriptor(sortModel: readonly DataGridSortState[]): DataGridSortState | null {
+  if (!Array.isArray(sortModel)) {
+    return null
+  }
+  const descriptors = sortModel.filter(Boolean)
+  return descriptors.length === 1 ? descriptors[0] ?? null : null
+}
+
+function tryReverseSingleSortDirectionProjection<T>(input: {
+  descriptor: DataGridSortState
+  rowsForSort: readonly DataGridRowNode<T>[]
+  previousSortedRowsProjection: readonly DataGridRowNode<T>[]
+  previousSortInputRowsReference: readonly DataGridRowNode<T>[] | null
+  previousSortValueCacheKey: string
+  nextSortValueCacheKey: string
+  previousSortProjectionKey: string
+  nextSortProjectionKey: string
+  resolveSingleSortValue: SingleSortValueResolver<T>
+  comparatorRegistry?: DataGridComparatorRegistry<T>
+}): DataGridRowNode<T>[] | null {
+  if (
+    input.nextSortValueCacheKey === "__none__"
+    || input.previousSortValueCacheKey !== input.nextSortValueCacheKey
+    || input.previousSortProjectionKey === "__none__"
+    || input.previousSortProjectionKey === input.nextSortProjectionKey
+    || input.previousSortedRowsProjection.length === 0
+    || input.previousSortInputRowsReference !== input.rowsForSort
+  ) {
+    return null
+  }
+
+  const groups: Array<{ start: number; end: number }> = []
+  let groupStart = 0
+  let groupValue = input.resolveSingleSortValue(input.previousSortedRowsProjection[0]!, input.descriptor)
+  for (let index = 1; index < input.previousSortedRowsProjection.length; index += 1) {
+    const row = input.previousSortedRowsProjection[index]
+    if (!row) {
+      continue
+    }
+    const value = input.resolveSingleSortValue(row, input.descriptor)
+    const compared = compareDataGridValues(
+      groupValue,
+      value,
+      {
+        descriptor: input.descriptor,
+        leftRow: input.previousSortedRowsProjection[groupStart],
+        rightRow: row,
+      },
+      { comparatorRegistry: input.comparatorRegistry },
+    )
+    if (compared === 0) {
+      continue
+    }
+    groups.push({ start: groupStart, end: index })
+    groupStart = index
+    groupValue = value
+  }
+  groups.push({ start: groupStart, end: input.previousSortedRowsProjection.length })
+
+  const sortedRows = new Array<DataGridRowNode<T>>(input.previousSortedRowsProjection.length)
+  let outputIndex = 0
+  for (let groupIndex = groups.length - 1; groupIndex >= 0; groupIndex -= 1) {
+    const group = groups[groupIndex]
+    if (!group) {
+      continue
+    }
+    for (let index = group.start; index < group.end; index += 1) {
+      const row = input.previousSortedRowsProjection[index]
+      if (row) {
+        sortedRows[outputIndex] = row
+        outputIndex += 1
+      }
+    }
+  }
+  return sortedRows
+}
 
 export function runSortProjectionStage<T>(
   params: RunSortProjectionStageParams<T>,
@@ -99,9 +182,58 @@ export function runSortProjectionStage<T>(
     const shouldCacheSortValues = params.projectionPolicy.shouldCacheSortValues()
     const maxSortValueCacheSize = params.projectionPolicy.maxSortValueCacheSize(params.sourceRows.length)
     const sortKey = serializeSortValueModelForCache(params.sortModel, { includeDirection: false })
+    const sortProjectionKey = serializeSortValueModelForCache(params.sortModel, { includeDirection: true })
     if (sortKey !== params.sortValueCacheKey || !shouldCacheSortValues || maxSortValueCacheSize <= 0) {
       params.sortValueCache.clear()
     }
+    const resolveSingleSortValue: SingleSortValueResolver<T> = (row, descriptor) => {
+      if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
+        params.counters.misses += 1
+        return params.readRowField(row, descriptor.key, descriptor.field)
+      }
+      const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
+      const cached = params.sortValueCache.get(row.rowId)
+      if (cached && cached.rowVersion === currentRowVersion) {
+        params.counters.hits += 1
+        return Object.prototype.hasOwnProperty.call(cached, "singleValue")
+          ? cached.singleValue
+          : cached.values[0]
+      }
+      const resolved = params.readRowField(row, descriptor.key, descriptor.field)
+      params.sortValueCache.set(row.rowId, {
+        rowVersion: currentRowVersion,
+        values: EMPTY_SORT_VALUES,
+        singleValue: resolved,
+      })
+      enforceCacheCap(params.sortValueCache, maxSortValueCacheSize)
+      params.counters.misses += 1
+      return resolved
+    }
+    const singleSortDescriptor = resolveSingleSortDescriptor(params.sortModel)
+    const directionReversedRows = singleSortDescriptor && !params.treeData
+      ? tryReverseSingleSortDirectionProjection({
+          descriptor: singleSortDescriptor,
+          rowsForSort,
+          previousSortedRowsProjection: params.previousSortedRowsProjection,
+          previousSortInputRowsReference: params.sortInputRowsReference,
+          previousSortValueCacheKey: params.sortValueCacheKey,
+          nextSortValueCacheKey: sortKey,
+          previousSortProjectionKey: params.sortProjectionKey,
+          nextSortProjectionKey: sortProjectionKey,
+          resolveSingleSortValue,
+          comparatorRegistry: params.comparatorRegistry,
+        })
+      : null
+    if (directionReversedRows) {
+      return {
+        sortedRowsProjection: directionReversedRows,
+        recomputed: true,
+        sortValueCacheKey: sortKey,
+        sortProjectionKey,
+        sortInputRowsReference: rowsForSort,
+      }
+    }
+
     const sortedRowsProjection = sortLeafRows(
       rowsForSort,
       params.sortModel,
@@ -138,35 +270,15 @@ export function runSortProjectionStage<T>(
         params.counters.misses += 1
         return resolved
       },
-      (row, descriptor) => {
-        if (!shouldCacheSortValues || maxSortValueCacheSize <= 0) {
-          params.counters.misses += 1
-          return params.readRowField(row, descriptor.key, descriptor.field)
-        }
-        const currentRowVersion = params.rowVersionById.get(row.rowId) ?? 0
-        const cached = params.sortValueCache.get(row.rowId)
-        if (cached && cached.rowVersion === currentRowVersion) {
-          params.counters.hits += 1
-          return Object.prototype.hasOwnProperty.call(cached, "singleValue")
-            ? cached.singleValue
-            : cached.values[0]
-        }
-        const resolved = params.readRowField(row, descriptor.key, descriptor.field)
-        params.sortValueCache.set(row.rowId, {
-          rowVersion: currentRowVersion,
-          values: EMPTY_SORT_VALUES,
-          singleValue: resolved,
-        })
-        enforceCacheCap(params.sortValueCache, maxSortValueCacheSize)
-        params.counters.misses += 1
-        return resolved
-      },
+      (row, descriptor) => resolveSingleSortValue(row, descriptor),
       { comparatorRegistry: params.comparatorRegistry },
     )
     return {
       sortedRowsProjection,
       recomputed: true,
       sortValueCacheKey: sortKey,
+      sortProjectionKey,
+      sortInputRowsReference: rowsForSort,
     }
   }
 
@@ -174,6 +286,8 @@ export function runSortProjectionStage<T>(
     sortedRowsProjection: preserveRowOrder(params.previousSortedRowsProjection, rowsForSort),
     recomputed: false,
     sortValueCacheKey: params.sortValueCacheKey,
+    sortProjectionKey: params.sortProjectionKey,
+    sortInputRowsReference: params.sortInputRowsReference,
   }
 }
 

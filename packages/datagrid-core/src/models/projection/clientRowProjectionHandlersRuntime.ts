@@ -90,6 +90,10 @@ export interface ClientRowProjectionHandlersRuntimeContext<T> {
 
   getSortValueCacheKey: () => string
   setSortValueCacheKey: (key: string) => void
+  getSortProjectionKey: () => string
+  setSortProjectionKey: (key: string) => void
+  getSortInputRowsReference: () => readonly DataGridRowNode<T>[] | null
+  setSortInputRowsReference: (rows: readonly DataGridRowNode<T>[] | null) => void
   sortValueCache: Map<DataGridRowId, SortValueCacheEntry>
 
   getGroupValueCacheKey: () => string
@@ -184,6 +188,8 @@ export function createClientRowProjectionHandlersRuntime<T>(
       projectionPolicy: context.getProjectionPolicy(),
       sortValueCache: context.sortValueCache,
       sortValueCacheKey: context.getSortValueCacheKey(),
+      sortProjectionKey: context.getSortProjectionKey(),
+      sortInputRowsReference: context.getSortInputRowsReference(),
       rowVersionById: context.getRowVersionById(),
       counters: sortValueCounters,
       readRowField: context.readRowField,
@@ -191,6 +197,8 @@ export function createClientRowProjectionHandlersRuntime<T>(
     })
     context.runtimeState.sortedRowsProjection = result.sortedRowsProjection
     context.setSortValueCacheKey(result.sortValueCacheKey)
+    context.setSortProjectionKey(result.sortProjectionKey)
+    context.setSortInputRowsReference(result.sortInputRowsReference)
     context.derivedCacheDiagnostics.sortValueHits = sortValueCounters.hits
     context.derivedCacheDiagnostics.sortValueMisses = sortValueCounters.misses
     return result.recomputed

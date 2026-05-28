@@ -44,6 +44,10 @@ export interface ClientRowDerivedCacheRuntime<T> {
   clearFilterPredicateCache: () => void
   getSortValueCacheKey: () => string
   setSortValueCacheKey: (key: string) => void
+  getSortProjectionKey: () => string
+  setSortProjectionKey: (key: string) => void
+  getSortInputRowsReference: () => readonly DataGridRowNode<T>[] | null
+  setSortInputRowsReference: (rows: readonly DataGridRowNode<T>[] | null) => void
   getSortValueCache: () => Map<DataGridRowId, SortValueCacheEntry>
   clearSortValueCache: () => void
   evictSortValueCacheRows: (rowIds: readonly DataGridRowId[]) => void
@@ -71,6 +75,8 @@ export function createClientRowDerivedCacheRuntime<T>(
   let cachedFilterPredicate: ((rowNode: DataGridRowNode<T>) => boolean) | null = null
   const sortValueCache = new Map<DataGridRowId, SortValueCacheEntry>()
   let sortValueCacheKey = "__none__"
+  let sortProjectionKey = "__none__"
+  let sortInputRowsReference: readonly DataGridRowNode<T>[] | null = null
   const groupValueCache = new Map<string, string>()
   let groupValueCacheKey = "__none__"
   const diagnostics: DataGridClientRowModelDerivedCacheDiagnostics = {
@@ -133,6 +139,18 @@ export function createClientRowDerivedCacheRuntime<T>(
     setSortValueCacheKey(key: string) {
       sortValueCacheKey = key
     },
+    getSortProjectionKey() {
+      return sortProjectionKey
+    },
+    setSortProjectionKey(key: string) {
+      sortProjectionKey = key
+    },
+    getSortInputRowsReference() {
+      return sortInputRowsReference
+    },
+    setSortInputRowsReference(rows: readonly DataGridRowNode<T>[] | null) {
+      sortInputRowsReference = rows
+    },
     getSortValueCache() {
       return sortValueCache
     },
@@ -161,6 +179,8 @@ export function createClientRowDerivedCacheRuntime<T>(
       cachedFilterPredicate = null
       sortValueCache.clear()
       sortValueCacheKey = "__none__"
+      sortProjectionKey = "__none__"
+      sortInputRowsReference = null
       groupValueCache.clear()
       groupValueCacheKey = "__none__"
     },

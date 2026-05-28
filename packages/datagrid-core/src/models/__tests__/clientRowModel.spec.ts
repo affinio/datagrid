@@ -2485,6 +2485,30 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("preserves tie ordering when reversing a single numeric sort direction", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, amount: 2 }, rowId: "r20", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, amount: 1 }, rowId: "r10", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, amount: 2 }, rowId: "r02", originalIndex: 2, displayIndex: 2 },
+        { row: { id: 4, amount: 1 }, rowId: "r01", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialSortModel: [{ key: "amount", direction: "asc" }],
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId)))
+      .toEqual(["r01", "r10", "r02", "r20"])
+
+    model.setSortModel([{ key: "amount", direction: "desc" }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId)))
+      .toEqual(["r02", "r20", "r01", "r10"])
+
+    model.setSortModel([{ key: "amount", direction: "asc" }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId)))
+      .toEqual(["r01", "r10", "r02", "r20"])
+    model.dispose()
+  })
+
   it("uses aggregation registry entries for grouped custom aggregates", () => {
     interface RangeState {
       min: number | null

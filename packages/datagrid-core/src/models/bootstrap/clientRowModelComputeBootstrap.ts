@@ -145,6 +145,14 @@ export function createClientRowModelComputeBootstrap<T>(
       setSortValueCacheKey: key => {
         options.derivedCacheRuntime.setSortValueCacheKey(key)
       },
+      getSortProjectionKey: () => options.derivedCacheRuntime.getSortProjectionKey(),
+      setSortProjectionKey: key => {
+        options.derivedCacheRuntime.setSortProjectionKey(key)
+      },
+      getSortInputRowsReference: () => options.derivedCacheRuntime.getSortInputRowsReference(),
+      setSortInputRowsReference: rows => {
+        options.derivedCacheRuntime.setSortInputRowsReference(rows)
+      },
       sortValueCache: options.derivedCacheRuntime.getSortValueCache(),
       getGroupValueCacheKey: () => options.derivedCacheRuntime.getGroupValueCacheKey(),
       setGroupValueCacheKey: key => {
