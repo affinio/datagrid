@@ -771,6 +771,9 @@ describe("DataGridTableStage contract", () => {
     await nextTick()
 
     const rendererBefore = wrapper.find(".test-native-renderer").element
+    const textNodeBefore = rendererBefore.firstChild
+
+    expect(textNodeBefore?.nodeType).toBe(Node.TEXT_NODE)
 
     await wrapper.setProps({
       rows: {
@@ -783,6 +786,7 @@ describe("DataGridTableStage contract", () => {
 
     const rendererAfter = wrapper.find(".test-native-renderer")
     expect(rendererAfter.element).toBe(rendererBefore)
+    expect(rendererAfter.element.firstChild).toBe(textNodeBefore)
     expect(rendererAfter.text()).toBe("A4")
 
     wrapper.unmount()

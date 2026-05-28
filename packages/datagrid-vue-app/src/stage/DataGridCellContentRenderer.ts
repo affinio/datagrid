@@ -1,5 +1,6 @@
 import { Fragment, cloneVNode, h, isVNode, type FunctionalComponent, type PropType, type VNode, type VNodeChild } from "vue"
 
+const PATCHABLE_NATIVE_TEXT_CONTENT_TAGS = new Set(["span"])
 const STATEFUL_NATIVE_CONTENT_TAGS = new Set([
   "a",
   "button",
@@ -25,17 +26,52 @@ function shouldKeyRenderedContent(content: VNodeChild): content is VNode {
   return true
 }
 
+function isPrimitiveNativeTextContent(content: VNodeChild): content is VNode {
+  if (!isVNode(content) || typeof content.type !== "string") {
+    return false
+  }
+  if (!PATCHABLE_NATIVE_TEXT_CONTENT_TAGS.has(content.type)) {
+    return false
+  }
+  if (typeof content.children !== "string" && typeof content.children !== "number") {
+    return false
+  }
+  const props = content.props as Record<string, unknown> | null
+  return !props || (props.innerHTML == null && props.textContent == null)
+}
+
+function resolvePatchableNativeTextContent(content: VNodeChild): VNodeChild {
+  if (!isPrimitiveNativeTextContent(content)) {
+    return content
+  }
+  const normalizedContent = h(content.type as string, content.props, [String(content.children)])
+  if (content.dirs) {
+    normalizedContent.dirs = content.dirs
+  }
+  if (content.transition) {
+    normalizedContent.transition = content.transition
+  }
+  if (content.scopeId) {
+    normalizedContent.scopeId = content.scopeId
+  }
+  if (content.appContext) {
+    normalizedContent.appContext = content.appContext
+  }
+  return normalizedContent
+}
+
 function resolveRenderedContent(content: VNodeChild, contentKey?: string): VNodeChild {
+  const resolvedContent = resolvePatchableNativeTextContent(content)
   if (!contentKey) {
-    return content
+    return resolvedContent
   }
-  if (Array.isArray(content)) {
-    return h(Fragment, { key: contentKey }, content)
+  if (Array.isArray(resolvedContent)) {
+    return h(Fragment, { key: contentKey }, resolvedContent)
   }
-  if (!shouldKeyRenderedContent(content)) {
-    return content
+  if (!shouldKeyRenderedContent(resolvedContent)) {
+    return resolvedContent
   }
-  return cloneVNode(content, { key: contentKey })
+  return cloneVNode(resolvedContent, { key: contentKey })
 }
 
 interface DataGridCellContentRendererProps {
