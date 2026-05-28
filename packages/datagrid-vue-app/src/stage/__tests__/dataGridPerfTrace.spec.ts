@@ -128,9 +128,42 @@ describe("dataGridPerfTrace", () => {
     })
     expect(store?.latest("stageWindowFlush")).toMatchObject({
       rowStart: 4,
+      rowEnd: 8,
       rowCount: 1,
       topSpacerHeight: 14,
       bottomSpacerHeight: 26,
+      scrollTop: 128,
+      firstRowId: "srv-000025",
+      lastRowId: "srv-000025",
+      rowStartDelta: 1,
+      rowEndDelta: 0,
+      rowCountDelta: 0,
+      topSpacerDelta: 2,
+      bottomSpacerDelta: 2,
+      firstRowChanged: 0,
+      lastRowChanged: 0,
+    })
+
+    displayRows.value = [
+      {
+        ...displayRows.value[0]!,
+        rowId: "srv-000026",
+        rowKey: "srv-000026",
+      },
+    ]
+
+    await nextTick()
+    await nextTick()
+
+    expect(store?.latest("stageWindowFlush")).toMatchObject({
+      rowStart: 4,
+      rowCount: 1,
+      firstRowId: "srv-000026",
+      lastRowId: "srv-000026",
+      rowStartDelta: 0,
+      rowCountDelta: 0,
+      firstRowChanged: 1,
+      lastRowChanged: 1,
     })
 
     scope.stop()
