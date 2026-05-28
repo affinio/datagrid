@@ -2471,16 +2471,17 @@ describe("createClientRowModel", () => {
   it("sorts single numeric-like client rows with nulls after finite values", () => {
     const model = createClientRowModel({
       rows: [
-        { row: { id: 1, amount: "10" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
-        { row: { id: 2, amount: 2 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
-        { row: { id: 3, amount: null }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
-        { row: { id: 4, amount: "01" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+        { row: { id: 1, amount: "10" }, rowId: "20", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, amount: 2 }, rowId: "10", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, amount: null }, rowId: "30", originalIndex: 2, displayIndex: 2 },
+        { row: { id: 4, amount: "01" }, rowId: "40", originalIndex: 3, displayIndex: 3 },
+        { row: { id: 5, amount: 2 }, rowId: "2", originalIndex: 4, displayIndex: 4 },
       ],
       initialSortModel: [{ key: "amount", direction: "asc" }],
     })
 
-    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { amount: unknown }).amount))
-      .toEqual(["01", 2, "10", null])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { id: number }).id))
+      .toEqual([4, 5, 2, 1, 3])
     model.dispose()
   })
 

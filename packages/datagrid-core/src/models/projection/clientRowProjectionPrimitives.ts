@@ -748,10 +748,6 @@ export function isSameFilterModel(
   return serializeFilterModelForSignature(left) === serializeFilterModelForSignature(right)
 }
 
-function compareUnknown(left: unknown, right: unknown): number {
-  return compareDataGridValues(left, right)
-}
-
 function toFastComparableNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value
@@ -761,6 +757,24 @@ function toFastComparableNumber(value: unknown): number | null {
   }
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function compareUnknown(left: unknown, right: unknown): number {
+  if (left == null && right == null) {
+    return 0
+  }
+  if (left == null) {
+    return 1
+  }
+  if (right == null) {
+    return -1
+  }
+  const leftNumber = toFastComparableNumber(left)
+  const rightNumber = toFastComparableNumber(right)
+  if (leftNumber != null && rightNumber != null) {
+    return leftNumber - rightNumber
+  }
+  return String(left).localeCompare(String(right))
 }
 
 function compareFastNullableNumbers(
