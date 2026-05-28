@@ -19,14 +19,14 @@
     <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle" @contextmenu="handleContextMenu">
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div
-        v-for="(row, rowOffset) in pane.displayRows"
+        v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex } in paneRowSlots"
         :key="resolvePaneRowKey(row, rowOffset)"
         class="grid-row"
         role="row"
-        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, renderApi.viewportRowOffset(row, rowOffset)) }]"
+        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, viewportRowOffset) }]"
         :style="renderApi.paneRowStyle(row, rowOffset, pane.width)"
-        :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
-        :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
+        :data-row-index="absoluteRowIndex"
+        :aria-rowindex="absoluteRowIndex + 1"
         :aria-expanded="renderApi.rowAriaExpanded(row)"
         :aria-label="renderApi.rowAriaLabel(row, rowOffset)"
         :aria-disabled="renderApi.rowAriaDisabled(row, rowOffset)"
@@ -37,43 +37,43 @@
           v-if="pane.showIndexColumn"
           class="grid-cell grid-cell--index grid-cell--index-number datagrid-stage__row-index-cell"
           :class="[
-            renderApi.rowIndexCellClasses(row, renderApi.viewportRowOffset(row, rowOffset)),
+            renderApi.rowIndexCellClasses(row, viewportRowOffset),
             {
               'grid-cell--pinned-divider-right': pane.side === 'left' && pane.columns.length > 0,
             },
           ]"
-          :style="renderApi.rowIndexCellStyle(row, renderApi.viewportRowOffset(row, rowOffset))"
+          :style="renderApi.rowIndexCellStyle(row, viewportRowOffset)"
           :data-row-id="String(row.rowId)"
-          :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
-          :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
+          :data-row-index="absoluteRowIndex"
+          :aria-rowindex="absoluteRowIndex + 1"
           aria-colindex="1"
           role="rowheader"
           :tabindex="renderApi.rowIndexTabIndex(row)"
           :draggable="renderApi.isRowIndexDraggable(row)"
-          @click.stop="renderApi.handleRowIndexClickSafe(row, renderApi.viewportRowOffset(row, rowOffset), $event)"
-          @keydown.stop="renderApi.handleRowIndexKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-          @dragstart.stop="renderApi.handleRowIndexDragStart($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-          @dragover.stop="renderApi.handleRowIndexDragOver($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-          @drop.stop="renderApi.handleRowIndexDrop($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+          @click.stop="renderApi.handleRowIndexClickSafe(row, viewportRowOffset, $event)"
+          @keydown.stop="renderApi.handleRowIndexKeydown($event, row, viewportRowOffset)"
+          @dragstart.stop="renderApi.handleRowIndexDragStart($event, row, viewportRowOffset)"
+          @dragover.stop="renderApi.handleRowIndexDragOver($event, row, viewportRowOffset)"
+          @drop.stop="renderApi.handleRowIndexDrop($event, row, viewportRowOffset)"
           @dragend.stop="renderApi.handleRowIndexDragEnd()"
         >
-          {{ rows.rowIndexLabel(row, renderApi.viewportRowOffset(row, rowOffset)) }}
+          {{ rows.rowIndexLabel(row, viewportRowOffset) }}
           <button
             v-if="mode === 'base'"
             type="button"
             class="row-resize-handle"
             aria-label="Resize rows"
-            @mousedown.stop="rows.startRowResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
-            @touchstart.stop.passive="startRowTouchResize($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @mousedown.stop="rows.startRowResize($event, row, viewportRowOffset)"
+            @touchstart.stop.passive="startRowTouchResize($event, row, viewportRowOffset)"
             @touchmove.stop.passive="handleRowTouchResizeMove($event)"
             @touchend.stop.passive="handleRowTouchResizeEnd($event)"
             @touchcancel.stop.passive="handleRowTouchResizeEnd($event)"
             @click.stop
-            @dblclick.stop="rows.autosizeRow($event, row, renderApi.viewportRowOffset(row, rowOffset))"
+            @dblclick.stop="rows.autosizeRow($event, row, viewportRowOffset)"
           />
         </div>
         <div
-          v-for="(column, columnOffset) in pane.columns"
+          v-for="{ column, columnOffset, columnIndex } in paneColumnSlots"
           :key="resolvePaneCellKey(row, column)"
           class="grid-cell"
           :class="[
@@ -81,39 +81,39 @@
             pane.side === 'left' ? 'grid-cell--pinned-left' : 'grid-cell--pinned-right',
             pane.side === 'left' && columnOffset < pane.columns.length - 1 ? 'grid-cell--pinned-divider-right' : null,
             pane.side === 'right' && columnOffset > 0 ? 'grid-cell--pinned-divider-left' : null,
-            renderApi.builtInCellClasses(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
-            renderApi.cellStateClasses(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
-            renderApi.resolveCellCustomClass(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
+            renderApi.builtInCellClasses(row, viewportRowOffset, column, columnIndex),
+            renderApi.cellStateClasses(row, viewportRowOffset, columnIndex),
+            renderApi.resolveCellCustomClass(row, viewportRowOffset, column, columnIndex),
           ]"
           :style="[
             renderApi.columnStyle(column.key),
             renderApi.bodyCellPresentationStyle(column),
-            renderApi.bodyCellSelectionStyle(row, column, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)),
-            renderApi.resolveCellCustomStyle(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)),
+            renderApi.bodyCellSelectionStyle(row, column, viewportRowOffset, columnIndex),
+            renderApi.resolveCellCustomStyle(row, viewportRowOffset, column, columnIndex),
           ]"
           :id="renderApi.cellDomId(row, column)"
           :data-row-id="String(row.rowId)"
           :data-column-key="column.key"
-          :data-row-index="renderApi.absoluteRowIndex(row, rowOffset)"
-          :data-column-index="renderApi.columnIndexByKey(column.key)"
-          :aria-rowindex="renderApi.absoluteRowIndex(row, rowOffset) + 1"
-          :aria-colindex="renderApi.columnIndexByKey(column.key) + 1"
-          :tabindex="renderApi.cellTabIndex(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          :aria-selected="renderApi.cellAriaSelected(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          :role="renderApi.cellAriaRole(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) ?? 'gridcell'"
-          :aria-checked="renderApi.cellAriaChecked(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
-          :aria-pressed="renderApi.cellAriaPressed(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
-          :aria-label="renderApi.cellAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
-          :aria-disabled="renderApi.cellAriaDisabled(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
-          @mousedown.stop="renderApi.handleCellMouseDown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          @click.stop="renderApi.handleBodyCellClick($event, row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
-          @mousemove="renderApi.handleCellMouseMove($event, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+          :data-row-index="absoluteRowIndex"
+          :data-column-index="columnIndex"
+          :aria-rowindex="absoluteRowIndex + 1"
+          :aria-colindex="columnIndex + 1"
+          :tabindex="renderApi.cellTabIndex(viewportRowOffset, columnIndex)"
+          :aria-selected="renderApi.cellAriaSelected(viewportRowOffset, columnIndex)"
+          :role="renderApi.cellAriaRole(row, viewportRowOffset, column, columnIndex) ?? 'gridcell'"
+          :aria-checked="renderApi.cellAriaChecked(row, viewportRowOffset, column, columnIndex)"
+          :aria-pressed="renderApi.cellAriaPressed(row, viewportRowOffset, column, columnIndex)"
+          :aria-label="renderApi.cellAriaLabel(row, viewportRowOffset, column, columnIndex)"
+          :aria-disabled="renderApi.cellAriaDisabled(row, viewportRowOffset, column, columnIndex)"
+          @mousedown.stop="renderApi.handleCellMouseDown($event, row, viewportRowOffset, columnIndex)"
+          @click.stop="renderApi.handleBodyCellClick($event, row, viewportRowOffset, column, columnIndex)"
+          @mousemove="renderApi.handleCellMouseMove($event, viewportRowOffset, columnIndex)"
           @mouseleave="renderApi.clearRangeMoveHandleHover()"
-          @keydown.stop="renderApi.handleCellKeydown($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
-          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset), $event)"
+          @keydown.stop="renderApi.handleCellKeydown($event, row, viewportRowOffset, columnIndex)"
+          @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, viewportRowOffset, $event)"
         >
           <button
-            v-if="mode === 'base' && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
+            v-if="mode === 'base' && renderApi.isFillHandleCellSafe(viewportRowOffset, columnIndex) && renderApi.isCellEditableSafe(row, viewportRowOffset, column, columnIndex) && !renderApi.isEditingCellSafe(row, column.key)"
             type="button"
             class="cell-fill-handle"
             aria-label="Fill handle"
@@ -126,13 +126,13 @@
             @touchcancel.stop.passive="renderApi.handleFillHandleTouchEnd($event)"
           />
           <button
-            v-if="renderApi.isTouchSelectionAnchorHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+            v-if="renderApi.isTouchSelectionAnchorHandleCell(row, viewportRowOffset, columnIndex)"
             type="button"
             class="grid-touch-selection-handle"
             aria-label="Selection handle"
             tabindex="-1"
             @mousedown.stop.prevent="renderApi.handleTouchSelectionHandleMouseDown($event)"
-            @touchstart.stop.passive="renderApi.handleTouchSelectionHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+            @touchstart.stop.passive="renderApi.handleTouchSelectionHandleTouchStart($event, row, viewportRowOffset, columnIndex)"
             @touchmove.stop.passive="renderApi.handleTouchSelectionHandleTouchMove($event)"
             @touchend.stop.passive="renderApi.handleTouchSelectionHandleTouchEnd($event)"
             @touchcancel.stop.passive="renderApi.handleTouchSelectionHandleTouchEnd($event)"
@@ -140,13 +140,13 @@
             @contextmenu.stop.prevent
           />
           <button
-            v-if="renderApi.isTouchRangeMoveHandleCell(row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+            v-if="renderApi.isTouchRangeMoveHandleCell(row, viewportRowOffset, columnIndex)"
             type="button"
             class="grid-touch-range-move-handle"
             aria-label="Move selection"
             tabindex="-1"
             @mousedown.stop.prevent="renderApi.handleTouchRangeMoveHandleMouseDown($event)"
-            @touchstart.stop.passive="renderApi.handleTouchRangeMoveHandleTouchStart($event, row, renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key))"
+            @touchstart.stop.passive="renderApi.handleTouchRangeMoveHandleTouchStart($event, row, viewportRowOffset, columnIndex)"
             @touchmove.stop.passive="renderApi.handleTouchRangeMoveHandleTouchMove($event)"
             @touchend.stop.passive="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
             @touchcancel.stop.passive="renderApi.handleTouchRangeMoveHandleTouchEnd($event)"
@@ -154,27 +154,27 @@
             @contextmenu.stop.prevent
           />
           <DataGridCellComboboxEditor
-            v-if="renderApi.isSelectEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            v-if="renderApi.isSelectEditorCell(row, viewportRowOffset, column, columnIndex)"
             :value="renderApi.resolveSelectEditorValue(row, column)"
             :options="renderApi.resolveSelectEditorOptions(row, column)"
             :load-options="renderApi.resolveSelectEditorOptionsLoader(row, column)"
             :initial-filter="editing.editingCellInitialFilter"
             :open-on-mount="editing.editingCellOpenOnMount"
             :disabled="editing.editingCellPending"
-            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            :aria-label="renderApi.cellEditorAriaLabel(row, viewportRowOffset, column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             @commit="renderApi.handleSelectEditorCommit"
             @cancel="renderApi.handleSelectEditorCancel"
             @options-resolved="renderApi.handleSelectEditorOptionsResolved(row, column, $event)"
           />
           <input
-            v-else-if="renderApi.isDateEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            v-else-if="renderApi.isDateEditorCell(row, viewportRowOffset, column, columnIndex)"
             class="cell-editor-control cell-editor-input cell-editor-input--date"
             :name="`datagrid-cell-editor-${column.key}`"
             :type="renderApi.resolveDateEditorInputType(row, column)"
             :value="editing.editingCellValue"
             :disabled="editing.editingCellPending"
-            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            :aria-label="renderApi.cellEditorAriaLabel(row, viewportRowOffset, column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             :aria-busy="editing.editingCellPending ? 'true' : undefined"
             autofocus
@@ -187,12 +187,12 @@
             @blur="renderApi.handleTextEditorBlur"
           />
           <input
-            v-else-if="renderApi.isTextEditorCell(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            v-else-if="renderApi.isTextEditorCell(row, viewportRowOffset, column, columnIndex)"
             class="cell-editor-control cell-editor-input"
             :name="`datagrid-cell-editor-${column.key}`"
             :value="editing.editingCellValue"
             :disabled="editing.editingCellPending"
-            :aria-label="renderApi.cellEditorAriaLabel(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            :aria-label="renderApi.cellEditorAriaLabel(row, viewportRowOffset, column, columnIndex)"
             :aria-invalid="editing.editingCellValidationMessage || editing.editingCellRejectedReason ? 'true' : undefined"
             :aria-busy="editing.editingCellPending ? 'true' : undefined"
             autofocus
@@ -211,7 +211,7 @@
           <DataGridCellContentRenderer
             v-else
             :content-key="resolvePaneCellContentKey(row, column)"
-            :content="renderApi.renderResolvedCellContent(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
+            :content="renderApi.renderResolvedCellContent(row, viewportRowOffset, column, columnIndex)"
           />
         </div>
       </div>
@@ -227,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, type PropType } from "vue"
+import { computed, watch, type PropType } from "vue"
 import DataGridCellComboboxEditor from "../overlays/DataGridCellComboboxEditor.vue"
 import {
   recordDataGridPerfSample,
@@ -274,6 +274,18 @@ const viewport = useDataGridTableStageViewportSection<Record<string, unknown>>()
 const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
+
+const paneRowSlots = computed(() => props.pane.displayRows.map((row, rowOffset) => ({
+  row,
+  rowOffset,
+  viewportRowOffset: props.renderApi.viewportRowOffset(row, rowOffset),
+  absoluteRowIndex: props.renderApi.absoluteRowIndex(row, rowOffset),
+})))
+const paneColumnSlots = computed(() => props.pane.columns.map((column, columnOffset) => ({
+  column,
+  columnOffset,
+  columnIndex: props.renderApi.columnIndexByKey(column.key),
+})))
 
 function resolvePaneRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
   if (props.pane.rowKeyMode !== "recycled") {

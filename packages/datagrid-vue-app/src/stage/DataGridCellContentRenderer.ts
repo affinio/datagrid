@@ -1,4 +1,4 @@
-import { Fragment, cloneVNode, defineComponent, h, isVNode, type PropType, type VNode, type VNodeChild } from "vue"
+import { Fragment, cloneVNode, h, isVNode, type FunctionalComponent, type PropType, type VNode, type VNodeChild } from "vue"
 
 const STATEFUL_NATIVE_CONTENT_TAGS = new Set([
   "a",
@@ -38,19 +38,25 @@ function resolveRenderedContent(content: VNodeChild, contentKey?: string): VNode
   return cloneVNode(content, { key: contentKey })
 }
 
-export default defineComponent({
-  name: "DataGridCellContentRenderer",
-  props: {
-    content: {
-      type: null as unknown as PropType<VNodeChild>,
-      default: null,
-    },
-    contentKey: {
-      type: String,
-      default: undefined,
-    },
+interface DataGridCellContentRendererProps {
+  content?: VNodeChild
+  contentKey?: string
+}
+
+const DataGridCellContentRenderer: FunctionalComponent<DataGridCellContentRendererProps> = props => (
+  resolveRenderedContent(props.content ?? null, props.contentKey) as VNodeChild
+)
+
+DataGridCellContentRenderer.displayName = "DataGridCellContentRenderer"
+DataGridCellContentRenderer.props = {
+  content: {
+    type: null as unknown as PropType<VNodeChild>,
+    default: null,
   },
-  setup(props) {
-    return () => resolveRenderedContent(props.content, props.contentKey) as VNodeChild
+  contentKey: {
+    type: String,
+    default: undefined,
   },
-})
+}
+
+export default DataGridCellContentRenderer
