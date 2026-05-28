@@ -15,6 +15,7 @@ The enterprise browser frame benchmark on `/vue/shell/base-grid` with `100000` r
 - `stageWindowFlush` perf samples now include row/window deltas, spacer deltas, scrollTop, and first/last row identity changes so the next optimization slice can separate virtual-window movement from same-window row replacement and spacer-only updates.
 - The enterprise browser-frame benchmark now classifies `stageWindowFlush` samples as `window-jump`, `window-step`, `row-identity-replacement`, `row-count-change`, `spacer-only`, or `unchanged` and aggregates duration/delta stats by class.
 - `scripts/compare-datagrid-enterprise-browser-frames.mjs` compares before/after browser-frame artifacts by scenario for frame, dropped-frame, long-task, stage-window-flush, churn, and blank-viewport metrics; use it to reject speculative runtime changes before keeping them.
+- Enterprise browser-frame scenarios reset vertical and horizontal scroll origins before telemetry starts, so smooth-scroll runs cannot inherit the previous scenario's bottom scroll position and silently produce zero viewport/render samples.
 - Body pane cell rendering now uses a functional content renderer and precomputed row/column slot metadata, reducing repeated per-cell index resolution during `stageWindowFlush`; targeted 100k-row vertical jump-scroll improved `stageWindowFlush` p95 from about `9.92ms` to about `7.21ms` with `blankViewportCount = 0`.
 - `sort-only` still has main-thread spikes from column-menu value loading and synchronous full-table client sorting.
 

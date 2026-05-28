@@ -528,6 +528,17 @@ registerTokenCheck(
 )
 
 registerTokenCheck(
+  "enterprise-browser-frame-scroll-origin-reset",
+  "scripts/bench-datagrid-enterprise-browser-frames.mjs",
+  [
+    "const resetScenarioScrollOrigin = async () => {",
+    "await resetScenarioScrollOrigin()",
+    "resolveDataGridPerfStore()?.clear?.()",
+  ],
+  "Enterprise browser frame scenarios reset scroll origin before telemetry so smooth-scroll samples cannot inherit prior scenario scroll state",
+)
+
+registerTokenCheck(
   "tree-benchmark-p99-budgets",
   "scripts/bench-datagrid-tree-workload.mjs",
   [

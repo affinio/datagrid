@@ -913,6 +913,24 @@ async function runScenario(page, sessionIndex, scenario) {
     const waitForPaint = () => new Promise(resolvePaint => {
       requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
     })
+    const resetScenarioScrollOrigin = async () => {
+      let didReset = false
+      if (viewport.scrollTop !== 0) {
+        viewport.scrollTop = 0
+        didReset = true
+      }
+      if (viewport.scrollLeft !== 0) {
+        viewport.scrollLeft = 0
+        didReset = true
+      }
+      if (horizontalViewport !== viewport && horizontalViewport.scrollLeft !== 0) {
+        horizontalViewport.scrollLeft = 0
+        didReset = true
+      }
+      if (didReset) {
+        await waitForPaint()
+      }
+    }
     const summarizeNumbers = (values) => {
       const finite = values.filter(value => Number.isFinite(value))
       if (!finite.length) {
@@ -1360,6 +1378,8 @@ async function runScenario(page, sessionIndex, scenario) {
       }
       return counts
     }
+    await resetScenarioScrollOrigin()
+
     const perfWindow = window
     const traceDiagnosticsEnabled = isVerticalDiagnosticsScenario || isSortDiagnosticsScenario || isInteractionDiagnosticsScenario
     const resolveDataGridPerfStore = () => traceDiagnosticsEnabled && perfWindow.__AFFINO_DATAGRID_PERF__
@@ -1372,6 +1392,8 @@ async function runScenario(page, sessionIndex, scenario) {
         .find(button => button.textContent?.trim() === "Slow backend")
       slowBackendButton?.click()
       await waitForPaint()
+      await resetScenarioScrollOrigin()
+      resolveDataGridPerfStore()?.clear?.()
     }
 
     const recordMutationSummary = (summary, mutations) => {
