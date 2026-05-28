@@ -1295,7 +1295,7 @@ export function useDataGridAppViewport<TRow>(
     }
     const hysteresis = isCoarsePointer.value
       ? 1
-      : Math.max(1, Math.floor(resolveEffectiveRowOverscan() * 0.5))
+      : Math.max(1, Math.floor(resolveEffectiveRowOverscan() * 0.25))
     return visibleRange.start >= lastSyncedRange.start + hysteresis
       && visibleRange.end <= lastSyncedRange.end - hysteresis
   }

@@ -1006,11 +1006,20 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledTimes(1)
+    expect(setViewportRange).not.toHaveBeenCalled()
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(16, 29).map(row => row.rowId))
+
+    element.scrollTop = 480
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledTimes(1)
     expect(setViewportRange).toHaveBeenCalledTimes(1)
-    expect(setViewportRange).toHaveBeenLastCalledWith({ start: 19, end: 31 })
-    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(3)
-    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([29, 30, 31])
-    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(19, 32).map(row => row.rowId))
+    expect(setViewportRange).toHaveBeenLastCalledWith({ start: 20, end: 32 })
+    expect(getBodyRowAtIndex).toHaveBeenCalledTimes(4)
+    expect(getBodyRowAtIndex.mock.calls.map(([rowIndex]) => rowIndex)).toEqual([29, 30, 31, 32])
+    expect(viewport.displayRows.value.map(row => row.rowId)).toEqual(rows.slice(20, 33).map(row => row.rowId))
   })
 
   // -------------------------------------------------------------------------
