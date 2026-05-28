@@ -752,6 +752,36 @@ function compareUnknown(left: unknown, right: unknown): number {
   return compareDataGridValues(left, right)
 }
 
+function toFastComparableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value
+  }
+  if (value instanceof Date) {
+    return value.getTime()
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function compareFastNullableNumbers(
+  leftValue: unknown,
+  rightValue: unknown,
+  leftNumber: number | undefined,
+  rightNumber: number | undefined,
+  nulls: "first" | "last",
+): number {
+  if (leftValue == null && rightValue == null) {
+    return 0
+  }
+  if (leftValue == null) {
+    return nulls === "first" ? -1 : 1
+  }
+  if (rightValue == null) {
+    return nulls === "first" ? 1 : -1
+  }
+  return (leftNumber ?? 0) - (rightNumber ?? 0)
+}
+
 export function sortLeafRows<T>(
   rows: readonly DataGridRowNode<T>[],
   sortModel: readonly DataGridSortState[],
@@ -769,18 +799,31 @@ export function sortLeafRows<T>(
       return rows as DataGridRowNode<T>[]
     }
     const direction = descriptor.direction === "desc" ? -1 : 1
+    const nulls = descriptor.comparator?.nulls === "first" ? "first" : "last"
     const sortValuesByIndex = new Array<unknown>(rows.length)
+    const numericSortValuesByIndex = new Array<number | undefined>(rows.length)
+    let canUseNumericSortFastPath = descriptor.comparator?.kind !== "custom"
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index]
       if (!row) {
         sortValuesByIndex[index] = undefined
         continue
       }
-      sortValuesByIndex[index] = resolveSingleSortValue
+      const sortValue = resolveSingleSortValue
         ? resolveSingleSortValue(row, descriptor)
         : resolveSortValues
           ? resolveSortValues(row, descriptors)[0]
           : readRowField(row, descriptor.key, descriptor.field)
+      sortValuesByIndex[index] = sortValue
+      if (!canUseNumericSortFastPath || sortValue == null) {
+        continue
+      }
+      const numericSortValue = toFastComparableNumber(sortValue)
+      if (numericSortValue == null) {
+        canUseNumericSortFastPath = false
+        continue
+      }
+      numericSortValuesByIndex[index] = numericSortValue
     }
 
     const orderedIndexes = new Array<number>(rows.length)
@@ -794,12 +837,20 @@ export function sortLeafRows<T>(
       if (!leftRow || !rightRow) {
         return leftIndex - rightIndex
       }
-      const compared = compareDataGridValues(
-        sortValuesByIndex[leftIndex],
-        sortValuesByIndex[rightIndex],
-        { descriptor, leftRow, rightRow },
-        { comparatorRegistry: options.comparatorRegistry },
-      )
+      const compared = canUseNumericSortFastPath
+        ? compareFastNullableNumbers(
+            sortValuesByIndex[leftIndex],
+            sortValuesByIndex[rightIndex],
+            numericSortValuesByIndex[leftIndex],
+            numericSortValuesByIndex[rightIndex],
+            nulls,
+          )
+        : compareDataGridValues(
+            sortValuesByIndex[leftIndex],
+            sortValuesByIndex[rightIndex],
+            { descriptor, leftRow, rightRow },
+            { comparatorRegistry: options.comparatorRegistry },
+          )
       if (compared !== 0) {
         return compared * direction
       }

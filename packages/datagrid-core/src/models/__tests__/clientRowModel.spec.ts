@@ -2468,6 +2468,22 @@ describe("createClientRowModel", () => {
     customModel.dispose()
   })
 
+  it("sorts single numeric-like client rows with nulls after finite values", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, amount: "10" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, amount: 2 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, amount: null }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: 4, amount: "01" }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialSortModel: [{ key: "amount", direction: "asc" }],
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => (row.row as { amount: unknown }).amount))
+      .toEqual(["01", 2, "10", null])
+    model.dispose()
+  })
+
   it("uses aggregation registry entries for grouped custom aggregates", () => {
     interface RangeState {
       min: number | null
