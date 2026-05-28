@@ -183,7 +183,7 @@
           </template>
           <DataGridCellContentRenderer
             v-else
-            :key="resolveBodyCellContentKey(row, column)"
+            :content-key="resolveBodyCellContentKey(row, column)"
             :content="renderApi.renderResolvedCellContent(row, renderApi.viewportRowOffset(row, rowOffset), column, columnIndex)"
           />
         </div>

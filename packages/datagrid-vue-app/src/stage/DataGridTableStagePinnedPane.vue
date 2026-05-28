@@ -210,7 +210,7 @@
           </template>
           <DataGridCellContentRenderer
             v-else
-            :key="resolvePaneCellContentKey(row, column)"
+            :content-key="resolvePaneCellContentKey(row, column)"
             :content="renderApi.renderResolvedCellContent(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key))"
           />
         </div>

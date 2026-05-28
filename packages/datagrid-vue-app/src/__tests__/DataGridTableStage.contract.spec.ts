@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils"
-import { h, nextTick } from "vue"
+import { defineComponent, h, nextTick, onUnmounted } from "vue"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { DataGridColumnSnapshot, DataGridOverlayRange } from "@affino/datagrid-vue"
 import type { DataGridTableRow, DataGridTableStageProps } from "../dataGridTableStage.types"
@@ -739,6 +739,110 @@ describe("DataGridTableStage contract", () => {
     expect(pinnedRowsAfter[0]?.element).toBe(pinnedRowsBefore[0])
     expect(pinnedCellsAfter[0]?.element).toBe(pinnedCellsBefore[0])
     expect(pinnedCellsAfter[0]?.attributes("data-row-id")).toBe("r4")
+
+    wrapper.unmount()
+  })
+
+  it("patches native custom renderer content while recycling body shells", async () => {
+    const initialRows = createRows(1, 0)
+    const nextRows = createRows(1, 3)
+    const stageProps = createStageProps(() => false, {
+      rows: initialRows,
+      visibleColumns: [
+        {
+          key: "centerA",
+          pin: "center",
+          width: 140,
+          column: {
+            key: "centerA",
+            label: "Status",
+            cellRenderer: ({ displayValue }) => h("span", {
+              class: "test-native-renderer",
+            }, displayValue),
+          },
+        },
+      ] as unknown as readonly DataGridColumnSnapshot[],
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+
+    await nextTick()
+
+    const rendererBefore = wrapper.find(".test-native-renderer").element
+
+    await wrapper.setProps({
+      rows: {
+        ...stageProps.rows,
+        displayRows: nextRows,
+        displayRowsRevision: 1,
+      },
+    })
+    await nextTick()
+
+    const rendererAfter = wrapper.find(".test-native-renderer")
+    expect(rendererAfter.element).toBe(rendererBefore)
+    expect(rendererAfter.text()).toBe("A4")
+
+    wrapper.unmount()
+  })
+
+  it("remounts stateful custom renderer components while recycling body shells", async () => {
+    const cleanup = vi.fn()
+    const RendererChild = defineComponent({
+      props: {
+        label: {
+          type: String,
+          required: true,
+        },
+      },
+      setup(props) {
+        onUnmounted(cleanup)
+        return () => h("span", {
+          class: "test-stateful-renderer",
+        }, props.label)
+      },
+    })
+    const initialRows = createRows(1, 0)
+    const nextRows = createRows(1, 3)
+    const stageProps = createStageProps(() => false, {
+      rows: initialRows,
+      visibleColumns: [
+        {
+          key: "centerA",
+          pin: "center",
+          width: 140,
+          column: {
+            key: "centerA",
+            label: "Status",
+            cellRenderer: ({ displayValue }) => h(RendererChild, {
+              label: displayValue,
+            }),
+          },
+        },
+      ] as unknown as readonly DataGridColumnSnapshot[],
+    })
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+
+    await nextTick()
+
+    expect(wrapper.find(".test-stateful-renderer").text()).toBe("A1")
+
+    await wrapper.setProps({
+      rows: {
+        ...stageProps.rows,
+        displayRows: nextRows,
+        displayRowsRevision: 1,
+      },
+    })
+    await nextTick()
+
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(wrapper.find(".test-stateful-renderer").text()).toBe("A4")
 
     wrapper.unmount()
   })
