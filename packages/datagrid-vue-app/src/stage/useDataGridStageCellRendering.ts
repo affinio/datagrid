@@ -292,14 +292,15 @@ export function useDataGridStageCellRendering(
     }
   }
 
-  function renderResolvedCellContent(
+  function resolveRendererInteractiveContext(
     row: DataGridTableRow<Record<string, unknown>>,
     rowOffset: number,
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
-  ): VNodeChild {
-    const displayValue = readResolvedDisplayCell(row, column)
-    const surface = resolveRowSurfaceContext(row)
+  ): DataGridAppCellRendererInteractiveContext | null {
+    if (!column.column.cellInteraction) {
+      return null
+    }
     const editable = options.isCellEditableSafe(row, rowOffset, column, columnIndex)
     const interaction = resolveDataGridCellInteraction({
       column: column.column,
@@ -307,26 +308,35 @@ export function useDataGridStageCellRendering(
       rowId: row.rowId,
       editable,
     })
+    if (!interaction) {
+      return null
+    }
+    return {
+      enabled: interaction.disabled !== true,
+      click: interaction.click,
+      keyboard: interaction.keyboard,
+      role: interaction.role,
+      ariaLabel: interaction.label,
+      ariaPressed: interaction.pressed,
+      ariaChecked: interaction.checked,
+      ariaDisabled: interaction.disabled ? "true" : undefined,
+      activate: (trigger?: DataGridCellInteractionInvocationTrigger) => invokeDataGridCellInteraction({
+        column: column.column,
+        row: row.kind !== "group" ? row.data : undefined,
+        rowId: row.rowId,
+        editable,
+        trigger: trigger ?? "click",
+      }),
+    }
+  }
 
-    const interactive: DataGridAppCellRendererInteractiveContext | null = interaction
-      ? {
-        enabled: interaction.disabled !== true,
-        click: interaction.click,
-        keyboard: interaction.keyboard,
-        role: interaction.role,
-        ariaLabel: interaction.label,
-        ariaPressed: interaction.pressed,
-        ariaChecked: interaction.checked,
-        ariaDisabled: interaction.disabled ? "true" : undefined,
-        activate: (trigger?: DataGridCellInteractionInvocationTrigger) => invokeDataGridCellInteraction({
-          column: column.column,
-          row: row.kind !== "group" ? row.data : undefined,
-          rowId: row.rowId,
-          editable,
-          trigger: trigger ?? "click",
-        }),
-      }
-      : null
+  function renderResolvedCellContent(
+    row: DataGridTableRow<Record<string, unknown>>,
+    rowOffset: number,
+    column: DataGridTableStageBodyColumn,
+    columnIndex: number,
+  ): VNodeChild {
+    const displayValue = readResolvedDisplayCell(row, column)
 
     if (row.kind === "group") {
       const groupRenderer = column.column.groupCellRenderer
@@ -334,6 +344,8 @@ export function useDataGridStageCellRendering(
       if (typeof groupRenderer !== "function" && typeof cellRenderer !== "function") {
         return displayValue
       }
+      const surface = resolveRowSurfaceContext(row)
+      const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
       const groupRow = row as DataGridTableRow<Record<string, unknown>> & { kind: "group" }
       const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
         ? Math.max(0, Math.trunc(row.groupMeta?.childrenCount as number))
@@ -403,6 +415,8 @@ export function useDataGridStageCellRendering(
     if (typeof renderer !== "function") {
       return displayValue
     }
+    const surface = resolveRowSurfaceContext(row)
+    const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
 
     return invokeDataGridStageRendererWithFallback({
       scope: "cellRenderer",
@@ -439,8 +453,8 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
-    return options.isCellEditableSafe(row, rowOffset, column, columnIndex)
-      && options.isEditingCellSafe(row, column.key)
+    return options.isEditingCellSafe(row, column.key)
+      && options.isCellEditableSafe(row, rowOffset, column, columnIndex)
       && resolveCellEditorMode(row, column) === "select"
   }
 
@@ -450,10 +464,11 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
+    if (!options.isEditingCellSafe(row, column.key) || !options.isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+      return false
+    }
     const editorMode = resolveCellEditorMode(row, column)
-    return options.isCellEditableSafe(row, rowOffset, column, columnIndex)
-      && options.isEditingCellSafe(row, column.key)
-      && (editorMode === "date" || editorMode === "datetime")
+    return editorMode === "date" || editorMode === "datetime"
   }
 
   function resolveDateEditorInputType(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn): "date" | "datetime-local" {
@@ -466,8 +481,8 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
-    return options.isCellEditableSafe(row, rowOffset, column, columnIndex)
-      && options.isEditingCellSafe(row, column.key)
+    return options.isEditingCellSafe(row, column.key)
+      && options.isCellEditableSafe(row, rowOffset, column, columnIndex)
       && resolveCellEditorMode(row, column) === "text"
   }
 

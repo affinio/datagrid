@@ -417,6 +417,62 @@ describe("useDataGridStageCellRendering", () => {
     expect(accessor).not.toHaveBeenCalled()
   })
 
+  it("skips editability work for inactive editors and non-interactive renderers", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const cellRenderer = vi.fn(({ interactive }) => `cell:${interactive ? "interactive" : "plain"}`)
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
+      createColumn({ key: "plain" }),
+      createColumn({
+        key: "rendered",
+        column: {
+          cellRenderer,
+        },
+      }),
+    ])
+    const rows = ref<Readonly<DataGridTableStageRowsSection<Record<string, unknown>>>>({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({
+      startInlineEdit: vi.fn(),
+      updateEditingCellValue: vi.fn(),
+      commitInlineEdit: vi.fn(),
+      cancelInlineEdit: vi.fn(),
+      handleEditorKeydown: vi.fn(),
+      handleEditorBlur: vi.fn(),
+    } as unknown as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: (_row: DataGridTableRow<Record<string, unknown>>, columnKey: string) => columnKey,
+      readDisplayCell: (_row: DataGridTableRow<Record<string, unknown>>, columnKey: string) => (
+        columnKey === "plain" ? "Plain" : "Rendered"
+      ),
+    })
+    const isCellEditableSafe = vi.fn(() => true)
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+    })
+    const row = createRow({ data: { plain: "Plain", rendered: "Rendered" } })
+    const plainColumn = visibleColumns.value[0]!
+    const renderedColumn = visibleColumns.value[1]!
+
+    expect(renderApi.isSelectEditorCell(row, 0, plainColumn, 0)).toBe(false)
+    expect(renderApi.isDateEditorCell(row, 0, plainColumn, 0)).toBe(false)
+    expect(renderApi.isTextEditorCell(row, 0, plainColumn, 0)).toBe(false)
+    expect(renderApi.renderResolvedCellContent(row, 0, plainColumn, 0)).toBe("Plain")
+    expect(String(renderApi.renderResolvedCellContent(row, 0, renderedColumn, 1))).toBe("cell:plain")
+    expect(isCellEditableSafe).not.toHaveBeenCalled()
+  })
+
   it("falls back to display values when custom renderers throw", () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
