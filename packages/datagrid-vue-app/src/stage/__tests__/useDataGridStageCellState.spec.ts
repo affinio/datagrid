@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { useDataGridStageCellState } from "../useDataGridStageCellState"
 import type { DataGridTableStageBodyColumn, DataGridTableStageBodyRow } from "../dataGridTableStageBody.types"
 
@@ -137,5 +137,36 @@ describe("useDataGridStageCellState", () => {
 
     const placeholderRow = createRow({ __placeholder: true } as Partial<DataGridTableStageBodyRow>)
     expect(service.cellAriaDisabled(placeholderRow, 0, plainColumn, 2)).toBe("true")
+  })
+
+  it("skips interaction editability work for cells without interactions", () => {
+    const column = createColumn({ key: "plain" })
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([column])
+    const row = createRow()
+    const isCellEditableSafe = vi.fn(() => true)
+
+    const service = useDataGridStageCellState({
+      visibleColumns,
+      cells: ref({
+        readCell: () => "plain",
+      }),
+      isCellEditableSafe,
+      isEditingCellSafe: () => false,
+      resolveCellEditorMode: () => "text",
+      isCellSelectedSafe: () => false,
+      isVisualSelectionAnchorCell: () => false,
+      shouldHighlightSelectedCellVisual: () => false,
+      isRangeMoveHandleHoverCell: () => false,
+      isCellInFillPreviewSafe: () => false,
+      isCellInPendingClipboardRangeSafe: () => false,
+      isCellOnPendingClipboardEdgeSafe: () => false,
+    })
+
+    expect(service.cellAriaRole(row, 0, column, 0)).toBeUndefined()
+    expect(service.cellAriaChecked(row, 0, column, 0)).toBeUndefined()
+    expect(service.cellAriaPressed(row, 0, column, 0)).toBeUndefined()
+    expect(service.cellAriaLabel(row, 0, column, 0)).toBeUndefined()
+    expect(service.cellAriaDisabled(row, 0, column, 0)).toBeUndefined()
+    expect(isCellEditableSafe).not.toHaveBeenCalled()
   })
 })

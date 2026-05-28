@@ -113,7 +113,7 @@
           @dblclick.stop="renderApi.startInlineEditIfAllowed(row, column, renderApi.viewportRowOffset(row, rowOffset), $event)"
         >
           <button
-            v-if="mode === 'base' && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
+            v-if="mode === 'base' && renderApi.isFillHandleCellSafe(renderApi.viewportRowOffset(row, rowOffset), renderApi.columnIndexByKey(column.key)) && renderApi.isCellEditableSafe(row, renderApi.viewportRowOffset(row, rowOffset), column, renderApi.columnIndexByKey(column.key)) && !renderApi.isEditingCellSafe(row, column.key)"
             type="button"
             class="cell-fill-handle"
             aria-label="Fill handle"

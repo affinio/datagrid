@@ -61,6 +61,9 @@ function resolveCellInteraction(
   column: DataGridTableStageBodyColumn,
   columnIndex: number,
 ) {
+  if (!column.column.cellInteraction) {
+    return null
+  }
   return resolveDataGridCellInteraction({
     column: column.column,
     row: row.kind !== "group" ? row.data : undefined,
