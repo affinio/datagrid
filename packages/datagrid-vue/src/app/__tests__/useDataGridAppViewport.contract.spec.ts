@@ -117,7 +117,7 @@ function resolveSharedAppProfileOverscan(input: {
       0,
       (Math.max(input.baseOverscan, maxOverscan) - input.baseOverscan) / Math.max(1, viewportRows),
     ),
-    teleportMultiplier: Number.POSITIVE_INFINITY,
+    teleportMultiplier: 2.5,
     frameDurationMs: frameMs,
     minSampleMs: 1,
   })
@@ -572,7 +572,7 @@ describe("useDataGridAppViewport contract", () => {
     viewport.bodyViewportRef.value = element
 
     viewport.handleViewportScroll(createScrollEvent(element))
-    element.scrollTop = 500
+    element.scrollTop = 300
     viewport.handleViewportScroll(createScrollEvent(element))
     raf.run(getScheduledFrameHandle(raf))
 
@@ -580,11 +580,11 @@ describe("useDataGridAppViewport contract", () => {
       baseOverscan: 1,
       viewportHeight: 100,
       rowHeight: 20,
-      delta: 400,
+      delta: 200,
       timestamp: 16,
     })
     expect(sharedOverscan).toBe(16)
-    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 25 - sharedOverscan, end: 29 + sharedOverscan })
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 0, end: 36 })
 
     vi.advanceTimersByTime(121)
     syncRowsInRange.mockClear()
@@ -593,6 +593,47 @@ describe("useDataGridAppViewport contract", () => {
     raf.run(getScheduledFrameHandle(raf))
 
     expect(syncRowsInRange).toHaveBeenCalledWith({ start: 44, end: 50 })
+  })
+
+  it("keeps base row overscan for teleport-sized scroll jumps", () => {
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(16)
+      .mockReturnValue(32)
+
+    const raf = createRafHarness()
+    const syncRowsInRange = vi.fn(() => [])
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: syncRowsInRange,
+        rowPartition: ref({ bodyRowCount: 200, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      rowOverscan: computed(() => 1),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const element = {
+      scrollTop: 100,
+      scrollLeft: 0,
+      clientHeight: 100,
+      clientWidth: 320,
+    } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    viewport.handleViewportScroll(createScrollEvent(element))
+    element.scrollTop = 1_000
+    viewport.handleViewportScroll(createScrollEvent(element))
+    raf.run(getScheduledFrameHandle(raf))
+
+    expect(syncRowsInRange).toHaveBeenCalledWith({ start: 49, end: 55 })
   })
 
   it("keeps adaptive row overscan disabled when base overscan is zero", () => {

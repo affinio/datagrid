@@ -31,7 +31,7 @@ Completed in Phase 1:
 - Header resize click guard: column resize handle gestures suppress the follow-up header click so resize release cannot trigger sorting.
 - Scroll-time suppression: hover/range-edge hover and inline edit start are suppressed while the body viewport is scrolling.
 - App-stage overscan: `useDataGridAppViewport.ts` increases row overscan on coarse pointers, scales touch overscan with viewport height using a larger bounded active window, and adds velocity-based adaptive row overscan with idle decay.
-- Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count, with a bounded minimum and maximum, so programmatic jump-scroll stress does not inflate the rendered row window far beyond the visible viewport.
+- Adaptive overscan cap: velocity-based row overscan is capped by the current viewport row count and treats teleport-sized jumps as base-overscan updates, so programmatic jump-scroll stress does not inflate the rendered row window beyond the useful buffer.
 - Large touch viewport retention: coarse-pointer smooth scroll uses a larger viewport-relative retained row window plus fixed-row browser containment; when the retained buffer edge is crossed, the row window advances in bounded chunks instead of jumping by a full overscan block, reducing periodic renderer/layout churn and badge/style flicker while the finger remains down.
 - Stage scroll batching: `useDataGridStageViewportRuntime.ts` batches body scroll refs and pinned-bottom scroll-left sync through a scroll frame.
 - Pinned-pane vertical sync: the shared vertical scroll owner now hosts the inherited `--datagrid-body-scroll-top` CSS variable, so center and pinned sticky layers share one owner-level scroll-offset write instead of three per-pane writes. Reactive refs, pinned-bottom sync, and chrome redraw remain rAF-batched.
@@ -237,7 +237,7 @@ Problem:
 Current state:
 - `useDataGridAppViewport.ts` now applies a larger minimum overscan for coarse pointers.
 - It also tracks scroll velocity and temporarily increases effective row overscan, then decays it after vertical scroll idle.
-- The adaptive overscan maximum is viewport-relative, so fast jump-scroll stress retains blanking protection without rendering the previous fixed 64-row lookahead on every viewport size.
+- The adaptive overscan maximum is viewport-relative, and teleport-sized scroll jumps stay on base overscan; fast continuous scroll keeps blanking protection without rendering a large lookahead for scrollbar/page jumps.
 
 Recommended fix:
 - Add benchmarks/telemetry around adaptive overscan hit rate, row count, and blank viewport risk.
@@ -454,7 +454,7 @@ Gap:
 - Done: add coarse-pointer detection.
 - Done: disable hover and range-edge hover on coarse pointers and while scrolling.
 - Done: add touch-specific and velocity-adaptive row overscan in `useDataGridAppViewport`.
-- Done: cap velocity-adaptive row overscan by viewport size to reduce DOM bursts during jump-scroll stress while preserving a bounded lookahead floor.
+- Done: cap velocity-adaptive row overscan by viewport size and keep teleport-sized jumps at base overscan to reduce DOM bursts during jump-scroll stress while preserving bounded lookahead for continuous scroll.
 - Done: expand fill, row resize, and column resize hit targets for coarse pointers.
 - Done: move app viewport header `scrollLeft` synchronization out of the raw body scroll event and into the rAF viewport commit.
 - Done: skip pinned-bottom `scrollLeft` sync work for vertical-only body scroll frames.

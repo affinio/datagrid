@@ -300,7 +300,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 ## Slice 16: Adaptive Overscan Stress Cap
 
-- Status: Completed on 2026-05-17. App-stage velocity-adaptive row overscan now caps the lookahead by viewport size with a bounded floor/ceiling, reducing programmatic jump-scroll DOM bursts while preserving smooth native scroll behavior.
+- Status: Completed on 2026-05-17; updated on 2026-05-28. App-stage velocity-adaptive row overscan now caps lookahead by viewport size and keeps teleport-sized jumps at base overscan, reducing programmatic jump-scroll DOM bursts while preserving smooth native scroll behavior.
 - Objective: reduce `vertical-scroll-only` and combined stress frame inflation without weakening smooth-scroll or touch/coarse-pointer blanking protection.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
