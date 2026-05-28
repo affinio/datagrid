@@ -937,6 +937,94 @@ async function runScenario(page, sessionIndex, scenario) {
         max: sorted[sorted.length - 1] ?? 0,
       }
     }
+    const resolveStageWindowFlushKind = (sample) => {
+      const rowStartDelta = Math.abs(Number(sample?.rowStartDelta ?? 0))
+      const rowEndDelta = Math.abs(Number(sample?.rowEndDelta ?? 0))
+      const rowCountDelta = Math.abs(Number(sample?.rowCountDelta ?? 0))
+      const topSpacerDelta = Math.abs(Number(sample?.topSpacerDelta ?? 0))
+      const bottomSpacerDelta = Math.abs(Number(sample?.bottomSpacerDelta ?? 0))
+      const firstRowChanged = Number(sample?.firstRowChanged ?? 0) === 1
+      const lastRowChanged = Number(sample?.lastRowChanged ?? 0) === 1
+      const rowWindowChanged = rowStartDelta > 0 || rowEndDelta > 0
+      const spacerChanged = topSpacerDelta > 0 || bottomSpacerDelta > 0
+      const rowIdentityChanged = firstRowChanged || lastRowChanged
+
+      if (rowWindowChanged && Math.max(rowStartDelta, rowEndDelta) > 1) {
+        return "window-jump"
+      }
+      if (rowWindowChanged) {
+        return "window-step"
+      }
+      if (rowIdentityChanged) {
+        return "row-identity-replacement"
+      }
+      if (rowCountDelta > 0) {
+        return "row-count-change"
+      }
+      if (spacerChanged) {
+        return "spacer-only"
+      }
+      return "unchanged"
+    }
+    const pickSlowestStageWindowFlushSample = (samples) => {
+      let slowest = null
+      for (const sample of samples) {
+        if (!slowest || Number(sample?.totalMs ?? 0) > Number(slowest?.totalMs ?? 0)) {
+          slowest = sample
+        }
+      }
+      if (!slowest) {
+        return null
+      }
+      return {
+        kind: resolveStageWindowFlushKind(slowest),
+        totalMs: Number(slowest.totalMs ?? 0),
+        rowStart: Number(slowest.rowStart ?? 0),
+        rowEnd: Number(slowest.rowEnd ?? 0),
+        rowStartDelta: Number(slowest.rowStartDelta ?? 0),
+        rowEndDelta: Number(slowest.rowEndDelta ?? 0),
+        rowCountDelta: Number(slowest.rowCountDelta ?? 0),
+        topSpacerDelta: Number(slowest.topSpacerDelta ?? 0),
+        bottomSpacerDelta: Number(slowest.bottomSpacerDelta ?? 0),
+        firstRowChanged: Number(slowest.firstRowChanged ?? 0),
+        lastRowChanged: Number(slowest.lastRowChanged ?? 0),
+        scrollTop: Number(slowest.scrollTop ?? 0),
+      }
+    }
+    const summarizeStageWindowFlushSamples = (samples) => {
+      const buckets = new Map()
+      for (const sample of samples) {
+        const kind = resolveStageWindowFlushKind(sample)
+        const bucket = buckets.get(kind) ?? []
+        bucket.push(sample)
+        buckets.set(kind, bucket)
+      }
+      const byKind = {}
+      for (const [kind, bucket] of buckets.entries()) {
+        byKind[kind] = {
+          count: bucket.length,
+          totalMs: summarizeNumbers(bucket.map(sample => Number(sample?.totalMs))),
+          rowStartDelta: summarizeNumbers(bucket.map(sample => Math.abs(Number(sample?.rowStartDelta ?? 0)))),
+          rowEndDelta: summarizeNumbers(bucket.map(sample => Math.abs(Number(sample?.rowEndDelta ?? 0)))),
+          topSpacerDelta: summarizeNumbers(bucket.map(sample => Math.abs(Number(sample?.topSpacerDelta ?? 0)))),
+          bottomSpacerDelta: summarizeNumbers(bucket.map(sample => Math.abs(Number(sample?.bottomSpacerDelta ?? 0)))),
+          slowestSample: pickSlowestStageWindowFlushSample(bucket),
+        }
+      }
+      return {
+        sampleCount: samples.length,
+        totalMs: summarizeNumbers(samples.map(sample => Number(sample?.totalMs))),
+        rowStartDelta: summarizeNumbers(samples.map(sample => Math.abs(Number(sample?.rowStartDelta ?? 0)))),
+        rowEndDelta: summarizeNumbers(samples.map(sample => Math.abs(Number(sample?.rowEndDelta ?? 0)))),
+        rowCountDelta: summarizeNumbers(samples.map(sample => Math.abs(Number(sample?.rowCountDelta ?? 0)))),
+        topSpacerDelta: summarizeNumbers(samples.map(sample => Math.abs(Number(sample?.topSpacerDelta ?? 0)))),
+        bottomSpacerDelta: summarizeNumbers(samples.map(sample => Math.abs(Number(sample?.bottomSpacerDelta ?? 0)))),
+        firstRowChangedCount: samples.filter(sample => Number(sample?.firstRowChanged ?? 0) === 1).length,
+        lastRowChangedCount: samples.filter(sample => Number(sample?.lastRowChanged ?? 0) === 1).length,
+        slowestSample: pickSlowestStageWindowFlushSample(samples),
+        byKind,
+      }
+    }
     const summarizePerfSamplesByScope = (samples) => {
       const grouped = {}
       for (const sample of samples) {
@@ -2284,6 +2372,9 @@ async function runScenario(page, sessionIndex, scenario) {
         .filter(sample => sample?.scope === "chromeDraw")
       const overlayComputePerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
         .filter(sample => sample?.scope === "overlayCompute")
+      const stageWindowFlushPerfSamples = (verticalDiagnostics.appPerf?.samples ?? [])
+        .filter(sample => sample?.scope === "stageWindowFlush")
+      verticalDiagnostics.stageWindowFlushTelemetry = summarizeStageWindowFlushSamples(stageWindowFlushPerfSamples)
       verticalDiagnostics.virtualizationTelemetry = {
         sampleCount: viewportPerfSamples.length,
         latest: viewportPerfSamples[viewportPerfSamples.length - 1] ?? null,
@@ -2571,6 +2662,38 @@ async function runScenario(page, sessionIndex, scenario) {
   }
 }
 
+function aggregateStageWindowFlushTelemetry(diagnosticsRuns) {
+  const telemetryRuns = diagnosticsRuns.map(diagnostics => diagnostics.stageWindowFlushTelemetry).filter(Boolean)
+  const kinds = new Set()
+  for (const telemetry of telemetryRuns) {
+    for (const kind of Object.keys(telemetry.byKind ?? {})) {
+      kinds.add(kind)
+    }
+  }
+  const byKind = {}
+  for (const kind of [...kinds].sort()) {
+    byKind[kind] = {
+      count: stats(telemetryRuns.map(telemetry => telemetry.byKind?.[kind]?.count ?? 0)),
+      totalMsP95: stats(telemetryRuns.map(telemetry => telemetry.byKind?.[kind]?.totalMs?.p95 ?? 0)),
+      totalMsMax: stats(telemetryRuns.map(telemetry => telemetry.byKind?.[kind]?.totalMs?.max ?? 0)),
+      rowStartDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.byKind?.[kind]?.rowStartDelta?.max ?? 0)),
+    }
+  }
+  return {
+    sampleCount: stats(telemetryRuns.map(telemetry => telemetry.sampleCount)),
+    totalMsP95: stats(telemetryRuns.map(telemetry => telemetry.totalMs?.p95)),
+    totalMsMax: stats(telemetryRuns.map(telemetry => telemetry.totalMs?.max)),
+    rowStartDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.rowStartDelta?.max)),
+    rowEndDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.rowEndDelta?.max)),
+    rowCountDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.rowCountDelta?.max)),
+    topSpacerDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.topSpacerDelta?.max)),
+    bottomSpacerDeltaMax: stats(telemetryRuns.map(telemetry => telemetry.bottomSpacerDelta?.max)),
+    firstRowChangedCount: stats(telemetryRuns.map(telemetry => telemetry.firstRowChangedCount)),
+    lastRowChangedCount: stats(telemetryRuns.map(telemetry => telemetry.lastRowChangedCount)),
+    byKind,
+  }
+}
+
 function aggregateRuns(runs) {
   const verticalDiagnosticsRuns = runs.map(run => run.verticalDiagnostics).filter(Boolean)
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
@@ -2605,6 +2728,7 @@ function aggregateRuns(runs) {
     peakViewportCells: stats(runs.map(run => run.telemetry.peakViewportCells)),
     cellUpdatesAttempted: stats(runs.map(run => run.interactions.cellUpdatesAttempted)),
     cellUpdatesCommitted: stats(runs.map(run => run.interactions.cellUpdatesCommitted)),
+    stageWindowFlushTelemetry: aggregateStageWindowFlushTelemetry(verticalDiagnosticsRuns),
     virtualizationTelemetry: {
       sampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.sampleCount)),
       renderedRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.renderedRows?.p95)),
