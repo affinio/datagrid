@@ -2,7 +2,11 @@
 import { readFileSync } from "node:fs"
 import { basename } from "node:path"
 
-const [baselinePath, candidatePath, ...requestedScenarios] = process.argv.slice(2)
+const rawArgs = process.argv.slice(2)
+if (rawArgs[0] === "--") {
+  rawArgs.shift()
+}
+const [baselinePath, candidatePath, ...requestedScenarios] = rawArgs
 
 function printUsage() {
   console.error("Usage: node scripts/compare-datagrid-enterprise-browser-frames.mjs <baseline.json> <candidate.json> [scenario ...]")

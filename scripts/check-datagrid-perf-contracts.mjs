@@ -181,6 +181,11 @@ registerFileCheck(
   "Enterprise browser frame benchmark for scroll and interaction frame budgets",
 )
 registerFileCheck(
+  "enterprise-browser-frame-comparator-script",
+  "scripts/compare-datagrid-enterprise-browser-frames.mjs",
+  "Enterprise browser frame artifact comparator for before/after regression review",
+)
+registerFileCheck(
   "tree-workload-benchmark-script",
   "scripts/bench-datagrid-tree-workload.mjs",
   "Tree workload benchmark for deep hierarchy expand/filter/sort pressure",
@@ -622,6 +627,7 @@ registerTokenCheck(
     "bench:datagrid:dependency-graph:assert",
     "bench:datagrid:enterprise:selection:assert",
     "bench:datagrid:enterprise:browser-frames",
+    "bench:datagrid:enterprise:browser-frames:compare",
     "bench:datagrid:enterprise:browser-frames:assert",
     "bench:datagrid:enterprise:browser-frames:touch:assert",
     "bench:datagrid:enterprise:scroll:assert",
