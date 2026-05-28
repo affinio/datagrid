@@ -328,6 +328,20 @@ function resolveInitialSortState(sortModel: readonly DataGridSortState[] | undef
   }))
 }
 
+function areSortToggleStatesEqual(left: readonly SortToggleState[], right: readonly SortToggleState[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftEntry = left[index]
+    const rightEntry = right[index]
+    if (leftEntry?.key !== rightEntry?.key || leftEntry?.direction !== rightEntry?.direction) {
+      return false
+    }
+  }
+  return true
+}
+
 function createEmptyFilterModel(): DataGridFilterSnapshot {
   return {
     columnFilters: {},
@@ -2066,6 +2080,7 @@ export default defineComponent({
         ? sortState.value.filter(entry => entry.key !== columnKey)
         : [{ key: columnKey, direction }]
       const handlerEndMs = resolveDataGridPerfNow()
+      const unchangedSortState = areSortToggleStatesEqual(sortState.value, nextSortState)
       recordDataGridDefaultRendererPerf({
         scope: "columnMenuSortRequest",
         ts: Date.now(),
@@ -2074,7 +2089,13 @@ export default defineComponent({
         direction: direction ?? "clear",
         handlerStartMs,
         handlerEndMs,
+        unchangedSortState: unchangedSortState ? 1 : 0,
       })
+      if (unchangedSortState) {
+        reportGridStatus(formatColumnSortStatus(columnKey, direction))
+        pendingColumnMenuSort.value = null
+        return
+      }
       scheduleColumnMenuSortApply({ columnKey, direction, nextSortState }, handlerStartMs, handlerEndMs)
     }
 

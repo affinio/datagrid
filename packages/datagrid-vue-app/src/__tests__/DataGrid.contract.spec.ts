@@ -1855,6 +1855,17 @@ describe("DataGrid app facade contract", () => {
 
     await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
+    queryColumnMenuAction("sort-desc")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(queryColumnMenuRoot()).toBeFalsy()
+    expect(wrapper.find(".datagrid-app-stage--sorting-pending").exists()).toBe(false)
+    expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
+      sortModel: [{ key: "owner", direction: "desc" }],
+    })
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
     queryColumnMenuAction("pin-submenu")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
     queryColumnMenuAction("pin-right")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
