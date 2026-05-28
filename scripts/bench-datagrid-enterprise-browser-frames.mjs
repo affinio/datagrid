@@ -806,6 +806,9 @@ async function runScenario(page, sessionIndex, scenario) {
       removedRowNodes: 0,
       addedCellNodes: 0,
       removedCellNodes: 0,
+      cellTargetChildListMutations: 0,
+      directCellTargetChildListMutations: 0,
+      cellDescendantTargetChildListMutations: 0,
     })
     const interactions = {
       scenarioId: input.scenario.id,
@@ -836,9 +839,11 @@ async function runScenario(page, sessionIndex, scenario) {
           rangeSampleCount: 0,
           uniqueRangeCount: 0,
           mutationSummary: createMutationSummary(),
+          mutationRecords: [],
           layoutReadSamples: [],
           appPerf: null,
           longTasks: [],
+          scrollFrameAttribution: null,
         }
       : null
     const sortDiagnostics = isSortDiagnosticsScenario
@@ -1170,6 +1175,101 @@ async function runScenario(page, sessionIndex, scenario) {
         .map(sample => sample.delta)
       return summarizeNumbers(samples)
     }
+    const sumMutationRecords = (records) => {
+      const total = createMutationSummary()
+      for (const record of records) {
+        total.callbackCount += Number(record?.callbackCount ?? 0)
+        total.childListMutations += Number(record?.childListMutations ?? 0)
+        total.attributesMutations += Number(record?.attributesMutations ?? 0)
+        total.addedNodes += Number(record?.addedNodes ?? 0)
+        total.removedNodes += Number(record?.removedNodes ?? 0)
+        total.addedRowNodes += Number(record?.addedRowNodes ?? 0)
+        total.removedRowNodes += Number(record?.removedRowNodes ?? 0)
+        total.addedCellNodes += Number(record?.addedCellNodes ?? 0)
+        total.removedCellNodes += Number(record?.removedCellNodes ?? 0)
+        total.cellTargetChildListMutations += Number(record?.cellTargetChildListMutations ?? 0)
+        total.directCellTargetChildListMutations += Number(record?.directCellTargetChildListMutations ?? 0)
+        total.cellDescendantTargetChildListMutations += Number(record?.cellDescendantTargetChildListMutations ?? 0)
+      }
+      return total
+    }
+    const summarizeScrollWriteFrameAttribution = () => {
+      if (!verticalDiagnostics) {
+        return null
+      }
+      const slowFrameThresholdMs = 32
+      const writes = verticalDiagnostics.scrollWrites.map(write => {
+        const startMs = Number(write?.beforeWriteMs ?? 0)
+        const endMs = Math.max(startMs, Number(write?.afterPauseMs ?? write?.afterWriteMs ?? startMs))
+        const windowFrameSamples = frameSamples.filter(sample => sample.timestamp >= startMs && sample.timestamp <= endMs)
+        const frameValues = windowFrameSamples.map(sample => sample.delta)
+        const frameStats = summarizeNumbers(frameValues)
+        const mutationTotals = sumMutationRecords((verticalDiagnostics.mutationRecords ?? [])
+          .filter(record => Number(record?.atMs ?? 0) >= startMs && Number(record?.atMs ?? 0) <= endMs))
+        const overlappingLongTasks = longTaskEntries.filter(entry => {
+          const taskStart = Number(entry?.startTime ?? 0)
+          const taskEnd = taskStart + Number(entry?.duration ?? 0)
+          return taskEnd >= startMs && taskStart <= endMs
+        })
+        const longTaskDurations = overlappingLongTasks.map(entry => Number(entry?.duration ?? 0))
+        const longTaskTotalMs = longTaskDurations.reduce((sum, value) => sum + value, 0)
+        return {
+          step: Number(write?.step ?? 0),
+          durationMs: endMs - startMs,
+          appliedDelta: Number(write?.appliedDelta ?? 0),
+          rangeChanged: write?.rangeChanged === true ? 1 : write?.rangeChanged === false ? 0 : -1,
+          frameCount: frameStats.count,
+          frameP95Ms: frameStats.p95,
+          frameMaxMs: frameStats.max,
+          longFrameCount: frameValues.filter(value => value > 16.7).length,
+          slowFrameCount: frameValues.filter(value => value >= slowFrameThresholdMs).length,
+          longTaskCount: overlappingLongTasks.length,
+          longTaskTotalMs,
+          longTaskMaxMs: longTaskDurations.length ? Math.max(...longTaskDurations) : 0,
+          mutationCallbackCount: mutationTotals.callbackCount,
+          childListMutationCount: mutationTotals.childListMutations,
+          cellTargetChildListMutationCount: mutationTotals.cellTargetChildListMutations,
+          directCellTargetChildListMutationCount: mutationTotals.directCellTargetChildListMutations,
+          cellDescendantTargetChildListMutationCount: mutationTotals.cellDescendantTargetChildListMutations,
+          addedRows: mutationTotals.addedRowNodes,
+          removedRows: mutationTotals.removedRowNodes,
+          addedCells: mutationTotals.addedCellNodes,
+          removedCells: mutationTotals.removedCellNodes,
+          waitedAfterWriteMs: Number(write?.waitedAfterWriteMs ?? 0),
+          writeToLatestRafMs: Number(write?.msFromWriteToLatestRaf ?? 0),
+        }
+      })
+      const slowWrites = writes.filter(write => (
+        write.frameMaxMs >= slowFrameThresholdMs
+        || write.slowFrameCount > 0
+        || write.longTaskCount > 0
+      ))
+      return {
+        sampleCount: writes.length,
+        slowFrameThresholdMs,
+        slowWriteCount: slowWrites.length,
+        slowWritePct: writes.length > 0 ? (slowWrites.length / writes.length) * 100 : 0,
+        rangeChangedSlowWriteCount: slowWrites.filter(write => write.rangeChanged === 1).length,
+        frameMaxMs: summarizeNumbers(writes.map(write => write.frameMaxMs)),
+        frameP95Ms: summarizeNumbers(writes.map(write => write.frameP95Ms)),
+        longFrameCount: summarizeNumbers(writes.map(write => write.longFrameCount)),
+        slowFrameCount: summarizeNumbers(writes.map(write => write.slowFrameCount)),
+        longTaskCount: summarizeNumbers(writes.map(write => write.longTaskCount)),
+        longTaskTotalMs: summarizeNumbers(writes.map(write => write.longTaskTotalMs)),
+        mutationCallbackCount: summarizeNumbers(writes.map(write => write.mutationCallbackCount)),
+        childListMutationCount: summarizeNumbers(writes.map(write => write.childListMutationCount)),
+        cellTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.cellTargetChildListMutationCount)),
+        directCellTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.directCellTargetChildListMutationCount)),
+        cellDescendantTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.cellDescendantTargetChildListMutationCount)),
+        addedRows: summarizeNumbers(writes.map(write => write.addedRows)),
+        removedRows: summarizeNumbers(writes.map(write => write.removedRows)),
+        addedCells: summarizeNumbers(writes.map(write => write.addedCells)),
+        removedCells: summarizeNumbers(writes.map(write => write.removedCells)),
+        topSlowWrites: [...slowWrites]
+          .sort((left, right) => (right.frameMaxMs - left.frameMaxMs) || (right.longTaskTotalMs - left.longTaskTotalMs))
+          .slice(0, 8),
+      }
+    }
     const captureTelemetry = (label) => {
       const performanceWithMemory = performance
       const usedHeap = typeof performanceWithMemory?.memory?.usedJSHeapSize === "number"
@@ -1396,7 +1496,34 @@ async function runScenario(page, sessionIndex, scenario) {
       resolveDataGridPerfStore()?.clear?.()
     }
 
+    const classifyMutationTarget = (target) => {
+      const element = target instanceof Element
+        ? target
+        : target instanceof Node && target.parentElement instanceof Element
+          ? target.parentElement
+          : null
+      const cell = element?.closest?.(".grid-cell") ?? null
+      return {
+        inCell: cell instanceof Element,
+        directCell: element instanceof Element && element.classList.contains("grid-cell"),
+      }
+    }
     const recordMutationSummary = (summary, mutations) => {
+      const batch = {
+        atMs: performance.now(),
+        callbackCount: 1,
+        childListMutations: 0,
+        attributesMutations: 0,
+        addedNodes: 0,
+        removedNodes: 0,
+        addedRowNodes: 0,
+        removedRowNodes: 0,
+        addedCellNodes: 0,
+        removedCellNodes: 0,
+        cellTargetChildListMutations: 0,
+        directCellTargetChildListMutations: 0,
+        cellDescendantTargetChildListMutations: 0,
+      }
       summary.callbackCount += 1
       for (const mutation of mutations) {
         if (mutation.type === "childList") {
@@ -1405,20 +1532,51 @@ async function runScenario(page, sessionIndex, scenario) {
           summary.childListMutations += 1
           summary.addedNodes += mutation.addedNodes.length
           summary.removedNodes += mutation.removedNodes.length
+          const targetClass = classifyMutationTarget(mutation.target)
           summary.addedRowNodes += addedGridNodes.rows
           summary.removedRowNodes += removedGridNodes.rows
           summary.addedCellNodes += addedGridNodes.cells
           summary.removedCellNodes += removedGridNodes.cells
+          if (targetClass.inCell) {
+            summary.cellTargetChildListMutations += 1
+          }
+          if (targetClass.directCell) {
+            summary.directCellTargetChildListMutations += 1
+          }
+          if (targetClass.inCell && !targetClass.directCell) {
+            summary.cellDescendantTargetChildListMutations += 1
+          }
+          batch.childListMutations += 1
+          if (targetClass.inCell) {
+            batch.cellTargetChildListMutations += 1
+          }
+          if (targetClass.directCell) {
+            batch.directCellTargetChildListMutations += 1
+          }
+          if (targetClass.inCell && !targetClass.directCell) {
+            batch.cellDescendantTargetChildListMutations += 1
+          }
+          batch.addedNodes += mutation.addedNodes.length
+          batch.removedNodes += mutation.removedNodes.length
+          batch.addedRowNodes += addedGridNodes.rows
+          batch.removedRowNodes += removedGridNodes.rows
+          batch.addedCellNodes += addedGridNodes.cells
+          batch.removedCellNodes += removedGridNodes.cells
         } else if (mutation.type === "attributes") {
           summary.attributesMutations += 1
+          batch.attributesMutations += 1
         }
       }
+      return batch
     }
     let mutationObserver = null
     if ((verticalDiagnostics || sortDiagnostics || editDiagnostics) && typeof MutationObserver !== "undefined") {
       mutationObserver = new MutationObserver((mutations) => {
         if (verticalDiagnostics) {
-          recordMutationSummary(verticalDiagnostics.mutationSummary, mutations)
+          const mutationRecord = recordMutationSummary(verticalDiagnostics.mutationSummary, mutations)
+          if (verticalDiagnostics.mutationRecords.length < 1000) {
+            verticalDiagnostics.mutationRecords.push(mutationRecord)
+          }
         }
         if (sortDiagnostics) {
           recordMutationSummary(sortDiagnostics.mutationSummary, mutations)
@@ -2466,6 +2624,7 @@ async function runScenario(page, sessionIndex, scenario) {
         name: entry.name,
         attribution: entry.attribution,
       }))
+      verticalDiagnostics.scrollFrameAttribution = summarizeScrollWriteFrameAttribution()
     }
     if (sortDiagnostics) {
       const frameWindow = sortDiagnostics.frameWindow
@@ -2716,6 +2875,32 @@ function aggregateStageWindowFlushTelemetry(diagnosticsRuns) {
   }
 }
 
+function aggregateScrollFrameAttribution(diagnosticsRuns) {
+  const telemetryRuns = diagnosticsRuns.map(diagnostics => diagnostics.scrollFrameAttribution).filter(Boolean)
+  return {
+    sampleCount: stats(telemetryRuns.map(telemetry => telemetry.sampleCount)),
+    slowWriteCount: stats(telemetryRuns.map(telemetry => telemetry.slowWriteCount)),
+    slowWritePct: stats(telemetryRuns.map(telemetry => telemetry.slowWritePct)),
+    rangeChangedSlowWriteCount: stats(telemetryRuns.map(telemetry => telemetry.rangeChangedSlowWriteCount)),
+    frameMaxMsP95: stats(telemetryRuns.map(telemetry => telemetry.frameMaxMs?.p95)),
+    frameMaxMsMax: stats(telemetryRuns.map(telemetry => telemetry.frameMaxMs?.max)),
+    frameP95MsP95: stats(telemetryRuns.map(telemetry => telemetry.frameP95Ms?.p95)),
+    longFrameCountP95: stats(telemetryRuns.map(telemetry => telemetry.longFrameCount?.p95)),
+    slowFrameCountP95: stats(telemetryRuns.map(telemetry => telemetry.slowFrameCount?.p95)),
+    longTaskCountP95: stats(telemetryRuns.map(telemetry => telemetry.longTaskCount?.p95)),
+    longTaskTotalMsP95: stats(telemetryRuns.map(telemetry => telemetry.longTaskTotalMs?.p95)),
+    mutationCallbackCountP95: stats(telemetryRuns.map(telemetry => telemetry.mutationCallbackCount?.p95)),
+    childListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.childListMutationCount?.p95)),
+    cellTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellTargetChildListMutationCount?.p95)),
+    directCellTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.directCellTargetChildListMutationCount?.p95)),
+    cellDescendantTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellDescendantTargetChildListMutationCount?.p95)),
+    addedRowsP95: stats(telemetryRuns.map(telemetry => telemetry.addedRows?.p95)),
+    removedRowsP95: stats(telemetryRuns.map(telemetry => telemetry.removedRows?.p95)),
+    addedCellsP95: stats(telemetryRuns.map(telemetry => telemetry.addedCells?.p95)),
+    removedCellsP95: stats(telemetryRuns.map(telemetry => telemetry.removedCells?.p95)),
+  }
+}
+
 function aggregateRuns(runs) {
   const verticalDiagnosticsRuns = runs.map(run => run.verticalDiagnostics).filter(Boolean)
   const sortDiagnosticsRuns = runs.map(run => run.sortDiagnostics).filter(Boolean)
@@ -2751,6 +2936,7 @@ function aggregateRuns(runs) {
     cellUpdatesAttempted: stats(runs.map(run => run.interactions.cellUpdatesAttempted)),
     cellUpdatesCommitted: stats(runs.map(run => run.interactions.cellUpdatesCommitted)),
     stageWindowFlushTelemetry: aggregateStageWindowFlushTelemetry(verticalDiagnosticsRuns),
+    scrollFrameAttribution: aggregateScrollFrameAttribution(verticalDiagnosticsRuns),
     virtualizationTelemetry: {
       sampleCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.sampleCount)),
       renderedRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.virtualizationTelemetry?.renderedRows?.p95)),

@@ -522,6 +522,8 @@ registerTokenCheck(
     "buildVirtualizationBudgetWarnings",
     "buildDatasourcePlaceholderBudgetWarnings",
     "waitForScrollStepFrame",
+    "scrollFrameAttribution",
+    "summarizeScrollWriteFrameAttribution",
     "grid-selection-overlay__segment--fill-preview",
   ],
   "Enterprise browser frame benchmark exposes calibrated interaction/virtualization budgets and paint-cadenced direct scroll sampling",
@@ -536,6 +538,17 @@ registerTokenCheck(
     "resolveDataGridPerfStore()?.clear?.()",
   ],
   "Enterprise browser frame scenarios reset scroll origin before telemetry so smooth-scroll samples cannot inherit prior scenario scroll state",
+)
+
+registerTokenCheck(
+  "enterprise-browser-frame-comparator-attribution-metrics",
+  "scripts/compare-datagrid-enterprise-browser-frames.mjs",
+  [
+    "scrollFrameAttribution",
+    "slowWritePct",
+    "writeFrameMaxP95",
+  ],
+  "Enterprise browser frame comparator includes scroll-frame attribution metrics for before/after review",
 )
 
 registerTokenCheck(
