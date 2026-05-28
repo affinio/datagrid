@@ -474,20 +474,11 @@ const renderedColumnWindowSignature = computed(() => (
   renderedCenterColumns.value.map(column => String(column.key)).join("|")
 ))
 
-function resolveRecycledRowSlotIndex(row: DataGridTableStageBodyRow, rowOffset: number, rowCount: number): number {
-  const poolSize = Math.max(1, rowCount)
-  const absoluteIndex = renderApi.value.absoluteRowIndex(row, rowOffset)
-  const normalizedIndex = Number.isFinite(absoluteIndex)
-    ? Math.trunc(absoluteIndex)
-    : rowOffset
-  return ((normalizedIndex % poolSize) + poolSize) % poolSize
-}
-
 function resolveBodyRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
   if (props.rowKeyMode !== "recycled") {
     return String(row.rowId)
   }
-  return `recycled-row-${resolveRecycledRowSlotIndex(row, rowOffset, displayRows.value.length)}`
+  return `recycled-row-${rowOffset}`
 }
 
 function resolveBodyCellKey(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): string {

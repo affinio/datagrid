@@ -275,20 +275,11 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
 
-function resolveRecycledPaneRowSlotIndex(row: DataGridTableStageBodyRow, rowOffset: number, rowCount: number): number {
-  const poolSize = Math.max(1, rowCount)
-  const absoluteIndex = props.renderApi.absoluteRowIndex(row, rowOffset)
-  const normalizedIndex = Number.isFinite(absoluteIndex)
-    ? Math.trunc(absoluteIndex)
-    : rowOffset
-  return ((normalizedIndex % poolSize) + poolSize) % poolSize
-}
-
 function resolvePaneRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
   if (props.pane.rowKeyMode !== "recycled") {
     return `${String(row.rowId)}-${props.pane.side}-row`
   }
-  return `${props.pane.side}-recycled-row-${resolveRecycledPaneRowSlotIndex(row, rowOffset, props.pane.displayRows.length)}`
+  return `${props.pane.side}-recycled-row-${rowOffset}`
 }
 
 function resolvePaneCellKey(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): string {
