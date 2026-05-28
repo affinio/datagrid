@@ -796,6 +796,88 @@ function compareFastNullableNumbers(
   return (leftNumber ?? 0) - (rightNumber ?? 0)
 }
 
+const NUMERIC_BUCKET_SORT_MIN_ROWS = 4096
+const NUMERIC_BUCKET_SORT_MAX_RANGE = 65_536
+const NUMERIC_BUCKET_SORT_RANGE_RATIO = 8
+
+function shouldUseNumericIntegerBucketSort(rowCount: number, minValue: number, maxValue: number): boolean {
+  if (rowCount < NUMERIC_BUCKET_SORT_MIN_ROWS) {
+    return false
+  }
+  const range = maxValue - minValue + 1
+  if (!Number.isSafeInteger(range) || range <= 0) {
+    return false
+  }
+  const rangeBudget = Math.min(
+    NUMERIC_BUCKET_SORT_MAX_RANGE,
+    Math.max(1024, Math.floor(rowCount / NUMERIC_BUCKET_SORT_RANGE_RATIO)),
+  )
+  return range <= rangeBudget
+}
+
+function compareRowTieBreakers<T>(
+  rows: readonly DataGridRowNode<T>[],
+  leftIndex: number,
+  rightIndex: number,
+): number {
+  const leftRow = rows[leftIndex]
+  const rightRow = rows[rightIndex]
+  if (!leftRow || !rightRow) {
+    return leftIndex - rightIndex
+  }
+  const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
+  if (rowIdDelta !== 0) {
+    return rowIdDelta
+  }
+  const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
+  if (sourceDelta !== 0) {
+    return sourceDelta
+  }
+  return leftIndex - rightIndex
+}
+
+function sortRowsByIntegerBuckets<T>(
+  rows: readonly DataGridRowNode<T>[],
+  numericSortValuesByIndex: readonly (number | undefined)[],
+  minValue: number,
+  maxValue: number,
+  direction: 1 | -1,
+): DataGridRowNode<T>[] {
+  const range = maxValue - minValue + 1
+  const buckets = new Array<number[] | undefined>(range)
+  for (let index = 0; index < rows.length; index += 1) {
+    const bucketIndex = (numericSortValuesByIndex[index] ?? minValue) - minValue
+    const bucket = buckets[bucketIndex]
+    if (bucket) {
+      bucket.push(index)
+    } else {
+      buckets[bucketIndex] = [index]
+    }
+  }
+
+  const sortedRows = new Array<DataGridRowNode<T>>(rows.length)
+  let outputIndex = 0
+  const start = direction === -1 ? range - 1 : 0
+  const end = direction === -1 ? -1 : range
+  for (let bucketIndex = start; bucketIndex !== end; bucketIndex += direction) {
+    const bucket = buckets[bucketIndex]
+    if (!bucket) {
+      continue
+    }
+    if (bucket.length > 1) {
+      bucket.sort((leftIndex, rightIndex) => compareRowTieBreakers(rows, leftIndex, rightIndex))
+    }
+    for (let index = 0; index < bucket.length; index += 1) {
+      const row = rows[bucket[index] ?? -1]
+      if (row) {
+        sortedRows[outputIndex] = row
+        outputIndex += 1
+      }
+    }
+  }
+  return sortedRows
+}
+
 export function sortLeafRows<T>(
   rows: readonly DataGridRowNode<T>[],
   sortModel: readonly DataGridSortState[],
@@ -817,10 +899,16 @@ export function sortLeafRows<T>(
     const sortValuesByIndex = new Array<unknown>(rows.length)
     const numericSortValuesByIndex = new Array<number | undefined>(rows.length)
     let canUseNumericSortFastPath = descriptor.comparator?.kind !== "custom"
+    let canUseIntegerBucketSort = canUseNumericSortFastPath
+    let hasNullableSortValue = false
+    let minIntegerSortValue = Number.POSITIVE_INFINITY
+    let maxIntegerSortValue = Number.NEGATIVE_INFINITY
     for (let index = 0; index < rows.length; index += 1) {
       const row = rows[index]
       if (!row) {
         sortValuesByIndex[index] = undefined
+        hasNullableSortValue = true
+        canUseIntegerBucketSort = false
         continue
       }
       const sortValue = resolveSingleSortValue
@@ -830,14 +918,43 @@ export function sortLeafRows<T>(
           : readRowField(row, descriptor.key, descriptor.field)
       sortValuesByIndex[index] = sortValue
       if (!canUseNumericSortFastPath || sortValue == null) {
+        if (sortValue == null) {
+          hasNullableSortValue = true
+          canUseIntegerBucketSort = false
+        }
         continue
       }
       const numericSortValue = toFastComparableNumber(sortValue)
       if (numericSortValue == null) {
         canUseNumericSortFastPath = false
+        canUseIntegerBucketSort = false
         continue
       }
       numericSortValuesByIndex[index] = numericSortValue
+      if (!canUseIntegerBucketSort) {
+        continue
+      }
+      if (!Number.isSafeInteger(numericSortValue)) {
+        canUseIntegerBucketSort = false
+        continue
+      }
+      minIntegerSortValue = Math.min(minIntegerSortValue, numericSortValue)
+      maxIntegerSortValue = Math.max(maxIntegerSortValue, numericSortValue)
+    }
+
+    if (
+      canUseNumericSortFastPath
+      && canUseIntegerBucketSort
+      && !hasNullableSortValue
+      && shouldUseNumericIntegerBucketSort(rows.length, minIntegerSortValue, maxIntegerSortValue)
+    ) {
+      return sortRowsByIntegerBuckets(
+        rows,
+        numericSortValuesByIndex,
+        minIntegerSortValue,
+        maxIntegerSortValue,
+        direction,
+      )
     }
 
     const orderedIndexes = new Array<number>(rows.length)
@@ -868,15 +985,7 @@ export function sortLeafRows<T>(
       if (compared !== 0) {
         return compared * direction
       }
-      const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
-      if (rowIdDelta !== 0) {
-        return rowIdDelta
-      }
-      const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
-      if (sourceDelta !== 0) {
-        return sourceDelta
-      }
-      return leftIndex - rightIndex
+      return compareRowTieBreakers(rows, leftIndex, rightIndex)
     })
 
     const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)
@@ -936,15 +1045,7 @@ export function sortLeafRows<T>(
         return compared * direction
       }
     }
-    const rowIdDelta = compareUnknown(leftRow.rowId, rightRow.rowId)
-    if (rowIdDelta !== 0) {
-      return rowIdDelta
-    }
-    const sourceDelta = leftRow.sourceIndex - rightRow.sourceIndex
-    if (sourceDelta !== 0) {
-      return sourceDelta
-    }
-    return leftIndex - rightIndex
+    return compareRowTieBreakers(rows, leftIndex, rightIndex)
   })
 
   const sortedRows = new Array<DataGridRowNode<T>>(orderedIndexes.length)

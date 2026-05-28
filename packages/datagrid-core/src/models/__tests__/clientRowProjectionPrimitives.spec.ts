@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createFilterPredicate, hasActiveFilterModel } from "../projection/clientRowProjectionPrimitives"
+import { createFilterPredicate, hasActiveFilterModel, sortLeafRows } from "../projection/clientRowProjectionPrimitives"
 import type { DataGridFilterSnapshot, DataGridRowNode } from "../rowModel"
 
 interface Row {
@@ -110,5 +110,25 @@ describe("client row projection quick filter predicate", () => {
   it("treats a non-empty quick filter as an active filter model", () => {
     expect(hasActiveFilterModel(createFilterModel({ query: "api", columns: ["service"] }))).toBe(true)
     expect(hasActiveFilterModel(createFilterModel({ query: "   ", columns: ["service"] }))).toBe(false)
+  })
+})
+
+describe("client row projection sort primitives", () => {
+  it("sorts bounded integer columns with deterministic row-id tie breaks", () => {
+    const rows = Array.from({ length: 5000 }, (_, index) => createRowNode({
+      rowId: `row-${String(5000 - index).padStart(5, "0")}`,
+      service: "api",
+      owner: "ops",
+      status: "active",
+      latencyMs: index % 16,
+    }, index))
+
+    const sortedRows = sortLeafRows(rows, [{ key: "latencyMs", direction: "asc" }])
+    const values = sortedRows.map(row => row.data.latencyMs)
+    expect(values.slice(0, 8)).toEqual([0, 0, 0, 0, 0, 0, 0, 0])
+    expect(values[values.length - 1]).toBe(15)
+
+    const firstValueRows = sortedRows.filter(row => row.data.latencyMs === 0).map(row => String(row.rowId))
+    expect(firstValueRows).toEqual([...firstValueRows].sort((left, right) => left.localeCompare(right)))
   })
 })
