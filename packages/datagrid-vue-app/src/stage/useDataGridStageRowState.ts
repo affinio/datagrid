@@ -253,6 +253,9 @@ export function useDataGridStageRowState(
     if (shouldHighlightSelectedCellVisual(rowOffset, columnIndex)) {
       return { background: "var(--datagrid-selection-range-bg)" }
     }
+    if (options.useCanvasChrome?.value === true) {
+      return {}
+    }
     const rowStateFill = resolveInlineRowStateFill(row, rowOffset, {
       fullBleed: column.pin === "left" || column.pin === "right",
     })
