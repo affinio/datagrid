@@ -10,6 +10,7 @@ import {
 } from "../perf/dataGridPerfTrace"
 
 type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
+type GridChromeRedrawSource = string
 
 export interface UseDataGridStageChromeCanvasOptions {
   stageRootEl: Ref<HTMLElement | null>
@@ -46,8 +47,8 @@ export interface UseDataGridStageChromeCanvasResult {
   syncBodyViewportMetrics: () => void
   syncPinnedBottomViewportMetrics: () => void
   syncPinnedBottomViewportScrollLeft: () => void
-  scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
-  flushGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
+  scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
+  flushGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
   connectGridChromeResizeObserver: () => void
   disconnectGridChromeResizeObserver: () => void
 }
@@ -76,6 +77,26 @@ function mergeGridChromeRedrawMode(current: GridChromeRedrawMode, next: GridChro
     return "full"
   }
   return "full"
+}
+
+function normalizeGridChromeRedrawSource(source?: GridChromeRedrawSource): string {
+  const normalizedSource = source?.trim()
+  return normalizedSource && normalizedSource.length > 0 ? normalizedSource : "manual"
+}
+
+function mergeGridChromeRedrawSources(current: string, next: GridChromeRedrawSource): string {
+  const normalizedNext = normalizeGridChromeRedrawSource(next)
+  if (current.length === 0 || current === "none") {
+    return normalizedNext
+  }
+  const currentParts = current.split("|")
+  if (currentParts.includes(normalizedNext) || currentParts.includes("...")) {
+    return current
+  }
+  if (currentParts.length >= 8) {
+    return `${current}|...`
+  }
+  return `${current}|${normalizedNext}`
 }
 
 function resolveGridChromeDevicePixelRatio(): number {
@@ -295,9 +316,38 @@ export function useDataGridStageChromeCanvas(
 ): UseDataGridStageChromeCanvasResult {
   let gridChromeAnimationFrame = 0
   let gridChromeResizeObserver: ResizeObserver | null = null
-  type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
   let pendingGridChromeRedrawMode: GridChromeRedrawMode = "full"
+  let pendingGridChromeRedrawSources = "none"
   let cachedGridChromeStyle: GridChromeResolvedStyle | null = null
+
+  function recordGridChromeRedrawRequest(
+    phase: "schedule" | "flush",
+    source: string,
+    requestedMode: GridChromeRedrawMode,
+    previousPendingMode: GridChromeRedrawMode,
+    mergedMode: GridChromeRedrawMode,
+    hadPendingFrame: boolean,
+    pendingSources: string,
+  ): void {
+    if (!options.perfTraceEnabled) {
+      return
+    }
+    if (!hadPendingFrame && requestedMode === mergedMode && requestedMode !== "full") {
+      return
+    }
+    recordDataGridPerfSample({
+      scope: "chromeRedrawRequest",
+      ts: resolveDataGridPerfNow(),
+      totalMs: 0,
+      phase,
+      source,
+      requestedMode,
+      previousPendingMode,
+      mergedMode,
+      hadPendingFrame: hadPendingFrame ? 1 : 0,
+      pendingSources,
+    })
+  }
 
   function readGridChromeStyle(): GridChromeResolvedStyle {
     const rowDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-divider-color", "rgba(0, 0, 0, 0.08)")
@@ -373,10 +423,15 @@ export function useDataGridStageChromeCanvas(
     syncPinnedBottomViewportScrollLeft()
   }
 
-  function drawGridChromeCanvas(mode: GridChromeRedrawMode = "full"): void {
+  function drawGridChromeCanvas(
+    mode: GridChromeRedrawMode = "full",
+    source: GridChromeRedrawSource = "manual",
+    sources: string = normalizeGridChromeRedrawSource(source),
+  ): void {
     const startedAt = options.perfTraceEnabled ? resolveDataGridPerfNow() : 0
     gridChromeAnimationFrame = 0
     pendingGridChromeRedrawMode = "full"
+    pendingGridChromeRedrawSources = "none"
     const headerRenderModel = options.headerChromeRenderModel.value
     const renderModel = options.chromeRenderModel.value
     const bottomRenderModel = options.pinnedBottomChromeRenderModel.value
@@ -461,6 +516,8 @@ export function useDataGridStageChromeCanvas(
         ts: finishedAt,
         totalMs: finishedAt - startedAt,
         redrawMode: mode,
+        redrawSource: normalizeGridChromeRedrawSource(source),
+        redrawSources: sources,
         drawnPaneCount,
         bodyLineCount: countGridChromePaneLines(renderModel),
         headerLineCount: countGridChromePaneLines(headerRenderModel),
@@ -471,31 +528,69 @@ export function useDataGridStageChromeCanvas(
     }
   }
 
-  function scheduleGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
-    pendingGridChromeRedrawMode = gridChromeAnimationFrame === 0
+  function scheduleGridChromeRedraw(
+    mode: GridChromeRedrawMode = "full",
+    source: GridChromeRedrawSource = "manual",
+  ): void {
+    const normalizedSource = normalizeGridChromeRedrawSource(source)
+    const hadPendingFrame = gridChromeAnimationFrame !== 0
+    const previousPendingMode = pendingGridChromeRedrawMode
+    const nextMode = !hadPendingFrame
       ? mode
       : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
+    const nextSources = hadPendingFrame
+      ? mergeGridChromeRedrawSources(pendingGridChromeRedrawSources, normalizedSource)
+      : normalizedSource
+    pendingGridChromeRedrawMode = nextMode
+    pendingGridChromeRedrawSources = nextSources
+    recordGridChromeRedrawRequest(
+      "schedule",
+      normalizedSource,
+      mode,
+      previousPendingMode,
+      nextMode,
+      hadPendingFrame,
+      nextSources,
+    )
     if (typeof window === "undefined") {
-      drawGridChromeCanvas(pendingGridChromeRedrawMode)
+      drawGridChromeCanvas(pendingGridChromeRedrawMode, normalizedSource, pendingGridChromeRedrawSources)
       return
     }
     if (gridChromeAnimationFrame !== 0) {
       return
     }
     gridChromeAnimationFrame = window.requestAnimationFrame(() => {
-      drawGridChromeCanvas(pendingGridChromeRedrawMode)
+      drawGridChromeCanvas(pendingGridChromeRedrawMode, "scheduled", pendingGridChromeRedrawSources)
     })
   }
 
-  function flushGridChromeRedraw(mode: GridChromeRedrawMode = "full"): void {
-    const nextMode = gridChromeAnimationFrame === 0
+  function flushGridChromeRedraw(
+    mode: GridChromeRedrawMode = "full",
+    source: GridChromeRedrawSource = "manual",
+  ): void {
+    const normalizedSource = normalizeGridChromeRedrawSource(source)
+    const hadPendingFrame = gridChromeAnimationFrame !== 0
+    const previousPendingMode = pendingGridChromeRedrawMode
+    const nextMode = !hadPendingFrame
       ? mode
       : mergeGridChromeRedrawMode(pendingGridChromeRedrawMode, mode)
-    if (gridChromeAnimationFrame !== 0 && typeof window !== "undefined") {
+    const nextSources = hadPendingFrame
+      ? mergeGridChromeRedrawSources(pendingGridChromeRedrawSources, normalizedSource)
+      : normalizedSource
+    recordGridChromeRedrawRequest(
+      "flush",
+      normalizedSource,
+      mode,
+      previousPendingMode,
+      nextMode,
+      hadPendingFrame,
+      nextSources,
+    )
+    if (hadPendingFrame && typeof window !== "undefined") {
       window.cancelAnimationFrame(gridChromeAnimationFrame)
       gridChromeAnimationFrame = 0
     }
-    drawGridChromeCanvas(nextMode)
+    drawGridChromeCanvas(nextMode, normalizedSource, nextSources)
   }
 
   function connectGridChromeResizeObserver(): void {
@@ -505,7 +600,7 @@ export function useDataGridStageChromeCanvas(
     if (!gridChromeResizeObserver) {
       gridChromeResizeObserver = new ResizeObserver(() => {
         syncBodyViewportMetrics()
-        scheduleGridChromeRedraw()
+        scheduleGridChromeRedraw("full", "resize-observer")
       })
     }
     gridChromeResizeObserver.disconnect()

@@ -1509,6 +1509,14 @@ const {
   pinnedBottomRowMetrics,
   chromeColumnsRevision,
   chromeRowsRevision,
+  rowMetricsSignature,
+  pinnedBottomRowMetricsSignature,
+  rowBandsSignature,
+  pinnedBottomRowBandsSignature,
+  leftChromeColumnsSignature,
+  centerChromeColumnsSignature,
+  rightChromeColumnsSignature,
+  headerPivotGroupsSignature,
   resolveVisibleRowMetricsFromDom,
 } = useDataGridStageChromeModel({
   mode,
@@ -1740,11 +1748,37 @@ gridChromeSyncers.value = {
   disconnectGridChromeResizeObserver,
 }
 
+const chromeColumnsRedrawSignature = computed(() => [
+  leftChromeColumnsSignature.value,
+  centerChromeColumnsSignature.value,
+  rightChromeColumnsSignature.value,
+  headerPivotGroupsSignature.value,
+].join("||"))
+
+const chromeBodyRowsRedrawSignature = computed(() => [
+  rowMetricsSignature.value,
+  rowBandsSignature.value,
+].join("||"))
+
+const chromePinnedBottomRowsRedrawSignature = computed(() => [
+  pinnedBottomRowMetricsSignature.value,
+  pinnedBottomRowBandsSignature.value,
+].join("||"))
+
+let lastChromeColumnsRedrawSignature = chromeColumnsRedrawSignature.value
+let lastChromeBodyRowsRedrawSignature = chromeBodyRowsRedrawSignature.value
+let lastChromePinnedBottomRowsRedrawSignature = chromePinnedBottomRowsRedrawSignature.value
+
 watch(
   chromeColumnsRevision,
   () => {
+    const nextSignature = chromeColumnsRedrawSignature.value
+    if (nextSignature === lastChromeColumnsRedrawSignature) {
+      return
+    }
+    lastChromeColumnsRedrawSignature = nextSignature
     syncBodyViewportMetrics()
-    scheduleGridChromeRedraw()
+    scheduleGridChromeRedraw("full", "chrome-columns-revision")
   },
 )
 
@@ -1753,7 +1787,7 @@ watch(
   () => {
     void nextTick(() => {
       syncBodyViewportMetrics()
-      scheduleGridChromeRedraw()
+      scheduleGridChromeRedraw("full", "chrome-signature")
     })
   },
 )
@@ -1761,9 +1795,22 @@ watch(
 watch(
   chromeRowsRevision,
   () => {
-    // Auto-height row metrics can shift during scroll; redraw chrome, but avoid
-    // re-reading shell/header layout metrics that belong to resize/column sync.
-    scheduleGridChromeRedraw()
+    const nextBodySignature = chromeBodyRowsRedrawSignature.value
+    const nextPinnedBottomSignature = chromePinnedBottomRowsRedrawSignature.value
+    const bodyRowsChanged = nextBodySignature !== lastChromeBodyRowsRedrawSignature
+    const pinnedBottomRowsChanged = nextPinnedBottomSignature !== lastChromePinnedBottomRowsRedrawSignature
+    lastChromeBodyRowsRedrawSignature = nextBodySignature
+    lastChromePinnedBottomRowsRedrawSignature = nextPinnedBottomSignature
+    if (pinnedBottomRowsChanged) {
+      scheduleGridChromeRedraw(
+        "full",
+        bodyRowsChanged ? "chrome-rows-revision" : "chrome-pinned-bottom-rows-revision",
+      )
+      return
+    }
+    if (bodyRowsChanged) {
+      scheduleGridChromeRedraw("body-scroll", "chrome-body-rows-revision")
+    }
   },
 )
 

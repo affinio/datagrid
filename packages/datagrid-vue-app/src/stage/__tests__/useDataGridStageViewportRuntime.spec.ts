@@ -579,7 +579,7 @@ describe("useDataGridStageViewportRuntime", () => {
     frameCallbacks.forEach(callback => callback(performance.now()))
 
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll", "scroll-frame")
 
     harness.unmount()
   })
@@ -632,7 +632,7 @@ describe("useDataGridStageViewportRuntime", () => {
 
     frameCallbacks.forEach(callback => callback(performance.now()))
 
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll")
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("center-scroll", "scroll-frame")
 
     harness.unmount()
   })
@@ -681,7 +681,7 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(32)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).toHaveBeenCalledTimes(1)
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full")
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("full", "scroll-frame")
 
     harness.unmount()
   })
@@ -787,7 +787,7 @@ describe("useDataGridStageViewportRuntime", () => {
     expect(harness.runtime.bodyViewportScrollTop.value).toBe(144)
     expect(harness.runtime.bodyViewportScrollLeft.value).toBe(0)
     expect(harness.syncers.syncPinnedBottomViewportScrollLeft).not.toHaveBeenCalled()
-    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("body-scroll")
+    expect(harness.syncers.flushGridChromeRedraw).toHaveBeenCalledWith("body-scroll", "scroll-frame")
 
     harness.unmount()
   })

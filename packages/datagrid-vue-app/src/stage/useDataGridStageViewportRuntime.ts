@@ -13,13 +13,14 @@ import {
 
 const DATA_GRID_SCROLL_IDLE_MS = 120
 type GridChromeRedrawMode = "full" | "center-scroll" | "body-scroll"
+type GridChromeRedrawSource = string
 
 export interface UseDataGridStageViewportRuntimeSyncers {
   syncBodyViewportMetrics: () => void
   syncPinnedBottomViewportMetrics: () => void
   syncPinnedBottomViewportScrollLeft: () => void
-  scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
-  flushGridChromeRedraw: (mode?: GridChromeRedrawMode) => void
+  scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
+  flushGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
   connectGridChromeResizeObserver: () => void
   disconnectGridChromeResizeObserver: () => void
 }
@@ -319,7 +320,7 @@ export function useDataGridStageViewportRuntime(
         options.gridChromeSyncers.value.syncPinnedBottomViewportScrollLeft()
       }
       if (chromeRedrawMode) {
-        options.gridChromeSyncers.value.flushGridChromeRedraw(chromeRedrawMode)
+        options.gridChromeSyncers.value.flushGridChromeRedraw(chromeRedrawMode, "scroll-frame")
       }
       if (perfTraceEnabled) {
         recordDataGridPerfSample({
@@ -418,7 +419,7 @@ export function useDataGridStageViewportRuntime(
     const syncers = options.gridChromeSyncers.value
     syncers.syncBodyViewportMetrics()
     syncers.connectGridChromeResizeObserver()
-    syncers.scheduleGridChromeRedraw()
+    syncers.scheduleGridChromeRedraw("full", "body-viewport-ref")
   }
 
   function captureSharedVerticalViewportRef(value: Element | ComponentPublicInstance | null): void {
@@ -533,7 +534,7 @@ export function useDataGridStageViewportRuntime(
     syncScrollOwnerRefs()
     options.gridChromeSyncers.value.syncBodyViewportMetrics()
     options.gridChromeSyncers.value.connectGridChromeResizeObserver()
-    options.gridChromeSyncers.value.scheduleGridChromeRedraw()
+    options.gridChromeSyncers.value.scheduleGridChromeRedraw("full", "stage-mounted")
     if (typeof window !== "undefined") {
       window.addEventListener("resize", scheduleBodyViewportMetricsSync)
     }

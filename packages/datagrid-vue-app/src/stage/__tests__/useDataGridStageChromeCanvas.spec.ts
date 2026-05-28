@@ -123,6 +123,41 @@ describe("useDataGridStageChromeCanvas", () => {
     })
   })
 
+  it("records merged chrome redraw sources when a pending full redraw is flushed", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined)
+    const api = createChromeCanvasApi(true)
+
+    api.scheduleGridChromeRedraw("full", "chrome-rows-revision")
+    api.flushGridChromeRedraw("body-scroll", "scroll-frame")
+
+    expect(frameCallbacks).toHaveLength(1)
+    expect(cancelAnimationFrameSpy).toHaveBeenCalledWith(1)
+    expect(resolveDataGridPerfStore()?.latest("chromeRedrawRequest")).toMatchObject({
+      scope: "chromeRedrawRequest",
+      phase: "flush",
+      source: "scroll-frame",
+      requestedMode: "body-scroll",
+      previousPendingMode: "full",
+      mergedMode: "full",
+      hadPendingFrame: 1,
+      pendingSources: "chrome-rows-revision|scroll-frame",
+    })
+    expect(resolveDataGridPerfStore()?.latest("chromeDraw")).toMatchObject({
+      scope: "chromeDraw",
+      redrawMode: "full",
+      redrawSource: "scroll-frame",
+      redrawSources: "chrome-rows-revision|scroll-frame",
+    })
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+  })
+
   it("reuses cached chrome styles for body scroll redraws", () => {
     const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({
       getPropertyValue: () => "",
