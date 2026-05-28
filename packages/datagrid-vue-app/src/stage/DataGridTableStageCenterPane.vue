@@ -463,6 +463,17 @@ const renderedColumnSlots = computed(() => renderedCenterColumns.value.map(colum
   column,
   columnIndex: renderApi.value.columnIndexByKey(column.key),
 })))
+const renderedColumnWindowSignature = computed(() => (
+  renderedCenterColumns.value.map(column => String(column.key)).join("|")
+))
+
+function resolveRowWindowSignature(rows: readonly DataGridTableStageBodyRow[]): string {
+  const rowCount = rows.length
+  const firstRow = rows[0]
+  const lastRow = rowCount > 0 ? rows[rowCount - 1] : null
+  return `${rowCount}:${String(firstRow?.rowId ?? "none")}:${String(lastRow?.rowId ?? "none")}`
+}
+
 const gridAriaRowCount = computed(() => Math.max(
   0,
   selection.value.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length,
@@ -662,8 +673,8 @@ watch(
     }
     return [
       displayRows.value.length,
-      displayRows.value.map(row => String(row.rowId)).join("|"),
-      columns.value.renderedColumns.map(column => String(column.key)).join("|"),
+      resolveRowWindowSignature(displayRows.value),
+      renderedColumnWindowSignature.value,
       String(props.runtimeRevision ?? "none"),
       String(props.bodyRowsRevision ?? "none"),
       String(topSpacerHeight.value),

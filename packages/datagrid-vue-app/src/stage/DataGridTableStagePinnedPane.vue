@@ -273,6 +273,20 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
 
+function resolveRowWindowSignature(rows: readonly DataGridTableStageBodyRow[]): string {
+  const rowCount = rows.length
+  const firstRow = rows[0]
+  const lastRow = rowCount > 0 ? rows[rowCount - 1] : null
+  return `${rowCount}:${String(firstRow?.rowId ?? "none")}:${String(lastRow?.rowId ?? "none")}`
+}
+
+function resolveColumnWindowSignature(columns: DataGridTableStagePinnedPaneProps["columns"]): string {
+  const columnCount = columns.length
+  const firstColumn = columns[0]
+  const lastColumn = columnCount > 0 ? columns[columnCount - 1] : null
+  return `${columnCount}:${String(firstColumn?.key ?? "none")}:${String(lastColumn?.key ?? "none")}`
+}
+
 let activeTouchRowResizeId: number | null = null
 
 function readTouchAt(touches: TouchList, identifier: number): Touch | null {
@@ -371,8 +385,8 @@ watch(
     return [
       props.pane.side,
       props.pane.displayRows.length,
-      props.pane.displayRows.map(row => String(row.rowId)).join("|"),
-      props.pane.columns.map(column => String(column.key)).join("|"),
+      resolveRowWindowSignature(props.pane.displayRows),
+      resolveColumnWindowSignature(props.pane.columns),
       String(props.pane.showIndexColumn),
       String(props.pane.topSpacerHeight ?? viewport.value.topSpacerHeight),
       String(props.pane.bottomSpacerHeight ?? viewport.value.bottomSpacerHeight),
