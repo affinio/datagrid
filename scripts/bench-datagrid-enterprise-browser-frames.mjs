@@ -1164,11 +1164,15 @@ async function runScenario(page, sessionIndex, scenario) {
         .map((rowElement, index) => {
           const cells = Array.from(rowElement.querySelectorAll(".grid-cell"))
             .filter(candidate => candidate instanceof HTMLElement)
+          const rowId = cells
+            .map(cell => cell.getAttribute("data-row-id"))
+            .find(Boolean)
           const rowIndex = cells
             .map(cell => cell.getAttribute("data-row-index"))
             .find(Boolean)
           const rowKey = rowElement.getAttribute("data-row-key")
             ?? rowElement.getAttribute("data-row-id")
+            ?? rowId
             ?? rowIndex
             ?? String(index)
           const amountCell = cells.find(cell => cell.getAttribute("data-column-key") === "amount")
@@ -2035,8 +2039,14 @@ async function runScenario(page, sessionIndex, scenario) {
           preferredButtonFound: preferredSortButton instanceof HTMLElement,
           fallbackButtonFound: sortButton instanceof HTMLElement,
           menuPanelFound: false,
+          sortAscActionFound: false,
+          sortAscActionDisabled: null,
           sortDescActionFound: false,
           sortDescActionDisabled: null,
+          targetDirection: null,
+          targetActionFound: false,
+          targetActionDisabled: null,
+          targetWasAlreadyActive: null,
         }
       }
       if (sortButton instanceof HTMLElement) {
@@ -2067,12 +2077,28 @@ async function runScenario(page, sessionIndex, scenario) {
           }
           captureSortRenderedSnapshot("sort:after-menu-open")
         }
-        const sortAction = document.querySelector('[data-datagrid-column-menu-action="sort-desc"]')
+        const sortAscAction = document.querySelector('[data-datagrid-column-menu-action="sort-asc"]')
+        const sortDescAction = document.querySelector('[data-datagrid-column-menu-action="sort-desc"]')
+        const isSortActionActive = action => action instanceof HTMLElement
+          && action.querySelector(".datagrid-column-menu__state") instanceof HTMLElement
+        const sortDescActive = isSortActionActive(sortDescAction)
+        const targetSortDirection = sortDescActive ? "asc" : "desc"
+        const sortAction = targetSortDirection === "asc" ? sortAscAction : sortDescAction
         if (sortDiagnostics) {
-          sortDiagnostics.sortAction.sortDescActionFound = sortAction instanceof HTMLElement
-          sortDiagnostics.sortAction.sortDescActionDisabled = sortAction instanceof HTMLElement
+          sortDiagnostics.sortAction.sortAscActionFound = sortAscAction instanceof HTMLElement
+          sortDiagnostics.sortAction.sortAscActionDisabled = sortAscAction instanceof HTMLElement
+            ? sortAscAction.hasAttribute("disabled")
+            : null
+          sortDiagnostics.sortAction.sortDescActionFound = sortDescAction instanceof HTMLElement
+          sortDiagnostics.sortAction.sortDescActionDisabled = sortDescAction instanceof HTMLElement
+            ? sortDescAction.hasAttribute("disabled")
+            : null
+          sortDiagnostics.sortAction.targetDirection = targetSortDirection
+          sortDiagnostics.sortAction.targetActionFound = sortAction instanceof HTMLElement
+          sortDiagnostics.sortAction.targetActionDisabled = sortAction instanceof HTMLElement
             ? sortAction.hasAttribute("disabled")
             : null
+          sortDiagnostics.sortAction.targetWasAlreadyActive = isSortActionActive(sortAction)
         }
         if (sortAction instanceof HTMLElement && !sortAction.hasAttribute("disabled")) {
           const beforeSortSignature = buildVisibleRowsSignature()
@@ -2084,7 +2110,7 @@ async function runScenario(page, sessionIndex, scenario) {
           const sortClickEndMs = performance.now()
           const afterClickSignature = buildVisibleRowsSignature()
           interactions.sortApplied = true
-          captureTelemetry("sort:desc")
+          captureTelemetry(`sort:${targetSortDirection}`)
           let finalSignature = afterClickSignature
           let changedSynchronously = afterClickSignature !== beforeSortSignature
           let changedAfterFrame = false
@@ -2124,10 +2150,10 @@ async function runScenario(page, sessionIndex, scenario) {
               summary: summarizeFrameWindow(menuClickStartMs, sortPaintEndMs),
               sortApplySummary: summarizeFrameWindow(sortClickStartMs, sortPaintEndMs),
             }
-            captureSortRenderedSnapshot("sort:after-desc")
+            captureSortRenderedSnapshot(`sort:after-${targetSortDirection}`)
           }
         } else {
-          interactions.skipped.push("sort:no-sort-desc-action")
+          interactions.skipped.push("sort:no-target-sort-action")
         }
       } else {
         interactions.skipped.push("sort:no-column-menu-button")
