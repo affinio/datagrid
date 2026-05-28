@@ -371,6 +371,52 @@ describe("useDataGridStageCellRendering", () => {
     expect(groupRenderer).toHaveBeenCalledTimes(1)
   })
 
+  it("resolves editor mode without reading row values", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const accessor = vi.fn(() => "planned")
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
+      createColumn({
+        key: "stage",
+        column: {
+          cellType: "select",
+          accessor,
+        },
+      }),
+    ])
+    const rows = ref<Readonly<DataGridTableStageRowsSection<Record<string, unknown>>>>({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({
+      startInlineEdit: vi.fn(),
+      updateEditingCellValue: vi.fn(),
+      commitInlineEdit: vi.fn(),
+      cancelInlineEdit: vi.fn(),
+      handleEditorKeydown: vi.fn(),
+      handleEditorBlur: vi.fn(),
+    } as unknown as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: () => "planned",
+      readDisplayCell: () => "Planned",
+    })
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => true,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: key => visibleColumns.value.findIndex(column => column.key === key),
+    })
+
+    expect(renderApi.resolveCellEditorMode(createRow({ data: { stage: "planned" } }), visibleColumns.value[0]!)).toBe("select")
+    expect(accessor).not.toHaveBeenCalled()
+  })
+
   it("falls back to display values when custom renderers throw", () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([

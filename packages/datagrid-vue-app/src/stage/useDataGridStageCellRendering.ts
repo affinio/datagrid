@@ -1,9 +1,9 @@
 import { ref, type Ref, type VNodeChild } from "vue"
 import {
-  buildDataGridCellRenderModel,
   getDataGridRowRenderMeta,
   invokeDataGridCellInteraction,
   resolveDataGridCellInteraction,
+  resolveDataGridCellType,
   type DataGridCellInteractionInvocationTrigger,
 } from "@affino/datagrid-vue"
 import type {
@@ -171,14 +171,10 @@ export function useDataGridStageCellRendering(
   const asyncSelectOptionCache = ref(new Map<string, readonly DataGridTableStageSelectEditorOption[]>())
 
   function resolveCellEditorMode(
-    row: DataGridTableRow<Record<string, unknown>>,
+    _row: DataGridTableRow<Record<string, unknown>>,
     column: DataGridTableStageBodyColumn,
   ): "none" | "text" | "select" | "date" | "datetime" {
-    return buildDataGridCellRenderModel({
-      column: column.column,
-      row: row.kind !== "group" ? row.data : undefined,
-      editable: true,
-    }).editorMode
+    return resolveDataGridCellType({ column: column.column }).editorMode ?? "text"
   }
 
   function buildSelectEditorCacheKey(row: DataGridTableRow<Record<string, unknown>>, columnKey: string): string | null {
