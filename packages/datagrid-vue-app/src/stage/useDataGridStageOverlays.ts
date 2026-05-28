@@ -170,8 +170,12 @@ function normalizeBodyOverlayMetric<TMetrics extends DataGridStageOverlayMetrics
 
 function normalizeBodyPinnedPaneSeamMetricsList<TMetrics extends DataGridStageOverlayMetricsSource>(
   metricsList: readonly TMetrics[],
-  scrollTop: number,
+  resolveScrollTop: () => number,
 ): TMetrics[] {
+  if (metricsList.length === 0) {
+    return []
+  }
+  const scrollTop = resolveScrollTop()
   const topOffset = Math.max(0, Number.isFinite(scrollTop) ? scrollTop : 0)
   if (topOffset <= 0) {
     return [...metricsList]
@@ -184,12 +188,12 @@ function normalizeBodyPinnedPaneSeamMetricsList<TMetrics extends DataGridStageOv
 
 function normalizeBodyPinnedPaneSeamMetric<TMetrics extends DataGridStageOverlayMetricsSource>(
   metrics: TMetrics | null,
-  scrollTop: number,
+  resolveScrollTop: () => number,
 ): TMetrics | null {
   if (!metrics) {
     return null
   }
-  return normalizeBodyPinnedPaneSeamMetricsList([metrics], scrollTop)[0] ?? null
+  return normalizeBodyPinnedPaneSeamMetricsList([metrics], resolveScrollTop)[0] ?? null
 }
 
 function recordOverlayComputeSample(
@@ -264,11 +268,22 @@ export function useDataGridStageOverlays(
       : options.rangeMovePreviewRange.value
   })
 
-  const visibleSelectionBounds = computed(() => resolveVisibleBounds(
-    options.displayRows.value.length,
-    options.visibleColumns.value.length,
-    options.isCellSelectedSafe,
+  const hasSelectionOverlaySource = computed(() => (
+    options.isAdditiveSelection.value
+      ? options.selectionRange.value != null
+      : options.selectionRanges.value.length > 0
   ))
+
+  const visibleSelectionBounds = computed(() => {
+    if (!hasSelectionOverlaySource.value) {
+      return null
+    }
+    return resolveVisibleBounds(
+      options.displayRows.value.length,
+      options.visibleColumns.value.length,
+      options.isCellSelectedSafe,
+    )
+  })
 
   const visibleFillPreviewBounds = computed(() => resolveVisibleBounds(
     options.displayRows.value.length,
@@ -359,13 +374,13 @@ export function useDataGridStageOverlays(
     normalizeBodyOverlayMetric(visibleMovePreviewOverlayMetrics.value, bodyOverlayRowOrigin.value)
   ))
   const bodyPinnedPaneSeamSelectionOverlayMetricsList = computed(() => (
-    normalizeBodyPinnedPaneSeamMetricsList(visibleSelectionOverlayMetricsList.value, options.bodyViewportScrollTop.value)
+    normalizeBodyPinnedPaneSeamMetricsList(visibleSelectionOverlayMetricsList.value, () => options.bodyViewportScrollTop.value)
   ))
   const bodyPinnedPaneSeamFillPreviewOverlayMetrics = computed(() => (
-    normalizeBodyPinnedPaneSeamMetric(visibleFillPreviewOverlayMetrics.value, options.bodyViewportScrollTop.value)
+    normalizeBodyPinnedPaneSeamMetric(visibleFillPreviewOverlayMetrics.value, () => options.bodyViewportScrollTop.value)
   ))
   const bodyPinnedPaneSeamMovePreviewOverlayMetrics = computed(() => (
-    normalizeBodyPinnedPaneSeamMetric(visibleMovePreviewOverlayMetrics.value, options.bodyViewportScrollTop.value)
+    normalizeBodyPinnedPaneSeamMetric(visibleMovePreviewOverlayMetrics.value, () => options.bodyViewportScrollTop.value)
   ))
 
   const leftSelectionOverlaySegments = computedOverlaySegments(options, "selection", "body", "left", () => buildPaneOverlaySegmentsForMetricsList(
@@ -638,7 +653,7 @@ export function useDataGridStageOverlays(
     return {
       overlay,
       body: normalizeBodyOverlayMetricsList(body, bodyOverlayRowOrigin.value),
-      bodyPinnedPaneSeam: normalizeBodyPinnedPaneSeamMetricsList(body, options.bodyViewportScrollTop.value),
+      bodyPinnedPaneSeam: normalizeBodyPinnedPaneSeamMetricsList(body, () => options.bodyViewportScrollTop.value),
       pinnedBottom: resolveOverlayMetricsList(
         overlay.ranges,
         options.resolvePinnedBottomVisibleRangeBounds,
