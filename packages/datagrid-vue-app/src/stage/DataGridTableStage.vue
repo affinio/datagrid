@@ -1845,12 +1845,15 @@ const focusRuntime = useDataGridStageFocusRuntime({
 })
 
 const remountFocusSignature = computed(() => {
+  if (!gridFocusOwned.value) {
+    return "unfocused"
+  }
   const firstRow = displayRows.value[0]
   const lastRow = displayRows.value[displayRows.value.length - 1]
   const firstColumn = visibleColumns.value[0]
   const lastColumn = visibleColumns.value[visibleColumns.value.length - 1]
   return [
-    gridFocusOwned.value ? "focused" : "unfocused",
+    "focused",
     viewport.value.viewportRowStart,
     displayRows.value.length,
     firstRow ? String(firstRow.rowId) : "",
