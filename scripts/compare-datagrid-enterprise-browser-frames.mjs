@@ -58,6 +58,8 @@ const metrics = [
   { label: "writeLongTaskTotal", path: ["scrollFrameAttribution", "longTaskTotalMsP95"] },
   { label: "writeMutationsP95", path: ["scrollFrameAttribution", "mutationCallbackCountP95"] },
   { label: "writeCellMutationsP95", path: ["scrollFrameAttribution", "cellTargetChildListMutationCountP95"] },
+  { label: "writeCellTextMutationsP95", path: ["scrollFrameAttribution", "cellTargetCharacterDataMutationCountP95"] },
+  { label: "writeDescTextMutationsP95", path: ["scrollFrameAttribution", "cellDescendantTargetCharacterDataMutationCountP95"] },
   { label: "rowMount/write", path: ["churnTelemetry", "rowMountsPerScrollWrite"] },
   { label: "cellMount/write", path: ["churnTelemetry", "cellMountsPerScrollWrite"] },
   { label: "blankViewport", path: ["virtualizationTelemetry", "blankViewportCount"] },

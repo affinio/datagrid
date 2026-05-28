@@ -112,6 +112,10 @@ const BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS",
   false,
 )
+const BENCH_BROWSER_OBSERVE_CHARACTER_DATA = boolEnv(
+  "BENCH_BROWSER_OBSERVE_CHARACTER_DATA",
+  false,
+)
 const BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS = boolEnv(
   "BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS",
   false,
@@ -800,6 +804,10 @@ async function runScenario(page, sessionIndex, scenario) {
       callbackCount: 0,
       childListMutations: 0,
       attributesMutations: 0,
+      characterDataMutations: 0,
+      cellTargetCharacterDataMutations: 0,
+      directCellTargetCharacterDataMutations: 0,
+      cellDescendantTargetCharacterDataMutations: 0,
       addedNodes: 0,
       removedNodes: 0,
       addedRowNodes: 0,
@@ -1181,6 +1189,10 @@ async function runScenario(page, sessionIndex, scenario) {
         total.callbackCount += Number(record?.callbackCount ?? 0)
         total.childListMutations += Number(record?.childListMutations ?? 0)
         total.attributesMutations += Number(record?.attributesMutations ?? 0)
+        total.characterDataMutations += Number(record?.characterDataMutations ?? 0)
+        total.cellTargetCharacterDataMutations += Number(record?.cellTargetCharacterDataMutations ?? 0)
+        total.directCellTargetCharacterDataMutations += Number(record?.directCellTargetCharacterDataMutations ?? 0)
+        total.cellDescendantTargetCharacterDataMutations += Number(record?.cellDescendantTargetCharacterDataMutations ?? 0)
         total.addedNodes += Number(record?.addedNodes ?? 0)
         total.removedNodes += Number(record?.removedNodes ?? 0)
         total.addedRowNodes += Number(record?.addedRowNodes ?? 0)
@@ -1231,6 +1243,10 @@ async function runScenario(page, sessionIndex, scenario) {
           cellTargetChildListMutationCount: mutationTotals.cellTargetChildListMutations,
           directCellTargetChildListMutationCount: mutationTotals.directCellTargetChildListMutations,
           cellDescendantTargetChildListMutationCount: mutationTotals.cellDescendantTargetChildListMutations,
+          characterDataMutationCount: mutationTotals.characterDataMutations,
+          cellTargetCharacterDataMutationCount: mutationTotals.cellTargetCharacterDataMutations,
+          directCellTargetCharacterDataMutationCount: mutationTotals.directCellTargetCharacterDataMutations,
+          cellDescendantTargetCharacterDataMutationCount: mutationTotals.cellDescendantTargetCharacterDataMutations,
           addedRows: mutationTotals.addedRowNodes,
           removedRows: mutationTotals.removedRowNodes,
           addedCells: mutationTotals.addedCellNodes,
@@ -1261,6 +1277,10 @@ async function runScenario(page, sessionIndex, scenario) {
         cellTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.cellTargetChildListMutationCount)),
         directCellTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.directCellTargetChildListMutationCount)),
         cellDescendantTargetChildListMutationCount: summarizeNumbers(writes.map(write => write.cellDescendantTargetChildListMutationCount)),
+        characterDataMutationCount: summarizeNumbers(writes.map(write => write.characterDataMutationCount)),
+        cellTargetCharacterDataMutationCount: summarizeNumbers(writes.map(write => write.cellTargetCharacterDataMutationCount)),
+        directCellTargetCharacterDataMutationCount: summarizeNumbers(writes.map(write => write.directCellTargetCharacterDataMutationCount)),
+        cellDescendantTargetCharacterDataMutationCount: summarizeNumbers(writes.map(write => write.cellDescendantTargetCharacterDataMutationCount)),
         addedRows: summarizeNumbers(writes.map(write => write.addedRows)),
         removedRows: summarizeNumbers(writes.map(write => write.removedRows)),
         addedCells: summarizeNumbers(writes.map(write => write.addedCells)),
@@ -1514,6 +1534,10 @@ async function runScenario(page, sessionIndex, scenario) {
         callbackCount: 1,
         childListMutations: 0,
         attributesMutations: 0,
+        characterDataMutations: 0,
+        cellTargetCharacterDataMutations: 0,
+        directCellTargetCharacterDataMutations: 0,
+        cellDescendantTargetCharacterDataMutations: 0,
         addedNodes: 0,
         removedNodes: 0,
         addedRowNodes: 0,
@@ -1565,6 +1589,22 @@ async function runScenario(page, sessionIndex, scenario) {
         } else if (mutation.type === "attributes") {
           summary.attributesMutations += 1
           batch.attributesMutations += 1
+        } else if (mutation.type === "characterData") {
+          const targetClass = classifyMutationTarget(mutation.target)
+          summary.characterDataMutations += 1
+          batch.characterDataMutations += 1
+          if (targetClass.inCell) {
+            summary.cellTargetCharacterDataMutations += 1
+            batch.cellTargetCharacterDataMutations += 1
+          }
+          if (targetClass.directCell) {
+            summary.directCellTargetCharacterDataMutations += 1
+            batch.directCellTargetCharacterDataMutations += 1
+          }
+          if (targetClass.inCell && !targetClass.directCell) {
+            summary.cellDescendantTargetCharacterDataMutations += 1
+            batch.cellDescendantTargetCharacterDataMutations += 1
+          }
         }
       }
       return batch
@@ -1588,6 +1628,7 @@ async function runScenario(page, sessionIndex, scenario) {
       mutationObserver.observe((sortDiagnostics || editDiagnostics) && document.body ? document.body : viewport, {
         childList: true,
         subtree: true,
+        characterData: input.observeCharacterData === true,
       })
     }
     const handleMeasuredScrollEvent = () => {
@@ -2524,6 +2565,10 @@ async function runScenario(page, sessionIndex, scenario) {
         scrollWriteCount: verticalDiagnostics.scrollWrites.length,
         mutationCallbackCount: verticalDiagnostics.mutationSummary.callbackCount,
         childListMutationCount: verticalDiagnostics.mutationSummary.childListMutations,
+        characterDataMutationCount: verticalDiagnostics.mutationSummary.characterDataMutations,
+        cellTargetCharacterDataMutationCount: verticalDiagnostics.mutationSummary.cellTargetCharacterDataMutations,
+        directCellTargetCharacterDataMutationCount: verticalDiagnostics.mutationSummary.directCellTargetCharacterDataMutations,
+        cellDescendantTargetCharacterDataMutationCount: verticalDiagnostics.mutationSummary.cellDescendantTargetCharacterDataMutations,
         rowMountCount: verticalDiagnostics.mutationSummary.addedRowNodes,
         rowUnmountCount: verticalDiagnostics.mutationSummary.removedRowNodes,
         cellMountCount: verticalDiagnostics.mutationSummary.addedCellNodes,
@@ -2809,6 +2854,7 @@ async function runScenario(page, sessionIndex, scenario) {
     enableFilter: BENCH_ENABLE_FILTER,
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
+    observeCharacterData: BENCH_BROWSER_OBSERVE_CHARACTER_DATA,
     sessionIndex,
   })
 
@@ -2894,6 +2940,10 @@ function aggregateScrollFrameAttribution(diagnosticsRuns) {
     cellTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellTargetChildListMutationCount?.p95)),
     directCellTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.directCellTargetChildListMutationCount?.p95)),
     cellDescendantTargetChildListMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellDescendantTargetChildListMutationCount?.p95)),
+    characterDataMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.characterDataMutationCount?.p95)),
+    cellTargetCharacterDataMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellTargetCharacterDataMutationCount?.p95)),
+    directCellTargetCharacterDataMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.directCellTargetCharacterDataMutationCount?.p95)),
+    cellDescendantTargetCharacterDataMutationCountP95: stats(telemetryRuns.map(telemetry => telemetry.cellDescendantTargetCharacterDataMutationCount?.p95)),
     addedRowsP95: stats(telemetryRuns.map(telemetry => telemetry.addedRows?.p95)),
     removedRowsP95: stats(telemetryRuns.map(telemetry => telemetry.removedRows?.p95)),
     addedCellsP95: stats(telemetryRuns.map(telemetry => telemetry.addedCells?.p95)),
@@ -3691,6 +3741,7 @@ const summary = {
     a11yFailOnWarnings: BENCH_A11Y_FAIL_ON_WARNINGS,
     browserResourceFailOnWarnings: BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS,
     interactionFrameFailOnWarnings: BENCH_INTERACTION_FRAME_FAIL_ON_WARNINGS,
+    observeCharacterDataMutations: BENCH_BROWSER_OBSERVE_CHARACTER_DATA,
     interactionBudgets: {
       previewP95Ms: PERF_BUDGET_MAX_INTERACTION_PREVIEW_P95_MS,
       autoScrollP95Ms: PERF_BUDGET_MAX_INTERACTION_AUTOSCROLL_P95_MS,

@@ -547,6 +547,7 @@ registerTokenCheck(
     "scrollFrameAttribution",
     "slowWritePct",
     "writeFrameMaxP95",
+    "writeCellTextMutationsP95",
   ],
   "Enterprise browser frame comparator includes scroll-frame attribution metrics for before/after review",
 )
