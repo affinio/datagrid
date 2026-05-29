@@ -144,7 +144,7 @@ const tasks = [
   {
     id: "datasource-churn",
     command: "node",
-    args: ["./scripts/bench-datagrid-datasource-churn.mjs"],
+    args: ["--expose-gc", "./scripts/bench-datagrid-datasource-churn.mjs"],
     retries: 1,
     samples: mode === "ci" ? 3 : 1,
     jsonPath: `${outputDir}/bench-datagrid-datasource-churn.json`,

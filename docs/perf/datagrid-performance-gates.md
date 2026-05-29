@@ -177,6 +177,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `PERF_BUDGET_MIN_STALE_RETAINED_ROWS=1900`
   - `PERF_BUDGET_PLACEHOLDER_FAIL_ON_WARNINGS=true`
   - Pull request, abort, dropped-pull, row-cache eviction, placeholder exposure, viewport availability, cache-hit/miss, pull-duration, retry, and stale-retention budgets are hard failures in `bench:datagrid:datasource-churn:assert`.
+  - Heap drift is sampled with `--expose-gc` and post-GC ticks so the gate tracks retained datasource churn instead of nursery collection timing.
   - Server datasource browser artifacts include placeholder exposure, viewport data availability, blank viewport events, viewport cache hit/miss ratio, and pull duration. `bench:datagrid:enterprise:virtualization:assert` hard-fails the server placeholder subset with `PERF_BUDGET_MAX_SERVER_PLACEHOLDER_EXPOSURE_MS=450`, `PERF_BUDGET_MAX_SERVER_VIEWPORT_AVAILABILITY_MS=550`, `PERF_BUDGET_MAX_SERVER_BLANK_VIEWPORT_EVENTS=4`, `PERF_BUDGET_MAX_SERVER_CACHE_MISS_ROWS=600`, and `PERF_BUDGET_MAX_SERVER_PULL_DURATION_MS=550`.
   - The controlled-latency placeholder scenario covers cold scroll, warm scroll, direction reversal, jump scroll, and retry after a failed pull.
 - Derived cache (stable cache + invalidation pressure):

@@ -175,6 +175,28 @@ function diagnosticNumber(diagnostics, key) {
   return Number.isFinite(value) ? value : 0
 }
 
+function sleepTick() {
+  return new Promise(resolveTick => {
+    setTimeout(resolveTick, 0)
+  })
+}
+
+async function sampleHeapUsed() {
+  const maybeGc = globalThis.gc
+  let minHeap = Number.POSITIVE_INFINITY
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    if (typeof maybeGc === "function") {
+      maybeGc()
+    }
+    await sleepTick()
+    const used = process.memoryUsage().heapUsed
+    if (used < minHeap) {
+      minHeap = used
+    }
+  }
+  return Number.isFinite(minHeap) ? minHeap : process.memoryUsage().heapUsed
+}
+
 function countLoadedRows(rows) {
   return rows.filter(row => row && row.__placeholder !== true).length
 }
@@ -569,13 +591,14 @@ for (const seed of BENCH_SEEDS) {
     await runPlaceholderExposureScenario(createDataSourceBackedRowModel, warmupSeed)
   }
 
-  const heapStart = process.memoryUsage().heapUsed
+  const heapStart = await sampleHeapUsed()
   const startedAt = performance.now()
   const scrollBurst = await runScrollBurstScenario(createDataSourceBackedRowModel, seed)
   const filterBurst = await runFilterBurstScenario(createDataSourceBackedRowModel, seed)
   const placeholderExposure = await runPlaceholderExposureScenario(createDataSourceBackedRowModel, seed)
   const elapsed = performance.now() - startedAt
-  const heapDeltaMb = (process.memoryUsage().heapUsed - heapStart) / (1024 * 1024)
+  const heapEnd = await sampleHeapUsed()
+  const heapDeltaMb = (heapEnd - heapStart) / (1024 * 1024)
 
   runResults.push({
     seed,
