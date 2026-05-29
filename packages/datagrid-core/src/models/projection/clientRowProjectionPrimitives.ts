@@ -144,6 +144,7 @@ function normalizeColumnFilterEntries(
     key: string
     kind: "valueSet"
     valueTokenSet: Set<string>
+    stringValueSet: Set<string> | null
   } | {
     key: string
     kind: "predicate"
@@ -159,6 +160,7 @@ function normalizeColumnFilterEntries(
     key: string
     kind: "valueSet"
     valueTokenSet: Set<string>
+    stringValueSet: Set<string> | null
   } | {
     key: string
     kind: "predicate"
@@ -173,6 +175,7 @@ function normalizeColumnFilterEntries(
     if (rawEntry.kind === "valueSet") {
       const seen = new Set<string>()
       const valueTokens: string[] = []
+      const stringValues: string[] = []
       for (const rawToken of rawEntry.tokens ?? []) {
         const token = normalizeValueSetTokenForLookup(String(rawToken ?? ""))
         if (!token || seen.has(token)) {
@@ -180,11 +183,19 @@ function normalizeColumnFilterEntries(
         }
         seen.add(token)
         valueTokens.push(token)
+        if (token.startsWith("string:")) {
+          stringValues.push(token.slice("string:".length))
+        }
       }
       if (valueTokens.length === 0) {
         continue
       }
-      normalized.push({ key, kind: "valueSet", valueTokenSet: new Set(valueTokens) })
+      normalized.push({
+        key,
+        kind: "valueSet",
+        valueTokenSet: new Set(valueTokens),
+        stringValueSet: stringValues.length > 0 ? new Set(stringValues) : null,
+      })
       continue
     }
 
@@ -282,6 +293,30 @@ function normalizeQuickFilterTokens(query: string): readonly string[] {
   return query.split(/\s+/).filter(token => token.length > 0)
 }
 
+function matchesValueSetFilter(
+  candidate: unknown,
+  filterEntry: {
+    valueTokenSet: Set<string>
+    stringValueSet: Set<string> | null
+  },
+): boolean {
+  if (candidate == null) {
+    return filterEntry.valueTokenSet.has("null")
+  }
+  if (typeof candidate === "string") {
+    return filterEntry.stringValueSet?.has(candidate.toLowerCase()) === true
+  }
+  if (candidate instanceof Date) {
+    return filterEntry.valueTokenSet.has(`date:${candidate.toISOString()}`)
+  }
+  const kind = typeof candidate
+  if (kind === "number" || kind === "boolean" || kind === "bigint" || kind === "undefined") {
+    return filterEntry.valueTokenSet.has(`${kind}:${String(candidate)}`)
+  }
+  const candidateToken = normalizeStyleValueTokenForLookup(serializeColumnValueToToken(candidate))
+  return filterEntry.valueTokenSet.has(candidateToken)
+}
+
 export function createFilterPredicate<T>(
   filterModel: DataGridFilterSnapshot | null,
   options: DataGridFilterPredicateOptions<T> = {},
@@ -369,11 +404,30 @@ export function createFilterPredicate<T>(
   const quickFilterTokens = quickFilterMode === "tokens"
     ? normalizeQuickFilterTokens(quickFilterQuery)
     : []
+  const hasQuickFilter = quickFilterQuery.length > 0
+
+  const readCellValue = (rowNode: DataGridRowNode<T>, columnKey: string, field?: string): unknown => {
+    if (typeof readFilterCell === "function") {
+      const resolved = readFilterCell(rowNode, columnKey)
+      if (typeof resolved !== "undefined") {
+        return resolved
+      }
+    }
+    return readField(rowNode, columnKey, field)
+  }
+
+  const readCellStyleValue = (
+    rowNode: DataGridRowNode<T>,
+    columnKey: string,
+    styleKey: string,
+  ): unknown => {
+    if (typeof readFilterCellStyle !== "function") {
+      return undefined
+    }
+    return readFilterCellStyle(rowNode, columnKey, styleKey)
+  }
 
   const rowMatchesQuickFilter = (rowNode: DataGridRowNode<T>): boolean => {
-    if (quickFilterQuery.length === 0) {
-      return true
-    }
     if (quickFilterColumnKeys.length === 0) {
       return false
     }
@@ -382,12 +436,7 @@ export function createFilterPredicate<T>(
     }
     const values: string[] = []
     for (const columnKey of quickFilterColumnKeys) {
-      const value = resolveDataGridFilterCellValue({
-        rowNode,
-        columnKey,
-        readFilterCell,
-        readField,
-      })
+      const value = readCellValue(rowNode, columnKey)
       if (value == null) {
         continue
       }
@@ -407,15 +456,9 @@ export function createFilterPredicate<T>(
 
   return (rowNode: DataGridRowNode<T>) => {
     for (const [key, filterEntry] of columnFilters) {
-      const candidate = resolveDataGridFilterCellValue({
-        rowNode,
-        columnKey: key,
-        readFilterCell,
-        readField,
-      })
+      const candidate = readCellValue(rowNode, key)
       if (filterEntry.kind === "valueSet") {
-        const candidateToken = normalizeStyleValueTokenForLookup(serializeColumnValueToToken(candidate))
-        if (!filterEntry.valueTokenSet?.has(candidateToken)) {
+        if (!matchesValueSetFilter(candidate, filterEntry)) {
           return false
         }
         continue
@@ -426,12 +469,7 @@ export function createFilterPredicate<T>(
     }
 
     for (const filterEntry of columnStyleFilters) {
-      const candidate = resolveDataGridFilterCellStyleValue({
-        rowNode,
-        columnKey: filterEntry.key,
-        styleKey: filterEntry.styleKey,
-        readFilterCellStyle,
-      })
+      const candidate = readCellStyleValue(rowNode, filterEntry.key, filterEntry.styleKey)
       const candidateToken = normalizeStyleValueTokenForLookup(serializeColumnValueToToken(candidate))
       if (!filterEntry.valueTokenSet.has(candidateToken)) {
         return false
@@ -440,19 +478,13 @@ export function createFilterPredicate<T>(
 
     if (advancedExpression) {
       if (!evaluateDataGridAdvancedFilterExpression(advancedExpression, condition => {
-        return resolveDataGridFilterCellValue({
-          rowNode,
-          columnKey: condition.key,
-          field: condition.field,
-          readFilterCell,
-          readField,
-        })
+        return readCellValue(rowNode, condition.key, condition.field)
       })) {
         return false
       }
     }
 
-    return rowMatchesQuickFilter(rowNode)
+    return !hasQuickFilter || rowMatchesQuickFilter(rowNode)
   }
 }
 

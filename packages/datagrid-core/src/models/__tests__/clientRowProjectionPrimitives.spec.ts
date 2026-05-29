@@ -87,6 +87,19 @@ describe("client row projection quick filter predicate", () => {
     expect(rows.filter(predicate).map(row => row.rowId)).toEqual(["r3"])
   })
 
+  it("matches value-set filters across primitive token types", () => {
+    const filterModel: DataGridFilterSnapshot = {
+      columnFilters: {
+        service: { kind: "valueSet", tokens: ["string:API"] },
+        latencyMs: { kind: "valueSet", tokens: ["number:200"] },
+      },
+      advancedFilters: {},
+    }
+    const predicate = createFilterPredicate(filterModel)
+
+    expect(rows.filter(predicate).map(row => row.rowId)).toEqual(["r1"])
+  })
+
   it("matches all quick filter tokens across searchable columns", () => {
     const predicate = createFilterPredicate(createFilterModel({
       query: "api platform",
