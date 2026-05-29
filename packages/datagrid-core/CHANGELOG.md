@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0
+
+### Minor Changes
+
+- ## Summary
+
+  Improved DataGrid performance across client projection hot paths, tree filter/sort workloads, datasource churn heap measurement, and benchmark regression coverage.
+
+  ## User impact
+
+  Large client-side and server-backed grids spend less time in filter/sort and churn-heavy paths, with more stable benchmark telemetry for release gates.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource churn, tree workload, benchmark report, and perf-contract gates passed
+
 ### Patch Changes
 
 - ## Summary

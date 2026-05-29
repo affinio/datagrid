@@ -5,7 +5,7 @@
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "exportCount": 3,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -17,7 +17,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 107,
-          "declarationHash": "2f156c446eece93ccf9dfac8bd636715f1505642c91b2a800793836dcc20fc76",
+          "declarationHash": "5d2ba9e839e6d7db15cd384861f2a1bc8f02f5eb50666c9c4138dfb113bc639f",
           "entrypointExportCount": 1,
           "entrypointExports": [
             "export * from \"./public.js\""
@@ -225,7 +225,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowDerivedCacheRuntime.d.ts",
-              "hash": "cc4092b47b41d318936408a01ef94639706f1607792867e228f908bc9310f6a1"
+              "hash": "56e952d513e46b627bed7f5bcb70a993b98b087a8cadbe56fb6254e13f6f680b"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowFlatIdentityProjectionRefreshRuntime.d.ts",
@@ -233,7 +233,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionBasicStages.d.ts",
-              "hash": "448a3f01f68a4f97c63ab8b65481794e5f968094fdee7a5b9ad5d2595b529d3a"
+              "hash": "0e58412afcbb73145149fcb6621875d0ac763a049aea0a9833a053489dae3225"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionComputeStage.d.ts",
@@ -245,7 +245,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionHandlersRuntime.d.ts",
-              "hash": "a18c956f0c06a540a62df854662a34420ec75af77c35db6f176a83bb0f52da8f"
+              "hash": "23b115354b3359fe69589ec115ea573e8fc772cf3ddd5d013295d505460c2421"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionOrchestrator.d.ts",
@@ -460,7 +460,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/advanced.d.ts",
           "declarationExists": true,
           "declarationFileCount": 111,
-          "declarationHash": "892369d060994b2f3b06f3b84297776438e059151a208f102f06ff659a2de014",
+          "declarationHash": "7511f8c4c7f3744743f1d6e5a1343e046be1e33e82d32e3812606beae1c245a4",
           "entrypointExportCount": 12,
           "entrypointExports": [
             "export type { DataGridAdvancedEventMap, DataGridAdvancedEventName, DataGridEventAffectedRange, DataGridEventEnvelope, DataGridEventPhase, DataGridEventSource, DataGridEventTier, DataGridInternalEventMap, DataGridInternalEventName, DataGridStableEventMap, DataGridStableEventName, } from \"./protocol/index.js\"",
@@ -671,7 +671,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowDerivedCacheRuntime.d.ts",
-              "hash": "cc4092b47b41d318936408a01ef94639706f1607792867e228f908bc9310f6a1"
+              "hash": "56e952d513e46b627bed7f5bcb70a993b98b087a8cadbe56fb6254e13f6f680b"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowFlatIdentityProjectionRefreshRuntime.d.ts",
@@ -679,7 +679,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionBasicStages.d.ts",
-              "hash": "448a3f01f68a4f97c63ab8b65481794e5f968094fdee7a5b9ad5d2595b529d3a"
+              "hash": "0e58412afcbb73145149fcb6621875d0ac763a049aea0a9833a053489dae3225"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionComputeStage.d.ts",
@@ -691,7 +691,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionHandlersRuntime.d.ts",
-              "hash": "a18c956f0c06a540a62df854662a34420ec75af77c35db6f176a83bb0f52da8f"
+              "hash": "23b115354b3359fe69589ec115ea573e8fc772cf3ddd5d013295d505460c2421"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/projection/clientRowProjectionOrchestrator.d.ts",
@@ -968,7 +968,7 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "exportCount": 13,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -1952,7 +1952,7 @@
           "declarationFile": "packages/datagrid-vue/dist/app/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 114,
-          "declarationHash": "28eeb7203552acc08a1e4d769fc1f453e69b0516c28cadced3b8f11080555190",
+          "declarationHash": "6448614afdcbf46af0259ae4a5967faf72ca018750ad5dbd42d76a7223468de6",
           "entrypointExportCount": 24,
           "entrypointExports": [
             "export type { DataGridAppAdvancedFilterClauseDraft, DataGridAppAdvancedFilterClauseJoin, DataGridAppAdvancedFilterClausePatch, DataGridAppAdvancedFilterColumnOption, } from \"./advancedFilterPanel.types\"",
@@ -2115,7 +2115,7 @@
             },
             {
               "path": "packages/datagrid-vue/dist/app/useDataGridAppViewport.d.ts",
-              "hash": "2474ccf9f7de99ef84970fb53ed8960bb5a822ea2ce4b94ed9e6429507af10d3"
+              "hash": "f108deb4ff6c85cc0e0d5b57e1d4e2f8b5162401c74a05b2188af440913da30f"
             },
             {
               "path": "packages/datagrid-vue/dist/app/useDataGridAppViewportLifecycle.d.ts",
@@ -2590,7 +2590,7 @@
     {
       "packageName": "@affino/datagrid-vue-app",
       "packageDir": "packages/datagrid-vue-app",
-      "version": "0.4.6",
+      "version": "0.5.0",
       "exportCount": 7,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -2601,9 +2601,9 @@
           "types": "./dist/index.d.ts",
           "declarationFile": "packages/datagrid-vue-app/dist/index.d.ts",
           "declarationExists": true,
-          "declarationFileCount": 31,
-          "declarationHash": "84fada1974d5330f3160715cbaa25269f94d45958c24757d5d6d04cefe5cf06d",
-          "entrypointExportCount": 36,
+          "declarationFileCount": 32,
+          "declarationHash": "33b9510e923343b5d2934d843fc12a7d64721fa463d79e3f1192c38d574f5bce",
+          "entrypointExportCount": 37,
           "entrypointExports": [
             "export declare const DataGrid: import(\"./DataGrid\").DataGridComponent",
             "export type { DataGridAdvancedFilterLabels, DataGridAdvancedFilterOperatorLabelKey, DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, DataGridResolvedAdvancedFilterLabels, } from \"./config/dataGridAdvancedFilter\"",
@@ -2626,6 +2626,7 @@
             "export type { DataGridLayoutMode, DataGridResolvedLayoutOptions, } from \"./config/dataGridLayout\"",
             "export type { DataGridPlaceholderRowCreateParams, DataGridPlaceholderRowFactory, DataGridPlaceholderRowMaterializeTrigger, DataGridPlaceholderRowsOptions, DataGridPlaceholderRowsPolicy, DataGridPlaceholderRowsProp, } from \"./config/dataGridPlaceholderRows\"",
             "export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from \"./config/dataGridQuickFilter\"",
+            "export type { DataGridResolvedRowSelectionOptions, DataGridRowSelectionOptions, DataGridRowSelectionProp, } from \"./config/dataGridRowSelection\"",
             "export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from \"./config/dataGridRowReorder\"",
             "export type { DataGridSavedViewSnapshot, DataGridSavedViewStorageLike, } from \"./config/dataGridSavedView\"",
             "export type { DataGridStatePersistenceOptions, DataGridStatePersistenceProp, DataGridStatePersistenceStorage, } from \"./config/dataGridStatePersistence\"",
@@ -2700,6 +2701,10 @@
               "hash": "9e543da3aab7480d9827b4e66ba11037ff8df634b7820f96fab188c84a23fc8b"
             },
             {
+              "path": "packages/datagrid-vue-app/dist/config/dataGridRowSelection.d.ts",
+              "hash": "662c88295edaf9cf6b53a4e128ec77021ab74c9bcd35416c24055e61a5b6e6c0"
+            },
+            {
               "path": "packages/datagrid-vue-app/dist/config/dataGridSavedView.d.ts",
               "hash": "a3a35879c6464ae60bc385482ac7769efa6ba95e98a0485f66580551a6135936"
             },
@@ -2713,7 +2718,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/DataGrid.d.ts",
-              "hash": "95ea3cbb6a91841ca3489931e1900513b315d65c546ce0af779ba4b06dd014bb"
+              "hash": "e97a75efa6e4cc1cd08af39ca96ba9c93a984f008a0f35c48e854e8f81af64e0"
             },
             {
               "path": "packages/datagrid-vue-app/dist/dataGridEditability.d.ts",
@@ -2741,7 +2746,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/index.d.ts",
-              "hash": "3061f5d5320284bf04b12eba36993b5896ab29e49c3cc2a069160c76314920c9"
+              "hash": "d42b70b510ff8ebac5311112f1b7f87919201158cbbfade286961f2d21af82e7"
             },
             {
               "path": "packages/datagrid-vue-app/dist/overlays/dataGridColumnMenu.d.ts",
@@ -2753,7 +2758,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
+              "hash": "9b4f7f8972278b398e89fa7f2e1c74e995724c4f2c9db844f41f0c6636103b7a"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/useDataGridTableStageHistory.d.ts",
@@ -2776,7 +2781,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/advanced-filter.d.ts",
           "declarationExists": true,
           "declarationFileCount": 3,
-          "declarationHash": "350dd7853af93795d87df210f56e98adbe3d011c1bc31e656e367783173e111a",
+          "declarationHash": "4f35b56ee4deb1c60d158e025983ae0b8e83cadcac28f1edd4901d2e00c4c103",
           "entrypointExportCount": 2,
           "entrypointExports": [
             "export type { DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, } from \"./config/dataGridAdvancedFilter\"",
@@ -2793,7 +2798,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/overlays/DataGridAdvancedFilterPopover.vue.d.ts",
-              "hash": "9e1f15546329820c17dda61a285b8ec10d2631ac03f04215d9b6f8f119fb795b"
+              "hash": "cbf73b8d6d4effff678e71be19f75d8125b756bccef35f10ce2a003f796a9921"
             }
           ]
         },
@@ -2860,7 +2865,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/gantt.d.ts",
           "declarationExists": true,
           "declarationFileCount": 8,
-          "declarationHash": "e3d96851df216fedfe29f26ceca8437ec18ebe41d00c1751fa665dc014b20644",
+          "declarationHash": "49c80555bce38269e8cf59441861c5074c89f279fc964b6cf40452cb8e727095",
           "entrypointExportCount": 3,
           "entrypointExports": [
             "export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\"",
@@ -2894,7 +2899,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
+              "hash": "9b4f7f8972278b398e89fa7f2e1c74e995724c4f2c9db844f41f0c6636103b7a"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStageContext.d.ts",
@@ -2909,7 +2914,7 @@
           "declarationFile": "packages/datagrid-vue-app/dist/internal.d.ts",
           "declarationExists": true,
           "declarationFileCount": 37,
-          "declarationHash": "993f0d632e4a6ea59e8aaa44c417dd6e8c3be4db27bdb470bf4610afbd60dea4",
+          "declarationHash": "5f8f68b524945d7fcb6dcdae1e35ddcf95135446fef766e703d6510f792542b5",
           "entrypointExportCount": 28,
           "entrypointExports": [
             "export type { AnyDataGridTableStageContext, DataGridTableStageContextSource, DataGridTableStageSectionKey, } from \"./stage/dataGridTableStageContext\"",
@@ -3028,7 +3033,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/host/DataGridDefaultRenderer.d.ts",
-              "hash": "323228cb86f1bccab38fde8c1417619f82c5c5a2ca3427121fbb481832b4cc59"
+              "hash": "0aa266ece4b49bc5f11472f1c4ebb25f47469d4223634a196bb630aaf3657b02"
             },
             {
               "path": "packages/datagrid-vue-app/dist/host/DataGridModuleHost.d.ts",
@@ -3040,7 +3045,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/overlays/DataGridAdvancedFilterPopover.vue.d.ts",
-              "hash": "9e1f15546329820c17dda61a285b8ec10d2631ac03f04215d9b6f8f119fb795b"
+              "hash": "cbf73b8d6d4effff678e71be19f75d8125b756bccef35f10ce2a003f796a9921"
             },
             {
               "path": "packages/datagrid-vue-app/dist/overlays/dataGridColumnMenu.d.ts",
@@ -3060,7 +3065,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/dataGridTableStage.types.d.ts",
-              "hash": "829d104dd603599c306b8a1e19aa0d6b0a96598fb624709a27a868160e655472"
+              "hash": "9b4f7f8972278b398e89fa7f2e1c74e995724c4f2c9db844f41f0c6636103b7a"
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/DataGridTableStage.vue.d.ts",
@@ -3080,7 +3085,7 @@
             },
             {
               "path": "packages/datagrid-vue-app/dist/stage/useDataGridTableStageRuntime.d.ts",
-              "hash": "4ccd4406c9dae71626dd504979ffde7f4d17991c1b7aac18dc61ce306b35a727"
+              "hash": "d0c6c588b3bc3c82dfc0ef08ca56fa3d96ac002e592248841a2d2f3f11e6d52e"
             },
             {
               "path": "packages/datagrid-vue-app/dist/types/bivariance.d.ts",
@@ -3125,7 +3130,7 @@
     {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "exportCount": 1,
       "missingDeclarations": [],
       "unclassifiedExports": [],

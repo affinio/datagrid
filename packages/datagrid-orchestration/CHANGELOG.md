@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0
+
+### Minor Changes
+
+- ## Summary
+
+  Released the performance-focused DataGrid runtime stabilization work alongside the shared interaction/orchestration refinements used by the Vue packages.
+
+  ## User impact
+
+  Hosts built on orchestration primitives get more predictable high-churn grid behavior without changing public interaction APIs.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource churn, tree workload, benchmark report, and perf-contract gates passed
+
 ### Patch Changes
 
 - ## Summary

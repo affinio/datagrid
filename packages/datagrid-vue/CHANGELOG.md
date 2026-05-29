@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0
+
+### Minor Changes
+
+- ## Summary
+
+  Improved DataGrid Vue runtime performance around scroll/render synchronization, projection refreshes, selection overlays, and server-backed operation paths.
+
+  ## User impact
+
+  Vue DataGrid consumers should see smoother large-grid interaction and more stable behavior under high-frequency scrolling, filtering, and server datasource churn.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource churn, tree workload, benchmark report, and perf-contract gates passed
+
 ### Patch Changes
 
 - ## Summary

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0
+
+### Minor Changes
+
+- ## Summary
+
+  Improved app-stage DataGrid performance for large viewport scrolling, pinned-pane synchronization, overlay/chrome rendering, quick-filter/data-source flows, and benchmark telemetry.
+
+  ## User impact
+
+  App-level DataGrid integrations get smoother large-grid UX and more predictable server-backed workflows without migration work.
+
+  ## Migration
+  - No migration required.
+
+  ## Validation
+  - datasource churn, tree workload, benchmark report, and perf-contract gates passed
+
 ### Patch Changes
 
 - ## Summary
