@@ -1,4 +1,4 @@
-import type { ChartMargin, ChartRect, ChartSize } from "./types"
+import type { ChartMargin, ChartRect, ChartSize } from "./types.js"
 
 export const DEFAULT_CHART_MARGIN: ChartMargin = {
   top: 16,

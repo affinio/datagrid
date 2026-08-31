@@ -1,12 +1,12 @@
-import { getChartNumberValue, getChartStringValue } from "./data"
-import { resolveChartPlotArea } from "./layout"
+import { getChartNumberValue, getChartStringValue } from "./data.js"
+import { resolveChartPlotArea } from "./layout.js"
 import type {
   ChartDatum,
   ChartPoint,
   PieChartGeometry,
   PieChartGeometryOptions,
   PieChartSliceGeometry,
-} from "./types"
+} from "./types.js"
 
 interface ValidPieDatum {
   key: string

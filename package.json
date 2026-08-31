@@ -35,6 +35,8 @@
     "test:e2e:datagrid:tree": "playwright test e2e/sandbox-tree-pivot.spec.ts --grep tree",
     "test:e2e:datagrid:parity": "playwright test e2e/sandbox-grid.spec.ts e2e/sandbox-interactions.spec.ts e2e/sandbox-tree-pivot.spec.ts",
     "codemod:datagrid:public-protocol": "node ./scripts/codemods/datagrid-public-protocol-codemod.mjs",
+    "bench:charts:time-series": "pnpm --filter @affino/charts-core build && node --expose-gc ./scripts/bench-charts-time-series.mjs",
+    "test:charts:package-consumer": "node ./scripts/test-charts-package-consumer.mjs",
     "bench:datagrid:interactions": "node ./scripts/bench-datagrid-interactions.mjs",
     "bench:datagrid:interactions:assert": "BENCH_OUTPUT_JSON=artifacts/performance/bench-datagrid-interactions.assert.json BENCH_SEEDS=1337,7331,2026 PERF_BUDGET_TOTAL_MS=1500 PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5 PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8 PERF_BUDGET_MAX_FILL_APPLY_P95_MS=8 PERF_BUDGET_MAX_FILL_APPLY_P99_MS=14 PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P95_MS=1 PERF_BUDGET_MAX_MULTI_RANGE_LOOKUP_P99_MS=2 PERF_BUDGET_MAX_SELECTION_OVERLAY_P95_MS=4 PERF_BUDGET_MAX_SELECTION_OVERLAY_P99_MS=8 PERF_BUDGET_MAX_VARIANCE_PCT=25 PERF_BUDGET_MAX_HEAP_DELTA_MB=80 node ./scripts/bench-datagrid-interactions.mjs",
     "bench:datagrid:browser-frames": "node ./scripts/bench-datagrid-browser-frames.mjs",

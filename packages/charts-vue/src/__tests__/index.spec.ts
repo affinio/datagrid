@@ -9,6 +9,7 @@ import {
   AffinoMetricCard,
   AffinoPieChart,
   AffinoScatterChart,
+  AffinoTimeSeriesChart,
   createChartsVue,
 } from "../index"
 import type {
@@ -19,6 +20,7 @@ import type {
   AffinoLineChartPointEvent,
   AffinoPieChartSliceEvent,
   AffinoScatterChartPointEvent,
+  AffinoTimeSeriesTooltip,
   ChartAnchorRect,
   ChartInteractionPoint,
   ChartLegendItem,
@@ -50,6 +52,7 @@ describe("@affino/charts-vue", () => {
       color?: string
       value?: string | number
       disabled?: boolean
+      hidden?: boolean
     }>()
     expectTypeOf<ChartLegendOrientation>().toEqualTypeOf<"horizontal" | "vertical">()
     expectTypeOf<AffinoChartInteractionPayload<BarChartBarGeometry>>().toEqualTypeOf<{
@@ -138,6 +141,7 @@ describe("@affino/charts-vue", () => {
       "AffinoMetricCard",
       "AffinoPieChart",
       "AffinoScatterChart",
+      "AffinoTimeSeriesChart",
       "createChartsVue",
     ])
     expect(entrypoint.AffinoAreaChart).toBe(AffinoAreaChart)
@@ -149,6 +153,7 @@ describe("@affino/charts-vue", () => {
     expect(entrypoint.AffinoMetricCard).toBe(AffinoMetricCard)
     expect(entrypoint.AffinoPieChart).toBe(AffinoPieChart)
     expect(entrypoint.AffinoScatterChart).toBe(AffinoScatterChart)
+    expect(entrypoint.AffinoTimeSeriesChart).toBe(AffinoTimeSeriesChart)
     expect(entrypoint.createChartsVue).toBe(createChartsVue)
   })
 })

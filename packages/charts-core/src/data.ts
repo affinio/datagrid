@@ -1,4 +1,4 @@
-import type { ChartDatum } from "./types"
+import type { ChartDatum } from "./types.js"
 
 export function isFiniteChartNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)

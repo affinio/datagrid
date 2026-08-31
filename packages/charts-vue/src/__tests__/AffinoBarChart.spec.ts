@@ -91,4 +91,18 @@ describe("AffinoBarChart", () => {
 
     expect(wrapper.find(".affino-bar-chart__grid").exists()).toBe(false)
   })
+
+  it("renders signed bars around a zero baseline", () => {
+    const wrapper = mountChart({ rows: [{ category: "Gain", value: 0.1 }, { category: "Loss", value: -0.05 }] })
+    expect(wrapper.findAll(".affino-bar-chart__bar--positive")).toHaveLength(1)
+    expect(wrapper.findAll(".affino-bar-chart__bar--negative")).toHaveLength(1)
+    expect(wrapper.find(".affino-bar-chart__zero-line").exists()).toBe(true)
+  })
+
+  it("renders a native formatted tooltip on hover", async () => {
+    const wrapper = mountChart({ valueFormatter: (value) => (value * 100).toFixed(1) + "%" })
+    await wrapper.find(".affino-bar-chart__bar").trigger("mouseenter")
+    expect(wrapper.find(".affino-bar-chart__tooltip").text()).toContain("Alpha")
+    expect(wrapper.find(".affino-bar-chart__tooltip").text()).toContain("1000.0%")
+  })
 })

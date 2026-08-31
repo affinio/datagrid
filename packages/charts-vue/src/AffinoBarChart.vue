@@ -1,4 +1,5 @@
 <template>
+  <div class="affino-bar-chart-container">
   <AffinoChartFrame
     class="affino-bar-chart"
     :width="width"
@@ -58,11 +59,22 @@
       </text>
     </g>
 
+    <line
+      v-if="showAxes"
+      class="affino-bar-chart__zero-line"
+      :x1="geometry.plotArea.x"
+      :x2="geometry.plotArea.x + geometry.plotArea.width"
+      :y1="zeroY"
+      :y2="zeroY"
+      aria-hidden="true"
+    />
+
     <g class="affino-bar-chart__bars">
       <rect
         v-for="bar in geometry.bars"
         :key="bar.key"
         class="affino-bar-chart__bar"
+        :class="bar.value < 0 ? 'affino-bar-chart__bar--negative' : 'affino-bar-chart__bar--positive'"
         :data-bar-index="bar.index"
         :data-bar-category="bar.category"
         :x="bar.x"
@@ -73,8 +85,10 @@
         role="button"
         :aria-label="`${bar.category}: ${bar.value}`"
         @click="emitBarEvent('bar-click', bar, $event)"
-        @mouseenter="emitBarEvent('bar-hover', bar, $event)"
-        @mouseleave="emitBarEvent('bar-leave', bar, $event)"
+        @mouseenter="showBarTooltip(bar); emitBarEvent('bar-hover', bar, $event)"
+        @mouseleave="clearBarTooltip(); emitBarEvent('bar-leave', bar, $event)"
+        @focus="showBarTooltip(bar)"
+        @blur="clearBarTooltip"
         @keydown.enter.prevent="emitBarEvent('bar-click', bar, $event)"
         @keydown.space.prevent="emitBarEvent('bar-click', bar, $event)"
       />
@@ -84,10 +98,15 @@
       {{ emptyText }}
     </template>
   </AffinoChartFrame>
+  <div v-if="tooltip && activeBar !== null" class="affino-bar-chart__tooltip" :style="tooltipStyle" role="status">
+    <span>{{ formatCategory(activeBar.category) }}</span>
+    <strong>{{ formatTick(activeBar.value) }}</strong>
+  </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, ref } from "vue"
 import { createBarChartGeometry, createChartLinearScale } from "@affino/charts-core"
 import type { BarChartBarGeometry, ChartDatum, ChartMargin } from "@affino/charts-core"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
@@ -112,17 +131,23 @@ const props = withDefaults(defineProps<{
   showAxes?: boolean
   showGrid?: boolean
   emptyText?: string
+  tooltip?: boolean
+  valueFormatter?: (value: number) => string
+  categoryFormatter?: (category: string) => string
 }>(), {
   width: DEFAULT_WIDTH,
   height: DEFAULT_HEIGHT,
   showAxes: true,
   showGrid: true,
   emptyText: "No data",
+  tooltip: true,
 })
 
 const emit = defineEmits<{
   (event: "bar-click" | "bar-hover" | "bar-leave", payload: AffinoBarChartBarEvent): void
 }>()
+
+const activeBar = ref<BarChartBarGeometry | null>(null)
 
 const geometry = computed(() => createBarChartGeometry({
   rows: props.rows,
@@ -141,6 +166,7 @@ const yScale = computed(() => createChartLinearScale(geometry.value.valueDomain,
   min: geometry.value.plotArea.y + geometry.value.plotArea.height,
   max: geometry.value.plotArea.y,
 }))
+const zeroY = computed(() => yScale.value.scale(0))
 const yTicks = computed(() => {
   const { min, max } = geometry.value.valueDomain
   if (Y_TICK_COUNT <= 1 || min === max) {
@@ -165,12 +191,20 @@ const visibleAxisBars = computed(() => {
   const stride = Math.ceil(bars.length / MAX_X_AXIS_LABELS)
   return bars.filter((bar) => bar.index % stride === 0)
 })
+const tooltipStyle = computed(() => ({
+  left: `${activeBar.value === null ? 50 : Math.min(92, Math.max(8, (activeBar.value.x + activeBar.value.width / 2) / props.width * 100))}%`,
+}))
 
 function formatTick(value: number): string {
+  if (props.valueFormatter !== undefined) return props.valueFormatter(value)
   if (Number.isInteger(value)) {
     return String(value)
   }
   return Number.parseFloat(value.toFixed(2)).toString()
+}
+
+function formatCategory(category: string): string {
+  return props.categoryFormatter?.(category) ?? category
 }
 
 function emitBarEvent(
@@ -178,6 +212,8 @@ function emitBarEvent(
   bar: BarChartBarGeometry,
   event: MouseEvent | KeyboardEvent,
 ): void {
+  if (eventName === "bar-hover") activeBar.value = bar
+  if (eventName === "bar-leave") activeBar.value = null
   const anchor = createChartInteractionAnchor(event.currentTarget instanceof Element ? event.currentTarget : null)
 
   emit(eventName, {
@@ -190,9 +226,22 @@ function emitBarEvent(
     ...anchor,
   })
 }
+
+function showBarTooltip(bar: BarChartBarGeometry): void {
+  activeBar.value = bar
+}
+
+function clearBarTooltip(): void {
+  activeBar.value = null
+}
 </script>
 
 <style scoped>
+.affino-bar-chart-container {
+  position: relative;
+  width: 100%;
+}
+
 .affino-bar-chart {
   --affino-chart-bar-fill: var(--affino-chart-series-1, #2563eb);
   --affino-chart-bar-hover-fill: #1d4ed8;
@@ -214,7 +263,8 @@ function emitBarEvent(
   stroke-width: 2;
 }
 
-.affino-bar-chart__axis-line {
+.affino-bar-chart__axis-line,
+.affino-bar-chart__zero-line {
   stroke: var(--affino-chart-axis);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
@@ -230,5 +280,34 @@ function emitBarEvent(
 .affino-bar-chart__y-label {
   fill: var(--affino-chart-muted-text);
   font-size: 11px;
+}
+
+.affino-bar-chart__bar--positive {
+  fill: var(--affino-chart-positive, #16a34a);
+}
+
+.affino-bar-chart__bar--negative {
+  fill: var(--affino-chart-negative, #dc2626);
+}
+
+.affino-bar-chart__tooltip {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  padding: 8px 10px;
+  color: var(--affino-chart-tooltip-text, #ffffff);
+  background: var(--affino-chart-tooltip-background, #101828);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / 18%);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.affino-bar-chart__tooltip strong {
+  font-variant-numeric: tabular-nums;
 }
 </style>

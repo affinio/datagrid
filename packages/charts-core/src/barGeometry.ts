@@ -1,17 +1,17 @@
-import { createChartBandScale } from "./bandScale"
-import { getChartNumberValue, getChartStringValue } from "./data"
-import { resolveChartPlotArea } from "./layout"
+import { createChartBandScale } from "./bandScale.js"
+import { getChartNumberValue, getChartStringValue } from "./data.js"
+import { resolveChartPlotArea } from "./layout.js"
 import {
   computeChartNumericDomain,
   createChartLinearScale,
-} from "./scale"
+} from "./scale.js"
 import type {
   BarChartBarGeometry,
   BarChartGeometry,
   BarChartGeometryOptions,
   ChartDatum,
   ChartNumericDomain,
-} from "./types"
+} from "./types.js"
 
 interface ValidBarDatum {
   key: string

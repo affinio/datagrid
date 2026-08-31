@@ -1,16 +1,16 @@
-import { getChartNumberValue } from "./data"
-import { resolveChartPlotArea } from "./layout"
+import { getChartNumberValue } from "./data.js"
+import { resolveChartPlotArea } from "./layout.js"
 import {
   computeChartNumericDomain,
   createChartLinearScale,
-} from "./scale"
+} from "./scale.js"
 import type {
   ChartDatum,
   ChartNumericDomain,
   LineChartGeometry,
   LineChartGeometryOptions,
   LineChartPointGeometry,
-} from "./types"
+} from "./types.js"
 
 interface ValidLineDatum {
   key: string

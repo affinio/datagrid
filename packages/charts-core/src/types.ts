@@ -284,3 +284,91 @@ export interface HistogramGeometry {
   countDomain: ChartNumericDomain
   totalCount: number
 }
+
+export interface TimeSeriesPoint {
+  /** UTC Unix timestamp in milliseconds. */
+  time: number
+  value: number
+}
+
+export type TimeSeriesType = "line" | "area"
+
+export interface TimeSeriesPresentation {
+  type?: TimeSeriesType
+  color?: string
+  lineWidth?: number
+  areaOpacity?: number
+}
+
+export interface TimeSeries {
+  id: string
+  label: string
+  data: readonly TimeSeriesPoint[]
+  visible?: boolean
+  presentation?: TimeSeriesPresentation
+}
+
+export interface TimeAxisOptions {
+  /** Time-series timestamps are always interpreted as UTC instants. */
+  timeZone?: "UTC"
+  locale?: string
+  targetTickCount?: number
+  minTickSpacing?: number
+  format?: (timestamp: number) => string
+  formatOptions?: Intl.DateTimeFormatOptions
+}
+
+export interface TimeSeriesYAxisOptions {
+  includeZero?: boolean
+  format?: (value: number) => string
+}
+
+export interface TimeSeriesChartOptions {
+  series: readonly TimeSeries[]
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  timeAxis?: TimeAxisOptions
+  yAxis?: TimeSeriesYAxisOptions
+}
+
+export interface TimeSeriesGeometryPoint extends TimeSeriesPoint {
+  index: number
+  x: number
+  y: number
+}
+
+export interface TimeSeriesGeometry {
+  id: string
+  label: string
+  presentation: Required<Pick<TimeSeriesPresentation, "type" | "lineWidth" | "areaOpacity">> & Pick<TimeSeriesPresentation, "color">
+  points: TimeSeriesGeometryPoint[]
+  linePath: string
+  areaPath: string
+}
+
+export interface TimeAxisTick {
+  value: number
+  x: number
+  label: string
+}
+
+export interface TimeSeriesChartGeometry {
+  series: TimeSeriesGeometry[]
+  plotArea: ChartRect
+  timeDomain: ChartNumericDomain
+  valueDomain: ChartNumericDomain
+  timeTicks: TimeAxisTick[]
+  zeroY: number | null
+}
+
+export interface TimeSeriesTooltipEntry {
+  seriesId: string
+  seriesLabel: string
+  value: number
+  color?: string
+}
+
+export interface TimeSeriesTooltip {
+  timestamp: number
+  entries: TimeSeriesTooltipEntry[]
+}

@@ -6,6 +6,8 @@ import type {
   LineChartPointGeometry,
   PieChartSliceGeometry,
   ScatterChartPointGeometry,
+  TimeSeries,
+  TimeSeriesTooltip,
 } from "@affino/charts-core"
 
 export type ChartThemeVariant = "default" | "muted" | "success" | "warning" | "danger"
@@ -28,6 +30,7 @@ export interface ChartLegendItem {
   color?: string
   value?: string | number
   disabled?: boolean
+  hidden?: boolean
 }
 
 export type ChartLegendOrientation = "horizontal" | "vertical"
@@ -83,4 +86,49 @@ export interface AffinoHistogramBinEvent extends AffinoChartInteractionPayload<H
   max: number
   count: number
   values: number[]
+}
+
+export type ChartThemeMode = "light" | "dark"
+
+export interface ChartTheme {
+  mode?: ChartThemeMode
+  background?: string
+  surface?: string
+  border?: string
+  grid?: string
+  axis?: string
+  text?: string
+  mutedText?: string
+  tooltipBackground?: string
+  tooltipText?: string
+  seriesColors?: readonly string[]
+  positive?: string
+  negative?: string
+  focus?: string
+  crosshair?: string
+}
+
+export interface TimeSeriesTooltipOptions {
+  enabled?: boolean
+  formatTime?: (timestamp: number) => string
+  formatValue?: (value: number, series: TimeSeries) => string
+}
+
+export interface AffinoTimeSeriesTooltipEntry {
+  seriesId: string
+  seriesLabel: string
+  value: number
+  formattedValue: string
+  color?: string
+}
+
+export interface AffinoTimeSeriesTooltip extends Omit<TimeSeriesTooltip, "entries"> {
+  formattedTimestamp: string
+  x: number
+  entries: AffinoTimeSeriesTooltipEntry[]
+}
+
+export interface AffinoTimeSeriesVisibilityEvent {
+  seriesId: string
+  visible: boolean
 }

@@ -1,5 +1,5 @@
-import { isFiniteChartNumber } from "./data"
-import type { ChartLinearScale, ChartNumericDomain } from "./types"
+import { isFiniteChartNumber } from "./data.js"
+import type { ChartLinearScale, ChartNumericDomain } from "./types.js"
 
 const DEFAULT_NUMERIC_DOMAIN: ChartNumericDomain = { min: 0, max: 1 }
 

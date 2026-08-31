@@ -1,177 +1,62 @@
 # @affino/charts-core
 
-Headless chart geometry and model helpers for Affino chart features.
+Headless, renderer-independent chart geometry and public data contracts for Affino charts. The package has no runtime dependencies and does not calculate financial metrics.
 
-`@affino/charts-core` turns chart-ready rows into plain TypeScript data structures: plot areas, scales, SVG path strings, chart geometry, and KPI models. It does not render anything and does not depend on Vue, React, the DOM, SVG components, Canvas, WebGL, D3, Chart.js, Recharts, ECharts, or application packages.
-
-`@affino/charts-vue` uses this package as its calculation layer and owns Vue rendering, interaction, styling, accessibility, and component state.
-
-## Package Boundaries
-
-- `@affino/analytics-core` prepares, filters, groups, and aggregates datasets.
-- `@affino/charts-core` expects chart-ready rows and converts them into geometry or models.
-- Rendering packages, such as `@affino/charts-vue`, should consume these geometry/model outputs and render them for a specific UI framework.
-
-Current non-goals:
-
-- No Vue, React, DOM, Canvas, WebGL, or renderer components.
-- No D3, Chart.js, Recharts, ECharts, or external chart dependencies.
-- No dependency on `@affino/analytics-core`.
-- No dependency on `@affino/datagrid-sandbox`.
-- No multi-series charts yet.
-- No stacked or grouped bars yet.
-- No date/time scale yet.
-- No legends, labels, tooltips, smoothing, clustering, or trendlines yet.
-
-## Public API Overview
-
-Base types:
-
-- `ChartDatum`
-- `ChartSize`
-- `ChartMargin`
-- `ChartRect`
-- `ChartPoint`
-- `ChartNumericDomain`
-
-Data access helpers:
-
-- `isFiniteChartNumber(value)`
-- `getChartStringValue(row, field)`
-- `getChartNumberValue(row, field)`
-
-Layout helpers:
-
-- `DEFAULT_CHART_MARGIN`
-- `resolveChartMargin(margin)`
-- `resolveChartPlotArea(size, margin)`
-
-Scale helpers:
-
-- `computeChartNumericDomain(values, options)`
-- `normalizeChartValue(value, domain)`
-- `createChartLinearScale(domain, range)`
-- `createChartBandScale(options)`
-
-Geometry and model helpers:
-
-- `createBarChartGeometry(options)`
-- `createLineChartGeometry(options)`
-- `createPieChartGeometry(options)`
-- `createScatterChartGeometry(options)`
-- `createAreaChartGeometry(options)`
-- `createHistogramGeometry(options)`
-- `createMetricModel(options)`
-
-## Examples
-
-### Bar Geometry
+## Time-series API
 
 ```ts
-import { createBarChartGeometry } from "@affino/charts-core"
+import {
+  createTimeSeriesChartGeometry,
+  resolveTimeSeriesTooltip,
+  type TimeSeries,
+  type TimeSeriesChartOptions,
+  type TimeSeriesPoint,
+} from "@affino/charts-core"
 
-const geometry = createBarChartGeometry({
-  rows: [
-    { region: "UK", revenue: 120 },
-    { region: "EU", revenue: 180 },
-  ],
-  categoryField: "region",
-  valueField: "revenue",
-  size: { width: 640, height: 360 },
-})
+const series: TimeSeries[] = [
+  {
+    id: "balance",
+    label: "Balance",
+    data: [{ time: Date.UTC(2026, 0, 1), value: 10_000 }],
+  },
+  {
+    id: "equity",
+    label: "Equity",
+    data: [{ time: Date.UTC(2026, 0, 1), value: 9_940 }],
+  },
+]
 
-console.log(geometry.bars)
+const options: TimeSeriesChartOptions = {
+  series,
+  size: { width: 800, height: 360 },
+  timeAxis: { locale: "en-GB" },
+  yAxis: { format: value => value.toFixed(2) },
+}
+
+const geometry = createTimeSeriesChartGeometry(options)
+const tooltip = resolveTimeSeriesTooltip(series, Date.UTC(2026, 0, 1))
 ```
 
-### Line Geometry
+`TimeSeriesPoint.time` is a UTC Unix timestamp in milliseconds. Formatting always uses `Intl.DateTimeFormat` with `timeZone: "UTC"`; applications can provide `timeAxis.format(timestamp)` or UTC-safe `formatOptions`. Tick intervals and counts respond to plot width and cover intraday through multi-year spans.
 
-```ts
-import { createLineChartGeometry } from "@affino/charts-core"
+All visible series share one time domain, numeric value domain, plot area, and tick model. `presentation.type` supports `"line"` and `"area"`. Area geometry uses zero as its baseline and naturally supports an underwater/drawdown presentation.
 
-const geometry = createLineChartGeometry({
-  rows: [
-    { monthIndex: 0, revenue: 120 },
-    { monthIndex: 1, revenue: 180 },
-    { monthIndex: 2, revenue: 160 },
-  ],
-  xField: "monthIndex",
-  yField: "revenue",
-  xScaleType: "number",
-  size: { width: 640, height: 360 },
-})
+## Input contract
 
-console.log(geometry.path)
-```
+- Empty series and single-point series are supported.
+- Values and timestamps must be finite numbers. `NaN`, `Infinity`, and `null` are rejected.
+- Each series must be strictly timestamp-sorted; duplicate and unsorted timestamps are rejected.
+- Series ids must be unique and labels must be non-empty.
+- Missing points are represented by omission. Nullable points are not supported in V1.
+- Input arrays and points are never mutated.
+- No downsampling or decimation is performed. Geometry contains every supplied point.
 
-### Pie Or Donut Geometry
+`validateTimeSeries()` exposes the same validation used by geometry and tooltip helpers.
 
-```ts
-import { createPieChartGeometry } from "@affino/charts-core"
+## Other public geometry
 
-const geometry = createPieChartGeometry({
-  rows: [
-    { channel: "Direct", users: 240 },
-    { channel: "Search", users: 360 },
-  ],
-  categoryField: "channel",
-  valueField: "users",
-  innerRadiusRatio: 0.55,
-  size: { width: 360, height: 360 },
-})
+The package also exports generic bar, line, area, histogram, pie, scatter, band-scale, numeric-scale, layout, and metric-model helpers. `createBarChartGeometry()` includes zero by default and places positive and negative bars around the baseline. Histogram geometry is already public and remains a binned numeric-data primitive, not a financial calculation API.
 
-console.log(geometry.slices.map((slice) => slice.path))
-```
+## Package boundary
 
-### Metric Model
-
-```ts
-import { createMetricModel } from "@affino/charts-core"
-
-const metric = createMetricModel({
-  label: "Conversion",
-  value: 0.125,
-  previousValue: 0.1,
-  format: "percent",
-  precision: 1,
-})
-
-console.log(metric.displayValue, metric.delta)
-```
-
-### Histogram Geometry
-
-```ts
-import { createHistogramGeometry } from "@affino/charts-core"
-
-const geometry = createHistogramGeometry({
-  rows: [
-    { loadTimeMs: 120 },
-    { loadTimeMs: 180 },
-    { loadTimeMs: 240 },
-  ],
-  valueField: "loadTimeMs",
-  binCount: 8,
-  size: { width: 640, height: 360 },
-})
-
-console.log(geometry.bins)
-```
-
-## Boundary Audit
-
-Current package state:
-
-- Runtime dependencies: none.
-- Dev dependencies: `vitest` only.
-- Public exports are chart-generic types, helpers, geometry generators, and KPI model helpers.
-- No source imports from Vue, DOM APIs, D3, Chart.js, Recharts, ECharts, `@affino/datagrid-sandbox`, or `@affino/analytics-core`.
-- Package output is ESM with `dist` and type exports.
-
-Validation expected for changes:
-
-```sh
-pnpm --filter @affino/charts-core type-check
-pnpm --filter @affino/charts-core test
-pnpm --filter @affino/charts-core build
-git diff --check
-```
+`@affino/charts-core` owns data validation, domains, scales, ticks, tooltip lookup, and geometry. `@affino/charts-vue` owns SVG/DOM rendering, interaction, responsive observation, accessibility, legends, tooltips, crosshair presentation, and themes.

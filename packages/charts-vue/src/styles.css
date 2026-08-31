@@ -1,0 +1,48 @@
+.affino-chart-theme,
+.affino-chart-theme--light {
+  --affino-chart-background: #ffffff;
+  --affino-chart-surface: #f8fafc;
+  --affino-chart-border: #d8dee8;
+  --affino-chart-text: #172033;
+  --affino-chart-muted-text: #667085;
+  --affino-chart-axis: #475467;
+  --affino-chart-grid: #e4e7ec;
+  --affino-chart-tooltip-background: #101828;
+  --affino-chart-tooltip-text: #ffffff;
+  --affino-chart-series-1: #2563eb;
+  --affino-chart-series-2: #16a34a;
+  --affino-chart-series-3: #f59e0b;
+  --affino-chart-series-4: #dc2626;
+  --affino-chart-series-5: #8b5cf6;
+  --affino-chart-positive: #16a34a;
+  --affino-chart-negative: #dc2626;
+  --affino-chart-focus: #2563eb;
+  --affino-chart-crosshair: #667085;
+  --affino-chart-danger: #dc2626;
+  --affino-chart-warning: #d97706;
+  --affino-chart-success: #16a34a;
+}
+
+.affino-chart-theme--dark {
+  --affino-chart-background: #101828;
+  --affino-chart-surface: #182230;
+  --affino-chart-border: #344054;
+  --affino-chart-text: #f2f4f7;
+  --affino-chart-muted-text: #98a2b3;
+  --affino-chart-axis: #98a2b3;
+  --affino-chart-grid: #344054;
+  --affino-chart-tooltip-background: #f2f4f7;
+  --affino-chart-tooltip-text: #101828;
+  --affino-chart-series-1: #84adff;
+  --affino-chart-series-2: #75e0a7;
+  --affino-chart-series-3: #fec84b;
+  --affino-chart-series-4: #f97066;
+  --affino-chart-series-5: #b692f6;
+  --affino-chart-positive: #75e0a7;
+  --affino-chart-negative: #f97066;
+  --affino-chart-focus: #84adff;
+  --affino-chart-crosshair: #d0d5dd;
+  --affino-chart-danger: #f97066;
+  --affino-chart-warning: #fec84b;
+  --affino-chart-success: #75e0a7;
+}

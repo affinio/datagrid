@@ -1,6 +1,6 @@
 {
   "name": "@affino/charts-vue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Reusable Vue SVG chart rendering package for Affino",
@@ -8,7 +8,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -21,7 +22,7 @@
   ],
   "scripts": {
     "build": "pnpm --filter @affino/charts-core build && vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
-    "type-check": "pnpm --filter @affino/charts-core build && vue-tsc -p tsconfig.json --noEmit",
+    "type-check": "pnpm --filter @affino/charts-core build && vue-tsc -p tsconfig.json --noEmit && vue-tsc -p tsconfig.examples.json --noEmit",
     "test": "vitest run --config ./vitest.config.ts"
   },
   "dependencies": {

@@ -107,25 +107,9 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
 
 <style scoped>
 .affino-chart-frame {
-  --affino-chart-background: #ffffff;
-  --affino-chart-surface: #f8fafc;
-  --affino-chart-border: #d8dee8;
-  --affino-chart-text: #172033;
-  --affino-chart-muted-text: #667085;
-  --affino-chart-axis: #475467;
-  --affino-chart-grid: #e4e7ec;
-  --affino-chart-series-1: #2563eb;
-  --affino-chart-series-2: #16a34a;
-  --affino-chart-series-3: #f59e0b;
-  --affino-chart-series-4: #dc2626;
-  --affino-chart-series-5: #8b5cf6;
-  --affino-chart-danger: #dc2626;
-  --affino-chart-warning: #d97706;
-  --affino-chart-success: #16a34a;
-
-  color: var(--affino-chart-text);
-  background: var(--affino-chart-background);
-  border: 1px solid var(--affino-chart-border);
+  color: var(--affino-chart-text, #172033);
+  background: var(--affino-chart-background, #ffffff);
+  border: 1px solid var(--affino-chart-border, #d8dee8);
   border-radius: 8px;
   font-family: inherit;
   min-width: 0;
@@ -155,7 +139,7 @@ const stateLive = computed(() => state.value === "error" ? "assertive" : "polite
 
 .affino-chart-frame__stage {
   position: relative;
-  background: var(--affino-chart-surface);
+  background: var(--affino-chart-surface, #f8fafc);
   min-width: 0;
 }
 

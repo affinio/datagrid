@@ -11,10 +11,12 @@
       :class="{
         'affino-chart-legend__item--interactive': interactive && !item.disabled,
         'affino-chart-legend__item--disabled': item.disabled,
+        'affino-chart-legend__item--hidden': item.hidden,
       }"
       :tabindex="interactive && !item.disabled ? 0 : undefined"
       :role="interactive && !item.disabled ? 'button' : undefined"
       :aria-disabled="item.disabled ? 'true' : undefined"
+      :aria-pressed="interactive && !item.disabled ? !item.hidden : undefined"
       @click="handleItemClick(item, index, $event)"
       @mouseenter="emitItemEvent('item-hover', item, index, $event.currentTarget)"
       @mouseleave="emitItemEvent('item-leave', item, index, $event.currentTarget)"
@@ -122,6 +124,10 @@ function isInteractiveEventTarget(item: ChartLegendItem, element: EventTarget | 
 
 .affino-chart-legend__item--disabled {
   color: var(--affino-chart-muted-text, #667085);
+  opacity: 0.54;
+}
+
+.affino-chart-legend__item--hidden {
   opacity: 0.54;
 }
 

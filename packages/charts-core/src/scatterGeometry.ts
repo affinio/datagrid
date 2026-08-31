@@ -1,9 +1,9 @@
-import { getChartNumberValue } from "./data"
-import { resolveChartPlotArea } from "./layout"
+import { getChartNumberValue } from "./data.js"
+import { resolveChartPlotArea } from "./layout.js"
 import {
   computeChartNumericDomain,
   createChartLinearScale,
-} from "./scale"
+} from "./scale.js"
 import type {
   ChartDatum,
   ChartLinearScale,
@@ -11,7 +11,7 @@ import type {
   ScatterChartGeometry,
   ScatterChartGeometryOptions,
   ScatterChartPointGeometry,
-} from "./types"
+} from "./types.js"
 
 interface ValidScatterDatum {
   key: string

@@ -1,4 +1,4 @@
-import type { ChartBandScale, ChartBandScaleOptions } from "./types"
+import type { ChartBandScale, ChartBandScaleOptions } from "./types.js"
 
 const DEFAULT_BAND_PADDING_INNER = 0.1
 const DEFAULT_BAND_PADDING_OUTER = 0.05

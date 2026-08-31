@@ -1,16 +1,16 @@
-import { getChartNumberValue, isFiniteChartNumber } from "./data"
-import { resolveChartPlotArea } from "./layout"
+import { getChartNumberValue, isFiniteChartNumber } from "./data.js"
+import { resolveChartPlotArea } from "./layout.js"
 import {
   computeChartNumericDomain,
   createChartLinearScale,
-} from "./scale"
+} from "./scale.js"
 import type {
   AreaChartGeometry,
   AreaChartGeometryOptions,
   AreaChartPointGeometry,
   ChartDatum,
   ChartNumericDomain,
-} from "./types"
+} from "./types.js"
 
 interface ValidAreaDatum {
   key: string

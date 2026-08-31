@@ -33,30 +33,50 @@ export type {
   ScatterChartGeometry,
   ScatterChartGeometryOptions,
   ScatterChartPointGeometry,
-} from "./types"
+  TimeAxisOptions,
+  TimeAxisTick,
+  TimeSeries,
+  TimeSeriesChartGeometry,
+  TimeSeriesChartOptions,
+  TimeSeriesGeometry,
+  TimeSeriesGeometryPoint,
+  TimeSeriesPoint,
+  TimeSeriesPresentation,
+  TimeSeriesTooltip,
+  TimeSeriesTooltipEntry,
+  TimeSeriesType,
+  TimeSeriesYAxisOptions,
+} from "./types.js"
 export {
   getChartNumberValue,
   getChartStringValue,
   isFiniteChartNumber,
-} from "./data"
+} from "./data.js"
 export {
   DEFAULT_CHART_MARGIN,
   resolveChartMargin,
   resolveChartPlotArea,
-} from "./layout"
+} from "./layout.js"
 export {
   computeChartNumericDomain,
   createChartLinearScale,
   normalizeChartValue,
-} from "./scale"
-export { createChartBandScale } from "./bandScale"
-export { createBarChartGeometry } from "./barGeometry"
-export { createLineChartGeometry } from "./lineGeometry"
-export { createPieChartGeometry } from "./pieGeometry"
-export { createScatterChartGeometry } from "./scatterGeometry"
-export { createAreaChartGeometry } from "./areaGeometry"
-export { createMetricModel } from "./metricModel"
-export { createHistogramGeometry } from "./histogramGeometry"
+} from "./scale.js"
+export { createChartBandScale } from "./bandScale.js"
+export { createBarChartGeometry } from "./barGeometry.js"
+export { createLineChartGeometry } from "./lineGeometry.js"
+export { createPieChartGeometry } from "./pieGeometry.js"
+export { createScatterChartGeometry } from "./scatterGeometry.js"
+export { createAreaChartGeometry } from "./areaGeometry.js"
+export { createMetricModel } from "./metricModel.js"
+export { createHistogramGeometry } from "./histogramGeometry.js"
+export {
+  createTimeAxisTicks,
+  createTimeSeriesChartGeometry,
+  formatTimeAxisTick,
+  resolveTimeSeriesTooltip,
+  validateTimeSeries,
+} from "./timeSeries.js"
 
 export function createChartsCore(): { version: string } {
   return { version: "0.1.0" }

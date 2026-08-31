@@ -1,11 +1,11 @@
-import { isFiniteChartNumber } from "./data"
+import { isFiniteChartNumber } from "./data.js"
 import type {
   MetricDeltaDirection,
   MetricDeltaModel,
   MetricFormat,
   MetricModel,
   MetricModelOptions,
-} from "./types"
+} from "./types.js"
 
 const DEFAULT_METRIC_LOCALE = "en-GB"
 const DEFAULT_METRIC_CURRENCY = "GBP"
