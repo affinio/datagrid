@@ -116,26 +116,29 @@
       <rect
         v-if="!isEmpty"
         class="affino-time-series-chart__interaction"
+        ref="interactionElement"
         :x="geometry.plotArea.x"
         :y="geometry.plotArea.y"
         :width="geometry.plotArea.width"
         :height="geometry.plotArea.height"
         fill="transparent"
-        tabindex="0"
+        :tabindex="interactionEnabled ? 0 : -1"
         role="slider"
         aria-label="Inspect chart values"
         :aria-valuemin="geometry.timeDomain.min"
         :aria-valuemax="geometry.timeDomain.max"
         :aria-valuenow="activeTimestamp ?? undefined"
-        @mousemove="handlePointerMove"
-        @mouseleave="clearTooltip"
+        :aria-valuetext="activeTimestamp === null ? undefined : formatTime(activeTimestamp)"
+        @pointerenter="handlePointerEnter"
+        @pointermove="handlePointerMove"
+        @pointerleave="handlePointerLeave"
         @focus="handleFocus"
-        @blur="clearTooltip"
-        @keydown.left.prevent="moveTooltip(-1)"
-        @keydown.right.prevent="moveTooltip(1)"
-        @keydown.home.prevent="moveTooltipToEdge('start')"
-        @keydown.end.prevent="moveTooltipToEdge('end')"
-        @keydown.esc="clearTooltip"
+        @blur="handleBlur"
+        @keydown.left.prevent="handleKeydown(() => moveTooltip(-1))"
+        @keydown.right.prevent="handleKeydown(() => moveTooltip(1))"
+        @keydown.home.prevent="handleKeydown(() => moveTooltipToEdge('start'))"
+        @keydown.end.prevent="handleKeydown(() => moveTooltipToEdge('end'))"
+        @keydown.esc="handleKeydown(clearTooltip)"
       />
 
       <template #empty>{{ emptyText }}</template>
@@ -143,7 +146,9 @@
 
     <div
       v-if="tooltipEnabled && tooltipPayload !== null"
+      ref="tooltipElement"
       class="affino-time-series-chart__tooltip"
+      :class="'affino-time-series-chart__tooltip--' + tooltipPayload.placement"
       :style="tooltipPositionStyle"
       role="status"
     >
@@ -168,12 +173,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import {
   createChartLinearScale,
   createTimeSeriesChartGeometry,
+  createTimeSeriesTooltipResolver,
   formatTimeAxisTick,
-  resolveTimeSeriesTooltip,
 } from "@affino/charts-core"
 import type {
   ChartMargin,
@@ -182,14 +187,18 @@ import type {
   TimeSeriesGeometryPoint,
   TimeSeriesYAxisOptions,
 } from "@affino/charts-core"
+import { resolveChartTooltipPlacement } from "./interaction"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
 import AffinoChartLegend from "./AffinoChartLegend.vue"
 import type {
   AffinoTimeSeriesTooltip,
   AffinoTimeSeriesVisibilityEvent,
+  ChartInteractionPoint,
   ChartLegendItem,
   ChartTheme,
+  TimeSeriesInteractionOptions,
   TimeSeriesTooltipOptions,
+  TimeSeriesTooltipPointer,
 } from "./types"
 
 const DEFAULT_WIDTH = 640
@@ -208,6 +217,7 @@ const props = withDefaults(defineProps<{
   timeAxis?: TimeAxisOptions
   yAxis?: TimeSeriesYAxisOptions
   tooltip?: TimeSeriesTooltipOptions
+  interaction?: TimeSeriesInteractionOptions
   showAxes?: boolean
   showGrid?: boolean
   showLegend?: boolean
@@ -237,9 +247,17 @@ defineSlots<{
 }>()
 
 const containerElement = ref<HTMLElement | null>(null)
+const interactionElement = ref<SVGRectElement | null>(null)
+const tooltipElement = ref<HTMLElement | null>(null)
 const observedWidth = ref<number | null>(null)
+const containerBounds = ref({ width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })
+const tooltipSize = ref({ width: 180, height: 80 })
+const layoutRevision = ref(0)
 const hiddenSeriesIds = ref(new Set<string>())
 const activeTimestamp = ref<number | null>(null)
+const pointerPosition = ref<TimeSeriesTooltipPointer | null>(null)
+const keyboardFocused = ref(false)
+const interactionSource = ref<"pointer" | "keyboard" | null>(null)
 let resizeObserver: ResizeObserver | null = null
 
 const renderWidth = computed(() => props.responsive ? observedWidth.value ?? props.width : props.width)
@@ -256,7 +274,13 @@ const geometry = computed(() => createTimeSeriesChartGeometry({
 }))
 const isEmpty = computed(() => geometry.value.series.every((series) => series.points.length === 0))
 const areaSeries = computed(() => geometry.value.series.filter((series) => series.presentation.type === "area"))
-const tooltipEnabled = computed(() => props.tooltip?.enabled !== false)
+const interactionEnabled = computed(() => props.interaction?.enabled !== false)
+const tooltipOptions = computed<TimeSeriesTooltipOptions>(() => ({
+  ...props.tooltip,
+  ...props.interaction?.tooltip,
+}))
+const tooltipEnabled = computed(() => interactionEnabled.value && tooltipOptions.value.enabled !== false)
+const showCrosshair = computed(() => interactionEnabled.value && (props.interaction?.crosshair?.enabled ?? props.showCrosshair))
 const themeMode = computed(() => typeof props.theme === "string" ? props.theme : props.theme.mode ?? "light")
 const themeStyle = computed<Record<string, string>>(() => {
   if (typeof props.theme === "string") return {}
@@ -272,14 +296,20 @@ const themeStyle = computed<Record<string, string>>(() => {
     ["mutedText", "--affino-chart-muted-text"],
     ["tooltipBackground", "--affino-chart-tooltip-background"],
     ["tooltipText", "--affino-chart-tooltip-text"],
+    ["tooltipSecondaryText", "--affino-chart-tooltip-secondary-text"],
+    ["tooltipBorder", "--affino-chart-tooltip-border"],
+    ["tooltipShadow", "--affino-chart-tooltip-shadow"],
     ["positive", "--affino-chart-positive"],
     ["negative", "--affino-chart-negative"],
     ["focus", "--affino-chart-focus"],
     ["crosshair", "--affino-chart-crosshair"],
+    ["crosshairWidth", "--affino-chart-crosshair-width"],
+    ["crosshairDash", "--affino-chart-crosshair-dash"],
+    ["crosshairOpacity", "--affino-chart-crosshair-opacity"],
   ]
   for (const [key, token] of tokens) {
     const value = theme[key]
-    if (typeof value === "string") styles[token] = value
+    if (typeof value === "string" || typeof value === "number") styles[token] = String(value)
   }
   theme.seriesColors?.forEach((color, index) => {
     styles[`--affino-chart-series-${index + 1}`] = color
@@ -298,37 +328,42 @@ const yTicks = computed(() => {
     return { value, y: yScale.value.scale(value) }
   })
 })
-const domainTimestamps = computed(() => [...new Set(renderedSeries.value
-  .filter((series) => series.visible !== false)
-  .flatMap((series) => series.data.map((point) => point.time)))]
-  .sort((left, right) => left - right))
-const tooltipPayload = computed<AffinoTimeSeriesTooltip | null>(() => {
-  if (activeTimestamp.value === null) return null
-  const raw = resolveTimeSeriesTooltip(renderedSeries.value, activeTimestamp.value)
+const tooltipResolver = computed(() => createTimeSeriesTooltipResolver(renderedSeries.value))
+const domainTimestamps = computed(() => tooltipResolver.value.timestamps)
+const tooltipPayloadBase = computed<Omit<AffinoTimeSeriesTooltip, "placement"> | null>(() => {
+  if (!interactionEnabled.value || activeTimestamp.value === null) return null
+  const raw = tooltipResolver.value.resolve(activeTimestamp.value)
   if (raw === null) return null
   const xScale = createChartLinearScale(geometry.value.timeDomain, {
     min: geometry.value.plotArea.x,
     max: geometry.value.plotArea.x + geometry.value.plotArea.width,
   })
+  const anchor = {
+    x: xScale.scale(raw.timestamp),
+    y: geometry.value.plotArea.y + geometry.value.plotArea.height / 2,
+  }
   return {
     timestamp: raw.timestamp,
-    formattedTimestamp: props.tooltip?.formatTime?.(raw.timestamp)
+    domainValue: raw.timestamp,
+    formattedTimestamp: tooltipOptions.value.formatTime?.(raw.timestamp)
       ?? formatTimeAxisTick(raw.timestamp, props.timeAxis, geometry.value.timeDomain.max - geometry.value.timeDomain.min),
-    x: xScale.scale(raw.timestamp),
+    x: anchor.x,
+    anchor,
+    pointer: pointerPosition.value ?? createPointerForPlot(anchor),
     entries: raw.entries.map((entry) => {
-      const sourceSeries = props.series.find((series) => series.id === entry.seriesId)
+      const sourceSeries = renderedSeries.value.find((series) => series.id === entry.seriesId)
       return {
         ...entry,
-        color: sourceSeries === undefined ? entry.color : seriesColor(sourceSeries.id, props.series.indexOf(sourceSeries)),
+        color: sourceSeries === undefined ? entry.color : seriesColor(sourceSeries.id, renderedSeries.value.indexOf(sourceSeries)),
         formattedValue: sourceSeries === undefined
           ? formatValue(entry.value)
-          : props.tooltip?.formatValue?.(entry.value, sourceSeries) ?? formatValue(entry.value),
+          : tooltipOptions.value.formatValue?.(entry.value, sourceSeries) ?? formatValue(entry.value),
       }
     }),
   }
 })
 const activePoints = computed(() => {
-  const tooltip = tooltipPayload.value
+  const tooltip = tooltipPayloadBase.value
   if (tooltip === null) return []
   return geometry.value.series.flatMap((series, index) => {
     const point = findGeometryPoint(series.points, tooltip.timestamp)
@@ -340,10 +375,33 @@ const activePoints = computed(() => {
     }]
   })
 })
-const tooltipLeftPercent = computed(() => Math.min(92, Math.max(8, tooltipPayload.value === null
-  ? 50
-  : tooltipPayload.value.x / renderWidth.value * 100)))
-const tooltipPositionStyle = computed(() => ({ left: `${tooltipLeftPercent.value}%` }))
+const tooltipPlacement = computed(() => {
+  layoutRevision.value
+  const payload = tooltipPayloadBase.value
+  if (payload === null) {
+    return { left: 0, top: 0, placement: "right-bottom" as const }
+  }
+  const pointer = tooltipOptions.value.followPointer === false
+    ? createPointerForPlot(payload.anchor).chart
+    : payload.pointer.chart
+  return resolveChartTooltipPlacement({
+    pointer,
+    container: containerBounds.value,
+    tooltip: tooltipSize.value,
+    offsetX: tooltipOptions.value.offsetX ?? 12,
+    offsetY: tooltipOptions.value.offsetY ?? 12,
+    padding: 8,
+    constrainToChart: tooltipOptions.value.constrainToChart !== false,
+  })
+})
+const tooltipPayload = computed<AffinoTimeSeriesTooltip | null>(() => {
+  const payload = tooltipPayloadBase.value
+  return payload === null ? null : { ...payload, placement: tooltipPlacement.value.placement }
+})
+const tooltipPositionStyle = computed(() => ({
+  left: String(tooltipPlacement.value.left) + "px",
+  top: String(tooltipPlacement.value.top) + "px",
+}))
 const legendItems = computed<ChartLegendItem[]>(() => props.series.map((series, index) => ({
   id: series.id,
   label: series.label,
@@ -357,11 +415,25 @@ watch(() => props.series.map((series) => series.id), (ids) => {
   if (activeTimestamp.value !== null && domainTimestamps.value.length === 0) clearTooltip()
 })
 
+watch(tooltipPayload, () => {
+  void nextTick(measureTooltip)
+}, { flush: "post" })
+
+watch([renderWidth, () => props.height], () => {
+  layoutRevision.value += 1
+  updateContainerBounds()
+  void nextTick(measureTooltip)
+})
+
 onMounted(() => {
+  updateContainerBounds()
   if (!props.responsive || typeof ResizeObserver === "undefined" || containerElement.value === null) return
   resizeObserver = new ResizeObserver((entries) => {
     const width = entries[0]?.contentRect.width
     if (width !== undefined && width > 0) observedWidth.value = width
+    updateContainerBounds()
+    layoutRevision.value += 1
+    void nextTick(measureTooltip)
   })
   resizeObserver.observe(containerElement.value)
 })
@@ -372,33 +444,78 @@ function formatValue(value: number): string {
   return props.yAxis?.format?.(value) ?? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)
 }
 
+function formatTime(timestamp: number): string {
+  return tooltipOptions.value.formatTime?.(timestamp)
+    ?? formatTimeAxisTick(timestamp, props.timeAxis, geometry.value.timeDomain.max - geometry.value.timeDomain.min)
+}
+
 function seriesColor(seriesId: string, index: number): string {
   const configured = props.series.find((series) => series.id === seriesId)?.presentation?.color
   return configured ?? `var(--affino-chart-series-${index % 5 + 1})`
 }
 
-function handlePointerMove(event: MouseEvent): void {
+function handlePointerEnter(): void {
+  if (interactionEnabled.value) interactionSource.value = "pointer"
+}
+
+function handlePointerMove(event: PointerEvent): void {
+  if (!interactionEnabled.value) return
   const element = event.currentTarget
   if (!(element instanceof SVGElement)) return
   const rect = element.getBoundingClientRect()
-  if (rect.width <= 0) return
-  const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+  if (rect.width <= 0 || rect.height <= 0) return
+  const ratioX = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+  const ratioY = clamp((event.clientY - rect.top) / rect.height, 0, 1)
+  const plotArea = geometry.value.plotArea
+  const plot = {
+    x: plotArea.x + plotArea.width * ratioX,
+    y: plotArea.y + plotArea.height * ratioY,
+  }
+  const rootRect = containerElement.value?.getBoundingClientRect()
+  pointerPosition.value = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    chart: {
+      x: event.clientX - (rootRect?.left ?? rect.left),
+      y: event.clientY - (rootRect?.top ?? rect.top),
+    },
+    plot,
+  }
+  interactionSource.value = "pointer"
+  updateContainerBounds()
   const { min, max } = geometry.value.timeDomain
-  setActiveTimestamp(min + (max - min) * ratio)
+  setActiveTimestamp(min + (max - min) * ratioX)
+}
+
+function handlePointerLeave(): void {
+  if (!keyboardFocused.value) clearTooltip()
 }
 
 function handleFocus(): void {
-  if (activeTimestamp.value !== null) return
+  if (!interactionEnabled.value) return
+  keyboardFocused.value = true
+  interactionSource.value = "keyboard"
   const timestamps = domainTimestamps.value
-  const timestamp = timestamps[Math.floor((timestamps.length - 1) / 2)]
+  const timestamp = activeTimestamp.value ?? timestamps[Math.floor((timestamps.length - 1) / 2)]
   if (timestamp !== undefined) setActiveTimestamp(timestamp)
+}
+
+function handleBlur(): void {
+  keyboardFocused.value = false
+  clearTooltip()
+}
+
+function handleKeydown(action: () => void): void {
+  if (!interactionEnabled.value) return
+  keyboardFocused.value = true
+  interactionSource.value = "keyboard"
+  action()
 }
 
 function moveTooltip(direction: -1 | 1): void {
   const timestamps = domainTimestamps.value
   if (timestamps.length === 0) return
-  const current = tooltipPayload.value?.timestamp
-  const currentIndex = current === undefined ? -1 : timestamps.indexOf(current)
+  const currentIndex = activeTimestamp.value === null ? -1 : timestamps.indexOf(activeTimestamp.value)
   const nextIndex = Math.min(timestamps.length - 1, Math.max(0, currentIndex + direction))
   const timestamp = timestamps[nextIndex]
   if (timestamp !== undefined) setActiveTimestamp(timestamp)
@@ -411,14 +528,19 @@ function moveTooltipToEdge(edge: "start" | "end"): void {
 }
 
 function setActiveTimestamp(timestamp: number): void {
-  const resolved = resolveTimeSeriesTooltip(renderedSeries.value, timestamp)
+  const resolved = tooltipResolver.value.resolve(timestamp)
   activeTimestamp.value = resolved?.timestamp ?? null
+  if (activeTimestamp.value !== null && interactionSource.value === "keyboard") {
+    pointerPosition.value = createPointerForTimestamp(activeTimestamp.value)
+  }
   emit("tooltip-change", tooltipPayload.value)
 }
 
 function clearTooltip(): void {
-  if (activeTimestamp.value === null) return
+  if (activeTimestamp.value === null && pointerPosition.value === null) return
   activeTimestamp.value = null
+  pointerPosition.value = null
+  interactionSource.value = null
   emit("tooltip-change", null)
 }
 
@@ -431,6 +553,47 @@ function toggleSeriesVisibility(seriesId: string): void {
     seriesId,
     visible: !next.has(seriesId),
   })
+}
+
+function updateContainerBounds(): void {
+  const rect = containerElement.value?.getBoundingClientRect()
+  if (rect === undefined || rect.width <= 0 || rect.height <= 0) return
+  containerBounds.value = { width: rect.width, height: rect.height }
+}
+
+function measureTooltip(): void {
+  const rect = tooltipElement.value?.getBoundingClientRect()
+  if (rect === undefined || rect.width <= 0 || rect.height <= 0) return
+  if (rect.width !== tooltipSize.value.width || rect.height !== tooltipSize.value.height) {
+    tooltipSize.value = { width: rect.width, height: rect.height }
+  }
+}
+
+function createPointerForTimestamp(timestamp: number): TimeSeriesTooltipPointer {
+  const xScale = createChartLinearScale(geometry.value.timeDomain, {
+    min: geometry.value.plotArea.x,
+    max: geometry.value.plotArea.x + geometry.value.plotArea.width,
+  })
+  return createPointerForPlot({
+    x: xScale.scale(timestamp),
+    y: geometry.value.plotArea.y + geometry.value.plotArea.height / 2,
+  })
+}
+
+function createPointerForPlot(plot: ChartInteractionPoint): TimeSeriesTooltipPointer {
+  const rootRect = containerElement.value?.getBoundingClientRect()
+  const svgRect = interactionElement.value?.ownerSVGElement?.getBoundingClientRect()
+  const scaleX = svgRect === undefined || renderWidth.value <= 0 ? 1 : svgRect.width / renderWidth.value
+  const scaleY = svgRect === undefined || props.height <= 0 ? 1 : svgRect.height / props.height
+  const chart = {
+    x: (svgRect?.left ?? rootRect?.left ?? 0) - (rootRect?.left ?? 0) + plot.x * scaleX,
+    y: (svgRect?.top ?? rootRect?.top ?? 0) - (rootRect?.top ?? 0) + plot.y * scaleY,
+  }
+  return { clientX: null, clientY: null, chart, plot }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }
 
 function findGeometryPoint(points: readonly TimeSeriesGeometryPoint[], timestamp: number): TimeSeriesGeometryPoint | null {
@@ -503,8 +666,9 @@ function findGeometryPoint(points: readonly TimeSeriesGeometryPoint[], timestamp
 
 .affino-time-series-chart__crosshair {
   stroke: var(--affino-chart-crosshair, #667085);
-  stroke-dasharray: 4 3;
-  stroke-width: 1;
+  stroke-dasharray: var(--affino-chart-crosshair-dash, 4 3);
+  stroke-width: var(--affino-chart-crosshair-width, 1);
+  opacity: var(--affino-chart-crosshair-opacity, 1);
   vector-effect: non-scaling-stroke;
 }
 
@@ -517,21 +681,22 @@ function findGeometryPoint(points: readonly TimeSeriesGeometryPoint[], timestamp
 .affino-time-series-chart__tooltip {
   position: absolute;
   z-index: 2;
-  top: 12px;
   min-width: 160px;
-  max-width: min(280px, 80%);
+  max-width: min(280px, calc(100% - 16px));
   padding: 10px 12px;
   color: var(--affino-chart-tooltip-text, #ffffff);
   background: var(--affino-chart-tooltip-background, #101828);
+  border: 1px solid var(--affino-chart-tooltip-border, transparent);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgb(16 24 40 / 18%);
+  box-shadow: var(--affino-chart-tooltip-shadow, 0 8px 24px rgb(16 24 40 / 18%));
   font-size: 12px;
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: none;
 }
 
 .affino-time-series-chart__tooltip-time {
   margin-bottom: 6px;
+  color: var(--affino-chart-tooltip-secondary-text, currentColor);
   font-weight: 600;
 }
 

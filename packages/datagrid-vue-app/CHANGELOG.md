@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.1
+
+### Patch Changes
+
+- Fixed packed runtime resolution and bundled required menu/popover implementation for the public app entry.
 ## 0.5.0
 
 ### Minor Changes

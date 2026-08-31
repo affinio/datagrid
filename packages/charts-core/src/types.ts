@@ -368,7 +368,14 @@ export interface TimeSeriesTooltipEntry {
   color?: string
 }
 
+export type TimeSeriesInteractionSnap = "nearest"
+
 export interface TimeSeriesTooltip {
   timestamp: number
   entries: TimeSeriesTooltipEntry[]
+}
+
+export interface TimeSeriesTooltipResolver {
+  readonly timestamps: readonly number[]
+  resolve(targetTimestamp: number): TimeSeriesTooltip | null
 }

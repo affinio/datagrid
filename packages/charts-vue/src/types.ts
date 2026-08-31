@@ -17,6 +17,15 @@ export interface ChartInteractionPoint {
   y: number
 }
 
+export type ChartTooltipPlacement = "right-bottom" | "left-bottom" | "right-top" | "left-top"
+
+export interface TimeSeriesTooltipPointer {
+  clientX: number | null
+  clientY: number | null
+  chart: ChartInteractionPoint
+  plot: ChartInteractionPoint
+}
+
 export interface ChartAnchorRect {
   x: number
   y: number
@@ -101,17 +110,39 @@ export interface ChartTheme {
   mutedText?: string
   tooltipBackground?: string
   tooltipText?: string
+  tooltipSecondaryText?: string
+  tooltipBorder?: string
+  tooltipShadow?: string
   seriesColors?: readonly string[]
   positive?: string
   negative?: string
   focus?: string
   crosshair?: string
+  crosshairWidth?: number
+  crosshairDash?: string
+  crosshairOpacity?: number
 }
 
 export interface TimeSeriesTooltipOptions {
   enabled?: boolean
+  followPointer?: boolean
+  constrainToChart?: boolean
+  offsetX?: number
+  offsetY?: number
   formatTime?: (timestamp: number) => string
   formatValue?: (value: number, series: TimeSeries) => string
+}
+
+export interface TimeSeriesCrosshairOptions {
+  enabled?: boolean
+  snap?: "nearest"
+}
+
+export interface TimeSeriesInteractionOptions {
+  enabled?: boolean
+  snap?: "nearest"
+  tooltip?: TimeSeriesTooltipOptions
+  crosshair?: TimeSeriesCrosshairOptions
 }
 
 export interface AffinoTimeSeriesTooltipEntry {
@@ -124,7 +155,11 @@ export interface AffinoTimeSeriesTooltipEntry {
 
 export interface AffinoTimeSeriesTooltip extends Omit<TimeSeriesTooltip, "entries"> {
   formattedTimestamp: string
+  domainValue: number
   x: number
+  anchor: ChartInteractionPoint
+  pointer: TimeSeriesTooltipPointer
+  placement: ChartTooltipPlacement
   entries: AffinoTimeSeriesTooltipEntry[]
 }
 

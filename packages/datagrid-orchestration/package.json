@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-orchestration",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Framework-agnostic orchestration layer for @affino/datagrid-core",
@@ -17,7 +17,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.public.json",
+    "build": "rm -rf dist && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "type-check:public": "tsc -p tsconfig.public.json --noEmit",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",

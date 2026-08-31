@@ -9,6 +9,9 @@
   --affino-chart-grid: #e4e7ec;
   --affino-chart-tooltip-background: #101828;
   --affino-chart-tooltip-text: #ffffff;
+  --affino-chart-tooltip-secondary-text: #d0d5dd;
+  --affino-chart-tooltip-border: rgb(255 255 255 / 18%);
+  --affino-chart-tooltip-shadow: 0 8px 24px rgb(16 24 40 / 18%);
   --affino-chart-series-1: #2563eb;
   --affino-chart-series-2: #16a34a;
   --affino-chart-series-3: #f59e0b;
@@ -18,6 +21,9 @@
   --affino-chart-negative: #dc2626;
   --affino-chart-focus: #2563eb;
   --affino-chart-crosshair: #667085;
+  --affino-chart-crosshair-width: 1;
+  --affino-chart-crosshair-dash: 4 3;
+  --affino-chart-crosshair-opacity: 1;
   --affino-chart-danger: #dc2626;
   --affino-chart-warning: #d97706;
   --affino-chart-success: #16a34a;
@@ -33,6 +39,9 @@
   --affino-chart-grid: #344054;
   --affino-chart-tooltip-background: #f2f4f7;
   --affino-chart-tooltip-text: #101828;
+  --affino-chart-tooltip-secondary-text: #475467;
+  --affino-chart-tooltip-border: rgb(16 24 40 / 18%);
+  --affino-chart-tooltip-shadow: 0 8px 24px rgb(16 24 40 / 28%);
   --affino-chart-series-1: #84adff;
   --affino-chart-series-2: #75e0a7;
   --affino-chart-series-3: #fec84b;
@@ -42,6 +51,9 @@
   --affino-chart-negative: #f97066;
   --affino-chart-focus: #84adff;
   --affino-chart-crosshair: #d0d5dd;
+  --affino-chart-crosshair-width: 1;
+  --affino-chart-crosshair-dash: 4 3;
+  --affino-chart-crosshair-opacity: 1;
   --affino-chart-danger: #f97066;
   --affino-chart-warning: #fec84b;
   --affino-chart-success: #75e0a7;

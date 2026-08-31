@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.1
+
+### Patch Changes
+
+- Fixed published ESM runtime specifiers and aligned the release with `@affino/datagrid-pivot@0.1.3`.
 ## 0.5.0
 
 ### Minor Changes

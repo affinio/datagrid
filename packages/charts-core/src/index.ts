@@ -42,8 +42,10 @@ export type {
   TimeSeriesGeometryPoint,
   TimeSeriesPoint,
   TimeSeriesPresentation,
+  TimeSeriesInteractionSnap,
   TimeSeriesTooltip,
   TimeSeriesTooltipEntry,
+  TimeSeriesTooltipResolver,
   TimeSeriesType,
   TimeSeriesYAxisOptions,
 } from "./types.js"
@@ -72,8 +74,10 @@ export { createMetricModel } from "./metricModel.js"
 export { createHistogramGeometry } from "./histogramGeometry.js"
 export {
   createTimeAxisTicks,
+  createTimeSeriesTooltipResolver,
   createTimeSeriesChartGeometry,
   formatTimeAxisTick,
+  resolveNearestTimeSeriesTimestamp,
   resolveTimeSeriesTooltip,
   validateTimeSeries,
 } from "./timeSeries.js"

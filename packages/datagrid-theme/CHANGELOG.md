@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.5
+
+### Patch Changes
+
+- Fixed emitted ESM specifiers for the public theme entry and CSS companion asset.
 ### Patch Changes
 
 - ## Summary

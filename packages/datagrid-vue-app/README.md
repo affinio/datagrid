@@ -19,6 +19,7 @@ Public export:
 - `DataGridModuleHost`
 
 The package ships its own runtime table-stage styles, so the default renderer does not depend on sandbox CSS.
+The supported corrected 0.5.x install is `@affino/datagrid-vue-app@0.5.1`, `@affino/datagrid-vue@0.5.1`, and `@affino/datagrid-theme@0.2.5` with Vue 3. Use package-root imports only. For backend-owned collections, keep one `createDataSourceBackedRowModel(...)` instance and pass it through the documented `row-model` prop; its pull request carries the bounded viewport range, `sortModel`, and `filterModel`, and rows should have a stable `rowId` or a `resolveRowId` resolver. See the [server datasource quick start](../../docs/server-datasource/quick-start.md) for bounded lazy windows, sort/filter resets, selection, and theme tokens.
 
 ## Planned enterprise surface
 

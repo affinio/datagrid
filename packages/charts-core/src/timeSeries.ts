@@ -11,6 +11,7 @@ import type {
   TimeSeriesGeometry,
   TimeSeriesGeometryPoint,
   TimeSeriesTooltip,
+  TimeSeriesTooltipResolver,
 } from "./types.js"
 
 const FALLBACK_DOMAIN: ChartNumericDomain = { min: 0, max: 1 }
@@ -202,35 +203,48 @@ export function formatTimeAxisTick(timestamp: number, options: TimeAxisOptions =
   }).format(new Date(timestamp))
 }
 
+export function createTimeSeriesTooltipResolver(series: readonly TimeSeries[]): TimeSeriesTooltipResolver {
+  validateTimeSeries(series)
+  const visibleSeries = series.filter((item) => item.visible !== false && item.data.length > 0)
+  const timestamps = [...new Set(visibleSeries.flatMap((item) => item.data.map((point) => point.time)))]
+    .sort((left, right) => left - right)
+  return {
+    timestamps,
+    resolve(targetTimestamp) {
+      const timestamp = resolveNearestTimeSeriesTimestamp(timestamps, targetTimestamp)
+      if (timestamp === null) return null
+
+      return {
+        timestamp,
+        entries: visibleSeries.flatMap((item) => {
+          const point = findPointAtTimestamp(item, timestamp)
+          return point === null ? [] : [{
+            seriesId: item.id,
+            seriesLabel: item.label,
+            value: point.value,
+            color: item.presentation?.color,
+          }]
+        }),
+      }
+    },
+  }
+}
+
 export function resolveTimeSeriesTooltip(
   series: readonly TimeSeries[],
   targetTimestamp: number,
 ): TimeSeriesTooltip | null {
-  validateTimeSeries(series)
+  return createTimeSeriesTooltipResolver(series).resolve(targetTimestamp)
+}
+
+export function resolveNearestTimeSeriesTimestamp(
+  timestamps: readonly number[],
+  targetTimestamp: number,
+): number | null {
   if (!isFiniteChartNumber(targetTimestamp)) {
     throw new TypeError("Tooltip target timestamp must be finite UTC Unix milliseconds.")
   }
-
-  const visibleSeries = series.filter((item) => item.visible !== false && item.data.length > 0)
-  const timestamps = [...new Set(visibleSeries.flatMap((item) => item.data.map((point) => point.time)))]
-    .sort((left, right) => left - right)
-  const timestamp = findNearestValue(timestamps, targetTimestamp)
-  if (timestamp === null) {
-    return null
-  }
-
-  return {
-    timestamp,
-    entries: visibleSeries.flatMap((item) => {
-      const point = findPointAtTimestamp(item, timestamp)
-      return point === null ? [] : [{
-        seriesId: item.id,
-        seriesLabel: item.label,
-        value: point.value,
-        color: item.presentation?.color,
-      }]
-    }),
-  }
+  return findNearestValue(timestamps, targetTimestamp)
 }
 
 function createLinePath(points: readonly TimeSeriesGeometryPoint[]): string {

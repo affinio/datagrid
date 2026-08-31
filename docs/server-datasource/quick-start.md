@@ -11,6 +11,7 @@ POST /api/{tableId}/pull
 Use `@affino/datagrid-server-adapters` first. It provides the current app-facing datasource factory for the Affino HTTP endpoint shape. Reach for `@affino/datagrid-server-client` only when you need lower-level polling, invalidation, or custom transport helpers.
 
 For sandbox-equivalent behavior, follow the [server datasource UX contract](./ux-contract.md). In short: keep one datasource-backed row model alive, let server sort/filter state flow through `pull(request)`, and do not replace it with app-level reloads for normal filtering.
+The supported corrected 0.5.x package matrix is `@affino/datagrid-vue-app@0.5.1`, `@affino/datagrid-vue@0.5.1`, `@affino/datagrid-core@0.5.1`, `@affino/datagrid-orchestration@0.5.1`, `@affino/datagrid-worker@0.5.1`, and `@affino/datagrid-pivot@0.1.3`, with `@affino/datagrid-theme@0.2.5`. These versions are released as a compatible set; consumers should not pin an older pivot or theme package alongside them.
 
 ## 1. Read-Only In 10 Minutes
 

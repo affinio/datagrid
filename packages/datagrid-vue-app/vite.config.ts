@@ -20,7 +20,7 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: id => id === "vue" || id.startsWith("@affino/"),
+      external: id => id === "vue" || id.startsWith("@affino/datagrid-") || id === "@affino/projection-engine",
       output: {
         entryFileNames: "[name].js",
         chunkFileNames: "chunks/[name]-[hash].js",

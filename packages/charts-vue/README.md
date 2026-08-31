@@ -93,11 +93,35 @@ The package accepts supplied drawdown data and never calculates it.
 
 Positive and negative bars use separate theme tokens, geometry includes zero, and a built-in hover/focus tooltip uses the same formatter.
 
-## Tooltip API
+## Declarative time-series interaction
 
-`tooltip` accepts `enabled`, `formatTime`, and `formatValue`. `tooltip-change` emits a timestamp plus every series value present at the selected timestamp. A custom renderer uses the public slot:
+Time-series interaction is declarative and enabled by default. The chart owns pointer capture, coordinate conversion, nearest-X resolution, crosshair rendering, tooltip positioning, and keyboard navigation:
 
-```vue
+~~~vue
+<AffinoTimeSeriesChart
+  :series="series"
+  :interaction="{
+    snap: 'nearest',
+    tooltip: {
+      followPointer: true,
+      constrainToChart: true,
+      offsetX: 12,
+      offsetY: 12,
+    },
+    crosshair: { snap: 'nearest' },
+  }"
+/>
+~~~
+
+The interaction pipeline is pointer client coordinates → chart-local coordinates → plot X → UTC domain value → nearest actual domain timestamp → shared crosshair and tooltip state. Nearest lookup uses binary search over the sorted shared visible domain. A tie resolves to the earlier timestamp. Pointer Y is not used for X resolution.
+
+The shared domain is the union of visible series timestamps. Each visible series contributes an exact value at the resolved timestamp; missing observations are omitted, never interpolated. Hidden legend series do not participate. Duplicate or unsorted timestamps are rejected by the existing time-series validator.
+
+`tooltip` also accepts `enabled`, `formatTime`, `formatValue`, `followPointer`, `constrainToChart`, `offsetX`, and `offsetY`. The tooltip follows the raw pointer while its values and crosshair use the resolved domain X. The measured tooltip is placed inside the chart root with a preferred right/below placement, horizontal/vertical flipping, and final clamping. The overlay has `pointer-events: none`, so crossing it does not cause hover flicker.
+
+The `tooltip-change` payload is typed and includes `timestamp`, `domainValue`, formatted entries, `anchor` (plot/SVG coordinates), `pointer` (client, chart-root, and plot coordinates), and `placement`. A custom slot owns presentation only:
+
+~~~vue
 <AffinoTimeSeriesChart :series="series">
   <template #tooltip="{ tooltip }">
     <strong>{{ tooltip.formattedTimestamp }}</strong>
@@ -106,7 +130,9 @@ Positive and negative bars use separate theme tokens, geometry includes zero, an
     </div>
   </template>
 </AffinoTimeSeriesChart>
-```
+~~~
+
+When focused, the chart initially selects the middle timestamp. Left/Right move through the shared domain; Home/End select the first/last timestamp. Pointer and keyboard input update the same active state. Pointer leave and blur clear the transient interaction.
 
 ## Time and numeric axes
 
@@ -132,11 +158,16 @@ Use `theme="light"`, `theme="dark"`, or a reactive theme object. Data does not n
     negative: 'var(--app-negative)',
     focus: 'var(--app-focus)',
     crosshair: 'var(--app-muted)',
+    crosshairWidth: 1,
+    crosshairDash: "4 3",
+    crosshairOpacity: 0.85,
+    tooltipSecondaryText: "var(--app-muted)",
+    tooltipBorder: "var(--app-border)",
   }"
 />
 ```
 
-Equivalent stable CSS custom properties are `--affino-chart-background`, `surface`, `border`, `grid`, `axis`, `text`, `muted-text`, `tooltip-background`, `tooltip-text`, `series-1` through `series-5`, `positive`, `negative`, `focus`, and `crosshair`. No internal selector or `!important` override is required.
+Equivalent stable CSS custom properties include `--affino-chart-background`, `--affino-chart-surface`, `--affino-chart-border`, `--affino-chart-grid`, `--affino-chart-axis`, `--affino-chart-text`, `--affino-chart-muted-text`, `--affino-chart-tooltip-background`, `--affino-chart-tooltip-text`, `--affino-chart-tooltip-secondary-text`, `--affino-chart-tooltip-border`, `--affino-chart-tooltip-shadow`, `--affino-chart-series-1` through `--affino-chart-series-5`, `--affino-chart-positive`, `--affino-chart-negative`, `--affino-chart-focus`, `--affino-chart-crosshair`, `--affino-chart-crosshair-width`, `--affino-chart-crosshair-dash`, and `--affino-chart-crosshair-opacity`. No internal selector or `!important` override is required.
 
 ## Responsive behavior and reactivity
 

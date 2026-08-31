@@ -9,6 +9,7 @@
       :height="320"
       :y-axis="currencyAxis"
       :tooltip="currencyTooltip"
+      :interaction="{ crosshair: { snap: 'nearest' }, tooltip: { followPointer: true, constrainToChart: true } }"
     />
 
     <AffinoTimeSeriesChart

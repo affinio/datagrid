@@ -17,7 +17,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "find src \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' -o -name '*.d.ts.map' \\) -delete && tsc -p tsconfig.json"
+    "build": "find src -type f -name '*.js' -delete && find src -type f -name '*.js.map' -delete && find src -type f -name '*.d.ts' -delete && find src -type f -name '*.d.ts.map' -delete && tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist"
   },
   "repository": {
     "type": "git",

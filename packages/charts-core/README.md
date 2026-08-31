@@ -41,6 +41,17 @@ const tooltip = resolveTimeSeriesTooltip(series, Date.UTC(2026, 0, 1))
 
 All visible series share one time domain, numeric value domain, plot area, and tick model. `presentation.type` supports `"line"` and `"area"`. Area geometry uses zero as its baseline and naturally supports an underwater/drawdown presentation.
 
+## Indexed interaction lookup
+
+Use `createTimeSeriesTooltipResolver(series)` when resolving more than one pointer/focus update. It builds the sorted union of visible timestamps once, resolves nearest X with binary search, and returns exact values for visible series at that X:
+
+~~~ts
+const resolver = createTimeSeriesTooltipResolver(series)
+const tooltip = resolver.resolve(pointerTimestamp)
+~~~
+
+`resolveNearestTimeSeriesTimestamp()` uses actual timestamp distance. Exact matches win, bounds clamp to the first/last timestamp, and an equal-distance tie chooses the earlier timestamp. Missing series observations are omitted; no interpolation is performed.
+
 ## Input contract
 
 - Empty series and single-point series are supported.

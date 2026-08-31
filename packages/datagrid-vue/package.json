@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue adapter and headless foundation for Affino DataGrid",
@@ -65,7 +65,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/datagrid-core build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker build && tsc -p tsconfig.public.json",
+    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/datagrid-core build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "type-check:public": "node ./scripts/type-check-public.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",

@@ -17,7 +17,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

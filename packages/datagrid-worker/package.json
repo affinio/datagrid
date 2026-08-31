@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-worker",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Worker transport protocol and postMessage bridge for Affino DataGrid compute runtime",
@@ -17,7 +17,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "pnpm --filter @affino/datagrid-formula-engine build && tsc -p tsconfig.json",
+    "build": "pnpm --filter @affino/datagrid-formula-engine build && tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist",
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {

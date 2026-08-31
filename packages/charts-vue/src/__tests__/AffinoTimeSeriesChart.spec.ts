@@ -39,7 +39,8 @@ describe("AffinoTimeSeriesChart", () => {
       value: () => ({ left: 0, width: 100, top: 0, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) }),
     })
 
-    await interaction.trigger("mousemove", { clientX: 0 })
+    interaction.element.dispatchEvent(new MouseEvent("pointermove", { clientX: 0, clientY: 40 }))
+    await nextTick()
 
     expect(wrapper.findAll(".affino-time-series-chart__tooltip-entry")).toHaveLength(2)
     expect(wrapper.find(".affino-time-series-chart__tooltip").text()).toContain("2026-01-01")
@@ -58,6 +59,50 @@ describe("AffinoTimeSeriesChart", () => {
     expect(wrapper.find(".affino-time-series-chart__crosshair").exists()).toBe(true)
     await interaction.trigger("keydown", { key: "End" })
     expect(wrapper.emitted("tooltip-change")?.at(-1)?.[0]).toMatchObject({ timestamp: second })
+  })
+
+  it("snaps the vertical crosshair and tooltip to the resolved domain X", async () => {
+    const wrapper = mount(AffinoTimeSeriesChart, {
+      props: {
+        series,
+        responsive: false,
+        interaction: {
+          tooltip: { followPointer: true, constrainToChart: true },
+          crosshair: { snap: "nearest" },
+        },
+      },
+    })
+    const interaction = wrapper.find(".affino-time-series-chart__interaction")
+    Object.defineProperty(interaction.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 10, top: 20, width: 100, height: 100, right: 110, bottom: 120, x: 10, y: 20, toJSON: () => ({}) }),
+    })
+
+    interaction.element.dispatchEvent(new MouseEvent("pointermove", { clientX: 85, clientY: 60 }))
+    await nextTick()
+
+    const payload = wrapper.emitted("tooltip-change")?.at(-1)?.[0] as { timestamp: number; x: number; pointer: { chart: { x: number } } }
+    expect(payload.timestamp).toBe(second)
+    expect(payload.x).not.toBe(payload.pointer.chart.x)
+    expect(wrapper.find(".affino-time-series-chart__crosshair").attributes("x1")).toBe(String(payload.x))
+  })
+
+  it("flips the tooltip inside the owning chart bounds near the right edge", async () => {
+    const wrapper = mount(AffinoTimeSeriesChart, { props: { series, responsive: false } })
+    Object.defineProperty(wrapper.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 100, top: 50, width: 320, height: 220, right: 420, bottom: 270, x: 100, y: 50, toJSON: () => ({}) }),
+    })
+    const interaction = wrapper.find(".affino-time-series-chart__interaction")
+    Object.defineProperty(interaction.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 100, top: 60, width: 300, height: 150, right: 400, bottom: 210, x: 100, y: 60, toJSON: () => ({}) }),
+    })
+
+    interaction.element.dispatchEvent(new MouseEvent("pointermove", { clientX: 395, clientY: 100 }))
+    await nextTick()
+
+    expect(wrapper.find(".affino-time-series-chart__tooltip").classes()).toContain("affino-time-series-chart__tooltip--left-bottom")
   })
 
   it("toggles series visibility through the native legend", async () => {
