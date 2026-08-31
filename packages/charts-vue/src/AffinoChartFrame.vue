@@ -17,7 +17,7 @@
         :aria-label="ariaLabel || undefined"
         :aria-labelledby="svgLabelledBy"
       >
-        <title :id="titleId">{{ svgTitle }}</title>
+        <title v-if="!ariaLabel" :id="titleId">{{ svgTitle }}</title>
         <desc v-if="description" :id="descriptionId">{{ description }}</desc>
         <slot />
       </svg>

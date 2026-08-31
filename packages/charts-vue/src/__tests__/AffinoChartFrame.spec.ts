@@ -50,6 +50,18 @@ describe("AffinoChartFrame", () => {
     expect(svg.attributes("aria-labelledby")).toBeUndefined()
   })
 
+  it("omits the native SVG title when an explicit accessible label is provided", () => {
+    const wrapper = mount(AffinoChartFrame, {
+      props: {
+        ariaLabel: "Revenue chart",
+        title: "Revenue",
+      },
+    })
+
+    expect(wrapper.find("svg title").exists()).toBe(false)
+    expect(wrapper.find("svg").attributes("aria-label")).toBe("Revenue chart")
+  })
+
   it("renders empty, loading, and error states", () => {
     const emptyWrapper = mount(AffinoChartFrame, {
       props: {

@@ -56,6 +56,8 @@ const currency = (value: number) => new Intl.NumberFormat("en-US", {
 
 The component renders all series in one SVG plot. Its built-in legend identifies series and toggles visibility. Hover, keyboard focus, Left/Right/Home/End navigation, the default tooltip, the `tooltip` slot, `tooltip-change`, and the crosshair use public data only.
 
+Chart accessibility uses the SVG aria-label and description. When an explicit accessible label is present, the package omits the browser-native SVG title popup so it does not compete with the chart tooltip.
+
 ## Drawdown
 
 The package accepts supplied drawdown data and never calculates it.

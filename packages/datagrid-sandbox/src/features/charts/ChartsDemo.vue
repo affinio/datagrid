@@ -48,6 +48,17 @@
           />
         </div>
 
+        <div class="charts-demo__chart-card charts-demo__chart-card--interaction">
+          <AffinoTimeSeriesChart
+            :series="BALANCE_EQUITY_SERIES"
+            title="Balance and Equity"
+            description="Nearest-X snapping with a floating, boundary-aware tooltip"
+            :height="360"
+            :tooltip="{ formatValue: formatCurrency }"
+            :interaction="TIME_SERIES_INTERACTION"
+          />
+        </div>
+
         <div class="charts-demo__chart-card charts-demo__chart-card--wide">
           <AffinoAreaChart
             :rows="CUMULATIVE_TRAFFIC"
@@ -166,6 +177,7 @@ import {
   AffinoMetricCard,
   AffinoPieChart,
   AffinoScatterChart,
+  AffinoTimeSeriesChart,
 } from "@affino/charts-vue"
 import type {
   AffinoAreaChartPointEvent,
@@ -179,7 +191,7 @@ import type {
   ChartInteractionPoint,
   ChartLegendItem,
 } from "@affino/charts-vue"
-import type { ChartDatum, MetricFormat, MetricModel } from "@affino/charts-core"
+import type { ChartDatum, MetricFormat, MetricModel, TimeSeries } from "@affino/charts-core"
 
 interface MetricCardDemo {
   label: string
@@ -213,6 +225,37 @@ const MONTHLY_TREND: ChartDatum[] = [
   { month: "Jun", monthIndex: 6, revenue: 136 },
   { month: "Jul", monthIndex: 7, revenue: 148 },
 ]
+
+const DEMO_TIME_SERIES_TIMES = Array.from({ length: 12 }, (_, index) => Date.UTC(2026, index, 1))
+
+const BALANCE_EQUITY_SERIES: TimeSeries[] = [
+  {
+    id: "balance",
+    label: "Balance",
+    data: [10000, 10420, 10180, 10860, 11240, 11020, 11680, 12060, 11920, 12480, 12760, 13180]
+      .map((value, index) => ({ time: DEMO_TIME_SERIES_TIMES[index]!, value })),
+  },
+  {
+    id: "equity",
+    label: "Equity",
+    data: [9860, 10560, 9940, 11120, 11040, 11360, 11420, 12340, 11760, 12720, 12480, 13420]
+      .map((value, index) => ({ time: DEMO_TIME_SERIES_TIMES[index]!, value })),
+  },
+]
+
+const TIME_SERIES_INTERACTION = {
+  snap: "nearest" as const,
+  tooltip: {
+    followPointer: true,
+    constrainToChart: true,
+    offsetX: 14,
+    offsetY: 14,
+  },
+  crosshair: {
+    enabled: true,
+    snap: "nearest" as const,
+  },
+}
 
 const CUMULATIVE_TRAFFIC: ChartDatum[] = [
   { week: 1, sessions: 1200 },
@@ -429,6 +472,14 @@ function formatPercent(value: number): string {
 function formatNumber(value: number): string {
   return Number.parseFloat(value.toFixed(1)).toString()
 }
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value)
+}
 </script>
 
 <style scoped>
@@ -486,6 +537,7 @@ function formatNumber(value: number): string {
 }
 
 .charts-demo__theme :deep(.affino-chart-frame),
+.charts-demo__theme :deep(.affino-time-series-chart),
 .charts-demo__theme :deep(.affino-pie-chart),
 .charts-demo__theme :deep(.affino-chart-legend),
 .charts-demo__theme :deep(.affino-metric-card) {
@@ -505,6 +557,10 @@ function formatNumber(value: number): string {
   --affino-chart-scatter-hover-fill: color-mix(in srgb, var(--charts-demo-scatter) 72%, transparent);
   --affino-chart-histogram-bin-fill: var(--charts-demo-histogram);
   --affino-chart-histogram-bin-hover-fill: var(--charts-demo-histogram-hover);
+  --affino-chart-crosshair: var(--charts-demo-line);
+  --affino-chart-crosshair-width: 1;
+  --affino-chart-crosshair-dash: 4 3;
+  --affino-chart-crosshair-opacity: 0.85;
 }
 
 .charts-demo__metrics {
@@ -524,6 +580,10 @@ function formatNumber(value: number): string {
 
 .charts-demo__chart-card--wide {
   grid-column: span 1;
+}
+
+.charts-demo__chart-card--interaction {
+  grid-column: 1 / -1;
 }
 
 .charts-demo__debug {

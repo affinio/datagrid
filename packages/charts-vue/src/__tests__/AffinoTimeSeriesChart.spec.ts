@@ -20,6 +20,7 @@ describe("AffinoTimeSeriesChart", () => {
     expect(wrapper.findAll(".affino-time-series-chart__line")).toHaveLength(2)
     expect(wrapper.findAll(".affino-chart-legend__item")).toHaveLength(2)
     expect(wrapper.findAll("svg")).toHaveLength(1)
+    expect(wrapper.find("svg title").exists()).toBe(false)
   })
 
   it("renders and emits a public all-series tooltip with configurable formatting", async () => {
@@ -49,6 +50,28 @@ describe("AffinoTimeSeriesChart", () => {
       timestamp: first,
       entries: [{ seriesId: "balance", value: 100 }, { seriesId: "equity", value: 98 }],
     })
+  })
+
+  it("clears the pointer tooltip when leaving the plot, including after keyboard focus", async () => {
+    const wrapper = mount(AffinoTimeSeriesChart, { props: { series, responsive: false } })
+    const interaction = wrapper.find(".affino-time-series-chart__interaction")
+    Object.defineProperty(interaction.element, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ left: 0, width: 100, top: 0, height: 100, right: 100, bottom: 100, x: 0, y: 0, toJSON: () => ({}) }),
+    })
+
+    await interaction.trigger("focus")
+    interaction.element.dispatchEvent(new MouseEvent("pointerenter"))
+    interaction.element.dispatchEvent(new MouseEvent("pointermove", { clientX: 40, clientY: 40 }))
+    await nextTick()
+
+    expect(wrapper.find(".affino-time-series-chart__tooltip").exists()).toBe(true)
+
+    interaction.element.dispatchEvent(new MouseEvent("pointerleave"))
+    await nextTick()
+
+    expect(wrapper.find(".affino-time-series-chart__tooltip").exists()).toBe(false)
+    expect(wrapper.emitted("tooltip-change")?.at(-1)?.[0]).toBeNull()
   })
 
   it("supports keyboard tooltip focus and a public crosshair", async () => {

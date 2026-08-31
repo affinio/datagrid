@@ -455,7 +455,9 @@ function seriesColor(seriesId: string, index: number): string {
 }
 
 function handlePointerEnter(): void {
-  if (interactionEnabled.value) interactionSource.value = "pointer"
+  if (!interactionEnabled.value) return
+  keyboardFocused.value = false
+  interactionSource.value = "pointer"
 }
 
 function handlePointerMove(event: PointerEvent): void {
@@ -488,7 +490,7 @@ function handlePointerMove(event: PointerEvent): void {
 }
 
 function handlePointerLeave(): void {
-  if (!keyboardFocused.value) clearTooltip()
+  if (interactionSource.value !== "keyboard") clearTooltip()
 }
 
 function handleFocus(): void {
