@@ -1,6 +1,6 @@
 {
   "name": "@affino/charts-vue",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Reusable Vue SVG chart rendering package for Affino",
