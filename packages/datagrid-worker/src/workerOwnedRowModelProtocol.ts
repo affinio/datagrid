@@ -72,6 +72,16 @@ export interface DataGridWorkerVisibleRowDelta<T = unknown> {
   row: DataGridRowNode<T>
 }
 
+export interface DataGridWorkerColumnarNumericField {
+  field: string
+  values: Float64Array
+  nulls: Uint8Array
+}
+
+export interface DataGridWorkerVisibleRowsColumnarPayload {
+  fields: readonly DataGridWorkerColumnarNumericField[]
+}
+
 export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   schemaVersion?: number
   snapshot: DataGridRowModelSnapshot<T>
@@ -83,6 +93,7 @@ export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   visibleRows: readonly DataGridRowNode<T>[]
   visibleRowsMode?: "full" | "delta"
   visibleRowsDelta?: readonly DataGridWorkerVisibleRowDelta<T>[]
+  visibleRowsColumnar?: DataGridWorkerVisibleRowsColumnarPayload | null
   visibleRange: DataGridViewportRange
 }
 
@@ -128,6 +139,12 @@ export function createDataGridWorkerRowModelCommandMessage<T = unknown>(
     timestamp: Date.now(),
     payload,
   }
+}
+
+export function collectDataGridWorkerColumnarTransferables(
+  payload: DataGridWorkerRowModelUpdatePayload,
+): Transferable[] {
+  return (payload.visibleRowsColumnar?.fields ?? []).flatMap(field => [field.values.buffer, field.nulls.buffer])
 }
 
 export function createDataGridWorkerRowModelUpdateMessage<T = unknown>(

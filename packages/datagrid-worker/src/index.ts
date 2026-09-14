@@ -42,6 +42,7 @@ export {
   DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
   createDataGridWorkerRowModelCommandMessage,
   createDataGridWorkerRowModelUpdateMessage,
+  collectDataGridWorkerColumnarTransferables,
   isDataGridWorkerRowModelCommandMessage,
   isDataGridWorkerRowModelUpdateMessage,
   type DataGridWorkerRowModelProtocolHeader,
@@ -50,6 +51,8 @@ export {
   type DataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelUpdatePayload,
   type DataGridWorkerVisibleRowDelta,
+  type DataGridWorkerColumnarNumericField,
+  type DataGridWorkerVisibleRowsColumnarPayload,
   type DataGridWorkerRowModelUpdateMessage,
   type DataGridWorkerRowModelProtocolMessage,
 } from "./workerOwnedRowModelProtocol.js"

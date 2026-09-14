@@ -24,6 +24,7 @@ class MemoryMessageEndpoint {
   private readonly listeners = new Set<MessageListener>()
   private peer: MemoryMessageEndpoint | null = null
   readonly receivedMessages: unknown[] = []
+  readonly receivedTransfers: readonly Transferable[][] = []
   onerror: ((event: { error?: unknown; message?: string }) => void) | null = null
   onmessageerror: ((event: { error?: unknown; message?: string }) => void) | null = null
 
@@ -31,7 +32,8 @@ class MemoryMessageEndpoint {
     this.peer = peer
   }
 
-  postMessage(message: unknown): void {
+  postMessage(message: unknown, transfer?: readonly Transferable[]): void {
+    this.receivedTransfers.push(transfer ?? [])
     const peer = this.peer
     if (!peer) {
       return
@@ -329,6 +331,39 @@ describe("worker-owned row model", () => {
     expect(mirror.getSnapshot().error?.message).toBe("row id resolver failed")
     expect(mirror.getSnapshot().loading).toBe(false)
     expect(mirror.getRowsInRange({ start: 0, end: 1 })).toEqual([])
+
+    mirror.dispose()
+    host.dispose()
+  })
+
+  it("transfers configured numeric visible fields as columnar typed arrays", async () => {
+    const rows = buildRows(60)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+      columnarNumericFields: ["revenue"],
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+
+    await flushMessages()
+
+    const update = channel.main.receivedMessages.find(message => (message as { kind?: unknown }).kind === "row-model-update") as {
+      payload?: {
+        visibleRowsColumnar?: { fields: readonly { field: string; values: Float64Array; nulls: Uint8Array }[] }
+      }
+    } | undefined
+    const field = update?.payload?.visibleRowsColumnar?.fields[0]
+    expect(field?.field).toBe("revenue")
+    expect(field?.values).toBeInstanceOf(Float64Array)
+    expect(field?.values[0]).toBe(10)
+    expect(field?.nulls[0]).toBe(0)
+    expect(channel.worker.receivedTransfers.some(transfer => transfer.length === 2)).toBe(true)
+    expect(mirror.getRowsInRange({ start: 0, end: 0 })[0]?.data.revenue).toBe(10)
 
     mirror.dispose()
     host.dispose()

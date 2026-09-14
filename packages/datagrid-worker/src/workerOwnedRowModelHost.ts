@@ -2,6 +2,7 @@ import {
   createClientRowModel,
   type CreateClientRowModelOptions,
   type DataGridRowNodeInput,
+  type DataGridRowNode,
 } from "@affino/datagrid-core"
 import type {
   DataGridWorkerMessageEvent,
@@ -10,11 +11,13 @@ import type {
 } from "./postMessageTransport.js"
 import {
   DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+  collectDataGridWorkerColumnarTransferables,
   createDataGridWorkerRowModelUpdateMessage,
   isDataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelCommand,
   type DataGridWorkerRowModelUpdatePayload,
   type DataGridWorkerVisibleRowDelta,
+  type DataGridWorkerColumnarNumericField,
 } from "./workerOwnedRowModelProtocol.js"
 
 export interface CreateDataGridWorkerOwnedRowModelHostOptions<T = unknown>
@@ -23,6 +26,7 @@ export interface CreateDataGridWorkerOwnedRowModelHostOptions<T = unknown>
   source: DataGridWorkerMessageSource
   target: DataGridWorkerMessageTarget
   channel?: string | null
+  columnarNumericFields?: readonly string[]
 }
 
 export interface DataGridWorkerOwnedRowModelHost {
@@ -122,6 +126,39 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
   let previousVisibleRange: { start: number; end: number } | null = null
   let previousVisibleRows: Readonly<ReturnType<typeof model.getRowsInRange>> = []
 
+  const encodeColumnarNumericRows = (rows: readonly DataGridRowNode<T>[]): {
+    rows: DataGridRowNode<T>[]
+    fields: DataGridWorkerColumnarNumericField[]
+  } | null => {
+    const configuredFields = (options.columnarNumericFields ?? [])
+      .map(field => field.trim())
+      .filter((field, index, fields) => field.length > 0 && fields.indexOf(field) === index)
+    if (configuredFields.length === 0 || rows.length === 0) return null
+    const fields: DataGridWorkerColumnarNumericField[] = []
+    for (const field of configuredFields) {
+      const values = new Float64Array(rows.length)
+      const nulls = new Uint8Array(rows.length)
+      for (let index = 0; index < rows.length; index += 1) {
+        const value = (rows[index]!.data as Record<string, unknown>)[field]
+        if (value == null) {
+          nulls[index] = 1
+          continue
+        }
+        if (typeof value !== "number" || !Number.isFinite(value)) return null
+        values[index] = value
+      }
+      fields.push({ field, values, nulls })
+    }
+    return {
+      rows: rows.map(row => {
+        const data = { ...(row.data as Record<string, unknown>) }
+        for (const field of configuredFields) delete data[field]
+        return { ...row, data: data as T, row: data as T }
+      }),
+      fields,
+    }
+  }
+
   const emitUpdate = (requestId = 0, error: unknown = null, metadataUnchanged = false): void => {
     if (disposed) {
       return
@@ -132,6 +169,8 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       end: snapshot.viewportRange.end,
     }
     const visibleRows = error ? [] : model.getRowsInRange(visibleRange)
+    const columnar = error ? null : encodeColumnarNumericRows(visibleRows)
+    const transportRows = columnar?.rows ?? visibleRows
     const canDelta = !error
       && previousVisibleRange?.start === visibleRange.start
       && previousVisibleRange.end === visibleRange.end
@@ -159,7 +198,8 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       formulaFields: metadataUnchanged ? [] : model.getFormulaFields?.() ?? [],
       formulaExecutionPlan: metadataUnchanged ? null : model.getFormulaExecutionPlan?.() ?? null,
       formulaComputeStageDiagnostics: model.getFormulaComputeStageDiagnostics?.() ?? null,
-      visibleRows: useDelta ? [] : visibleRows,
+      visibleRows: useDelta ? [] : transportRows,
+      ...(columnar && !useDelta ? { visibleRowsColumnar: { fields: columnar.fields } } : {}),
       ...(useDelta ? { visibleRowsMode: "delta" as const, visibleRowsDelta } : { visibleRowsMode: "full" as const }),
       visibleRange,
     }
@@ -171,7 +211,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       channel,
     )
     try {
-      target.postMessage(message)
+      target.postMessage(message, collectDataGridWorkerColumnarTransferables(payload))
     } catch (postError) {
       // A row payload can fail structured cloning independently of command execution.
       // Retry once with a terminal, metadata-only snapshot so the request is observable.

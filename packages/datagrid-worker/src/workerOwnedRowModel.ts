@@ -759,6 +759,21 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     emit()
   }
 
+  const decodeColumnarRows = (payload: {
+    visibleRows: readonly DataGridRowNode<T>[]
+    visibleRowsColumnar?: { fields: readonly { field: string; values: Float64Array; nulls: Uint8Array }[] } | null
+  }): DataGridRowNode<T>[] => {
+    const fields = payload.visibleRowsColumnar?.fields ?? []
+    if (fields.length === 0) return payload.visibleRows as DataGridRowNode<T>[]
+    return payload.visibleRows.map((row, index) => {
+      const data = { ...(row.data as Record<string, unknown>) }
+      for (const field of fields) {
+        data[field.field] = field.nulls[index] === 1 ? null : field.values[index]
+      }
+      return { ...row, data: data as T, row: data as T }
+    })
+  }
+
   const onMessage = (event: DataGridWorkerMessageEvent): void => {
     if (disposed) {
       return
@@ -828,7 +843,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       }
       visibleRows = nextVisibleRows
     } else {
-      visibleRows = update.visibleRows as DataGridRowNode<T>[]
+      visibleRows = decodeColumnarRows(update)
     }
     visibleRange = nextVisibleRange
     pushWindowCache(visibleRange, visibleRows)
