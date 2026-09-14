@@ -4167,6 +4167,42 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("recomputes sorted membership for filtered hidden rows", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, owner: "noc", score: 20 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, owner: "ops", score: 10 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, owner: "noc", score: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+    })
+    model.setFilterModel({
+      columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
+      advancedFilters: {},
+    })
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    model.patchRows([{ rowId: "r2", data: { score: 1 } }], { recomputeSort: true })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3"])
+    model.dispose()
+  })
+
+  it("recomputes sorted pagination after a sort-key patch", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, score: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+        { row: { id: 4, score: 40 }, rowId: "r4", originalIndex: 3, displayIndex: 3 },
+      ],
+      initialPagination: { enabled: true, pageSize: 2, currentPage: 1 },
+    })
+    model.setSortModel([{ key: "score", direction: "asc" }])
+    model.patchRows([{ rowId: "r1", data: { score: 50 } }], { recomputeSort: true })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r4", "r1"])
+    model.dispose()
+  })
+
   it("tracks projection diagnostics version and stale stage markers", () => {
     const model = createClientRowModel({
       rows: [

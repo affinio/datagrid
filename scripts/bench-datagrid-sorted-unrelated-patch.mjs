@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url"
 const rowCount = Number.parseInt(process.env.BENCH_SORTED_PATCH_ROWS ?? "100000", 10)
 const iterations = Number.parseInt(process.env.BENCH_SORTED_PATCH_ITERATIONS ?? "12", 10)
 const changeCounts = (process.env.BENCH_SORTED_PATCH_SIZES ?? "1,100,1000").split(",").map(Number)
+const sortKeyMode = process.env.BENCH_SORTED_PATCH_MODE === "sort-key"
 
 async function loadFactory() {
   for (const candidate of [resolve("packages/datagrid-core/dist/src/models/index.js"), resolve("packages/datagrid-core/dist/src/public.js")]) {
@@ -25,7 +26,7 @@ const createClientRowModel = await loadFactory()
 const rows = Array.from({ length: rowCount }, (_, id) => ({
   row: { id, score: rowCount - id, label: `row-${id}` }, rowId: id, originalIndex: id, displayIndex: id,
 }))
-console.log(`sorted-unrelated-patch rows=${rowCount} iterations=${iterations}`)
+console.log(`sorted-patch mode=${sortKeyMode ? "sort-key" : "unrelated"} rows=${rowCount} iterations=${iterations}`)
 for (const changeCount of changeCounts) {
   const model = createClientRowModel({ rows })
   const samples = []
@@ -37,14 +38,16 @@ for (const changeCount of changeCounts) {
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       const updates = Array.from({ length: changeCount }, (_, index) => ({
         rowId: (iteration * changeCount + index) % rowCount,
-        data: { label: `patch-${iteration}-${index}` },
+        data: sortKeyMode
+          ? { score: rowCount - ((iteration * changeCount + index) % rowCount) - iteration - 1 }
+          : { label: `patch-${iteration}-${index}` },
       }))
       const startedAt = performance.now()
-      model.patchRows(updates)
+      model.patchRows(updates, sortKeyMode ? { recomputeSort: true } : undefined)
       samples.push(performance.now() - startedAt)
     }
     const first = model.getRowsInRange({ start: 0, end: 0 })[0]
-    if (first?.rowId !== rowCount - 1) throw new Error("sorted order changed during unrelated patch")
+    if (!sortKeyMode && first?.rowId !== rowCount - 1) throw new Error("sorted order changed during unrelated patch")
   } finally {
     model.dispose()
   }
