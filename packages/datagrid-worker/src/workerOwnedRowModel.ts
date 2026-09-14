@@ -238,6 +238,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   const MAX_WINDOW_CACHE_SIZE = 8
   const INITIAL_SYNC_PREFETCH_MAX_ROWS = 25
   const PATCH_BURST_IMMEDIATE_FLUSH_THRESHOLD = 1024
+  const MAX_QUEUED_COMMANDS_BEFORE_FLUSH = 64
   const viewportCoalescingStrategy = options.viewportCoalescingStrategy ?? "split"
   let disposed = false
   let nextRequestId = 1
@@ -674,6 +675,10 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     }
     if (queuedCommands.length > queuePeak) {
       queuePeak = queuedCommands.length
+    }
+    if (queuedCommands.length >= MAX_QUEUED_COMMANDS_BEFORE_FLUSH) {
+      flushNow()
+      return requestId
     }
     if (
       payload.type === "patch-rows"

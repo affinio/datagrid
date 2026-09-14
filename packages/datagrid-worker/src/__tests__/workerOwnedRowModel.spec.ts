@@ -375,6 +375,34 @@ describe("worker-owned row model", () => {
     host.dispose()
   })
 
+  it("flushes non-coalescible command bursts at a bounded queue size", async () => {
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows: buildRows(100),
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+
+    for (let index = 0; index < 100; index += 1) {
+      mirror.toggleGroup(`group-${index}`)
+    }
+    await flushMessages()
+
+    expect(countRowModelCommands(channel.worker, "toggle-group")).toBe(100)
+    expect(mirror.getWorkerProtocolDiagnostics()).toMatchObject({
+      queuePeak: 64,
+      immediateFlushCount: 1,
+    })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("coalesces high-frequency patch commands and merges payload/options", async () => {
     const rows = buildRows(20)
     const channel = createMessageChannelPair()
