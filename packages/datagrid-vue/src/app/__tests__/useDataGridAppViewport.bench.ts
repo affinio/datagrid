@@ -302,3 +302,25 @@ describe("visible-row sync — 1 000 one-row window shifts", () => {
 // Read once so TypeScript does not warn "declared but never read".
 // Has no runtime effect; V8 will eliminate this check.
 void _sink
+
+
+// ---------------------------------------------------------------------------
+// Suite 4 — zero-width initialization: full materialization vs bounded seed
+// ---------------------------------------------------------------------------
+
+const ZERO_WIDTH_COLUMN_COUNT = 10_000
+const ZERO_WIDTH_OVERSCAN = 2
+const zeroWidthColumns = Array.from({ length: ZERO_WIDTH_COLUMN_COUNT }, (_, index) => ({
+  key: `zero-${index}`,
+  width: COLUMN_WIDTH,
+}))
+
+describe("zero-width column initialization — 10 000 columns", () => {
+  bench("BEFORE — materialize every column", () => {
+    _sink = zeroWidthColumns.slice(0)
+  })
+
+  bench("AFTER  — materialize bounded seed window", () => {
+    _sink = zeroWidthColumns.slice(0, ZERO_WIDTH_OVERSCAN + 1)
+  })
+})

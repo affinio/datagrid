@@ -969,15 +969,25 @@ export function useDataGridAppViewport<TRow>(
 
     const availableWidth = Math.max(0, viewportClientWidth.value - indexColumnWidth)
     if (availableWidth <= 0) {
+      // A hidden or not-yet-measured container must keep a bounded seed window.
+      // The next resize/visibility sync will resolve the precise range.
+      const seedEnd = Math.min(columns.length - 1, Math.max(0, columnOverscan.value))
       lastSyncedColumnRange = {
         columns,
         prefix: columnPrefixWidths.value,
         totalWidth,
         overscan: columnOverscan.value,
         start: 0,
-        end: Math.max(0, columns.length - 1),
+        end: seedEnd,
       }
-      return resolveViewportColumnMetricsResult(columns, 0, Math.max(0, columns.length - 1), 0, 0)
+      const renderedWidth = (columnPrefixWidths.value[seedEnd + 1] ?? totalWidth)
+      return resolveViewportColumnMetricsResult(
+        columns,
+        0,
+        seedEnd,
+        0,
+        Math.max(0, totalWidth - renderedWidth),
+      )
     }
 
     const scrollLeft = Math.max(0, viewportScrollLeft.value)

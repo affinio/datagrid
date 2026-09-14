@@ -1056,6 +1056,28 @@ describe("useDataGridAppViewport contract", () => {
   // column virtualization — range correctness
   // -------------------------------------------------------------------------
 
+  it("keeps zero-width column virtualization bounded until resize measurement", () => {
+    const raf = createRafHarness()
+    const COLS = makeColumns(10_000, 140)
+    const viewport = makeViewport({
+      visibleColumns: ref(COLS),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    const el = makeBodyViewport(0, 0)
+    viewport.bodyViewportRef.value = el
+    viewport.syncViewportFromDom()
+
+    expect(viewport.renderedColumns.value).toHaveLength(3)
+    expect(viewport.viewportColumnStart.value).toBe(0)
+    expect(viewport.viewportColumnEnd.value).toBe(2)
+    expect(viewport.rightColumnSpacerWidth.value).toBe(10_000 * 140 - 3 * 140)
+  })
+
   it("computes correct rendered column range at zero scroll", () => {
     const raf = createRafHarness()
     const COLS = makeColumns(50, 140) // 50 × 140 = 7 000 px total
