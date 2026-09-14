@@ -62,7 +62,10 @@ import type { ClientRowComputedSnapshotFieldsRuntime } from "./materialization/c
 import {
   createFilterPredicate,
 } from "./projection/clientRowProjectionPrimitives.js"
-import { createClientRowColumnHistogramRuntime } from "./projection/clientRowColumnHistogramRuntime.js"
+import {
+  createClientRowColumnHistogramRuntime,
+  type ClientRowColumnHistogramRuntime,
+} from "./projection/clientRowColumnHistogramRuntime.js"
 import {
   applyRowDataPatch,
   mergeRowPatch,
@@ -384,15 +387,22 @@ export function createClientRowModel<T>(
     filter: runtimeState.filterRevision,
     group: runtimeState.groupRevision,
   })
-  const columnHistogramRuntime = createClientRowColumnHistogramRuntime<T>({
-    ensureActive: () => lifecycle.ensureActive(),
-    getBaseSourceRows,
-    getFilteredRowsProjection: () => runtimeState.filteredRowsProjection,
-    readProjectionRowField: (row, key, field) => readProjectionRowField(row, key, field),
-    readFilterCell: options.readFilterCell,
-    readFilterCellStyle: options.readFilterCellStyle,
-    resolveFilterPredicate: filterOptions => derivedCacheRuntime.resolveFilterPredicate(filterOptions),
-  })
+  let columnHistogramRuntime: ClientRowColumnHistogramRuntime | null = null
+  const getColumnHistogramRuntime = (): ClientRowColumnHistogramRuntime => {
+    if (columnHistogramRuntime) {
+      return columnHistogramRuntime
+    }
+    columnHistogramRuntime = createClientRowColumnHistogramRuntime<T>({
+      ensureActive: () => lifecycle.ensureActive(),
+      getBaseSourceRows,
+      getFilteredRowsProjection: () => runtimeState.filteredRowsProjection,
+      readProjectionRowField: (row, key, field) => readProjectionRowField(row, key, field),
+      readFilterCell: options.readFilterCell,
+      readFilterCellStyle: options.readFilterCellStyle,
+      resolveFilterPredicate: filterOptions => derivedCacheRuntime.resolveFilterPredicate(filterOptions),
+    })
+    return columnHistogramRuntime
+  }
   const groupByIncrementalAggregationState = projectionTransientStateRuntime.getGroupByIncrementalAggregationState()
   const computedRegistryRef: { current: ClientRowComputedRegistryRuntime<T> | null } = {
     current: null,
@@ -1101,7 +1111,7 @@ export function createClientRowModel<T>(
       return cloneAggregationModel(viewStateRuntime.getAggregationModel())
     },
     getColumnHistogram(columnId: string, histogramOptions?: DataGridColumnHistogramOptions) {
-      return columnHistogramRuntime.getColumnHistogram(columnId, histogramOptions)
+      return getColumnHistogramRuntime().getColumnHistogram(columnId, histogramOptions)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       mutationHostRuntime.setGroupExpansion(expansion)

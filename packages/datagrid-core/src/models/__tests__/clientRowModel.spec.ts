@@ -5006,3 +5006,20 @@ describe("createClientRowModel", () => {
     }).toThrow(/disposed/i)
   })
 })
+
+
+it("activates column histogram capability on first read without changing plain rows", () => {
+  const model = createClientRowModel({
+    rows: [
+      { row: { id: "r1", status: "ready" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+      { row: { id: "r2", status: "pending" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+    ],
+  })
+
+  expect(model.getRowsInRange({ start: 0, end: 1 }).map(row => row.rowId)).toEqual(["r1", "r2"])
+  expect(model.getColumnHistogram("status")).toEqual([
+    { token: "string:pending", value: "pending", count: 1, text: "pending" },
+    { token: "string:ready", value: "ready", count: 1, text: "ready" },
+  ])
+  model.dispose()
+})
