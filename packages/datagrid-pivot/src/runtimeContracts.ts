@@ -39,6 +39,17 @@ export interface DataGridPivotProjectionResult<T> {
   diagnostics?: DataGridPivotProjectionDiagnostics
 }
 
+export interface DataGridPivotMaterializeOptions {
+  mode?: "sparse" | "dense"
+  maxCells?: number
+}
+
+export interface DataGridPivotMaterializeResult<T> {
+  rows: DataGridRowNode<T>[]
+  columns: DataGridPivotColumn[]
+  diagnostics?: DataGridPivotProjectionDiagnostics
+}
+
 export interface DataGridPivotProjectRowsInput<T> {
   inputRows: readonly DataGridRowNode<T>[]
   pivotModel: DataGridPivotSpec
@@ -61,5 +72,6 @@ export interface DataGridPivotRuntime<T> {
   projectRows: (input: DataGridPivotProjectRowsInput<T>) => DataGridPivotProjectionResult<T>
   applyValueOnlyPatch: (input: DataGridPivotApplyValuePatchInput<T>) => DataGridPivotProjectionResult<T> | null
   readCell: (address: DataGridPivotCellAddress) => DataGridPivotCellState<unknown>
+  materializeRows: (options?: DataGridPivotMaterializeOptions) => DataGridPivotMaterializeResult<T>
   normalizeColumns: (columns: readonly DataGridPivotColumn[]) => DataGridPivotColumn[]
 }

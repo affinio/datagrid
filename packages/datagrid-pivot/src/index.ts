@@ -68,6 +68,8 @@ export type {
   DataGridPivotRuntimeOptions,
   DataGridPivotCellState,
   DataGridPivotCellAddress,
+  DataGridPivotMaterializeOptions,
+  DataGridPivotMaterializeResult,
   DataGridPivotProjectionDiagnostics,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,

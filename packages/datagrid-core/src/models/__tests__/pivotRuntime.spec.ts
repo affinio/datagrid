@@ -142,6 +142,31 @@ describe("pivotRuntime incremental patching", () => {
     expect(Object.keys(amer.row as Record<string, unknown>)).toHaveLength(4)
   })
 
+  it("materializes bounded dense compatibility rows from sparse output", () => {
+    const runtime = createPivotRuntime<PivotRow>({ sparseOutput: true })
+    const projected = runtime.projectRows({
+      inputRows: [
+        createLeafRow({ id: "r1", region: "AMER", year: 2024, revenue: 10 }, 0),
+        createLeafRow({ id: "r2", region: "EMEA", year: 2025, revenue: 20 }, 1),
+      ],
+      pivotModel: { rows: ["region"], columns: ["year"], values: [{ field: "revenue", agg: "sum" }] },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+    const dense = runtime.materializeRows({ mode: "dense", maxCells: 10 })
+    expect(dense.diagnostics).toBeUndefined()
+    expect(dense.rows).toHaveLength(projected.rows.length)
+    for (const row of dense.rows) {
+      for (const column of dense.columns) {
+        expect(Object.hasOwn(row.data as Record<string, unknown>, column.id)).toBe(true)
+      }
+    }
+    expect(runtime.materializeRows({ mode: "dense", maxCells: 1 })).toMatchObject({
+      rows: [],
+      columns: [],
+      diagnostics: { kind: "output-limit-exceeded", estimatedCells: 4, maxOutputCells: 1 },
+    })
+  })
+
   it("applies value-only patch without relying on cached binding by rowId", () => {
     const runtime = createPivotRuntime<PivotRow>()
     const sourceRows = [

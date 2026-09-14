@@ -12,6 +12,8 @@ import type {
   DataGridPivotFieldResolver,
   DataGridPivotCellAddress,
   DataGridPivotCellState,
+  DataGridPivotMaterializeOptions,
+  DataGridPivotMaterializeResult,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,
   DataGridPivotRuntime,
@@ -792,6 +794,34 @@ export function createPivotRuntime<T>(
     return value === null ? { kind: "null" } : { kind: "value", value }
   }
 
+  const materializeRows = (input: DataGridPivotMaterializeOptions = {}): DataGridPivotMaterializeResult<T> => {
+    const mode = input.mode === "dense" ? "dense" : "sparse"
+    if (mode === "sparse") {
+      return { rows: projectedRows.slice(), columns: projectedColumns.slice() }
+    }
+    const maxCells = Number.isFinite(input.maxCells)
+      ? Math.max(1, Math.trunc(input.maxCells as number))
+      : Number.POSITIVE_INFINITY
+    const estimatedCells = projectedRows.length * projectedColumns.length
+    if (estimatedCells > maxCells) {
+      return {
+        rows: [],
+        columns: [],
+        diagnostics: { kind: "output-limit-exceeded", estimatedCells, maxOutputCells: maxCells },
+      }
+    }
+    const rows = projectedRows.map(row => {
+      const data = { ...(row.data as Record<string, unknown>) }
+      for (const column of projectedColumns) {
+        if (!Object.prototype.hasOwnProperty.call(data, column.id)) {
+          data[column.id] = null
+        }
+      }
+      return { ...row, data: data as T, row: data as T }
+    })
+    return { rows, columns: projectedColumns.slice() }
+  }
+
   const applyValueOnlyPatch = (input: DataGridPivotApplyValuePatchInput<T>): DataGridPivotProjectionResult<T> | null => {
     const state = incrementalState
     if (!state) {
@@ -929,6 +959,7 @@ export function createPivotRuntime<T>(
     },
     applyValueOnlyPatch,
     readCell,
+    materializeRows,
     normalizeColumns: normalizePivotColumns,
   }
 }

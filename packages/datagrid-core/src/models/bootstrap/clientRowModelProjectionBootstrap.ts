@@ -71,6 +71,9 @@ export function createClientRowModelProjectionBootstrap<T>(
     readCell(address) {
       return getPivotRuntime().readCell(address)
     },
+    materializeRows(options) {
+      return getPivotRuntime().materializeRows(options)
+    },
     normalizeColumns(columns) {
       return getPivotRuntime().normalizeColumns(columns)
     },
