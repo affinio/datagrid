@@ -1,3 +1,4 @@
+import { createChunkedSequence } from "./treeProjectionChunkedSequence.js"
 import {
   isGroupExpanded,
   type DataGridGroupExpansionSnapshot,
@@ -1332,9 +1333,16 @@ function replaceProjectionSegment<T>(
   removeCount: number,
   replacement: readonly DataGridRowNode<T>[],
 ): DataGridRowNode<T>[] {
+  const safeStart = Math.max(0, Math.min(startIndex, rows.length))
+  const safeRemoveCount = Math.max(0, Math.min(removeCount, rows.length - safeStart))
+  const replacementSpan = Math.max(safeRemoveCount, replacement.length)
+  if (replacementSpan >= 4096) {
+    const sequence = createChunkedSequence(rows, 256)
+    sequence.replace(safeStart, safeRemoveCount, replacement)
+    return sequence.toArray()
+  }
+
   const result = rows.slice()
-  const safeStart = Math.max(0, Math.min(startIndex, result.length))
-  const safeRemoveCount = Math.max(0, Math.min(removeCount, result.length - safeStart))
   const delta = replacement.length - safeRemoveCount
   const tailStart = safeStart + safeRemoveCount
 
