@@ -41,6 +41,7 @@ Per-benchmark outputs (JSON):
 - `artifacts/performance/bench-datagrid-enterprise-browser-frames.json`
 - `artifacts/performance/bench-datagrid-enterprise-a11y-browser.assert.json`
 - `artifacts/performance/bench-datagrid-package-footprint.json`
+- `artifacts/performance/bench-datagrid-ag-comparator.json`
 
 Harness summary:
 - `artifacts/performance/datagrid-benchmark-report.json`
@@ -49,6 +50,12 @@ Runtime report gate summary:
 - `artifacts/quality/datagrid-benchmark-gates-report.json`
 Baseline lock:
 - `docs/perf/datagrid-benchmark-baseline.json`
+
+## AG Grid Comparator Fixture
+
+- `pnpm run bench:datagrid:ag-comparator` writes a pinned AG Grid `36.1.0` comparator manifest with deterministic shared data checksum and workload profiles.
+- The manifest is a fixture contract only; timing comparison requires the browser runner and an AG Enterprise license supplied through CI/local secret. License values are never written to artifacts.
+- Keep Affino and AG Grid on the same row generator, column count, update batch policy, warmup, viewport, and profile order before comparing raw browser artifacts.
 
 ## Package Footprint and Startup
 

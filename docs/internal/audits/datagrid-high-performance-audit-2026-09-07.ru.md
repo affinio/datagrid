@@ -115,7 +115,7 @@
 
 - **Область поиска:** scripts, e2e, CI, perf docs, manifests sandbox/showcase. Есть AG-target названия и собственные before/after сравнения; реализация запуска AG Grid в проверенной области не найдена.
 - **Последствие:** невозможно сказать, быстрее ли Affino на том же workload, где граница памяти и сколько стоит flexibility. «Enterprise» в имени теста не является сравнением.
-- **Исправление:** минимальный отдельный comparator fixture с точной версией AG Grid Enterprise/Vue wrapper и общим генератором данных. Не примешивать dependency конкурента в production packages.
+- **Исправление:** начат отдельный dev-only comparator fixture: AG Grid `36.1.0` community/vue3/enterprise закреплены в root devDependencies, `scripts/bench-datagrid-ag-comparator.mjs` генерирует общий deterministic workload manifest/checksum и профили. Dependency не попадает в production packages. Browser timing runner и license-backed Enterprise execution остаются следующим sub-slice.
 - **DoD:** матрица из раздела 7; одинаковая модель данных, колонки, formatter/renderer complexity, row height, pinned panes, viewport, сортировка и batch latency; production builds. Raw artifacts, commit/version, browser, CPU profile, warmup и порядок прогонов фиксируются. AG Enterprise запускается с корректно предоставленной конфигурацией лицензии.
 - **Риск:** сравнить холодный Affino с прогретым AG, plain cells с Vue components, local rows с серверной загрузкой либо batch с per-row update и получить ложную победу.
 - **Public API:** не требуется. Зависимости: HP-03. Размер: M, затем расширение матрицы.
