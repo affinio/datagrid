@@ -193,6 +193,27 @@ describe("datagrid-worker postMessage transport", () => {
     transport.dispose()
   })
 
+  it("passes an explicit transfer list without changing the compute envelope", () => {
+    const transferred = new ArrayBuffer(8)
+    let receivedTransfer: readonly Transferable[] | undefined
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: {
+        postMessage(_message, transfer) {
+          receivedTransfer = transfer
+        },
+      },
+      resolveTransferList: ({ request }) => request.kind === "refresh" ? [transferred] : [],
+      dispatchStrategy: "fire-and-forget",
+      requestTimeoutMs: 0,
+    })
+
+    transport.dispatch({ kind: "refresh" })
+
+    expect(receivedTransfer).toEqual([transferred])
+    expect(transport.getStats().dispatched).toBe(1)
+    transport.dispose()
+  })
+
   it("serializes compute batch plan for execution-stage requests", async () => {
     const channel = createMessageChannelPair()
     const transport = createDataGridWorkerPostMessageTransport({

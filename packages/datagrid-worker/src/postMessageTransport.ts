@@ -10,7 +10,7 @@ export interface DataGridWorkerMessageEvent<T = unknown> {
 }
 
 export interface DataGridWorkerMessageTarget {
-  postMessage: (message: unknown) => void
+  postMessage: (message: unknown, transfer?: readonly Transferable[]) => void
 }
 
 export interface DataGridWorkerMessageSource {
@@ -48,6 +48,10 @@ export interface CreateDataGridWorkerPostMessageTransportOptions {
   channel?: string | null
   dispatchStrategy?: DataGridWorkerDispatchStrategy
   requestTimeoutMs?: number
+  resolveTransferList?: (input: {
+    request: DataGridWorkerComputeRequest
+    message: unknown
+  }) => readonly Transferable[]
 }
 
 interface PendingRequestState {
@@ -117,7 +121,8 @@ export function createDataGridWorkerPostMessageTransport(
     // Register before posting: MessageChannel implementations may deliver an ack synchronously.
     pendingById.set(requestId, { timeoutHandle })
     try {
-      options.target.postMessage(requestMessage)
+      const transfer = options.resolveTransferList?.({ request, message: requestMessage }) ?? []
+      options.target.postMessage(requestMessage, transfer)
     } catch (error) {
       clearPending(requestId)
       errored += 1
