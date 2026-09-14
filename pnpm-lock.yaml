@@ -63,6 +63,9 @@ importers:
       ag-grid-vue3:
         specifier: 36.1.0
         version: 36.1.0(vue@3.4.38(typescript@5.9.3))
+      esbuild:
+        specifier: ^0.25.12
+        version: 0.25.12
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1

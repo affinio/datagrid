@@ -154,6 +154,7 @@
     "ag-grid-community": "36.1.0",
     "ag-grid-enterprise": "36.1.0",
     "ag-grid-vue3": "36.1.0",
+    "esbuild": "^0.25.12",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
     "vite": "^8.0.10",

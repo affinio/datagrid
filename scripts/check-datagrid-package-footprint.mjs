@@ -24,13 +24,21 @@ const failures = []
 for (const profile of artifact.profiles ?? []) {
   const expected = baselineProfiles[profile.name]
   if (!expected) { failures.push(`${profile.name}: missing baseline profile`); continue }
-  for (const metric of ["distBytes", "gzipBytes", "brotliBytes"]) {
-    const growth = growthPct(profile[metric], expected[metric])
+  const metrics = [
+    ["distBytes", profile.distBytes, expected.distBytes],
+    ["gzipBytes", profile.gzipBytes, expected.gzipBytes],
+    ["brotliBytes", profile.brotliBytes, expected.brotliBytes],
+    ["treeShaken.bytes", profile.treeShaken?.bytes, expected.treeShaken?.bytes],
+    ["treeShaken.gzipBytes", profile.treeShaken?.gzipBytes, expected.treeShaken?.gzipBytes],
+    ["treeShaken.brotliBytes", profile.treeShaken?.brotliBytes, expected.treeShaken?.brotliBytes],
+  ]
+  for (const [metric, candidate, baselineValue] of metrics) {
+    const growth = growthPct(candidate, baselineValue)
     if (growth != null && growth > maxGrowthPct) failures.push(`${profile.name} ${metric} growth ${growth.toFixed(2)}% > ${maxGrowthPct}%`)
   }
   const startupGrowth = growthPct(profile.startupMs?.p50, expected.startupMs?.p50)
   if (startupGrowth != null && startupGrowth > maxStartupGrowthPct) failures.push(`${profile.name} startup p50 growth ${startupGrowth.toFixed(2)}% > ${maxStartupGrowthPct}%`)
-  console.log(`${profile.name}: footprint growth ${["distBytes", "gzipBytes", "brotliBytes"].map(metric => `${metric}=${(growthPct(profile[metric], expected[metric]) ?? 0).toFixed(2)}%`).join(", ")}; startupP50=${(startupGrowth ?? 0).toFixed(2)}%`)
+  console.log(`${profile.name}: footprint growth ${metrics.map(([metric, candidate, baselineValue]) => `${metric}=${(growthPct(candidate, baselineValue) ?? 0).toFixed(2)}%`).join(", ")}; startupP50=${(startupGrowth ?? 0).toFixed(2)}%`)
 }
 if (failures.length) {
   console.error("\nPackage footprint regression gate failed:")

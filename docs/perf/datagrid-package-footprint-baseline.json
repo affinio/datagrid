@@ -1,9 +1,12 @@
 {
-  "description": "Reviewed package footprint/startup baseline for documented entrypoints",
+  "description": "Reviewed package footprint/startup and tree-shaken consumer baseline for documented entrypoints",
   "metrics": [
     "distBytes",
     "gzipBytes",
     "brotliBytes",
+    "treeShaken.bytes",
+    "treeShaken.gzipBytes",
+    "treeShaken.brotliBytes",
     "startupMs.p50"
   ],
   "profiles": {
@@ -13,6 +16,11 @@
       "brotliBytes": 227397,
       "startupMs": {
         "p50": 53.94297
+      },
+      "treeShaken": {
+        "bytes": 636153,
+        "gzipBytes": 168952,
+        "brotliBytes": 139650
       }
     },
     "core:advanced": {
@@ -21,6 +29,11 @@
       "brotliBytes": 227397,
       "startupMs": {
         "p50": 54.64967899999999
+      },
+      "treeShaken": {
+        "bytes": 528042,
+        "gzipBytes": 143682,
+        "brotliBytes": 120507
       }
     },
     "vue:plain": {
@@ -29,6 +42,11 @@
       "brotliBytes": 62626,
       "startupMs": {
         "p50": 122.37054899999998
+      },
+      "treeShaken": {
+        "bytes": 548711,
+        "gzipBytes": 149903,
+        "brotliBytes": 125093
       }
     },
     "vue:advanced": {
@@ -37,6 +55,11 @@
       "brotliBytes": 62626,
       "startupMs": {
         "p50": 125.662095
+      },
+      "treeShaken": {
+        "bytes": 540533,
+        "gzipBytes": 147662,
+        "brotliBytes": 124925
       }
     },
     "vue-app:plain": {
@@ -45,6 +68,11 @@
       "brotliBytes": 145224,
       "startupMs": {
         "p50": 157.50631800000002
+      },
+      "treeShaken": {
+        "bytes": 1398693,
+        "gzipBytes": 362637,
+        "brotliBytes": 291859
       }
     },
     "pivot": {
@@ -53,6 +81,11 @@
       "brotliBytes": 4835,
       "startupMs": {
         "p50": 5.395634000000001
+      },
+      "treeShaken": {
+        "bytes": 11091,
+        "gzipBytes": 3736,
+        "brotliBytes": 3440
       }
     },
     "worker": {
@@ -61,6 +94,11 @@
       "brotliBytes": 8332,
       "startupMs": {
         "p50": 53.745844
+      },
+      "treeShaken": {
+        "bytes": 363297,
+        "gzipBytes": 94330,
+        "brotliBytes": 79242
       }
     }
   }
