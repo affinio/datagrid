@@ -24,6 +24,8 @@ class MemoryMessageEndpoint {
   private readonly listeners = new Set<MessageListener>()
   private peer: MemoryMessageEndpoint | null = null
   readonly receivedMessages: unknown[] = []
+  onerror: ((event: { error?: unknown; message?: string }) => void) | null = null
+  onmessageerror: ((event: { error?: unknown; message?: string }) => void) | null = null
 
   connect(peer: MemoryMessageEndpoint): void {
     this.peer = peer
@@ -225,6 +227,27 @@ describe("worker-owned row model", () => {
     )
     const updateClone = structuredClone(updateMessage)
     expect(updateClone.payload.snapshot.filterModel?.quickFilter).toEqual(filterModel.quickFilter)
+  })
+
+  it("clears pending viewport loading on worker messageerror", async () => {
+    const channel = createMessageChannelPair()
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+      requestInitialSync: false,
+    })
+
+    mirror.setViewportRange({ start: 10, end: 20 })
+    await Promise.resolve()
+    expect(mirror.getSnapshot().loading).toBe(true)
+
+    channel.main.onmessageerror?.({ message: "clone failed" })
+
+    expect(mirror.getSnapshot().loading).toBe(false)
+    expect(mirror.getSnapshot().error?.message).toBe(
+      "[AffinoDataGrid worker] transport failed: clone failed",
+    )
+    mirror.dispose()
   })
 
   it("terminates a failed host command with an error snapshot", async () => {

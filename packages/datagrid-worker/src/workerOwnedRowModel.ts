@@ -733,6 +733,27 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     return requestId
   }
 
+  const onTransportError = (event: { error?: unknown; message?: string }): void => {
+    if (disposed) {
+      return
+    }
+    const reason = event.error instanceof Error
+      ? event.error.message
+      : (event.message || "Worker transport failed")
+    loadingViewport = false
+    pendingViewportRequestId = 0
+    pendingViewportRange = null
+    requestedViewportRange = null
+    queuedCommands.length = 0
+    queuedCommandIndexByKey.clear()
+    snapshot = {
+      ...snapshot,
+      loading: false,
+      error: new Error(`[AffinoDataGrid worker] transport failed: ${reason}`),
+    }
+    emit()
+  }
+
   const onMessage = (event: DataGridWorkerMessageEvent): void => {
     if (disposed) {
       return
@@ -819,6 +840,16 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   }
 
   options.source.addEventListener("message", onMessage)
+  const errorSource = options.source as unknown as {
+    onerror?: ((event: { error?: unknown; message?: string }) => void) | null
+    onmessageerror?: ((event: { error?: unknown; message?: string }) => void) | null
+  }
+  if ("onerror" in errorSource) {
+    errorSource.onerror = onTransportError
+  }
+  if ("onmessageerror" in errorSource) {
+    errorSource.onmessageerror = onTransportError
+  }
   if (options.requestInitialSync !== false) {
     dispatchCommand({ type: "sync" })
   }
@@ -1060,6 +1091,12 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       }
       disposed = true
       options.source.removeEventListener("message", onMessage)
+      if (errorSource.onerror === onTransportError) {
+        errorSource.onerror = null
+      }
+      if (errorSource.onmessageerror === onTransportError) {
+        errorSource.onmessageerror = null
+      }
       listeners.clear()
       visibleRows = []
       visibleWindowCache.clear()
