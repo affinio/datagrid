@@ -145,8 +145,10 @@
 
 - **Код:** `stage/useDataGridStageCellRendering.ts:133` синхронно вызывает renderer; `DataGridTableStageCenterPane.vue:187` вычисляет content при render. Error fallback есть, автоматического переноса тяжёлого renderer после scroll в проверенном пути нет.
 - **Последствие:** bound по числу DOM cells не даёт bound по стоимости пользовательского callback. Даже сотни callbacks по долям миллисекунды могут исчерпать frame budget. Исторические тяжёлые сценарии из раздела 6 подтверждают необходимость отдельного профиля, но не дают актуальный FPS.
-- **Исправление:** измерить обычные spans, Vue components, interactive renderers, formatter-only и deliberately slow renderer; затем opt-in defer/placeholder policy для тяжёлого content и ограничение совокупной работы за frame. Сохранить уже сделанные shell pooling/native-text оптимизации.
+- **Исправление:** baseline telemetry и renderer-duration budgets уже добавлены для обычных spans, slow custom renderers, pinned и auto-height профилей; runtime defer/placeholder policy вынесена в proposal `docs/internal/plans/datagrid-authored-renderer-defer-design-2026-09-14.ru.md`.
 - **Ориентир:** у AG Grid есть `deferRender` для тяжёлых cell components и skeleton до окончания scroll. [Scrolling performance](https://www.ag-grid.com/javascript-data-grid/scrolling-performance/).
+- **Текущий статус slice:** `dgPerfTrace=1` записывает `stageRenderWindow`, `cellRenderer`, `groupCellRenderer`; enterprise browser gate проверяет наличие invocation и p95 duration budgets. Свежий Chromium run в текущем окружении невозможен, поэтому улучшение FPS/input-to-paint не заявляется.
+- **Остаток:** runtime scheduler, placeholder policy и browser differential acceptance остаются отдельным implementation slice.
 - **DoD:** улучшение input-to-paint и frame tail с сохранением stateful row identity, editor focus, custom events, group renderer semantics, a11y; после остановки скролла окончательный content появляется в ограниченное время. Stateful children нельзя безусловно переиспользовать по viewport slot.
 - **Public API:** новый renderer policy сначала предложить и согласовать. Зависимости: HP-03. Размер: M.
 
