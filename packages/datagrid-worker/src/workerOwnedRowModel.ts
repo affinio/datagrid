@@ -794,17 +794,20 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
         viewportRange: clampRangeToRowCount(requestedViewportRange, snapshot.rowCount),
       }
     }
-    aggregationModel = cloneAggregationModel(update.aggregationModel)
-    formulaFields = Array.isArray(update.formulaFields)
-      ? update.formulaFields.map(field => ({
-          name: field.name,
-          field: field.field,
-          formula: field.formula,
-          deps: [...field.deps],
-          contextKeys: [...field.contextKeys],
-        }))
-      : []
-    formulaExecutionPlan = cloneFormulaExecutionPlan(update.formulaExecutionPlan)
+    const metadataUnchanged = update.metadataMode === "unchanged"
+    if (!metadataUnchanged) {
+      aggregationModel = cloneAggregationModel(update.aggregationModel)
+      formulaFields = Array.isArray(update.formulaFields)
+        ? update.formulaFields.map(field => ({
+            name: field.name,
+            field: field.field,
+            formula: field.formula,
+            deps: [...field.deps],
+            contextKeys: [...field.contextKeys],
+          }))
+        : []
+      formulaExecutionPlan = cloneFormulaExecutionPlan(update.formulaExecutionPlan)
+    }
     formulaComputeStageDiagnostics = cloneFormulaComputeStageDiagnostics(
       update.formulaComputeStageDiagnostics,
     )

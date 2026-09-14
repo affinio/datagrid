@@ -23,7 +23,7 @@ import type {
 } from "@affino/datagrid-formula-engine"
 
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION = 1 as const
-export const DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION = 3 as const
+export const DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION = 4 as const
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_CHANNEL = "affino.datagrid.row-model"
 
 export interface DataGridWorkerRowModelProtocolHeader {
@@ -76,6 +76,7 @@ export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   schemaVersion?: number
   snapshot: DataGridRowModelSnapshot<T>
   aggregationModel: DataGridAggregationModel<T> | null
+  metadataMode?: "full" | "unchanged"
   formulaFields?: readonly DataGridFormulaFieldSnapshot[]
   formulaExecutionPlan?: DataGridFormulaExecutionPlanSnapshot | null
   formulaComputeStageDiagnostics?: DataGridFormulaComputeStageDiagnostics | null

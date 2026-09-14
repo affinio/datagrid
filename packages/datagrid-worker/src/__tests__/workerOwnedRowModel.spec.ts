@@ -434,6 +434,35 @@ describe("worker-owned row model", () => {
     host.dispose()
   })
 
+  it("retains structural metadata when a patch uses the unchanged metadata mode", async () => {
+    const rows = buildRows(4)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    const before = channel.main.receivedMessages.length
+    mirror.patchRows([{ rowId: 1, data: { revenue: 999 } }])
+    await flushMessages()
+
+    const update = channel.main.receivedMessages.slice(before).find((message) => {
+      return (message as { kind?: unknown }).kind === "row-model-update"
+    }) as { payload?: { metadataMode?: string; aggregationModel?: unknown; formulaFields?: unknown[] } } | undefined
+    expect(update?.payload?.metadataMode).toBe("unchanged")
+    expect(update?.payload?.aggregationModel).toBeNull()
+    expect(update?.payload?.formulaFields).toEqual([])
+    expect(mirror.getRow(0)?.row).toMatchObject({ revenue: 999 })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("coalesces high-frequency viewport commands before worker dispatch", async () => {
     const rows = buildRows(100)
     const channel = createMessageChannelPair()

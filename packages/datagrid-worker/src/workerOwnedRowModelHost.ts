@@ -122,7 +122,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
   let previousVisibleRange: { start: number; end: number } | null = null
   let previousVisibleRows: Readonly<ReturnType<typeof model.getRowsInRange>> = []
 
-  const emitUpdate = (requestId = 0, error: unknown = null): void => {
+  const emitUpdate = (requestId = 0, error: unknown = null, metadataUnchanged = false): void => {
     if (disposed) {
       return
     }
@@ -154,9 +154,10 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
           error: error instanceof Error ? error : new Error(String(error)),
         }
         : snapshot,
-      aggregationModel: model.getAggregationModel(),
-      formulaFields: model.getFormulaFields?.() ?? [],
-      formulaExecutionPlan: model.getFormulaExecutionPlan?.() ?? null,
+      aggregationModel: metadataUnchanged ? null : model.getAggregationModel(),
+      ...(metadataUnchanged ? { metadataMode: "unchanged" as const } : {}),
+      formulaFields: metadataUnchanged ? [] : model.getFormulaFields?.() ?? [],
+      formulaExecutionPlan: metadataUnchanged ? null : model.getFormulaExecutionPlan?.() ?? null,
       formulaComputeStageDiagnostics: model.getFormulaComputeStageDiagnostics?.() ?? null,
       visibleRows: useDelta ? [] : visibleRows,
       ...(useDelta ? { visibleRowsMode: "delta" as const, visibleRowsDelta } : { visibleRowsMode: "full" as const }),
@@ -208,7 +209,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
     const commandMessage = event.data
     try {
       executeCommand(model, commandMessage.payload)
-      emitUpdate(commandMessage.requestId)
+      emitUpdate(commandMessage.requestId, null, commandMessage.payload.type === "patch-rows")
     } catch (error) {
       emitUpdate(commandMessage.requestId, error)
     }

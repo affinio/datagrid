@@ -28,6 +28,16 @@ const delta = createDataGridWorkerRowModelUpdateMessage(2, {
   visibleRowsMode: "delta",
   visibleRowsDelta: [{ index: 17, row: rows[17]! }],
 })
+const deltaWithUnchangedMetadata = createDataGridWorkerRowModelUpdateMessage(3, {
+  ...base,
+  aggregationModel: null,
+  metadataMode: "unchanged",
+  formulaFields: [],
+  formulaExecutionPlan: null,
+  visibleRows: [],
+  visibleRowsMode: "delta",
+  visibleRowsDelta: [{ index: 17, row: rows[17]! }],
+})
 
 function jsonBytes(value: unknown): number {
   return JSON.stringify(value).length
@@ -36,4 +46,5 @@ function jsonBytes(value: unknown): number {
 describe("worker row model visible window payload", () => {
   bench("serialize full 200-row window", () => jsonBytes(full))
   bench("serialize one-row delta window", () => jsonBytes(delta))
+  bench("serialize row delta with unchanged metadata", () => jsonBytes(deltaWithUnchangedMetadata))
 })
