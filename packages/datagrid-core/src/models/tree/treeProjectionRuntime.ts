@@ -1520,10 +1520,15 @@ function tryProjectTreePathSubtreeToggle<T>(
   if (!projectionSegmentMatches(input.rows, replaceStart, previousDescendants)) {
     return null
   }
-  const nextRows = input.rows.slice()
-  const currentGroup = nextRows[resolvedGroupIndex]
+  const replacedRows = replaceProjectionSegment(
+    input.rows,
+    replaceStart,
+    previousDescendants.length,
+    nextDescendants,
+  )
+  const currentGroup = replacedRows[resolvedGroupIndex]
   if (currentGroup && currentGroup.kind === "group") {
-    nextRows[resolvedGroupIndex] = {
+    replacedRows[resolvedGroupIndex] = {
       ...currentGroup,
       state: {
         ...currentGroup.state,
@@ -1531,12 +1536,6 @@ function tryProjectTreePathSubtreeToggle<T>(
       },
     }
   }
-  const replacedRows = replaceProjectionSegment(
-    nextRows,
-    replaceStart,
-    previousDescendants.length,
-    nextDescendants,
-  )
   updateGroupIndexAfterSubtreeReplacement(
     input.cacheState.cache.groupIndexByRowId,
     input.cacheState.cache.groupIndexShiftHistory,
@@ -1634,10 +1633,15 @@ function tryProjectTreeParentSubtreeToggle<T>(
   if (!projectionSegmentMatches(input.rows, replaceStart, previousDescendants)) {
     return null
   }
-  const nextRows = input.rows.slice()
-  const currentGroup = nextRows[resolvedGroupIndex]
+  const replacedRows = replaceProjectionSegment(
+    input.rows,
+    replaceStart,
+    previousDescendants.length,
+    nextDescendants,
+  )
+  const currentGroup = replacedRows[resolvedGroupIndex]
   if (currentGroup && currentGroup.kind === "group") {
-    nextRows[resolvedGroupIndex] = {
+    replacedRows[resolvedGroupIndex] = {
       ...currentGroup,
       state: {
         ...currentGroup.state,
@@ -1645,12 +1649,6 @@ function tryProjectTreeParentSubtreeToggle<T>(
       },
     }
   }
-  const replacedRows = replaceProjectionSegment(
-    nextRows,
-    replaceStart,
-    previousDescendants.length,
-    nextDescendants,
-  )
   updateGroupIndexAfterSubtreeReplacement(
     input.cacheState.cache.groupIndexByRowId,
     input.cacheState.cache.groupIndexShiftHistory,
