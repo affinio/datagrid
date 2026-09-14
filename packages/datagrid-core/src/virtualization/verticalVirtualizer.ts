@@ -1,4 +1,5 @@
 import { createAxisVirtualizer, type AxisVirtualizerStrategy } from "./axisVirtualizer"
+import { resolveUniformRowIndexAtOffset, resolveUniformRowOffset } from "./verticalGeometry"
 
 const MIN_ROW_HEIGHT = 0.0001
 const VIRTUAL_PADDING = 1
@@ -69,7 +70,7 @@ export function createVerticalAxisStrategy(): AxisVirtualizerStrategy<VerticalVi
       }
 
       const rowHeight = context.estimatedItemSize || 1
-      const rawStart = Math.floor(offset / Math.max(rowHeight, 1))
+      const rawStart = resolveUniformRowIndexAtOffset(offset, context.totalCount, rowHeight)
       const desiredStart = rawStart - context.overscanLeading
       const maxPoolStart = Math.max(context.totalCount - context.poolSize, 0)
       const start = clamp(desiredStart, 0, maxPoolStart)
@@ -83,7 +84,7 @@ export function createVerticalAxisStrategy(): AxisVirtualizerStrategy<VerticalVi
     getOffsetForIndex(index, context) {
       const rowHeight = context.estimatedItemSize || 1
       const clampedIndex = clamp(index, 0, Math.max(context.totalCount - 1, 0))
-      return clampedIndex * rowHeight
+      return resolveUniformRowOffset(clampedIndex, context.totalCount, rowHeight)
     },
   }
 }

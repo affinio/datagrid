@@ -1,3 +1,5 @@
+import { resolveUniformRowIndexAtOffset, resolveUniformRowOffset } from "@affino/datagrid-core/internal"
+
 export interface DataGridAppRowHeightMetricsOptions {
   totalRows: () => number
   resolveBaseRowHeight: () => number
@@ -319,7 +321,7 @@ export function createDataGridAppRowHeightMetrics(
       return offset
     }
     if (metrics.prefixOffsets == null) {
-      return normalizedIndex * metrics.baseRowHeight
+      return resolveUniformRowOffset(normalizedIndex, metrics.totalRows, metrics.baseRowHeight)
     }
     return metrics.prefixOffsets[normalizedIndex] ?? 0
   }
@@ -377,10 +379,7 @@ export function createDataGridAppRowHeightMetrics(
     }
     if (metrics.prefixOffsets == null) {
       const normalizedHeight = Math.max(1, metrics.baseRowHeight)
-      return Math.max(
-        0,
-        Math.min(metrics.totalRows - 1, Math.floor(Math.max(0, offset) / normalizedHeight)),
-      )
+      return resolveUniformRowIndexAtOffset(offset, metrics.totalRows, normalizedHeight)
     }
     const totalHeight = metrics.prefixOffsets[metrics.totalRows] ?? 0
     if (totalHeight <= 0) {

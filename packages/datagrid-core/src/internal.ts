@@ -23,3 +23,8 @@ export {
   resolveLastColumnIndexBeforeOffset,
   resolveLastColumnIndexBeforePrefixOffset,
 } from "./virtualization/columnSizing.js"
+
+export {
+  resolveUniformRowIndexAtOffset,
+  resolveUniformRowOffset,
+} from "./virtualization/verticalGeometry.js"

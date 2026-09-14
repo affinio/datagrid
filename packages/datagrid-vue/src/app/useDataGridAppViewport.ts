@@ -10,6 +10,8 @@ import {
   createVerticalOverscanController,
   resolveFirstColumnIndexAfterPrefixOffset,
   resolveLastColumnIndexBeforePrefixOffset,
+  resolveUniformRowIndexAtOffset,
+  resolveUniformRowOffset,
   type VerticalOverscanController,
 } from "@affino/datagrid-core/internal"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
@@ -1091,8 +1093,8 @@ export function useDataGridAppViewport<TRow>(
     }
 
     const estimatedRowHeight = options.normalizedBaseRowHeight.value
-    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight) - effectiveRowOverscan)
-    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight) + effectiveRowOverscan * 2
+    const start = Math.max(0, resolveUniformRowIndexAtOffset(snapshot.scrollTop, total, estimatedRowHeight) - effectiveRowOverscan)
+    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / Math.max(1, estimatedRowHeight)) + effectiveRowOverscan * 2
     const end = Math.min(total - 1, start + visibleCount - 1)
     return { start, end }
   }
@@ -1119,8 +1121,8 @@ export function useDataGridAppViewport<TRow>(
     }
 
     const estimatedRowHeight = options.normalizedBaseRowHeight.value
-    const start = Math.max(0, Math.floor(snapshot.scrollTop / estimatedRowHeight))
-    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / estimatedRowHeight)
+    const start = Math.max(0, resolveUniformRowIndexAtOffset(snapshot.scrollTop, total, estimatedRowHeight))
+    const visibleCount = Math.ceil(Math.max(1, snapshot.clientHeight) / Math.max(1, estimatedRowHeight))
     const end = Math.min(total - 1, start + visibleCount - 1)
     return { start, end }
   }
@@ -1154,7 +1156,11 @@ export function useDataGridAppViewport<TRow>(
     if (typeof options.resolveRowOffset === "function") {
       return Math.max(0, options.resolveRowOffset(rowIndex))
     }
-    return Math.max(0, rowIndex * options.normalizedBaseRowHeight.value)
+    return resolveUniformRowOffset(
+      rowIndex,
+      resolveScrollableBodyRowCount(),
+      options.normalizedBaseRowHeight.value,
+    )
   }
 
   const resolveColumnIndexByKey = (columnKey: string | null | undefined): number | null => {

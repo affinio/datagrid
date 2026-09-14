@@ -7,6 +7,16 @@ import {
 import { createHorizontalAxisVirtualizer } from "../../virtualization/horizontalVirtualizer"
 import { createVerticalAxisStrategy } from "../../virtualization/verticalVirtualizer"
 import { accumulateColumnWidths, type ColumnSizeLike } from "../../virtualization/columnSizing"
+import { resolveUniformRowIndexAtOffset, resolveUniformRowOffset } from "../../virtualization/verticalGeometry"
+
+describe("uniform vertical geometry contract", () => {
+  it("keeps offset and inverse lookup bounded at fractional and terminal positions", () => {
+    expect(resolveUniformRowOffset(-4, 10_000, 24.5)).toBe(0)
+    expect(resolveUniformRowOffset(10_000, 10_000, 24.5)).toBe(10_000 * 24.5)
+    expect(resolveUniformRowIndexAtOffset(24.5, 10_000, 24.5)).toBe(1)
+    expect(resolveUniformRowIndexAtOffset(Number.POSITIVE_INFINITY, 10_000, 24.5)).toBe(9_999)
+  })
+})
 
 describe("vertical velocity overscan contract", () => {
   it("keeps base overscan for idle or slow scroll samples", () => {
