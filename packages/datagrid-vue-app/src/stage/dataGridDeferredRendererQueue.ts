@@ -14,15 +14,24 @@ export interface DataGridDeferredRendererQueue {
   clear(): void
 }
 
-const PRIORITY_ORDER: Record<DataGridDeferredRendererPriority, number> = {
-  pinned: 0,
-  visible: 1,
-  overscan: 2,
-}
+const PRIORITIES: readonly DataGridDeferredRendererPriority[] = ["pinned", "visible", "overscan"]
 
 export function createDataGridDeferredRendererQueue(maxPending = 512): DataGridDeferredRendererQueue {
   const capacity = Math.max(1, Math.trunc(maxPending))
   const entries = new Map<string, DataGridDeferredRendererQueueEntry>()
+  const buckets: Record<DataGridDeferredRendererPriority, Set<string>> = {
+    pinned: new Set(),
+    visible: new Set(),
+    overscan: new Set(),
+  }
+
+  const remove = (key: string) => {
+    const entry = entries.get(key)
+    if (entry == null) return false
+    entries.delete(key)
+    buckets[entry.priority].delete(key)
+    return true
+  }
 
   return {
     get size() {
@@ -30,44 +39,44 @@ export function createDataGridDeferredRendererQueue(maxPending = 512): DataGridD
     },
     enqueue(entry) {
       if (entries.has(entry.key)) {
+        remove(entry.key)
         entries.set(entry.key, entry)
+        buckets[entry.priority].add(entry.key)
         return true
       }
       if (entries.size >= capacity) {
-        let worstKey: string | null = null
-        let worstPriority = -1
-        for (const [key, candidate] of entries) {
-          const priority = PRIORITY_ORDER[candidate.priority]
-          if (priority > worstPriority) {
-            worstPriority = priority
-            worstKey = key
-          }
-        }
-        if (worstKey == null || PRIORITY_ORDER[entry.priority] >= worstPriority) {
+        const worstBucket = [...PRIORITIES].reverse().find(priority => buckets[priority].size > 0)
+        if (worstBucket == null || PRIORITIES.indexOf(entry.priority) >= PRIORITIES.indexOf(worstBucket)) {
           return false
         }
-        entries.delete(worstKey)
+        const worstKey = buckets[worstBucket].values().next().value as string | undefined
+        if (worstKey != null) remove(worstKey)
       }
       entries.set(entry.key, entry)
+      buckets[entry.priority].add(entry.key)
       return true
     },
     cancel(key) {
-      return entries.delete(key)
+      return remove(key)
     },
     flush(limit) {
       const count = Math.max(0, Math.trunc(limit))
       if (count === 0 || entries.size === 0) return 0
-      const batch = [...entries.values()]
-        .sort((left, right) => PRIORITY_ORDER[left.priority] - PRIORITY_ORDER[right.priority])
-        .slice(0, count)
-      for (const entry of batch) {
-        entries.delete(entry.key)
-        entry.render()
+      let flushed = 0
+      for (const priority of PRIORITIES) {
+        for (const key of buckets[priority]) {
+          if (flushed >= count) return flushed
+          const entry = entries.get(key)
+          remove(key)
+          entry?.render()
+          flushed += 1
+        }
       }
-      return batch.length
+      return flushed
     },
     clear() {
       entries.clear()
+      for (const bucket of Object.values(buckets)) bucket.clear()
     },
   }
 }

@@ -14,6 +14,18 @@ describe("deferred renderer queue contract", () => {
     expect(queue.size).toBe(1)
   })
 
+  it("moves a deduplicated key between priority buckets without stale work", () => {
+    const queue = createDataGridDeferredRendererQueue(4)
+    const calls: string[] = []
+    queue.enqueue({ key: "cell", priority: "overscan", render: () => calls.push("old") })
+    queue.enqueue({ key: "cell", priority: "pinned", render: () => calls.push("new") })
+    queue.enqueue({ key: "visible", priority: "visible", render: () => calls.push("visible") })
+
+    expect(queue.flush(2)).toBe(2)
+    expect(calls).toEqual(["new", "visible"])
+    expect(queue.size).toBe(0)
+  })
+
   it("rejects lower priority work at capacity and cancels stale keys", () => {
     const queue = createDataGridDeferredRendererQueue(2)
     const render = vi.fn()
