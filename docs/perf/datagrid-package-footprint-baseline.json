@@ -93,7 +93,7 @@
       "gzipBytes": 11190,
       "brotliBytes": 9623,
       "startupMs": {
-        "p50": 55.037636
+        "p50": 53.745844
       },
       "treeShaken": {
         "bytes": 372273,
