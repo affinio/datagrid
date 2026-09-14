@@ -1126,6 +1126,36 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("keeps root and grouped cache stores independent across group reopen", async () => {
+    const { calls, dataSource } = createDeferredPullDataSource<{ id: number; value: string; status: string }>()
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1,
+    })
+
+    model.setViewportRange({ start: 0, end: 0 })
+    calls[0]?.resolve({
+      rows: [{ index: 0, row: { id: 1, value: "root", status: "raw" }, rowId: 1 }],
+      total: 1,
+    })
+    await flushMicrotasks()
+
+    model.setGroupBy({ fields: ["status"], expandedByDefault: true })
+    calls[1]?.resolve({
+      rows: [{ index: 0, kind: "group", rowId: "status=active", row: { id: 0, value: "branch", status: "active" } }],
+      total: 1,
+    })
+    await flushMicrotasks()
+    expect(model.getRow(0)?.row.value).toBe("branch")
+
+    model.setGroupBy(null)
+    expect(model.getRow(0)?.row.value).toBe("root")
+    expect(calls).toHaveLength(3)
+
+    model.dispose()
+  })
+
   it("drops out-of-window cached rows after branch group expansion changes projection", async () => {
     type GroupedRow = { id: string; label: string; region: string }
     let pushListener: DataGridDataSourcePushListener<GroupedRow> | null = null

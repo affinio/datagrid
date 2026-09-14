@@ -86,6 +86,7 @@ import {
   resolveVisibleRangeInvalidation,
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
+import { createDataSourceCacheStoreRegistry } from "./server/dataSourceCacheStoreRegistry.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
 import {
   createDataSourceRuntimeLifecycle,
@@ -336,12 +337,32 @@ export function createDataSourceBackedRowModel<T = unknown>(
     } as const
   })()
 
-  const cacheManager = createDataSourceCacheManager<T>({
-    rowCacheLimit,
-    rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
-  })
-  const { rowCache, staleRetainedRowIndexes, rangeCache } = cacheManager
-  const cacheStateKeyByIndex = new Map<number, string>()
+  type CacheStore = {
+    key: string
+    cacheManager: ReturnType<typeof createDataSourceCacheManager<T>>
+    cacheStateKeyByIndex: Map<number, string>
+  }
+  const cacheStoreRegistry = createDataSourceCacheStoreRegistry({ maxStores: 8 })
+  const cacheStores = new Map<string, CacheStore>()
+  const createCacheStore = (key: string): CacheStore => {
+    const cacheManager = createDataSourceCacheManager<T>({
+      rowCacheLimit,
+      rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
+    })
+    cacheManager.init()
+    cacheManager.attach()
+    const store = { key, cacheManager, cacheStateKeyByIndex: new Map<number, string>() }
+    cacheStores.set(key, store)
+    return store
+  }
+  const rootCacheStore = createCacheStore("__root__")
+  cacheStoreRegistry.acquire({ key: rootCacheStore.key, signature: rootCacheStore.key })
+  let activeCacheStore = rootCacheStore
+  let cacheManager = activeCacheStore.cacheManager
+  let rowCache = cacheManager.rowCache
+  let staleRetainedRowIndexes = cacheManager.staleRetainedRowIndexes
+  let rangeCache = cacheManager.rangeCache
+  let cacheStateKeyByIndex = activeCacheStore.cacheStateKeyByIndex
   const listeners = new Set<DataGridRowModelListener<T>>()
   const diagnostics: DataGridDataSourceBackpressureDiagnostics = {
     pullRequested: 0,
@@ -440,6 +461,38 @@ export function createDataSourceBackedRowModel<T = unknown>(
         applyPushEvent(event)
       })
     : null
+
+  function activateCacheStore(key: string): void {
+    if (activeCacheStore.key === key) return
+    const previousRowCache = rowCache
+    const previousCacheStateKeyByIndex = cacheStateKeyByIndex
+    cacheStoreRegistry.retain(activeCacheStore.key)
+    cacheStoreRegistry.acquire({ key, signature: key })
+    let nextStore = cacheStores.get(key)
+    if (!nextStore) nextStore = createCacheStore(key)
+    activeCacheStore = nextStore
+    cacheManager = nextStore.cacheManager
+    rowCache = cacheManager.rowCache
+    staleRetainedRowIndexes = cacheManager.staleRetainedRowIndexes
+    rangeCache = cacheManager.rangeCache
+    cacheStateKeyByIndex = nextStore.cacheStateKeyByIndex
+    if (rowCache.size === 0 && previousRowCache.size > 0) {
+      for (const [index, row] of previousRowCache) {
+        rowCache.set(index, row)
+        staleRetainedRowIndexes.add(index)
+        rangeCache.setRow(index, row)
+        cacheStateKeyByIndex.set(index, previousCacheStateKeyByIndex.get(index) ?? "__retained__")
+      }
+    }
+    for (const evictedKey of cacheStoreRegistry.enforceLimit()) {
+      if (evictedKey === activeCacheStore.key) continue
+      const evictedStore = cacheStores.get(evictedKey)
+      if (!evictedStore) continue
+      evictedStore.cacheManager.dispose()
+      evictedStore.cacheStateKeyByIndex.clear()
+      cacheStores.delete(evictedKey)
+    }
+  }
 
   function getProtectedSourceRanges(): readonly DataGridViewportRange[] {
     const protectedRanges: DataGridViewportRange[] = [toSourceRange(viewportRange)]
@@ -1608,6 +1661,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
     })
   }
 
+  function buildCacheStoreKey(
+    treePullContext: DataGridDataSourceTreePullContext | null,
+  ): string {
+    if (!treePullContext) {
+      return activeCacheStore.key
+    }
+    return groupBy
+      ? serializePullState({ groupBy, treeData: treePullContext })
+      : "__root__"
+  }
+
   function buildRequestKey(
     requestRange: DataGridViewportRange,
     reason: DataGridDataSourcePullReason,
@@ -1759,6 +1823,8 @@ export function createDataSourceBackedRowModel<T = unknown>(
     const requestRange = normalizeRequestedRange(range)
     const treePullContext = normalizeTreePullContext(treeData)
     const requestStateKey = buildRequestStateKey()
+    const cacheStoreKey = buildCacheStoreKey(treePullContext)
+    activateCacheStore(cacheStoreKey)
     const requestKey = buildRequestKey(requestRange, reason, priority, treePullContext, requestStateKey)
     const laneInFlight = readLaneInFlight(priority)
 
@@ -1897,6 +1963,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         }
 
         let changed = false
+        activateCacheStore(cacheStoreKey)
         if (typeof result.datasetVersion !== "undefined" && result.datasetVersion !== datasetVersion) {
           datasetVersion = result.datasetVersion ?? null
           changed = true
@@ -3025,6 +3092,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
       diagnostics.paused = false
       diagnostics.hasPendingPull = false
       diagnostics.rowCacheSize = 0
+      for (const store of cacheStores.values()) {
+        if (store.cacheManager !== cacheManager) store.cacheManager.dispose()
+      }
+      cacheStores.clear()
+      cacheStoreRegistry.clear()
       disposeRuntimeServices()
       unsubscribePush?.()
     },
