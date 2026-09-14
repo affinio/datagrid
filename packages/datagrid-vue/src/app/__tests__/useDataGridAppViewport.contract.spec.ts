@@ -1078,6 +1078,26 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.rightColumnSpacerWidth.value).toBe(10_000 * 140 - 3 * 140)
   })
 
+  it("keeps a fully zero-width measured grid bounded", () => {
+    const raf = createRafHarness()
+    const columns = makeColumns(10_000, 0)
+    const viewport = makeViewport({
+      visibleColumns: ref(columns),
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 2),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    viewport.bodyViewportRef.value = makeBodyViewport(0, 800)
+    viewport.syncViewportFromDom()
+
+    expect(viewport.renderedColumns.value.length).toBeLessThan(20)
+    expect(viewport.viewportColumnStart.value).toBeGreaterThanOrEqual(0)
+    expect(viewport.viewportColumnEnd.value).toBeLessThan(columns.length)
+    expect(viewport.mainTrackStyle.value.width).toBe("0px")
+  })
+
   it("recomputes a bounded window after wide-grid hide, resize, and reorder transitions", () => {
     const raf = createRafHarness()
     const initialColumns = makeColumns(10_000, 100)
