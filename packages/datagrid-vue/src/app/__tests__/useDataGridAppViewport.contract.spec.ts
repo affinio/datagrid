@@ -1805,6 +1805,86 @@ describe("useDataGridAppViewport contract", () => {
     expect(getBodyRowAtIndex).not.toHaveBeenCalled()
   })
 
+  it("restores the last sparse logical row without scanning the dataset", () => {
+    const events = createEventHarness()
+    const resolveBodyRowIndexById = vi.fn((rowId: string | number) => rowId === "last" ? 999_999 : -1)
+    const getBodyRowAtIndex = vi.fn(() => null)
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 999_999, end: 999_999 },
+      anchor: { rowId: "last", rowIndex: 999_999, columnKey: null, columnIndex: null },
+      scroll: { top: 0, left: 0 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: vi.fn(() => []),
+        resolveBodyRowIndexById,
+        getBodyRowAtIndex,
+        getViewportPosition: () => viewportPosition,
+        rowPartition: ref({ bodyRowCount: 1_000_000, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(31),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 620, clientWidth: 800 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(resolveBodyRowIndexById).toHaveBeenCalledWith("last")
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(element.scrollTop).toBe(999_999 * 31)
+  })
+
+  it("uses the stored row index for a missing sparse rowId without fallback scanning", () => {
+    const events = createEventHarness()
+    const resolveBodyRowIndexById = vi.fn(() => -1)
+    const getBodyRowAtIndex = vi.fn(() => null)
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 700_000, end: 700_000 },
+      anchor: { rowId: "gone", rowIndex: 700_000, columnKey: null, columnIndex: null },
+      scroll: { top: 12, left: 0 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: vi.fn(() => []),
+        resolveBodyRowIndexById,
+        getBodyRowAtIndex,
+        getViewportPosition: () => viewportPosition,
+        rowPartition: ref({ bodyRowCount: 1_000_000, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(31),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 620, clientWidth: 800 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(resolveBodyRowIndexById).toHaveBeenCalledWith("gone")
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+    expect(element.scrollTop).toBe(700_000 * 31)
+  })
+
   it("restores DOM scroll from runtime viewport position after state import", () => {
     const rows = makeRows(100)
     const events = createEventHarness()
