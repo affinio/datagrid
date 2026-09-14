@@ -171,6 +171,28 @@ describe("datagrid-worker postMessage transport", () => {
     transport.dispose()
   })
 
+  it("falls back synchronously after reaching the bounded in-flight cap", () => {
+    const sent: unknown[] = []
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: {
+        postMessage(message) {
+          sent.push(message)
+        },
+      },
+      source: null,
+      dispatchStrategy: "fire-and-forget",
+      requestTimeoutMs: 0,
+    })
+
+    const results = Array.from({ length: 40 }, () => transport.dispatch({ kind: "refresh" }))
+
+    expect(sent).toHaveLength(32)
+    expect(results.slice(0, 32).every(result => result?.handled === true)).toBe(true)
+    expect(results.slice(32).every(result => result?.handled === false)).toBe(true)
+    expect(transport.getStats()).toMatchObject({ dispatched: 32, inflight: 32 })
+    transport.dispose()
+  })
+
   it("serializes compute batch plan for execution-stage requests", async () => {
     const channel = createMessageChannelPair()
     const transport = createDataGridWorkerPostMessageTransport({

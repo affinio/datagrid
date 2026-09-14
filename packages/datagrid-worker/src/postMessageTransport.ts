@@ -26,6 +26,10 @@ export interface DataGridWorkerMessageSource {
 
 export type DataGridWorkerDispatchStrategy = "sync-fallback" | "fire-and-forget"
 
+// Compute transport has a synchronous fallback when dispatch returns handled=false.
+// Keep unacknowledged postMessage work bounded without changing row-model commands.
+const MAX_INFLIGHT_COMPUTE_REQUESTS = 32
+
 export interface DataGridWorkerPostMessageTransportStats {
   dispatched: number
   acked: number
@@ -123,6 +127,9 @@ export function createDataGridWorkerPostMessageTransport(
 
   return {
     dispatch(request) {
+      if (pendingById.size >= MAX_INFLIGHT_COMPUTE_REQUESTS) {
+        return { handled: false }
+      }
       dispatchRequest(request)
       return {
         handled: strategy === "fire-and-forget",
