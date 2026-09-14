@@ -1078,6 +1078,42 @@ describe("useDataGridAppViewport contract", () => {
     expect(viewport.rightColumnSpacerWidth.value).toBe(10_000 * 140 - 3 * 140)
   })
 
+  it("recomputes a bounded window after wide-grid hide, resize, and reorder transitions", () => {
+    const raf = createRafHarness()
+    const initialColumns = makeColumns(10_000, 100)
+    const visibleColumns = ref<readonly DataGridColumnSnapshot[]>(initialColumns)
+    const viewport = makeViewport({
+      visibleColumns,
+      columnVirtualizationEnabled: computed(() => true),
+      columnOverscan: computed(() => 1),
+      indexColumnWidth: 0,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+    const element = makeBodyViewport(2_000, 800)
+    viewport.bodyViewportRef.value = element
+    viewport.syncViewportFromDom()
+
+    expect(viewport.renderedColumns.value.length).toBeLessThan(20)
+    expect(viewport.renderedColumns.value[0]?.key).toBe("col-19")
+
+    const resizedAndReordered = initialColumns
+      .filter((_, index) => index !== 20)
+      .map((column, index) => ({
+        ...column,
+        key: index === 0 ? "col-9999" : column.key,
+        width: index === 1 ? 180 : 100,
+        pin: index === 0 ? "left" : "center",
+      })) as unknown as readonly DataGridColumnSnapshot[]
+    visibleColumns.value = resizedAndReordered
+    viewport.syncViewportFromDom()
+
+    expect(viewport.renderedColumns.value.length).toBeLessThan(20)
+    expect(viewport.renderedColumns.value.every(column => resizedAndReordered.some(next => next.key === column.key))).toBe(true)
+    expect(viewport.mainTrackStyle.value.width).toBe(`${resizedAndReordered.reduce((sum, column) => sum + Number(column.width ?? 0), 0)}px`)
+    expect(viewport.renderedColumns.value).not.toHaveLength(resizedAndReordered.length)
+  })
+
   it("computes correct rendered column range at zero scroll", () => {
     const raf = createRafHarness()
     const COLS = makeColumns(50, 140) // 50 × 140 = 7 000 px total
