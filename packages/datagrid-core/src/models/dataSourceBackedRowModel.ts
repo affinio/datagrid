@@ -462,6 +462,29 @@ export function createDataSourceBackedRowModel<T = unknown>(
       })
     : null
 
+  function disposeCacheStore(key: string): void {
+    if (key === activeCacheStore.key) return
+    const store = cacheStores.get(key)
+    if (!store) return
+    store.cacheManager.dispose()
+    store.cacheStateKeyByIndex.clear()
+    cacheStores.delete(key)
+  }
+
+  function enforceGlobalCacheRowBudget(): void {
+    const maxRows = rowCacheLimit
+    const countRows = (): number => {
+      let count = 0
+      for (const store of cacheStores.values()) count += store.cacheManager.rowCache.size
+      return count
+    }
+    while (countRows() > maxRows) {
+      const evictedKey = cacheStoreRegistry.evictLeastRecentlyUsedRetained()
+      if (!evictedKey) return
+      disposeCacheStore(evictedKey)
+    }
+  }
+
   function activateCacheStore(key: string): void {
     if (activeCacheStore.key === key) return
     const previousRowCache = rowCache
@@ -486,12 +509,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     for (const evictedKey of cacheStoreRegistry.enforceLimit()) {
       if (evictedKey === activeCacheStore.key) continue
-      const evictedStore = cacheStores.get(evictedKey)
-      if (!evictedStore) continue
-      evictedStore.cacheManager.dispose()
-      evictedStore.cacheStateKeyByIndex.clear()
-      cacheStores.delete(evictedKey)
+      disposeCacheStore(evictedKey)
     }
+    enforceGlobalCacheRowBudget()
   }
 
   function getProtectedSourceRanges(): readonly DataGridViewportRange[] {
@@ -1206,6 +1226,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node, stateKey)
     }
     updateTotalFromRows(rows)
+    enforceGlobalCacheRowBudget()
     return true
   }
 
@@ -1263,6 +1284,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateTotalFromRows(rows)
     diagnostics.rowCacheSize = rowCache.size
     updateLoadingState()
+    enforceGlobalCacheRowBudget()
     return previousSize > 0 || normalizedRows.length > 0
   }
 

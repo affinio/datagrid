@@ -15,6 +15,7 @@ export interface DataSourceCacheStoreRegistry {
   dispose(key: string): boolean
   invalidate(key: string): boolean
   enforceLimit(): readonly string[]
+  evictLeastRecentlyUsedRetained(): string | undefined
   get(key: string): DataSourceCacheStoreDescriptor | undefined
   getDiagnostics(): { maxStores: number; stores: number; active: number; retained: number; disposed: number }
   clear(): void
@@ -109,14 +110,21 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
     enforceLimit() {
       const evicted: string[] = []
       while (stores.size > maxStores) {
+        const key = this.evictLeastRecentlyUsedRetained()
+        if (!key) break
+        evicted.push(key)
+      }
+      return evicted
+    },
+    evictLeastRecentlyUsedRetained() {
+      while (true) {
         const candidate = popRetained()
-        if (!candidate) break
+        if (!candidate) return undefined
         const current = stores.get(candidate.key)
         if (!current || current.lifecycle !== "retained" || current.lastAccess !== candidate.lastAccess) continue
         stores.delete(candidate.key)
-        evicted.push(candidate.key)
+        return candidate.key
       }
-      return evicted
     },
     get(key) {
       const store = stores.get(key)

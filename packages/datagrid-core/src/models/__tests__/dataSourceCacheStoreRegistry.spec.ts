@@ -53,4 +53,15 @@ describe("data source cache store registry", () => {
     const next = registry.acquire({ key: "root", signature: "rev-2" })
     expect(next.store.generation).toBe(acquired.store.generation + 1)
   })
+  it("evicts the least recently used retained store independently of the store cap", () => {
+    const registry = createDataSourceCacheStoreRegistry({ maxStores: 8 })
+    for (const key of ["root", "branch-a", "branch-b"]) {
+      registry.acquire({ key, signature: key })
+      registry.retain(key)
+    }
+
+    expect(registry.evictLeastRecentlyUsedRetained()).toBe("root")
+    expect(registry.get("root")).toBeUndefined()
+    expect(registry.getDiagnostics()).toMatchObject({ stores: 2, retained: 2 })
+  })
 })
