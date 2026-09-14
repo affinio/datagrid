@@ -1193,6 +1193,17 @@ registerTokenCheck(
 }
 
 registerTokenCheck(
+  "benchmark-harness-browser-resource-fail-closed",
+  "scripts/bench-datagrid-harness.mjs",
+  [
+    'BENCH_BROWSER_RESOURCE_FAIL_ON_WARNINGS: "true"',
+    "PERF_BUDGET_MAX_FRAME_P95_MS: \"180\"",
+    "PERF_BUDGET_MAX_DROPPED_FRAME_PCT: \"100\"",
+  ],
+  "CI harness makes browser resource warnings blocking while retaining explicit smoke ceilings",
+)
+
+registerTokenCheck(
   "benchmark-gate-finite-ci-guards",
   "scripts/check-datagrid-benchmark-report.mjs",
   [
