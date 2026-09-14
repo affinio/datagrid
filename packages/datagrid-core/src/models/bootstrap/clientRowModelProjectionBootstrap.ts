@@ -70,9 +70,36 @@ export function createClientRowModelProjectionBootstrap<T>(
       return getPivotRuntime().normalizeColumns(columns)
     },
   }
-  const treeProjectionRuntime = createTreeProjectionRuntime<T>({
-    resolveTreeDataRow: options.resolveTreeDataRow,
-  })
+  let treeProjectionRuntimeInstance: TreeProjectionRuntime<T> | null = null
+  const getTreeProjectionRuntime = (): TreeProjectionRuntime<T> => {
+    if (treeProjectionRuntimeInstance) {
+      return treeProjectionRuntimeInstance
+    }
+    treeProjectionRuntimeInstance = createTreeProjectionRuntime<T>({
+      resolveTreeDataRow: options.resolveTreeDataRow,
+    })
+    return treeProjectionRuntimeInstance
+  }
+  const treeProjectionRuntime: TreeProjectionRuntime<T> = {
+    buildCacheKey(input) {
+      return getTreeProjectionRuntime().buildCacheKey(input)
+    },
+    projectRowsFromCache(input) {
+      return getTreeProjectionRuntime().projectRowsFromCache(input)
+    },
+    patchPathCacheRowsByIdentity(cache, sourceById, changedRowIds) {
+      return getTreeProjectionRuntime().patchPathCacheRowsByIdentity(cache, sourceById, changedRowIds)
+    },
+    patchParentCacheRowsByIdentity(cache, sourceById, changedRowIds) {
+      return getTreeProjectionRuntime().patchParentCacheRowsByIdentity(cache, sourceById, changedRowIds)
+    },
+    tryProjectPathSubtreeToggle(input) {
+      return getTreeProjectionRuntime().tryProjectPathSubtreeToggle(input)
+    },
+    tryProjectParentSubtreeToggle(input) {
+      return getTreeProjectionRuntime().tryProjectParentSubtreeToggle(input)
+    },
+  }
   let aggregationModel = options.getAggregationModel()
   let aggregationEngineInstance: DataGridAggregationEngine<T> | null = null
   const getAggregationEngine = (): DataGridAggregationEngine<T> => {
