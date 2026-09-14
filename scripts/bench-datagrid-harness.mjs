@@ -425,6 +425,14 @@ ensureBenchmarkBuildArtifacts(tasks)
 const results = []
 let hasFailure = false
 
+function isDeterministicBrowserDependencyFailure(task, result) {
+  if (task.id !== "enterprise-browser-frames") {
+    return false
+  }
+  const output = `${result?.stdout ?? ""}\n${result?.stderr ?? ""}`
+  return /Executable doesn't exist|does not support chromium|Please run .*playwright install/i.test(output)
+}
+
 function runTask(command, args, env) {
   return new Promise(resolveTask => {
     const proc = spawn(command, args, {
@@ -557,8 +565,12 @@ for (const task of tasks) {
       if (proc.status === 0) {
         break
       }
-      if (attempt < maxAttempts) {
+      if (attempt < maxAttempts && !isDeterministicBrowserDependencyFailure(task, proc)) {
         console.warn(`[bench] ${task.id} failed on attempt ${attempt}, retrying...`)
+      }
+      else if (attempt < maxAttempts) {
+        console.warn(`[bench] ${task.id} failed because its browser dependency is unavailable; skipping retry`)
+        break
       }
     }
 
