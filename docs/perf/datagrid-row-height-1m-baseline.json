@@ -1,0 +1,25 @@
+{
+  "benchmark": "datagrid-row-height-metrics",
+  "generatedAt": "2026-09-14T00:00:00.000Z",
+  "environment": {
+    "node": "22.x",
+    "vitest": "4.0.18",
+    "rows": 1000000,
+    "overrides": 5000,
+    "updates": 64
+  },
+  "scenarios": {
+    "densePrefixRebuild": {
+      "opsPerSecond": 1.2186,
+      "meanMs": 820.64,
+      "samples": 10
+    },
+    "sparseFenwickMutation": {
+      "opsPerSecond": 2610.53,
+      "meanMs": 0.3831,
+      "samples": 1306
+    }
+  },
+  "speedup": 2142.3,
+  "scope": "Node benchmark; browser dense layout and pinned-pane alignment remain separate acceptance cases."
+}

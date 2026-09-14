@@ -220,7 +220,8 @@
 - **Сценарий:** repeated autosize/resize возле начала 1M-row table больше не проходит линейный suffix массива chunks.
 - **Измерение:** benchmark harness теперь параметризуется через `DATA_GRID_ROW_HEIGHT_BENCH_ROWS`, `DATA_GRID_ROW_HEIGHT_BENCH_OVERRIDES` и `DATA_GRID_ROW_HEIGHT_BENCH_UPDATES`; baseline 200k rows / 5k overrides / 64 updates: full prefix rebuild 6.85 ops/s, sparse Fenwick path 3,124 ops/s, 456.01×.
 - **1M contract slice:** 1,000,000 rows с sparse overrides в начале/середине/конце и последующей mutation покрыты contract test; resolver не вызывает per-row fallback, offset/inverse lookup сохраняют корректные абсолютные границы.
-- **DoD:** offsets и inverse lookup против contract oracle, sparse mutation regression, 1M sparse contract и package type-check проходят; dense/1M browser trace и pinned-pane alignment остаются отдельными workload checks.
+- **1M measurement:** baseline `docs/perf/datagrid-row-height-1m-baseline.json`: dense prefix rebuild `1.2186 ops/s`, sparse Fenwick path `2,610.53 ops/s`, `2,142.30×`; это Node measurement при 1M rows / 5k overrides / 64 updates.
+- **DoD:** offsets и inverse lookup против contract oracle, sparse mutation regression, 1M sparse contract, 1M measurement и package type-check проходят; dense/1M browser trace и pinned-pane alignment остаются отдельными workload checks.
 - **Public API:** внутреннее изменение возможно; общий core/Vue geometry contract — HP-09. Размер: M. Не ставить выше HP-01/02 только из-за лучшей асимптотики.
 
 ### HP-15. Модульность и размер базового runtime ещё надо доказать
