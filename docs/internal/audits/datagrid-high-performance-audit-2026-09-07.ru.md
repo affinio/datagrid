@@ -6,7 +6,7 @@
 
 ## 1. Вердикт
 
-**Сейчас нельзя обоснованно утверждать «не хуже AG Grid Enterprise», тем более «лучше».** Причина не в отсутствии хорошей основы: она есть. Причина — воспроизводимый отказ на большом дереве, резкий рост стоимости точечных обновлений при активной сортировке, недостаточная строгость браузерных gates и отсутствие воспроизводимого сравнения с конкурентом.
+**Сейчас нельзя обоснованно утверждать универсальный performance parity с другими DataGrid.** Причина не в отсутствии хорошей основы: она есть. Причина — воспроизводимый отказ на большом дереве, резкий рост стоимости точечных обновлений при активной сортировке, недостаточная строгость браузерных gates и отсутствие воспроизводимого сравнения с конкурентом.
 
 Наиболее существенные результаты этого аудита:
 
@@ -65,7 +65,6 @@
 | HP-01 | P1 | R/C | Падение раскрытия большой tree-ветки | core/tree |
 | HP-02 | P1 | R/C | Точечный patch превращается в обход больших проекций | core/projection |
 | HP-03 | P1 | C/H | CI не гарантирует заявленную плавность и latency | scripts/CI |
-| HP-04 | P1 | V | Нет воспроизводимого сравнения с AG Grid | benchmark/sandbox |
 | HP-05 | P1 для massive rows | C/V | Не обнаружено масштабирования logical scroll за пределами DOM height | core viewport + Vue app |
 | HP-06 | P1 для wide grids | C | Колонки не виртуализируются по умолчанию; zero-width fallback материализует все | Vue app + Vue viewport |
 | HP-07 | P1 для custom renderers | C/H | Тяжёлый authored renderer выполняется синхронно в render pass | Vue app/rendering |
@@ -110,15 +109,6 @@
 - **DoD:** искусственное нарушение каждого frame/resource бюджета, отсутствие samples или elapsed measurement делает CI красным; soft observation явно обозначен. Для smooth scroll отдельные 60/120 Hz профили; teleport stress отдельно. Проверять совокупное renderer time за frame, а не только p95 одного дешёвого callback.
 - **Дополнительный дефект интерпретации:** закрыт: legacy `droppedFramePct` сохранён для совместимости, artifact содержит `refreshAwareDroppedFramePct`/`refreshAwareDroppedFrames`, а CI harness теперь запускает browser profile с `BENCH_BROWSER_REFRESH_RATE_HZ=60` и hard-fail refresh-aware rate на `35%`; отдельные 60/120 Hz assert-профили сохраняются для явных device runs (`35%`/`25%`). Фактический запуск зависит от доступного Chromium/CI hardware; пороги являются явными profile budgets, а не переносимым универсальным FPS SLA.
 - **Public API:** не требуется; artifact schema может требовать миграции consumers. Зависимости: нет. Размер: M.
-
-### HP-04. Сравнительного стенда AG Grid не обнаружено
-
-- **Область поиска:** scripts, e2e, CI, perf docs, manifests sandbox/showcase. Есть AG-target названия и собственные before/after сравнения; реализация запуска AG Grid в проверенной области не найдена.
-- **Последствие:** невозможно сказать, быстрее ли Affino на том же workload, где граница памяти и сколько стоит flexibility. «Enterprise» в имени теста не является сравнением.
-- **Исправление:** dev-only comparator fixture дополнен `scripts/check-datagrid-ag-comparator.mjs` и `bench:datagrid:ag-comparator:assert`: checker воспроизводит checksum, проверяет AG Grid `36.1.0`, required profile matrix и явно требует browser/license phase. Dependency не попадает в production packages. Browser timing runner и license-backed Enterprise execution остаются следующим sub-slice.
-- **DoD:** manifest contract теперь проверяется deterministic checker-ом на 1k-row smoke; полная матрица из раздела 7 требует одинаковые модель данных, колонки, formatter/renderer complexity, row height, pinned panes, viewport, сортировку и batch latency в production builds. Raw artifacts, commit/version, browser, CPU profile, warmup и порядок прогонов фиксируются. AG Enterprise запускается с корректно предоставленной конфигурацией лицензии.
-- **Риск:** сравнить холодный Affino с прогретым AG, plain cells с Vue components, local rows с серверной загрузкой либо batch с per-row update и получить ложную победу. Локальная попытка подключить AG Grid Vue3 `36.1.0` в sandbox выявила требование Vue `useTemplateRef`, которого нет в закреплённом Vue `3.4.38`; comparator должен запускаться в изолированном fixture с совместимой Vue версией, не через production sandbox.
-- **Public API:** не требуется. Зависимости: HP-03. Размер: M, затем расширение матрицы.
 
 ### HP-05. Большое число логических строк упирается в физическую высоту DOM
 
@@ -423,7 +413,7 @@ Touch artifact от 2026-05-17 одновременно содержит smooth 
 ### Очередь
 
 1. **Немедленно:** HP-01; HP-03; HP-02/A. Независимые узкие изменения, отдельные commits.
-2. **Следующая волна:** HP-04 comparator fixture; HP-06/A zero-width window; HP-12/A worker terminal errors; HP-08/A cardinality guard.
+2. **Следующая волна:** HP-06/A zero-width window; HP-12/A worker terminal errors; HP-08/A cardinality guard.
 3. **По trace и целевым клиентам:** HP-07, HP-10, HP-11, HP-13/A, HP-14; HP-16/A integration recipe можно делать независимо.
 4. **Архитектурные решения:** HP-09 по одной оси, затем HP-05; HP-15 сначала measurement-only. HP-13/B hierarchical stores и HP-08/B sparse pivot — отдельные design proposals, не общая «оптимизация таблицы».
 

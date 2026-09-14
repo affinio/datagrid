@@ -1,4 +1,4 @@
-# Datagrid Performance Gates (AG Grid Target Track)
+# Datagrid Performance Gates
 
 Date: `2026-02-07`  
 Scope: `@affino/datagrid-core` + `@affino/datagrid-vue`
@@ -41,7 +41,6 @@ Per-benchmark outputs (JSON):
 - `artifacts/performance/bench-datagrid-enterprise-browser-frames.json`
 - `artifacts/performance/bench-datagrid-enterprise-a11y-browser.assert.json`
 - `artifacts/performance/bench-datagrid-package-footprint.json`
-- `artifacts/performance/bench-datagrid-ag-comparator.json`
 
 Harness summary:
 - `artifacts/performance/datagrid-benchmark-report.json`
@@ -50,13 +49,6 @@ Runtime report gate summary:
 - `artifacts/quality/datagrid-benchmark-gates-report.json`
 Baseline lock:
 - `docs/perf/datagrid-benchmark-baseline.json`
-
-## AG Grid Comparator Fixture
-
-- `pnpm run bench:datagrid:ag-comparator` writes a pinned AG Grid `36.1.0` comparator manifest with deterministic shared data checksum and workload profiles.
-- `pnpm run bench:datagrid:ag-comparator:assert` additionally verifies checksum, pinned versions, required profile matrix and explicit browser-run/license status before timing comparison.
-- The manifest is a fixture contract only; timing comparison requires the browser runner and an AG Enterprise license supplied through CI/local secret. License values are never written to artifacts. AG Grid Vue3 `36.1.0` requires a Vue runtime with `useTemplateRef`; keep its browser fixture isolated from the repository sandbox, which currently uses Vue `3.4.38`.
-- Keep Affino and AG Grid on the same row generator, column count, update batch policy, warmup, viewport, and profile order before comparing raw browser artifacts.
 
 ## Package Footprint and Startup
 
