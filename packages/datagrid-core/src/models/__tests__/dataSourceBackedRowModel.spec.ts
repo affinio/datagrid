@@ -2566,6 +2566,49 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("does not treat root rows as cached after a group context change", async () => {
+    const calls: PullCall<{ id: number; value: string }>[] = []
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      pull(request) {
+        return new Promise((resolve, reject) => {
+          calls.push({ request, resolve, reject })
+          request.signal.addEventListener("abort", () => reject({ name: "AbortError" }))
+        })
+      },
+    }
+
+    const model = createDataSourceBackedRowModel({
+      dataSource,
+      resolveRowId: row => row.id,
+      initialTotal: 1_000,
+      prefetch: {
+        enabled: true,
+        triggerViewportFactor: 1,
+        windowViewportFactor: 3,
+        minBatchSize: 30,
+        maxBatchSize: 90,
+      },
+    })
+
+    model.setViewportRange({ start: 0, end: 29 })
+    calls[0]?.resolve({ rows: buildRows(0, 29), total: 1_000 })
+    await flushMicrotasks()
+    calls[1]?.resolve({ rows: buildRows(30, 119), total: 1_000 })
+    await flushMicrotasks()
+    expect(calls).toHaveLength(2)
+
+    model.setGroupBy({ fields: ["value"], expandedByDefault: true })
+    expect(calls[2]?.request.reason).toBe("group-change")
+    calls[2]?.resolve({ rows: buildRows(0, 29), total: 1_000 })
+    await flushMicrotasks()
+
+    expect(calls[3]?.request.reason).toBe("prefetch")
+    expect(calls[3]?.request.priority).toBe("background")
+    expect(calls[3]?.request.range).toEqual({ start: 30, end: 119 })
+
+    model.dispose()
+  })
+
   it("scrolls within loaded buffer and starts next background prefetch before hitting the edge", async () => {
     const calls: PullCall<{ id: number; value: string }>[] = []
     const dataSource: DataGridDataSource<{ id: number; value: string }> = {
