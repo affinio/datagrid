@@ -32,7 +32,7 @@ class MemoryMessageEndpoint {
     this.peer = peer
   }
 
-  postMessage(message: unknown, transfer?: readonly Transferable[]): void {
+  postMessage(message: unknown, transfer?: Transferable[]): void {
     this.receivedTransfers.push(transfer ?? [])
     const peer = this.peer
     if (!peer) {

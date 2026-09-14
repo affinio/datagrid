@@ -663,6 +663,7 @@ const {
     resolveRowInputsOnDemand: () => buildWorkerRowInputs(rowCount.value, columnCount.value),
     rowInputsUpdateKey: computed(() => `${rowCount.value}:${columnCount.value}`),
     createHostWorker: () => new DataGridRowModelHostWorker(),
+    columnarNumericFields: ["amount", "latencyMs", "retries"],
   },
 })
 runtimeRef = runtime

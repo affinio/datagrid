@@ -283,6 +283,7 @@ Quick-filter typing gate:
 Worker canonical gate:
 - `pnpm run bench:datagrid:worker:canonical:assert`
 - Canonical release evidence is protocol correctness/payload timing, worker pressure, and worker browser frame parity via `bench:datagrid:worker:protocol:assert`, `bench:datagrid:worker:pressure:assert`, and `bench:datagrid:worker:frames:assert`.
+- The worker pressure profile runs /vue/worker-grid with the sandbox columnar consumer (amount, latencyMs, retries) and combines rapid viewport movement with repeated sort/filter patch pressure; the Playwright rapid-scroll regression covers the same production route at 100k rows × 32 columns.
 - The postMessage transport registers inflight requests before dispatch, so synchronous acknowledgements cannot be lost; thrown dispatch errors clear inflight state and increment `errored`. The protocol benchmark artifact remains the source for payload and pressure measurements.
 - Older worker artifact files remain historical references only; release review should use the canonical assert outputs unless a slice explicitly targets a retired artifact.
 

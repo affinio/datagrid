@@ -10,7 +10,8 @@ export interface DataGridWorkerMessageEvent<T = unknown> {
 }
 
 export interface DataGridWorkerMessageTarget {
-  postMessage: (message: unknown, transfer?: readonly Transferable[]) => void
+  postMessage(message: unknown): void
+  postMessage(message: unknown, transfer: Transferable[]): void
 }
 
 export interface DataGridWorkerMessageSource {
@@ -122,7 +123,7 @@ export function createDataGridWorkerPostMessageTransport(
     pendingById.set(requestId, { timeoutHandle })
     try {
       const transfer = options.resolveTransferList?.({ request, message: requestMessage }) ?? []
-      options.target.postMessage(requestMessage, transfer)
+      options.target.postMessage(requestMessage, [...transfer])
     } catch (error) {
       clearPending(requestId)
       errored += 1

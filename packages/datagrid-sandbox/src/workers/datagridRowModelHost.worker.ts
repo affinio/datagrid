@@ -9,6 +9,7 @@ import type { DataGridRowNodeInput } from "@affino/datagrid-core"
 interface DataGridWorkerHostInitMessage<TRow> {
   __datagridWorkerHostInit: true
   rows: readonly DataGridRowNodeInput<TRow>[]
+  columnarNumericFields?: readonly string[]
 }
 
 function isHostInitMessage<TRow>(value: unknown): value is DataGridWorkerHostInitMessage<TRow> {
@@ -33,6 +34,7 @@ const bootstrapListener = (event: MessageEvent): void => {
       source: workerScope,
       target: workerScope,
       rows: event.data.rows,
+      columnarNumericFields: event.data.columnarNumericFields,
     })
     for (const queuedEvent of queuedMessages.splice(0, queuedMessages.length)) {
       workerScope.dispatchEvent(new MessageEvent("message", { data: queuedEvent.data }))

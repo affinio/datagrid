@@ -43,21 +43,25 @@ export interface UseDataGridAppRuntimeOptions<TRow> {
     resolveRowInputsOnDemand?: () => readonly DataGridRowNodeInput<TRow>[]
     rowInputsUpdateKey?: MaybeRef<unknown>
     createHostWorker?: () => Worker
+    columnarNumericFields?: readonly string[]
   }
 }
 
 interface DataGridWorkerHostInitMessage<TRow> {
   __datagridWorkerHostInit: true
   rows: readonly DataGridRowNodeInput<TRow>[]
+  columnarNumericFields?: readonly string[]
 }
 
 function postWorkerHostInit<TRow>(
   worker: Worker,
   rows: readonly DataGridRowNodeInput<TRow>[],
+  columnarNumericFields?: readonly string[],
 ): void {
   const message: DataGridWorkerHostInitMessage<TRow> = {
     __datagridWorkerHostInit: true,
     rows,
+    ...(columnarNumericFields ? { columnarNumericFields } : {}),
   }
   worker.postMessage(message)
 }
@@ -96,7 +100,7 @@ export function useDataGridAppRuntime<TRow>(
     const initialRowInputs = resolveWorkerRowInputs()
     if (options.worker.createHostWorker) {
       hostWorker = options.worker.createHostWorker()
-      postWorkerHostInit(hostWorker, initialRowInputs)
+      postWorkerHostInit(hostWorker, initialRowInputs, options.worker.columnarNumericFields)
       workerRowModel = createDataGridWorkerOwnedRowModel<TRow>({
         source: hostWorker,
         target: hostWorker,
@@ -111,6 +115,7 @@ export function useDataGridAppRuntime<TRow>(
         source: channel.port2,
         target: channel.port2,
         rows: initialRowInputs,
+        columnarNumericFields: options.worker.columnarNumericFields,
       })
       workerRowModel = createDataGridWorkerOwnedRowModel<TRow>({
         source: channel.port1,
