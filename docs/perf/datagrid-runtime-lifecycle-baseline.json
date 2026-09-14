@@ -1,0 +1,42 @@
+{
+  "description": "Reviewed synchronous client-row-model factory-to-ready and create/dispose baseline for consumer-shaped profiles",
+  "measurement": "synchronous client-row-model factory-to-ready and dispose; rows allocated outside timed region; GC requested before each cycle when available",
+  "rowCount": 10000,
+  "iterations": 7,
+  "node": "v22.23.2",
+  "profiles": {
+    "plain": {
+      "createMs": {
+        "p50": 9.073093,
+        "p95": 9.682723999999993
+      },
+      "disposeMs": {
+        "p50": 0.02462499999998613,
+        "p95": 0.03554299999998989
+      },
+      "heapDeltaMb": 16.136245727539062
+    },
+    "sorted-filtered": {
+      "createMs": {
+        "p50": 12.768631,
+        "p95": 17.27451099999999
+      },
+      "disposeMs": {
+        "p50": 0.022542000000044027,
+        "p95": 0.06412600000001589
+      },
+      "heapDeltaMb": 9.271194458007812
+    },
+    "advanced": {
+      "createMs": {
+        "p50": 12.655129999999986,
+        "p95": 15.944247000000018
+      },
+      "disposeMs": {
+        "p50": 0.016999999999995907,
+        "p95": 0.019001000000002932
+      },
+      "heapDeltaMb": 9.862411499023438
+    }
+  }
+}

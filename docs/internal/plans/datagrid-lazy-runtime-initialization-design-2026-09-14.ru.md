@@ -33,7 +33,7 @@
 
 ## Rollout
 
-1. Add fixture harness and import/create/dispose measurements; capture baseline artifact before code changes.
+1. Выполнено: `bench:datagrid:runtime-lifecycle` добавляет production-shaped plain/sorted-filtered/advanced factory-to-ready и create/dispose measurement; baseline хранится в `docs/perf/datagrid-runtime-lifecycle-baseline.json`. Import-only numbers из package footprint остаются отдельным измерением.
 2. Extract one internal optional capability (formula or pivot) behind an internal lazy slot with focused parity tests.
 3. Compare plain and advanced fixtures with a fixed budget; reject if cold ready/first paint or memory regresses.
 4. Repeat for remaining capabilities only where consumer fixture proves a material cost.
