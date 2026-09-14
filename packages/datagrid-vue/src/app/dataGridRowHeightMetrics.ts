@@ -34,12 +34,49 @@ interface CachedMetrics {
   prefixOffsets: number[] | null
   chunkSize: number
   chunkDeltas: number[] | null
-  chunkPrefixDeltas: number[] | null
+  chunkPrefixTree: ChunkPrefixTree | null
   chunkRowDeltas: Array<Map<number, number> | undefined> | null
   totalHeight: number
 }
 
 const ROW_HEIGHT_CHUNK_SIZE = 256
+
+interface ChunkPrefixTree {
+  values: number[]
+  sum: (endExclusive: number) => number
+  add: (index: number, value: number) => void
+}
+
+function createChunkPrefixTree(chunkDeltas: readonly number[]): ChunkPrefixTree {
+  const values = new Array<number>(chunkDeltas.length + 1).fill(0)
+  for (let index = 0; index < chunkDeltas.length; index += 1) {
+    let treeIndex = index + 1
+    const value = chunkDeltas[index] ?? 0
+    while (treeIndex < values.length) {
+      values[treeIndex] = (values[treeIndex] ?? 0) + value
+      treeIndex += treeIndex & -treeIndex
+    }
+  }
+  return {
+    values,
+    sum: (endExclusive: number) => {
+      let index = Math.max(0, Math.min(chunkDeltas.length, Math.trunc(endExclusive)))
+      let result = 0
+      while (index > 0) {
+        result += values[index] ?? 0
+        index -= index & -index
+      }
+      return result
+    },
+    add: (index: number, value: number) => {
+      let treeIndex = Math.trunc(index) + 1
+      while (treeIndex < values.length) {
+        values[treeIndex] = (values[treeIndex] ?? 0) + value
+        treeIndex += treeIndex & -treeIndex
+      }
+    },
+  }
+}
 
 function normalizeRowHeight(value: number): number {
   if (!Number.isFinite(value)) {
@@ -64,7 +101,7 @@ export function createDataGridAppRowHeightMetrics(
     prefixOffsets: null,
     chunkSize: ROW_HEIGHT_CHUNK_SIZE,
     chunkDeltas: null,
-    chunkPrefixDeltas: null,
+    chunkPrefixTree: null,
     chunkRowDeltas: null,
     totalHeight: totalRows * baseRowHeight,
   })
@@ -78,7 +115,6 @@ export function createDataGridAppRowHeightMetrics(
     const chunkSize = ROW_HEIGHT_CHUNK_SIZE
     const chunkCount = Math.ceil(totalRows / chunkSize)
     const chunkDeltas = new Array<number>(chunkCount).fill(0)
-    const chunkPrefixDeltas = new Array<number>(chunkCount + 1).fill(0)
     const chunkRowDeltas = new Array<Map<number, number> | undefined>(chunkCount)
     let totalHeight = totalRows * baseRowHeight
 
@@ -101,10 +137,6 @@ export function createDataGridAppRowHeightMetrics(
       totalHeight += delta
     }
 
-    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-      chunkPrefixDeltas[chunkIndex + 1] = (chunkPrefixDeltas[chunkIndex] ?? 0) + (chunkDeltas[chunkIndex] ?? 0)
-    }
-
     return {
       totalRows,
       baseRowHeight,
@@ -112,7 +144,7 @@ export function createDataGridAppRowHeightMetrics(
       prefixOffsets: null,
       chunkSize,
       chunkDeltas,
-      chunkPrefixDeltas,
+      chunkPrefixTree: createChunkPrefixTree(chunkDeltas),
       chunkRowDeltas,
       totalHeight,
     }
@@ -125,7 +157,7 @@ export function createDataGridAppRowHeightMetrics(
   ): CachedMetrics | null => {
     if (
       metrics.chunkDeltas == null
-      || metrics.chunkPrefixDeltas == null
+      || metrics.chunkPrefixTree == null
       || metrics.chunkRowDeltas == null
       || mutation.kind === "clear-all"
       || mutation.rowIndex == null
@@ -160,9 +192,7 @@ export function createDataGridAppRowHeightMetrics(
 
     if (deltaDiff !== 0) {
       metrics.chunkDeltas[chunkIndex] = (metrics.chunkDeltas[chunkIndex] ?? 0) + deltaDiff
-      for (let index = chunkIndex + 1; index < metrics.chunkPrefixDeltas.length; index += 1) {
-        metrics.chunkPrefixDeltas[index] = (metrics.chunkPrefixDeltas[index] ?? 0) + deltaDiff
-      }
+      metrics.chunkPrefixTree.add(chunkIndex, deltaDiff)
       metrics.totalHeight += deltaDiff
     }
     metrics.version = version
@@ -234,7 +264,7 @@ export function createDataGridAppRowHeightMetrics(
       prefixOffsets,
       chunkSize: ROW_HEIGHT_CHUNK_SIZE,
       chunkDeltas: null,
-      chunkPrefixDeltas: null,
+      chunkPrefixTree: null,
       chunkRowDeltas: null,
       totalHeight: prefixOffsets == null
         ? totalRows * baseRowHeight
@@ -272,11 +302,11 @@ export function createDataGridAppRowHeightMetrics(
     const normalizedIndex = Math.max(0, Math.min(metrics.totalRows, Math.trunc(rowIndex)))
     if (
       metrics.chunkDeltas != null
-      && metrics.chunkPrefixDeltas != null
+      && metrics.chunkPrefixTree != null
       && metrics.chunkRowDeltas != null
     ) {
       const chunkIndex = Math.floor(normalizedIndex / metrics.chunkSize)
-      let offset = normalizedIndex * metrics.baseRowHeight + (metrics.chunkPrefixDeltas[chunkIndex] ?? 0)
+      let offset = normalizedIndex * metrics.baseRowHeight + metrics.chunkPrefixTree.sum(chunkIndex)
       const withinChunkIndex = normalizedIndex - (chunkIndex * metrics.chunkSize)
       if (withinChunkIndex > 0) {
         const rowDeltas = metrics.chunkRowDeltas[chunkIndex]
@@ -301,7 +331,7 @@ export function createDataGridAppRowHeightMetrics(
     }
     if (
       metrics.chunkDeltas != null
-      && metrics.chunkPrefixDeltas != null
+      && metrics.chunkPrefixTree != null
       && metrics.chunkRowDeltas != null
     ) {
       if (metrics.totalHeight <= 0) {
@@ -314,10 +344,10 @@ export function createDataGridAppRowHeightMetrics(
       while (low <= high) {
         const middle = Math.floor((low + high) / 2)
         const chunkStartOffset = (middle * metrics.chunkSize * metrics.baseRowHeight)
-          + (metrics.chunkPrefixDeltas[middle] ?? 0)
+          + metrics.chunkPrefixTree.sum(middle)
         const chunkRowEnd = Math.min(metrics.totalRows, (middle + 1) * metrics.chunkSize)
         const chunkEndOffset = (chunkRowEnd * metrics.baseRowHeight)
-          + (metrics.chunkPrefixDeltas[middle + 1] ?? 0)
+          + metrics.chunkPrefixTree.sum(middle + 1)
 
         if (clampedOffset < chunkStartOffset) {
           high = middle - 1

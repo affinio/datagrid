@@ -205,11 +205,11 @@
 
 ### HP-14. Переменные высоты: sparse не означает O(log N) update
 
-- **Код:** `datagrid-vue/src/app/dataGridRowHeightMetrics.ts:164` обновляет весь suffix `chunkPrefixDeltas` после изменённого chunk; chunk size 256. Без snapshot используется полный prefix rebuild с `:219`.
-- **Стоимость:** sparse single mutation O(N/256) в худшем случае; fallback rebuild O(N). Текущая chunk implementation уже существенно лучше полного rebuild, и contract tests проходят. Нельзя объявлять variable heights отсутствующими.
-- **Сценарий:** dense dynamic heights, repeated autosize/resize возле начала 1M-row table, batch высот после смены ширины/renderer content.
-- **Исправление:** сначала измерить sparse/dense/batched mutation; если suffix updates значимы, дерево сумм по chunks или batching version updates. Сохранить constant-height O(1) path.
-- **DoD:** offsets и inverse lookup против простого prefix oracle; рост/уменьшение высоты, clear-all, skipped versions, 0/5k/dense overrides, 100k/1M logical rows. Сохранять anchor и pinned-pane row alignment.
+- **Код:** `datagrid-vue/src/app/dataGridRowHeightMetrics.ts` хранит sparse row deltas по chunks размером 256; обновление изменённого chunk теперь обслуживается внутренним Fenwick tree префиксных сумм.
+- **Стоимость:** sparse single mutation — O(log(N/256)), offset lookup получает chunk prefix за O(log(N/256)) и сохраняет bounded scan внутри chunk; fallback без snapshot по-прежнему строит полный prefix O(N). Constant-height path сохранён.
+- **Сценарий:** repeated autosize/resize возле начала 1M-row table больше не проходит линейный suffix массива chunks.
+- **Измерение:** benchmark 200k rows / 5k overrides / 64 updates: full prefix rebuild baseline 6.85 ops/s, sparse Fenwick path 3,124 ops/s, 456.01×; lookup и mutation path измеряются совместно, чтобы benchmark отражал реальный viewport workload.
+- **DoD:** offsets и inverse lookup против contract oracle, sparse mutation regression и package type-check проходят; dense/1M browser trace и pinned-pane alignment остаются отдельными workload checks.
 - **Public API:** внутреннее изменение возможно; общий core/Vue geometry contract — HP-09. Размер: M. Не ставить выше HP-01/02 только из-за лучшей асимптотики.
 
 ### HP-15. Модульность и размер базового runtime ещё надо доказать

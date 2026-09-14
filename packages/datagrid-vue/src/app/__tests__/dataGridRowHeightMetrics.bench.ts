@@ -75,7 +75,7 @@ describe("rowHeightMetrics — 64 single-row height updates on 200k rows", () =>
     }
   })
 
-  bench("AFTER  — sparse chunk mutation + incremental prefix update", () => {
+  bench("AFTER  — sparse chunk mutation + logarithmic prefix update", () => {
     let version = 1
     let lastMutation: {
       version: number

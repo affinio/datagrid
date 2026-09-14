@@ -112,5 +112,21 @@ describe("createDataGridAppRowHeightMetrics contract", () => {
     expect(metrics.resolveRowOffset(2)).toBe(120)
     expect(metrics.resolveTotalHeight()).toBe((200000 * 30) + 75)
     expect(resolveRowHeightOverride).not.toHaveBeenCalled()
+
+    overrides.set(199999, 40)
+    version = 3
+    lastMutation = {
+      version,
+      kind: "set",
+      rowIndex: 199999,
+      previousHeight: null,
+      nextHeight: 40,
+    }
+
+    expect(metrics.resolveRowOffset(199999)).toBe((199999 * 30) + 75)
+    expect(metrics.resolveTotalHeight()).toBe((200000 * 30) + 85)
+    expect(metrics.resolveRowIndexAtOffset((199999 * 30) + 74)).toBe(199998)
+    expect(metrics.resolveRowIndexAtOffset((199999 * 30) + 75)).toBe(199999)
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
   })
 })
