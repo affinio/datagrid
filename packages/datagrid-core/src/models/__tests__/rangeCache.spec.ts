@@ -118,6 +118,26 @@ describe("createDataGridRangeCache", () => {
     expect(cache.readIndex(1)).toEqual({ index: 1, state: "loaded", row: "row-1" })
   })
 
+  it("evicts multiple least recently used chunks in one pass and keeps loading chunks", () => {
+    const cache = createDataGridRangeCache<string>({
+      chunkSize: 1,
+      maxChunks: 2,
+    })
+
+    const loading = cache.beginLoad({ start: 0, end: 0 })
+    cache.setRow(1, "row-1")
+    cache.setRow(2, "row-2")
+    cache.setRow(3, "row-3")
+
+    expect(cache.readIndex(0).state).toBe("loading")
+    expect(cache.getRow(1)).toBeUndefined()
+    expect(cache.getRow(2)).toBeUndefined()
+    expect(cache.getRow(3)).toBe("row-3")
+    expect(cache.getDiagnostics().chunks).toBe(2)
+
+    expect(cache.cancelLoad(loading)).toBe(true)
+  })
+
   it("evicts least recently used non-loading chunks", () => {
     const cache = createDataGridRangeCache<string>({
       chunkSize: 2,

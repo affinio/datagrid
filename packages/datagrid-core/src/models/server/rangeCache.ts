@@ -153,20 +153,25 @@ export function createDataGridRangeCache<T>(
   }
 
   function evictChunks(): void {
-    while (chunks.size > maxChunks) {
-      let candidate: ChunkRecord<T> | null = null
-      for (const chunk of chunks.values()) {
-        if (chunk.loadingTokens.size > 0) {
-          continue
-        }
-        if (!candidate || chunk.lastAccess < candidate.lastAccess) {
-          candidate = chunk
-        }
+    const overflow = chunks.size - maxChunks
+    if (overflow <= 0) {
+      return
+    }
+
+    const candidates: ChunkRecord<T>[] = []
+    for (const chunk of chunks.values()) {
+      if (chunk.loadingTokens.size === 0) {
+        candidates.push(chunk)
       }
-      if (!candidate) {
-        return
+    }
+    candidates.sort((left, right) => left.lastAccess - right.lastAccess)
+
+    const evictionCount = Math.min(overflow, candidates.length)
+    for (let index = 0; index < evictionCount; index += 1) {
+      const candidate = candidates[index]
+      if (candidate) {
+        chunks.delete(candidate.index)
       }
-      chunks.delete(candidate.index)
     }
   }
 
