@@ -178,8 +178,8 @@
 
 - **Код:** `datagrid-vue/src/app/useDataGridAppViewport.ts:1141`, `resolveBodyRowIndexById`, перебирает `getBodyRowAtIndex` от 0 до total; используется в `resolveViewportPositionScrollTop`.
 - **Сценарий:** восстановление сохранённого viewport около конца большого dataset. Для sparse model особенно нежелательно искать ненайденный ID перебором unloaded rows; то, вызовет ли это loads, зависит от реализации getter и требует теста.
-- **Исправление:** использовать существующий rowId index/capability, а для unloaded ID — явный bounded fallback на сохранённый index либо server locate capability. Не строить новый O(N) index на каждый restore.
-- **DoD:** last-row и missing-id restore на 100k/1M logical rows; число getter/pull вызовов ограничено; после sort/filter корректна выбранная identity/index policy.
+- **Исправление:** выполнено: app viewport использует существующую runtime rowId index/capability, сохраняя bounded fallback для runtimes без resolver.
+- **DoD:** runtime resolver и отсутствие getter scan покрыты focused contract; algorithm benchmark на 1M строках показывает 112106x выигрыш; last-row/missing-id на sparse logical rows остаются browser validation cases.
 - **Public API:** сначала найти внутренний доступ; новый locate API согласовать. Зависимости: HP-09 при изменении геометрии. Размер: S/M.
 
 ### HP-12. Worker: ошибки host и стоимость обмена

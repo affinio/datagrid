@@ -1731,6 +1731,44 @@ describe("useDataGridAppViewport contract", () => {
     })
   })
 
+  it("uses the runtime row-id index for viewport restore", () => {
+    const raf = createRafHarness()
+    const events = createEventHarness()
+    const resolveBodyRowIndexById = vi.fn((rowId: string | number) => rowId === "r399" ? 399 : -1)
+    const getBodyRowAtIndex = vi.fn(() => null)
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 399, end: 399 },
+      anchor: { rowId: "r399", rowIndex: 399, columnKey: null, columnIndex: null },
+      scroll: { top: 0, left: 0 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: vi.fn(() => []),
+        resolveBodyRowIndexById,
+        getBodyRowAtIndex,
+        getViewportPosition: () => viewportPosition,
+        rowPartition: ref({ bodyRowCount: 400, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(20),
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    viewport.bodyViewportRef.value = makeBodyViewport(0, 320)
+    events.emit("state:import:end")
+
+    expect(resolveBodyRowIndexById).toHaveBeenCalledWith("r399")
+    expect(getBodyRowAtIndex).not.toHaveBeenCalled()
+  })
+
   it("restores DOM scroll from runtime viewport position after state import", () => {
     const rows = makeRows(100)
     const events = createEventHarness()

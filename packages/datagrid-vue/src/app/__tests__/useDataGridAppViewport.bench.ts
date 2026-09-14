@@ -324,3 +324,30 @@ describe("zero-width column initialization — 10 000 columns", () => {
     _sink = zeroWidthColumns.slice(0, ZERO_WIDTH_OVERSCAN + 1)
   })
 })
+
+
+// ---------------------------------------------------------------------------
+// Suite 5 — viewport restore row lookup: repeated scan vs runtime index
+// ---------------------------------------------------------------------------
+
+const RESTORE_ROW_COUNT = 1_000_000
+const RESTORE_TARGET_INDEX = RESTORE_ROW_COUNT - 1
+const restoreRowIds = Array.from({ length: RESTORE_ROW_COUNT }, (_, index) => `row-${index}`)
+const restoreIndex = new Map([[`row-${RESTORE_TARGET_INDEX}`, RESTORE_TARGET_INDEX]])
+
+describe("viewport restore row-id lookup — 1 000 000 logical rows", () => {
+  bench("BEFORE — scan body rows", () => {
+    let found = -1
+    for (let index = 0; index < restoreRowIds.length; index += 1) {
+      if (restoreRowIds[index] === `row-${RESTORE_TARGET_INDEX}`) {
+        found = index
+        break
+      }
+    }
+    _sink = found
+  }, { time: 0.2 })
+
+  bench("AFTER  — runtime row-id index", () => {
+    _sink = restoreIndex.get(`row-${RESTORE_TARGET_INDEX}`) ?? -1
+  }, { time: 0.2 })
+})
