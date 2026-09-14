@@ -57,6 +57,8 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   tryApplyFlatProjectionPatch?: (
     changedRowIds: readonly DataGridRowId[],
     nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+    changedUpdatesById: ReadonlyMap<DataGridRowId, Partial<T>>,
+    options?: DataGridClientRowPatchCoordinatorOptions,
   ) => boolean
   getStaleStages: () => readonly DataGridClientProjectionStage[]
   recomputeWithExecutionPlan: (
@@ -142,7 +144,12 @@ export function createClientRowPatchCoordinatorRuntime<T>(
       context.setProjectionInvalidation(invalidationReasons)
       bumpRowVersions(context.getRowVersionById(), patchResult.changedRowIds)
       context.bumpRowRevision()
-      if (context.tryApplyFlatProjectionPatch?.(patchResult.changedRowIds, patchResult.nextRowsById)) {
+      if (context.tryApplyFlatProjectionPatch?.(
+        patchResult.changedRowIds,
+        patchResult.nextRowsById,
+        patchResult.changedUpdatesById,
+        options,
+      )) {
         if (options.emit !== false) {
           context.emit()
         }

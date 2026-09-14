@@ -97,13 +97,75 @@ export function createClientRowPatchHostRuntime<T>(
 ): ClientRowPatchHostRuntime<T> {
   const patchComputedMergeRuntime = createClientRowPatchComputedMergeRuntime<T>(options)
 
+  const projectionPositionIndexes = new WeakMap<object, Map<DataGridRowId, number>>()
+
+  const patchProjectionRowsAtIds = (
+    projectionRows: DataGridRowNode<T>[],
+    changedRowIds: readonly DataGridRowId[],
+    nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+  ): void => {
+    let positions = projectionPositionIndexes.get(projectionRows)
+    if (!positions) {
+      positions = new Map<DataGridRowId, number>()
+      for (let index = 0; index < projectionRows.length; index += 1) {
+        const row = projectionRows[index]
+        if (row) positions.set(row.rowId, index)
+      }
+      projectionPositionIndexes.set(projectionRows, positions)
+    }
+    for (const rowId of changedRowIds) {
+      const position = positions.get(rowId)
+      const nextRow = nextRowsById.get(rowId)
+      if (position === undefined || !nextRow) continue
+      const currentRow = projectionRows[position]
+      if (!currentRow || (currentRow.data === nextRow.data && currentRow.row === nextRow.row)) continue
+      projectionRows[position] = { ...currentRow, data: nextRow.data, row: nextRow.row }
+    }
+  }
+
   const tryApplyFlatProjectionPatch = (
     changedRowIds: readonly DataGridRowId[],
     nextRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<T>>,
+    changedUpdatesById: ReadonlyMap<DataGridRowId, Partial<T>>,
+    runtimeOptions: DataGridClientRowPatchCoordinatorOptions = {},
   ): boolean => {
+    const sortModel = options.getSortModel()
+    const sortFields = new Set(sortModel.flatMap(descriptor => [
+      descriptor.key,
+      ...(descriptor.field ? [descriptor.field] : []),
+      ...(descriptor.dependencyFields ?? []),
+    ]))
+    const sortOnlyUnrelatedPatch = sortModel.length > 0
+      && runtimeOptions.recomputeSort !== true
+      && runtimeOptions.recomputeFilter !== true
+      && runtimeOptions.recomputeGroup !== true
+      && !hasActiveFilterModel(options.getFilterModel())
+      && options.getTreeData() === null
+      && options.getGroupBy() === null
+      && options.getPivotModel() === null
+      && !(options.getAggregationModel() && options.getAggregationModel()!.columns.length > 0)
+      && !options.getPagination().enabled
+      && !options.hasComputedFields()
+      && [...changedUpdatesById.values()].every(update => Object.keys(update as object).every(field => !sortFields.has(field)))
+    if (sortOnlyUnrelatedPatch) {
+      const runtimeState = options.getRuntimeState()
+      const sourceCount = options.getSourceRows().length
+      if (runtimeState.sortedRowsProjection.length === sourceCount && runtimeState.rows.length === sourceCount) {
+        patchProjectionRowsAtIds(runtimeState.sortedRowsProjection, changedRowIds, nextRowsById)
+        if (runtimeState.rows !== runtimeState.sortedRowsProjection) {
+          patchProjectionRowsAtIds(runtimeState.rows, changedRowIds, nextRowsById)
+        }
+        options.updateDerivedCacheRevisions({
+          row: runtimeState.rowRevision, sort: runtimeState.sortRevision, filter: runtimeState.filterRevision, group: runtimeState.groupRevision,
+        })
+        options.commitProjectionCycle(false)
+        return true
+      }
+    }
+
     if (
       hasActiveFilterModel(options.getFilterModel())
-      || options.getSortModel().length > 0
+      || sortModel.length > 0
       || options.getTreeData() !== null
       || options.getGroupBy() !== null
       || options.getPivotModel() !== null
