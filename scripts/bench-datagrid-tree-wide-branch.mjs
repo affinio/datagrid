@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url"
 
 const leafCount = Number.parseInt(process.env.BENCH_TREE_WIDE_BRANCH_ROWS ?? "150000", 10)
 const iterations = Number.parseInt(process.env.BENCH_TREE_WIDE_BRANCH_ITERATIONS ?? "3", 10)
+const heapProfile = process.env.BENCH_TREE_WIDE_BRANCH_HEAP === "true"
 if (!Number.isInteger(leafCount) || leafCount <= 0) throw new Error("BENCH_TREE_WIDE_BRANCH_ROWS must be positive")
 if (!Number.isInteger(iterations) || iterations <= 0) throw new Error("BENCH_TREE_WIDE_BRANCH_ITERATIONS must be positive")
 
@@ -27,6 +28,11 @@ function stats(values) {
   const sorted = [...values].sort((a, b) => a - b)
   const quantile = q => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q))] ?? 0
   return { p50Ms: quantile(0.5), p95Ms: quantile(0.95), p99Ms: quantile(0.99), maxMs: sorted.at(-1) ?? 0 }
+}
+
+function sampleHeapUsed() {
+  if (typeof globalThis.gc === "function") globalThis.gc()
+  return process.memoryUsage().heapUsed
 }
 
 function makeRows(mode) {
@@ -54,6 +60,8 @@ for (const mode of ["path", "parent"]) {
   if (model.getRowCount() !== expectedRows) throw new Error(`${mode}: initial row count mismatch`)
   const key = mode === "path" ? "tree:path:4:root" : "tree:parent:root"
   const durations = []
+  const heapStart = heapProfile ? sampleHeapUsed() : null
+  let heapPeak = heapStart
   try {
     for (let iteration = 0; iteration < iterations; iteration += 1) {
       model.collapseGroup(key)
@@ -61,6 +69,7 @@ for (const mode of ["path", "parent"]) {
       const startedAt = performance.now()
       model.expandGroup(key)
       durations.push(performance.now() - startedAt)
+      if (heapProfile) heapPeak = Math.max(heapPeak ?? 0, sampleHeapUsed())
       if (model.getRowCount() !== expectedRows) throw new Error(`${mode}: expand row count mismatch`)
       const last = model.getRowsInRange({ start: expectedRows - 1, end: expectedRows - 1 })[0]
       if (last?.rowId !== (mode === "path" ? leafCount - 1 : leafCount - 1)) throw new Error(`${mode}: row order mismatch`)
@@ -68,5 +77,15 @@ for (const mode of ["path", "parent"]) {
   } finally {
     model.dispose()
   }
-  console.table([{ mode, ...stats(durations) }])
+  const heapEnd = heapProfile ? sampleHeapUsed() : null
+  console.table([{
+    mode,
+    ...stats(durations),
+    ...(heapProfile ? {
+      heapStartMb: (heapStart / (1024 * 1024)).toFixed(2),
+      heapPeakMb: (heapPeak / (1024 * 1024)).toFixed(2),
+      heapEndMb: (heapEnd / (1024 * 1024)).toFixed(2),
+      heapDeltaMb: ((heapEnd - heapStart) / (1024 * 1024)).toFixed(2),
+    } : {}),
+  }])
 }
