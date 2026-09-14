@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.6.0
+
+### Minor Changes
+
+- Added opt-in worker columnar numeric payloads for the production-shaped worker grid route.
+- Added bounded wide-grid bootstrap behavior and authored renderer defer contracts.
+- Added app input patch mode coverage for immutable same-shape updates.
+
+### Validation
+
+- Production build and declaration generation passed.
+- Perf contract gate passed: 61/61 checks.
+- Browser frame and heap measurements remain CI Chromium dependent.
+
+
 ## 0.5.1
 
 ### Patch Changes

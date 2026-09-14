@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.6.0
+
+### Minor Changes
+
+- Added bounded logical/physical viewport mapping for massive row counts.
+- Added opt-in sparse pivot storage with bounded dense materialization and global datasource cache byte budgets.
+- Added tree projection chunked replacement for large subtree toggles.
+
+### Validation
+
+- Core contracts and type-check passed.
+- Perf contracts: 61/61, score 10.00/10.
+- Node benchmark evidence is recorded in the Astra audit; browser evidence remains CI Chromium dependent.
+
+
 ## 0.5.0
 
 ### Minor Changes

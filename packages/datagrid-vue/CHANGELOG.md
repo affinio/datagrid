@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.6.0
+
+### Minor Changes
+
+- Added bounded zero-width and wide-grid column virtualization contracts.
+- Added logical viewport restore support for sparse million-row datasets.
+- Preserved DOM-compatible worker transport targets and aligned worker/pivot package contracts.
+
+### Validation
+
+- Public Vue build and type-check passed.
+- Focused viewport contracts passed.
+- Browser acceptance remains CI Chromium dependent.
+
+
 ## 0.5.1
 
 ### Patch Changes
