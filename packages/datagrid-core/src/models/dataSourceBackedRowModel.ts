@@ -475,15 +475,24 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   function enforceGlobalCacheRowBudget(): void {
     const maxRows = rowCacheLimit
-    const countRows = (): number => {
-      let count = 0
-      for (const store of cacheStores.values()) count += store.cacheManager.rowCache.size
-      return count
+    const maxBytes = Number.isFinite(options.rowCacheMaxBytes) && (options.rowCacheMaxBytes as number) > 0
+      ? Math.max(1, Math.trunc(options.rowCacheMaxBytes as number))
+      : Number.POSITIVE_INFINITY
+    const getTotals = (): { rows: number; bytes: number } => {
+      let rows = 0
+      let bytes = 0
+      for (const store of cacheStores.values()) {
+        rows += store.cacheManager.rowCache.size
+        bytes += store.cacheManager.getEstimatedBytes()
+      }
+      return { rows, bytes }
     }
-    while (countRows() > maxRows) {
+    let totals = getTotals()
+    while (totals.rows > maxRows || totals.bytes > maxBytes) {
       const evictedKey = cacheStoreRegistry.evictLeastRecentlyUsedRetained()
       if (!evictedKey) return
       disposeCacheStore(evictedKey)
+      totals = getTotals()
     }
   }
 

@@ -1,6 +1,6 @@
 # Design proposal: hierarchical server datasource cache
 
-Статус: internal store lifecycle prototype и row-model context wiring реализованы; payload-level budgets и protocol boundary остаются открытыми.
+Статус: internal store lifecycle, row-model context wiring и общий row/estimated-byte budget реализованы; protocol boundary остаётся отдельной server integration проверкой.
 
 Цель — дать server-backed row model отдельные cache stores для root и каждой раскрытой group branch, сохранив текущий flat datasource protocol и bounded viewport semantics. Это решение не меняет public API до отдельного согласования.
 
@@ -25,7 +25,7 @@ Collapse переводит branch store в `retained` или `disposed` сог�
 
 Сначала защищаются active root/branch stores, затем их текущие viewport и critical prefetch ranges. При переполнении удаляются oldest non-loading chunks внутри least-recently-used eligible store; loading chunks не удаляются. Если все candidates защищены или загружены, cache сохраняет overflow до следующего eligible transition и публикует diagnostics вместо удаления protected data.
 
-Общая cap должна быть проверяема одновременно по `maxStores`, `maxChunks`, `maxRows` и `maxBytes`. Текущий row-model slice уже ограничивает retained contexts (`8`) и общий retained row count настроенным `rowCacheLimit`; chunk/bytes accounting остаётся следующим этапом. Default policy сохраняет текущую flat cache behavior до включения hierarchical mode.
+Общая cap должна быть проверяема одновременно по `maxStores`, `maxChunks`, `maxRows` и `maxBytes`. Текущий row-model slice уже ограничивает retained contexts (`8`) и общий retained row count настроенным `rowCacheLimit`; chunk/bytes accounting для store-level enforcement реализован; protocol payload boundary остаётся следующим этапом. Default policy сохраняет текущую flat cache behavior до включения hierarchical mode.
 
 ## Required validation before implementation
 
