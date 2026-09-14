@@ -400,6 +400,7 @@ The demo runtime now includes an adapter-level telemetry primitive:
 
 - `useDataGridScrollPerfTelemetry` (`@affino/datagrid-orchestration`)
 - Emits active-scroll snapshot metrics: `fps`, `avgFrameMs`, `droppedFrames`, `longTaskFrames`, and quality (`unknown` | `good` | `degraded`).
+- Horizontal viewport offset-to-column boundary resolution is shared through the core internal geometry helpers used by both core column sizing and the Vue app viewport; Vue retains DOM measurement, scheduling, overscan, and retained-window ownership.
 - `recordVirtualizationEvent(...)` is disabled by default and records bounded virtualized viewport events only when `virtualizationTelemetryEnabled` is explicitly set.
 - With `dgPerfTrace=1`, the Vue app viewport records `viewportRaf` samples containing rendered row/column counts, row/column ranges, range resolve time, row/column overscan, placeholder row count, and blank-viewport flags.
 - Scroll-driven runtime viewport-position persistence stays out of the active scroll rAF; position snapshots are written on scroll idle so `setViewportPosition` does not duplicate viewport-range traffic per frame.

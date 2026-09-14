@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
+  resolveFirstColumnIndexAfterOffset,
+  resolveFirstColumnIndexAfterPrefixOffset,
+  resolveLastColumnIndexBeforeOffset,
+  resolveLastColumnIndexBeforePrefixOffset,
+} from "../../virtualization/columnSizing"
+import {
   computeHorizontalScrollClamp,
   computeHorizontalVirtualWindowRange,
 } from "../../virtualization/horizontalVirtualWindowMath"
@@ -21,6 +27,19 @@ describe("horizontal virtual window math contract", () => {
     buffer: 2,
     isRTL: false,
   }
+
+  it("shares offset-to-column boundary math across metrics and prefix callers", () => {
+    const widths = [100, 50, 200]
+    const offsets = [0, 100, 150]
+    const prefix = [0, 100, 150, 350]
+
+    expect(resolveFirstColumnIndexAfterOffset(100, widths, offsets)).toBe(0)
+    expect(resolveLastColumnIndexBeforeOffset(100, widths, offsets)).toBe(1)
+    expect(resolveFirstColumnIndexAfterPrefixOffset(100, prefix, 350)).toBe(1)
+    expect(resolveLastColumnIndexBeforePrefixOffset(100, prefix)).toBe(0)
+    expect(resolveFirstColumnIndexAfterPrefixOffset(350, prefix, 350)).toBe(3)
+    expect(resolveLastColumnIndexBeforePrefixOffset(0, prefix)).toBe(-1)
+  })
 
   it("computes virtual range from metrics-only contract", () => {
     const result = computeHorizontalVirtualWindowRange({

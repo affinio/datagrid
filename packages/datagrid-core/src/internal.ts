@@ -17,3 +17,9 @@ export {
   type VerticalOverscanController,
   type VerticalOverscanInput,
 } from "./virtualization/dynamicOverscan.js"
+export {
+  resolveFirstColumnIndexAfterOffset,
+  resolveFirstColumnIndexAfterPrefixOffset,
+  resolveLastColumnIndexBeforeOffset,
+  resolveLastColumnIndexBeforePrefixOffset,
+} from "./virtualization/columnSizing.js"

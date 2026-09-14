@@ -98,7 +98,11 @@ export function accumulateColumnWidths<T extends ColumnSizeLike>(columns: readon
   return metrics
 }
 
-function findFirstVisibleColumn(scrollLeft: number, widths: readonly number[], offsets: readonly number[]) {
+export function resolveFirstColumnIndexAfterOffset(
+  offset: number,
+  widths: readonly number[],
+  offsets: readonly number[],
+): number {
   let low = 0
   let high = widths.length - 1
   let candidate = widths.length
@@ -108,7 +112,7 @@ function findFirstVisibleColumn(scrollLeft: number, widths: readonly number[], o
     const columnStart = offsets[mid] ?? 0
     const columnWidth = widths[mid] ?? 0
     const columnEnd = columnStart + columnWidth
-    if (columnEnd >= scrollLeft) {
+    if (columnEnd >= offset) {
       candidate = mid
       high = mid - 1
     } else {
@@ -119,7 +123,28 @@ function findFirstVisibleColumn(scrollLeft: number, widths: readonly number[], o
   return Math.min(candidate, widths.length)
 }
 
-function findLastVisibleColumn(scrollRight: number, widths: readonly number[], offsets: readonly number[]) {
+export function resolveFirstColumnIndexAfterPrefixOffset(
+  offset: number,
+  prefix: readonly number[],
+  totalWidth: number,
+): number {
+  const count = Math.max(0, prefix.length - 1)
+  let low = 0
+  let high = count
+  while (low < high) {
+    const mid = (low + high) >> 1
+    const rightEdge = prefix[mid + 1] ?? totalWidth
+    if (rightEdge <= offset) low = mid + 1
+    else high = mid
+  }
+  return low
+}
+
+export function resolveLastColumnIndexBeforeOffset(
+  offset: number,
+  widths: readonly number[],
+  offsets: readonly number[],
+): number {
   let low = 0
   let high = widths.length - 1
   let candidate = -1
@@ -127,7 +152,7 @@ function findLastVisibleColumn(scrollRight: number, widths: readonly number[], o
   while (low <= high) {
     const mid = Math.floor((low + high) / 2)
     const columnStart = offsets[mid] ?? 0
-    if (columnStart <= scrollRight) {
+    if (columnStart <= offset) {
       candidate = mid
       low = mid + 1
     } else {
@@ -136,6 +161,25 @@ function findLastVisibleColumn(scrollRight: number, widths: readonly number[], o
   }
 
   return Math.min(candidate, widths.length - 1)
+}
+
+export function resolveLastColumnIndexBeforePrefixOffset(
+  offset: number,
+  prefix: readonly number[],
+): number {
+  const count = Math.max(0, prefix.length - 1)
+  let low = 0
+  let high = count - 1
+  let candidate = -1
+  while (low <= high) {
+    const mid = (low + high) >> 1
+    const leftEdge = prefix[mid] ?? 0
+    if (leftEdge < offset) {
+      candidate = mid
+      low = mid + 1
+    } else high = mid - 1
+  }
+  return Math.min(candidate, count - 1)
 }
 
 export function calculateVisibleColumns<T extends ColumnSizeLike>(
@@ -210,8 +254,8 @@ export function calculateVisibleColumnsFromMetrics(
   const effectiveScrollLeft = Math.max(0, scrollLeft - pinnedLeftWidth)
   const scrollRight = effectiveScrollLeft + effectiveViewportWidth
 
-  const firstVisible = findFirstVisibleColumn(effectiveScrollLeft, widths, offsets)
-  const lastVisible = findLastVisibleColumn(scrollRight, widths, offsets)
+  const firstVisible = resolveFirstColumnIndexAfterOffset(effectiveScrollLeft, widths, offsets)
+  const lastVisible = resolveLastColumnIndexBeforeOffset(scrollRight, widths, offsets)
 
   if ((globalThis as typeof globalThis & { __UNITLAB_TABLE_DEBUG__?: boolean }).__UNITLAB_TABLE_DEBUG__) {
     // eslint-disable-next-line no-console

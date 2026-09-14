@@ -8,6 +8,8 @@ import type {
 } from "@affino/datagrid-core"
 import {
   createVerticalOverscanController,
+  resolveFirstColumnIndexAfterPrefixOffset,
+  resolveLastColumnIndexBeforePrefixOffset,
   type VerticalOverscanController,
 } from "@affino/datagrid-core/internal"
 import { resolveDataGridHeaderScrollSyncLeft } from "@affino/datagrid-orchestration"
@@ -996,16 +998,7 @@ export function useDataGridAppViewport<TRow>(
     const viewportEndPx = scrollLeft + availableWidth
     const prefix = columnPrefixWidths.value
 
-    // Binary search: first column whose right edge (prefix[i+1]) > viewportStartPx.
-    let lo = 0
-    let hi = columns.length
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      const rightEdge = prefix[mid + 1] ?? totalWidth
-      if (rightEdge <= viewportStartPx) lo = mid + 1
-      else hi = mid
-    }
-    const visibleStart = lo
+    const visibleStart = resolveFirstColumnIndexAfterPrefixOffset(viewportStartPx, prefix, totalWidth)
 
     if (visibleStart >= columns.length) {
       const lastIndex = columns.length - 1
@@ -1020,16 +1013,7 @@ export function useDataGridAppViewport<TRow>(
       )
     }
 
-    // Binary search: last column whose left edge (prefix[i]) < viewportEndPx.
-    lo = visibleStart
-    hi = columns.length - 1
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1
-      const leftEdge = prefix[mid] ?? 0
-      if (leftEdge < viewportEndPx) lo = mid
-      else hi = mid - 1
-    }
-    const visibleEnd = lo
+    const visibleEnd = resolveLastColumnIndexBeforePrefixOffset(viewportEndPx, prefix)
 
     return resolveBufferedViewportColumnMetrics(
       columns,
@@ -1208,15 +1192,7 @@ export function useDataGridAppViewport<TRow>(
     const prefix = columnPrefixWidths.value
     const totalWidth = mainTrackWidth.value
     const viewportStartPx = Math.max(0, scrollLeft)
-    let lo = 0
-    let hi = columns.length
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      const rightEdge = prefix[mid + 1] ?? totalWidth
-      if (rightEdge <= viewportStartPx) lo = mid + 1
-      else hi = mid
-    }
-    return Math.min(lo, columns.length - 1)
+    return Math.min(resolveFirstColumnIndexAfterPrefixOffset(viewportStartPx, prefix, totalWidth), columns.length - 1)
   }
 
   const resolveViewportPositionScrollTop = (
