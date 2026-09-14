@@ -132,6 +132,21 @@ function resolveElapsedWorstCase(root) {
   )
 }
 
+function resolveSampleCount(root) {
+  return ["runs", "sessions", "scenarios"].reduce((count, key) => {
+    return count + (Array.isArray(root?.[key]) ? root[key].length : 0)
+  }, 0)
+}
+
+function resolveMeasuredElapsedMs(root) {
+  return (
+    readNestedNumber(root, "aggregate.elapsedMs.mean") ??
+    readNestedNumber(root, "aggregate.elapsed.mean") ??
+    readNestedNumber(root, "aggregate.elapsedMs") ??
+    readNestedNumber(root, "aggregate.elapsed")
+  )
+}
+
 function resolvePositiveDriftPct(current, baseline) {
   if (!Number.isFinite(current) || !Number.isFinite(baseline) || baseline <= 0) {
     return null
@@ -393,6 +408,21 @@ if (report) {
         { taskAgeMinutes, maxReportAgeMinutes },
       )
     }
+
+    const sampleCount = resolveSampleCount(benchmarkJson)
+    register(
+      sampleCount > 0,
+      `task-${taskId}-samples-present`,
+      `task '${taskId}' artifact must contain at least one measured sample`,
+      { sampleCount },
+    )
+    const measuredElapsedMs = resolveMeasuredElapsedMs(benchmarkJson)
+    register(
+      measuredElapsedMs != null && measuredElapsedMs >= 0,
+      `task-${taskId}-elapsed-measured`,
+      `task '${taskId}' artifact must expose a finite aggregate elapsed measurement`,
+      { measuredElapsedMs },
+    )
 
     register(Boolean(benchmarkJson.ok), `task-${taskId}-benchmark-ok`, `task '${taskId}' benchmark summary must be ok=true`)
     const budgetErrors = Array.isArray(benchmarkJson.budgetErrors) ? benchmarkJson.budgetErrors : []

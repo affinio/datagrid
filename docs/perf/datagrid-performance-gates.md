@@ -307,6 +307,7 @@ Fail-fast behavior:
   - required suites presence (`vue-adapters`, `laravel-morph`, `interaction-models`, `datasource-churn`, `derived-cache`, `row-models`, `enterprise-browser-frames`),
   - tree workload stress suite presence in harness report (`tree-workload`) with CI fail-fast through harness `ok` status,
   - harness report consistency (no duplicate task ids, valid durations, status/ok consistency),
+  - at least one measured `runs`/`sessions`/`scenarios` sample and finite aggregate elapsed measurement per required suite,
   - presence and completeness of `budgets.byTask` map for required suites,
   - `ok=true` for harness summary and each required suite,
   - JSON artifact integrity for each suite,
