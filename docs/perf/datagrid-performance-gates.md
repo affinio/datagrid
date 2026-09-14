@@ -63,6 +63,7 @@ Baseline lock:
 - The artifact records raw JS/CSS bytes, gzip and Brotli sizes, and isolated Node import startup samples.
 - `distBytes` is the complete package distribution footprint, while `entryBytes` identifies the selected entry module; these values are package evidence, not a consumer-specific tree-shaken bundle.
 - Use `BENCH_STARTUP_ITERATIONS` and `BENCH_OUTPUT_JSON` to repeat the measurement with a controlled sample count and output path.
+- `pnpm run bench:datagrid:package-footprint:assert` compares the artifact with `docs/perf/datagrid-package-footprint-baseline.json`; default growth budgets are 15% for dist/gzip/Brotli and 25% for isolated startup p50. Override them explicitly with `PERF_BUDGET_MAX_PACKAGE_FOOTPRINT_GROWTH_PCT` and `PERF_BUDGET_MAX_PACKAGE_STARTUP_GROWTH_PCT` after reviewing a new baseline.
 
 ## Budgets and Fail-Fast Rules
 

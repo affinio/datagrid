@@ -1,0 +1,67 @@
+{
+  "description": "Reviewed package footprint/startup baseline for documented entrypoints",
+  "metrics": [
+    "distBytes",
+    "gzipBytes",
+    "brotliBytes",
+    "startupMs.p50"
+  ],
+  "profiles": {
+    "core:plain": {
+      "distBytes": 2354284,
+      "gzipBytes": 361069,
+      "brotliBytes": 227397,
+      "startupMs": {
+        "p50": 53.94297
+      }
+    },
+    "core:advanced": {
+      "distBytes": 2354284,
+      "gzipBytes": 361069,
+      "brotliBytes": 227397,
+      "startupMs": {
+        "p50": 54.64967899999999
+      }
+    },
+    "vue:plain": {
+      "distBytes": 490962,
+      "gzipBytes": 80482,
+      "brotliBytes": 62626,
+      "startupMs": {
+        "p50": 122.37054899999998
+      }
+    },
+    "vue:advanced": {
+      "distBytes": 490962,
+      "gzipBytes": 80482,
+      "brotliBytes": 62626,
+      "startupMs": {
+        "p50": 125.662095
+      }
+    },
+    "vue-app:plain": {
+      "distBytes": 887733,
+      "gzipBytes": 183632,
+      "brotliBytes": 145224,
+      "startupMs": {
+        "p50": 157.50631800000002
+      }
+    },
+    "pivot": {
+      "distBytes": 27289,
+      "gzipBytes": 5365,
+      "brotliBytes": 4835,
+      "startupMs": {
+        "p50": 5.395634000000001
+      }
+    },
+    "worker": {
+      "distBytes": 54687,
+      "gzipBytes": 9695,
+      "brotliBytes": 8332,
+      "startupMs": {
+        "p50": 53.745844
+      }
+    }
+  }
+}
