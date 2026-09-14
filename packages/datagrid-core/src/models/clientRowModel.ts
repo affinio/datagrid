@@ -73,7 +73,10 @@ import {
 import type { DataGridFieldDependency } from "./dependency/dependencyGraph.js"
 import { createClientRowPivotDrilldownHostRuntime } from "./pivot/clientRowPivotDrilldownHostRuntime.js"
 import { createClientRowSourceColumnHostRuntime } from "./host/clientRowSourceColumnHostRuntime.js"
-import { createClientRowFormulaDiagnosticsRuntime } from "./compute/clientRowFormulaDiagnosticsRuntime.js"
+import {
+  createClientRowFormulaDiagnosticsRuntime,
+  type ClientRowFormulaDiagnosticsRuntime,
+} from "./compute/clientRowFormulaDiagnosticsRuntime.js"
 import { createClientRowSourceColumnCacheRuntime } from "./materialization/clientRowSourceColumnCacheRuntime.js"
 import { createClientRowMaterializationRuntime } from "./materialization/clientRowMaterializationRuntime.js"
 import { cloneAggregationModel } from "./clientRowModelHelpers.js"
@@ -407,14 +410,32 @@ export function createClientRowModel<T>(
   const computedRegistryRef: { current: ClientRowComputedRegistryRuntime<T> | null } = {
     current: null,
   }
-  const formulaDiagnosticsRuntime = createClientRowFormulaDiagnosticsRuntime({
-    hasFormulaFields: () => computedRegistryRef.current?.hasFormulaFields() === true,
-    hasComputedFields: () => computedRegistryRef.current?.hasComputedFields() === true,
-    setProjectionFormulaDiagnostics: diagnostics => {
-      runtimeStateStore.setProjectionFormulaDiagnostics(diagnostics)
-    },
-    runtimeErrorsPreviewLimit: DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT,
-  })
+  let formulaDiagnosticsRuntimeInstance: ClientRowFormulaDiagnosticsRuntime | null = null
+  const getFormulaDiagnosticsRuntime = (): ClientRowFormulaDiagnosticsRuntime => {
+    if (formulaDiagnosticsRuntimeInstance) {
+      return formulaDiagnosticsRuntimeInstance
+    }
+    formulaDiagnosticsRuntimeInstance = createClientRowFormulaDiagnosticsRuntime({
+      hasFormulaFields: () => computedRegistryRef.current?.hasFormulaFields() === true,
+      hasComputedFields: () => computedRegistryRef.current?.hasComputedFields() === true,
+      setProjectionFormulaDiagnostics: diagnostics => {
+        runtimeStateStore.setProjectionFormulaDiagnostics(diagnostics)
+      },
+      runtimeErrorsPreviewLimit: DATAGRID_FORMULA_RUNTIME_ERRORS_PREVIEW_LIMIT,
+    })
+    return formulaDiagnosticsRuntimeInstance
+  }
+  const formulaDiagnosticsRuntime: ClientRowFormulaDiagnosticsRuntime = {
+    createEmptyFormulaDiagnostics: () => getFormulaDiagnosticsRuntime().createEmptyFormulaDiagnostics(),
+    createEmptyFormulaComputeStageDiagnostics: () => getFormulaDiagnosticsRuntime().createEmptyFormulaComputeStageDiagnostics(),
+    pushFormulaRuntimeError: runtimeError => getFormulaDiagnosticsRuntime().pushFormulaRuntimeError(runtimeError),
+    commitFormulaDiagnostics: diagnostics => getFormulaDiagnosticsRuntime().commitFormulaDiagnostics(diagnostics),
+    commitFormulaComputeStageDiagnostics: diagnostics => getFormulaDiagnosticsRuntime().commitFormulaComputeStageDiagnostics(diagnostics),
+    commitFormulaRowRecomputeDiagnostics: diagnostics => getFormulaDiagnosticsRuntime().commitFormulaRowRecomputeDiagnostics(diagnostics),
+    getFormulaComputeStageDiagnosticsSnapshot: () => getFormulaDiagnosticsRuntime().getFormulaComputeStageDiagnosticsSnapshot(),
+    getFormulaRowRecomputeDiagnosticsSnapshot: () => getFormulaDiagnosticsRuntime().getFormulaRowRecomputeDiagnosticsSnapshot(),
+    withRuntimeErrorsCollector: (collector, run) => getFormulaDiagnosticsRuntime().withRuntimeErrorsCollector(collector, run),
+  }
   const createEmptyFormulaDiagnostics = formulaDiagnosticsRuntime.createEmptyFormulaDiagnostics
   const createEmptyFormulaComputeStageDiagnostics = formulaDiagnosticsRuntime.createEmptyFormulaComputeStageDiagnostics
   const pushFormulaRuntimeError = formulaDiagnosticsRuntime.pushFormulaRuntimeError
