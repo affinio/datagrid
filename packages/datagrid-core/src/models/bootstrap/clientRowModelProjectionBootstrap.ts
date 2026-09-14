@@ -40,6 +40,7 @@ export interface CreateClientRowModelProjectionBootstrapOptions<T> {
   getGroupBy: () => DataGridGroupBySpec | null
   comparatorRegistry?: DataGridComparatorRegistry<T>
   aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
+  maxPivotOutputCells?: number
 }
 
 export function createClientRowModelProjectionBootstrap<T>(
@@ -48,6 +49,7 @@ export function createClientRowModelProjectionBootstrap<T>(
   const pivotRuntime = createPivotRuntime<T>({
     readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
     aggregationRegistry: options.aggregationRegistry,
+    maxOutputCells: options.maxPivotOutputCells,
   })
   const treeProjectionRuntime = createTreeProjectionRuntime<T>({
     resolveTreeDataRow: options.resolveTreeDataRow,

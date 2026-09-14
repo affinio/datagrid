@@ -152,9 +152,10 @@
 
 - **Код:** `datagrid-core/src/models/pivot/pivotRuntime.ts:555` в `buildPivotRowNode` проходит все `columnOrder` и все value columns для каждой output row, записывая даже отсутствующие значения как `null`. Публичный `DataGridPivotSpec` в `datagrid-pivot/src/contracts.ts:23` не содержит ограничения output cardinality; guard в проверенном build path не найден.
 - **Стоимость:** минимум O(Rp × Cp × V) output property work, независимо от горизонтальной DOM virtualization. Rp — output rows, Cp — уникальные pivot tuples, V — value specs. Маленький source с высокой cardinality может породить огромный разреженный результат, который хранится плотно.
-- **Исправление A:** оценка размера результата до dense materialization; определённый diagnostic/error/limit behavior для чрезмерного результата.
-- **Исправление B:** по замерам рассмотреть sparse aggregate storage + lazy cell access, пользуясь существующими row/cell contracts. Поддержка null в exported snapshots требует отдельного решения.
-- **DoD:** равномерная и skewed cardinality, sparse и dense intersections, несколько aggregations, subtotals/grand totals, value patch и axis-key patch; heap peak, build latency, export/read/drilldown correctness. Guard должен срабатывать до чрезмерных allocations.
+- **Исправление A:** выполнено: opt-in `maxOutputCells` добавлен в `DataGridPivotRuntimeOptions` и client row model options; превышение возвращает typed `output-limit-exceeded` diagnostics, пустой результат и не создаёт dense output rows. Projection stage сохраняет предыдущий корректный snapshot.
+- **Исправление B:** sparse aggregate storage + lazy cell access не вводились; это отдельный этап после измерений и проверки export/read/drilldown semantics.
+- **Проверки:** focused pivot runtime contract проверяет guard на 2-row × 2-column output; pivot high-cardinality stress benchmark `bench:datagrid:pivot:stress:50k` выполнен на 50k rows, cardinality 30, 3 value specs и 3 seeds; core type-check/build проходят.
+- **DoD:** guard срабатывает до dense row materialization и сохраняет fail-closed semantics; отдельные heap peak, browser export/read/drilldown и pinned UI checks остаются для workload expansion.
 - **Риск:** несовместимость сериализованного row payload, export, формул, сортировки и custom renderer reads. **Public API:** новые limits/lazy access согласовать. Зависимости: HP-03, для B — оценка HP-15. Размер: A — M, B — L.
 
 ### HP-09. Два места определяют геометрию viewport

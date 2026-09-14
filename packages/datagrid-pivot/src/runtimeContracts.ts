@@ -10,11 +10,20 @@ import type {
 
 export interface DataGridPivotRuntimeOptions<T> {
   readRowField?: DataGridAggregationFieldReader<T>
+  /** Maximum dense output cells (projected rows × value columns). Infinity by default. */
+  maxOutputCells?: number
+}
+
+export interface DataGridPivotProjectionDiagnostics {
+  kind: "output-limit-exceeded"
+  estimatedCells: number
+  maxOutputCells: number
 }
 
 export interface DataGridPivotProjectionResult<T> {
   rows: DataGridRowNode<T>[]
   columns: DataGridPivotColumn[]
+  diagnostics?: DataGridPivotProjectionDiagnostics
 }
 
 export interface DataGridPivotProjectRowsInput<T> {

@@ -1,5 +1,5 @@
 import { preservePivotProjectionRowIdentity } from "../pivot/clientRowPivotProjectionUtils.js"
-import type { DataGridPivotColumn, DataGridPivotSpec } from "@affino/datagrid-pivot"
+import type { DataGridPivotColumn, DataGridPivotProjectionDiagnostics, DataGridPivotSpec } from "@affino/datagrid-pivot"
 import type { DataGridRowNode } from "../rowModel.js"
 import type { DataGridPivotIncrementalPatchRow, DataGridPivotRuntime } from "../pivot/pivotRuntime.js"
 
@@ -19,6 +19,7 @@ export interface RunPivotProjectionStageResult<T> {
   pivotedRowsProjection: DataGridRowNode<T>[]
   pivotColumns: DataGridPivotColumn[]
   recomputed: boolean
+  diagnostics?: DataGridPivotProjectionDiagnostics
 }
 
 export function runPivotProjectionStage<T>(
@@ -66,6 +67,15 @@ export function runPivotProjectionStage<T>(
     normalizeFieldValue: params.normalizeFieldValue,
     expansionSnapshot: params.expansionSnapshot,
   })
+  if (pivotProjection.diagnostics) {
+    return {
+      pivotedRowsProjection: params.previousPivotedRowsProjection as DataGridRowNode<T>[],
+      pivotColumns: params.previousPivotColumns as DataGridPivotColumn[],
+      recomputed: false,
+      diagnostics: pivotProjection.diagnostics,
+    }
+  }
+
   return {
     pivotedRowsProjection: preservePivotProjectionRowIdentity(
       params.previousPivotedRowsProjection,

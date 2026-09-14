@@ -66,6 +66,7 @@ export type {
 
 export type {
   DataGridPivotRuntimeOptions,
+  DataGridPivotProjectionDiagnostics,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,
   DataGridPivotIncrementalPatchRow,

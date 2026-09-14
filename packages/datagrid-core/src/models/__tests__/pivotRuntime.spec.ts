@@ -29,6 +29,31 @@ function createLeafRow(row: PivotRow, index: number): DataGridRowNode<PivotRow> 
 }
 
 describe("pivotRuntime incremental patching", () => {
+
+  it("fails closed before dense materialization when output cell limit is exceeded", () => {
+    const runtime = createPivotRuntime<PivotRow>({ maxOutputCells: 2 })
+    const sourceRows = [
+      createLeafRow({ id: "r1", region: "AMER", year: 2024, revenue: 10 }, 0),
+      createLeafRow({ id: "r2", region: "EMEA", year: 2025, revenue: 20 }, 1),
+    ]
+    const result = runtime.projectRows({
+      inputRows: sourceRows,
+      pivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+
+    expect(result.rows).toEqual([])
+    expect(result.columns).toEqual([])
+    expect(result.diagnostics).toEqual({
+      kind: "output-limit-exceeded",
+      estimatedCells: 4,
+      maxOutputCells: 2,
+    })
+  })
   it("applies value-only patch without relying on cached binding by rowId", () => {
     const runtime = createPivotRuntime<PivotRow>()
     const sourceRows = [

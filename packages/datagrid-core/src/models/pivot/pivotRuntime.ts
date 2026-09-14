@@ -411,6 +411,24 @@ function buildPivotProjectionRows<T>(
     runtimeColumnsByColumnKey.set(columnKey, runtimeColumnsForKey)
   }
 
+  const configuredMaxOutputCells = options.maxOutputCells
+  const maxOutputCells = Number.isFinite(configuredMaxOutputCells)
+    ? Math.max(1, Math.trunc(configuredMaxOutputCells as number))
+    : Number.POSITIVE_INFINITY
+  const estimatedCells = rowEntries.size * runtimeColumns.length
+  if (estimatedCells > maxOutputCells) {
+    return {
+      rows: [],
+      columns: [],
+      diagnostics: {
+        kind: "output-limit-exceeded",
+        estimatedCells,
+        maxOutputCells,
+      },
+      incrementalState: null,
+    }
+  }
+
   const expansionSnapshot = input.expansionSnapshot ?? null
   const expansionToggledKeys = new Set<string>(expansionSnapshot?.toggledGroupKeys ?? [])
   const isExpanded = (groupKey: string): boolean => {
@@ -863,6 +881,7 @@ export function createPivotRuntime<T>(
       return {
         rows: built.rows,
         columns: built.columns,
+        ...(built.diagnostics ? { diagnostics: built.diagnostics } : {}),
       }
     },
     applyValueOnlyPatch,
