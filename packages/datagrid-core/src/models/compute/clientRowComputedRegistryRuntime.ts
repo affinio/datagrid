@@ -191,6 +191,34 @@ export interface ClientRowComputedRegistryRuntime<T> {
   resolveRowFieldReader: (fieldInput: string) => ((rowNode: DataGridRowNode<T>) => unknown)
 }
 
+export function createLazyClientRowComputedRegistryRuntime<T>(
+  factory: () => ClientRowComputedRegistryRuntime<T>,
+): ClientRowComputedRegistryRuntime<T> {
+  let runtime: ClientRowComputedRegistryRuntime<T> | null = null
+  const resolve = (): ClientRowComputedRegistryRuntime<T> => {
+    runtime ??= factory()
+    return runtime
+  }
+
+  return new Proxy({} as ClientRowComputedRegistryRuntime<T>, {
+    get(_target, property: string | symbol) {
+      if (property === "hasComputedFields" || property === "hasFormulaFields") {
+        return () => runtime?.[property]() ?? false
+      }
+      if (property === "clear") {
+        return () => runtime?.clear()
+      }
+      return (...args: unknown[]) => {
+        const method = resolve()[property as keyof ClientRowComputedRegistryRuntime<T>]
+        if (typeof method !== "function") {
+          throw new TypeError(`Unknown computed registry method: ${String(property)}`)
+        }
+        return (method as (...args: unknown[]) => unknown)(...args)
+      }
+    },
+  })
+}
+
 export function createClientRowComputedRegistryRuntime<T>(
   context: ClientRowComputedRegistryRuntimeContext<T>,
 ): ClientRowComputedRegistryRuntime<T> {

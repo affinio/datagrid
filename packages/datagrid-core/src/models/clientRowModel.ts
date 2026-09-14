@@ -97,6 +97,7 @@ import {
   createClientRowComputedSnapshotRuntime,
 } from "./materialization/clientRowComputedSnapshotRuntime.js"
 import {
+  createLazyClientRowComputedRegistryRuntime,
   createClientRowComputedRegistryRuntime,
   type ClientRowComputedRegistryRuntime,
 } from "./compute/clientRowComputedRegistryRuntime.js"
@@ -448,18 +449,22 @@ export function createClientRowModel<T>(
     ? "iterative"
     : "error"
   let computedSnapshotFieldsRuntime: ClientRowComputedSnapshotFieldsRuntime | null = null
-  const computedRegistry = createClientRowComputedRegistryRuntime<T>({
-    projectionPolicy,
-    initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
-    formulaReferenceParserOptions: options.formulaReferenceParserOptions,
-    formulaCyclePolicy,
-    resolveRowFieldValue: (rowNode, field, readBaseValue) => {
-      return computedSnapshotRuntime.readFieldValue(rowNode, field, readBaseValue)
-    },
-    onFormulaRuntimeError: pushFormulaRuntimeError,
-    onComputedPlanChanged: () => {
-      computedSnapshotFieldsRuntime?.markDirty()
-    },
+  const computedRegistry = createLazyClientRowComputedRegistryRuntime<T>(() => {
+    const runtime = createClientRowComputedRegistryRuntime<T>({
+      projectionPolicy,
+      initialFormulaFunctionRegistry: options.initialFormulaFunctionRegistry,
+      formulaReferenceParserOptions: options.formulaReferenceParserOptions,
+      formulaCyclePolicy,
+      resolveRowFieldValue: (rowNode, field, readBaseValue) => {
+        return computedSnapshotRuntime.readFieldValue(rowNode, field, readBaseValue)
+      },
+      onFormulaRuntimeError: pushFormulaRuntimeError,
+      onComputedPlanChanged: () => {
+        computedSnapshotFieldsRuntime?.markDirty()
+      },
+    })
+    computedRegistryRef.current = runtime
+    return runtime
   })
   computedRegistryRef.current = computedRegistry
   const computedSnapshotRuntime = createClientRowComputedSnapshotRuntime<T>({
