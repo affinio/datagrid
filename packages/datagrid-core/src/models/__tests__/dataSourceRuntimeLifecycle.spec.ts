@@ -74,6 +74,29 @@ describe("data source runtime lifecycle", () => {
     expect([...cache.rowCache.keys()]).toEqual([0, 1, 2, 3])
   })
 
+  it("enforces an incremental byte budget without scanning payloads during eviction", () => {
+    const cache = createDataSourceCacheManager<{ id: number }>({
+      rowCacheLimit: 100,
+      rangeCacheChunkSize: 2,
+      maxBytes: 25,
+      estimateRowBytes: () => 10,
+    })
+    for (let index = 0; index < 4; index += 1) {
+      cache.rowCache.set(index, { rowId: index } as never)
+    }
+    const evicted: number[] = []
+
+    cache.enforceLimit({
+      rowCacheLimit: 100,
+      protectedRanges: [],
+      onEvict: index => evicted.push(index),
+    })
+
+    expect(cache.getEstimatedBytes()).toBe(20)
+    expect(evicted).toEqual([0, 1])
+    expect([...cache.rowCache.keys()]).toEqual([2, 3])
+  })
+
   it("keeps all rows when every cached index is protected", () => {
     const cache = createDataSourceCacheManager<{ id: number }>({
       rowCacheLimit: 2,

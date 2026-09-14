@@ -116,6 +116,7 @@ export interface CreateDataSourceBackedRowModelOptions<T = unknown> {
   initialPagination?: DataGridPaginationInput | null
   initialTotal?: number
   rowCacheLimit?: number
+  rowCacheMaxBytes?: number
   prefetch?: DataGridDataSourcePrefetchOptions
 }
 
@@ -347,6 +348,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   const createCacheStore = (key: string): CacheStore => {
     const cacheManager = createDataSourceCacheManager<T>({
       rowCacheLimit,
+      maxBytes: options.rowCacheMaxBytes,
       rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
     })
     cacheManager.init()

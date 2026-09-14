@@ -15,9 +15,11 @@ export interface DataSourceCacheManager<T> extends DataSourceRuntimeLifecycle {
   isProtectedIndex(index: number, protectedRanges: readonly DataGridViewportRange[]): boolean
   enforceLimit(options: {
     rowCacheLimit: number
+    maxBytes?: number
     protectedRanges: readonly DataGridViewportRange[]
     onEvict?: (index: number) => void
   }): void
+  getEstimatedBytes(): number
   deleteIndex(index: number): boolean
   clear(): void
 }
@@ -25,8 +27,36 @@ export interface DataSourceCacheManager<T> extends DataSourceRuntimeLifecycle {
 export function createDataSourceCacheManager<T>(options: {
   rowCacheLimit: number
   rangeCacheChunkSize: number
+  maxBytes?: number
+  estimateRowBytes?: (row: DataGridRowNode<T>) => number
 }): DataSourceCacheManager<T> {
-  const rowCache = new Map<number, DataGridRowNode<T>>()
+  let estimatedBytes = 0
+  const estimateRowBytes = options.estimateRowBytes ?? ((row: DataGridRowNode<T>): number => {
+    try {
+      return 128 + JSON.stringify(row.data).length * 2
+    } catch {
+      return 128
+    }
+  })
+  class AccountingRowCache extends Map<number, DataGridRowNode<T>> {
+    override set(index: number, row: DataGridRowNode<T>): this {
+      const previous = super.get(index)
+      if (previous) estimatedBytes -= estimateRowBytes(previous)
+      estimatedBytes += Math.max(0, estimateRowBytes(row))
+      return super.set(index, row)
+    }
+    override delete(index: number): boolean {
+      const previous = super.get(index)
+      if (!previous) return false
+      estimatedBytes -= estimateRowBytes(previous)
+      return super.delete(index)
+    }
+    override clear(): void {
+      estimatedBytes = 0
+      super.clear()
+    }
+  }
+  const rowCache = new AccountingRowCache()
   const staleRetainedRowIndexes = new Set<number>()
   const rangeCache = createDataGridRangeCache<DataGridRowNode<T>>({
     chunkSize: options.rangeCacheChunkSize,
@@ -69,8 +99,11 @@ export function createDataSourceCacheManager<T>(options: {
     staleRetainedRowIndexes,
     rangeCache,
     isProtectedIndex,
-    enforceLimit({ rowCacheLimit, protectedRanges, onEvict }) {
-      if (rowCache.size <= rowCacheLimit) {
+    enforceLimit({ rowCacheLimit, maxBytes = options.maxBytes, protectedRanges, onEvict }) {
+      const normalizedMaxBytes = Number.isFinite(maxBytes) && (maxBytes as number) > 0
+        ? Math.max(1, Math.trunc(maxBytes as number))
+        : Number.POSITIVE_INFINITY
+      if (rowCache.size <= rowCacheLimit && estimatedBytes <= normalizedMaxBytes) {
         return
       }
       const evictionCandidates: number[] = []
@@ -80,7 +113,7 @@ export function createDataSourceCacheManager<T>(options: {
         }
       }
       let candidateIndex = 0
-      while (rowCache.size > rowCacheLimit) {
+      while (rowCache.size > rowCacheLimit || estimatedBytes > normalizedMaxBytes) {
         const evictIndex = evictionCandidates[candidateIndex]
         candidateIndex += 1
         if (typeof evictIndex === "undefined") {
@@ -92,6 +125,7 @@ export function createDataSourceCacheManager<T>(options: {
       }
     },
     deleteIndex,
+    getEstimatedBytes: () => estimatedBytes,
     clear,
   }
 }
