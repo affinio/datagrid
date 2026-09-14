@@ -1365,28 +1365,33 @@ function resolveGroupRowIndexByRowId<T>(
   return -1
 }
 
-function rebuildGroupIndexByRowIdFrom<T>(
-  rows: readonly DataGridRowNode<T>[],
+function updateGroupIndexAfterSubtreeReplacement<T>(
   groupIndexByRowId: Map<DataGridRowId, number>,
-  startIndex = 0,
+  replaceStart: number,
+  deletedRows: readonly DataGridRowNode<T>[],
+  insertedRows: readonly DataGridRowNode<T>[],
 ): void {
-  if (startIndex <= 0) {
-    groupIndexByRowId.clear()
-    startIndex = 0
-  } else {
+  const deleteEnd = replaceStart + deletedRows.length
+  for (const row of deletedRows) {
+    if (row.kind === "group") {
+      groupIndexByRowId.delete(row.rowId)
+    }
+  }
+
+  const indexDelta = insertedRows.length - deletedRows.length
+  if (indexDelta !== 0) {
     for (const [rowId, index] of groupIndexByRowId.entries()) {
-      if (index >= startIndex) {
-        groupIndexByRowId.delete(rowId)
+      if (index >= deleteEnd) {
+        groupIndexByRowId.set(rowId, index + indexDelta)
       }
     }
   }
 
-  for (let index = startIndex; index < rows.length; index += 1) {
-    const row = rows[index]
-    if (!row || row.kind !== "group") {
-      continue
+  for (let offset = 0; offset < insertedRows.length; offset += 1) {
+    const row = insertedRows[offset]
+    if (row?.kind === "group") {
+      groupIndexByRowId.set(row.rowId, replaceStart + offset)
     }
-    groupIndexByRowId.set(row.rowId, index)
   }
 }
 
@@ -1480,7 +1485,12 @@ function tryProjectTreePathSubtreeToggle<T>(
     previousDescendants.length,
     nextDescendants,
   )
-  rebuildGroupIndexByRowIdFrom(replacedRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
+  updateGroupIndexAfterSubtreeReplacement(
+    input.cacheState.cache.groupIndexByRowId,
+    replaceStart,
+    previousDescendants,
+    nextDescendants,
+  )
   return {
     rows: replacedRows,
     diagnostics: input.cacheState.cache.diagnostics,
@@ -1584,7 +1594,12 @@ function tryProjectTreeParentSubtreeToggle<T>(
     previousDescendants.length,
     nextDescendants,
   )
-  rebuildGroupIndexByRowIdFrom(replacedRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
+  updateGroupIndexAfterSubtreeReplacement(
+    input.cacheState.cache.groupIndexByRowId,
+    replaceStart,
+    previousDescendants,
+    nextDescendants,
+  )
   return {
     rows: replacedRows,
     diagnostics: input.cacheState.cache.diagnostics,
