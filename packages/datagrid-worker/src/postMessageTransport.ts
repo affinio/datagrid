@@ -101,19 +101,24 @@ export function createDataGridWorkerPostMessageTransport(
       request,
       channel,
     )
-    options.target.postMessage(requestMessage)
-    if (requestTimeoutMs > 0) {
-      const timeoutHandle = setTimeout(() => {
+    const timeoutHandle = requestTimeoutMs > 0
+      ? setTimeout(() => {
         if (!pendingById.has(requestId)) {
           return
         }
         pendingById.delete(requestId)
         timedOut += 1
       }, requestTimeoutMs)
-      pendingById.set(requestId, { timeoutHandle })
-      return
+      : null
+    // Register before posting: MessageChannel implementations may deliver an ack synchronously.
+    pendingById.set(requestId, { timeoutHandle })
+    try {
+      options.target.postMessage(requestMessage)
+    } catch (error) {
+      clearPending(requestId)
+      errored += 1
+      throw error
     }
-    pendingById.set(requestId, { timeoutHandle: null })
   }
 
   return {

@@ -192,6 +192,7 @@
 - **Исправление B:** измерить bytes/message, serialization cost, ack lag, inflight work и retained heap; затем delta payload для unchanged window/metadata, viewport priority и backpressure. Transferables полезны для подходящего columnar payload, а не автоматически для любых object rows.
 - **DoD:** host exception покрыт worker regression test; uncloneable reply, lost response, worker termination, slow worker + rapid scroll/patch bursts и pending lifecycle остаются отдельными validation cases.
 - **Диагностический gap:** закрыт: `getSparseRowModelDiagnostics` считает уникальные cached row IDs по visible rows и всем окнам; overlap/dedup semantics покрыты regression test.
+- **Исправление B, lifecycle sub-slice:** закрыт race, при котором synchronous ack мог прийти до регистрации pending request; pending теперь регистрируется до `postMessage`, а synchronous ack и thrown transport error корректно очищают inflight state и обновляют error stats. Payload delta, bounded backpressure и browser pressure остаются отдельными sub-slices.
 - **Public API:** новые transport/protocol поля и target signature сначала предложить и согласовать. Зависимости: A независим; B после HP-03. Размер: A — M, B — M/L.
 
 ### HP-13. Server cache: eviction и иерархия

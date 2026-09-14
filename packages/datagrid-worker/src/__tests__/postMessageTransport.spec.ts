@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   DATAGRID_WORKER_COMPUTE_PAYLOAD_SCHEMA_VERSION,
+  createDataGridWorkerComputeAckMessage,
   createDataGridWorkerMessageHost,
   createDataGridWorkerPostMessageTransport,
   DATAGRID_WORKER_PROTOCOL_CHANNEL,
@@ -88,6 +89,50 @@ describe("datagrid-worker postMessage transport", () => {
 
     transport.dispose()
     host.dispose()
+  })
+
+  it("accounts for an acknowledgement delivered synchronously by postMessage", () => {
+    let listener: ((event: DataGridWorkerMessageEvent) => void) | null = null
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: {
+        postMessage() {
+          listener?.({
+            data: createDataGridWorkerComputeAckMessage(1, { handled: true }),
+          })
+        },
+      },
+      source: {
+        addEventListener(_type, nextListener) { listener = nextListener },
+        removeEventListener() { listener = null },
+      },
+      requestTimeoutMs: 1_000,
+    })
+
+    transport.dispatch({ kind: "refresh" })
+
+    expect(transport.getStats()).toMatchObject({
+      dispatched: 1,
+      acked: 1,
+      errored: 0,
+      timedOut: 0,
+      inflight: 0,
+    })
+    transport.dispose()
+  })
+
+  it("clears inflight state when postMessage throws", () => {
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: {
+        postMessage() {
+          throw new Error("transport unavailable")
+        },
+      },
+      requestTimeoutMs: 1_000,
+    })
+
+    expect(() => transport.dispatch({ kind: "refresh" })).toThrow("transport unavailable")
+    expect(transport.getStats()).toMatchObject({ dispatched: 1, errored: 1, inflight: 0 })
+    transport.dispose()
   })
 
   it("supports fire-and-forget strategy for future async compute hosts", () => {
