@@ -572,7 +572,12 @@ function buildPivotProjectionRows<T>(
       rowData.rowKey = rowKey
     }
 
-    for (const columnKey of columnOrder) {
+    const outputColumnKeys = sparseOutput
+      ? (canUseIncrementalPivotAggregation
+        ? rowEntry.columnAggregateStateByKey?.keys()
+        : rowEntry.columnBuckets?.keys())
+      : columnOrder
+    for (const columnKey of outputColumnKeys ?? []) {
       const runtimeColumnsForKey = runtimeColumnsByColumnKey.get(columnKey)
       if (!runtimeColumnsForKey) {
         continue
