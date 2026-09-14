@@ -130,7 +130,7 @@
 - **Стоимость:** O(renderedRows × allColumns), а не O(renderedRows × visibleColumns). На скрытой вкладке/нулевой начальной ширине возможен дорогой первый render до измерения viewport. Это C, не измеренный в браузере mount spike.
 - **Исправление A:** ограниченный zero-size bootstrap window или ожидание валидного measurement с определённым first-paint contract.
 - **Исправление B:** понятный wide-grid preset/explicit documented setting; изменение default не проводить молча.
-- **DoD:** zero-width 10k column contract (включая полностью zero-width measured grid) и algorithm benchmark покрыты; transition contract проверяет bounded window после hide, resize и reorder/pin на 10k columns; добавлен Playwright acceptance для 1000-column UI, который скрывает 999 колонок, проверяет bounded mounted window и отсутствие blank band. Browser execution зависит от CI Chromium.
+- **DoD:** закрыт кодом и не-browser contracts: zero-width 10k column contract (включая полностью zero-width measured grid), algorithm benchmark и transition contract после hide, resize и reorder/pin покрыты; Playwright acceptance для 1000-column UI проверяет bounded mounted window и отсутствие blank band. Осталось только выполнить browser acceptance в CI с поддерживаемым Chromium.
 - **Риск:** initial flash, некорректный autosize скрытых колонок, breaking change default. **Public API/behavior:** для B сначала предложение и согласование. Размер: A — S/M, B — отдельный slice.
 
 ### HP-07. Authored renderers могут блокировать каждый render window
@@ -185,7 +185,7 @@
 - **Код:** `datagrid-vue/src/app/useDataGridAppViewport.ts:1141`, `resolveBodyRowIndexById`, перебирает `getBodyRowAtIndex` от 0 до total; используется в `resolveViewportPositionScrollTop`.
 - **Сценарий:** восстановление сохранённого viewport около конца большого dataset. Для sparse model особенно нежелательно искать ненайденный ID перебором unloaded rows; то, вызовет ли это loads, зависит от реализации getter и требует теста.
 - **Исправление:** выполнено: app viewport использует существующую runtime rowId index/capability, сохраняя bounded fallback для runtimes без resolver.
-- **DoD:** runtime resolver и отсутствие getter scan покрыты focused contract; algorithm benchmark на 1M строках показывает 161363x выигрыш; новый Vue contract покрывает last-row и missing-id на 1M sparse logical rows без fallback scan, включая runtime resolver при отсутствии `getBodyRowAtIndex`. Browser restore acceptance остаётся отдельным workload check.
+- **DoD:** закрыт кодом и contracts: runtime resolver и отсутствие getter scan покрыты focused contract; algorithm benchmark на 1M строках показывает 161363x выигрыш; Vue contract покрывает last-row и missing-id на 1M sparse logical rows без fallback scan, включая runtime resolver при отсутствии `getBodyRowAtIndex`. Осталось только выполнить browser restore acceptance в CI с поддерживаемым Chromium.
 - **Public API:** сначала найти внутренний доступ; новый locate API согласовать. Зависимости: HP-09 при изменении геометрии. Размер: S/M.
 
 ### HP-12. Worker: ошибки host и стоимость обмена
