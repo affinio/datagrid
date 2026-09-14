@@ -8,7 +8,9 @@ import { pathToFileURL } from "node:url"
 const rowCount = Number.parseInt(process.env.BENCH_SORTED_PATCH_ROWS ?? "100000", 10)
 const iterations = Number.parseInt(process.env.BENCH_SORTED_PATCH_ITERATIONS ?? "12", 10)
 const changeCounts = (process.env.BENCH_SORTED_PATCH_SIZES ?? "1,100,1000").split(",").map(Number)
-const sortKeyMode = process.env.BENCH_SORTED_PATCH_MODE === "sort-key"
+const benchmarkMode = process.env.BENCH_SORTED_PATCH_MODE ?? "unrelated"
+const sortKeyMode = benchmarkMode === "sort-key" || benchmarkMode === "grouped"
+const groupedMode = benchmarkMode === "grouped"
 
 async function loadFactory() {
   for (const candidate of [resolve("packages/datagrid-core/dist/src/models/index.js"), resolve("packages/datagrid-core/dist/src/public.js")]) {
@@ -24,11 +26,16 @@ function percentile(values, q) {
 }
 const createClientRowModel = await loadFactory()
 const rows = Array.from({ length: rowCount }, (_, id) => ({
-  row: { id, score: rowCount - id, label: `row-${id}` }, rowId: id, originalIndex: id, displayIndex: id,
+  row: { id, score: rowCount - id, team: id % 2 === 0 ? "A" : "B", label: `row-${id}` }, rowId: id, originalIndex: id, displayIndex: id,
 }))
-console.log(`sorted-patch mode=${sortKeyMode ? "sort-key" : "unrelated"} rows=${rowCount} iterations=${iterations}`)
+console.log(`sorted-patch mode=${benchmarkMode} rows=${rowCount} iterations=${iterations}`)
 for (const changeCount of changeCounts) {
-  const model = createClientRowModel({ rows })
+  const model = createClientRowModel({
+    rows,
+    ...(groupedMode
+      ? { initialGroupBy: { fields: ["team"], expandedByDefault: true }, initialAggregationModel: { columns: [{ key: "score", op: "sum" }] } }
+      : {}),
+  })
   const samples = []
   try {
     model.setSortModel([{ key: "score", direction: "asc" }])
@@ -43,11 +50,17 @@ for (const changeCount of changeCounts) {
           : { label: `patch-${iteration}-${index}` },
       }))
       const startedAt = performance.now()
-      model.patchRows(updates, sortKeyMode ? { recomputeSort: true } : undefined)
+      model.patchRows(updates, sortKeyMode ? { recomputeSort: true, ...(groupedMode ? { recomputeGroup: true } : {}) } : undefined)
       samples.push(performance.now() - startedAt)
     }
     const first = model.getRowsInRange({ start: 0, end: 0 })[0]
     if (!sortKeyMode && first?.rowId !== rowCount - 1) throw new Error("sorted order changed during unrelated patch")
+    if (groupedMode) {
+      const groups = model.getRowsInRange({ start: 0, end: rowCount + 10 }).filter(row => row.kind === "group")
+      if (groups.length !== 2 || groups.some(row => typeof row.groupMeta?.aggregates?.score !== "number")) {
+        throw new Error("grouped aggregation snapshot is invalid after sorted patch")
+      }
+    }
   } finally {
     model.dispose()
   }

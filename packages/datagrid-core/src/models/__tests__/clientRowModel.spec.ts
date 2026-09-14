@@ -2405,6 +2405,28 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("recomputes grouped aggregates when a sorted patch changes the aggregate key", () => {
+    const model = createClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+        { row: { id: 3, team: "B", score: 30 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
+      ],
+      initialGroupBy: { fields: ["team"], expandedByDefault: true },
+      initialAggregationModel: { columns: [{ key: "score", op: "sum" }] },
+      initialSortModel: [{ key: "score", direction: "asc" }],
+    })
+
+    model.patchRows([{ rowId: "r1", data: { score: 40 } }], { recomputeSort: true, recomputeGroup: true })
+
+    const groups = model.getRowsInRange({ start: 0, end: 10 }).filter(row => row.kind === "group")
+    expect(groups.map(row => row.groupMeta?.aggregates)).toEqual([{ score: 60 }, { score: 30 }])
+    expect(model.getRowsInRange({ start: 0, end: 10 }).filter(row => row.kind === "leaf").map(row => row.rowId))
+      .toEqual(["r2", "r1", "r3"])
+
+    model.dispose()
+  })
+
   it("updates aggregates reactively when aggregation model changes at runtime", () => {
     const model = createClientRowModel({
       rows: [
