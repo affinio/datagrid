@@ -1,6 +1,6 @@
 # Design proposal: hierarchical server datasource cache
 
-Статус: proposed, implementation не начата.
+Статус: internal store lifecycle prototype реализован; row-model wiring и payload stores остаются открытыми.
 
 Цель — дать server-backed row model отдельные cache stores для root и каждой раскрытой group branch, сохранив текущий flat datasource protocol и bounded viewport semantics. Это решение не меняет public API до отдельного согласования.
 
@@ -36,4 +36,4 @@ Collapse переводит branch store в `retained` или `disposed` сог�
 - tree selection/restore and pivot context preserve store signature;
 - controlled RTT 20/100/300 ms with request count, bytes, stale drops and cache hit ratio.
 
-Implementation should extend existing `DataSourceCacheManager`/`DataGridRangeCache` ownership boundaries. A new public protocol field or consumer-visible store API requires a separate API proposal and approval.
+В текущем sub-slice добавлен internal `DataSourceCacheStoreRegistry`: он фиксирует store key/parent/signature, generation-safe invalidate, retained reuse и LRU eviction по `maxStores`. Implementation должна расширять существующие `DataSourceCacheManager`/`DataGridRangeCache` ownership boundaries. A new public protocol field or consumer-visible store API requires a separate API proposal and approval.
