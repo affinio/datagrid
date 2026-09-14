@@ -1825,6 +1825,43 @@ describe("useDataGridAppViewport contract", () => {
     expect(getBodyRowAtIndex).not.toHaveBeenCalled()
   })
 
+  it("uses the sparse row-id resolver when indexed row access is unavailable", () => {
+    const events = createEventHarness()
+    const resolveBodyRowIndexById = vi.fn((rowId: string | number) => rowId === "last" ? 999_999 : -1)
+    const viewportPosition: DataGridViewportPositionSnapshot = {
+      version: 1,
+      range: { start: 999_999, end: 999_999 },
+      anchor: { rowId: "last", rowIndex: 999_999, columnKey: null, columnIndex: null },
+      scroll: { top: 0, left: 0 },
+    }
+    const viewport = useDataGridAppViewport({
+      runtime: {
+        syncBodyRowsInRange: vi.fn(() => []),
+        resolveBodyRowIndexById,
+        getViewportPosition: () => viewportPosition,
+        rowPartition: ref({ bodyRowCount: 1_000_000, pinnedTopRows: [], pinnedBottomRows: [] }),
+        virtualWindow: ref({ rowStart: 0, rowEnd: 0 }),
+        api: { events },
+      } as never,
+      mode: computed(() => "base" as const),
+      rowRenderMode: computed(() => "virtualization" as const),
+      rowVirtualizationEnabled: computed(() => true),
+      columnVirtualizationEnabled: computed(() => false),
+      visibleColumns: ref([] as unknown as readonly DataGridColumnSnapshot[]),
+      normalizedBaseRowHeight: ref(31),
+      rowOverscan: computed(() => 0),
+      columnOverscan: computed(() => 0),
+      indexColumnWidth: 0,
+    })
+    const element = { scrollTop: 0, scrollLeft: 0, clientHeight: 620, clientWidth: 800 } as HTMLElement
+    viewport.bodyViewportRef.value = element
+
+    events.emit("state:import:end")
+
+    expect(resolveBodyRowIndexById).toHaveBeenCalledWith("last")
+    expect(element.scrollTop).toBe(999_999 * 31)
+  })
+
   it("restores the last sparse logical row without scanning the dataset", () => {
     const events = createEventHarness()
     const resolveBodyRowIndexById = vi.fn((rowId: string | number) => rowId === "last" ? 999_999 : -1)

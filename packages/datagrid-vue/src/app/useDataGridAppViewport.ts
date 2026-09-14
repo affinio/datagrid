@@ -1136,12 +1136,15 @@ export function useDataGridAppViewport<TRow>(
   }
 
   const resolveBodyRowIndexById = (rowId: DataGridRowId | null | undefined): number | null => {
-    if (rowId == null || typeof options.runtime.getBodyRowAtIndex !== "function") {
+    if (rowId == null) {
       return null
     }
     const resolvedByRuntime = options.runtime.resolveBodyRowIndexById?.(rowId)
     if (typeof resolvedByRuntime === "number") {
       return resolvedByRuntime >= 0 ? resolvedByRuntime : null
+    }
+    if (typeof options.runtime.getBodyRowAtIndex !== "function") {
+      return null
     }
     const total = resolveScrollableBodyRowCount()
     for (let rowIndex = 0; rowIndex < total; rowIndex += 1) {
