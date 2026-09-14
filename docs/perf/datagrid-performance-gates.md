@@ -54,7 +54,7 @@ Baseline lock:
 ## AG Grid Comparator Fixture
 
 - `pnpm run bench:datagrid:ag-comparator` writes a pinned AG Grid `36.1.0` comparator manifest with deterministic shared data checksum and workload profiles.
-- The manifest is a fixture contract only; timing comparison requires the browser runner and an AG Enterprise license supplied through CI/local secret. License values are never written to artifacts.
+- The manifest is a fixture contract only; timing comparison requires the browser runner and an AG Enterprise license supplied through CI/local secret. License values are never written to artifacts. AG Grid Vue3 `36.1.0` requires a Vue runtime with `useTemplateRef`; keep its browser fixture isolated from the repository sandbox, which currently uses Vue `3.4.38`.
 - Keep Affino and AG Grid on the same row generator, column count, update batch policy, warmup, viewport, and profile order before comparing raw browser artifacts.
 
 ## Package Footprint and Startup
