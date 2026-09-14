@@ -3353,7 +3353,7 @@ describe("createClientRowModel", () => {
 
   it("keeps production tree indexes correct across repeated local replacements", () => {
     const pathModel = createClientRowModel({
-      rows: Array.from({ length: 48 * 4 }, (_, index) => ({
+      rows: Array.from({ length: 80 * 4 }, (_, index) => ({
         row: { id: `path-${index}`, path: [`root-${Math.floor(index / 4)}`, "leaf"] },
         rowId: `path-${index}`,
         originalIndex: index,
@@ -3369,7 +3369,7 @@ describe("createClientRowModel", () => {
     const pathGroupKeys = pathExpanded
       .filter(row => row.kind === "group" && row.groupMeta?.level === 0)
       .map(row => String(row.rowId))
-    expect(pathGroupKeys).toHaveLength(48)
+    expect(pathGroupKeys).toHaveLength(80)
     const pathInitialIds = pathExpanded.map(row => String(row.rowId))
 
     for (const [index, groupKey] of pathGroupKeys.entries()) {
@@ -3384,7 +3384,7 @@ describe("createClientRowModel", () => {
     pathModel.dispose()
 
     const parentModel = createClientRowModel({
-      rows: Array.from({ length: 48 * 4 }, (_, index) => ({
+      rows: Array.from({ length: 80 * 4 }, (_, index) => ({
         row: { id: `parent-${index}`, parentId: index % 4 === 0 ? null : `parent-${index - index % 4}` },
         rowId: `parent-${index}`,
         originalIndex: index,
@@ -3400,7 +3400,7 @@ describe("createClientRowModel", () => {
     const parentGroupKeys = parentExpanded
       .filter(row => row.kind === "group")
       .map(row => String(row.groupMeta?.groupKey ?? ""))
-    expect(parentGroupKeys).toHaveLength(48)
+    expect(parentGroupKeys).toHaveLength(80)
     const parentInitialIds = parentExpanded.map(row => String(row.rowId))
 
     for (const [index, groupKey] of parentGroupKeys.entries()) {

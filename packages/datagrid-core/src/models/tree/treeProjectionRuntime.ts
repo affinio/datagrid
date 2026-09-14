@@ -38,6 +38,11 @@ interface TreeProjectionDiagnostics {
   cycles: number
 }
 
+interface TreeGroupIndexShift {
+  start: number
+  delta: number
+}
+
 export interface TreeProjectionResult<T> {
   rows: DataGridRowNode<T>[]
   diagnostics: TreeProjectionDiagnostics
@@ -52,6 +57,8 @@ export interface TreePathProjectionCache<T> {
   branchParentByKey: Map<string, string | null>
   branchPathByLeafRowId: Map<DataGridRowId, readonly string[]>
   groupIndexByRowId: Map<DataGridRowId, number>
+  groupIndexShiftHistory: TreeGroupIndexShift[]
+  groupIndexBornAt: Map<DataGridRowId, number>
   togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
   toggleNextDescendantsBuffer: DataGridRowNode<T>[]
   rootLeaves: DataGridRowNode<T>[]
@@ -72,6 +79,8 @@ export interface TreeParentProjectionCache<T> {
   includedChildrenById: Map<DataGridRowId, DataGridRowId[]>
   groupRowIdByGroupKey: Map<string, DataGridRowId>
   groupIndexByRowId: Map<DataGridRowId, number>
+  groupIndexShiftHistory: TreeGroupIndexShift[]
+  groupIndexBornAt: Map<DataGridRowId, number>
   togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
   toggleNextDescendantsBuffer: DataGridRowNode<T>[]
   rootIncluded: DataGridRowId[]
@@ -387,6 +396,8 @@ function buildTreePathProjectionCache<T>(
   )
   const branchPathByLeafRowId = new Map<DataGridRowId, readonly string[]>()
   const groupIndexByRowId = new Map<DataGridRowId, number>()
+  const groupIndexShiftHistory: TreeGroupIndexShift[] = []
+  const groupIndexBornAt = new Map<DataGridRowId, number>()
   const togglePreviousDescendantsBuffer: DataGridRowNode<T>[] = []
   const toggleNextDescendantsBuffer: DataGridRowNode<T>[] = []
   const rootLeaves: DataGridRowNode<T>[] = []
@@ -545,6 +556,8 @@ function buildTreePathProjectionCache<T>(
     branchParentByKey,
     branchPathByLeafRowId,
     groupIndexByRowId,
+    groupIndexShiftHistory,
+    groupIndexBornAt,
     togglePreviousDescendantsBuffer,
     toggleNextDescendantsBuffer,
     rootLeaves,
@@ -700,6 +713,8 @@ function materializeTreePathProjection<T>(
   }
   const projected: DataGridRowNode<T>[] = []
   cache.groupIndexByRowId.clear()
+  cache.groupIndexShiftHistory.length = 0
+  cache.groupIndexBornAt.clear()
   const expansionToggledKeys = resolveExpansionToggledKeys(
     expansionSnapshot,
     precomputedExpansionToggledKeys,
@@ -894,6 +909,8 @@ function buildTreeParentProjectionCache<T>(
       includedChildrenById: new Map<DataGridRowId, DataGridRowId[]>(),
       groupRowIdByGroupKey: new Map<string, DataGridRowId>(),
       groupIndexByRowId: new Map<DataGridRowId, number>(),
+      groupIndexShiftHistory: [],
+      groupIndexBornAt: new Map<DataGridRowId, number>(),
       togglePreviousDescendantsBuffer: [],
       toggleNextDescendantsBuffer: [],
       rootIncluded: [],
@@ -1048,6 +1065,8 @@ function buildTreeParentProjectionCache<T>(
     includedChildrenById,
     groupRowIdByGroupKey,
     groupIndexByRowId: new Map<DataGridRowId, number>(),
+    groupIndexShiftHistory: [],
+    groupIndexBornAt: new Map<DataGridRowId, number>(),
     togglePreviousDescendantsBuffer: [],
     toggleNextDescendantsBuffer: [],
     rootIncluded,
@@ -1148,6 +1167,8 @@ function materializeTreeParentProjection<T>(
   }
   const projected: DataGridRowNode<T>[] = []
   cache.groupIndexByRowId.clear()
+  cache.groupIndexShiftHistory.length = 0
+  cache.groupIndexBornAt.clear()
   const expansionToggledKeys = resolveExpansionToggledKeys(
     expansionSnapshot,
     precomputedExpansionToggledKeys,
@@ -1341,20 +1362,34 @@ function resolveGroupRowIndexByRowId<T>(
   groupRowId: DataGridRowId,
   groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
   fallbackGroupIndexByRowId?: ReadonlyMap<DataGridRowId, number>,
+  groupIndexShiftHistory?: readonly TreeGroupIndexShift[],
+  groupIndexBornAt?: ReadonlyMap<DataGridRowId, number>,
 ): number {
-  const tryResolve = (indexMap?: ReadonlyMap<DataGridRowId, number>): number => {
+  const tryResolve = (
+    indexMap?: ReadonlyMap<DataGridRowId, number>,
+    shiftHistory?: readonly TreeGroupIndexShift[],
+    bornAt?: ReadonlyMap<DataGridRowId, number>,
+  ): number => {
     const indexed = indexMap?.get(groupRowId)
     if (typeof indexed !== "number") {
       return -1
     }
-    const candidate = rows[indexed]
+    let resolved = indexed
+    const startAt = bornAt?.get(groupRowId) ?? 0
+    for (let index = startAt; index < (shiftHistory?.length ?? 0); index += 1) {
+      const shift = shiftHistory![index]!
+      if (resolved >= shift.start) {
+        resolved += shift.delta
+      }
+    }
+    const candidate = rows[resolved]
     if (candidate?.kind === "group" && candidate.rowId === groupRowId) {
-      return indexed
+      return resolved
     }
     return -1
   }
 
-  const primary = tryResolve(groupIndexByRowId)
+  const primary = tryResolve(groupIndexByRowId, groupIndexShiftHistory, groupIndexBornAt)
   if (primary >= 0) {
     return primary
   }
@@ -1367,6 +1402,8 @@ function resolveGroupRowIndexByRowId<T>(
 
 function updateGroupIndexAfterSubtreeReplacement<T>(
   groupIndexByRowId: Map<DataGridRowId, number>,
+  groupIndexShiftHistory: TreeGroupIndexShift[],
+  groupIndexBornAt: Map<DataGridRowId, number>,
   replaceStart: number,
   deletedRows: readonly DataGridRowNode<T>[],
   insertedRows: readonly DataGridRowNode<T>[],
@@ -1375,15 +1412,27 @@ function updateGroupIndexAfterSubtreeReplacement<T>(
   for (const row of deletedRows) {
     if (row.kind === "group") {
       groupIndexByRowId.delete(row.rowId)
+      groupIndexBornAt.delete(row.rowId)
     }
   }
 
   const indexDelta = insertedRows.length - deletedRows.length
   if (indexDelta !== 0) {
-    for (const [rowId, index] of groupIndexByRowId.entries()) {
-      if (index >= deleteEnd) {
-        groupIndexByRowId.set(rowId, index + indexDelta)
+    groupIndexShiftHistory.push({ start: deleteEnd, delta: indexDelta })
+    if (groupIndexShiftHistory.length >= 64) {
+      for (const [rowId, index] of groupIndexByRowId.entries()) {
+        let resolved = index
+        const startAt = groupIndexBornAt.get(rowId) ?? 0
+        for (let shiftIndex = startAt; shiftIndex < groupIndexShiftHistory.length; shiftIndex += 1) {
+          const shift = groupIndexShiftHistory[shiftIndex]!
+          if (resolved >= shift.start) {
+            resolved += shift.delta
+          }
+        }
+        groupIndexByRowId.set(rowId, resolved)
       }
+      groupIndexShiftHistory.length = 0
+      groupIndexBornAt.clear()
     }
   }
 
@@ -1391,6 +1440,9 @@ function updateGroupIndexAfterSubtreeReplacement<T>(
     const row = insertedRows[offset]
     if (row?.kind === "group") {
       groupIndexByRowId.set(row.rowId, replaceStart + offset)
+      if (groupIndexShiftHistory.length > 0) {
+        groupIndexBornAt.set(row.rowId, groupIndexShiftHistory.length)
+      }
     }
   }
 }
@@ -1487,6 +1539,8 @@ function tryProjectTreePathSubtreeToggle<T>(
   )
   updateGroupIndexAfterSubtreeReplacement(
     input.cacheState.cache.groupIndexByRowId,
+    input.cacheState.cache.groupIndexShiftHistory,
+    input.cacheState.cache.groupIndexBornAt,
     replaceStart,
     previousDescendants,
     nextDescendants,
@@ -1537,6 +1591,9 @@ function tryProjectTreeParentSubtreeToggle<T>(
       input.rows,
       rowId,
       input.cacheState.cache.groupIndexByRowId,
+      undefined,
+      input.cacheState.cache.groupIndexShiftHistory,
+      input.cacheState.cache.groupIndexBornAt,
     )
   if (resolvedGroupIndex < 0) {
     return null
@@ -1596,6 +1653,8 @@ function tryProjectTreeParentSubtreeToggle<T>(
   )
   updateGroupIndexAfterSubtreeReplacement(
     input.cacheState.cache.groupIndexByRowId,
+    input.cacheState.cache.groupIndexShiftHistory,
+    input.cacheState.cache.groupIndexBornAt,
     replaceStart,
     previousDescendants,
     nextDescendants,
