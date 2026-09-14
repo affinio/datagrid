@@ -180,6 +180,38 @@ function createSnapshot(
 }
 
 describe("worker-owned row model", () => {
+  it("returns a metadata-only terminal update when the row reply is uncloneable", async () => {
+    const channel = createMessageChannelPair()
+    const emitted: unknown[] = []
+    const target = {
+      postMessage(message: unknown) {
+        const payload = (message as { payload?: { visibleRows?: unknown[] } }).payload
+        if ((payload?.visibleRows?.length ?? 0) > 0) {
+          const error = new Error("function could not be cloned")
+          error.name = "DataCloneError"
+          throw error
+        }
+        emitted.push(message)
+      },
+    }
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      rows: [{ row: { id: 1, region: "AMER", revenue: 1 }, rowId: 1 }],
+      source: channel.worker,
+      target,
+    })
+
+    await flushMessages()
+
+    expect(emitted.length).toBeGreaterThanOrEqual(1)
+    const terminal = emitted.at(-1) as { requestId: number; payload: { visibleRows: unknown[]; snapshot: { loading: boolean; error?: Error | null } } }
+    expect(terminal.requestId).toBe(0)
+    expect(terminal.payload.visibleRows).toEqual([])
+    expect(terminal.payload.snapshot.loading).toBe(false)
+    expect(terminal.payload.snapshot.error?.message).toContain("update dispatch failed")
+
+    host.dispose()
+  })
+
   it("stamps schema version on row-model update payloads", () => {
     const message = createDataGridWorkerRowModelUpdateMessage<BenchRow>(
       1,

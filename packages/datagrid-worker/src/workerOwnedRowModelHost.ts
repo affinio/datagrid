@@ -150,7 +150,32 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       payload,
       channel,
     )
-    target.postMessage(message)
+    try {
+      target.postMessage(message)
+    } catch (postError) {
+      // A row payload can fail structured cloning independently of command execution.
+      // Retry once with a terminal, metadata-only snapshot so the request is observable.
+      const reason = postError instanceof Error ? postError.message : String(postError)
+      const safePayload: DataGridWorkerRowModelUpdatePayload<T> = {
+        schemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
+        snapshot: {
+          ...snapshot,
+          loading: false,
+          error: new Error(`[AffinoDataGrid worker] update dispatch failed: ${reason}`),
+        },
+        aggregationModel: null,
+        formulaFields: [],
+        formulaExecutionPlan: null,
+        formulaComputeStageDiagnostics: null,
+        visibleRows: [],
+        visibleRange,
+      }
+      try {
+        target.postMessage(createDataGridWorkerRowModelUpdateMessage(requestId, safePayload, channel))
+      } catch {
+        // If the transport itself is unavailable, there is no channel left for a reply.
+      }
+    }
   }
 
   const onMessage = (event: DataGridWorkerMessageEvent): void => {
