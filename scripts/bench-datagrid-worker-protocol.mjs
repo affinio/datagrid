@@ -335,9 +335,15 @@ async function waitFor(predicate, timeoutMs = 10_000, pollMs = 8) {
 
 async function loadFactories() {
   const candidate = resolve("packages/datagrid-worker/dist/index.js")
-  const sourceCandidates = [
-    resolve("packages/datagrid-worker/src/workerOwnedRowModel.ts"),
-    resolve("packages/datagrid-worker/src/workerOwnedRowModelHost.ts"),
+  const sourceOutputPairs = [
+    [
+      resolve("packages/datagrid-worker/src/workerOwnedRowModel.ts"),
+      resolve("packages/datagrid-worker/dist/workerOwnedRowModel.js"),
+    ],
+    [
+      resolve("packages/datagrid-worker/src/workerOwnedRowModelHost.ts"),
+      resolve("packages/datagrid-worker/dist/workerOwnedRowModelHost.js"),
+    ],
   ]
   const allowStaleDist = process.env.BENCH_ALLOW_STALE_DIST === "1"
   const enforceFreshDist = process.env.BENCH_ENFORCE_FRESH_DIST === "1"
@@ -345,14 +351,10 @@ async function loadFactories() {
     throw new Error("Unable to locate datagrid-worker build artifacts. Run `pnpm --filter @affino/datagrid-worker build`.")
   }
   if (!allowStaleDist) {
-    const distTimestamp = statSync(candidate).mtimeMs
-    const newestSourceTimestamp = Math.max(
-      ...sourceCandidates
-        .filter(path => existsSync(path))
-        .map(path => statSync(path).mtimeMs),
-      0,
+    const stalePair = sourceOutputPairs.find(([sourcePath, outputPath]) =>
+      existsSync(sourcePath) && existsSync(outputPath) && statSync(sourcePath).mtimeMs > statSync(outputPath).mtimeMs,
     )
-    if (newestSourceTimestamp > distTimestamp) {
+    if (stalePair) {
       const message = `Datagrid worker dist artifact appears stale (${candidate}). Run \`pnpm --filter @affino/datagrid-worker build\` before benchmarks.`
       if (enforceFreshDist) {
         throw new Error(message)
