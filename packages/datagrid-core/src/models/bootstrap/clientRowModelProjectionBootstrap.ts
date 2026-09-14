@@ -46,11 +46,29 @@ export interface CreateClientRowModelProjectionBootstrapOptions<T> {
 export function createClientRowModelProjectionBootstrap<T>(
   options: CreateClientRowModelProjectionBootstrapOptions<T>,
 ): ClientRowModelProjectionBootstrapResult<T> {
-  const pivotRuntime = createPivotRuntime<T>({
-    readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
-    aggregationRegistry: options.aggregationRegistry,
-    maxOutputCells: options.maxPivotOutputCells,
-  })
+  let pivotRuntimeInstance: DataGridPivotRuntime<T> | null = null
+  const getPivotRuntime = (): DataGridPivotRuntime<T> => {
+    if (pivotRuntimeInstance) {
+      return pivotRuntimeInstance
+    }
+    pivotRuntimeInstance = createPivotRuntime<T>({
+      readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
+      aggregationRegistry: options.aggregationRegistry,
+      maxOutputCells: options.maxPivotOutputCells,
+    })
+    return pivotRuntimeInstance
+  }
+  const pivotRuntime: DataGridPivotRuntime<T> = {
+    projectRows(input) {
+      return getPivotRuntime().projectRows(input)
+    },
+    applyValueOnlyPatch(input) {
+      return getPivotRuntime().applyValueOnlyPatch(input)
+    },
+    normalizeColumns(columns) {
+      return getPivotRuntime().normalizeColumns(columns)
+    },
+  }
   const treeProjectionRuntime = createTreeProjectionRuntime<T>({
     resolveTreeDataRow: options.resolveTreeDataRow,
   })

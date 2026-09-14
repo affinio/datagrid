@@ -34,7 +34,7 @@
 ## Rollout
 
 1. Выполнено: `bench:datagrid:runtime-lifecycle` добавляет production-shaped plain/sorted-filtered/advanced factory-to-ready и create/dispose measurement; baseline хранится в `docs/perf/datagrid-runtime-lifecycle-baseline.json`. Import-only numbers из package footprint остаются отдельным измерением.
-2. Первый slice выполнен для column histogram: capability создаётся через internal lazy slot при первом чтении, parity покрыта focused client-row-model test; formula/pivot остаются следующими кандидатами после runtime measurements.
+2. Выполнено для column histogram и pivot projection: обе capability создаются через internal lazy slots при первом вызове, parity покрыта focused tests; formula/tree/aggregation остаются следующими кандидатами после runtime measurements.
 3. Compare plain and advanced fixtures with a fixed budget; reject if cold ready/first paint or memory regresses.
 4. Repeat for remaining capabilities only where consumer fixture proves a material cost.
 5. Update public docs only after tree-shaken and runtime evidence demonstrates a stable benefit.
