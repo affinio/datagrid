@@ -89,13 +89,90 @@ export function createDataGridRangeCache<T>(
     : DEFAULT_MAX_CHUNKS
 
   const chunks = new Map<number, ChunkRecord<T>>()
+  const lruHeap: Array<{ index: number; lastAccess: number }> = []
+  const lruHeapPosition = new Map<number, number>()
   let generation = 0
   let tokenCounter = 0
   let accessCounter = 0
 
+  function isEarlier(left: { index: number; lastAccess: number }, right: { index: number; lastAccess: number }): boolean {
+    return left.lastAccess < right.lastAccess
+      || (left.lastAccess === right.lastAccess && left.index < right.index)
+  }
+
+  function swapHeapEntries(leftIndex: number, rightIndex: number): void {
+    const left = lruHeap[leftIndex]
+    const right = lruHeap[rightIndex]
+    if (!left || !right) return
+    lruHeap[leftIndex] = right
+    lruHeap[rightIndex] = left
+    lruHeapPosition.set(left.index, rightIndex)
+    lruHeapPosition.set(right.index, leftIndex)
+  }
+
+  function siftUp(position: number): void {
+    let current = position
+    while (current > 0) {
+      const parent = Math.floor((current - 1) / 2)
+      const entry = lruHeap[current]
+      const parentEntry = lruHeap[parent]
+      if (!entry || !parentEntry || !isEarlier(entry, parentEntry)) return
+      swapHeapEntries(current, parent)
+      current = parent
+    }
+  }
+
+  function siftDown(position: number): void {
+    let current = position
+    while (true) {
+      const left = current * 2 + 1
+      const right = left + 1
+      let smallest = current
+      const currentEntry = lruHeap[current]
+      const leftEntry = lruHeap[left]
+      const rightEntry = lruHeap[right]
+      if (leftEntry && currentEntry && isEarlier(leftEntry, currentEntry)) smallest = left
+      const smallestEntry = lruHeap[smallest]
+      if (rightEntry && smallestEntry && isEarlier(rightEntry, smallestEntry)) smallest = right
+      if (smallest === current) return
+      swapHeapEntries(current, smallest)
+      current = smallest
+    }
+  }
+
+  function upsertLruEntry(chunk: ChunkRecord<T>): void {
+    const existingPosition = lruHeapPosition.get(chunk.index)
+    if (typeof existingPosition === "number") {
+      const entry = lruHeap[existingPosition]
+      if (entry) entry.lastAccess = chunk.lastAccess
+      siftUp(existingPosition)
+      const nextPosition = lruHeapPosition.get(chunk.index)
+      if (typeof nextPosition === "number") siftDown(nextPosition)
+      return
+    }
+    const position = lruHeap.length
+    lruHeap.push({ index: chunk.index, lastAccess: chunk.lastAccess })
+    lruHeapPosition.set(chunk.index, position)
+    siftUp(position)
+  }
+
+  function popLruEntry(): number | undefined {
+    const first = lruHeap[0]
+    if (!first) return undefined
+    const last = lruHeap.pop()
+    lruHeapPosition.delete(first.index)
+    if (last && lruHeap.length > 0) {
+      lruHeap[0] = last
+      lruHeapPosition.set(last.index, 0)
+      siftDown(0)
+    }
+    return first.index
+  }
+
   function touch(chunk: ChunkRecord<T>): ChunkRecord<T> {
     accessCounter += 1
     chunk.lastAccess = accessCounter
+    upsertLruEntry(chunk)
     return chunk
   }
 
@@ -158,20 +235,23 @@ export function createDataGridRangeCache<T>(
       return
     }
 
-    const candidates: ChunkRecord<T>[] = []
-    for (const chunk of chunks.values()) {
-      if (chunk.loadingTokens.size === 0) {
-        candidates.push(chunk)
+    const deferredLoadingIndexes: number[] = []
+    let evicted = 0
+    while (chunks.size - evicted > maxChunks) {
+      const candidateIndex = popLruEntry()
+      if (typeof candidateIndex === "undefined") break
+      const candidate = chunks.get(candidateIndex)
+      if (!candidate) continue
+      if (candidate.loadingTokens.size > 0) {
+        deferredLoadingIndexes.push(candidateIndex)
+        continue
       }
+      chunks.delete(candidateIndex)
+      evicted += 1
     }
-    candidates.sort((left, right) => left.lastAccess - right.lastAccess)
-
-    const evictionCount = Math.min(overflow, candidates.length)
-    for (let index = 0; index < evictionCount; index += 1) {
-      const candidate = candidates[index]
-      if (candidate) {
-        chunks.delete(candidate.index)
-      }
+    for (const index of deferredLoadingIndexes) {
+      const candidate = chunks.get(index)
+      if (candidate) upsertLruEntry(candidate)
     }
   }
 
@@ -282,9 +362,13 @@ export function createDataGridRangeCache<T>(
     reset() {
       generation += 1
       chunks.clear()
+      lruHeap.length = 0
+      lruHeapPosition.clear()
     },
     clear() {
       chunks.clear()
+      lruHeap.length = 0
+      lruHeapPosition.clear()
     },
     setRow,
     getRow,
