@@ -1,4 +1,4 @@
-import { ref } from "vue"
+import { nextTick, ref } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useDataGridStageCellRendering } from "../useDataGridStageCellRendering"
 import {
@@ -216,6 +216,42 @@ describe("useDataGridStageCellRendering", () => {
     expect(suppressedInlineEditEvent.defaultPrevented).toBe(false)
     expect(editing.value.startInlineEdit).not.toHaveBeenCalled()
     expect(resolveDataGridPerfStore()?.latest("cellRenderer")).toBeNull()
+  })
+
+  it("defers authored renderer work until scroll idle when opted in", async () => {
+    const mode = ref<DataGridTableMode>("base")
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([createColumn({ key: "value" })])
+    const rows = ref({ displayRows: [], pinnedBottomRows: [], toggleGroupRow: vi.fn() } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({} as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const cells = ref({
+      readCell: () => "raw",
+      readDisplayCell: () => "Display",
+    })
+    const scrolling = ref(true)
+    const rendererPolicy = ref({ mode: "defer" as const, maxPending: 8, cellsPerFrame: 1 })
+    const renderer = vi.fn(() => "Rendered")
+    const api = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells,
+      editing,
+      isCellEditableSafe: () => false,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: () => 0,
+      isScrolling: scrolling,
+      rendererPolicy,
+    })
+    const row = createRow({ rowId: "r1" })
+    const column = { ...visibleColumns.value[0]!, column: { ...visibleColumns.value[0]!.column, cellRenderer: renderer } }
+
+    expect(api.renderResolvedCellContent(row, 0, column, 0)).toBe("Display")
+    expect(renderer).not.toHaveBeenCalled()
+    scrolling.value = false
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 25))
+    expect(api.renderResolvedCellContent(row, 0, column, 0)).toBe("Rendered")
+    expect(renderer).toHaveBeenCalledTimes(1)
   })
 
   it("records custom renderer telemetry only when perf tracing is enabled", () => {

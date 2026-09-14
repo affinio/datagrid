@@ -1,13 +1,13 @@
 # Design proposal: deferred authored renderer policy
 
-Статус: internal queue gate implemented; renderer wiring, opt-in policy и browser evidence остаются открытыми.
+Статус: opt-in public policy и queue/wiring implemented; browser differential evidence остаётся открытой.
 
 Цель — уменьшить вклад тяжёлых `cellRenderer`/`groupCellRenderer` в scroll render window, сохранив identity stateful children и текущие synchronous semantics по умолчанию.
 
 ## Policy boundary
 
 - Existing default остаётся synchronous: renderer получает тот же context, ошибки сохраняют display-value fallback.
-- Deferred rendering включается явной opt-in policy на уровне grid/app. Новый public option должен быть предложен отдельным API review до реализации.
+- Deferred rendering включается явной opt-in policy на уровне grid/app через `rendererPolicy`. Default mode остаётся `sync`; rollout defer mode требует browser differential evidence.
 - Policy применяется только к authored renderer content в body viewport; headers, editors, pinned row semantics и group disclosure не откладываются автоматически.
 - Во время active scroll renderer slot показывает placeholder только для content, которое ещё не готово; shell, row identity, ARIA cell semantics и размеры остаются доступными.
 
@@ -40,9 +40,9 @@ Existing `dgPerfTrace=1` scopes `stageRenderWindow`, `cellRenderer`, `groupCellR
 
 ## Rollout gates
 
-1. Выполнено частично: internal bounded priority queue и stale-key cancellation покрыты contract/benchmark; scheduler wiring и identity contract остаются.
+1. Выполнено частично: internal bounded priority queue, stale-key cancellation и opt-in table-stage wiring покрыты contracts/benchmark; component identity contract и browser differential остаются.
 2. Browser differential run with opt-in disabled: zero behavior delta.
 3. Opt-in browser run: no blank viewport, no focus/selection/group/a11y regressions, bounded final-content latency.
-4. Only then expose documented public option and add profile-specific budget.
+4. После browser evidence закрепить documented rollout и profile-specific budget для defer mode.
 
 Новые public options, placeholder slots или renderer context fields требуют отдельного согласования API. Реализация должна расширять существующего stage/render ownership и не создавать параллельный renderer manager.

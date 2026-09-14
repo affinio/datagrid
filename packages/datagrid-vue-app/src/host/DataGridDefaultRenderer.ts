@@ -66,6 +66,7 @@ import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import { normalizeDataGridAppFilterModel } from "../config/dataGridFilterNormalization"
 import type { DataGridAppColumnInput } from "../config/dataGridFormulaOptions"
+import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
@@ -900,6 +901,10 @@ export default defineComponent({
     mode: {
       type: String as PropType<DataGridMode>,
       required: true,
+    },
+    rendererPolicy: {
+      type: Object as PropType<DataGridAuthoredRendererPolicy | undefined>,
+      default: undefined,
     },
     rows: {
       type: Array as PropType<readonly Record<string, unknown>[]>,
@@ -3467,6 +3472,7 @@ export default defineComponent({
       visibleColumns,
       rowRenderMode: computed(() => props.renderMode),
       rowHeightMode,
+      rendererPolicy: computed(() => props.rendererPolicy),
       normalizedBaseRowHeight,
       selectionSnapshot: props.selectionSnapshot,
       selectionAnchor: props.selectionAnchor,

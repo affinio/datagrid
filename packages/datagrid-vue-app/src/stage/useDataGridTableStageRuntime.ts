@@ -47,6 +47,7 @@ import type {
   DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
@@ -252,6 +253,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
   rowRenderMode: Ref<"virtualization" | "pagination">
   rowHeightMode: Ref<"fixed" | "auto">
+  rendererPolicy?: Ref<DataGridAuthoredRendererPolicy | undefined>
   normalizedBaseRowHeight: Ref<number>
   selectionSnapshot: Ref<DataGridSelectionSnapshot | null>
   selectionAnchor: Ref<unknown>
@@ -2061,6 +2063,7 @@ export function useDataGridTableStageRuntime<
     rowHeightMode: options.rowHeightMode,
     layoutMode: options.layoutMode,
     chromeSignature: options.chromeSignature,
+    rendererPolicy: options.rendererPolicy,
     visibleColumns: orderedVisibleColumns,
     renderedColumns,
     displayRows,

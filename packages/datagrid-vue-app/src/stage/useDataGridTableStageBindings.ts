@@ -193,6 +193,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     rowHeightMode: unref(options.rowHeightMode),
     layoutMode: unref(options.layoutMode),
     chromeSignature: unref(options.chromeSignature),
+    rendererPolicy: unref(options.rendererPolicy),
     customOverlays: unref(options.customOverlays),
     reportCenterPaneDiagnostics: unref(options.reportCenterPaneDiagnostics),
     reportFillPlumbingState: unref(options.reportFillPlumbingState),

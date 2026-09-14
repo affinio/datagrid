@@ -1,4 +1,4 @@
-import { ref, type Ref, type VNodeChild } from "vue"
+import { getCurrentInstance, onBeforeUnmount, ref, watch, type Ref, type VNodeChild } from "vue"
 import {
   getDataGridRowRenderMeta,
   invokeDataGridCellInteraction,
@@ -16,6 +16,8 @@ import {
   resolveDataGridPerfNow,
 } from "../perf/dataGridPerfTrace"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
+import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import { createDataGridDeferredRendererQueue } from "./dataGridDeferredRendererQueue"
 import type {
   DataGridTableMode,
   DataGridTableRow,
@@ -42,6 +44,8 @@ export interface UseDataGridStageCellRenderingOptions {
   columnIndexByKey: (columnKey: string) => number
   suppressInlineEditStart?: Readonly<Ref<boolean>>
   perfTraceEnabled?: boolean
+  rendererPolicy?: Readonly<Ref<DataGridAuthoredRendererPolicy | undefined>>
+  isScrolling?: Readonly<Ref<boolean>>
 }
 
 export interface UseDataGridStageCellRenderingResult {
@@ -169,6 +173,69 @@ export function useDataGridStageCellRendering(
   options: UseDataGridStageCellRenderingOptions,
 ): UseDataGridStageCellRenderingResult {
   const asyncSelectOptionCache = ref(new Map<string, readonly DataGridTableStageSelectEditorOption[]>())
+  const deferredRendererQueue = createDataGridDeferredRendererQueue(
+    options.rendererPolicy?.value?.maxPending,
+  )
+  const deferredRendererReadyKeys = new Set<string>()
+  const deferredRendererRevision = ref(0)
+  let deferredRendererFrame: number | null = null
+
+  const cancelDeferredRendererFrame = (): void => {
+    if (deferredRendererFrame == null || typeof window === "undefined") return
+    window.cancelAnimationFrame(deferredRendererFrame)
+    deferredRendererFrame = null
+  }
+
+  const flushDeferredRenderers = (): void => {
+    deferredRendererFrame = null
+    if (options.isScrolling?.value || options.rendererPolicy?.value?.mode !== "defer") return
+    const flushed = deferredRendererQueue.flush(options.rendererPolicy?.value?.cellsPerFrame ?? 32)
+    if (flushed > 0) {
+      deferredRendererRevision.value += 1
+    }
+    if (deferredRendererQueue.size > 0 && typeof window !== "undefined") {
+      deferredRendererFrame = window.requestAnimationFrame(flushDeferredRenderers)
+    }
+  }
+
+  const scheduleDeferredRendererFlush = (): void => {
+    if (deferredRendererFrame != null || typeof window === "undefined") return
+    deferredRendererFrame = window.requestAnimationFrame(flushDeferredRenderers)
+  }
+
+  const stopDeferredRendererWork = (): void => {
+    cancelDeferredRendererFrame()
+    deferredRendererQueue.clear()
+    deferredRendererReadyKeys.clear()
+  }
+
+  if (options.isScrolling) {
+    watch(options.isScrolling, (scrolling) => {
+      if (scrolling) {
+        stopDeferredRendererWork()
+        deferredRendererRevision.value += 1
+      } else {
+        scheduleDeferredRendererFlush()
+      }
+    })
+  }
+  if (getCurrentInstance()) {
+    onBeforeUnmount(stopDeferredRendererWork)
+  }
+
+  function shouldDeferRenderer(scope: DataGridStageRendererScope, row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn): boolean {
+    void deferredRendererRevision.value
+    if (options.rendererPolicy?.value?.mode !== "defer" || !options.isScrolling?.value) return false
+    const key = `${scope}:${String(row.rowId)}:${column.key}`
+    if (deferredRendererReadyKeys.has(key)) return false
+    deferredRendererQueue.enqueue({
+      key,
+      priority: row.state.pinned !== "none" ? "pinned" : "visible",
+      render: () => deferredRendererReadyKeys.add(key),
+    })
+    return true
+  }
+
 
   function resolveCellEditorMode(
     _row: DataGridTableRow<Record<string, unknown>>,
@@ -366,6 +433,7 @@ export function useDataGridStageCellRendering(
         if (typeof cellRenderer !== "function") {
           return displayValue
         }
+        if (shouldDeferRenderer("cellRenderer", row, column)) return displayValue
         return invokeDataGridStageRendererWithFallback({
           scope: "cellRenderer",
           rowKind: "group",
@@ -379,6 +447,7 @@ export function useDataGridStageCellRendering(
           columnKey: column.key,
         })
       }
+      if (shouldDeferRenderer("groupCellRenderer", row, column)) return displayValue
       return invokeDataGridStageRendererWithFallback({
         scope: "groupCellRenderer",
         rowKind: "group",
@@ -417,6 +486,7 @@ export function useDataGridStageCellRendering(
     }
     const surface = resolveRowSurfaceContext(row)
     const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
+    if (shouldDeferRenderer("cellRenderer", row, column)) return displayValue
 
     return invokeDataGridStageRendererWithFallback({
       scope: "cellRenderer",

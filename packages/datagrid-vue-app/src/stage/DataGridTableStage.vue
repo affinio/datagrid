@@ -367,6 +367,10 @@ const props = defineProps({
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["chromeSignature"]>,
     default: "",
   },
+  rendererPolicy: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["rendererPolicy"]>,
+    default: undefined,
+  },
   reportFillPlumbingState: {
     type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingState"]>,
     default: undefined,
@@ -1601,6 +1605,8 @@ const {
   isEditingCellSafe: isEditingCellSafeBase,
   columnIndexByKey,
   suppressInlineEditStart: isBodyViewportScrolling,
+  rendererPolicy: computed(() => props.rendererPolicy),
+  isScrolling: isBodyViewportScrolling,
   perfTraceEnabled,
 })
 

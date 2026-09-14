@@ -53,6 +53,7 @@ import {
   type DataGridStructuralRowActionId,
 } from "./dataGridStructuralRowActions"
 import type { DataGridBivariantCallback } from "./types/bivariance"
+import type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
 import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
 import type {
   DataGridCaptureFocusAnchorOptions,
@@ -587,6 +588,10 @@ const dataGridProps = {
   columns: {
     type: Array as PropType<readonly DataGridAppColumnInput[]>,
     default: () => [],
+  },
+  rendererPolicy: {
+    type: Object as PropType<DataGridAuthoredRendererPolicy | undefined>,
+    default: undefined,
   },
   theme: {
     type: [String, Object] as PropType<DataGridThemeProp>,
@@ -1694,6 +1699,7 @@ const DataGridRuntimeComponent = defineComponent({
         findReplace: resolvedFindReplace.value,
         gridLines: resolvedGridLines.value,
         rowHeightMode: props.rowHeightMode,
+        rendererPolicy: props.rendererPolicy,
         baseRowHeight: props.baseRowHeight,
         layoutMode: resolvedLayout.value.layoutMode,
         minRows: resolvedLayout.value.minRows,

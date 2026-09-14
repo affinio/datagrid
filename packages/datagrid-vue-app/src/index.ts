@@ -49,6 +49,7 @@ export type {
   DataGridDefinedColumns,
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
+export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
 export type {
   DataGridAppColumnFilterOptions,
   DataGridAppFilterValueNormalizationContext,

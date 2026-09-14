@@ -8,6 +8,7 @@ import type {
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type {
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuCustomItem,
@@ -270,6 +271,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   reportCenterPaneDiagnostics?: (payload: DataGridTableStageCenterPaneDiagnostics) => void
   reportFillPlumbingState?: (layer: string, present: boolean) => void
   reportFillPlumbingDetail?: (layer: string, value: string) => void
+  rendererPolicy?: DataGridAuthoredRendererPolicy
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
@@ -298,4 +300,5 @@ export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string
   reportCenterPaneDiagnostics?: DataGridMaybeRef<(payload: DataGridTableStageCenterPaneDiagnostics) => void>
   reportFillPlumbingState?: DataGridMaybeRef<(layer: string, present: boolean) => void>
   reportFillPlumbingDetail?: DataGridMaybeRef<(layer: string, value: string) => void>
+  rendererPolicy?: DataGridMaybeRef<DataGridTableStageProps<TRow>["rendererPolicy"]>
 }
