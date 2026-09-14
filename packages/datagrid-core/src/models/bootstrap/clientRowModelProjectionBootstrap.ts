@@ -7,6 +7,7 @@ import type {
 import type { DataGridPivotSpec, DataGridPivotRuntime } from "@affino/datagrid-pivot"
 import { createDataGridAggregationEngine } from "../aggregation/aggregationEngine.js"
 import type {
+  DataGridAggregationEngine,
   DataGridAggregationRegistry,
   DataGridAggregationRegistryInput,
 } from "../aggregation/aggregationEngine.js"
@@ -72,10 +73,55 @@ export function createClientRowModelProjectionBootstrap<T>(
   const treeProjectionRuntime = createTreeProjectionRuntime<T>({
     resolveTreeDataRow: options.resolveTreeDataRow,
   })
-  const aggregationEngine = createDataGridAggregationEngine<T>(options.getAggregationModel(), {
-    readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
-    aggregationRegistry: options.aggregationRegistry,
-  })
+  let aggregationModel = options.getAggregationModel()
+  let aggregationEngineInstance: DataGridAggregationEngine<T> | null = null
+  const getAggregationEngine = (): DataGridAggregationEngine<T> => {
+    if (aggregationEngineInstance) {
+      return aggregationEngineInstance
+    }
+    aggregationEngineInstance = createDataGridAggregationEngine<T>(aggregationModel, {
+      readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
+      aggregationRegistry: options.aggregationRegistry,
+    })
+    return aggregationEngineInstance
+  }
+  const aggregationEngine: DataGridAggregationEngine<T> = {
+    setModel(nextModel) {
+      aggregationModel = nextModel
+      if (aggregationEngineInstance) {
+        aggregationEngineInstance.setModel(nextModel)
+      } else if (nextModel) {
+        getAggregationEngine()
+      }
+    },
+    getModel() {
+      return aggregationModel
+    },
+    getCompiledColumns() {
+      return aggregationEngineInstance?.getCompiledColumns() ?? []
+    },
+    isIncrementalAggregationSupported() {
+      return aggregationEngineInstance?.isIncrementalAggregationSupported() ?? false
+    },
+    createEmptyGroupState() {
+      return aggregationEngineInstance?.createEmptyGroupState() ?? null
+    },
+    createLeafContribution(row) {
+      return aggregationEngineInstance?.createLeafContribution(row) ?? null
+    },
+    applyContributionDelta(groupState, previous, next) {
+      aggregationEngineInstance?.applyContributionDelta(groupState, previous, next)
+    },
+    finalizeGroupState(groupState) {
+      return aggregationEngineInstance?.finalizeGroupState(groupState) ?? {}
+    },
+    computeAggregatesForLeaves(rows) {
+      return aggregationEngineInstance?.computeAggregatesForLeaves(rows) ?? {}
+    },
+    computeAggregatesForGroupedRows(rows) {
+      return aggregationEngineInstance?.computeAggregatesForGroupedRows(rows) ?? new Map()
+    },
+  }
   const treePivotIntegrationRuntime = createClientRowTreePivotIntegrationRuntime<T>({
     getTreeData: options.getTreeData,
     getSourceRows: options.getSourceRows,
