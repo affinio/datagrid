@@ -119,7 +119,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
   })
   let disposed = false
 
-  const emitUpdate = (requestId = 0): void => {
+  const emitUpdate = (requestId = 0, error: unknown = null): void => {
     if (disposed) {
       return
     }
@@ -128,10 +128,16 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       start: snapshot.viewportRange.start,
       end: snapshot.viewportRange.end,
     }
-    const visibleRows = model.getRowsInRange(visibleRange)
+    const visibleRows = error ? [] : model.getRowsInRange(visibleRange)
     const payload: DataGridWorkerRowModelUpdatePayload<T> = {
       schemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
-      snapshot,
+      snapshot: error
+        ? {
+          ...snapshot,
+          loading: false,
+          error: error instanceof Error ? error : new Error(String(error)),
+        }
+        : snapshot,
       aggregationModel: model.getAggregationModel(),
       formulaFields: model.getFormulaFields?.() ?? [],
       formulaExecutionPlan: model.getFormulaExecutionPlan?.() ?? null,
@@ -155,8 +161,12 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       return
     }
     const commandMessage = event.data
-    executeCommand(model, commandMessage.payload)
-    emitUpdate(commandMessage.requestId)
+    try {
+      executeCommand(model, commandMessage.payload)
+      emitUpdate(commandMessage.requestId)
+    } catch (error) {
+      emitUpdate(commandMessage.requestId, error)
+    }
   }
 
   source.addEventListener("message", onMessage)

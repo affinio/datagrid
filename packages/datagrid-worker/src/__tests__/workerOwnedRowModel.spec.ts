@@ -227,6 +227,36 @@ describe("worker-owned row model", () => {
     expect(updateClone.payload.snapshot.filterModel?.quickFilter).toEqual(filterModel.quickFilter)
   })
 
+  it("terminates a failed host command with an error snapshot", async () => {
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      resolveRowId: () => { throw new Error("row id resolver failed") },
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+
+    await flushMessages()
+    channel.main.postMessage(createDataGridWorkerRowModelCommandMessage(
+      7,
+      {
+        type: "set-rows",
+        rows: [{ row: { id: 1, region: "AMER", revenue: 1 }, originalIndex: 0, displayIndex: 0 }],
+      },
+    ))
+    await flushMessages()
+
+    expect(mirror.getSnapshot().error?.message).toBe("row id resolver failed")
+    expect(mirror.getSnapshot().loading).toBe(false)
+    expect(mirror.getRowsInRange({ start: 0, end: 1 })).toEqual([])
+
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("mirrors snapshot + visible rows from worker-owned host", async () => {
     const rows = buildRows(60)
     const channel = createMessageChannelPair()
