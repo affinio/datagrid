@@ -93,7 +93,7 @@ function createPrng(seed: number): () => number {
   }
 }
 
-function createControllerHarness() {
+function createControllerHarness(options: { scrollHeight?: number } = {}) {
   const rows = createRows(50_000)
   const columns = createColumns(260)
   const rowModel = createClientRowModel({ rows })
@@ -102,7 +102,7 @@ function createControllerHarness() {
     clientWidth: 1180,
     clientHeight: 700,
     scrollWidth: 240_000,
-    scrollHeight: 2_200_000,
+    scrollHeight: options.scrollHeight ?? 2_200_000,
   })
   const headerMetrics = createMeasuredElement({
     clientWidth: 1180,
@@ -197,6 +197,26 @@ function disposeHarness(harness: ReturnType<typeof createControllerHarness>) {
 }
 
 describe("scroll/resize determinism contract", () => {
+  it("maps a bounded native scroll extent to the logical last rows", () => {
+    const harness = createControllerHarness({ scrollHeight: 200_000 })
+    harness.controller.setViewportMetrics({
+      containerWidth: harness.containerMetrics.state.clientWidth,
+      containerHeight: harness.containerMetrics.state.clientHeight,
+      headerHeight: harness.headerMetrics.state.clientHeight,
+    })
+    harness.containerMetrics.element.scrollTop = 199_200
+    harness.containerMetrics.element.dispatchEvent(new Event("scroll"))
+    harness.controller.refresh(true)
+
+    const payload = latestRowsPayload(harness)
+    expect(payload.totalRowCount).toBe(50_000)
+    expect(payload.visibleRows?.length).toBeGreaterThan(0)
+    expect(Math.max(...(payload.visibleRows ?? []).map(row => row.displayIndex))).toBeGreaterThan(49_900)
+    expect(harness.controller.input.scrollTop.value).toBeLessThanOrEqual(199_300)
+
+    disposeHarness(harness)
+  })
+
   it("keeps repeated forced refresh idempotent for imperative callbacks", () => {
     const harness = createControllerHarness()
     harness.controller.refresh(true)
