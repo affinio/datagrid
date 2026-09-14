@@ -416,6 +416,11 @@ if (report) {
         "enterprise browser frame artifact must include viewport telemetry samples",
       )
       register(
+        readNestedNumber(benchmarkJson, "aggregate.refreshAwareDroppedFramePct.p95") != null,
+        "task-enterprise-browser-frames-refresh-aware-dropped-frame",
+        "enterprise browser frame artifact must expose refresh-aware dropped-frame p95",
+      )
+      register(
         readNestedNumber(benchmarkJson, "aggregate.virtualizationTelemetry.blankViewportCount.max") === 0,
         "task-enterprise-browser-frames-no-blank-viewports",
         "enterprise browser frame artifact must report zero blank viewport telemetry events",
