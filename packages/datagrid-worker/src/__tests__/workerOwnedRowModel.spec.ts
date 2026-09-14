@@ -688,6 +688,47 @@ describe("worker-owned row model", () => {
     mirror.dispose()
   })
 
+  it("keeps the newest snapshot after a delayed reverse worker burst", async () => {
+    const channel = createMessageChannelPair()
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+      requestInitialSync: false,
+    })
+
+    for (let requestId = 40; requestId >= 1; requestId -= 1) {
+      channel.worker.postMessage(createDataGridWorkerRowModelUpdateMessage<BenchRow>(
+        requestId,
+        {
+          snapshot: createSnapshot(requestId, { start: requestId - 1, end: requestId - 1 }),
+          aggregationModel: null,
+          visibleRows: [{
+            kind: "leaf",
+            data: { id: requestId, region: "AMER", revenue: requestId },
+            row: { id: requestId, region: "AMER", revenue: requestId },
+            rowId: requestId,
+            rowKey: requestId,
+            sourceIndex: requestId - 1,
+            originalIndex: requestId - 1,
+            displayIndex: requestId - 1,
+            state: { selected: false, group: false, pinned: "none", expanded: false },
+          }],
+          visibleRange: { start: requestId - 1, end: requestId - 1 },
+        },
+      ))
+    }
+    await flushMessages()
+
+    expect(mirror.getSnapshot().rowCount).toBe(40)
+    expect(mirror.getRowsInRange({ start: 39, end: 39 })[0]?.rowId).toBe(40)
+    expect(mirror.getWorkerProtocolDiagnostics()).toMatchObject({
+      updatesReceived: 40,
+      updatesApplied: 1,
+      updatesDroppedStale: 39,
+    })
+    mirror.dispose()
+  })
+
   it("tracks payload schema mismatches in worker protocol diagnostics", async () => {
     const channel = createMessageChannelPair()
     const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
