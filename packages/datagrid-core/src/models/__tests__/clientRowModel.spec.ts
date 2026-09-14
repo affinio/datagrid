@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { createChunkedSequence } from "../tree/treeProjectionChunkedSequence"
 import {
   createClientRowModel,
   createDataGridDependencyGraph,
@@ -46,6 +47,28 @@ function encodeTreePathGroupKey(segments: readonly string[]): string {
   }
   return encoded
 }
+
+describe("tree projection chunked sequence contract", () => {
+  it("replaces a local range while preserving ordered array semantics", () => {
+    const sequence = createChunkedSequence(Array.from({ length: 10_000 }, (_, index) => index), 64)
+    sequence.replace(128, 4_500, ["replacement-a", "replacement-b"])
+    const oracle = Array.from({ length: 10_000 }, (_, index) => index)
+    oracle.splice(128, 4_500, "replacement-a", "replacement-b")
+
+    expect(sequence.length).toBe(oracle.length)
+    expect(sequence.toArray()).toEqual(oracle)
+    expect(sequence.get(128)).toBe("replacement-a")
+    expect(sequence.get(sequence.length - 1)).toBe(oracle.at(-1))
+  })
+
+  it("keeps empty and terminal replacements bounded", () => {
+    const sequence = createChunkedSequence([1, 2, 3], 2)
+    sequence.replace(3, 0, [4, 5])
+    sequence.replace(0, 5, [])
+    expect(sequence.toArray()).toEqual([])
+    expect(sequence.get(0)).toBeUndefined()
+  })
+})
 
 describe("createClientRowModel", () => {
   it("normalizes viewport range to row count", () => {
