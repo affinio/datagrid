@@ -1,6 +1,6 @@
 # Design proposal: bounded physical scroll mapping
 
-Статус: proposed, runtime implementation не начата.
+Статус: core mapping реализован; Vue/browser acceptance остаётся отдельным workload slice.
 
 Цель — поддержать logical row counts, чья estimated/variable content height превышает browser DOM scroll extent, сохранив один logical coordinate contract для viewport consumers.
 

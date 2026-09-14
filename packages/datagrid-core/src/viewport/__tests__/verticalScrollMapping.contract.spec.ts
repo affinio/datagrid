@@ -35,6 +35,28 @@ describe("vertical logical/physical scroll mapping contract", () => {
     expect(mapping.toLogical(mapping.physicalMax)).toBe(mapping.logicalMax)
   })
 
+  it("preserves top/middle/last row reachability across the supported row-height matrix", () => {
+    for (const rowCount of [1_000_000, 10_000_000]) {
+      for (const rowHeight of [24, 31, 100]) {
+        const mapping = resolveVerticalScrollMapping({
+          logicalContentHeight: rowCount * rowHeight,
+          viewportSize: 620,
+          nativeScrollLimit: 16_000_000,
+        })
+        const logicalMax = (rowCount * rowHeight) - 620
+        const logicalOffsets = [0, logicalMax / 2, logicalMax]
+        for (const logicalOffset of logicalOffsets) {
+          const physicalOffset = mapping.toPhysical(logicalOffset)
+          const roundTrip = mapping.toLogical(physicalOffset)
+          expect(roundTrip).toBeCloseTo(logicalOffset, 5)
+          expect(physicalOffset).toBeGreaterThanOrEqual(0)
+          expect(physicalOffset).toBeLessThanOrEqual(mapping.physicalMax)
+        }
+        expect(mapping.toLogical(mapping.physicalMax)).toBeCloseTo(logicalMax, 5)
+      }
+    }
+  })
+
   it("fails closed for unknown or invalid native extents", () => {
     const mapping = resolveVerticalScrollMapping({
       logicalContentHeight: 100_000,
