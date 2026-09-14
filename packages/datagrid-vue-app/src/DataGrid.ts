@@ -564,6 +564,10 @@ const dataGridProps = {
     type: Object as PropType<DataGridRowModel<unknown> | undefined>,
     default: undefined,
   },
+  rowsUpdateMode: {
+    type: String as PropType<"replace" | "patch">,
+    default: "replace",
+  },
   clientRowModelOptions: {
     type: Object as PropType<DataGridAppClientRowModelOptions<unknown> | undefined>,
     default: undefined,
@@ -864,6 +868,7 @@ export type DataGridProps<TRow = unknown> = Omit<
   rows?: readonly (TRow | DataGridRowNodeInput<TRow>)[]
   rowModel?: DataGridRowModel<TRow> | undefined
   clientRowModelOptions?: DataGridAppClientRowModelOptions<TRow> | undefined
+  rowsUpdateMode?: "replace" | "patch"
   computedFields?: readonly DataGridComputedFieldDefinition<TRow>[] | null | undefined
   columns?: readonly DataGridAppColumnInput<TRow>[]
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
@@ -1197,6 +1202,7 @@ const DataGridRuntimeComponent = defineComponent({
       rows: toRef(props, "rows"),
       rowModel: toRef(props, "rowModel"),
       clientRowModelOptions: resolvedClientRowModelOptions,
+      rowsUpdateMode: props.rowsUpdateMode,
       onOwnedRowModelRecreated: () => {
         controlledState.dispose()
       },

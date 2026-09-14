@@ -124,7 +124,11 @@ rowModel.patchRows([
 
 Pass this stable model through the component's `rowModel` input. Reserve `rows` replacement for full source replacement. Keep `clientRowModelOptions` stable; changing its reference intentionally recreates the owned model. For immutable parent state, translate known record changes into `patchRows` and call `refresh()` only when sort/filter/group membership must be reapplied.
 
-This preserves editor focus, selection, history, and subscriptions during high-frequency updates. The tradeoff is explicit: `setRows` remains a full replacement with full normalization and projection work. Reproduce the 100k-row comparison with `pnpm run bench:datagrid:app-inputs`.
+This preserves editor focus, selection, history, and subscriptions during high-frequency updates. The tradeoff is explicit: `setRows` remains a full replacement with full normalization and projection work.
+
+For an app component that owns immutable rows, opt into `rows-update-mode="patch"` when every update preserves row order and stable row IDs. The app translates same-length record changes into `patchRows`; additions, removals, reorders, row-node inputs, and primitive rows use the normal `setRows` replacement path. The default is `rows-update-mode="replace"`.
+
+Reproduce the 100k-row comparison with `pnpm run bench:datagrid:app-inputs`.
 
 ## What the Adapter Persists
 

@@ -9,6 +9,35 @@ async function flushWatchers(): Promise<void> {
 }
 
 describe("useDataGridAppRowModel options contract", () => {
+  it("patches stable immutable row updates only when opt-in mode is enabled", async () => {
+    const rows = ref<readonly unknown[]>([{ id: 1, value: "before" }, { id: 2, value: "same" }])
+    const rowModel = ref(undefined)
+    const clientRowModelOptions = ref({ resolveRowId: (row: unknown) => (row as { id: number }).id })
+    let result: ReturnType<typeof useDataGridAppRowModel> | undefined
+    const wrapper = mount(defineComponent({
+      setup() {
+        result = useDataGridAppRowModel({ rows, rowModel, clientRowModelOptions, rowsUpdateMode: "patch" })
+        return {}
+      },
+      render: () => null,
+    }))
+    await flushWatchers()
+    const initialModel = result?.resolvedRowModel.value
+
+    rows.value = [{ id: 1, value: "after" }, { id: 2, value: "same" }]
+    await flushWatchers()
+
+    expect(result?.resolvedRowModel.value).toBe(initialModel)
+    expect(result?.dataGridInstanceKey.value).toBe(0)
+    expect((result?.resolvedRowModel.value.getRow(0)?.row as { value?: string }).value).toBe("after")
+
+    rows.value = [{ id: 2, value: "same" }, { id: 1, value: "after" }]
+    await flushWatchers()
+    expect(result?.resolvedRowModel.value.getRow(0)?.rowId).toBe(2)
+
+    wrapper.unmount()
+  })
+
   it("keeps the owned model for equivalent inline options and recreates for semantic changes", async () => {
     const rows = ref<readonly unknown[]>([{ id: 1 }])
     const rowModel = ref(undefined)
