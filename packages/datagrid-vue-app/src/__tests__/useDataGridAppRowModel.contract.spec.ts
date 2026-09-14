@@ -33,6 +33,14 @@ describe("useDataGridAppRowModel options contract", () => {
     expect((result?.resolvedRowModel.value.getRow(0)?.row as { value?: string }).value).toBe("after")
     expect(result?.resolvedRowModel.value.getRow(1)).toBe(unchangedRowNode)
 
+    for (let update = 0; update < 10; update += 1) {
+      rows.value = [{ id: 1, value: `after-${update}` }, { id: 2, value: "same" }]
+      await flushWatchers()
+      expect(result?.resolvedRowModel.value).toBe(initialModel)
+      expect(result?.dataGridInstanceKey.value).toBe(0)
+      expect(result?.resolvedRowModel.value.getRow(1)).toBe(unchangedRowNode)
+    }
+
     rows.value = [{ id: 2, value: "same" }, { id: 1, value: "after" }]
     await flushWatchers()
     expect(result?.resolvedRowModel.value.getRow(0)?.rowId).toBe(2)
