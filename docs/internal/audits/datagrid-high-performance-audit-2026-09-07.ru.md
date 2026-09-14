@@ -190,7 +190,7 @@
 - **Код P2:** каждый host command возвращает snapshot + visibleRows + aggregation/formula metadata (`workerOwnedRowModelHost.ts:123`). `postMessageTransport.ts:15` не предоставляет transfer-list в target contract. Proxy кеширует до 8 окон и дополнительно клонирует row nodes (`workerOwnedRowModel.ts:522`). Coalescing уже есть, но microtask batch не является ограничением числа команд в полёте при длительном worker compute.
 - **Исправление B:** измерить bytes/message, serialization cost, ack lag, inflight work и retained heap; затем delta payload для unchanged window/metadata, viewport priority и backpressure. Transferables полезны для подходящего columnar payload, а не автоматически для любых object rows.
 - **DoD:** host exception покрыт worker regression test; uncloneable reply, lost response, worker termination, slow worker + rapid scroll/patch bursts и pending lifecycle остаются отдельными validation cases.
-- **Диагностический gap:** `getSparseRowModelDiagnostics` сейчас считает `visibleRows.length + visibleWindowCache.size`, складывая строки и число окон. Это не достоверный cached-row count; исправить отдельно и проверить overlap/dedup semantics.
+- **Диагностический gap:** закрыт: `getSparseRowModelDiagnostics` считает уникальные cached row IDs по visible rows и всем окнам; overlap/dedup semantics покрыты regression test.
 - **Public API:** новые transport/protocol поля и target signature сначала предложить и согласовать. Зависимости: A независим; B после HP-03. Размер: A — M, B — M/L.
 
 ### HP-13. Server cache: eviction и иерархия

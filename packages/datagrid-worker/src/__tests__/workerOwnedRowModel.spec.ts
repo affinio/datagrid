@@ -502,6 +502,29 @@ describe("worker-owned row model", () => {
     host.dispose()
   })
 
+  it("counts unique cached rows across overlapping windows", async () => {
+    const channel = createMessageChannelPair()
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+      requestInitialSync: false,
+    })
+    const makeUpdate = (requestId: number, start: number, end: number) =>
+      createDataGridWorkerRowModelUpdateMessage<BenchRow>(requestId, {
+        snapshot: createSnapshot(10, { start, end }),
+        aggregationModel: null,
+        visibleRows: buildRows(end - start + 1).map((row, index) => ({ ...row, rowId: start + index })),
+        visibleRange: { start, end },
+      })
+
+    channel.worker.postMessage(makeUpdate(1, 0, 2))
+    channel.worker.postMessage(makeUpdate(2, 1, 3))
+    await flushMessages()
+
+    expect(mirror.getSparseRowModelDiagnostics().cachedRowCount).toBe(4)
+    mirror.dispose()
+  })
+
   it("ignores stale worker updates that arrive out of order", async () => {
     const channel = createMessageChannelPair()
     const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({

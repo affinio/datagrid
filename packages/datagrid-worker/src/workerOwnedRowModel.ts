@@ -1017,11 +1017,20 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       }
     },
     getSparseRowModelDiagnostics() {
+      const cachedRowIds = new Set<DataGridRowId>()
+      for (const row of visibleRows) {
+        cachedRowIds.add(row.rowId)
+      }
+      for (const rows of visibleWindowCache.values()) {
+        for (const row of rows) {
+          cachedRowIds.add(row.rowId)
+        }
+      }
       return {
         kind: "worker",
         rowCount: Math.max(0, snapshot.rowCount),
         viewportRange: { ...snapshot.viewportRange },
-        cachedRowCount: visibleRows.length + visibleWindowCache.size,
+        cachedRowCount: cachedRowIds.size,
       }
     },
     getWorkerProtocolDiagnostics() {
