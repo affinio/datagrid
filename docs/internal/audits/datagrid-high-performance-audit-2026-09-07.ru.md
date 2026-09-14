@@ -176,7 +176,7 @@
 
 - **Код:** `treeProjectionRuntime.ts:1435`/`:1534` — `input.rows.slice()`, далее insertion и `rebuildGroupIndexByRowIdFrom`; `:1337` проходит group-index map и оставшийся хвост rows.
 - **Стоимость:** O(P) копирование flattened projection и обработка хвоста даже при изменении небольшой ветки в начале. P — количество видимых логических строк, не DOM window. Исправление HP-01 само по себе это не устранит.
-- **Исправление:** выполнен безопасный sub-slice: `replaceProjectionSegment` теперь делает одну копию projection и выполняет bounded manual shift/insert без промежуточных prefix/suffix arrays и без spread argument limit. O(P) копирование и suffix index maintenance сохранены явно; chunked sequence/incremental index остаются отдельным design slice.
+- **Исправление:** выполнен безопасный sub-slice: `replaceProjectionSegment` теперь делает одну копию projection и выполняет bounded manual shift/insert без промежуточных prefix/suffix arrays и без spread argument limit. O(P) копирование и suffix index maintenance сохранены явно; proposal `docs/internal/plans/datagrid-tree-chunked-projection-design-2026-09-14.ru.md` фиксирует chunked sequence/locator и differential acceptance для следующего runtime slice.
 - **DoD:** correctness regression suite проходит (`148` focused core tests); group-depth workload `20k` rows / depth `5` / cardinality `12` измерен после изменения: rebuild p95 `28.943ms`, expand p95 `113.541ms`, collapse p95 `6.805ms`. Position-specific allocation trace и chunked/index design остаются отдельными этапами.
 - **Public API:** не требуется при сохранении snapshot invariants. Зависимости: HP-01. Размер: M/L.
 
