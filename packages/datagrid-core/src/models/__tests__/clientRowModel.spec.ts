@@ -3351,6 +3351,70 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("keeps production tree indexes correct across repeated local replacements", () => {
+    const pathModel = createClientRowModel({
+      rows: Array.from({ length: 48 * 4 }, (_, index) => ({
+        row: { id: `path-${index}`, path: [`root-${Math.floor(index / 4)}`, "leaf"] },
+        rowId: `path-${index}`,
+        originalIndex: index,
+        displayIndex: index,
+      })),
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+    const pathExpanded = pathModel.getRowsInRange({ start: 0, end: 10_000 })
+    const pathGroupKeys = pathExpanded
+      .filter(row => row.kind === "group" && row.groupMeta?.level === 0)
+      .map(row => String(row.rowId))
+    expect(pathGroupKeys).toHaveLength(48)
+    const pathInitialIds = pathExpanded.map(row => String(row.rowId))
+
+    for (const [index, groupKey] of pathGroupKeys.entries()) {
+      pathModel.collapseGroup(groupKey)
+      expect(pathModel.getRowCount()).toBe(pathInitialIds.length - (index + 1) * 5)
+    }
+    for (const [index, groupKey] of [...pathGroupKeys].reverse().entries()) {
+      pathModel.expandGroup(groupKey)
+      expect(pathModel.getRowCount()).toBe(pathInitialIds.length - (pathGroupKeys.length - index - 1) * 5)
+    }
+    expect(pathModel.getRowsInRange({ start: 0, end: 10_000 }).map(row => String(row.rowId))).toEqual(pathInitialIds)
+    pathModel.dispose()
+
+    const parentModel = createClientRowModel({
+      rows: Array.from({ length: 48 * 4 }, (_, index) => ({
+        row: { id: `parent-${index}`, parentId: index % 4 === 0 ? null : `parent-${index - index % 4}` },
+        rowId: `parent-${index}`,
+        originalIndex: index,
+        displayIndex: index,
+      })),
+      initialTreeData: {
+        mode: "parent",
+        getParentId: row => row.parentId,
+        expandedByDefault: true,
+      },
+    })
+    const parentExpanded = parentModel.getRowsInRange({ start: 0, end: 10_000 })
+    const parentGroupKeys = parentExpanded
+      .filter(row => row.kind === "group")
+      .map(row => String(row.groupMeta?.groupKey ?? ""))
+    expect(parentGroupKeys).toHaveLength(48)
+    const parentInitialIds = parentExpanded.map(row => String(row.rowId))
+
+    for (const [index, groupKey] of parentGroupKeys.entries()) {
+      parentModel.collapseGroup(groupKey)
+      expect(parentModel.getRowCount()).toBe(parentInitialIds.length - (index + 1) * 3)
+    }
+    for (const [index, groupKey] of [...parentGroupKeys].reverse().entries()) {
+      parentModel.expandGroup(groupKey)
+      expect(parentModel.getRowCount()).toBe(parentInitialIds.length - (parentGroupKeys.length - index - 1) * 3)
+    }
+    expect(parentModel.getRowsInRange({ start: 0, end: 10_000 }).map(row => String(row.rowId))).toEqual(parentInitialIds)
+    parentModel.dispose()
+  })
+
   it("toggles a wide path branch without spreading descendants into call arguments", () => {
     const leafCount = 150_000
     const model = createClientRowModel({
