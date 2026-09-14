@@ -171,6 +171,8 @@ export interface CreateClientRowModelOptions<T> {
   aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
   /** Optional fail-closed cap for dense client pivot output cells. */
   maxPivotOutputCells?: number
+  /** Omits absent aggregate fields from client pivot row payloads. */
+  sparsePivotOutput?: boolean
   initialPagination?: DataGridPaginationInput | null
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
@@ -482,6 +484,7 @@ export function createClientRowModel<T>(
     getGroupBy,
     aggregationRegistry: options.aggregationRegistry,
     maxPivotOutputCells: options.maxPivotOutputCells,
+    sparsePivotOutput: options.sparsePivotOutput,
   })
   const {
     pivotRuntime,

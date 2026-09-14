@@ -1,6 +1,6 @@
 # Design proposal: sparse pivot output storage
 
-Статус: proposed, runtime implementation не начата.
+Статус: sparse row payload sub-slice реализован; column store/export/read/drilldown остаются открытыми.
 
 Цель — убрать обязательную запись `null` для каждой комбинации output row × pivot column × value, сохранив существующие row model, read, export, sort и drilldown semantics.
 
@@ -40,3 +40,5 @@ Pivot projection хранит immutable output metadata отдельно от ce
 - browser pinned-pane rendering and custom renderer compatibility.
 
 Implementation must extend the existing pivot projection ownership. New public sparse accessor or export mode requires a separate API proposal and approval.
+
+Выполненный sub-slice: opt-in sparseOutput пропускает отсутствующие aggregate properties в output row objects и корректно удаляет их при value-only patch; default dense payload не изменён.

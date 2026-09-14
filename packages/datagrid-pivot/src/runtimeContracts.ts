@@ -12,6 +12,8 @@ export interface DataGridPivotRuntimeOptions<T> {
   readRowField?: DataGridAggregationFieldReader<T>
   /** Maximum dense output cells (projected rows × value columns). Infinity by default. */
   maxOutputCells?: number
+  /** Omits absent aggregate fields from row payloads; dense output remains the default. */
+  sparseOutput?: boolean
 }
 
 export interface DataGridPivotProjectionDiagnostics {

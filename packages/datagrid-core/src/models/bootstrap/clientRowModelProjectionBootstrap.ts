@@ -42,6 +42,7 @@ export interface CreateClientRowModelProjectionBootstrapOptions<T> {
   comparatorRegistry?: DataGridComparatorRegistry<T>
   aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
   maxPivotOutputCells?: number
+  sparsePivotOutput?: boolean
 }
 
 export function createClientRowModelProjectionBootstrap<T>(
@@ -56,6 +57,7 @@ export function createClientRowModelProjectionBootstrap<T>(
       readRowField: (row, key, field) => options.readProjectionRowField(row, key, field),
       aggregationRegistry: options.aggregationRegistry,
       maxOutputCells: options.maxPivotOutputCells,
+      sparseOutput: options.sparsePivotOutput,
     })
     return pivotRuntimeInstance
   }

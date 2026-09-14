@@ -89,6 +89,7 @@ interface DataGridPivotIncrementalProjectionState<T> {
   includeColumnGrandTotal: boolean
   columnGrandTotalKey: string
   aggregationEngine: ReturnType<typeof createDataGridAggregationEngine<T>>
+  sparseOutput: boolean
 }
 
 interface DataGridPivotProjectionBuildResult<T> extends DataGridPivotProjectionResult<T> {
@@ -127,6 +128,7 @@ function buildPivotProjectionRows<T>(
   options: CoreDataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotProjectionBuildResult<T> {
   const { inputRows, pivotModel, normalizeFieldValue } = input
+  const sparseOutput = options.sparseOutput === true
   if (inputRows.length === 0) {
     return { rows: [], columns: [], incrementalState: null }
   }
@@ -588,7 +590,11 @@ function buildPivotProjectionRows<T>(
         }
       }
       for (const column of runtimeColumnsForKey) {
-        rowData[column.id] = aggregateRecord?.[column.aggregateKey] ?? null
+        const hasAggregate = aggregateRecord != null && Object.prototype.hasOwnProperty.call(aggregateRecord, column.aggregateKey)
+        if (sparseOutput && !hasAggregate) {
+          continue
+        }
+        rowData[column.id] = hasAggregate ? aggregateRecord![column.aggregateKey] : null
       }
     }
 
@@ -745,6 +751,7 @@ function buildPivotProjectionRows<T>(
         includeColumnGrandTotal,
         columnGrandTotalKey,
         aggregationEngine: pivotAggregationEngine,
+        sparseOutput,
       } satisfies DataGridPivotIncrementalProjectionState<T>
     : null
 
@@ -858,7 +865,12 @@ export function createPivotRuntime<T>(
           ? state.aggregationEngine.finalizeGroupState(groupState)
           : {}
         for (const column of runtimeColumnsForKey) {
-          nextRowData[column.id] = aggregateRecord[column.aggregateKey] ?? null
+          const hasAggregate = Object.prototype.hasOwnProperty.call(aggregateRecord, column.aggregateKey)
+          if (state.sparseOutput && !hasAggregate) {
+            delete nextRowData[column.id]
+          } else {
+            nextRowData[column.id] = hasAggregate ? aggregateRecord[column.aggregateKey] : null
+          }
         }
       }
       nextRows[rowIndex] = {

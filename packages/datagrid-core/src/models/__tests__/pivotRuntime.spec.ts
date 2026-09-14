@@ -82,6 +82,35 @@ describe("pivotRuntime incremental patching", () => {
     })
   })
 
+  it("omits absent aggregate fields in opt-in sparse row payloads", () => {
+    const runtime = createPivotRuntime<PivotRow>({ sparseOutput: true })
+    const result = runtime.projectRows({
+      inputRows: [
+        createLeafRow({ id: "r1", region: "AMER", year: 2024, revenue: 10 }, 0),
+        createLeafRow({ id: "r2", region: "EMEA", year: 2025, revenue: 20 }, 1),
+      ],
+      pivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+
+    const amer = result.rows.find(row => String((row.row as Record<string, unknown>).region) === "AMER")
+    const emea = result.rows.find(row => String((row.row as Record<string, unknown>).region) === "EMEA")
+    expect(amer).toBeDefined()
+    expect(emea).toBeDefined()
+    const amerData = amer!.row as Record<string, unknown>
+    const emeaData = emea!.row as Record<string, unknown>
+    const amerYearColumns = result.columns.filter(column => column.columnPath.some(segment => segment.value === "2024"))
+    const emeaYearColumns = result.columns.filter(column => column.columnPath.some(segment => segment.value === "2025"))
+    expect(amerYearColumns.every(column => Object.hasOwn(amerData, column.id))).toBe(true)
+    expect(amerYearColumns.length).toBeGreaterThan(0)
+    expect(emeaYearColumns.every(column => !Object.hasOwn(amerData, column.id))).toBe(true)
+    expect(emeaYearColumns.every(column => Object.hasOwn(emeaData, column.id))).toBe(true)
+  })
+
   it("applies value-only patch without relying on cached binding by rowId", () => {
     const runtime = createPivotRuntime<PivotRow>()
     const sourceRows = [
