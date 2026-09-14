@@ -89,16 +89,16 @@
       }
     },
     "worker": {
-      "distBytes": 54687,
-      "gzipBytes": 9695,
-      "brotliBytes": 8332,
+      "distBytes": 61633,
+      "gzipBytes": 11190,
+      "brotliBytes": 9623,
       "startupMs": {
-        "p50": 53.745844
+        "p50": 55.037636
       },
       "treeShaken": {
-        "bytes": 363297,
-        "gzipBytes": 94330,
-        "brotliBytes": 79242
+        "bytes": 372273,
+        "gzipBytes": 97184,
+        "brotliBytes": 81605
       }
     }
   }
