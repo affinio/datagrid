@@ -1311,9 +1311,29 @@ function replaceProjectionSegment<T>(
   removeCount: number,
   replacement: readonly DataGridRowNode<T>[],
 ): DataGridRowNode<T>[] {
-  return rows
-    .slice(0, startIndex)
-    .concat(replacement, rows.slice(startIndex + removeCount))
+  const result = rows.slice()
+  const safeStart = Math.max(0, Math.min(startIndex, result.length))
+  const safeRemoveCount = Math.max(0, Math.min(removeCount, result.length - safeStart))
+  const delta = replacement.length - safeRemoveCount
+  const tailStart = safeStart + safeRemoveCount
+
+  if (delta > 0) {
+    const previousLength = result.length
+    result.length = previousLength + delta
+    for (let index = previousLength - 1; index >= tailStart; index -= 1) {
+      result[index + delta] = result[index]!
+    }
+  } else if (delta < 0) {
+    for (let index = tailStart; index < result.length; index += 1) {
+      result[index + delta] = result[index]!
+    }
+    result.length += delta
+  }
+
+  for (let index = 0; index < replacement.length; index += 1) {
+    result[safeStart + index] = replacement[index]!
+  }
+  return result
 }
 
 function resolveGroupRowIndexByRowId<T>(
