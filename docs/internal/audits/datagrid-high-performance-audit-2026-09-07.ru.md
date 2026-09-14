@@ -108,7 +108,7 @@
 - **Разрыв:** `docs/perf/datagrid-performance-gates.md` заявляет scroll latency <=16 ms и CV<=25%; фактические профили гораздо мягче. Время функции, frame interval и input-to-paint — разные величины, заменять одну другой нельзя.
 - **Исправление:** отделить correctness/smoke ceilings от UX-SLO profiles; критичные resource warnings сделать blocking в фактической цепочке CI; budgets по сценариям, минимальный sample count, явный fail при нулевых samples, raw samples и environment metadata. Не ужесточать пороги вслепую на shared runner.
 - **DoD:** искусственное нарушение каждого frame/resource бюджета делает CI красным; soft observation явно обозначен. Для smooth scroll отдельные 60/120 Hz профили; teleport stress отдельно. Проверять совокупное renderer time за frame, а не только p95 одного дешёвого callback.
-- **Дополнительный дефект интерпретации:** `droppedFramePct` в script `:675` — доля наблюдённых интервалов >20 ms. Это не число потерянных refresh opportunities и плохо переносится на 120 Hz. Переименовать/документировать либо добавить refresh-aware метрику, сохранив совместимость artifacts.
+- **Дополнительный дефект интерпретации:** закрыт частично: legacy `droppedFramePct` сохранён для совместимости, а artifact теперь содержит `refreshAwareDroppedFramePct`/`refreshAwareDroppedFrames` с параметром `BENCH_BROWSER_REFRESH_RATE_HZ`; отдельные calibrated 60/120 Hz budgets остаются следующим этапом.
 - **Public API:** не требуется; artifact schema может требовать миграции consumers. Зависимости: нет. Размер: M.
 
 ### HP-04. Сравнительного стенда AG Grid не обнаружено

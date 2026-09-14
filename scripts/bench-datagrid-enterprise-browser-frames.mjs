@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { chromium } from "@playwright/test"
 import { ensureSandboxServer } from "./ensure-sandbox-server.mjs"
+import { computeFrameMetrics } from "./datagrid-frame-metrics.mjs"
 
 const BENCH_BROWSER_BASE_URL = process.env.BENCH_BROWSER_BASE_URL ?? "http://127.0.0.1:4173"
 const BENCH_BROWSER_ROUTE = process.env.BENCH_BROWSER_ROUTE ?? "/vue/shell/base-grid"
@@ -24,6 +25,7 @@ const BENCH_BROWSER_SMOOTH_SCROLL_DELTA_PX = intEnv("BENCH_BROWSER_SMOOTH_SCROLL
 const BENCH_BROWSER_HORIZONTAL_STEPS = intEnv("BENCH_BROWSER_HORIZONTAL_STEPS", 96)
 const BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS = intEnv("BENCH_BROWSER_SMOOTH_FRAME_DELAY_MS", 16)
 const BENCH_BROWSER_STEP_DELAY_MS = intEnv("BENCH_BROWSER_STEP_DELAY_MS", 6)
+const BENCH_BROWSER_REFRESH_RATE_HZ = Number(process.env.BENCH_BROWSER_REFRESH_RATE_HZ ?? 60)
 const BENCH_BROWSER_CELL_UPDATE_BURST = intEnv("BENCH_BROWSER_CELL_UPDATE_BURST", 4)
 const BENCH_BROWSER_CLIPBOARD_ROWS = intEnv("BENCH_BROWSER_CLIPBOARD_ROWS", 200)
 const BENCH_BROWSER_CLIPBOARD_COLUMNS = intEnv("BENCH_BROWSER_CLIPBOARD_COLUMNS", 20)
@@ -667,29 +669,6 @@ function stats(values) {
     min: Math.min(...finite),
     max: Math.max(...finite),
   }
-}
-
-function computeFrameMetrics(frameDeltas) {
-  const filtered = normalizeFrameDeltas(frameDeltas)
-  const frameStats = stats(filtered)
-  const droppedFrames = filtered.filter(delta => delta > 20).length
-  const longFramesOver16Ms = filtered.filter(delta => delta > 16).length
-  const longFramesOver32Ms = filtered.filter(delta => delta > 32).length
-  const droppedPct = filtered.length > 0 ? (droppedFrames / filtered.length) * 100 : 0
-  const fps = frameStats.mean > 0 ? 1000 / frameStats.mean : 0
-  return {
-    sampleCount: filtered.length,
-    frameStats,
-    droppedFrames,
-    droppedPct,
-    longFramesOver16Ms,
-    longFramesOver32Ms,
-    fps,
-  }
-}
-
-function normalizeFrameDeltas(frameDeltas) {
-  return frameDeltas.filter(delta => Number.isFinite(delta) && delta > 0).slice(2)
 }
 
 function buildScenarioUrl(scenario) {
@@ -2884,7 +2863,7 @@ async function runScenario(page, sessionIndex, scenario) {
     sessionIndex,
   })
 
-  const frame = computeFrameMetrics(result.frameDeltas)
+  const frame = computeFrameMetrics(result.frameDeltas, BENCH_BROWSER_REFRESH_RATE_HZ)
   const longTaskCount = result.longTaskDurations.length
   const longTaskTotalMs = result.longTaskDurations.reduce((sum, value) => sum + value, 0)
   const longTaskMaxMs = longTaskCount > 0 ? Math.max(...result.longTaskDurations) : 0
@@ -2998,6 +2977,8 @@ function aggregateRuns(runs) {
     fps: stats(runs.map(run => run.fps)),
     droppedFramePct: stats(runs.map(run => run.droppedPct)),
     droppedFrames: stats(runs.map(run => run.droppedFrames)),
+    refreshAwareDroppedFramePct: stats(runs.map(run => run.refreshAwareDroppedPct)),
+    refreshAwareDroppedFrames: stats(runs.map(run => run.refreshAwareDroppedFrames)),
     longFramesOver16Ms: stats(runs.map(run => run.longFramesOver16Ms)),
     longFramesOver32Ms: stats(runs.map(run => run.longFramesOver32Ms)),
     longTaskCount: stats(runs.map(run => run.longTaskCount)),
@@ -3759,6 +3740,7 @@ const summary = {
     enableSort: BENCH_ENABLE_SORT,
     enableCellUpdates: BENCH_ENABLE_CELL_UPDATES,
     interactionDeviceProfile: BENCH_INTERACTION_DEVICE_PROFILE,
+    refreshRateHz: BENCH_BROWSER_REFRESH_RATE_HZ,
     interactionDeviceProfileDescription: interactionDeviceProfile.description,
     browserContext: interactionDeviceProfile.context,
     interactionFailOnWarnings: BENCH_INTERACTION_FAIL_ON_WARNINGS,
@@ -3902,12 +3884,12 @@ writeFileSync(BENCH_OUTPUT_JSON, JSON.stringify(summary, null, 2))
 
 console.log(`\nBenchmark summary written: ${BENCH_OUTPUT_JSON}`)
 console.log(
-  `frame p50=${aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${aggregate.fps.p50.toFixed(2)} dropped p95=${aggregate.droppedFramePct.p95.toFixed(2)}%`,
+  `frame p50=${aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${aggregate.fps.p50.toFixed(2)} legacy-dropped p95=${aggregate.droppedFramePct.p95.toFixed(2)}% refresh-aware-dropped p95=${aggregate.refreshAwareDroppedFramePct.p95.toFixed(2)}%`,
 )
 for (const scenario of SCENARIOS) {
   const report = scenarioReports[scenario.id]
   console.log(
-    `${scenario.id}: frame p50=${report.aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${report.aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${report.aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${report.aggregate.fps.p50.toFixed(2)} dropped p95=${report.aggregate.droppedFramePct.p95.toFixed(2)}%`,
+    `${scenario.id}: frame p50=${report.aggregate.frameP50Ms.p50.toFixed(3)}ms p95=${report.aggregate.frameP95Ms.p50.toFixed(3)}ms p99=${report.aggregate.frameP99Ms.p50.toFixed(3)}ms fps p50=${report.aggregate.fps.p50.toFixed(2)} legacy-dropped p95=${report.aggregate.droppedFramePct.p95.toFixed(2)}% refresh-aware-dropped p95=${report.aggregate.refreshAwareDroppedFramePct.p95.toFixed(2)}%`,
   )
 }
 if (budgetWarnings.length > 0) {
