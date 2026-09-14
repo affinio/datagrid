@@ -36,6 +36,9 @@ describe("data source cache store registry", () => {
     registry.acquire({ key: "root/a", parentKey: "root", signature: "rev-1" })
     registry.retain("root/a")
     expect(registry.get("root")?.lifecycle).toBe("retained")
+    for (let index = 0; index < 1_000; index += 1) {
+      registry.get("root")
+    }
     registry.acquire({ key: "root/b", parentKey: "root", signature: "rev-1" })
 
     expect(registry.enforceLimit()).toEqual(["root/a"])

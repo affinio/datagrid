@@ -27,14 +27,30 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
   const retainedHeap: Array<{ key: string; lastAccess: number }> = []
   let accessCounter = 0
 
-  const pushRetained = (store: DataSourceCacheStoreDescriptor): void => {
-    retainedHeap.push({ key: store.key, lastAccess: store.lastAccess })
+  const insertRetainedHeapEntry = (entry: { key: string; lastAccess: number }): void => {
+    retainedHeap.push(entry)
     let index = retainedHeap.length - 1
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2)
       if (retainedHeap[parent]!.lastAccess <= retainedHeap[index]!.lastAccess) break
       ;[retainedHeap[parent], retainedHeap[index]] = [retainedHeap[index]!, retainedHeap[parent]!]
       index = parent
+    }
+  }
+
+  const rebuildRetainedHeap = (): void => {
+    retainedHeap.length = 0
+    for (const store of stores.values()) {
+      if (store.lifecycle === "retained") {
+        insertRetainedHeapEntry({ key: store.key, lastAccess: store.lastAccess })
+      }
+    }
+  }
+
+  const pushRetained = (store: DataSourceCacheStoreDescriptor): void => {
+    insertRetainedHeapEntry({ key: store.key, lastAccess: store.lastAccess })
+    if (retainedHeap.length > stores.size * 4 + 32) {
+      rebuildRetainedHeap()
     }
   }
 
