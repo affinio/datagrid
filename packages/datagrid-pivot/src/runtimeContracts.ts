@@ -22,6 +22,17 @@ export interface DataGridPivotProjectionDiagnostics {
   maxOutputCells: number
 }
 
+export type DataGridPivotCellState<T> =
+  | { kind: "missing" }
+  | { kind: "null" }
+  | { kind: "value"; value: T }
+
+export interface DataGridPivotCellAddress {
+  rowKey: string
+  columnKey: string
+  valueField: string
+}
+
 export interface DataGridPivotProjectionResult<T> {
   rows: DataGridRowNode<T>[]
   columns: DataGridPivotColumn[]
@@ -49,5 +60,6 @@ export interface DataGridPivotApplyValuePatchInput<T> {
 export interface DataGridPivotRuntime<T> {
   projectRows: (input: DataGridPivotProjectRowsInput<T>) => DataGridPivotProjectionResult<T>
   applyValueOnlyPatch: (input: DataGridPivotApplyValuePatchInput<T>) => DataGridPivotProjectionResult<T> | null
+  readCell: (address: DataGridPivotCellAddress) => DataGridPivotCellState<unknown>
   normalizeColumns: (columns: readonly DataGridPivotColumn[]) => DataGridPivotColumn[]
 }

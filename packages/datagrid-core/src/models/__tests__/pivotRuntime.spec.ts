@@ -111,6 +111,37 @@ describe("pivotRuntime incremental patching", () => {
     expect(emeaYearColumns.every(column => Object.hasOwn(emeaData, column.id))).toBe(true)
   })
 
+  it("reads sparse cells without materializing missing neighbors", () => {
+    const runtime = createPivotRuntime<PivotRow>({ sparseOutput: true })
+    const result = runtime.projectRows({
+      inputRows: [
+        createLeafRow({ id: "r1", region: "AMER", year: 2024, revenue: 10 }, 0),
+        createLeafRow({ id: "r2", region: "EMEA", year: 2025, revenue: 20 }, 1),
+      ],
+      pivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+    const amer = result.rows.find(row => String((row.row as Record<string, unknown>).region) === "AMER")!
+    const amerColumn = result.columns.find(column => column.columnPath.some(segment => segment.value === "2024"))!
+    const emeaColumn = result.columns.find(column => column.columnPath.some(segment => segment.value === "2025"))!
+
+    expect(runtime.readCell({
+      rowKey: String(amer.rowId),
+      columnKey: amerColumn.id,
+      valueField: amerColumn.valueField,
+    })).toEqual({ kind: "value", value: 10 })
+    expect(runtime.readCell({
+      rowKey: String(amer.rowId),
+      columnKey: emeaColumn.id,
+      valueField: emeaColumn.valueField,
+    })).toEqual({ kind: "missing" })
+    expect(Object.keys(amer.row as Record<string, unknown>)).toHaveLength(4)
+  })
+
   it("applies value-only patch without relying on cached binding by rowId", () => {
     const runtime = createPivotRuntime<PivotRow>()
     const sourceRows = [

@@ -10,6 +10,8 @@ import type {
   DataGridPivotApplyValuePatchInput,
   DataGridPivotColumn,
   DataGridPivotFieldResolver,
+  DataGridPivotCellAddress,
+  DataGridPivotCellState,
   DataGridPivotProjectionResult,
   DataGridPivotProjectRowsInput,
   DataGridPivotRuntime,
@@ -771,6 +773,24 @@ export function createPivotRuntime<T>(
   options: CoreDataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotRuntime<T> {
   let incrementalState: DataGridPivotIncrementalProjectionState<T> | null = null
+  let projectedRows: DataGridRowNode<T>[] = []
+  let projectedColumns: DataGridPivotColumn[] = []
+
+  const readCell = (address: DataGridPivotCellAddress): DataGridPivotCellState<unknown> => {
+    const row = projectedRows.find(candidate => String(candidate.rowId) === address.rowKey)
+    const column = projectedColumns.find(candidate => (
+      candidate.id === address.columnKey && candidate.valueField === address.valueField
+    ))
+    if (!row || !column) {
+      return { kind: "missing" }
+    }
+    const data = row.data as Record<string, unknown>
+    if (!Object.prototype.hasOwnProperty.call(data, column.id)) {
+      return { kind: "missing" }
+    }
+    const value = data[column.id]
+    return value === null ? { kind: "null" } : { kind: "value", value }
+  }
 
   const applyValueOnlyPatch = (input: DataGridPivotApplyValuePatchInput<T>): DataGridPivotProjectionResult<T> | null => {
     const state = incrementalState
@@ -839,6 +859,8 @@ export function createPivotRuntime<T>(
     }
 
     if (affectedEntryKeys.size === 0) {
+      projectedRows = nextRows
+      projectedColumns = normalizedColumns
       return {
         rows: nextRows,
         columns: normalizedColumns,
@@ -885,6 +907,8 @@ export function createPivotRuntime<T>(
       }
     }
 
+    projectedRows = nextRows
+    projectedColumns = normalizedColumns
     return {
       rows: nextRows,
       columns: normalizedColumns,
@@ -895,6 +919,8 @@ export function createPivotRuntime<T>(
     projectRows: (input: DataGridPivotProjectRowsInput<T>): DataGridPivotProjectionResult<T> => {
       const built = buildPivotProjectionRows(input, options)
       incrementalState = built.incrementalState
+      projectedRows = built.rows
+      projectedColumns = built.columns
       return {
         rows: built.rows,
         columns: built.columns,
@@ -902,6 +928,7 @@ export function createPivotRuntime<T>(
       }
     },
     applyValueOnlyPatch,
+    readCell,
     normalizeColumns: normalizePivotColumns,
   }
 }

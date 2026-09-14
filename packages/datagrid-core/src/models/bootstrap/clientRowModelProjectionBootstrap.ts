@@ -68,6 +68,9 @@ export function createClientRowModelProjectionBootstrap<T>(
     applyValueOnlyPatch(input) {
       return getPivotRuntime().applyValueOnlyPatch(input)
     },
+    readCell(address) {
+      return getPivotRuntime().readCell(address)
+    },
     normalizeColumns(columns) {
       return getPivotRuntime().normalizeColumns(columns)
     },
