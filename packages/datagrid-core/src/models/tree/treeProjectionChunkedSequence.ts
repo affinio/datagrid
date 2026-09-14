@@ -59,8 +59,21 @@ export function createChunkedSequence<T>(
       return chunks[chunkIndex]?.[index - chunkStarts[chunkIndex]!]
     },
     replace(start, deleteCount, replacement) {
+      const safeDeleteCount = Math.max(0, Math.trunc(deleteCount))
       const from = locate(start)
-      const to = locate(start + Math.max(0, Math.trunc(deleteCount)))
+      const to = locate(start + safeDeleteCount)
+      if (
+        safeDeleteCount === replacement.length
+        && from.chunk === to.chunk
+        && from.chunk < chunks.length
+      ) {
+        const nextChunk = chunks[from.chunk]!.slice()
+        for (let index = 0; index < replacement.length; index += 1) {
+          nextChunk[from.offset + index] = replacement[index]!
+        }
+        chunks[from.chunk] = nextChunk
+        return
+      }
       const before = chunks.slice(0, from.chunk)
       const first = chunks[from.chunk]?.slice(0, from.offset) ?? []
       const after = chunks.slice(to.chunk)
@@ -71,7 +84,7 @@ export function createChunkedSequence<T>(
         nextChunks.push(middle.slice(index, index + size))
       }
       chunks = nextChunks.concat(after)
-      length += replacement.length - Math.max(0, Math.trunc(deleteCount))
+      length += replacement.length - safeDeleteCount
       chunkStarts = []
       let chunkStart = 0
       for (const chunk of chunks) {
