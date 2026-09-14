@@ -1,6 +1,6 @@
 # Design proposal: deferred authored renderer policy
 
-Статус: proposed, runtime implementation не начата.
+Статус: internal queue gate implemented; renderer wiring, opt-in policy и browser evidence остаются открытыми.
 
 Цель — уменьшить вклад тяжёлых `cellRenderer`/`groupCellRenderer` в scroll render window, сохранив identity stateful children и текущие synchronous semantics по умолчанию.
 
@@ -40,7 +40,7 @@ Existing `dgPerfTrace=1` scopes `stageRenderWindow`, `cellRenderer`, `groupCellR
 
 ## Rollout gates
 
-1. Internal scheduler/identity contract tests with deterministic fake clock.
+1. Выполнено частично: internal bounded priority queue и stale-key cancellation покрыты contract/benchmark; scheduler wiring и identity contract остаются.
 2. Browser differential run with opt-in disabled: zero behavior delta.
 3. Opt-in browser run: no blank viewport, no focus/selection/group/a11y regressions, bounded final-content latency.
 4. Only then expose documented public option and add profile-specific budget.

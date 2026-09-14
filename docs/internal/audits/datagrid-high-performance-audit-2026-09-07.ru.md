@@ -148,7 +148,8 @@
 - **Исправление:** baseline telemetry и renderer-duration budgets уже добавлены для обычных spans, slow custom renderers, pinned и auto-height профилей; runtime defer/placeholder policy вынесена в proposal `docs/internal/plans/datagrid-authored-renderer-defer-design-2026-09-14.ru.md`.
 - **Ориентир:** у AG Grid есть `deferRender` для тяжёлых cell components и skeleton до окончания scroll. [Scrolling performance](https://www.ag-grid.com/javascript-data-grid/scrolling-performance/).
 - **Текущий статус slice:** `dgPerfTrace=1` записывает `stageRenderWindow`, `cellRenderer`, `groupCellRenderer`; enterprise browser gate проверяет наличие invocation и p95 duration budgets. Свежий Chromium run в текущем окружении невозможен, поэтому улучшение FPS/input-to-paint не заявляется.
-- **Остаток:** runtime scheduler, placeholder policy и browser differential acceptance остаются отдельным implementation slice.
+- **Исправление sub-slice:** internal `dataGridDeferredRendererQueue` реализует bounded pending queue с приоритетами `pinned`/`visible`/`overscan`, дедупликацией и cancellation stale keys; default synchronous renderer path не меняется.
+- **Проверки:** queue contract — 2 tests passed; enqueue+flush 512 prioritized cells — 13,145.76 ops/s. Runtime placeholder wiring и browser differential acceptance остаются отдельным implementation slice.
 - **DoD:** улучшение input-to-paint и frame tail с сохранением stateful row identity, editor focus, custom events, group renderer semantics, a11y; после остановки скролла окончательный content появляется в ограниченное время. Stateful children нельзя безусловно переиспользовать по viewport slot.
 - **Public API:** новый renderer policy сначала предложить и согласовать. Зависимости: HP-03. Размер: M.
 
