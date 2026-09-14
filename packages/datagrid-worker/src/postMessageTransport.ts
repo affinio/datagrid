@@ -10,8 +10,10 @@ export interface DataGridWorkerMessageEvent<T = unknown> {
 }
 
 export interface DataGridWorkerMessageTarget {
-  postMessage(message: unknown): void
-  postMessage(message: unknown, transfer: Transferable[]): void
+  postMessage(
+    message: unknown,
+    transfer?: Transferable[] | StructuredSerializeOptions,
+  ): void
 }
 
 export interface DataGridWorkerMessageSource {
