@@ -67,6 +67,23 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await assertNoBlankVerticalViewport(page)
   })
 
+  test("vue base grid keeps variable-height viewport covered across long jumps", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=50000&cols=8")
+
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalRows(page), { timeout: 20_000 }).toBe(50000)
+    await selectGridOption(page, "Row mode", "Auto")
+
+    for (const ratio of [0.2, 0.55, 0.85, 1]) {
+      const maxTop = await viewportMaxScrollTop(viewport)
+      await setViewportScroll(viewport, { top: Math.round(maxTop * ratio), left: 0 })
+      await page.waitForTimeout(48)
+      await assertNoBlankVerticalViewport(page)
+      expect(await renderedRows(page)).toBeLessThanOrEqual(96)
+    }
+  })
+
   test("vue base grid does not expose blank vertical viewport bands during fast scroll", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=50000")
 
