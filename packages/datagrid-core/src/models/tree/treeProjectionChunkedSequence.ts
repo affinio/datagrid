@@ -34,12 +34,8 @@ export function createChunkedSequence<T>(
     },
     get(index) {
       if (!Number.isInteger(index) || index < 0 || index >= length) return undefined
-      let remaining = index
-      for (const chunk of chunks) {
-        if (remaining < chunk.length) return chunk[remaining]
-        remaining -= chunk.length
-      }
-      return undefined
+      const chunk = chunks[Math.floor(index / size)]
+      return chunk?.[index % size]
     },
     replace(start, deleteCount, replacement) {
       const from = locate(start)

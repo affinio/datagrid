@@ -15,4 +15,8 @@ describe("tree projection local replacement proof of concept", () => {
   bench("chunked sequence — replace one row", () => {
     sequence.replace(128, 1, ["replacement"])
   }, { iterations: 10, time: 500 })
+
+  bench("chunked sequence — random indexed read", () => {
+    sequence.get(ROWS - 128)
+  }, { iterations: 10, time: 500 })
 })
