@@ -1,6 +1,6 @@
 # Design proposal: chunked tree projection and group index
 
-Статус: proposed, runtime implementation не начата.
+Статус: POC выполнен; production sequence integration и differential validation остаются открытыми.
 
 Цель — уменьшить стоимость локального tree expand/collapse, когда замена одного subtree сдвигает большой flattened projection и индекс групп. Текущий bounded manual shift устраняет spread/temporary arrays, но сохраняет O(P) копирование projection и глобальный suffix index maintenance.
 
@@ -33,4 +33,4 @@
 - random operation differential test comparing ordered rows and group index lookup;
 - viewport range reads, snapshot/export compatibility, dispose and cache invalidation.
 
-Implementation must begin with an internal sequence/locator proof-of-concept and keep the current array path as a differential oracle. Do not change public tree API or default representation until the benchmark shows a material win at the audited branch sizes.
+Internal sequence proof-of-concept выполнен в `models/tree/treeProjectionChunkedSequence.ts`; contract и 300k local replacement benchmark показывают material win для локальной замены. Production tree runtime пока сохраняет array path как differential oracle. Не менять public tree API или default representation до differential subtree validation, heap measurements и range-read acceptance.

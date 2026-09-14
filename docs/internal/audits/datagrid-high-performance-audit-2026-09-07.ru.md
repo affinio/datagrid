@@ -260,7 +260,7 @@
 
 | Проверка | Результат |
 | --- | --- |
-| `node scripts/check-datagrid-perf-contracts.mjs` | 60/60 checks; 10/10 по собственной статической шкале |
+| `node scripts/check-datagrid-perf-contracts.mjs` | 61/61 checks; 10/10 по собственной статической шкале |
 | `node scripts/check-datagrid-architecture-acceptance.mjs` | 63/63 checks; 10/10 по собственной статической шкале |
 | `node scripts/check-datagrid-docs-framework-track.mjs` | 0 violations; 3 files checked, 10 skipped |
 | Core: virtualization range + horizontal stress + client row model stress | 3 files, 12 tests passed |
