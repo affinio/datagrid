@@ -105,6 +105,27 @@ const overlayTransform = buildDataGridOverlayTransformFromSnapshot({
 Adapter interface is defined in:
 `packages/datagrid-core/src/dataGridSettingsAdapter.ts`
 
+## High-Frequency Row Updates
+
+Keep one client row model alive for edit bursts and route changed records through `patchRows`:
+
+```ts
+import { createClientRowModel } from "@affino/datagrid-core"
+
+const rowModel = createClientRowModel({
+  rows: initialRows,
+  resolveRowId: row => row.id,
+})
+
+rowModel.patchRows([
+  { rowId: changedRow.id, data: { status: changedRow.status } },
+])
+```
+
+Pass this stable model through the component's `rowModel` input. Reserve `rows` replacement for full source replacement. Keep `clientRowModelOptions` stable; changing its reference intentionally recreates the owned model. For immutable parent state, translate known record changes into `patchRows` and call `refresh()` only when sort/filter/group membership must be reapplied.
+
+This preserves editor focus, selection, history, and subscriptions during high-frequency updates. The tradeoff is explicit: `setRows` remains a full replacement with full normalization and projection work.
+
 ## What the Adapter Persists
 
 - Column widths

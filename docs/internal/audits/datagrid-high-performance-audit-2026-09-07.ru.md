@@ -227,7 +227,7 @@
 
 - **Код:** `datagrid-vue-app/src/useDataGridAppRowModel.ts:102` при новой ссылке `rows` вызывает `setRows`; `:89` пересоздаёт модель при изменении options и увеличивает instance key, options watcher — deep. `core/models/mutation/clientRowRowsMutationsRuntime.ts:89` нормализует все rows; `state/clientRowSourceNormalizationRuntime.ts:45` проходит весь массив и клонирует верхний уровень row data через property descriptors.
 - **Сценарий:** обычный immutable Vue parent обновляет один record через новый массив либо пересоздаёт inline options. Пользователь получает O(N) ingest/возможный remount вместо быстрого patch, хотя core умеет точечные изменения.
-- **Исправление A:** production-shaped recipe стабильной модели + patchRows/существующих mutation APIs, стабильные options, объяснение controlled versus high-frequency workflow; не рекомендовать deep reactive mutations dataset.
+- **Исправление A:** выполнено в integration guide: production-shaped recipe стабильной модели + `patchRows`, стабильные options и явное разделение full replacement versus high-frequency workflow.
 - **Исправление B:** проверить возможность обновлять реально изменяемые options без полной пересборки; diff rows — отдельный opt-in contract, а не невидимое изменение `setRows` semantics.
 - **DoD:** пример 100k строк с 100 updates/s и активным editor/selection; count model recreations, ingest allocations, time-to-visible update; immutable replacement остаётся корректным. Деструкция предыдущей модели освобождает subscriptions.
 - **Риск:** неверная идентичность строк, потеря focus/history при remount. **Public API:** documentation slice независим, новые input modes согласовать. Зависимости: HP-02 для projected workload. Размер: A — S, B — M.
