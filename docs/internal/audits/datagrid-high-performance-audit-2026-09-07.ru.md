@@ -138,7 +138,7 @@
 - **Стоимость:** O(renderedRows × allColumns), а не O(renderedRows × visibleColumns). На скрытой вкладке/нулевой начальной ширине возможен дорогой первый render до измерения viewport. Это C, не измеренный в браузере mount spike.
 - **Исправление A:** ограниченный zero-size bootstrap window или ожидание валидного measurement с определённым first-paint contract.
 - **Исправление B:** понятный wide-grid preset/explicit documented setting; изменение default не проводить молча.
-- **DoD:** zero-width 10k column contract (включая полностью zero-width measured grid) и algorithm benchmark покрыты; новый transition contract проверяет bounded window после hide, resize и reorder/pin на 10k columns; browser mounted-cell counts и real visibility/resize/pin acceptance остаются отдельными validation cases.
+- **DoD:** zero-width 10k column contract (включая полностью zero-width measured grid) и algorithm benchmark покрыты; transition contract проверяет bounded window после hide, resize и reorder/pin на 10k columns; добавлен Playwright acceptance для 1000-column UI, который скрывает 999 колонок, проверяет bounded mounted window и отсутствие blank band. Browser execution зависит от CI Chromium.
 - **Риск:** initial flash, некорректный autosize скрытых колонок, breaking change default. **Public API/behavior:** для B сначала предложение и согласование. Размер: A — S/M, B — отдельный slice.
 
 ### HP-07. Authored renderers могут блокировать каждый render window

@@ -107,6 +107,32 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     expect(await renderedCenterCellsInFirstVisibleRow(page)).toBeLessThanOrEqual(80)
   })
 
+  test("vue base grid keeps a bounded window after hiding 999 of 1000 columns", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=1000")
+
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1000)
+
+    await page.getByRole("button", { name: "Columns", exact: true }).click()
+    const visibilityInputs = page.locator(".column-layout-panel input[type=checkbox]")
+    await expect(visibilityInputs).toHaveCount(1000, { timeout: 20_000 })
+    await visibilityInputs.evaluateAll(inputs => {
+      for (const [index, input] of inputs.entries()) {
+        if (index === 0) continue
+        const checkbox = input as HTMLInputElement
+        if (checkbox.checked) {
+          checkbox.click()
+        }
+      }
+    })
+    await page.getByRole("button", { name: "Apply", exact: true }).click()
+
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1)
+    await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBeLessThanOrEqual(8)
+    await assertNoBlankHorizontalViewport(page)
+  })
+
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
     await gotoSandboxRoute(page, "/core/base-grid")
 
