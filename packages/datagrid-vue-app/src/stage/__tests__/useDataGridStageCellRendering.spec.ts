@@ -229,7 +229,7 @@ describe("useDataGridStageCellRendering", () => {
     })
     const scrolling = ref(true)
     const rendererPolicy = ref({ mode: "defer" as const, maxPending: 8, cellsPerFrame: 1 })
-    const renderer = vi.fn(() => "Rendered")
+    const renderer = vi.fn(({ row }: { row: Record<string, unknown> }) => String(row.value ?? "Rendered"))
     const api = useDataGridStageCellRendering({
       mode,
       visibleColumns,
@@ -242,7 +242,7 @@ describe("useDataGridStageCellRendering", () => {
       isScrolling: scrolling,
       rendererPolicy,
     })
-    const row = createRow({ rowId: "r1" })
+    const row = createRow({ rowId: "r1", data: { value: "initial" } })
     const column = { ...visibleColumns.value[0]!, column: { ...visibleColumns.value[0]!.column, cellRenderer: renderer } }
 
     expect(api.renderResolvedCellContent(row, 0, column, 0)).toBe("Display")
@@ -250,8 +250,12 @@ describe("useDataGridStageCellRendering", () => {
     scrolling.value = false
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 25))
-    expect(api.renderResolvedCellContent(row, 0, column, 0)).toBe("Rendered")
+    expect(api.renderResolvedCellContent(row, 0, column, 0)).toBe("initial")
     expect(renderer).toHaveBeenCalledTimes(1)
+
+    const refreshedRow = createRow({ rowId: "r1", data: { value: "updated" } })
+    expect(api.renderResolvedCellContent(refreshedRow, 0, column, 0)).toBe("updated")
+    expect(renderer).toHaveBeenCalledTimes(2)
   })
 
   it("records custom renderer telemetry only when perf tracing is enabled", () => {
