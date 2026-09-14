@@ -54,6 +54,26 @@ function createDiagnostics(): DataGridDataSourceBackpressureDiagnostics {
 }
 
 describe("data source runtime lifecycle", () => {
+  it("batch-scans eviction candidates behind protected ranges", () => {
+    const cache = createDataSourceCacheManager<{ id: number }>({
+      rowCacheLimit: 2,
+      rangeCacheChunkSize: 2,
+    })
+    for (let index = 0; index < 6; index += 1) {
+      cache.rowCache.set(index, { rowId: index } as never)
+    }
+    const evicted: number[] = []
+
+    cache.enforceLimit({
+      rowCacheLimit: 2,
+      protectedRanges: [{ start: 0, end: 3 }],
+      onEvict: index => evicted.push(index),
+    })
+
+    expect(evicted).toEqual([4, 5, 0, 1])
+    expect([...cache.rowCache.keys()]).toEqual([2, 3])
+  })
+
   it("runs init, attach, suspend, resume, and dispose transitions deterministically", () => {
     const calls: string[] = []
     const lifecycle = createDataSourceRuntimeLifecycle({

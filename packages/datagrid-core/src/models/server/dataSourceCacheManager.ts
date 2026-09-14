@@ -70,17 +70,20 @@ export function createDataSourceCacheManager<T>(options: {
     rangeCache,
     isProtectedIndex,
     enforceLimit({ rowCacheLimit, protectedRanges, onEvict }) {
+      if (rowCache.size <= rowCacheLimit) {
+        return
+      }
+      const evictionCandidates: number[] = []
+      for (const cachedIndex of rowCache.keys()) {
+        if (!isProtectedIndex(cachedIndex, protectedRanges)) {
+          evictionCandidates.push(cachedIndex)
+        }
+      }
+      let candidateIndex = 0
       while (rowCache.size > rowCacheLimit) {
-        let evictIndex: number | undefined
-        for (const cachedIndex of rowCache.keys()) {
-          if (!isProtectedIndex(cachedIndex, protectedRanges)) {
-            evictIndex = cachedIndex
-            break
-          }
-        }
-        if (typeof evictIndex === "undefined") {
-          evictIndex = rowCache.keys().next().value as number | undefined
-        }
+        const evictIndex = evictionCandidates[candidateIndex]
+          ?? rowCache.keys().next().value as number | undefined
+        candidateIndex += 1
         if (typeof evictIndex === "undefined") {
           break
         }
