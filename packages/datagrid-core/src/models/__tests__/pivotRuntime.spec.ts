@@ -111,6 +111,20 @@ describe("pivotRuntime incremental patching", () => {
     expect(emeaYearColumns.every(column => Object.hasOwn(emeaData, column.id))).toBe(true)
   })
 
+  it("stores opt-in sparse aggregate values outside row objects", () => {
+    const runtime = createPivotRuntime<PivotRow>({ sparseOutput: true, sparseStorage: true })
+    const projected = runtime.projectRows({
+      inputRows: [createLeafRow({ id: "r1", region: "AMER", year: 2024, revenue: 10 }, 0)],
+      pivotModel: { rows: ["region"], columns: ["year"], values: [{ field: "revenue", agg: "sum" }] },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+    const column = projected.columns[0]!
+    const row = projected.rows[0]!
+    expect(Object.hasOwn(row.data as Record<string, unknown>, column.id)).toBe(false)
+    expect(runtime.readCell({ rowKey: String(row.rowId), columnKey: column.id, valueField: column.valueField })).toEqual({ kind: "value", value: 10 })
+    expect(runtime.materializeRows({ mode: "dense", maxCells: 10 }).rows[0]?.data).toHaveProperty(column.id, 10)
+  })
+
   it("reads sparse cells without materializing missing neighbors", () => {
     const runtime = createPivotRuntime<PivotRow>({ sparseOutput: true })
     const result = runtime.projectRows({

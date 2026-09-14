@@ -1,6 +1,6 @@
 # Design proposal: sparse pivot output storage
 
-Статус: sparse row payload sub-slice реализован; column store/export/read/drilldown остаются открытыми.
+Статус: opt-in sparse row/column storage и bounded dense compatibility reads реализованы; export/browser integration остаются workload checks.
 
 Цель — убрать обязательную запись `null` для каждой комбинации output row × pivot column × value, сохранив существующие row model, read, export, sort и drilldown semantics.
 

@@ -14,6 +14,8 @@ export interface DataGridPivotRuntimeOptions<T> {
   maxOutputCells?: number
   /** Omits absent aggregate fields from row payloads; dense output remains the default. */
   sparseOutput?: boolean
+  /** Stores aggregate values outside row objects and serves them through readCell/materializeRows. Requires sparseOutput. */
+  sparseStorage?: boolean
 }
 
 export interface DataGridPivotProjectionDiagnostics {

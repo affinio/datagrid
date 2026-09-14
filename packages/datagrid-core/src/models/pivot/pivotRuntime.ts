@@ -774,11 +774,35 @@ function buildPivotProjectionRows<T>(
 export function createPivotRuntime<T>(
   options: CoreDataGridPivotRuntimeOptions<T> = {},
 ): DataGridPivotRuntime<T> {
+  const sparseStorage = options.sparseOutput === true && options.sparseStorage === true
   let incrementalState: DataGridPivotIncrementalProjectionState<T> | null = null
   let projectedRows: DataGridRowNode<T>[] = []
   let projectedColumns: DataGridPivotColumn[] = []
   let projectedRowsByKey = new Map<string, DataGridRowNode<T>>()
   let projectedColumnsByAddress = new Map<string, DataGridPivotColumn>()
+  let sparseCellValues = new Map<string, Map<string, unknown>>()
+
+  const rebuildSparseCellStore = (rows: readonly DataGridRowNode<T>[], columns: readonly DataGridPivotColumn[]): void => {
+    if (!sparseStorage) return
+    sparseCellValues = new Map()
+    for (const row of rows) {
+      const data = row.data as Record<string, unknown>
+      const cells = new Map<string, unknown>()
+      for (const column of columns) {
+        if (Object.prototype.hasOwnProperty.call(data, column.id)) cells.set(column.id, data[column.id])
+      }
+      if (cells.size > 0) sparseCellValues.set(String(row.rowId), cells)
+    }
+  }
+
+  const stripSparseAggregateFields = (rows: readonly DataGridRowNode<T>[], columns: readonly DataGridPivotColumn[]): DataGridRowNode<T>[] => {
+    if (!sparseStorage) return rows.slice()
+    return rows.map(row => {
+      const data = { ...(row.data as Record<string, unknown>) }
+      for (const column of columns) delete data[column.id]
+      return { ...row, data: data as T, row: data as T }
+    })
+  }
 
   const replaceProjectedSnapshot = (
     rows: DataGridRowNode<T>[],
@@ -800,6 +824,11 @@ export function createPivotRuntime<T>(
       return { kind: "missing" }
     }
     const data = row.data as Record<string, unknown>
+    const sparseCells = sparseCellValues.get(address.rowKey)
+    if (sparseStorage && sparseCells && sparseCells.has(column.id)) {
+      const value = sparseCells.get(column.id)
+      return value === null ? { kind: "null" } : { kind: "value", value }
+    }
     if (!Object.prototype.hasOwnProperty.call(data, column.id)) {
       return { kind: "missing" }
     }
@@ -827,7 +856,8 @@ export function createPivotRuntime<T>(
       const data = { ...(row.data as Record<string, unknown>) }
       for (const column of projectedColumns) {
         if (!Object.prototype.hasOwnProperty.call(data, column.id)) {
-          data[column.id] = null
+          const cell = readCell({ rowKey: String(row.rowId), columnKey: column.id, valueField: column.valueField })
+          data[column.id] = cell.kind === "value" ? cell.value : null
         }
       }
       return { ...row, data: data as T, row: data as T }
@@ -942,6 +972,22 @@ export function createPivotRuntime<T>(
           }
         }
       }
+      if (sparseStorage) {
+        const cells = sparseCellValues.get(String(currentRow.rowId)) ?? new Map<string, unknown>()
+        for (const columnKey of affectedColumnKeys) {
+          const runtimeColumnsForKey = state.runtimeColumnsByColumnKey.get(columnKey) ?? []
+          const aggregateRecord = rowEntry.columnAggregateStateByKey.get(columnKey)
+            ? state.aggregationEngine.finalizeGroupState(rowEntry.columnAggregateStateByKey.get(columnKey)!)
+            : {}
+          for (const column of runtimeColumnsForKey) {
+            if (Object.prototype.hasOwnProperty.call(aggregateRecord, column.aggregateKey)) cells.set(column.id, aggregateRecord[column.aggregateKey])
+            else cells.delete(column.id)
+          }
+        }
+        if (cells.size > 0) sparseCellValues.set(String(currentRow.rowId), cells)
+        else sparseCellValues.delete(String(currentRow.rowId))
+        for (const column of normalizedColumns) delete nextRowData[column.id]
+      }
       nextRows[rowIndex] = {
         ...currentRow,
         data: nextRowData as T,
@@ -960,9 +1006,11 @@ export function createPivotRuntime<T>(
     projectRows: (input: DataGridPivotProjectRowsInput<T>): DataGridPivotProjectionResult<T> => {
       const built = buildPivotProjectionRows(input, options)
       incrementalState = built.incrementalState
-      replaceProjectedSnapshot(built.rows, built.columns)
+      rebuildSparseCellStore(built.rows, built.columns)
+      const outputRows = stripSparseAggregateFields(built.rows, built.columns)
+      replaceProjectedSnapshot(outputRows, built.columns)
       return {
-        rows: built.rows,
+        rows: outputRows,
         columns: built.columns,
         ...(built.diagnostics ? { diagnostics: built.diagnostics } : {}),
       }
