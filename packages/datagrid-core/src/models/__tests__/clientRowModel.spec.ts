@@ -122,6 +122,17 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("reorders a large moved block without spreading it into call arguments", () => {
+    const rowCount = 150_001
+    const model = createClientRowModel({ rows: buildRows(rowCount) })
+
+    expect(model.reorderRows({ fromIndex: 1, toIndex: rowCount, count: rowCount - 1 })).toBe(true)
+    expect(model.getRow(0)?.row.id).toBe(0)
+    expect(model.getRow(rowCount - 1)?.row.id).toBe(rowCount - 1)
+
+    model.dispose()
+  })
+
   it("registers initial computed fields and applies incremental recompute on patches", () => {
     const model = createClientRowModel<{
       id: number

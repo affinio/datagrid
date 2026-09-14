@@ -85,8 +85,8 @@
 - **Воспроизведение:** path tree, 150 000 строк с `path: ['root']`, изначально раскрыто; `collapseGroup(rootKey)` → `expandGroup(rootKey)`. Получен `RangeError` в `tryProjectTreePathSubtreeToggle`. Контроль на 10 000 проходит.
 - **Последствие:** отказ поддерживаемой операции на большом, но реалистичном enterprise dataset. Лимит аргументов зависит от JS engine; 150 000 — подтверждённый пример, не универсальная граница.
 - **Исправление:** выполнено: subtree replacement собирается через `slice().concat()` без передачи всех потомков как аргументов `splice` для path и parent tree. Сначала узкий fix; смена структуры всего дерева не обязательна.
-- **DoD:** выполнено для path 150k и parent 150k focused regression + `bench:datagrid:tree:wide-branch`; 300k остаётся nightly validation target.
-- **Риск:** частично изменённые expansion/cache state при исключении; тестировать повторную команду после ошибки. Аналогичный класс spread insertion есть в `clientRowRowsMutationsRuntime.ts:116` (`...moved`); это отдельный кандидат на проверку, его отказ здесь не воспроизводился.
+- **DoD:** выполнено для path 150k и parent 150k focused regression + `bench:datagrid:tree:wide-branch`; 300k остаётся nightly validation target. Отдельная regression на reorder-блок 150k закрывает аналогичный spread insertion в `clientRowRowsMutationsRuntime.ts`; сборка результата теперь не передаёт большой блок как аргументы функции.
+- **Риск:** частично изменённые expansion/cache state при исключении; повторная команда после ошибки покрыта tree regressions. Вставка и reorder сохраняют прежний порядок, row identity и duplicate-id validation.
 - **Public API:** изменение не требуется. Зависимости: нет. Размер: S.
 
 ### HP-02. Быстрый patch заканчивается при включении сортировки

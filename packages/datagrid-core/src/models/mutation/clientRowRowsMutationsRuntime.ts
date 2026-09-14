@@ -76,11 +76,10 @@ export function createClientRowRowsMutationsRuntime<T>(
       return false
     }
     const sourceRows = context.getSourceRows()
-    const nextRows = sourceRows.slice()
     const safeIndex = Number.isFinite(index)
-      ? Math.max(0, Math.min(nextRows.length, Math.trunc(index)))
-      : nextRows.length
-    nextRows.splice(safeIndex, 0, ...normalizedRows)
+      ? Math.max(0, Math.min(sourceRows.length, Math.trunc(index)))
+      : sourceRows.length
+    const nextRows = sourceRows.slice(0, safeIndex).concat(normalizedRows, sourceRows.slice(safeIndex))
     commitSourceRows(nextRows)
     return true
   }
@@ -111,8 +110,8 @@ export function createClientRowRowsMutationsRuntime<T>(
         return false
       }
       const adjustedTarget = toIndexRaw > fromIndex ? Math.max(0, toIndexRaw - moved.length) : toIndexRaw
-      rows.splice(adjustedTarget, 0, ...moved)
-      commitSourceRows(rows)
+      const reorderedRows = rows.slice(0, adjustedTarget).concat(moved, rows.slice(adjustedTarget))
+      commitSourceRows(reorderedRows)
       return true
     },
     insertRowsAt,
