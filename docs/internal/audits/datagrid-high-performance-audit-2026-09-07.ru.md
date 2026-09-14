@@ -128,6 +128,7 @@
 - **Ориентир:** AG Grid документирует измерение browser max height и stretching. Число 32M px на их странице относится к приведённому примеру Chrome, а не является универсальной константой. [Официальное описание](https://www.ag-grid.com/javascript-data-grid/massive-row-count/).
 - **Исправление:** design proposal подготовлен: `docs/internal/plans/datagrid-bounded-physical-scroll-design-2026-09-14.ru.md` разделяет logical/physical domains, фиксирует single mapping boundary для scroll/restore/selection/overlays и acceptance matrix для 1M/10M rows. Core теперь содержит pure monotonic mapping и viewport virtualization переводит measured native extent в logical offset при превышении browser limit; identity path сохранён. Browser last-row reachability и полное Vue integration acceptance остаются отдельным slice.
 - **DoD:** 1M/10M logical server rows; 24/31/100 px и variable heights; top/middle/last row, thumb drag, keyboard End, scrollToCell, restoration, fractional zoom. Бounded DOM, отсутствие blank gaps и корректные абсолютные индексы.
+- **Измерение slice:** 1,000,000 logical↔physical round-trips для 10M rows / native limit 16M выполнены за `4.21ms` в Node 22; scale `0.051613`. Это измерение pure math, не browser scroll acceptance.
 - **Public API:** сначала внутренний mapping; любые новые публичные координаты согласовать. Зависимости: HP-09. Размер: L.
 
 ### HP-06. Wide-grid default и zero-size materialization
