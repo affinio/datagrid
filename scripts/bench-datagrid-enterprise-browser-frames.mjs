@@ -3636,20 +3636,20 @@ console.log(
 
 const sandboxServer = await ensureSandboxServer(BENCH_BROWSER_BASE_URL, BENCH_BROWSER_ROUTE, "enterprise-browser-frames")
 
-const browser = await chromium.launch({
-  headless: BENCH_BROWSER_HEADLESS,
-  args: ["--disable-dev-shm-usage"],
-})
-
-const context = await browser.newContext(interactionDeviceProfile.context)
-await context.grantPermissions(["clipboard-read", "clipboard-write"], {
-  origin: new URL(BENCH_BROWSER_BASE_URL).origin,
-})
-
+let browser = null
+let context = null
 const sessions = []
 const setup = []
 
 try {
+  browser = await chromium.launch({
+    headless: BENCH_BROWSER_HEADLESS,
+    args: ["--disable-dev-shm-usage"],
+  })
+  context = await browser.newContext(interactionDeviceProfile.context)
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(BENCH_BROWSER_BASE_URL).origin,
+  })
   for (let session = 0; session < BENCH_BROWSER_SESSIONS; session += 1) {
     for (const scenario of SCENARIOS) {
       console.log(
@@ -3674,8 +3674,8 @@ try {
     }
   }
 } finally {
-  await context.close()
-  await browser.close()
+  await context?.close()
+  await browser?.close()
   await sandboxServer.stop()
 }
 
