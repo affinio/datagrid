@@ -121,6 +121,7 @@
 - **DoD:** 1M/10M logical server rows; 24/31/100 px и variable heights; top/middle/last row, thumb drag, keyboard End, scrollToCell, restoration, fractional zoom. Бounded DOM, отсутствие blank gaps и корректные абсолютные индексы.
 - **Измерение slice:** 1,000,000 logical↔physical round-trips для 10M rows / native limit 16M выполнены за `4.21ms` в Node 22; scale `0.051613`. Это измерение pure math, не browser scroll acceptance.
 - **Integration check:** synthetic controller contract с 50k logical rows и native limit `199,300px` достигает последних logical rows при bottom scroll; mapping/resize suites — `8` tests passed. Добавлен Playwright acceptance для 200k rows × 120 px: bottom scroll обязан достигать viewport start `>199000` и оставаться без blank band. Это CI/browser evidence; локальный Chromium в audit-среде отсутствует.
+- **Worker integration acceptance:** тот же bottom-scroll сценарий добавлен для `/vue/worker-grid`, чтобы отдельно фиксировать logical reachability через worker-owned row model; локальный запуск ожидаемо заблокирован отсутствующим Chromium на ARM64, test discovery проходит.
 - **Public API:** сначала внутренний mapping; любые новые публичные координаты согласовать. Зависимости: HP-09. Размер: L.
 
 ### HP-06. Wide-grid default и zero-size materialization

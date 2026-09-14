@@ -67,6 +67,20 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     expect(await renderedRows(page)).toBeLessThanOrEqual(96)
   })
 
+  test("vue worker grid reaches the last logical row beyond native scroll height", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/worker-grid?rows=200000&cols=8")
+
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalRows(page), { timeout: 30_000 }).toBe(200000)
+
+    await page.getByLabel("Row size").fill("120")
+    await expect.poll(async () => viewportMaxScrollTop(viewport), { timeout: 20_000 }).toBeGreaterThan(0)
+    await setViewportScroll(viewport, { top: await viewportMaxScrollTop(viewport), left: 0 })
+    await expect.poll(async () => viewportRangeStart(page), { timeout: 20_000 }).toBeGreaterThan(199_000)
+    await assertNoBlankVerticalViewport(page)
+  })
+
   test("vue base grid reaches the last logical row beyond native scroll height", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=200000&cols=8")
 
