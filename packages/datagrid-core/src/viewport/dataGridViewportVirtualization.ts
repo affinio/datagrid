@@ -1,7 +1,11 @@
 import { createAxisVirtualizer, type AxisVirtualizerState } from "../virtualization/axisVirtualizer"
 import { createVerticalAxisStrategy } from "../virtualization/verticalVirtualizer"
 import { createVerticalOverscanController } from "../virtualization/dynamicOverscan"
-import { clampScrollOffset, computeVerticalScrollLimit } from "../virtualization/scrollLimits"
+import {
+  clampScrollOffset,
+  computeVerticalScrollLimit,
+  resolveVerticalScrollMapping,
+} from "../virtualization/scrollLimits"
 import type { VisibleRow } from "../types"
 import type { DataGridViewportDiagnostics } from "./dataGridViewportDiagnostics"
 import type { RowPoolItem, DataGridViewportSignals } from "./dataGridViewportSignals"
@@ -368,8 +372,13 @@ export function createDataGridViewportVirtualization(
   function clampScrollTop(value: number): number {
     if (!Number.isFinite(value)) return 0
     const nativeLimit = Math.max(0, lastKnownNativeLimit)
+    const mapping = resolveVerticalScrollMapping({
+      logicalContentHeight: lastKnownTotalRows * (lastKnownRowHeight || 1),
+      viewportSize: lastKnownViewportHeight || 1,
+      nativeScrollLimit: nativeLimit,
+    })
     if (!lastVirtualizationFlag) {
-      return clampScrollOffset({ offset: value, limit: nativeLimit })
+      return mapping.toPhysical(clampScrollOffset({ offset: mapping.toLogical(value), limit: mapping.logicalMax }))
     }
     const verticalState = verticalVirtualizer.getState()
     const limit = computeVerticalScrollLimit({
@@ -378,10 +387,11 @@ export function createDataGridViewportVirtualization(
       viewportSize: lastKnownViewportHeight || 1,
       overscanTrailing: verticalState.overscanTrailing,
       visibleCount: verticalState.visibleCount,
-      nativeScrollLimit: nativeLimit,
+      nativeScrollLimit: mapping.isScaled ? null : nativeLimit,
       trailingPadding: verticalConfig.edgePadding,
     })
-    return clampScrollOffset({ offset: value, limit })
+    const logicalLimit = mapping.isScaled ? Math.min(limit, mapping.logicalMax) : limit
+    return mapping.toPhysical(clampScrollOffset({ offset: mapping.toLogical(value), limit: logicalLimit }))
   }
 
   function applyVirtualState(
@@ -532,8 +542,17 @@ export function createDataGridViewportVirtualization(
     }
 
     const nowTs = clock.now()
-    const deltaTop = Math.abs(pendingScrollTop - lastScrollTopSample)
-    const direction = pendingScrollTop === lastScrollTopSample ? 0 : pendingScrollTop > lastScrollTopSample ? 1 : -1
+    const scrollMapping = resolveVerticalScrollMapping({
+      logicalContentHeight: totalRows * resolvedRowHeight,
+      viewportSize: viewportHeightValue,
+      nativeScrollLimit: lastKnownNativeLimit,
+    })
+    const logicalPendingScrollTop = scrollMapping.toLogical(pendingScrollTop)
+    const logicalLastScrollTopSample = scrollMapping.toLogical(lastScrollTopSample)
+    const deltaTop = Math.abs(logicalPendingScrollTop - logicalLastScrollTopSample)
+    const direction = logicalPendingScrollTop === logicalLastScrollTopSample
+      ? 0
+      : logicalPendingScrollTop > logicalLastScrollTopSample ? 1 : -1
 
     let overscan = 0
     if (virtualizationFlag) {
@@ -563,7 +582,7 @@ export function createDataGridViewportVirtualization(
     let verticalState = verticalVirtualizer.update({
       axis: "vertical",
       viewportSize: viewportHeightValue,
-      scrollOffset: pendingScrollTop,
+      scrollOffset: logicalPendingScrollTop,
       virtualizationEnabled: virtualizationFlag,
       estimatedItemSize: resolvedRowHeight,
       totalCount: totalRows,
@@ -571,7 +590,7 @@ export function createDataGridViewportVirtualization(
       meta: {
         zoom: zoomFactor,
         scrollDirection: direction,
-        nativeScrollLimit: lastKnownNativeLimit,
+        nativeScrollLimit: scrollMapping.isScaled ? null : lastKnownNativeLimit,
         debug: diagnostics.isDebugEnabled(),
         debugNativeScrollLimit: diagnostics.isDebugEnabled() ? lastKnownNativeLimit : undefined,
       },
@@ -583,16 +602,17 @@ export function createDataGridViewportVirtualization(
       viewportSize: viewportHeightValue,
       overscanTrailing: verticalState.overscanTrailing,
       visibleCount: verticalState.visibleCount,
-      nativeScrollLimit: lastKnownNativeLimit,
+      nativeScrollLimit: scrollMapping.isScaled ? null : lastKnownNativeLimit,
       trailingPadding: verticalConfig.edgePadding,
     })
-    let nextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: scrollLimit })
+    const logicalScrollLimit = scrollMapping.isScaled ? Math.min(scrollLimit, scrollMapping.logicalMax) : scrollLimit
+    let logicalNextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: logicalScrollLimit })
 
-    if (Math.abs(nextScrollTop - verticalState.offset) > verticalConfig.scrollEpsilon) {
+    if (Math.abs(logicalNextScrollTop - verticalState.offset) > verticalConfig.scrollEpsilon) {
       verticalState = verticalVirtualizer.update({
         axis: "vertical",
         viewportSize: viewportHeightValue,
-        scrollOffset: nextScrollTop,
+        scrollOffset: logicalNextScrollTop,
         virtualizationEnabled: virtualizationFlag,
         estimatedItemSize: resolvedRowHeight,
         totalCount: totalRows,
@@ -600,14 +620,15 @@ export function createDataGridViewportVirtualization(
         meta: {
           zoom: zoomFactor,
           scrollDirection: direction,
-          nativeScrollLimit: lastKnownNativeLimit,
+          nativeScrollLimit: scrollMapping.isScaled ? null : lastKnownNativeLimit,
           debug: diagnostics.isDebugEnabled(),
           debugNativeScrollLimit: diagnostics.isDebugEnabled() ? lastKnownNativeLimit : undefined,
         },
       })
-      nextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: scrollLimit })
+      logicalNextScrollTop = clampScrollOffset({ offset: verticalState.offset, limit: logicalScrollLimit })
     }
 
+    let nextScrollTop = scrollMapping.toPhysical(logicalNextScrollTop)
     const needsScrollWrite =
       Math.abs(lastScrollTopSample - nextScrollTop) > verticalConfig.scrollEpsilon ||
       pendingScrollTopRequest != null ||

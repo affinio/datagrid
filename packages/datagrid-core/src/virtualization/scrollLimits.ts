@@ -9,6 +9,47 @@ function clamp(value: number, min: number, max: number) {
   return value
 }
 
+export interface VerticalScrollMapping {
+  logicalMax: number
+  physicalMax: number
+  scale: number
+  isScaled: boolean
+  toLogical: (physicalOffset: number) => number
+  toPhysical: (logicalOffset: number) => number
+}
+
+export interface VerticalScrollMappingInput {
+  logicalContentHeight: number
+  viewportSize: number
+  nativeScrollLimit?: number | null
+}
+
+export function resolveVerticalScrollMapping(input: VerticalScrollMappingInput): VerticalScrollMapping {
+  const contentHeight = Math.max(0, normalizeNumber(input.logicalContentHeight, 0))
+  const viewportSize = Math.max(0, normalizeNumber(input.viewportSize, 0))
+  const logicalMax = Math.max(0, contentHeight - viewportSize)
+  const nativeLimit = input.nativeScrollLimit
+  const physicalMax = nativeLimit != null && Number.isFinite(nativeLimit) && nativeLimit > 0
+    ? nativeLimit
+    : logicalMax
+  const isScaled = logicalMax > 0 && physicalMax > 0 && physicalMax < logicalMax
+  const scale = isScaled ? physicalMax / logicalMax : 1
+  return {
+    logicalMax,
+    physicalMax: isScaled ? physicalMax : logicalMax,
+    scale,
+    isScaled,
+    toLogical: (physicalOffset: number) => {
+      const normalized = Math.max(0, normalizeNumber(physicalOffset, 0))
+      return Math.min(logicalMax, isScaled ? normalized / scale : normalized)
+    },
+    toPhysical: (logicalOffset: number) => {
+      const normalized = Math.max(0, normalizeNumber(logicalOffset, 0))
+      return Math.min(isScaled ? physicalMax : logicalMax, isScaled ? normalized * scale : normalized)
+    },
+  }
+}
+
 export interface VerticalScrollLimitInput {
   estimatedItemSize: number
   totalCount: number
