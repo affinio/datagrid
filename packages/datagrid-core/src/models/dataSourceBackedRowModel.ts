@@ -341,6 +341,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
   })
   const { rowCache, staleRetainedRowIndexes, rangeCache } = cacheManager
+  const cacheStateKeyByIndex = new Map<number, string>()
   const listeners = new Set<DataGridRowModelListener<T>>()
   const diagnostics: DataGridDataSourceBackpressureDiagnostics = {
     pullRequested: 0,
@@ -499,13 +500,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return cached
   }
 
-  function writeRowCache(index: number, row: DataGridRowNode<T>) {
+  function writeRowCache(index: number, row: DataGridRowNode<T>, stateKey: string = buildRequestStateKey()) {
     if (rowCache.has(index)) {
       rowCache.delete(index)
     }
     telemetry.finishPlaceholderExposure(index)
     staleRetainedRowIndexes.delete(index)
     rowCache.set(index, row)
+    cacheStateKeyByIndex.set(index, stateKey)
     rangeCache.setRow(index, row)
     enforceRowCacheLimit()
     diagnostics.rowCacheSize = rowCache.size
@@ -513,9 +515,9 @@ export function createDataSourceBackedRowModel<T = unknown>(
     finishViewportDataAvailability()
   }
 
-  function writeRowCacheWithOptimisticOverlay(index: number, row: DataGridRowNode<T>) {
+  function writeRowCacheWithOptimisticOverlay(index: number, row: DataGridRowNode<T>, stateKey?: string) {
     const next = applyPendingOptimisticEditsToNode(row)
-    writeRowCache(index, next)
+    writeRowCache(index, next, stateKey)
   }
 
   function findCachedRowById(
@@ -763,24 +765,26 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return Math.max(0, range.end - range.start + 1)
   }
 
-  function isRangeFullyCached(range: DataGridViewportRange): boolean {
+  function isRangeFullyCached(range: DataGridViewportRange, stateKey?: string): boolean {
     for (let index = range.start; index <= range.end; index += 1) {
-      if (!isIndexCached(index)) {
+      if (!isIndexCached(index, stateKey)) {
         return false
       }
     }
     return true
   }
 
-  function isIndexCached(index: number): boolean {
-    return rowCache.has(index) && !staleRetainedRowIndexes.has(index)
+  function isIndexCached(index: number, stateKey?: string): boolean {
+    return rowCache.has(index)
+      && (stateKey == null || cacheStateKeyByIndex.get(index) === stateKey)
+      && !staleRetainedRowIndexes.has(index)
   }
 
   function reconcilePlaceholderExposure(sourceViewport: DataGridViewportRange = toSourceRange(viewportRange)): void {
     telemetry.reconcilePlaceholderExposure({
       sourceViewport,
       rowCount,
-      hasCachedRow: index => rowCache.has(index),
+      hasCachedRow: index => isIndexCached(index),
     })
   }
 
@@ -1140,13 +1144,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function applyRows(rows: readonly DataGridDataSourceRowEntry<T>[]): boolean {
+  function applyRows(rows: readonly DataGridDataSourceRowEntry<T>[], stateKey: string = buildRequestStateKey()): boolean {
     if (rows.length === 0) {
       return false
     }
     for (const entry of rows) {
       const normalized = normalizeRowEntry(entry)
-      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node)
+      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node, stateKey)
     }
     updateTotalFromRows(rows)
     return true
@@ -1161,7 +1165,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return false
   }
 
-  function replaceCacheWithRows(rows: readonly DataGridDataSourceRowEntry<T>[]): boolean {
+  function replaceCacheWithRows(rows: readonly DataGridDataSourceRowEntry<T>[], stateKey: string = buildRequestStateKey()): boolean {
     const normalizedRows = rows.map(entry => normalizeRowEntry(entry))
     const freshIndexes = new Set(normalizedRows.map(entry => entry.index))
     const preserveRange = toSourceRange(viewportRange)
@@ -1180,6 +1184,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
     const previousSize = rowCache.size
     rowCache.clear()
+    cacheStateKeyByIndex.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
     const removedRows = Math.max(0, previousSize - preservedRows.length)
@@ -1200,7 +1205,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
     }
     for (const normalized of normalizedRows) {
-      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node)
+      writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node, stateKey)
     }
     updateTotalFromRows(rows)
     diagnostics.rowCacheSize = rowCache.size
@@ -1389,6 +1394,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       })
     }
     rowCache.clear()
+    cacheStateKeyByIndex.clear()
     staleRetainedRowIndexes.clear()
     rangeCache.reset()
     diagnostics.rowCacheSize = rowCache.size
@@ -1756,7 +1762,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     const requestKey = buildRequestKey(requestRange, reason, priority, treePullContext, requestStateKey)
     const laneInFlight = readLaneInFlight(priority)
 
-    if (priority === "background" && isRangeFullyCached(requestRange)) {
+    if (priority === "background" && isRangeFullyCached(requestRange, requestStateKey)) {
       diagnostics.prefetchSkippedCached += 1
       return
     }
@@ -1905,13 +1911,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
           viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
         }
         if (options?.replaceCacheOnSuccess) {
-          changed = replaceCacheWithRows(result.rows) || changed
+          changed = replaceCacheWithRows(result.rows, requestStateKey) || changed
           const currentViewport = toSourceRange(viewportRange)
           if (hasStaleRowsInRange(currentViewport)) {
             scheduleViewportPull(currentViewport, buildRequestStateKey())
           }
         } else {
-          changed = applyRows(result.rows) || changed
+          changed = applyRows(result.rows, requestStateKey) || changed
         }
         if (typeof result.cursor !== "undefined") {
           const normalizedCursor = result.cursor == null ? null : String(result.cursor)
@@ -3005,6 +3011,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       listeners.clear()
       telemetry.finishAllPlaceholderExposures()
       rowCache.clear()
+      cacheStateKeyByIndex.clear()
       staleRetainedRowIndexes.clear()
       rangeCache.clear()
       telemetry.resetViewportDataAvailability()
