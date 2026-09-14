@@ -240,7 +240,7 @@
 - **Сценарий:** обычный immutable Vue parent обновляет один record через новый массив либо пересоздаёт inline options. Пользователь получает O(N) ingest/возможный remount вместо быстрого patch, хотя core умеет точечные изменения.
 - **Исправление A:** выполнено в integration guide: production-shaped recipe стабильной модели + `patchRows`, стабильные options и явное разделение full replacement versus high-frequency workflow.
 - **Исправление B:** выполнен opt-in contract: app row-model пропускает recreate для эквивалентных inline options и в режиме `rowsUpdateMode="patch"` переводит same-length immutable record updates со стабильными IDs в `patchRows`. Add/remove/reorder, row-node и primitive inputs сохраняют replace path; default остаётся `replace`.
-- **DoD:** integration guide обновлён; focused options/diff contract — 2 tests passed; `bench:datagrid:app-inputs` на 100k rows / 100 updates показал stable `patchRows` p95 `0.041ms` против immutable `setRows` p95 `104.754ms`. Editor/selection, allocations и model disposal остаются browser workload validation.
+- **DoD:** integration guide обновлён; focused options/diff contract теперь проверяет сохранение owned model и identity неизменённых row nodes; `bench:datagrid:app-inputs` на 100k rows / 100 updates показал stable `patchRows` p95 `0.041ms` против immutable `setRows` p95 `104.754ms`. Editor/selection, allocations и model disposal остаются browser workload validation.
 - **Риск:** неверная идентичность строк, потеря focus/history при remount. **Public API:** documentation slice независим, новые input modes согласовать. Зависимости: HP-02 для projected workload. Размер: A — S, B — M.
 
 ## 5. Дополнительные риски, не выдаваемые за подтверждённые bottlenecks

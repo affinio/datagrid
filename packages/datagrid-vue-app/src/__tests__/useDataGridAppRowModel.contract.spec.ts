@@ -23,6 +23,7 @@ describe("useDataGridAppRowModel options contract", () => {
     }))
     await flushWatchers()
     const initialModel = result?.resolvedRowModel.value
+    const unchangedRowNode = initialModel?.getRow(1)
 
     rows.value = [{ id: 1, value: "after" }, { id: 2, value: "same" }]
     await flushWatchers()
@@ -30,6 +31,7 @@ describe("useDataGridAppRowModel options contract", () => {
     expect(result?.resolvedRowModel.value).toBe(initialModel)
     expect(result?.dataGridInstanceKey.value).toBe(0)
     expect((result?.resolvedRowModel.value.getRow(0)?.row as { value?: string }).value).toBe("after")
+    expect(result?.resolvedRowModel.value.getRow(1)).toBe(unchangedRowNode)
 
     rows.value = [{ id: 2, value: "same" }, { id: 1, value: "after" }]
     await flushWatchers()
