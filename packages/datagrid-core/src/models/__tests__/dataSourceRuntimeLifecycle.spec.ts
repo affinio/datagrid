@@ -54,7 +54,7 @@ function createDiagnostics(): DataGridDataSourceBackpressureDiagnostics {
 }
 
 describe("data source runtime lifecycle", () => {
-  it("batch-scans eviction candidates behind protected ranges", () => {
+  it("evicts eligible rows and preserves a fully protected cache", () => {
     const cache = createDataSourceCacheManager<{ id: number }>({
       rowCacheLimit: 2,
       rangeCacheChunkSize: 2,
@@ -70,8 +70,28 @@ describe("data source runtime lifecycle", () => {
       onEvict: index => evicted.push(index),
     })
 
-    expect(evicted).toEqual([4, 5, 0, 1])
-    expect([...cache.rowCache.keys()]).toEqual([2, 3])
+    expect(evicted).toEqual([4, 5])
+    expect([...cache.rowCache.keys()]).toEqual([0, 1, 2, 3])
+  })
+
+  it("keeps all rows when every cached index is protected", () => {
+    const cache = createDataSourceCacheManager<{ id: number }>({
+      rowCacheLimit: 2,
+      rangeCacheChunkSize: 2,
+    })
+    for (let index = 0; index < 4; index += 1) {
+      cache.rowCache.set(index, { rowId: index } as never)
+    }
+    const evicted: number[] = []
+
+    cache.enforceLimit({
+      rowCacheLimit: 2,
+      protectedRanges: [{ start: 0, end: 3 }],
+      onEvict: index => evicted.push(index),
+    })
+
+    expect(evicted).toEqual([])
+    expect([...cache.rowCache.keys()]).toEqual([0, 1, 2, 3])
   })
 
   it("runs init, attach, suspend, resume, and dispose transitions deterministically", () => {

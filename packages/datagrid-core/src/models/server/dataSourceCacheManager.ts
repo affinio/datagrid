@@ -82,7 +82,6 @@ export function createDataSourceCacheManager<T>(options: {
       let candidateIndex = 0
       while (rowCache.size > rowCacheLimit) {
         const evictIndex = evictionCandidates[candidateIndex]
-          ?? rowCache.keys().next().value as number | undefined
         candidateIndex += 1
         if (typeof evictIndex === "undefined") {
           break
