@@ -206,6 +206,7 @@ function createInstrumentedChannel(options) {
     commandPayloadBytes: [],
     updatePayloadBytes: [],
     roundtripMs: [],
+    maxInflightCommands: 0,
   }
 
   const pendingSentAtByRequestId = new Map()
@@ -228,6 +229,7 @@ function createInstrumentedChannel(options) {
       telemetry.commandCount += 1
       telemetry.commandPayloadBytes.push(safePayloadBytes(message))
       pendingSentAtByRequestId.set(message.requestId, performance.now())
+      telemetry.maxInflightCommands = Math.max(telemetry.maxInflightCommands, pendingSentAtByRequestId.size)
     }
     schedule(() => emit("worker", message))
   }
@@ -313,6 +315,7 @@ function createInstrumentedChannel(options) {
       return {
         command: telemetry.commandPayloadBytes.length ? stats(telemetry.commandPayloadBytes) : stats([]),
         update: telemetry.updatePayloadBytes.length ? stats(telemetry.updatePayloadBytes) : stats([]),
+        maxInflightCommands: telemetry.maxInflightCommands,
       }
     },
     stats: telemetry,
@@ -677,6 +680,22 @@ if (heapDeltaMb > PERF_BUDGET_HEAP_EPSILON_MB && heapDeltaMb > PERF_BUDGET_MAX_H
   )
 }
 
+function aggregatePayloadStats(payloadStats) {
+  const values = payloadStats.filter(payload => payload && payload.mean > 0)
+  if (!values.length) return stats([])
+  const means = values.map(payload => payload.mean)
+  return {
+    mean: means.reduce((sum, value) => sum + value, 0) / means.length,
+    stdev: 0,
+    p50: values.length === 1 ? values[0].p50 : quantile(means, 0.5),
+    p95: Math.max(...values.map(payload => payload.p95)),
+    p99: Math.max(...values.map(payload => payload.p99)),
+    cvPct: 0,
+    min: Math.min(...values.map(payload => payload.min)),
+    max: Math.max(...values.map(payload => payload.max)),
+  }
+}
+
 const correctnessLoadingPct = stats(runs.map(run => run.correctness.loadingTruePct))
 const correctnessLoadingCycleP95 = stats(runs.map(run => run.correctness.loadingCycleMs.p95))
 const correctnessRoundtripP95 = stats(runs.map(run => run.correctness.transport.roundtripMs.p95))
@@ -689,6 +708,17 @@ const throughputSimpleDispatch = stats(runs.map(run => run.throughput.simple.com
 const throughputSplitDispatch = stats(runs.map(run => run.throughput.split.computeDiagnostics.dispatchCount))
 const throughputSimpleRoundtrip = stats(runs.map(run => run.throughput.simple.transport.roundtripMs.p95))
 const throughputSplitRoundtrip = stats(runs.map(run => run.throughput.split.transport.roundtripMs.p95))
+const correctnessCommandPayload = aggregatePayloadStats(runs.map(run => run.correctness.transport.payloadBytes.command))
+const correctnessUpdatePayload = aggregatePayloadStats(runs.map(run => run.correctness.transport.payloadBytes.update))
+const throughputSimpleCommandPayload = aggregatePayloadStats(runs.map(run => run.throughput.simple.transport.payloadBytes.command))
+const throughputSimpleUpdatePayload = aggregatePayloadStats(runs.map(run => run.throughput.simple.transport.payloadBytes.update))
+const throughputSplitCommandPayload = aggregatePayloadStats(runs.map(run => run.throughput.split.transport.payloadBytes.command))
+const throughputSplitUpdatePayload = aggregatePayloadStats(runs.map(run => run.throughput.split.transport.payloadBytes.update))
+const maxInflightCommands = Math.max(...runs.flatMap(run => [
+  run.correctness.transport.payloadBytes.maxInflightCommands,
+  run.throughput.simple.transport.payloadBytes.maxInflightCommands,
+  run.throughput.split.transport.payloadBytes.maxInflightCommands,
+]))
 const throughputSplitDriftPctValues = runs.map(run => {
   const simpleElapsed = run.throughput.simple.elapsedMs
   if (simpleElapsed <= 0) {
@@ -768,13 +798,18 @@ const summary = {
         elapsedMs: throughputSimpleElapsed,
         dispatchCount: throughputSimpleDispatch,
         roundtripP95Ms: throughputSimpleRoundtrip,
+        commandPayloadBytes: throughputSimpleCommandPayload,
+        updatePayloadBytes: throughputSimpleUpdatePayload,
       },
       split: {
         elapsedMs: throughputSplitElapsed,
         dispatchCount: throughputSplitDispatch,
         roundtripP95Ms: throughputSplitRoundtrip,
+        commandPayloadBytes: throughputSplitCommandPayload,
+        updatePayloadBytes: throughputSplitUpdatePayload,
       },
       splitVsSimpleElapsedDriftPct: throughputSplitDriftPct,
+      maxInflightCommands,
     },
   },
   varianceSkippedChecks,
