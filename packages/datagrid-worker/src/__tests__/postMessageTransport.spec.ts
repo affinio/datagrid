@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   DATAGRID_WORKER_COMPUTE_PAYLOAD_SCHEMA_VERSION,
   createDataGridWorkerComputeAckMessage,
@@ -56,6 +56,9 @@ function createMessageChannelPair(): { main: MemoryMessageEndpoint; worker: Memo
 }
 
 describe("datagrid-worker postMessage transport", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
   it("dispatches request and receives ack through host bridge", async () => {
     const channel = createMessageChannelPair()
     const host = createDataGridWorkerMessageHost({
@@ -132,6 +135,24 @@ describe("datagrid-worker postMessage transport", () => {
 
     expect(() => transport.dispatch({ kind: "refresh" })).toThrow("transport unavailable")
     expect(transport.getStats()).toMatchObject({ dispatched: 1, errored: 1, inflight: 0 })
+    transport.dispose()
+  })
+
+  it("clears a lost response from inflight state after the request timeout", () => {
+    vi.useFakeTimers()
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: { postMessage() { /* response intentionally lost */ } },
+      requestTimeoutMs: 25,
+    })
+
+    transport.dispatch({ kind: "refresh" })
+    expect(transport.getStats()).toMatchObject({ dispatched: 1, inflight: 1, timedOut: 0 })
+
+    vi.advanceTimersByTime(24)
+    expect(transport.getStats()).toMatchObject({ inflight: 1, timedOut: 0 })
+    vi.advanceTimersByTime(1)
+    expect(transport.getStats()).toMatchObject({ inflight: 0, timedOut: 1 })
+
     transport.dispose()
   })
 
