@@ -40,6 +40,7 @@ Per-benchmark outputs (JSON):
 - `artifacts/performance/bench-datagrid-rowmodels.json`
 - `artifacts/performance/bench-datagrid-enterprise-browser-frames.json`
 - `artifacts/performance/bench-datagrid-enterprise-a11y-browser.assert.json`
+- `artifacts/performance/bench-datagrid-package-footprint.json`
 
 Harness summary:
 - `artifacts/performance/datagrid-benchmark-report.json`
@@ -48,6 +49,13 @@ Runtime report gate summary:
 - `artifacts/quality/datagrid-benchmark-gates-report.json`
 Baseline lock:
 - `docs/perf/datagrid-benchmark-baseline.json`
+
+## Package Footprint and Startup
+
+- `pnpm run bench:datagrid:package-footprint` measures the production `dist` footprint for documented core, Vue, app, pivot, and worker entrypoints.
+- The artifact records raw JS/CSS bytes, gzip and Brotli sizes, and isolated Node import startup samples.
+- `distBytes` is the complete package distribution footprint, while `entryBytes` identifies the selected entry module; these values are package evidence, not a consumer-specific tree-shaken bundle.
+- Use `BENCH_STARTUP_ITERATIONS` and `BENCH_OUTPUT_JSON` to repeat the measurement with a controlled sample count and output path.
 
 ## Budgets and Fail-Fast Rules
 
