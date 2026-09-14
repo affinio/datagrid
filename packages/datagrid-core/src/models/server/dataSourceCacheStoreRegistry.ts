@@ -24,7 +24,39 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
   const maxStores = Number.isFinite(options.maxStores) && (options.maxStores as number) > 0 ? Math.max(1, Math.trunc(options.maxStores as number)) : 8
   const stores = new Map<string, DataSourceCacheStoreDescriptor>()
   const generationByKey = new Map<string, number>()
+  const retainedHeap: Array<{ key: string; lastAccess: number }> = []
   let accessCounter = 0
+
+  const pushRetained = (store: DataSourceCacheStoreDescriptor): void => {
+    retainedHeap.push({ key: store.key, lastAccess: store.lastAccess })
+    let index = retainedHeap.length - 1
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2)
+      if (retainedHeap[parent]!.lastAccess <= retainedHeap[index]!.lastAccess) break
+      ;[retainedHeap[parent], retainedHeap[index]] = [retainedHeap[index]!, retainedHeap[parent]!]
+      index = parent
+    }
+  }
+
+  const popRetained = (): { key: string; lastAccess: number } | undefined => {
+    const first = retainedHeap[0]
+    const last = retainedHeap.pop()
+    if (last && retainedHeap.length > 0) {
+      retainedHeap[0] = last
+      let index = 0
+      while (true) {
+        const left = index * 2 + 1
+        const right = left + 1
+        let smallest = index
+        if (left < retainedHeap.length && retainedHeap[left]!.lastAccess < retainedHeap[smallest]!.lastAccess) smallest = left
+        if (right < retainedHeap.length && retainedHeap[right]!.lastAccess < retainedHeap[smallest]!.lastAccess) smallest = right
+        if (smallest === index) break
+        ;[retainedHeap[index], retainedHeap[smallest]] = [retainedHeap[smallest]!, retainedHeap[index]!]
+        index = smallest
+      }
+    }
+    return first
+  }
   const touch = (store: DataSourceCacheStoreDescriptor): DataSourceCacheStoreDescriptor => {
     const next = { ...store, lastAccess: ++accessCounter }
     stores.set(next.key, next)
@@ -44,7 +76,8 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
     retain(key) {
       const store = stores.get(key)
       if (!store || store.lifecycle === "disposed") return false
-      touch({ ...store, lifecycle: "retained" })
+      const retained = touch({ ...store, lifecycle: "retained" })
+      pushRetained(retained)
       return true
     },
     dispose(key) {
@@ -58,18 +91,23 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
       return true
     },
     enforceLimit() {
-      const retained = [...stores.values()].filter(store => store.lifecycle === "retained").sort((left, right) => left.lastAccess - right.lastAccess)
       const evicted: string[] = []
-      while (stores.size > maxStores && retained.length > 0) {
-        const candidate = retained.shift()
+      while (stores.size > maxStores) {
+        const candidate = popRetained()
         if (!candidate) break
-        if (stores.delete(candidate.key)) evicted.push(candidate.key)
+        const current = stores.get(candidate.key)
+        if (!current || current.lifecycle !== "retained" || current.lastAccess !== candidate.lastAccess) continue
+        stores.delete(candidate.key)
+        evicted.push(candidate.key)
       }
       return evicted
     },
     get(key) {
       const store = stores.get(key)
-      return store ? touch(store) : undefined
+      if (!store) return undefined
+      const touched = touch(store)
+      if (touched.lifecycle === "retained") pushRetained(touched)
+      return touched
     },
     getDiagnostics() {
       let active = 0
@@ -80,6 +118,6 @@ export function createDataSourceCacheStoreRegistry(options: { maxStores?: number
       }
       return { maxStores, stores: stores.size, active, retained, disposed: 0 }
     },
-    clear() { stores.clear(); generationByKey.clear() },
+    clear() { stores.clear(); generationByKey.clear(); retainedHeap.length = 0 },
   }
 }

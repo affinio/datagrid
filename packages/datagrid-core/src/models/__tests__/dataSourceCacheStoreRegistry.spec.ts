@@ -29,6 +29,19 @@ describe("data source cache store registry", () => {
     expect(registry.get("root/b")?.lifecycle).toBe("active")
   })
 
+  it("ignores stale heap entries after a retained store is touched", () => {
+    const registry = createDataSourceCacheStoreRegistry({ maxStores: 2 })
+    registry.acquire({ key: "root", signature: "rev-1" })
+    registry.retain("root")
+    registry.acquire({ key: "root/a", parentKey: "root", signature: "rev-1" })
+    registry.retain("root/a")
+    expect(registry.get("root")?.lifecycle).toBe("retained")
+    registry.acquire({ key: "root/b", parentKey: "root", signature: "rev-1" })
+
+    expect(registry.enforceLimit()).toEqual(["root/a"])
+    expect(registry.get("root")?.lifecycle).toBe("retained")
+  })
+
   it("invalidates a store by removing it before a new generation is acquired", () => {
     const registry = createDataSourceCacheStoreRegistry()
     const acquired = registry.acquire({ key: "root", signature: "rev-1" })
