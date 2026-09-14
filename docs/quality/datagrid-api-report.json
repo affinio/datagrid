@@ -5,7 +5,7 @@
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 3,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -17,7 +17,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 107,
-          "declarationHash": "5d2ba9e839e6d7db15cd384861f2a1bc8f02f5eb50666c9c4138dfb113bc639f",
+          "declarationHash": "836c58207abd0538df12ef0f8d5293ca46d0ee48b8c0bfba3baad5293fc06f9f",
           "entrypointExportCount": 1,
           "entrypointExports": [
             "export * from \"./public.js\""
@@ -85,7 +85,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "83f7f5db3c2b4955d76b6581eb946ec7c1a4d0c0063157166cd8ba562036c593"
+              "hash": "a9d3b54afc181e2fce79f69f1c437904d055edfbb3f6fd5a1e1a818081e0f3de"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -441,7 +441,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/virtualization/columnSizing.d.ts",
-              "hash": "a985c0e274d6db9e0b54e6d2c572229b8baddd382e7a106e33e4404b344cd5c8"
+              "hash": "43351ce64fff894d7af067e998533e7c5cdc65234dc625f4a52c87258c68ff85"
             },
             {
               "path": "packages/datagrid-core/dist/src/virtualization/columnSnapshot.d.ts",
@@ -460,7 +460,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/advanced.d.ts",
           "declarationExists": true,
           "declarationFileCount": 111,
-          "declarationHash": "7511f8c4c7f3744743f1d6e5a1343e046be1e33e82d32e3812606beae1c245a4",
+          "declarationHash": "353e18c7e0a28586eb1d98f4a990bb2f05aaa07bf5b1233503f507186f781d4e",
           "entrypointExportCount": 12,
           "entrypointExports": [
             "export type { DataGridAdvancedEventMap, DataGridAdvancedEventName, DataGridEventAffectedRange, DataGridEventEnvelope, DataGridEventPhase, DataGridEventSource, DataGridEventTier, DataGridInternalEventMap, DataGridInternalEventName, DataGridStableEventMap, DataGridStableEventName, } from \"./protocol/index.js\"",
@@ -531,7 +531,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "83f7f5db3c2b4955d76b6581eb946ec7c1a4d0c0063157166cd8ba562036c593"
+              "hash": "a9d3b54afc181e2fce79f69f1c437904d055edfbb3f6fd5a1e1a818081e0f3de"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -903,7 +903,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/virtualization/columnSizing.d.ts",
-              "hash": "a985c0e274d6db9e0b54e6d2c572229b8baddd382e7a106e33e4404b344cd5c8"
+              "hash": "43351ce64fff894d7af067e998533e7c5cdc65234dc625f4a52c87258c68ff85"
             },
             {
               "path": "packages/datagrid-core/dist/src/virtualization/columnSnapshot.d.ts",
@@ -929,17 +929,18 @@
           "types": "./dist/src/internal.d.ts",
           "declarationFile": "packages/datagrid-core/dist/src/internal.d.ts",
           "declarationExists": true,
-          "declarationFileCount": 6,
-          "declarationHash": "0b16e1b7cef863cb38d3b628d309d473d7ea30877ccfe5ae030dca68cddffe79",
-          "entrypointExportCount": 2,
+          "declarationFileCount": 7,
+          "declarationHash": "f4f545c0bec9ddd5a5298dac3ac6ff024c25f635166f01ee4bdfde46081f4be9",
+          "entrypointExportCount": 3,
           "entrypointExports": [
             "export { createHorizontalOverscanController, createVerticalOverscanController, type HorizontalOverscanConfig, type HorizontalOverscanController, type HorizontalOverscanInput, type VerticalOverscanConfig, type VerticalOverscanController, type VerticalOverscanInput, } from \"./virtualization/dynamicOverscan.js\"",
-            "export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity, } from \"./models/rowModel.js\""
+            "export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity, } from \"./models/rowModel.js\"",
+            "export { resolveFirstColumnIndexAfterOffset, resolveFirstColumnIndexAfterPrefixOffset, resolveLastColumnIndexBeforeOffset, resolveLastColumnIndexBeforePrefixOffset, } from \"./virtualization/columnSizing.js\""
           ],
           "declarationFiles": [
             {
               "path": "packages/datagrid-core/dist/src/internal.d.ts",
-              "hash": "c43ebea3e9d7e1a0e2bcb264b50ec7f1e651a472e7fd3822a3abe971621e343e"
+              "hash": "945a71a2b22eedabc8e91f23140dcb02db2caaa3bfcb0414e4f610ea71e882b4"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/formula/formulaContracts.d.ts",
@@ -958,6 +959,10 @@
               "hash": "9281faad452695fda9a7873a5aa12ea6bdeeb60411e977736b4b3a67111cfb32"
             },
             {
+              "path": "packages/datagrid-core/dist/src/virtualization/columnSizing.d.ts",
+              "hash": "43351ce64fff894d7af067e998533e7c5cdc65234dc625f4a52c87258c68ff85"
+            },
+            {
               "path": "packages/datagrid-core/dist/src/virtualization/dynamicOverscan.d.ts",
               "hash": "319a1bd0809c5ec5475ff6baf9541842ff0c41fc29e9e07df1557ddc2291de22"
             }
@@ -968,7 +973,7 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 13,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -1952,7 +1957,7 @@
           "declarationFile": "packages/datagrid-vue/dist/app/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 114,
-          "declarationHash": "6448614afdcbf46af0259ae4a5967faf72ca018750ad5dbd42d76a7223468de6",
+          "declarationHash": "edd9055333be3509193a776fd85cd447076ebe3460571315ffa279658a4ecfbf",
           "entrypointExportCount": 24,
           "entrypointExports": [
             "export type { DataGridAppAdvancedFilterClauseDraft, DataGridAppAdvancedFilterClauseJoin, DataGridAppAdvancedFilterClausePatch, DataGridAppAdvancedFilterColumnOption, } from \"./advancedFilterPanel.types\"",
@@ -2115,7 +2120,7 @@
             },
             {
               "path": "packages/datagrid-vue/dist/app/useDataGridAppViewport.d.ts",
-              "hash": "f108deb4ff6c85cc0e0d5b57e1d4e2f8b5162401c74a05b2188af440913da30f"
+              "hash": "785e8341a27606501f6316d4210124781538ce6a73887faaee8f6056c0fcb508"
             },
             {
               "path": "packages/datagrid-vue/dist/app/useDataGridAppViewportLifecycle.d.ts",
@@ -2590,7 +2595,7 @@
     {
       "packageName": "@affino/datagrid-vue-app",
       "packageDir": "packages/datagrid-vue-app",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 7,
       "missingDeclarations": [],
       "unclassifiedExports": [],
@@ -3130,7 +3135,7 @@
     {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 1,
       "missingDeclarations": [],
       "unclassifiedExports": [],

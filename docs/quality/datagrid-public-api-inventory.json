@@ -5,7 +5,7 @@
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 3,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -47,7 +47,7 @@
           "wildcard": false,
           "exportDeclarationCount": 1,
           "exportDeclarations": [
-            "export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity, } from \"./models/rowModel.js\" export { createHorizontalOverscanController, createVerticalOverscanController, type HorizontalOverscanConfig, type HorizontalOverscanController, type HorizontalOverscanInput, type VerticalOverscanConfig, type VerticalOverscanController, type VerticalOverscanInput, } from \"./virtualization/dynamicOverscan.js\" "
+            "export { normalizeRowNode, normalizeViewportRange, withResolvedRowIdentity, } from \"./models/rowModel.js\" export { createHorizontalOverscanController, createVerticalOverscanController, type HorizontalOverscanConfig, type HorizontalOverscanController, type HorizontalOverscanInput, type VerticalOverscanConfig, type VerticalOverscanController, type VerticalOverscanInput, } from \"./virtualization/dynamicOverscan.js\" export { resolveFirstColumnIndexAfterOffset, resolveFirstColumnIndexAfterPrefixOffset, resolveLastColumnIndexBeforeOffset, resolveLastColumnIndexBeforePrefixOffset, } from \"./virtualization/columnSizing.js\" "
           ]
         }
       ]
@@ -55,7 +55,7 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 13,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -235,7 +235,7 @@
     {
       "packageName": "@affino/datagrid-vue-app",
       "packageDir": "packages/datagrid-vue-app",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 7,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -337,7 +337,7 @@
     {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "exportCount": 1,
       "unclassifiedExports": [],
       "wildcardExports": [],
