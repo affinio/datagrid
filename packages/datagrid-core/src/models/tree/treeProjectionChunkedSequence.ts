@@ -11,19 +11,40 @@ export function createChunkedSequence<T>(
 ): ChunkedSequence<T> {
   const size = Math.max(1, Math.trunc(chunkSize))
   let chunks: T[][] = []
+  let chunkStarts: number[] = []
   let length = 0
 
   const rebuild = (source: readonly T[]): void => {
     chunks = []
+    chunkStarts = []
     for (let index = 0; index < source.length; index += size) {
+      chunkStarts.push(index)
       chunks.push(source.slice(index, index + size))
     }
     length = source.length
   }
 
+  const findChunk = (index: number): number => {
+    let low = 0
+    let high = chunkStarts.length - 1
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2)
+      if (chunkStarts[middle]! <= index) {
+        low = middle + 1
+      } else {
+        high = middle - 1
+      }
+    }
+    return Math.max(0, high)
+  }
+
   const locate = (index: number): { chunk: number; offset: number } => {
     const normalized = Math.max(0, Math.min(length, Math.trunc(index)))
-    return { chunk: Math.floor(normalized / size), offset: normalized % size }
+    if (normalized === length) {
+      return { chunk: chunks.length, offset: 0 }
+    }
+    const chunk = findChunk(normalized)
+    return { chunk, offset: normalized - chunkStarts[chunk]! }
   }
 
   rebuild(values)
@@ -34,8 +55,8 @@ export function createChunkedSequence<T>(
     },
     get(index) {
       if (!Number.isInteger(index) || index < 0 || index >= length) return undefined
-      const chunk = chunks[Math.floor(index / size)]
-      return chunk?.[index % size]
+      const chunkIndex = findChunk(index)
+      return chunks[chunkIndex]?.[index - chunkStarts[chunkIndex]!]
     },
     replace(start, deleteCount, replacement) {
       const from = locate(start)
@@ -51,6 +72,12 @@ export function createChunkedSequence<T>(
       }
       chunks = nextChunks.concat(after)
       length += replacement.length - Math.max(0, Math.trunc(deleteCount))
+      chunkStarts = []
+      let chunkStart = 0
+      for (const chunk of chunks) {
+        chunkStarts.push(chunkStart)
+        chunkStart += chunk.length
+      }
     },
     toArray() {
       return chunks.flat()
