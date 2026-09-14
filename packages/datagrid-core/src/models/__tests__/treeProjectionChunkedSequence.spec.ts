@@ -16,6 +16,17 @@ describe("chunked tree projection sequence", () => {
     expect(sequence.get(516)).toBe(516)
   })
 
+  it("clamps deletion at the sequence boundary without corrupting length", () => {
+    const sequence = createChunkedSequence([0, 1, 2], 2)
+    sequence.replace(2, 100, ["tail"])
+    expect(sequence.length).toBe(3)
+    expect(sequence.toArray()).toEqual([0, 1, "tail"])
+
+    sequence.replace(3, 100, ["after-end"])
+    expect(sequence.length).toBe(4)
+    expect(sequence.toArray()).toEqual([0, 1, "tail", "after-end"])
+  })
+
   it("preserves variable-length replacement behavior", () => {
     const sequence = createChunkedSequence([0, 1, 2, 3, 4, 5], 2)
     sequence.replace(1, 3, ["x"])
