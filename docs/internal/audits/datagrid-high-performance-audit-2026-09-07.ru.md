@@ -126,7 +126,7 @@
 - **Сценарий:** 1M × 100 px = 100M px; server datasource с миллионами строк не решает ограничения DOM сам по себе. Даже при нескольких десятках mounted rows scrollbar требует представимого extent.
 - **Статус:** архитектурный риск C/V; конкретная граница и недоступность последней строки в текущем браузере здесь не измерялись. Нельзя заявлять, что 1M строк всегда ломается: при иной высоте и браузере результат другой.
 - **Ориентир:** AG Grid документирует измерение browser max height и stretching. Число 32M px на их странице относится к приведённому примеру Chrome, а не является универсальной константой. [Официальное описание](https://www.ag-grid.com/javascript-data-grid/massive-row-count/).
-- **Исправление:** сначала browser test last-row reachability, затем bounded physical scroll + logical mapping в core math при подтверждении лимита. Через тот же mapping должны идти selection, programmatic scroll, overlays и pinned rows.
+- **Исправление:** design proposal подготовлен: `docs/internal/plans/datagrid-bounded-physical-scroll-design-2026-09-14.ru.md` разделяет logical/physical domains, фиксирует single mapping boundary для scroll/restore/selection/overlays и acceptance matrix для 1M/10M rows. Runtime bounded mapping начинается после browser test last-row reachability и измерения native extent.
 - **DoD:** 1M/10M logical server rows; 24/31/100 px и variable heights; top/middle/last row, thumb drag, keyboard End, scrollToCell, restoration, fractional zoom. Бounded DOM, отсутствие blank gaps и корректные абсолютные индексы.
 - **Public API:** сначала внутренний mapping; любые новые публичные координаты согласовать. Зависимости: HP-09. Размер: L.
 
