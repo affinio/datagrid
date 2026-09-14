@@ -406,6 +406,12 @@ export function createClientRowModel<T>(
       readFilterCell: options.readFilterCell,
       readFilterCellStyle: options.readFilterCellStyle,
       resolveFilterPredicate: filterOptions => derivedCacheRuntime.resolveFilterPredicate(filterOptions),
+      getCacheKey: () => [
+        runtimeState.rowRevision,
+        runtimeState.sortRevision,
+        runtimeState.filterRevision,
+        runtimeState.groupRevision,
+      ].join("/"),
     })
     return columnHistogramRuntime
   }

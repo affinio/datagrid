@@ -62,4 +62,32 @@ describe("createClientRowColumnHistogramRuntime", () => {
     ])
     expect(runtime.getColumnHistogram("  ")).toEqual([])
   })
+
+  it("reuses a bounded result until the model cache key changes", () => {
+    const sourceRows = [
+      createRow({ id: 1, owner: "Alice", team: "A" }, 0),
+      createRow({ id: 2, owner: "Bob", team: "A" }, 1),
+    ]
+    let reads = 0
+    let revision = "1"
+    const runtime = createClientRowColumnHistogramRuntime<HistogramRow>({
+      ensureActive: () => {},
+      getBaseSourceRows: () => sourceRows,
+      getFilteredRowsProjection: () => sourceRows,
+      readProjectionRowField: (row, key) => {
+        reads += 1
+        return row.data[key as keyof HistogramRow]
+      },
+      resolveFilterPredicate: () => () => true,
+      getCacheKey: () => revision,
+    })
+
+    const first = runtime.getColumnHistogram("owner")
+    expect(runtime.getColumnHistogram("owner")).toBe(first)
+    expect(reads).toBe(sourceRows.length)
+
+    revision = "2"
+    expect(runtime.getColumnHistogram("owner")).not.toBe(first)
+    expect(reads).toBe(sourceRows.length * 2)
+  })
 })

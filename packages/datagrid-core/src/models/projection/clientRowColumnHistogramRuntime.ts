@@ -14,6 +14,7 @@ export interface CreateClientRowColumnHistogramRuntimeOptions<T> {
   readFilterCell?: (rowNode: DataGridRowNode<T>, columnKey: string) => unknown
   readFilterCellStyle?: DataGridFilterCellStyleReader<T>
   resolveFilterPredicate: (options?: { ignoreColumnFilterKey?: string }) => (row: DataGridRowNode<T>) => boolean
+  getCacheKey?: () => string
 }
 
 export interface ClientRowColumnHistogramRuntime {
@@ -23,6 +24,17 @@ export interface ClientRowColumnHistogramRuntime {
 export function createClientRowColumnHistogramRuntime<T>(
   options: CreateClientRowColumnHistogramRuntimeOptions<T>,
 ): ClientRowColumnHistogramRuntime {
+  const cache = new Map<string, DataGridColumnHistogram>()
+  const cacheLimit = 32
+
+  const storeResult = (key: string, result: DataGridColumnHistogram): DataGridColumnHistogram => {
+    cache.set(key, result)
+    if (cache.size > cacheLimit) {
+      cache.delete(cache.keys().next().value as string)
+    }
+    return result
+  }
+
   const buildHistogram = (
     rows: readonly DataGridRowNode<T>[],
     columnId: string,
@@ -43,9 +55,26 @@ export function createClientRowColumnHistogramRuntime<T>(
         return []
       }
 
+      const cacheKey = JSON.stringify([
+        options.getCacheKey?.() ?? "",
+        normalizedColumnId,
+        histogramOptions?.scope ?? "filtered",
+        histogramOptions?.ignoreSelfFilter ?? false,
+        histogramOptions?.styleKey,
+        histogramOptions?.search,
+        histogramOptions?.limit,
+        histogramOptions?.orderBy,
+      ])
+      const cached = cache.get(cacheKey)
+      if (cached) {
+        cache.delete(cacheKey)
+        cache.set(cacheKey, cached)
+        return cached
+      }
+
       const scope = histogramOptions?.scope ?? "filtered"
       if (scope === "sourceAll") {
-        return buildHistogram(options.getBaseSourceRows(), normalizedColumnId, histogramOptions)
+        return storeResult(cacheKey, buildHistogram(options.getBaseSourceRows(), normalizedColumnId, histogramOptions))
       }
 
       if (histogramOptions?.ignoreSelfFilter === true) {
@@ -58,14 +87,14 @@ export function createClientRowColumnHistogramRuntime<T>(
             rowsForHistogram.push(row)
           }
         }
-        return buildHistogram(rowsForHistogram, normalizedColumnId, histogramOptions)
+        return storeResult(cacheKey, buildHistogram(rowsForHistogram, normalizedColumnId, histogramOptions))
       }
 
-      return buildHistogram(
+      return storeResult(cacheKey, buildHistogram(
         options.getFilteredRowsProjection(),
         normalizedColumnId,
         histogramOptions,
-      )
+      ))
     },
   }
 }
