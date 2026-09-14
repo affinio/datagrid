@@ -49,6 +49,7 @@ export {
   type DataGridWorkerRowModelCommand,
   type DataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelUpdatePayload,
+  type DataGridWorkerVisibleRowDelta,
   type DataGridWorkerRowModelUpdateMessage,
   type DataGridWorkerRowModelProtocolMessage,
 } from "./workerOwnedRowModelProtocol.js"

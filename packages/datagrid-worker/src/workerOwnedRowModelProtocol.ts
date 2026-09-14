@@ -23,7 +23,7 @@ import type {
 } from "@affino/datagrid-formula-engine"
 
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION = 1 as const
-export const DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION = 2 as const
+export const DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION = 3 as const
 export const DATAGRID_WORKER_ROW_MODEL_PROTOCOL_CHANNEL = "affino.datagrid.row-model"
 
 export interface DataGridWorkerRowModelProtocolHeader {
@@ -67,6 +67,11 @@ export interface DataGridWorkerRowModelCommandMessage<T = unknown> extends DataG
   payload: DataGridWorkerRowModelCommand<T>
 }
 
+export interface DataGridWorkerVisibleRowDelta<T = unknown> {
+  index: number
+  row: DataGridRowNode<T>
+}
+
 export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   schemaVersion?: number
   snapshot: DataGridRowModelSnapshot<T>
@@ -75,6 +80,8 @@ export interface DataGridWorkerRowModelUpdatePayload<T = unknown> {
   formulaExecutionPlan?: DataGridFormulaExecutionPlanSnapshot | null
   formulaComputeStageDiagnostics?: DataGridFormulaComputeStageDiagnostics | null
   visibleRows: readonly DataGridRowNode<T>[]
+  visibleRowsMode?: "full" | "delta"
+  visibleRowsDelta?: readonly DataGridWorkerVisibleRowDelta<T>[]
   visibleRange: DataGridViewportRange
 }
 

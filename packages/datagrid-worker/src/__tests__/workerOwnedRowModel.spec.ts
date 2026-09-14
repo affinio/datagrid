@@ -401,6 +401,39 @@ describe("worker-owned row model", () => {
     expected.dispose()
   })
 
+  it("applies a same-window row delta without retransmitting the full window", async () => {
+    const rows = buildRows(100)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    mirror.setViewportRange({ start: 0, end: 9 })
+    await flushMessages()
+    const before = channel.main.receivedMessages.length
+
+    mirror.patchRows([{ rowId: 1, data: { revenue: 999 } }])
+    await flushMessages()
+
+    const updates = channel.main.receivedMessages.slice(before).filter((message) => {
+      return (message as { kind?: unknown }).kind === "row-model-update"
+    }) as Array<{ payload: { visibleRows: unknown[]; visibleRowsMode?: string; visibleRowsDelta?: unknown[] } }>
+    const update = updates.at(-1)
+    expect(update?.payload.visibleRowsMode).toBe("delta")
+    expect(update?.payload.visibleRows).toEqual([])
+    expect(update?.payload.visibleRowsDelta).toHaveLength(1)
+    expect(mirror.getRow(0)?.row).toMatchObject({ revenue: 999 })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("coalesces high-frequency viewport commands before worker dispatch", async () => {
     const rows = buildRows(100)
     const channel = createMessageChannelPair()

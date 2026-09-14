@@ -808,11 +808,26 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     formulaComputeStageDiagnostics = cloneFormulaComputeStageDiagnostics(
       update.formulaComputeStageDiagnostics,
     )
-    visibleRange = {
+    const nextVisibleRange = {
       start: update.visibleRange.start,
       end: update.visibleRange.end,
     }
-    visibleRows = update.visibleRows as DataGridRowNode<T>[]
+    const hasDelta = update.visibleRowsMode === "delta"
+      && nextVisibleRange.start === visibleRange.start
+      && nextVisibleRange.end === visibleRange.end
+      && Array.isArray(update.visibleRowsDelta)
+    if (hasDelta) {
+      const nextVisibleRows = visibleRows.slice()
+      for (const delta of update.visibleRowsDelta ?? []) {
+        if (Number.isInteger(delta.index) && delta.index >= 0 && delta.index < nextVisibleRows.length) {
+          nextVisibleRows[delta.index] = delta.row as DataGridRowNode<T>
+        }
+      }
+      visibleRows = nextVisibleRows
+    } else {
+      visibleRows = update.visibleRows as DataGridRowNode<T>[]
+    }
+    visibleRange = nextVisibleRange
     pushWindowCache(visibleRange, visibleRows)
 
     if (!initialWindowPrefetchResolved && requestId === 0) {

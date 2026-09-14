@@ -14,6 +14,7 @@ import {
   isDataGridWorkerRowModelCommandMessage,
   type DataGridWorkerRowModelCommand,
   type DataGridWorkerRowModelUpdatePayload,
+  type DataGridWorkerVisibleRowDelta,
 } from "./workerOwnedRowModelProtocol.js"
 
 export interface CreateDataGridWorkerOwnedRowModelHostOptions<T = unknown>
@@ -118,6 +119,8 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
     rows: rows ?? [],
   })
   let disposed = false
+  let previousVisibleRange: { start: number; end: number } | null = null
+  let previousVisibleRows: Readonly<ReturnType<typeof model.getRowsInRange>> = []
 
   const emitUpdate = (requestId = 0, error: unknown = null): void => {
     if (disposed) {
@@ -129,6 +132,19 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       end: snapshot.viewportRange.end,
     }
     const visibleRows = error ? [] : model.getRowsInRange(visibleRange)
+    const canDelta = !error
+      && previousVisibleRange?.start === visibleRange.start
+      && previousVisibleRange.end === visibleRange.end
+      && previousVisibleRows.length === visibleRows.length
+    const visibleRowsDelta: DataGridWorkerVisibleRowDelta<T>[] = []
+    if (canDelta) {
+      for (let index = 0; index < visibleRows.length; index += 1) {
+        if (previousVisibleRows[index] !== visibleRows[index]) {
+          visibleRowsDelta.push({ index, row: visibleRows[index]! })
+        }
+      }
+    }
+    const useDelta = canDelta && visibleRowsDelta.length <= Math.max(1, Math.floor(visibleRows.length / 2))
     const payload: DataGridWorkerRowModelUpdatePayload<T> = {
       schemaVersion: DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
       snapshot: error
@@ -142,9 +158,12 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
       formulaFields: model.getFormulaFields?.() ?? [],
       formulaExecutionPlan: model.getFormulaExecutionPlan?.() ?? null,
       formulaComputeStageDiagnostics: model.getFormulaComputeStageDiagnostics?.() ?? null,
-      visibleRows,
+      visibleRows: useDelta ? [] : visibleRows,
+      ...(useDelta ? { visibleRowsMode: "delta" as const, visibleRowsDelta } : { visibleRowsMode: "full" as const }),
       visibleRange,
     }
+    previousVisibleRange = visibleRange
+    previousVisibleRows = visibleRows
     const message = createDataGridWorkerRowModelUpdateMessage(
       requestId,
       payload,
@@ -168,6 +187,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
         formulaExecutionPlan: null,
         formulaComputeStageDiagnostics: null,
         visibleRows: [],
+        visibleRowsMode: "full",
         visibleRange,
       }
       try {
