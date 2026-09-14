@@ -1305,6 +1305,17 @@ function projectionSegmentMatches<T>(
   return true
 }
 
+function replaceProjectionSegment<T>(
+  rows: readonly DataGridRowNode<T>[],
+  startIndex: number,
+  removeCount: number,
+  replacement: readonly DataGridRowNode<T>[],
+): DataGridRowNode<T>[] {
+  return rows
+    .slice(0, startIndex)
+    .concat(replacement, rows.slice(startIndex + removeCount))
+}
+
 function resolveGroupRowIndexByRowId<T>(
   rows: readonly DataGridRowNode<T>[],
   groupRowId: DataGridRowId,
@@ -1443,10 +1454,15 @@ function tryProjectTreePathSubtreeToggle<T>(
       },
     }
   }
-  nextRows.splice(replaceStart, previousDescendants.length, ...nextDescendants)
-  rebuildGroupIndexByRowIdFrom(nextRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
+  const replacedRows = replaceProjectionSegment(
+    nextRows,
+    replaceStart,
+    previousDescendants.length,
+    nextDescendants,
+  )
+  rebuildGroupIndexByRowIdFrom(replacedRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
   return {
-    rows: nextRows,
+    rows: replacedRows,
     diagnostics: input.cacheState.cache.diagnostics,
   }
 }
@@ -1542,10 +1558,15 @@ function tryProjectTreeParentSubtreeToggle<T>(
       },
     }
   }
-  nextRows.splice(replaceStart, previousDescendants.length, ...nextDescendants)
-  rebuildGroupIndexByRowIdFrom(nextRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
+  const replacedRows = replaceProjectionSegment(
+    nextRows,
+    replaceStart,
+    previousDescendants.length,
+    nextDescendants,
+  )
+  rebuildGroupIndexByRowIdFrom(replacedRows, input.cacheState.cache.groupIndexByRowId, resolvedGroupIndex)
   return {
-    rows: nextRows,
+    rows: replacedRows,
     diagnostics: input.cacheState.cache.diagnostics,
   }
 }

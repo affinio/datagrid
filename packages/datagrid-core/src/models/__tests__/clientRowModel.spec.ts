@@ -3295,6 +3295,41 @@ describe("createClientRowModel", () => {
     model.dispose()
   })
 
+  it("toggles a wide path branch without spreading descendants into call arguments", () => {
+    const leafCount = 150_000
+    const model = createClientRowModel({
+      rows: Array.from({ length: leafCount }, (_, index) => ({
+        row: { id: index, path: ["root"] },
+        rowId: index,
+        originalIndex: index,
+        displayIndex: index,
+      })),
+      initialTreeData: {
+        mode: "path",
+        getDataPath: row => row.path,
+        expandedByDefault: true,
+      },
+    })
+
+    const expanded = model.getRowsInRange({ start: 0, end: leafCount + 1 })
+    expect(expanded).toHaveLength(leafCount + 1)
+    const rootKey = String(expanded[0]?.rowId)
+
+    model.collapseGroup(rootKey)
+    expect(model.getRowsInRange({ start: 0, end: 1 })).toHaveLength(1)
+    model.expandGroup(rootKey)
+
+    const restored = model.getRowsInRange({ start: leafCount, end: leafCount })
+    expect(model.getRowCount()).toBe(leafCount + 1)
+    expect(restored[0]?.rowId).toBe(leafCount - 1)
+    expect(model.getSnapshot().groupExpansion).toEqual({
+      expandedByDefault: true,
+      toggledGroupKeys: [],
+    })
+
+    model.dispose()
+  }, 30_000)
+
   it("computes tree path aggregates from matched leaf rows and keeps them on collapse", () => {
     const model = createClientRowModel({
       rows: [
