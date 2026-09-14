@@ -25,8 +25,9 @@ function createRow(row: PivotRow, index: number): DataGridRowNode<PivotRow> {
 }
 
 describe("createClientRowPivotDrilldownHostRuntime", () => {
-  it("returns materialized pivot drilldown rows for subtotal and grand total cells", () => {
+  it("returns bounded drilldown rows from sparse pivot output for subtotal and grand total cells", () => {
     const model = createClientRowModel<PivotRow>({
+      sparsePivotOutput: true,
       rows: [
         createRow({ id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, 0),
         createRow({ id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 20 }, 1),
