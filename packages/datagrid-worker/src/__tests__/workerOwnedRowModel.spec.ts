@@ -282,6 +282,28 @@ describe("worker-owned row model", () => {
     mirror.dispose()
   })
 
+  it("clears pending viewport loading on worker termination error", async () => {
+    const channel = createMessageChannelPair()
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+      requestInitialSync: false,
+    })
+
+    mirror.setViewportRange({ start: 40, end: 60 })
+    await Promise.resolve()
+    expect(mirror.getSnapshot().loading).toBe(true)
+
+    channel.main.onerror?.({ message: "worker terminated" })
+
+    expect(mirror.getSnapshot().loading).toBe(false)
+    expect(mirror.getSnapshot().error?.message).toBe(
+      "[AffinoDataGrid worker] transport failed: worker terminated",
+    )
+    expect(mirror.getWorkerProtocolDiagnostics().loadingClearCount).toBe(0)
+    mirror.dispose()
+  })
+
   it("terminates a failed host command with an error snapshot", async () => {
     const channel = createMessageChannelPair()
     const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
