@@ -108,7 +108,7 @@
 - **Разрыв:** `docs/perf/datagrid-performance-gates.md` заявляет scroll latency <=16 ms и CV<=25%; фактические профили гораздо мягче. Время функции, frame interval и input-to-paint — разные величины, заменять одну другой нельзя.
 - **Исправление:** отделить correctness/smoke ceilings от UX-SLO profiles; критичные resource warnings сделать blocking в фактической цепочке CI; budgets по сценариям, минимальный sample count, явный fail при нулевых samples, raw samples и environment metadata. Не ужесточать пороги вслепую на shared runner.
 - **DoD:** искусственное нарушение каждого frame/resource бюджета делает CI красным; soft observation явно обозначен. Для smooth scroll отдельные 60/120 Hz профили; teleport stress отдельно. Проверять совокупное renderer time за frame, а не только p95 одного дешёвого callback.
-- **Дополнительный дефект интерпретации:** закрыт частично: legacy `droppedFramePct` сохранён для совместимости, а artifact теперь содержит `refreshAwareDroppedFramePct`/`refreshAwareDroppedFrames` с параметром `BENCH_BROWSER_REFRESH_RATE_HZ`; отдельные calibrated 60/120 Hz budgets остаются следующим этапом.
+- **Дополнительный дефект интерпретации:** закрыт: legacy `droppedFramePct` сохранён для совместимости, artifact содержит `refreshAwareDroppedFramePct`/`refreshAwareDroppedFrames` с параметром `BENCH_BROWSER_REFRESH_RATE_HZ`, а отдельные 60/120 Hz assert-профили hard-fail refresh-aware rate на `35%`/`25%`. Фактический запуск зависит от доступного Chromium/CI hardware; пороги являются явными profile budgets, а не переносимым универсальным FPS SLA.
 - **Public API:** не требуется; artifact schema может требовать миграции consumers. Зависимости: нет. Размер: M.
 
 ### HP-04. Сравнительного стенда AG Grid не обнаружено
