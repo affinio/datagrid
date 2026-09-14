@@ -173,6 +173,7 @@ export interface CreateClientRowModelOptions<T> {
   maxPivotOutputCells?: number
   /** Omits absent aggregate fields from client pivot row payloads. */
   sparsePivotOutput?: boolean
+  sparsePivotStorage?: boolean
   initialPagination?: DataGridPaginationInput | null
   performanceMode?: DataGridClientPerformanceMode
   projectionPolicy?: DataGridProjectionPolicy
@@ -491,6 +492,7 @@ export function createClientRowModel<T>(
     aggregationRegistry: options.aggregationRegistry,
     maxPivotOutputCells: options.maxPivotOutputCells,
     sparsePivotOutput: options.sparsePivotOutput,
+    sparsePivotStorage: options.sparsePivotStorage,
   })
   const {
     pivotRuntime,
