@@ -65,6 +65,54 @@ describe("createDataGridAppRowHeightMetrics contract", () => {
     expect(resolveRowHeightOverride).not.toHaveBeenCalled()
   })
 
+  it("keeps 1M-row sparse offsets and inverse lookup bounded to the affected chunk", () => {
+    let version = 1
+    let lastMutation = null as {
+      version: number
+      kind: "set" | "clear" | "clear-all"
+      rowIndex: number | null
+      previousHeight: number | null
+      nextHeight: number | null
+    } | null
+    const overrides = new Map<number, number>([
+      [0, 48],
+      [512_000, 63],
+      [999_999, 80],
+    ])
+    const resolveRowHeightOverride = vi.fn((rowIndex: number) => overrides.get(rowIndex) ?? null)
+    const metrics = createDataGridAppRowHeightMetrics({
+      totalRows: () => 1_000_000,
+      resolveBaseRowHeight: () => 31,
+      resolveRowHeightOverride,
+      resolveRowHeightVersion: () => version,
+      hasRowHeightOverrides: () => overrides.size > 0,
+      resolveRowHeightOverridesSnapshot: () => overrides,
+      resolveLastRowHeightMutation: () => lastMutation,
+    })
+
+    expect(metrics.resolveTotalHeight()).toBe(31_000_000 + 17 + 32 + 49)
+    expect(metrics.resolveRowOffset(512_000)).toBe((512_000 * 31) + 17)
+    expect(metrics.resolveRowIndexAtOffset((512_000 * 31) + 17)).toBe(512_000)
+    expect(metrics.resolveRowIndexAtOffset(metrics.resolveTotalHeight() - 1)).toBe(999_999)
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
+
+    overrides.set(512_000, 91)
+    version += 1
+    lastMutation = {
+      version,
+      kind: "set",
+      rowIndex: 512_000,
+      previousHeight: 63,
+      nextHeight: 91,
+    }
+
+    expect(metrics.resolveRowOffset(512_001)).toBe((512_001 * 31) + 77)
+    expect(metrics.resolveTotalHeight()).toBe(31_000_000 + 17 + 60 + 49)
+    expect(metrics.resolveRowIndexAtOffset((512_001 * 31) + 76)).toBe(512_000)
+    expect(metrics.resolveRowIndexAtOffset((512_001 * 31) + 77)).toBe(512_001)
+    expect(resolveRowHeightOverride).not.toHaveBeenCalled()
+  })
+
   it("applies sparse row-height mutations without rescanning every row when snapshots are available", () => {
     let version = 1
     let lastMutation = null as {

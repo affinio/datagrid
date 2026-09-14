@@ -1,17 +1,17 @@
 import { bench, describe } from "vitest"
 import { createDataGridAppRowHeightMetrics } from "../dataGridRowHeightMetrics"
 
-const TOTAL_ROWS = 200_000
+const TOTAL_ROWS = Number(process.env.DATA_GRID_ROW_HEIGHT_BENCH_ROWS ?? 200_000)
 const BASE_ROW_HEIGHT = 31
-const INITIAL_OVERRIDE_COUNT = 5_000
-const UPDATE_COUNT = 64
+const INITIAL_OVERRIDE_COUNT = Number(process.env.DATA_GRID_ROW_HEIGHT_BENCH_OVERRIDES ?? 5_000)
+const UPDATE_COUNT = Number(process.env.DATA_GRID_ROW_HEIGHT_BENCH_UPDATES ?? 64)
 const CLIENT_HEIGHT = 620
 const OVERSCAN = 4
 
 function createInitialOverrides(): Map<number, number> {
   const overrides = new Map<number, number>()
   for (let index = 0; index < INITIAL_OVERRIDE_COUNT; index += 1) {
-    const rowIndex = index * 11
+    const rowIndex = Math.min(TOTAL_ROWS - 1, index * 11)
     overrides.set(rowIndex, BASE_ROW_HEIGHT + 8 + ((index % 5) * 3))
   }
   return overrides
