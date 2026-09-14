@@ -54,6 +54,34 @@ describe("pivotRuntime incremental patching", () => {
       maxOutputCells: 2,
     })
   })
+  it("fails closed for a high-cardinality 50k-row pivot before dense rows are built", () => {
+    const runtime = createPivotRuntime<PivotRow>({ maxOutputCells: 1_000 })
+    const sourceRows = Array.from({ length: 50_000 }, (_, index) => createLeafRow({
+      id: `r${index}`,
+      region: `region-${index % 100}`,
+      year: index,
+      revenue: index,
+    }, index))
+
+    const result = runtime.projectRows({
+      inputRows: sourceRows,
+      pivotModel: {
+        rows: ["region"],
+        columns: ["year"],
+        values: [{ field: "revenue", agg: "sum" }],
+      },
+      normalizeFieldValue: value => String(value ?? ""),
+    })
+
+    expect(result.rows).toEqual([])
+    expect(result.columns).toEqual([])
+    expect(result.diagnostics).toEqual({
+      kind: "output-limit-exceeded",
+      estimatedCells: 5_000_000,
+      maxOutputCells: 1_000,
+    })
+  })
+
   it("applies value-only patch without relying on cached binding by rowId", () => {
     const runtime = createPivotRuntime<PivotRow>()
     const sourceRows = [
