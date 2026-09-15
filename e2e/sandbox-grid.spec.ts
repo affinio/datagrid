@@ -194,9 +194,8 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await page.getByRole("button", { name: "Apply", exact: true }).click()
 
     await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1)
-    await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBeGreaterThan(0)
-    await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBeLessThanOrEqual(8)
-    await assertNoBlankHorizontalViewport(page)
+    await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBe(1)
+    await expect.poll(async () => viewportMaxScrollLeft(viewport), { timeout: 20_000 }).toBe(0)
   })
 
   test("core base grid keeps virtualization responsive while scrolling", async ({ page }) => {
