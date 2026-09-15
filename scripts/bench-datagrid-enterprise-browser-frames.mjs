@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { chromium } from "@playwright/test"
 import { ensureSandboxServer } from "./ensure-sandbox-server.mjs"
-import { computeFrameMetrics } from "./datagrid-frame-metrics.mjs"
+import { computeFrameMetrics, normalizeFrameDeltas } from "./datagrid-frame-metrics.mjs"
 
 const BENCH_BROWSER_BASE_URL = process.env.BENCH_BROWSER_BASE_URL ?? "http://127.0.0.1:4173"
 const BENCH_BROWSER_ROUTE = process.env.BENCH_BROWSER_ROUTE ?? "/vue/shell/base-grid"
