@@ -265,6 +265,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - Sorted patch validation includes `BENCH_SORTED_PATCH_MODE=sort-key` at `300k` rows and `BENCH_SORTED_PATCH_MODE=grouped` at `100k` rows with aggregate snapshot checks. Sorted-key remains an explicitly measured full reorder fallback.
 - Shared:
   - `PERF_BUDGET_MAX_VARIANCE_PCT=75`
+  - `PERF_BUDGET_VARIANCE_MIN_MEAN_MS=2` for the sub-millisecond expand burst, where CV is dominated by scheduler noise; p95/p99 latency budgets remain enforced.
   - `PERF_BUDGET_MAX_HEAP_DELTA_MB=140`
 
 Tree workload matrix profiles:
