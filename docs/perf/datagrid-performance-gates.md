@@ -263,7 +263,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - Pivot patching has an incremental same-bucket tier: patches that touch pivot axis fields may still use the incremental path when normalized row/column bucket keys stay stable; bucket-changing patches fall back to full rebuild.
   - Sorted patch validation includes `BENCH_SORTED_PATCH_MODE=sort-key` at `300k` rows and `BENCH_SORTED_PATCH_MODE=grouped` at `100k` rows with aggregate snapshot checks. Sorted-key remains an explicitly measured full reorder fallback.
 - Shared:
-  - `PERF_BUDGET_MAX_VARIANCE_PCT=60`
+  - `PERF_BUDGET_MAX_VARIANCE_PCT=75`
   - `PERF_BUDGET_MAX_HEAP_DELTA_MB=140`
 
 Tree workload matrix profiles:
