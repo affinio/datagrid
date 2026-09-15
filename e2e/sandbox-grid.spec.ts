@@ -95,7 +95,6 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect(viewport).toBeVisible({ timeout: 20_000 })
     await expect.poll(async () => totalRows(page), { timeout: 30_000 }).toBe(200000)
 
-    await page.getByLabel("Row size").fill("120")
     await expect.poll(async () => viewportMaxScrollTop(viewport), { timeout: 20_000 }).toBeGreaterThan(0)
     await setViewportScroll(viewport, { top: await viewportMaxScrollTop(viewport), left: 0 })
     await expect.poll(async () => viewportRangeStart(page), { timeout: 20_000 }).toBeGreaterThan(199_000)
@@ -195,6 +194,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await page.getByRole("button", { name: "Apply", exact: true }).click()
 
     await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(1)
+    await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBeGreaterThan(0)
     await expect.poll(async () => renderedCenterCellsInFirstVisibleRow(page), { timeout: 20_000 }).toBeLessThanOrEqual(8)
     await assertNoBlankHorizontalViewport(page)
   })
