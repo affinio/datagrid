@@ -34,6 +34,7 @@
     "test:datagrid:tree:contracts": "pnpm --filter @affino/datagrid-core test:unit -- src/models/__tests__/rowModel.spec.ts src/models/__tests__/clientRowModel.spec.ts src/selection/__tests__/selectionState.grouped.contract.spec.ts src/runtime/__tests__/dataGridRuntime.events.contract.spec.ts src/adapters/__tests__/adapterRuntimeProtocol.contract.spec.ts",
     "test:e2e:datagrid:tree": "playwright test e2e/sandbox-tree-pivot.spec.ts --grep tree",
     "test:e2e:datagrid:parity": "playwright test e2e/sandbox-grid.spec.ts e2e/sandbox-interactions.spec.ts e2e/sandbox-tree-pivot.spec.ts",
+    "test:e2e:docker": "docker compose -f docker-compose.e2e.yml run --rm e2e",
     "codemod:datagrid:public-protocol": "node ./scripts/codemods/datagrid-public-protocol-codemod.mjs",
     "bench:charts:time-series": "pnpm --filter @affino/charts-core build && node --expose-gc ./scripts/bench-charts-time-series.mjs",
     "test:charts:package-consumer": "node ./scripts/test-charts-package-consumer.mjs",

@@ -19,6 +19,7 @@ This folder separates user-facing documentation from internal planning material.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
 - [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.
 - [Troubleshooting runbook](./datagrid-troubleshooting-runbook.md) - operational debugging guide.
+- [Datagrid e2e in Docker](./testing/datagrid-e2e-docker.md) - local Chromium e2e on ARM64 and x64 hosts.
 - [Virtualization support matrix](./datagrid-virtualization-support-matrix.md) - supported, partial, and unsupported enterprise virtualization behavior.
 
 ## Core References

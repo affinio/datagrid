@@ -1,0 +1,19 @@
+services:
+  e2e:
+    platform: linux/amd64
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - e2e_node_modules:/workspace/node_modules
+      - e2e_pnpm_store:/root/.local/share/pnpm/store
+    environment:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+    command:
+      - bash
+      - -lc
+      - corepack enable && pnpm install --frozen-lockfile && pnpm run test:e2e:datagrid:parity
+
+volumes:
+  e2e_node_modules:
+  e2e_pnpm_store:
