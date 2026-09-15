@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/base:ubuntu
+FROM mcr.microsoft.com/devcontainers/base:noble
 
 # Base utilities for datagrid development
 RUN apt-get update && apt-get install -y \
@@ -8,6 +8,20 @@ RUN apt-get update && apt-get install -y \
     zip \
     git \
     ca-certificates \
+    libnspr4 \
+    libnss3 \
+    libatk1.0-0t64 \
+    libatspi2.0-0t64 \
+    libx11-6 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libxcb1 \
+    libxkbcommon0 \
+    libasound2t64 \
     libpq-dev \
     build-essential \
     iputils-ping \
