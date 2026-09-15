@@ -184,7 +184,7 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect(visibilityInputs).toHaveCount(1000, { timeout: 20_000 })
     await visibilityInputs.evaluateAll(inputs => {
       for (const [index, input] of inputs.entries()) {
-        if (index === 0) continue
+        if (index === 1) continue
         const checkbox = input as HTMLInputElement
         if (checkbox.checked) {
           checkbox.click()
