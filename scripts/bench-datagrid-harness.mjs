@@ -151,7 +151,7 @@ const tasks = [
     logPath: `${outputDir}/bench-datagrid-datasource-churn.log`,
     budgets: {
       ci: {
-        PERF_BUDGET_TOTAL_MS: "Infinity",
+        PERF_BUDGET_TOTAL_MS: "25000",
         PERF_BUDGET_MAX_VARIANCE_PCT: "120",
         PERF_BUDGET_MAX_SCROLL_BURST_P95_MS: "20",
         PERF_BUDGET_MAX_SCROLL_BURST_P99_MS: "35",

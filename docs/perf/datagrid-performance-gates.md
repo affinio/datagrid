@@ -161,7 +161,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - Renderer duration budgets are controlled by `PERF_BUDGET_MAX_CELL_RENDERER_P95_MS` and `PERF_BUDGET_MAX_GROUP_CELL_RENDERER_P95_MS`.
   - The sandbox benchmark route accepts perf-only query profiles (`renderProfile=slow-custom-renderers|overlay-heavy`, `pinnedProfile=wide-pinned`) so the gates exercise production DataGrid rendering paths without adding a separate benchmark app.
 - Datasource churn (range pull churn + invalidation pressure):
-  - `PERF_BUDGET_TOTAL_MS=Infinity` (reported for observability; not a hard CI failure because it is dominated by runner and Node runtime variance).
+  - `PERF_BUDGET_TOTAL_MS=25000`, calibrated from the current Node 24 CI profile; elapsed remains reported alongside hard scenario and diagnostic budgets.
   - Scroll/filter/placeholder latency and diagnostic budgets remain hard failures and are the actionable datasource performance gates.
   - `PERF_BUDGET_MAX_SCROLL_BURST_P95_MS=20`
   - `PERF_BUDGET_MAX_SCROLL_BURST_P99_MS=35`
