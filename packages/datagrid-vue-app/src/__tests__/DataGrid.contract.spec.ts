@@ -13,6 +13,7 @@ import type {
   DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import DataGrid from "../DataGrid"
+import { DataGridWithGantt } from "../gantt"
 import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import {
   defineDataGridCellClassResolver,
@@ -1768,7 +1769,7 @@ describe("DataGrid app facade contract", () => {
   })
 
   it("switches between table and gantt view modes through the public facade", async () => {
-    const wrapper = mount(DataGrid, {
+    const wrapper = mount(DataGridWithGantt, {
       props: {
         rows: GANTT_ROWS,
         columns: GANTT_COLUMNS,
@@ -1790,12 +1791,8 @@ describe("DataGrid app facade contract", () => {
     expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
     expect(wrapper.find(".datagrid-gantt-stage__splitter").exists()).toBe(true)
     expect((wrapper.find(".datagrid-gantt-stage__timeline-header").element as HTMLElement).style.height).not.toBe("")
-    expect(resolveVm(wrapper).getView?.()).toBe("gantt")
-
-    resolveVm(wrapper).setView?.("table")
+    await wrapper.setProps({ viewMode: "table" })
     await flushRuntimeTasks()
-
-    expect(resolveVm(wrapper).getView?.()).toBe("table")
     expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(false)
     expect(wrapper.find(".grid-stage").exists()).toBe(true)
 

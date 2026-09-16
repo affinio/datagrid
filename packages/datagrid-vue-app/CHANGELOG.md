@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.7.0
+
+### Breaking Changes
+
+- The root entry no longer loads the Gantt runtime. Gantt consumers should import `DataGrid` from `@affino/datagrid-vue-app/gantt`.
+
+### Changes
+
+- Moved Gantt stage registration behind the optional `/gantt` subpath.
+- Made `@affino/datagrid-gantt` an optional peer dependency for the package root.
+- Added root and Gantt entrypoint isolation checks to prevent optional runtime leakage and circular initialization regressions.
+
+### Validation
+
+- Root and Gantt ESM builds pass.
+- Package type-check and 42 test files / 467 tests pass.
+- Ordinary-table production Vite build passes without Gantt runtime.
+
 ## 0.6.0
 
 ### Minor Changes

@@ -95,6 +95,27 @@ Practical implications:
 
 Consumer-side chunk tuning can still help, but it is now an optimization rather than a workaround for the package boundary.
 
+The root entry renders ordinary tables and does not register the Gantt stage. To use the Gantt view, import the opt-in component from
+the Gantt subpath:
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue-app/gantt"
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    view-mode="gantt"
+    :gantt="{ startDateField: 'start', endDateField: 'end' }"
+  />
+</template>
+```
+
+`@affino/datagrid-vue-app/gantt` also exports `DataGridGanttStage` and the Gantt timeline helpers. Applications that only render ordinary
+tables should import `DataGrid` from the package root.
+
 ## Quick Start
 
 Minimal example with virtualization and built-in features.

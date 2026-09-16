@@ -355,9 +355,6 @@ importers:
       '@affino/datagrid-chrome':
         specifier: workspace:*
         version: link:../datagrid-chrome
-      '@affino/datagrid-gantt':
-        specifier: workspace:*
-        version: link:../datagrid-gantt
       '@affino/datagrid-theme':
         specifier: workspace:*
         version: link:../datagrid-theme
@@ -373,6 +370,10 @@ importers:
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
+    devDependencies:
+      '@affino/datagrid-gantt':
+        specifier: workspace:*
+        version: link:../datagrid-gantt
 
   packages/datagrid-vue-app-enterprise:
     dependencies:

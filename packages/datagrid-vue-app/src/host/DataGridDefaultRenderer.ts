@@ -5,6 +5,7 @@ import {
   defineAsyncComponent,
   defineComponent,
   h,
+  inject,
   markRaw,
   nextTick,
   onBeforeUnmount,
@@ -130,7 +131,7 @@ import type {
   DataGridTableStageCustomOverlay,
 } from "../stage/dataGridTableStage.types"
 import { isTouchGeneratedMouseEvent } from "../stage/dataGridMouseEventGuards"
-import DataGridGanttStage from "../gantt/DataGridGanttStageEntry"
+import { dataGridGanttStageKey } from "../gantt/dataGridGanttStageContext"
 
 type DataGridMode = "base" | "tree" | "pivot" | "worker"
 
@@ -1180,6 +1181,7 @@ export default defineComponent({
     },
   },
   setup(props) {
+    const ganttStage = inject(dataGridGanttStageKey, null)
     const gridChromeStyle = computed<CSSProperties>(() => ({
       "--datagrid-row-divider-size": props.gridLines.bodyRows ? "1px" : "0px",
       "--datagrid-column-divider-size": props.gridLines.bodyColumns ? "1px" : "0px",
@@ -4757,8 +4759,8 @@ export default defineComponent({
               ],
               ref: stageHostRef,
             }, [
-              props.viewMode === "gantt"
-                ? h(DataGridGanttStage as Component, {
+              props.viewMode === "gantt" && ganttStage
+                ? h(ganttStage as Component, {
                   stageContext: tableStageContext,
                   runtime: props.runtime,
                   gantt: props.gantt,
@@ -4787,8 +4789,8 @@ export default defineComponent({
             ],
             ref: stageHostRef,
           }, [
-            props.viewMode === "gantt"
-              ? h(DataGridGanttStage as Component, {
+            props.viewMode === "gantt" && ganttStage
+              ? h(ganttStage as Component, {
                 stageContext: tableStageContext,
                 runtime: props.runtime,
                 gantt: props.gantt,

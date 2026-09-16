@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
@@ -50,14 +50,14 @@
   },
   "dependencies": {
     "@affino/datagrid-chrome": "workspace:*",
-    "@affino/datagrid-gantt": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
     "@affino/menu-vue": "^2.1.1",
     "@affino/popover-vue": "^1.1.0"
   },
   "peerDependencies": {
-    "vue": "^3.3.0"
+    "vue": "^3.3.0",
+    "@affino/datagrid-gantt": "workspace:^"
   },
   "license": "MIT",
   "repository": {
@@ -74,5 +74,13 @@
     "vue",
     "app",
     "declarative"
-  ]
+  ],
+  "peerDependenciesMeta": {
+    "@affino/datagrid-gantt": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@affino/datagrid-gantt": "workspace:*"
+  }
 }
