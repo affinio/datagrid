@@ -52,12 +52,12 @@
     "@affino/datagrid-chrome": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
-    "@affino/menu-vue": "^2.1.1",
+    "@affino/menu-vue": "^2.2.0",
     "@affino/popover-vue": "^1.1.0"
   },
   "peerDependencies": {
-    "vue": "^3.3.0",
-    "@affino/datagrid-gantt": "workspace:^"
+    "@affino/datagrid-gantt": "workspace:^",
+    "vue": "^3.3.0"
   },
   "license": "MIT",
   "repository": {

@@ -317,8 +317,8 @@ importers:
         specifier: workspace:*
         version: link:../datagrid-vue-app
       '@affino/menu-vue':
-        specifier: ^2.1.1
-        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
+        specifier: ^2.2.0
+        version: 2.2.0(vue@3.4.38(typescript@5.9.3))
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
@@ -362,8 +362,8 @@ importers:
         specifier: workspace:*
         version: link:../datagrid-vue
       '@affino/menu-vue':
-        specifier: ^2.1.1
-        version: 2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))
+        specifier: ^2.2.0
+        version: 2.2.0(vue@3.4.38(typescript@5.9.3))
       '@affino/popover-vue':
         specifier: ^1.1.0
         version: 1.1.0(vue@3.4.38(typescript@5.9.3))
@@ -440,13 +440,12 @@ packages:
   '@affino/focus-utils@1.1.0':
     resolution: {integrity: sha512-DjE9w0WLlqmtjSXbmzf2y0WNGvhQ1hTIhkiRV8DPsCmKKXREr/6sm8Yc5PrCLqzuawdYUDzyDBEPxFqhMJOOCg==}
 
-  '@affino/menu-core@1.1.0':
-    resolution: {integrity: sha512-8kXmr/ryhzXSSCF/ew813IhBr2LKztW4+hdpQzKptZnAO3oh8TIB2bY/nFpweVb4Nbl7GZtw+ZXKdKHLTKWpBw==}
+  '@affino/menu-core@1.2.0':
+    resolution: {integrity: sha512-sG8GGC1Uh17gHnBsHPDxpyHX1sLXbuWZKSpc8xR9t2bec7CTeqNvuxoAFqiQNHhq2XjNlXtw3GdkjPM1I1iXrw==}
 
-  '@affino/menu-vue@2.1.1':
-    resolution: {integrity: sha512-83fDTTpdJC8spvtFst6wz6nodKYOawFNxGb4OB2FG7K+qElMxqD/3PJhaiRktM7qtJgwCk0+PguCuMJSAQGgSQ==}
+  '@affino/menu-vue@2.2.0':
+    resolution: {integrity: sha512-u0ewm+w8yL4/iwLwhxV86/eEirja/vimTu/Ft/dZniUQCZ2ZvFFDIfK4/QEYNNcoKznxn5MFjL6FMfs1LinNRQ==}
     peerDependencies:
-      '@affino/menu-core': ^1.1.0
       vue: 3.4.38
 
   '@affino/overlay-host@1.1.0':
@@ -2296,15 +2295,15 @@ snapshots:
 
   '@affino/focus-utils@1.1.0': {}
 
-  '@affino/menu-core@1.1.0':
+  '@affino/menu-core@1.2.0':
     dependencies:
       '@affino/overlay-kernel': 0.2.0
       '@affino/surface-core': 1.1.0
 
-  '@affino/menu-vue@2.1.1(@affino/menu-core@1.1.0)(vue@3.4.38(typescript@5.9.3))':
+  '@affino/menu-vue@2.2.0(vue@3.4.38(typescript@5.9.3))':
     dependencies:
       '@affino/focus-utils': 1.1.0
-      '@affino/menu-core': 1.1.0
+      '@affino/menu-core': 1.2.0
       '@affino/overlay-host': 1.1.0
       '@affino/overlay-kernel': 0.2.0
       vue: 3.4.38(typescript@5.9.3)
