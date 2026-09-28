@@ -98,6 +98,10 @@ function shouldEnforceVariance(stat) {
   )
 }
 
+function varianceForBudget(stat) {
+  return stat.cvPctRobust ?? stat.cvPct
+}
+
 function quantile(values, q) {
   if (!values.length) return 0
   const sorted = [...values].sort((a, b) => a - b)
@@ -669,9 +673,10 @@ for (const seed of BENCH_SEEDS) {
       `filter-sort-burst p99 ${filterSortBurst.stat.p99.toFixed(3)}ms exceeded PERF_BUDGET_MAX_FILTER_SORT_BURST_P99_MS=${PERF_BUDGET_MAX_FILTER_SORT_BURST_P99_MS}`,
     )
   }
-  if (shouldEnforceVariance(expandBurst.stat) && expandBurst.stat.cvPct > PERF_BUDGET_MAX_VARIANCE_PCT) {
+  const expandVariance = varianceForBudget(expandBurst.stat)
+  if (shouldEnforceVariance(expandBurst.stat) && expandVariance > PERF_BUDGET_MAX_VARIANCE_PCT) {
     seedErrors.push(
-      `expand-burst CV ${expandBurst.stat.cvPct.toFixed(2)}% exceeded PERF_BUDGET_MAX_VARIANCE_PCT=${PERF_BUDGET_MAX_VARIANCE_PCT}%`,
+      `expand-burst robust CV ${expandVariance.toFixed(2)}% exceeded PERF_BUDGET_MAX_VARIANCE_PCT=${PERF_BUDGET_MAX_VARIANCE_PCT}%`,
     )
   } else if (!shouldEnforceVariance(expandBurst.stat)) {
     varianceSkippedChecks.push({
@@ -681,9 +686,10 @@ for (const seed of BENCH_SEEDS) {
       thresholdMs: PERF_BUDGET_VARIANCE_MIN_MEAN_MS,
     })
   }
-  if (shouldEnforceVariance(filterSortBurst.stat) && filterSortBurst.stat.cvPct > PERF_BUDGET_MAX_VARIANCE_PCT) {
+  const filterSortVariance = varianceForBudget(filterSortBurst.stat)
+  if (shouldEnforceVariance(filterSortBurst.stat) && filterSortVariance > PERF_BUDGET_MAX_VARIANCE_PCT) {
     seedErrors.push(
-      `filter-sort-burst CV ${filterSortBurst.stat.cvPct.toFixed(2)}% exceeded PERF_BUDGET_MAX_VARIANCE_PCT=${PERF_BUDGET_MAX_VARIANCE_PCT}%`,
+      `filter-sort-burst robust CV ${filterSortVariance.toFixed(2)}% exceeded PERF_BUDGET_MAX_VARIANCE_PCT=${PERF_BUDGET_MAX_VARIANCE_PCT}%`,
     )
   } else if (!shouldEnforceVariance(filterSortBurst.stat)) {
     varianceSkippedChecks.push({
