@@ -59,6 +59,17 @@
           />
         </div>
 
+        <div class="charts-demo__chart-card charts-demo__chart-card--interaction">
+          <AffinoHlocChart
+            :data="HLOC_DATA"
+            title="HLOC Price Range"
+            description="High-low range with open and close ticks on a UTC time axis"
+            :height="360"
+            :margin="{ top: 16, right: 20, bottom: 42, left: 72 }"
+            :y-axis="{ format: formatNumber }"
+          />
+        </div>
+
         <div class="charts-demo__chart-card charts-demo__chart-card--wide">
           <AffinoAreaChart
             :rows="CUMULATIVE_TRAFFIC"
@@ -173,6 +184,7 @@ import {
   AffinoBarChart,
   AffinoChartLegend,
   AffinoHistogram,
+  AffinoHlocChart,
   AffinoLineChart,
   AffinoMetricCard,
   AffinoPieChart,
@@ -191,7 +203,7 @@ import type {
   ChartInteractionPoint,
   ChartLegendItem,
 } from "@affino/charts-vue"
-import type { ChartDatum, MetricFormat, MetricModel, TimeSeries } from "@affino/charts-core"
+import type { ChartDatum, HlocPoint, MetricFormat, MetricModel, TimeSeries } from "@affino/charts-core"
 
 interface MetricCardDemo {
   label: string
@@ -242,6 +254,27 @@ const BALANCE_EQUITY_SERIES: TimeSeries[] = [
       .map((value, index) => ({ time: DEMO_TIME_SERIES_TIMES[index]!, value })),
   },
 ]
+
+const HLOC_DATA: HlocPoint[] = ([
+  [101, 106, 99, 104],
+  [104, 108, 102, 103],
+  [103, 109, 101, 107],
+  [107, 111, 105, 110],
+  [110, 112, 106, 108],
+  [108, 115, 107, 113],
+  [113, 116, 109, 111],
+  [111, 114, 108, 110],
+  [110, 118, 109, 116],
+  [116, 121, 113, 119],
+  [119, 123, 115, 117],
+  [117, 122, 114, 120],
+] as readonly (readonly [number, number, number, number])[]).map(([open, high, low, close], index) => ({
+  time: DEMO_TIME_SERIES_TIMES[index]!,
+  open,
+  high,
+  low,
+  close,
+}))
 
 const TIME_SERIES_INTERACTION = {
   snap: "nearest" as const,

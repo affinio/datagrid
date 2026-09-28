@@ -68,6 +68,10 @@ const tooltip = resolver.resolve(pointerTimestamp)
 
 The package also exports generic bar, line, area, histogram, pie, scatter, band-scale, numeric-scale, layout, and metric-model helpers. `createBarChartGeometry()` includes zero by default and places positive and negative bars around the baseline. Histogram geometry is already public and remains a binned numeric-data primitive, not a financial calculation API.
 
+## HLOC geometry
+
+`createHlocChartGeometry()` accepts strictly timestamp-sorted `{ time, high, low, open, close }` points. It maps each point to a vertical high-low range with an open tick extending left and a close tick extending right; rising, falling, and flat directions are exposed for presentation. It does not calculate trading metrics or add trading semantics.
+
 ## Package boundary
 
 `@affino/charts-core` owns data validation, domains, scales, ticks, tooltip lookup, and geometry. `@affino/charts-vue` owns SVG/DOM rendering, interaction, responsive observation, accessibility, legends, tooltips, crosshair presentation, and themes.

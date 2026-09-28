@@ -5,11 +5,25 @@ Vue 3 SVG chart components backed by `@affino/charts-core`.
 ## Install and styles
 
 ```ts
-import { AffinoBarChart, AffinoTimeSeriesChart } from "@affino/charts-vue"
+import { AffinoBarChart, AffinoHlocChart, AffinoTimeSeriesChart } from "@affino/charts-vue"
 import "@affino/charts-vue/styles.css"
 ```
 
 `@affino/charts-vue/styles.css` is the stable public CSS entry. Do not import hashed `dist` assets. Component geometry and behavior are self-contained; the stylesheet supplies documented light/dark theme tokens.
+
+## HLOC
+
+```vue
+<AffinoHlocChart
+  :data="[
+    { time: Date.UTC(2026, 0, 1), high: 14, low: 8, open: 10, close: 12 },
+    { time: Date.UTC(2026, 0, 2), high: 13, low: 9, open: 12, close: 11 },
+  ]"
+  title="Daily HLOC"
+/>
+```
+
+HLOC renders the high-low range, an open marker to the left, and a close marker to the right. Green/red theme tokens indicate rising/falling points; flat points use the primary series token. The component is a generic visualization primitive and contains no trading, indicator, or transaction semantics.
 
 ## Balance and equity
 
@@ -177,4 +191,4 @@ Equivalent stable CSS custom properties include `--affino-chart-background`, `--
 
 ## Additional components
 
-The package continues to export `AffinoAreaChart`, `AffinoBarChart`, `AffinoChartFrame`, `AffinoChartLegend`, `AffinoHistogram`, `AffinoLineChart`, `AffinoMetricCard`, `AffinoPieChart`, and `AffinoScatterChart`.
+The package continues to export `AffinoAreaChart`, `AffinoBarChart`, `AffinoChartFrame`, `AffinoChartLegend`, `AffinoHistogram`, `AffinoHlocChart`, `AffinoLineChart`, `AffinoMetricCard`, `AffinoPieChart`, and `AffinoScatterChart`.

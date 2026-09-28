@@ -379,3 +379,43 @@ export interface TimeSeriesTooltipResolver {
   readonly timestamps: readonly number[]
   resolve(targetTimestamp: number): TimeSeriesTooltip | null
 }
+
+export interface HlocPoint {
+  /** UTC Unix timestamp in milliseconds. */
+  time: number
+  high: number
+  low: number
+  open: number
+  close: number
+}
+
+export interface HlocChartOptions {
+  data: readonly HlocPoint[]
+  size: ChartSize
+  margin?: Partial<ChartMargin>
+  timeAxis?: TimeAxisOptions
+  yAxis?: TimeSeriesYAxisOptions
+  tickWidth?: number
+}
+
+export type HlocDirection = "up" | "down" | "flat"
+
+export interface HlocPointGeometry extends HlocPoint {
+  index: number
+  x: number
+  highY: number
+  lowY: number
+  openY: number
+  closeY: number
+  openX: number
+  closeX: number
+  direction: HlocDirection
+}
+
+export interface HlocChartGeometry {
+  points: HlocPointGeometry[]
+  plotArea: ChartRect
+  timeDomain: ChartNumericDomain
+  valueDomain: ChartNumericDomain
+  timeTicks: TimeAxisTick[]
+}
