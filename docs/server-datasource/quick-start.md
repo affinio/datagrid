@@ -232,6 +232,19 @@ Optional shared endpoints:
 
 Use these when you want stack undo/redo backed by the server.
 
+If the table is read-only or the backend does not implement these endpoints, disable server-history synchronization explicitly:
+
+```vue
+<DataGrid
+  :row-model="rowModel"
+  :columns="columns"
+  :history="false"
+  :server-history="false"
+/>
+```
+
+`:server-history="false"` prevents the initial status request, the status subscription, and server undo/redo calls. It is independent from the local `history` prop.
+
 Read next:
 
 - [History](../datagrid-history.md)

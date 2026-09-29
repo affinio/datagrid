@@ -19,6 +19,9 @@ export interface DataGridHistoryOptions {
 
 export type DataGridHistoryProp = boolean | DataGridHistoryOptions
 
+/** Controls automatic history synchronization for datasource-backed row models. */
+export type DataGridServerHistoryProp = boolean
+
 export interface DataGridResolvedHistoryOptions {
   enabled: boolean
   depth: number | undefined

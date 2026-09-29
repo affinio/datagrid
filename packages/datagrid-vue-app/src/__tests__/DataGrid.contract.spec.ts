@@ -886,6 +886,7 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("findReplace")
     expect(publicProps).toContain("gridLines")
     expect(publicProps).toContain("history")
+    expect(publicProps).toContain("serverHistory")
     expect(publicProps).toContain("chrome")
     expect(publicProps).toContain("columnReorder")
     expect(publicProps).toContain("rowReorder")
@@ -960,6 +961,7 @@ describe("DataGrid app facade contract", () => {
           controls: true,
           shortcuts: false,
         },
+        serverHistory: false,
       },
     })
 
@@ -995,6 +997,14 @@ describe("DataGrid app facade contract", () => {
       return { operationId: "op-1", ...status }
     })
     const redoHistoryStack = vi.fn(async () => ({ operationId: "op-1", ...status }))
+    const getHistoryStatus = vi.fn(async () => status)
+    const subscribeHistoryStatus = vi.fn((listener: (nextStatus: typeof status) => void) => {
+      listeners.add(listener)
+      listener(status)
+      return () => {
+        listeners.delete(listener)
+      }
+    })
     const rowModel = createDataSourceBackedRowModel<DemoRow>({
       dataSource: {
         async pull() {
@@ -1005,19 +1015,11 @@ describe("DataGrid app facade contract", () => {
         },
         undoHistoryStack,
         redoHistoryStack,
-        async getHistoryStatus() {
-          return status
-        },
+        getHistoryStatus,
         getCachedHistoryStatus() {
           return status
         },
-        subscribeHistoryStatus(listener: (nextStatus: typeof status) => void) {
-          listeners.add(listener)
-          listener(status)
-          return () => {
-            listeners.delete(listener)
-          }
-        },
+        subscribeHistoryStatus,
       } as never,
       resolveRowId: row => row.rowId,
       initialTotal: BASE_ROWS.length,
@@ -1035,6 +1037,9 @@ describe("DataGrid app facade contract", () => {
     })
 
     await flushRuntimeTasks()
+
+    expect(getHistoryStatus).toHaveBeenCalled()
+    expect(subscribeHistoryStatus).toHaveBeenCalled()
 
     const undoButton = findToolbarAction(wrapper, "undo")
     const redoButton = findToolbarAction(wrapper, "redo")
@@ -1055,6 +1060,97 @@ describe("DataGrid app facade contract", () => {
 
     rowModel.dispose()
     wrapper.unmount()
+  })
+
+  it("does not synchronize server history when serverHistory is disabled", async () => {
+    const getHistoryStatus = vi.fn(async () => ({ canUndo: true, canRedo: false }))
+    const subscribeHistoryStatus = vi.fn(() => () => undefined)
+    const undoHistoryStack = vi.fn(async () => ({ operationId: "undo-1" }))
+    const redoHistoryStack = vi.fn(async () => ({ operationId: "redo-1" }))
+    const rowModel = createDataSourceBackedRowModel<DemoRow>({
+      dataSource: {
+        async pull() {
+          return {
+            rows: BASE_ROWS.map((row, index) => ({ index, row, rowId: row.rowId })),
+            total: BASE_ROWS.length,
+          }
+        },
+        getHistoryStatus,
+        subscribeHistoryStatus,
+        undoHistoryStack,
+        redoHistoryStack,
+      } as never,
+      resolveRowId: row => row.rowId,
+      initialTotal: BASE_ROWS.length,
+    })
+
+    const wrapper = mount(DataGrid, {
+      props: {
+        rowModel,
+        columns: COLUMNS,
+        history: false,
+        serverHistory: false,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(getHistoryStatus).not.toHaveBeenCalled()
+    expect(subscribeHistoryStatus).not.toHaveBeenCalled()
+    expect(undoHistoryStack).not.toHaveBeenCalled()
+    expect(redoHistoryStack).not.toHaveBeenCalled()
+    expect(resolveVm(wrapper).history?.canUndo?.()).toBe(false)
+
+    wrapper.unmount()
+    rowModel.dispose()
+  })
+
+  it("cleans server history subscriptions when the datasource changes and on unmount", async () => {
+    const createHistoryRowModel = () => {
+      const listeners = new Set<(status: { canUndo: boolean; canRedo: boolean }) => void>()
+      const subscribeHistoryStatus = vi.fn((listener: (status: { canUndo: boolean; canRedo: boolean }) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      })
+      const rowModel = createDataSourceBackedRowModel<DemoRow>({
+        dataSource: {
+          async pull() {
+            return {
+              rows: BASE_ROWS.map((row, index) => ({ index, row, rowId: row.rowId })),
+              total: BASE_ROWS.length,
+            }
+          },
+          async getHistoryStatus() {
+            return { canUndo: false, canRedo: false }
+          },
+          subscribeHistoryStatus,
+          undoHistoryStack: async () => ({ operationId: "undo-1" }),
+          redoHistoryStack: async () => ({ operationId: "redo-1" }),
+        } as never,
+        resolveRowId: row => row.rowId,
+        initialTotal: BASE_ROWS.length,
+      })
+      return { rowModel, listeners, subscribeHistoryStatus }
+    }
+
+    const first = createHistoryRowModel()
+    const second = createHistoryRowModel()
+    const wrapper = mount(DataGrid, {
+      props: { rowModel: first.rowModel, columns: COLUMNS },
+    })
+
+    await flushRuntimeTasks()
+    expect(first.listeners.size).toBeGreaterThan(0)
+
+    await wrapper.setProps({ rowModel: second.rowModel })
+    await flushRuntimeTasks()
+    expect(first.listeners.size).toBe(0)
+    expect(second.listeners.size).toBeGreaterThan(0)
+
+    wrapper.unmount()
+    expect(second.listeners.size).toBe(0)
+    first.rowModel.dispose()
+    second.rowModel.dispose()
   })
 
   it("routes window-level history shortcuts through the declarative controller", async () => {

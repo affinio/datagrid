@@ -311,7 +311,7 @@ Entrypoint exports:
 - `export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from "./config/dataGridFindReplace"`
 - `export type { DataGridGridLinesHeaderMode, DataGridGridLinesOptions, DataGridGridLinesPreset, DataGridGridLinesProp, } from "./config/dataGridGridLines"`
 - `export type { DataGridGroupByProp, DataGridPaginationProp, } from "./config/dataGridPublicProps"`
-- `export type { DataGridHistoryController, DataGridHistoryControlsMode, DataGridHistoryOptions, DataGridHistoryProp, DataGridHistoryShortcutsMode, } from "./dataGridHistory"`
+- `export type { DataGridHistoryController, DataGridHistoryControlsMode, DataGridHistoryOptions, DataGridHistoryProp, DataGridHistoryShortcutsMode, DataGridServerHistoryProp, } from "./dataGridHistory"`
 - `export type { DataGridLayoutMode, DataGridResolvedLayoutOptions, } from "./config/dataGridLayout"`
 - `export type { DataGridPlaceholderRowCreateParams, DataGridPlaceholderRowFactory, DataGridPlaceholderRowMaterializeTrigger, DataGridPlaceholderRowsOptions, DataGridPlaceholderRowsPolicy, DataGridPlaceholderRowsProp, } from "./config/dataGridPlaceholderRows"`
 - `export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from "./config/dataGridQuickFilter"`
@@ -332,7 +332,7 @@ Entrypoint exports:
 - `export { defineDataGridColumns } from "./config/dataGridFormulaOptions"`
 - `export { normalizeDataGridAppFilterModel, normalizeDataGridAppUnifiedStateFilters, } from "./config/dataGridFilterNormalization"`
 
-Declaration graph hash: `0ce3ebbabe01f1339b5e18af543bc94903d3cc4e1a75dd2a3b4fdc67ca8cec2c`
+Declaration graph hash: `5926fdb2dd02563247f41bd48062d0c8015d505d821dbba5bfe5fbbcae78d388`
 
 ### ./advanced-filter
 
@@ -371,7 +371,7 @@ Entrypoint exports:
 - `export { DataGridWithGantt as DataGrid }`
 - `export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from "./gantt/dataGridGantt"`
 
-Declaration graph hash: `c22c39f8c25bb5e4e4597c178ac1e4f43f786581175e18f58855e5c550d2b1bc`
+Declaration graph hash: `0943f1d5b5b448d1329798c491875830604d7e15242ba16dd06abb6357eafa57`
 
 ### ./internal
 
@@ -406,7 +406,7 @@ Entrypoint exports:
 - `export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"`
 - `export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"`
 
-Declaration graph hash: `f44eeac72cdb837185853274ae30de0f8e55c078d4f446fd947165ed4a5d2242`
+Declaration graph hash: `bcab868ec42f8c98fdfd041de87dbcf8065f221e7d7781d0cd6a86a52d4b4961`
 
 ### ./quick-filter
 

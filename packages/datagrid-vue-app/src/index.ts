@@ -90,6 +90,7 @@ export type {
   DataGridHistoryOptions,
   DataGridHistoryProp,
   DataGridHistoryShortcutsMode,
+  DataGridServerHistoryProp,
 } from "./dataGridHistory"
 export type {
   DataGridTableStageHistoryAdapter,

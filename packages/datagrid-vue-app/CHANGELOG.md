@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.9.2
+
+### Fixes
+
+- Added the public `serverHistory` prop. Set it to `false` for datasource-backed read-only grids to skip server history status requests, subscriptions, and undo/redo calls while keeping local `history` independent.
+
+### Validation
+
+- DataGrid server-history lifecycle contract tests passed.
+
 ## 0.9.1
 
 ### Fixes

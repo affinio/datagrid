@@ -928,6 +928,10 @@ export default defineComponent({
       >,
       required: true,
     },
+    serverHistory: {
+      type: Boolean,
+      default: true,
+    },
     reportFillWarning: {
       type: Function as PropType<((message: string) => void) | undefined>,
       default: undefined,
@@ -3383,8 +3387,12 @@ export default defineComponent({
     const serverHistoryStatus = ref<RendererServerHistoryStatusLike>({ canUndo: false, canRedo: false })
 
     watch(
-      () => props.runtimeRowModel,
-      (_rowModel, _previous, onCleanup) => {
+      () => [props.runtimeRowModel, props.serverHistory] as const,
+      ([_rowModel, serverHistory], _previous, onCleanup) => {
+        if (!serverHistory) {
+          serverHistoryStatus.value = { canUndo: false, canRedo: false }
+          return
+        }
         const dataSource = resolveServerHistoryDataSource()
         serverHistoryStatus.value = dataSource?.getCachedHistoryStatus?.() ?? { canUndo: false, canRedo: false }
         if (!dataSource) {
@@ -3416,6 +3424,9 @@ export default defineComponent({
       canUndo: () => serverHistoryStatus.value.canUndo === true,
       canRedo: () => serverHistoryStatus.value.canRedo === true,
       runHistoryAction: async direction => {
+        if (!props.serverHistory) {
+          return null
+        }
         const dataSource = resolveServerHistoryDataSource()
         if (!dataSource) {
           return null
@@ -3530,7 +3541,7 @@ export default defineComponent({
       historyEnabled: computed(() => props.history.enabled),
       historyMaxDepth: computed(() => props.history.depth),
       historyShortcuts: computed(() => props.history.shortcuts),
-      history: props.history.adapter ?? (resolveServerHistoryDataSource() ? serverHistoryAdapter : undefined),
+      history: props.history.adapter ?? (props.serverHistory && resolveServerHistoryDataSource() ? serverHistoryAdapter : undefined),
       isCellEditable: props.isCellEditable,
       isContextMenuVisible: () => contextMenuVisible(),
       closeContextMenu: () => closeRuntimeContextMenu(),

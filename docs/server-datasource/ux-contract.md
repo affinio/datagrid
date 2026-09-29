@@ -38,6 +38,8 @@ const rowModel = createDataSourceBackedRowModel<Row>({
 
 For this path, sorting, column filters, quick filter, advanced filter, grouping, pivoting, aggregation, viewport loading, edits, fill, history, and invalidations all pass through the same row-model lifecycle.
 
+For a read-only backend without history endpoints, pass `:server-history="false"` to `DataGrid`. This disables server-history status synchronization and undo/redo calls without changing the separate local `history` setting. The default remains enabled for backwards compatibility.
+
 That lifecycle is what provides stale-while-refresh behavior: cached visible rows remain readable while the server request is unresolved, and the cache is replaced only after a successful response.
 
 ## Enterprise Contract

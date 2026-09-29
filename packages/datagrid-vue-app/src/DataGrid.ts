@@ -174,6 +174,7 @@ import {
   resolveDataGridHistory,
   type DataGridHistoryController,
   type DataGridHistoryProp,
+  type DataGridServerHistoryProp,
 } from "./dataGridHistory"
 import type {
   DataGridAppViewMode,
@@ -821,6 +822,10 @@ const dataGridProps = {
     type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
     default: undefined,
   },
+  serverHistory: {
+    type: Boolean as PropType<DataGridServerHistoryProp | undefined>,
+    default: true,
+  },
   chrome: {
     type: [String, Object] as PropType<DataGridChromeProp | undefined>,
     default: undefined,
@@ -1438,8 +1443,12 @@ const DataGridRuntimeComponent = defineComponent({
     })
 
     watch(
-      resolvedRowModel,
-      (rowModel, _previous, onCleanup) => {
+      () => [resolvedRowModel.value, props.serverHistory] as const,
+      ([rowModel, serverHistory], _previous, onCleanup) => {
+        if (!serverHistory) {
+          serverHistoryStatus.value = { canUndo: false, canRedo: false }
+          return
+        }
         const dataSource = resolveServerHistoryDataSource(rowModel as DataGridRowModel<Record<string, unknown>> | null)
         serverHistoryStatus.value = dataSource?.getCachedHistoryStatus?.() ?? {
           canUndo: false,
@@ -1469,7 +1478,7 @@ const DataGridRuntimeComponent = defineComponent({
 
     const serverHistoryController = computed<DataGridHistoryController>(() => {
       const dataSource = resolveServerHistoryDataSource(resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null)
-      if (!resolvedHistory.value.enabled || resolvedHistory.value.adapter || !dataSource) {
+      if (!props.serverHistory || !resolvedHistory.value.enabled || resolvedHistory.value.adapter || !dataSource) {
         return disabledHistoryController
       }
       return {
@@ -1720,6 +1729,7 @@ const DataGridRuntimeComponent = defineComponent({
         viewMode: currentViewMode.value,
         gantt: props.gantt,
         history: resolvedHistory.value,
+        serverHistory: props.serverHistory,
         chrome: resolvedChrome.value,
         registerHistoryController,
         registerStructuralRowActionRunner,

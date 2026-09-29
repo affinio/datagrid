@@ -576,6 +576,8 @@ Supported history options:
 - `controls`: `false`, `"toolbar"`, or `"external-only"`
 - `adapter`: provide an external history source instead of the built-in app intent history
 
+For datasource-backed tables, `server-history` is a separate boolean prop. It defaults to `true` for backwards compatibility. Set `:server-history="false"` when the backend does not expose history endpoints; this prevents status polling/subscription and server undo/redo calls without changing local `history` behavior.
+
 Notes:
 
 - `depth` limits undoable transactions/intents, not raw per-cell keystrokes.

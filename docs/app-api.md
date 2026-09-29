@@ -40,6 +40,7 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | quick-filter / advanced-filter / find-replace | Optional query and editing tools. |
 | grid-lines | Grid-line presentation preset/options. |
 | history | Built-in or injected undo/redo controls. |
+| server-history | Enable synchronization with datasource-backed server history. Defaults to `true`; set `:server-history="false"` when the backend does not expose history endpoints. This is independent from local `history`. |
 | chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. |
 | theme | Theme preset or theme configuration. |
 
@@ -104,6 +105,21 @@ The public ref exposes:
 - focus-anchor capture/restore and selection aggregate helpers.
 
 Use getApi() only when the component-level props/events do not express the integration. For core namespace semantics, see [Core API](./core-api.md).
+
+### Server history synchronization
+
+`server-history` (`DataGridServerHistoryProp`) controls only the automatic server-history integration for a datasource-backed row model. With `:server-history="false"`, DataGrid does not call `getHistoryStatus()`, does not subscribe through `subscribeHistoryStatus()`, and does not call server undo/redo methods. The local `history` prop keeps its existing meaning and remains independent.
+
+```vue
+<DataGrid
+  :row-model="rowModel"
+  :columns="columns"
+  :history="false"
+  :server-history="false"
+/>
+```
+
+The default is enabled for backwards compatibility. Set it to `false` for read-only tables or backends that do not implement the history endpoints.
 
 ## Optional feature entrypoints
 
