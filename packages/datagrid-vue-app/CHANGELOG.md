@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.9.1
+
+### Fixes
+
+- Removed the remaining root declaration path that loaded Gantt types through
+  saved-view types when the optional Gantt peer was not installed.
+
+### Validation
+
+- Packed base and Gantt consumers type-check successfully without and with the
+  optional peer respectively.
+
 ## 0.9.0
 
 ### Fixes

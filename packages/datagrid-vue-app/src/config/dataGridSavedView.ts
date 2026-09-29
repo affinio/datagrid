@@ -1,5 +1,5 @@
 import type { DataGridMigrateStateOptions, DataGridUnifiedState } from "@affino/datagrid-vue"
-import type { DataGridAppViewMode } from "../gantt/dataGridGantt.types"
+import type { DataGridAppViewMode } from "./dataGridAppView"
 
 export interface DataGridSavedViewSnapshot<TRow extends Record<string, unknown> = Record<string, unknown>> {
   state: DataGridUnifiedState<TRow>

@@ -10,6 +10,7 @@ describe("datagrid-vue-app package entrypoints", () => {
     const rootEntry = readFileSync(resolve(distRoot, "index.js"), "utf8")
     const rootTypes = readFileSync(resolve(distRoot, "index.d.ts"), "utf8")
     const dataGridTypes = readFileSync(resolve(distRoot, "DataGrid.d.ts"), "utf8")
+    const savedViewTypes = readFileSync(resolve(distRoot, "config/dataGridSavedView.d.ts"), "utf8")
 
     expect(rootEntry).not.toContain("DataGridGanttStage")
     expect(rootEntry).not.toContain("@affino/datagrid-gantt")
@@ -17,6 +18,7 @@ describe("datagrid-vue-app package entrypoints", () => {
     expect(rootTypes).not.toContain("./gantt/dataGridGantt.types")
     expect(dataGridTypes).not.toContain("@affino/datagrid-gantt")
     expect(dataGridTypes).not.toContain("./gantt/dataGridGantt.types")
+    expect(savedViewTypes).not.toContain("../gantt/dataGridGantt.types")
   })
 
   it("builds the Gantt runtime through its explicit subpath", () => {
