@@ -1,4 +1,4 @@
-export type DataGridAppViewMode = "table" | "gantt"
+export type { DataGridAppViewMode } from "../config/dataGridAppView"
 
 export type {
   BuildDataGridGanttDependencyPathsInput,

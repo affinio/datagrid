@@ -178,7 +178,7 @@ import {
 import type {
   DataGridAppViewMode,
   DataGridGanttProp,
-} from "./gantt/dataGridGantt.types"
+} from "./config/dataGridAppView"
 import type {
   DataGridTableStageCenterPaneDiagnostics,
   DataGridTableStageCellClass,

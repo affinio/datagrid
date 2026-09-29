@@ -100,10 +100,10 @@ import {
   type DataGridRowIndexMenuActionKey,
   type DataGridRowIndexMenuOptions,
 } from "../overlays/dataGridContextMenu"
-import {
-  type DataGridAppViewMode,
-  type DataGridGanttProp,
-} from "../gantt/dataGridGantt.types"
+import type {
+  DataGridAppViewMode,
+  DataGridGanttProp,
+} from "../config/dataGridAppView"
 import type { DataGridResolvedChromeOptions, DataGridToolbarPlacement } from "../config/dataGridChrome"
 import type { DataGridRowReorderOptions } from "../config/dataGridRowReorder"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"

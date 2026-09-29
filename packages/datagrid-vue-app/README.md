@@ -90,7 +90,7 @@ Use subpath imports when you want optional feature modules explicitly:
 
 Practical implications:
 
-- ordinary `DataGrid` table usage no longer needs to pull `@affino/datagrid-gantt` through the root runtime graph
+- ordinary `DataGrid` table usage no longer needs to install or resolve `@affino/datagrid-gantt`; the optional peer is required only by the explicit Gantt entrypoint
 - gantt stage code is loaded lazily only when the gantt view is rendered
 - advanced filter, quick filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
 

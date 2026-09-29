@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.9.0
+
+### Fixes
+
+- Kept the optional Gantt peer out of the root TypeScript declaration graph;
+  Gantt types remain available through `@affino/datagrid-vue-app/gantt`.
+
+### Validation
+
+- Package build, type-check, entrypoint contracts, and isolated base/Gantt
+  consumer type checks passed.
+
 ## 0.8.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
@@ -45,6 +45,7 @@
   "scripts": {
     "build": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && vite build && vue-tsc -p tsconfig.json --declaration --emitDeclarationOnly --outDir dist",
     "type-check": "pnpm --filter @affino/datagrid-chrome build && pnpm --filter @affino/datagrid-gantt build && pnpm --filter @affino/datagrid-vue build && vue-tsc -p tsconfig.json --noEmit && vue-tsc -p tsconfig.type-contracts.json --noEmit",
+    "test:consumer-types": "node ../../scripts/test-datagrid-vue-app-package-types.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
     "test": "pnpm run type-check && pnpm run test:unit"
   },

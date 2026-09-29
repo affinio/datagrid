@@ -213,29 +213,9 @@ export type {
   DataGridGroupByProp,
   DataGridPaginationProp,
 } from "./config/dataGridPublicProps"
+export type { DataGridAppViewMode } from "./config/dataGridAppView"
 export type {
   DataGridVirtualizationOptions,
   DataGridVirtualizationProp,
 } from "./config/dataGridVirtualization"
-export type {
-  DataGridAppViewMode,
-  DataGridGanttDependencyRef,
-  DataGridGanttDependencyType,
-  DataGridGanttOptions,
-  DataGridGanttProp,
-  DataGridGanttZoomLevel,
-  DataGridResolvedWorkingCalendar,
-  DataGridTimelineHorizontalAlign,
-  DataGridTimelineLine,
-  DataGridTimelineModel,
-  DataGridTimelineRange,
-  DataGridTimelineRenderModels,
-  DataGridTimelineSegment,
-  DataGridTimelineSpan,
-  DataGridTimelineViewport,
-  DataGridWorkingCalendar,
-  BuildDataGridTimelineRenderModelsInput,
-  ResolveDataGridTimelineRangeInput,
-} from "./gantt/dataGridGantt.types"
-
 export { default } from "./DataGrid"
