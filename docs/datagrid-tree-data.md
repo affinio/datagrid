@@ -1,6 +1,6 @@
 # DataGrid TreeData Guide
 
-Updated: `2026-02-11`
+Status: maintained public documentation.
 
 This document describes the canonical `treeData` contract for `@affino/datagrid-core`, including policies, examples, failure modes, and migration from group-by-only setups.
 
@@ -192,6 +192,6 @@ Behavioral difference to expect:
 
 ## References
 
-- `docs/datagrid-tree-data-behavior-matrix.md`
-- `docs/datagrid-model-contracts.md`
-- `docs/datagrid-data-source-protocol.md`
+- [TreeData behavior matrix](./reference/datagrid-tree-data-behavior-matrix.md)
+- `docs/internal/reference/datagrid-model-contracts.md`
+- `docs/reference/datagrid-data-source-api.md`

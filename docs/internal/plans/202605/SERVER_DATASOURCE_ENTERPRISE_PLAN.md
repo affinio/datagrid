@@ -18,8 +18,8 @@ Current execution state:
 - Status: Completed. The server datasource docs now distinguish the backward-compatible HTTP protocol from the stricter enterprise integration profile, require stable row ids/indexes and consistency tokens for enterprise integrations, and explicitly mark offline, websocket/SSE, server grouping/tree/pivot projection, and server-side series fill as unsupported in the current implementation.
 - Objective: make the golden path, required enterprise fields, row identity invariants, and unsupported features explicit before runtime hardening.
 - Affected packages/files:
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
   - `docs/server-datasource/ux-contract.md`
   - `docs/audits/SERVER_DATASOURCE_ENTERPRISE_AUDIT.md`
 - Expected behavior change: no runtime behavior change; integrations have a clearer enterprise contract without tightening public protocol compatibility.
@@ -39,8 +39,8 @@ Current execution state:
   - `packages/datagrid-server-client/src/changeFeedPoller.ts`
   - `packages/datagrid-server-client/src/changeFeedPoller.spec.ts`
   - `packages/datagrid-server-client/src/client.spec.ts`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: transient 5xx/network failures on reads can recover within a bounded retry budget; mutations remain single-attempt unless a future idempotency contract enables retry.
 - Tests added/covered:
   - Pull retries retryable failures and stops at the configured budget.
@@ -79,7 +79,7 @@ Current execution state:
   - `packages/datagrid-server-client/src/changeFeedMapping.ts`
   - `packages/datagrid-server-client/src/invalidation.ts`
   - `backend/tests/test_server_demo_changes.py`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: all supported invalidation kinds have deterministic cache effects and tests; dataset invalidation no longer blanks the mounted viewport before the refresh response arrives.
 - Tests to add/update:
   - Cell invalidation maps to the smallest supported row-model refresh scope.
@@ -98,8 +98,8 @@ Current execution state:
   - `backend/app/features/server_demo/schemas.py`
   - `backend/app/features/server_demo/projection.py`
   - `backend/tests/test_server_demo_read.py`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/backend-fastapi.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/backend-fastapi.md`
 - Expected behavior change: integrations cannot misread accepted frontend query fields as implemented server-demo grouped/tree/pivot projections; unsupported projection requests fail with an explicit capability error.
 - Tests to add/update:
   - Unsupported projection fields produce deterministic capability errors.
@@ -116,8 +116,8 @@ Current execution state:
   - `packages/datagrid-server-client/src/liveUpdateTransport.ts`
   - `packages/datagrid-server-client/src/client.ts`
   - `packages/datagrid-server-adapters/src/index.ts`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: polling remains the default; future websocket/SSE transports have a defined adapter boundary that reuses the same dataset-version, invalidation, row snapshot, diagnostics, and invalid-cursor recovery semantics.
 - Tests to add/update:
   - Transport-neutral start/stop delegates to the configured transport.
@@ -132,8 +132,8 @@ Current execution state:
 - Status: Completed docs-first slice. Offline mutation replay remains explicitly unsupported; reconnect is defined as read/live recovery through cached visible rows, fresh viewport pull, last-seen `datasetVersion`, and dataset invalidation fallback. Durable offline replay requires a future approved operation-id/idempotency API.
 - Objective: either keep offline explicitly unsupported or propose the public operation-id/idempotency contract required for durable offline replay.
 - Affected packages/files:
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
   - `docs/server-datasource/ux-contract.md`
 - Expected behavior change: no runtime behavior change; host apps now have an explicit offline/reconnect policy and must not imply durable mutation replay.
 - Tests to add/update:

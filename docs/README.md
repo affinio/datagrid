@@ -1,66 +1,66 @@
 # Affino DataGrid Documentation
 
-This folder separates user-facing documentation from internal planning material.
+This is the public documentation for the DataGrid repository. Choose one entry point and stay within that layer until you need more control.
 
-## User-Facing Entry Points
+## Start here
 
-- [Codex reference map](./codex-reference-map.md) - focused reading path for code-review, quality, interaction, virtualization, and server datasource changes.
-- [Server datasource](./server-datasource/README.md) - production integration path for backend-owned tables.
-- [Server datasource integration map](./server-datasource/integration-docs-map.md) - ordered reading path for package users and Codex agents.
-- [External adoption audit](./datagrid-external-adoption-audit.md) - ranked first-time adoption frictions and slice roadmap.
-- [README entry flow audit](./datagrid-readme-entry-flow-audit.md) - proposed external README structure and onboarding flow.
-- [Positioning strategy audit](./datagrid-positioning-strategy-audit.md) - competitive positioning, OSS/enterprise messaging, and demo priorities.
-- [Stable API ergonomics audit](./datagrid-stable-api-ergonomics-audit.md) - adoption-focused review of core, Vue, and Vue app stable API complexity.
-- [Sandbox demo audit](./datagrid-sandbox-demo-audit.md) - adoption-focused review of sandbox first impression, demo hierarchy, and enterprise showcase gaps.
-- [OSS ecosystem audit](./datagrid-oss-ecosystem-audit.md) - open-source maturity review covering package boundaries, semver, contributors, and trust signals.
-- [Package map](./datagrid-package-map.md) - package roles, entrypoint tiers, install paths, and beginner recommendations.
-- [API start here](./datagrid-api-start-here.md) - stable API starter path, mutation choices, selection terminology, and server datasource pointers.
-- [Product report RU](./datagrid-product-report.ru.md) - simple product-oriented overview for engineers evaluating Affino DataGrid.
-- [Feature catalog](./datagrid-feature-catalog.md) - capability overview across packages.
-- [Migration guide](./datagrid-migration-guide.md) - compatibility and migration notes.
-- [Troubleshooting runbook](./datagrid-troubleshooting-runbook.md) - operational debugging guide.
-- [Virtualization support matrix](./datagrid-virtualization-support-matrix.md) - supported, partial, and unsupported enterprise virtualization behavior.
+- [Getting started](./getting-started.md) - install the grid and render a useful table in a Vue application.
+- [App layer guide](./app-layer.md) - the recommended, self-contained path for product teams using `DataGrid`.
+- [Vue adapter guide](./vue-adapter.md) - headless Vue runtime, custom renderers, row models, and adapter ownership.
+- [Core API guide](./core-api.md) - framework-independent row models, `DataGridApi`, lifecycle, state, events, and projection semantics.
+- [Core factories reference](./reference/datagrid-core-factories-reference.md) - core runtime assembly and constructor options.
+- [Package map](./datagrid-package-map.md) - package roles and when to move between layers.
+- [Feature catalog](./datagrid-feature-catalog.md) - capability matrix and runtime modes.
+- [Support status](./support-status.md) - implemented, partial, planned, advanced, and internal labels.
+- [Examples](./examples/README.md) - copyable local, editing, state, and server integration examples.
+- [App component API](./app-api.md) - props, events, state, and component refs.
+- [API stability](./api-stability.md) - stable, advanced, and internal import guarantees.
 
-## Core References
+The app guide is the primary user experience. The Vue and core guides are complete integration surfaces, not prerequisites for ordinary usage.
 
-- [Grid API](./datagrid-grid-api.md)
-- [Event matrix](./datagrid-event-matrix.md)
-- [Public API inventory](./datagrid-public-api-inventory.md)
-- [Core factories](./datagrid-core-factories-reference.md)
-- [Advanced core reference](./datagrid-core-advanced-reference.md)
-- [Model contracts](./datagrid-model-contracts.md)
-- [State/events/diagnostics](./datagrid-state-events-compute-diagnostics.md)
-- [History](./datagrid-history.md)
-- [Editing](./datagrid-editing.md)
-- [Clipboard](./datagrid-clipboard.md)
+## Integration guides
+
+- [Server datasource quick start](./server-datasource/quick-start.md)
+- [Server datasource protocol](./server-datasource/reference/protocol.md)
+- [Server datasource frontend adapter](./server-datasource/reference/frontend-adapter.md)
+- [State and saved views](./datagrid-state-events-compute-diagnostics.md)
+- [Editing and mutations](./datagrid-editing.md)
+- [Clipboard and range workflows](./datagrid-clipboard.md)
 - [Accessibility](./datagrid-accessibility.md)
-- [Headless accessibility contract](./datagrid-headless-a11y-contract.md)
-- [Data source protocol](./datagrid-data-source-protocol.md)
+- [Troubleshooting](./datagrid-troubleshooting-runbook.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Security policy](../SECURITY.md)
+- [Code of conduct](../CODE_OF_CONDUCT.md)
 
-## Feature Guides
+## Feature guides
 
 - [Quick filter](./datagrid-quick-filter.md)
-- [Formula engine guide](./datagrid-formula-engine-guide.md)
-- [Formula function reference](./datagrid-formula-engine-function-reference.md)
+- [Formula engine](./datagrid-formula-engine-guide.md)
 - [Tree data](./datagrid-tree-data.md)
 - [Gantt](./datagrid-gantt.md)
 - [Spreadsheet Vue app](./datagrid-spreadsheet-vue-app.md)
 
-## Package And Architecture Notes
+## API and architecture reference
 
+- [Unified Grid API](./datagrid-grid-api.md)
+- [Event matrix](./reference/datagrid-event-matrix.md)
+- [Data source API](./reference/datagrid-data-source-api.md)
 - [Architecture](./datagrid-architecture.md)
-- [AI integration roadmap](./AI_INTEGRATION_ROADMAP.md)
-- [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
-- [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)
-- [Orchestration public contract](./datagrid-orchestration-public-contract.md)
-- [Theme ownership](./datagrid-theme-ownership.md)
-- [Renderer lifecycle](./datagrid-renderer-lifecycle.md)
-- [Plugin lifecycle](./datagrid-plugin-lifecycle.md)
-- [Plugin capability model](./datagrid-plugin-capability-model.md)
+- [Virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md)
+- [Vue stable entrypoint](./reference/datagrid-vue-stable-entrypoint.md)
+- [Vue advanced entrypoint](./reference/datagrid-vue-advanced-entrypoint.md)
+- [Plugin capability model](./reference/datagrid-plugin-capability-model.md)
+- [Community vs enterprise](./datagrid-vue-app-community-vs-enterprise.md)
 
-## Specialized Folders
+## Specialized folders
 
-- [server-datasource](./server-datasource/README.md) - canonical server datasource integration kit.
-- [perf](./perf/) - benchmark baselines, performance gates, and performance plans.
+- [server-datasource](./server-datasource/README.md) - backend integration kit.
+- [perf](./perf/) - benchmark baselines and performance gates.
 - [quality](./quality/) - generated/static quality baselines.
-- [internal](./internal/README.md) - audits, plans, pipelines, checklists, and todos. These are not the primary user docs.
+- [internal](./internal/README.md) - audits, plans, pipelines, checklists, and todos.
+
+Research notes, audits, hypotheses, performance baselines, and delivery plans are intentionally excluded from the public reading path. Maintainers can find them under `docs/internal/` and `docs/perf/`.
+
+## Advanced reference
+
+- [Public reference index](./reference/README.md)

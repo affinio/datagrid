@@ -76,7 +76,7 @@ The app clipboard path exposes paste state as `idle`, `pending`, or `rejected`. 
 
 Loaded materialized rows can use the local clipboard path. Stale virtual ranges remain blocked. Unloaded virtual copy, cut, and paste ranges can use explicit opt-in server clipboard delegates; without those delegates, they remain blocked with a user-facing status. Grouped virtual operation semantics stay backend-defined and should remain blocked unless a host documents group behavior.
 
-Future server clipboard operations should reuse the operation model in `docs/server-datasource/selection-operations.md` and the planned protocol shape in `docs/server-datasource/protocol.md`: operation id, base revision, projection identity, normalized ranges, stable column keys, payload format, invalidation, warnings, partial results, and server history state.
+Future server clipboard operations should reuse the operation model in `docs/server-datasource/reference/selection-operations.md` and the planned protocol shape in `docs/server-datasource/reference/protocol.md`: operation id, base revision, projection identity, normalized ranges, stable column keys, payload format, invalidation, warnings, partial results, and server history state.
 
 ## Browser Clipboard Fallback
 

@@ -1,6 +1,6 @@
 # DataGrid Package Map
 
-Updated: 2026-05-24
+Status: maintained public documentation.
 
 This page is the external package decision sheet for Affino DataGrid. For normal Vue applications, start with `@affino/datagrid-vue-app`.
 

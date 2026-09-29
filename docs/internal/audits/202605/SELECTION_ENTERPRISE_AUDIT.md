@@ -16,17 +16,17 @@ Target enterprise readiness: **9/10** after hardening invariants, large-range/se
 - `datagrid-vue-app` owns rendered selection state, row-selection UI, pinned-pane overlays, additive header and row-index selection styling, stage focus lookup, pointer routing, fill handles, and range-move hover affordances.
 - `datagrid-orchestration` owns reusable interaction composables for keyboard commands, drag selection, pointer routing, range move, fill handle start, overlay generation, row selection, and clipboard mutation helpers.
 
-This layering is compatible with the project architecture. `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, browser/component placeholder row materialization selection handoff, virtual stale marking, transient interaction cleanup on projection changes, a11y state, additive header/row-index parity, pinned vertical remount, browser/component horizontal remount, browser-level editor scroll/commit behavior, browser-level server datasource placeholder replacement, component-level editor remount, and performance gates. The remaining high-risk proof point outside server operation delegation is real-device touch validation.
+This layering is compatible with the project architecture. `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the selection state-machine ownership contract, and focused contracts cover active-range anchor ownership, focus fallback with `preventScroll`, pointer-selection edit handoff, browser/component placeholder row materialization selection handoff, virtual stale marking, transient interaction cleanup on projection changes, a11y state, additive header/row-index parity, pinned vertical remount, browser/component horizontal remount, browser-level editor scroll/commit behavior, browser-level server datasource placeholder replacement, component-level editor remount, and performance gates. The remaining high-risk proof point outside server operation delegation is real-device touch validation.
 
 ## Exact Files Reviewed
 
 Documentation:
 
 - `AGENTS.md`
-- `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
-- `docs/datagrid-groupby-rowmodel-projection.md`
+- `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
+- `docs/internal/reference/datagrid-groupby-rowmodel-projection.md`
 - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
-- `docs/datagrid-headless-a11y-contract.md`
+- `docs/reference/datagrid-headless-a11y-contract.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 
 Core selection:
@@ -111,7 +111,7 @@ Tests and benchmarks sampled:
    `virtualSelection.ts` can compute loaded coverage from row-model intervals, and `createDataSourceBackedRowModel` exposes `getLoadedRowIntervals(range)` from its range cache. The fallback row-by-row helper still has a scan cap for row models that do not provide interval metadata.
 
 2. **Server-backed selection semantics are documented but not fully implemented.**
-   `docs/server-datasource/selection-operations.md` defines the operation matrix for materialized, server, blocked, and virtual modes across copy/export, cut, clear/delete, paste, fill, range move, summary, and row selection. Clipboard, paste target, clear/delete, and local range-move paths now block stale or unloaded virtual work before local materialized mutation, and unloaded virtual ranges remain blocked without a configured server delegate. Server fill has dedicated plumbing; implementation remains for broader delegated copy/export, cut, clear/delete, paste, range move, and summary operations.
+   `docs/server-datasource/reference/selection-operations.md` defines the operation matrix for materialized, server, blocked, and virtual modes across copy/export, cut, clear/delete, paste, fill, range move, summary, and row selection. Clipboard, paste target, clear/delete, and local range-move paths now block stale or unloaded virtual work before local materialized mutation, and unloaded virtual ranges remain blocked without a configured server delegate. Server fill has dedicated plumbing; implementation remains for broader delegated copy/export, cut, clear/delete, paste, range move, and summary operations.
 
 3. **Touch selection has browser coverage, but real-device validation remains open.**
    `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md` now documents the scroll-first touch model: stationary long press selects/focuses, body-cell touch drag remains native-scroll-first, and explicit touch handles own selection extension, fill, range move, and resize starts. Playwright covers these contracts, but the enterprise tablet matrix and hardware thresholds still need real-device validation.
@@ -142,7 +142,7 @@ Tests and benchmarks sampled:
    Row selection has a `focusedRow`, selected row ids, and all/excluded mode in `rowSelection.ts`. Cell selection has `activeCell` and ranges. This separation is now documented in the selection state-machine contract; remaining work is server-backed row-selection projection changes.
 
 2. **Grouped/tree selection is covered as a flattened-row app interaction surface.**
-   `docs/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
+   `docs/internal/reference/datagrid-groupby-rowmodel-projection.md` and core tests define flattened-row semantics and optional group-to-children behavior. App clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block ranges that include grouped/tree projection rows, avoiding partial leaf-only mutations. App contracts cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
 
 3. **Selection invalidation now covers virtual stale marking and transient interaction cleanup, but still needs remount/server proof.**
    `useDataGridAppSelection.ts` marks virtual selections stale on projection key changes, row selection can reconcile against current rows, and `useDataGridAppInteractionController.ts` clears transient fill, range-move, drag-selection, and pending clipboard state when projection identity changes. Browser remount flows now cover active cell, additive multi-ranges, local placeholder materialization, and server datasource loading-placeholder replacement; future gaps are server-delegated operation semantics over unloaded ranges.
@@ -165,7 +165,7 @@ Tests and benchmarks sampled:
    This is acceptable for tests/simple equality but should not become a hot-path enterprise diff primitive for large multi-range snapshots.
 
 3. **Some interaction docs are broader than tested behavior.**
-   `docs/datagrid-sheets-user-interactions-and-integrator-api.md` describes a rich Sheets-like contract. The implementation is close, but enterprise docs should distinguish implemented, partial, and planned behavior for server-backed and touch scenarios.
+   `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md` describes a rich Sheets-like contract. The implementation is close, but enterprise docs should distinguish implemented, partial, and planned behavior for server-backed and touch scenarios.
 
 ## Focus Area Evaluation
 

@@ -1,6 +1,6 @@
 # DataGrid State, Events, Compute, Diagnostics
 
-Updated: `2026-03-03`
+Status: maintained public documentation.
 
 This document defines the stable platform-level integration surface exposed by `DataGridApi`.
 
@@ -59,7 +59,7 @@ Important:
 ## Typed public events (`api.events`)
 
 Subscribe via `api.events.on(event, listener)`.
-For cross-layer mapping between `api.events`, Vue component emits, plugins, and local feature events, see [Event matrix](./datagrid-event-matrix.md).
+For cross-layer mapping between `api.events`, Vue component emits, plugins, and local feature events, see [Event matrix](./reference/datagrid-event-matrix.md).
 
 Stable event set:
 

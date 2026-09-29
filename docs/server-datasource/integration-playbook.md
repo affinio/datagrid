@@ -1,146 +1,36 @@
-# Integration Playbook
+# Server datasource integration playbook
 
-Use this as a mechanical guide for exposing a real backend table through Affino DataGrid.
+Status: maintained public integration guide.
 
-The example below uses an `Auctions` table with a SQLAlchemy model called `AuctionRowModel`.
+Use this page when the [quick start](./quick-start.md) works and you are
+integrating a real backend table. It explains the implementation order and
+ownership decisions. Exact HTTP payloads belong to the
+[protocol reference](./reference/protocol.md); reusable Python and TypeScript
+starting points belong to the [templates](./templates/).
 
-Columns:
+## Before writing code
 
-- `id`
-- `index`
-- `title`
-- `status`
-- `category`
-- `currentPrice`
-- `updatedAt`
+Decide these boundaries first:
 
-Assumption:
+| Decision | Recommended owner |
+| --- | --- |
+| Canonical rows, filtering, sorting, paging | Backend repository/query layer |
+| Column permissions and coercion | Backend column registry |
+| Revision and dataset version | Backend persistence layer |
+| Selection, editing, and viewport UX | DataGrid row model and app layer |
+| Workspace scope | `X-Workspace-Id` initially; authenticated scope in production |
+| HTTP request/response naming | JSON protocol aliases; keep them stable |
 
-- the backend owns the canonical rows
-- the frontend talks to the backend through HTTP
-- the workspace scope comes from `X-Workspace-Id` unless you later bind it to auth
+Do not put SQL translation in a FastAPI route or replace the datasource-backed
+row model with app-level reloads for ordinary filter and sort changes. The
+server owns data access; the grid owns projection and interaction state.
 
-## Step 1: Define SQLAlchemy Model
+## Step 1: Define the table contract
 
-Create the row model first. Keep stable row ids and a deterministic ordering key.
-
-```py
-from __future__ import annotations
-
-from datetime import datetime
-
-from sqlalchemy import DateTime, Index, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
-
-from your_app.infrastructure.db import Base
-
-
-class AuctionRowModel(Base):
-    __tablename__ = "auction_rows"
-    __table_args__ = (
-        Index("ix_auction_rows_workspace_id", "workspace_id"),
-        Index("ix_auction_rows_workspace_id_row_index", "workspace_id", "row_index"),
-        Index("ix_auction_rows_row_index", "row_index"),
-        Index("ix_auction_rows_status", "status"),
-        Index("ix_auction_rows_category", "category"),
-        Index("ix_auction_rows_current_price", "current_price"),
-        Index("ix_auction_rows_updated_at", "updated_at"),
-    )
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    workspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    row_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    status: Mapped[str] = mapped_column(String, nullable=False)
-    category: Mapped[str] = mapped_column(String, nullable=False)
-    current_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-```
-
-Do not invent a second ordering field. Pick one index field and keep it stable.
-
-## Step 2: Define Backend Column Registry
-
-Create a registry that marks each column as editable, sortable, filterable, or histogram-enabled.
+Create one table definition that connects the ORM model, stable row identity,
+ordering, workspace scope, timestamps, and column registry.
 
 ```py
-from affino_grid_backend import GridColumnDefinition
-
-AUCTION_COLUMNS = {
-    "id": GridColumnDefinition(
-        id="id",
-        model_attr="id",
-        readonly=True,
-        sortable=True,
-        filterable=True,
-    ),
-    "index": GridColumnDefinition(
-        id="index",
-        model_attr="row_index",
-        readonly=True,
-        sortable=True,
-        filterable=True,
-    ),
-    "title": GridColumnDefinition(
-        id="title",
-        model_attr="title",
-        editable=True,
-        sortable=True,
-        filterable=True,
-        histogram=False,
-        value_type="string",
-    ),
-    "status": GridColumnDefinition(
-        id="status",
-        model_attr="status",
-        editable=True,
-        sortable=True,
-        filterable=True,
-        histogram=True,
-        value_type="enum",
-        enum_values=frozenset({"Draft", "Open", "Closed"}),
-    ),
-    "category": GridColumnDefinition(
-        id="category",
-        model_attr="category",
-        editable=True,
-        sortable=True,
-        filterable=True,
-        histogram=True,
-        value_type="enum",
-        enum_values=frozenset({"Art", "Cars", "Collectibles"}),
-    ),
-    "currentPrice": GridColumnDefinition(
-        id="currentPrice",
-        model_attr="current_price",
-        editable=True,
-        sortable=True,
-        filterable=True,
-        histogram=False,
-        value_type="integer",
-    ),
-    "updatedAt": GridColumnDefinition(
-        id="updatedAt",
-        model_attr="updated_at",
-        readonly=True,
-        sortable=True,
-        filterable=True,
-        value_type="datetime",
-    ),
-}
-```
-
-Keep this registry in the host app unless you are publishing a reusable table package.
-
-## Step 3: Define GridTableDefinition
-
-Wire the model and registry together.
-
-```py
-from affino_grid_backend import GridTableDefinition
-from your_app.features.auctions.columns import AUCTION_COLUMNS
-from your_app.features.auctions.models import AuctionRowModel
-
 AUCTIONS_TABLE = GridTableDefinition(
     table_id="auctions",
     model=AuctionRowModel,
@@ -153,349 +43,139 @@ AUCTIONS_TABLE = GridTableDefinition(
 )
 ```
 
-This definition is the bridge between your ORM model and the reusable grid services.
-
-## Step 4: Define Pydantic DTOs
-
-Define request and response models that match the HTTP protocol exactly.
-
-```py
-from __future__ import annotations
-
-from datetime import datetime
-from typing import Any, Literal
-
-from pydantic import BaseModel, ConfigDict, Field
-
-
-class AuctionsPullRange(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    start_row: int = Field(ge=0, alias="startRow")
-    end_row: int = Field(ge=0, alias="endRow")
-
-
-class AuctionsPullRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    range: AuctionsPullRange
-    sort_model: list[dict[str, Any]] = Field(default_factory=list, alias="sortModel")
-    filter_model: dict[str, Any] | None = Field(default=None, alias="filterModel")
-
-
-class AuctionsRow(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    id: str
-    index: int
-    title: str
-    status: str
-    category: str
-    current_price: int | None = Field(alias="currentPrice")
-    updated_at: datetime = Field(alias="updatedAt")
-
-
-class AuctionsPullResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    rows: list[AuctionsRow] = Field(default_factory=list)
-    total: int
-    revision: str | None = None
-    dataset_version: int = Field(alias="datasetVersion")
-
-
-class AuctionsMutationInvalidationCell(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    row_id: str = Field(alias="rowId")
-    column_id: str = Field(alias="columnId")
-
-
-class AuctionsMutationInvalidationRange(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    start_row: int = Field(alias="startRow")
-    end_row: int = Field(alias="endRow")
-    start_column: str | None = Field(default=None, alias="startColumn")
-    end_column: str | None = Field(default=None, alias="endColumn")
-
-
-class AuctionsMutationInvalidation(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    type: Literal["cell", "range", "row", "dataset"]
-    cells: list[AuctionsMutationInvalidationCell] = Field(default_factory=list)
-    rows: list[str] = Field(default_factory=list)
-    range: AuctionsMutationInvalidationRange | None = None
-
-
-class AuctionsCommitResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    operation_id: str | None = Field(default=None, alias="operationId")
-    revision: str
-    dataset_version: int = Field(alias="datasetVersion")
-    affected_rows: int = Field(alias="affectedRows")
-    affected_cells: int = Field(alias="affectedCells")
-    can_undo: bool = Field(alias="canUndo")
-    can_redo: bool = Field(alias="canRedo")
-    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
-    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
-    invalidation: AuctionsMutationInvalidation | None = None
-
-
-class AuctionsHistoryScope(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    workspace_id: str | None = Field(default=None, alias="workspaceId")
-    table_id: str | None = Field(default="auctions", alias="tableId")
-    user_id: str | None = Field(default=None, alias="userId")
-    session_id: str | None = Field(default=None, alias="sessionId")
-
-
-class AuctionsHistoryStatusResponse(AuctionsHistoryScope):
-    can_undo: bool = Field(alias="canUndo")
-    can_redo: bool = Field(alias="canRedo")
-    latest_undo_operation_id: str | None = Field(default=None, alias="latestUndoOperationId")
-    latest_redo_operation_id: str | None = Field(default=None, alias="latestRedoOperationId")
-    dataset_version: int = Field(alias="datasetVersion")
-
-
-class AuctionsChangeFeedChange(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    type: Literal["cell", "range", "row", "dataset"]
-    operation_id: str | None = Field(default=None, alias="operationId")
-    user_id: str | None = None
-    session_id: str | None = None
-    invalidation: AuctionsMutationInvalidation
-
-
-class AuctionsChangeFeedResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
-
-    dataset_version: int = Field(alias="datasetVersion")
-    changes: list[AuctionsChangeFeedChange] = Field(default_factory=list)
-```
-
-Add the write DTOs next: edit commit, fill boundary, fill commit, stack history, history status, and change feed responses.
-
-## Step 5: Implement Repository / Adapter
-
-Keep the router thin. Put ORM translation and grid-service orchestration in a repository.
-
-```py
-from __future__ import annotations
-
-from typing import Any
-
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from affino_grid_backend import GridInvalidationService, GridRevisionService
-from your_app.features.auctions.columns import AUCTION_COLUMNS
-from your_app.features.auctions.models import AuctionRowModel
-from your_app.features.auctions.schemas import AuctionsPullRequest, AuctionsPullResponse, AuctionsRow
-from your_app.features.auctions.table import AUCTIONS_TABLE
-
-
-class AuctionsRepository:
-    def __init__(self, session: AsyncSession, workspace_id: str | None = None):
-        self._session = session
-        self._workspace_id = workspace_id
-        self._projection = AuctionsProjectionService(AUCTIONS_TABLE, workspace_id=workspace_id)
-        self._revision = GridRevisionService(AUCTIONS_TABLE, workspace_id=workspace_id)
-        self._edits = AuctionsEditService(AUCTION_COLUMNS, self._revision, workspace_id=workspace_id)
-        self._fill = AuctionsFillService(AUCTION_COLUMNS, self._projection, self._revision, workspace_id=workspace_id)
-        self._history = AuctionsHistoryService(AUCTION_COLUMNS, self._revision, workspace_id=workspace_id)
-        self._invalidation = GridInvalidationService()
-
-    async def pull(self, request: AuctionsPullRequest) -> AuctionsPullResponse:
-        # REQUIRED: translate filters, sort, and offset/limit to SQLAlchemy.
-        conditions = self._projection.build_filter_conditions(request.filter_model)
-        stmt = self._projection.build_row_query(conditions)
-        stmt = stmt.order_by(*self._projection.build_order_by(request.sort_model))
-        stmt = stmt.offset(request.range.start_row).limit(request.range.end_row - request.range.start_row)
-
-        rows = (await self._session.scalars(stmt)).all()
-        total = await self._projection.count_rows(self._session, conditions)
-        revision = await self._revision.get_revision(self._session)
-        return AuctionsPullResponse(rows=[self._to_row(row) for row in rows], total=total, revision=revision)
-
-    def _to_row(self, row: AuctionRowModel) -> AuctionsRow:
-        return AuctionsRow(
-            id=AUCTIONS_TABLE.row_id_value(row),
-            index=AUCTIONS_TABLE.row_index_value(row),
-            title=row.title,
-            status=row.status,
-            category=row.category,
-            currentPrice=row.current_price,
-            updatedAt=AUCTIONS_TABLE.updated_at_value(row),
-        )
-```
-
-Required methods:
-
-- `pull`
-- `histogram`
-- `commit_edits`
-- `resolve_fill_boundary`
-- `commit_fill`
-- `undo_operation`
-- `redo_operation`
-- `undo_latest_operation`
-- `redo_latest_operation`
-- `history_status`
-- `change_feed`
-
-Optional methods:
-
-- `health`
-- any table-specific convenience methods
-
-Do not move column coercion into the router.
-
-## Step 6: Wire FastAPI Router
-
-Keep the router declarative.
-
-```py
-from fastapi import APIRouter, Depends, Header
-
-from your_app.features.auctions.repository import AuctionsRepository
-from your_app.infrastructure.db import get_db
-
-router = APIRouter(prefix="/auctions", tags=["auctions"])
-
-
-def get_auctions_repository(
-    session = Depends(get_db),
-    workspace_id: str | None = Header(default=None, alias="X-Workspace-Id"),
-) -> AuctionsRepository:
-    return AuctionsRepository(session, workspace_id=workspace_id)
-```
-
-Then add route handlers for:
-
-- `GET /health`
-- `POST /pull`
-- `POST /histogram`
-- `POST /edits`
-- `POST /fill-boundary`
-- `POST /fill/commit`
-- `POST /history/undo`
-- `POST /history/redo`
-- `POST /history/status`
-- `POST /operations/{operation_id}/undo`
-- `POST /operations/{operation_id}/redo`
-- `GET /changes?sinceVersion=...`
-
-## Step 7: Implement Frontend HTTP Datasource Adapter
-
-The adapter should translate DataGrid calls to backend HTTP requests and keep the protocol shape stable.
+The row id must remain stable across pulls and mutations. Use one deterministic
+ordering field; do not introduce a second index with different semantics.
+
+Define the column registry next. Each column should explicitly state whether it
+is editable, sortable, filterable, histogram-enabled, and which value type it
+uses. Keep the registry in the host app unless it is a reusable table package.
+See the [backend template](./templates/backend-template.md) for the complete
+registry shape.
+
+## Step 2: Implement projection and persistence
+
+The repository or adapter should own:
+
+- workspace-scoped row queries;
+- translation of `sortModel` and `filterModel` into safe query expressions;
+- exclusive `range.endRow` handling;
+- total-count calculation;
+- row serialization to the public response shape;
+- revision and dataset-version reads;
+- narrow invalidation after mutations.
+
+The router should only resolve dependencies, read the workspace scope, call the
+repository, and return a response model. Compare the current FastAPI wiring in
+the [backend reference](./reference/backend-fastapi.md).
+
+## Step 3: Add the HTTP surface incrementally
+
+Implement endpoints in this order:
+
+1. `POST /api/{tableId}/pull`
+2. `POST /api/{tableId}/histogram`
+3. `POST /api/{tableId}/edits`
+4. `POST /api/{tableId}/fill-boundary`
+5. `POST /api/{tableId}/fill/commit`
+6. history endpoints;
+7. `GET /api/changes?sinceVersion=...` or a compatible push transport.
+
+The first endpoint must return stable row ids, `index`, `rows`, `total`, and a
+revision/dataset version when the backend has them. Add mutation tokens before
+shipping edits or fill. The exact required and optional fields are maintained
+in the [HTTP protocol reference](./reference/protocol.md).
+
+## Step 4: Preserve consistency tokens
+
+For every mutation path, decide how the backend handles:
+
+- `baseRevision` stale-write checks;
+- `projectionHash` and `boundaryToken` for fill;
+- `operationId` duplicate detection;
+- `revision` and `datasetVersion` advancement;
+- cell, range, row, or dataset invalidation;
+- history scope and redo-branch invalidation.
+
+Do not invent a second conflict model in the frontend. The client must preserve
+the tokens returned by the backend and apply the returned invalidation or row
+snapshots. See [consistency reference](./reference/consistency.md).
+
+## Step 5: Wire the frontend adapter
+
+Use `createAffinoDatasource` for the standard Affino HTTP shape. Use the lower-
+level `@affino/datagrid-server-client` only when the backend transport or URL
+shape requires a custom adapter.
 
 ```ts
-type WorkspaceSource = "header" | "auth"
-
-export function createAuctionsDatasourceHttpAdapter(options: {
-  baseUrl: string
-  workspaceId?: string | null
-}) {
-  const headers = () =>
-    options.workspaceId ? { "X-Workspace-Id": options.workspaceId } : undefined
-
-  return {
-    async pull(request: PullRequest) {
-      const response = await fetch(`${options.baseUrl}/api/auctions/pull`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...headers() },
-        body: JSON.stringify(request),
-      })
-      return await readOrThrow(response)
-    },
-  }
-}
+const datasource = createAffinoDatasource<AuctionRow>({
+  baseUrl: import.meta.env.VITE_API_BASE_URL,
+  tableId: "auctions",
+  historyScope: {
+    workspaceId: "workspace-a",
+    sessionId: "session-a",
+  },
+})
 ```
 
-The adapter should preserve:
+Pass the datasource to the datasource-backed row model and keep that row model
+instance stable for the lifetime of the grid. Dispose it when the host is
+unmounted. The adapter reference documents custom mapping and live-update
+boundaries.
 
-- `revision`
-- `datasetVersion`
-- `baseRevision`
-- `projectionHash`
-- `boundaryToken`
-- mutation invalidation
-- stack history scope fields
+## Step 6: Add the app layer
 
-## Step 8: Mount DataGrid in Vue
-
-Use the Vue app shell package and pass the HTTP datasource through the existing grid API.
+The normal Vue integration remains the app-facing `DataGrid` component. Keep
+backend concerns in the datasource and row model; do not make the component
+call pull endpoints directly.
 
 ```vue
-<script setup lang="ts">
-import { computed } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
-import { createAuctionsDatasourceHttpAdapter } from "@/features/auctions/auctionsDatasourceHttpAdapter"
-
-const datasource = createAuctionsDatasourceHttpAdapter({
-  baseUrl: import.meta.env.VITE_API_BASE_URL,
-  workspaceId: "workspace-a",
-})
-
-const gridProps = computed(() => ({
-  dataSource: datasource,
-  tableId: "auctions",
-}))
-</script>
-
-<template>
-  <DataGrid v-bind="gridProps" />
-</template>
+<DataGrid
+  :row-model="rowModel"
+  :columns="columns"
+  virtualization
+/>
 ```
 
-## Step 9: Add Tests
+For server-backed editing, fill, history, and live updates, verify the UX rules
+in the [server datasource UX contract](./ux-contract.md) before adding toolbar
+or keyboard actions.
 
-Test the integration at the boundary you own.
+## Step 7: Test the boundary you own
 
-```py
-async def test_auctions_pull_scoped_to_workspace(client):
-    response = await client.post(
-        "/api/auctions/pull",
-        json={"range": {"startRow": 0, "endRow": 20}},
-        headers={"X-Workspace-Id": "workspace-a"},
-    )
-    assert response.status_code == 200
-```
+Backend contract tests should cover:
 
-Test cases to add:
+- workspace isolation and authorization;
+- stable row identity and exclusive range boundaries;
+- sort/filter translation and histogram scope;
+- stale revision and duplicate operation handling;
+- fill boundary/commit token validation;
+- scoped undo/redo;
+- change-feed replay and dataset invalidation fallback.
 
-- pull returns only scoped rows
-- edit rejects rows from another workspace
-- histogram respects active filters
-- fill boundary and fill commit preserve consistency tokens
-- stack undo/redo only touch scoped rows
-- history status is scoped to workspace / user / session
-- change feed returns the expected changes or dataset fallback
-- legacy `NULL` workspace stays visible when no header is sent
+Frontend integration tests should cover:
 
-## Step 10: Run Validation
+- datasource-backed row-model creation and disposal;
+- request cancellation during viewport churn;
+- mutation invalidation and row snapshot application;
+- reconnect behavior and live-update cursor recovery.
 
-Run the smallest relevant checks first.
+Use the [integration checklist](./checklist.md) as the release gate. Do not
+copy the full protocol examples into each test or guide; link to the canonical
+reference and add only the payload fragment relevant to the behavior under
+test.
 
-```bash
-cd backend && uv run alembic upgrade head
-cd backend && python -m compileall app
-cd backend && uv run pytest
-```
+## Reference implementation and templates
 
-If you changed the frontend adapter too, run the frontend type-check and smoke flow for the host app.
+- [FastAPI reference](./reference/backend-fastapi.md) — current repository backend.
+- [Frontend adapter reference](./reference/frontend-adapter.md) — standard client mapping.
+- [Backend template](./templates/backend-template.md) — reusable Python skeleton.
+- [Frontend template](./templates/frontend-template.md) — custom HTTP adapter skeleton.
+- [Protocol](./reference/protocol.md) — exact request/response contract.
+- [Consistency](./reference/consistency.md) — revisions, invalidation, conflicts, and history.
+- [Selection operations](./reference/selection-operations.md) — delegated operations over loaded/unloaded data.
 
-## Current Limitations
+## Current limitations
 
-- server-side series fill is not implemented yet
-- stack history is the normal undo/redo path
-- operation-id replay remains available for low-level diagnostics/manual replay
-- workspace comes from `X-Workspace-Id` unless the host app binds it to auth
-- full off-viewport materialization may be bounded by the projection window
-- the host app must enforce authorization
-- websocket transport is not implemented yet
-- polling/change feed is available as the current fallback path
+The current FastAPI demo does not implement every enterprise projection or
+offline mutation mode. Treat limitations in the protocol and consistency
+references as part of the contract, not as implied future behavior.

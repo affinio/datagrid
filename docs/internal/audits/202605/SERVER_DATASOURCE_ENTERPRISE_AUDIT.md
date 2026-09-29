@@ -41,11 +41,11 @@ Docs:
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
 - `docs/server-datasource/README.md`
-- `docs/server-datasource/integration-docs-map.md`
-- `docs/server-datasource/protocol.md`
-- `docs/server-datasource/consistency.md`
+- `docs/internal/reference/server-datasource-integration-map.md`
+- `docs/server-datasource/reference/protocol.md`
+- `docs/server-datasource/reference/consistency.md`
 - `docs/server-datasource/ux-contract.md`
-- `docs/server-datasource/frontend-adapter.md`
+- `docs/server-datasource/reference/frontend-adapter.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 - `docs/HISTORY_ENTERPRISE_AUDIT.md`
 
@@ -122,7 +122,7 @@ Backend:
 ### Blocker
 
 1. **No concrete websocket/SSE live transport is implemented.**
-   - Evidence: `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` define polling change feed as the current backend path. `packages/datagrid-server-client/src/liveUpdateTransport.ts` defines the transport boundary and polling wrapper, but no reviewed WebSocket or SSE transport exists.
+   - Evidence: `docs/server-datasource/reference/protocol.md` and `docs/server-datasource/reference/consistency.md` define polling change feed as the current backend path. `packages/datagrid-server-client/src/liveUpdateTransport.ts` defines the transport boundary and polling wrapper, but no reviewed WebSocket or SSE transport exists.
    - Impact: enterprise realtime/collaborative use cases cannot rely on low-latency push, connection lifecycle state, or reconnect replay.
    - Required: implement a websocket or server-sent-events transport behind the live-update boundary, with reconnect and version-gap recovery.
 
@@ -479,7 +479,7 @@ Performance/benchmark tests:
 ## Prioritized Implementation Slices
 
 1. **Document enterprise datasource contract**
-   - Files: `docs/server-datasource/protocol.md`, `docs/server-datasource/consistency.md`, `docs/server-datasource/ux-contract.md`
+   - Files: `docs/server-datasource/reference/protocol.md`, `docs/server-datasource/reference/consistency.md`, `docs/server-datasource/ux-contract.md`
    - Outcome: required enterprise fields and unsupported features are explicit.
    - Status: completed. See `docs/plans/SERVER_DATASOURCE_ENTERPRISE_PLAN.md`.
 

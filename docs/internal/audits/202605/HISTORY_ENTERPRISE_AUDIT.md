@@ -18,7 +18,7 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 
 ## Implementation Progress
 
-- 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
+- 2026-05-18: Slice 1, Enterprise History Contract, is complete. `docs/datagrid-history.md` now defines client snapshot history versus server stack history, ownership boundaries, stack invariants, persistence/recovery limits, snapshot limits, restoration limits, and collaboration limits. `docs/server-datasource/reference/protocol.md` and `docs/server-datasource/reference/consistency.md` now state that server-backed grids should use scoped stack undo/redo as the normal owner and keep operation-id replay as diagnostics/manual replay.
 - 2026-05-18: Slice 2, Async History Action Serialization, is complete. Core `TransactionService` now rejects overlapping async `applyTransaction`, `commitBatch`, `undo`, and `redo` calls and blocks batch begin/rollback during an active async action. The orchestration history runner now ignores duplicate keyboard/control undo/redo triggers while the first action is pending.
 - 2026-05-18: Slice 3, Undo Failure Compensation, is complete. Core `TransactionService` now re-applies commands already rolled back inside a failed undo transaction and re-applies transactions already rolled back inside a failed undo batch, leaving undo/redo stacks unchanged when the action fails.
 - 2026-05-18: Slice 4, Snapshot Scope And Memory Budget, is complete. Client app intent history now marks full/partial snapshots that exceed row, cell, or byte-estimate budgets and skips recording those over-budget intents instead of creating unbounded undo entries.
@@ -41,7 +41,7 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - `packages/datagrid-server-adapters/src/index.ts` exposes server datasource edit/fill/history methods, maintains cached history status, posts scoped stack undo/redo/status requests, applies row snapshots or invalidations, and updates dataset versions.
 - `backend/app/features/server_demo/history.py` and `backend/packages/affino_grid_backend/affino_grid_backend/history/base.py` implement server-side operation replay from persisted cell events.
 - `backend/app/features/server_demo/edits.py` and `backend/app/features/server_demo/fill.py` record edit/fill operations, cell events, redo-branch invalidation, and change-feed events.
-- `docs/server-datasource/protocol.md` and `docs/server-datasource/consistency.md` document scoped stack undo/redo, operation-id replay, history status, revision monotonicity, redo invalidation, and deterministic replay expectations.
+- `docs/server-datasource/reference/protocol.md` and `docs/server-datasource/reference/consistency.md` document scoped stack undo/redo, operation-id replay, history status, revision monotonicity, redo invalidation, and deterministic replay expectations.
 
 ## Exact Files Reviewed
 
@@ -51,9 +51,9 @@ Documentation:
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
 - `docs/datagrid-history.md`
-- `docs/server-datasource/integration-docs-map.md`
-- `docs/server-datasource/protocol.md`
-- `docs/server-datasource/consistency.md`
+- `docs/internal/reference/server-datasource-integration-map.md`
+- `docs/server-datasource/reference/protocol.md`
+- `docs/server-datasource/reference/consistency.md`
 - `docs/FORMULA_ENGINE_ENTERPRISE_AUDIT.md`
 
 Core and Vue history:
@@ -137,7 +137,7 @@ Backend and sandbox:
    Status after Slice 6: built-in client history now records version-1 operation metadata beside snapshots. Snapshot replay is still the source of undo/redo truth, and persisted recovery/conflict replay remains future work.
 
 2. **There is no unified history contract across client snapshot history and server operation history.**
-   `docs/datagrid-history.md` documents the public prop/controller, while `docs/server-datasource/protocol.md` documents server stack history. The code supports both, but the boundary is implicit: client history restores snapshots, server history replays persisted operations. Enterprise consumers need a single contract that states which mode owns undo/redo, what is persisted, how redo invalidation works, and what restoration semantics are guaranteed.
+   `docs/datagrid-history.md` documents the public prop/controller, while `docs/server-datasource/reference/protocol.md` documents server stack history. The code supports both, but the boundary is implicit: client history restores snapshots, server history replays persisted operations. Enterprise consumers need a single contract that states which mode owns undo/redo, what is persisted, how redo invalidation works, and what restoration semantics are guaranteed.
    Status after Slice 1: documentation now defines this boundary. Runtime hardening and operation serialization remain open.
 
 ### High

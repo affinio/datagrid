@@ -18,7 +18,7 @@ Current execution state:
 - Affected packages/files:
   - `docs/datagrid-clipboard.md`
   - `docs/README.md`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `docs/audits/CLIPBOARD_ENTERPRISE_AUDIT.md`
   - `docs/plans/CLIPBOARD_ENTERPRISE_PLAN.md`
 - Expected behavior change: no runtime behavior change; `docs/datagrid-clipboard.md` is now the current contract for app-stage clipboard behavior and the baseline for remaining slices.
@@ -107,9 +107,9 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: define the server-backed copy/export, cut, clear/delete, paste/import, operation id, revision, projection identity, partial result, and history semantics before adding public runtime hooks.
 - Affected packages/files:
-  - `docs/server-datasource/selection-operations.md`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/integration-docs-map.md`
+  - `docs/server-datasource/reference/selection-operations.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/internal/reference/server-datasource-integration-map.md`
   - `docs/datagrid-clipboard.md`
   - `docs/audits/CLIPBOARD_ENTERPRISE_AUDIT.md`
 - Expected behavior change: no runtime behavior change; server clipboard delegation has a documented planned contract aligned with datasource revisions and server history.

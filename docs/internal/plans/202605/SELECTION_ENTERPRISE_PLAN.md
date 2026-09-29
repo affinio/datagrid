@@ -7,7 +7,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Status: Completed on 2026-05-17. Documented the cross-package selection state machine, including ownership for active cell, anchor, row selection, DOM focus, editing, pending clipboard ranges, fill preview, range-move preview, invalidation, and blocked/delegated virtual states.
 - Objective: document one canonical state machine for cell selection, row selection, active cell, anchor, DOM focus, editing, clipboard ranges, fill preview, and range-move preview.
 - Affected packages/files:
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `docs/datagrid-architecture.md`
   - `docs/audits/SELECTION_ENTERPRISE_AUDIT.md`
   - `docs/plans/SELECTION_ENTERPRISE_PLAN.md`
@@ -90,13 +90,13 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 
 ## Slice 5: Server Selection Operation Contract
 
-- Status: Completed on 2026-05-17. Added `docs/server-datasource/selection-operations.md` with the materialized/server/blocked/virtual operation matrix for loaded rows, unloaded rows, placeholders, grouped rows, stale projections, and all-row selection; linked it from protocol, integration map, datasource protocol, user interaction docs, and audit status.
+- Status: Completed on 2026-05-17. Added `docs/server-datasource/reference/selection-operations.md` with the materialized/server/blocked/virtual operation matrix for loaded rows, unloaded rows, placeholders, grouped rows, stale projections, and all-row selection; linked it from protocol, integration map, datasource protocol, user interaction docs, and audit status.
 - Objective: define the server-backed operation matrix before adding or changing public APIs for copy/export, cut, clear/delete, fill, range move, summary, and all-row selection.
 - Affected packages/files:
-  - `docs/server-datasource/integration-docs-map.md`
+  - `docs/internal/reference/server-datasource-integration-map.md`
   - `docs/server-datasource/*`
-  - `docs/datagrid-data-source-protocol.md`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/reference/datagrid-data-source-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `docs/audits/SELECTION_ENTERPRISE_AUDIT.md`
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
   - `packages/datagrid-core/src/selection/rowSelection.ts`
@@ -181,7 +181,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Status: Completed on 2026-05-17. Clipboard copy/cut, paste targets, clear/delete, and fill source/target ranges now block grouped/tree projection rows instead of copying group display values or partially mutating only leaf rows. GroupBy and TreeData docs now state flattened selection semantics and local mutation blocking rules. App contracts now cover keyboard shift-extension through grouped rows, additive cell ranges that include group rows, row-selection reconciliation preserving visible group row ids, fill blocking over group rows, virtual selection stale-marking after group expansion changes, row-selection reconciliation after collapsed projections hide descendants, and server-backed grouped placeholder rows blocking as group rows for copy, delete, and fill. E2E coverage now proves hidden fill-handle affordance on selected group rows and group anchor continuity across collapse/expand.
 - Objective: extend flattened-row selection semantics into app-stage interactions for grouped rows, tree rows, keyboard navigation, clipboard, fill, row selection, and server placeholders.
 - Affected packages/files:
-  - `docs/datagrid-groupby-rowmodel-projection.md`
+  - `docs/internal/reference/datagrid-groupby-rowmodel-projection.md`
   - `docs/datagrid-tree-data.md`
   - `packages/datagrid-core/src/selection/selectionState.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts`
@@ -205,7 +205,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Objective: design and implement a deliberate touch selection model with long press and explicit handles while preserving native one-finger body scroll.
 - Affected packages/files:
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
@@ -231,7 +231,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `packages/datagrid-vue/src/app/useDataGridAppSelection.ts`
   - `packages/datagrid-core/src/selection/__tests__/selectionSummary*.spec.ts`
   - `packages/datagrid-vue/src/app/__tests__/*Selection*.spec.ts`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: summaries and aggregate labels should either compute within a documented local budget, sample visible/materialized data, or delegate to a server summary contract.
 - Tests to add/update:
@@ -267,8 +267,8 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Status: Completed on 2026-05-18. Stage cells now expose deterministic `aria-selected` for active and additive selected ranges, non-materializable placeholder cells expose `aria-disabled`, row-selection checkbox ARIA remains covered, and focused component/unit contracts verify remount-safe selected state.
 - Objective: define and test selection-specific accessibility behavior for active cell, selected ranges, row selection, multi-range state, placeholder rows, and virtualized remounts.
 - Affected packages/files:
-  - `docs/datagrid-headless-a11y-contract.md`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/reference/datagrid-headless-a11y-contract.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
   - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRowSelection.ts`
@@ -311,7 +311,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `docs/audits/TODO.md`
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
   - `docs/plans/SELECTION_ENTERPRISE_PLAN.md`
-  - `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+  - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: no runtime behavior change; documentation should distinguish completed work, remaining risks, planned work, and validation expectations.
 - Tests to add/update:

@@ -8,6 +8,11 @@ Vue adapter and headless foundation for `@affino/datagrid-core`.
 If you want a declarative app-facing component, use
 [`@affino/datagrid-vue-app`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-vue-app#readme).
 
+## Documentation
+
+- [Vue adapter guide](../../docs/vue-adapter.md)
+- [Core API guide](../../docs/core-api.md)
+
 ## Canonical Feature Catalog
 
 Single source of truth for platform capabilities:
@@ -423,7 +428,9 @@ For new integrations:
 - Use `useDataGridRuntime` from `@affino/datagrid-vue` when you need a headless runtime.
 - Use `@affino/datagrid-vue/advanced/*` and app-layer hooks for custom interaction flows.
 
-For end-to-end UI behavior and spreadsheet interaction contracts, use:
+For end-to-end UI behavior, use the public guides:
 
-- [datagrid-vue-stable-entrypoint.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-vue-stable-entrypoint.md)
-- [datagrid-sheets-user-interactions-and-integrator-api.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-sheets-user-interactions-and-integrator-api.md)
+- [datagrid-vue-stable-entrypoint.md](https://github.com/affinio/datagrid/blob/main/docs/reference/datagrid-vue-stable-entrypoint.md)
+- [App layer guide](https://github.com/affinio/datagrid/blob/main/docs/app-layer.md)
+- [Editing](https://github.com/affinio/datagrid/blob/main/docs/datagrid-editing.md)
+- [Clipboard and range workflows](https://github.com/affinio/datagrid/blob/main/docs/datagrid-clipboard.md)

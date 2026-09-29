@@ -132,7 +132,7 @@ const rowModel = createDataSourceBackedRowModel({
 <DataGrid :row-model="rowModel" :columns="columns" virtualization />
 ```
 
-Start with the [server datasource quick start](./docs/server-datasource/quick-start.md), then use the [integration map](./docs/server-datasource/integration-docs-map.md) when you need histograms, edits, fill, history, invalidation, or consistency details.
+Start with the [server datasource quick start](./docs/server-datasource/quick-start.md), then use the server datasource README to choose optional capabilities.
 
 ## Stable Vs Advanced Entrypoints
 
@@ -151,20 +151,24 @@ Stable means semver-safe. It does not mean every stable export is part of the be
 
 Start here:
 
+- [Getting started](./docs/getting-started.md)
+- [App layer guide](./docs/app-layer.md)
+- [Vue adapter guide](./docs/vue-adapter.md)
+- [Core API guide](./docs/core-api.md)
+
 - [Documentation index](./docs/README.md)
 - [Package map](./docs/datagrid-package-map.md)
-- [API start here](./docs/datagrid-api-start-here.md)
-- [Vue stable entrypoint](./docs/datagrid-vue-stable-entrypoint.md)
+- [API stability](./docs/api-stability.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Vue stable entrypoint](./docs/reference/datagrid-vue-stable-entrypoint.md)
 - [Feature catalog](./docs/datagrid-feature-catalog.md)
+- [Examples](./docs/examples/README.md)
+- [App component API](./docs/app-api.md)
 - [Server datasource quick start](./docs/server-datasource/quick-start.md)
-- [Server datasource integration map](./docs/server-datasource/integration-docs-map.md)
 
 Core references:
 
 - [Grid API](./docs/datagrid-grid-api.md)
-- [Public API inventory](./docs/datagrid-public-api-inventory.md)
-- [Versioned public protocol](./docs/datagrid-versioned-public-protocol.md)
-- [Migration guide](./docs/datagrid-migration-guide.md)
 - [Architecture](./docs/datagrid-architecture.md)
 
 Feature guides:

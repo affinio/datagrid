@@ -56,7 +56,7 @@ For client row models, `packages/datagrid-core/src/models/snapshot/clientRowSnap
 - `visibleColumns`, `pinnedLeftColumns`, `centerColumns`, `pinnedRightColumns`
 - `visibility`, `pin`, `width` through per-column state
 
-The docs in `docs/datagrid-model-contracts.md` already describe `order` as stable base/global order and `zoneOrder` as projected layout order.
+The docs in `docs/internal/reference/datagrid-model-contracts.md` already describe `order` as stable base/global order and `zoneOrder` as projected layout order.
 
 ### Diagnostics snapshot
 
@@ -143,7 +143,7 @@ Current `DataGridUnifiedState` is mixed. It is a model-centric persisted/exporte
 - `docs/datagrid-state-events-compute-diagnostics.md`
 - `docs/datagrid-grid-api.md`
 - `docs/datagrid-feature-catalog.md`
-- `docs/datagrid-model-contracts.md`
+- `docs/internal/reference/datagrid-model-contracts.md`
 - `packages/datagrid-core/src/core/gridApiContracts.ts`
 - `packages/datagrid-core/src/core/gridApiStateMethods.ts`
 - `packages/datagrid-core/src/core/gridApiDiagnosticsMethods.ts`
@@ -257,7 +257,7 @@ Owned by `api.diagnostics`. Safe for support panels, profiling, test assertions,
 
 Evidence:
 
-- `docs/datagrid-model-contracts.md` defines `order` as stable base/global order and `zoneOrder` as projected layout order.
+- `docs/internal/reference/datagrid-model-contracts.md` defines `order` as stable base/global order and `zoneOrder` as projected layout order.
 - `packages/datagrid-core/src/models/columnModel.ts` keeps `order` stable when pinning changes and tracks zone-local order separately.
 - `packages/datagrid-core/src/models/__tests__/columnModel.spec.ts` verifies pinning does not mutate base order and that pinned zones can be reordered independently.
 - `packages/datagrid-core/src/core/__tests__/gridApi.contract.spec.ts` verifies `api.state.get/set` restores `zoneOrder`.

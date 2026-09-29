@@ -1,6 +1,6 @@
 # DataGrid Quick Filter
 
-Updated: `2026-05-09`
+Status: maintained public documentation.
 
 Quick filter is the grid-wide text filter contract for Affino DataGrid. It is part of the existing filter model, not a separate global search service.
 

@@ -255,11 +255,11 @@ Low-level helpers remain available from their concrete modules, but they are not
 ## Deep Dives
 
 - [Quick Start](../../../docs/server-datasource/quick-start.md)
-- [HTTP Protocol](../../../docs/server-datasource/protocol.md)
-- [Consistency Contract](../../../docs/server-datasource/consistency.md)
+- [HTTP Protocol](../../../docs/server-datasource/reference/protocol.md)
+- [Consistency Contract](../../../docs/server-datasource/reference/consistency.md)
 - [Integration Playbook](../../../docs/server-datasource/integration-playbook.md)
-- [Backend Template](../../../docs/server-datasource/backend-template.md)
-- [FastAPI Reference](../../../docs/server-datasource/backend-fastapi.md)
+- [Backend Template](../../../docs/server-datasource/templates/backend-template.md)
+- [FastAPI Reference](../../../docs/server-datasource/reference/backend-fastapi.md)
 
 ## Development
 

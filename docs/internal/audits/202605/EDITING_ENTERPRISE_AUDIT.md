@@ -29,7 +29,7 @@ This layering is compatible with the project architecture. Editing state, focus 
 Documentation:
 
 - `AGENTS.md`
-- `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+- `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
 - `docs/datagrid-history.md`
 - `docs/server-datasource/ux-contract.md`
 - `docs/datagrid-formula-engine-guide.md`

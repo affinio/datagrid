@@ -249,7 +249,7 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
-  - `docs/datagrid-renderer-lifecycle.md`
+  - `docs/reference/datagrid-renderer-lifecycle.md`
 - Expected behavior change: custom renderer hot paths are measurable and bounded by renderer-duration and churn gates.
 - Tests to add/update:
   - Slow custom renderer, auto-height renderer, renderer error, and overlay-heavy renderer gates.

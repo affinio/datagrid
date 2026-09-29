@@ -1,6 +1,6 @@
 # DataGrid Architecture and Package Boundaries
 
-Baseline date: `2026-05-17`
+Status: maintained public documentation.
 Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datagrid-vue`, `@affino/datagrid-vue-app`
 
 ## Goals
@@ -30,7 +30,7 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 
 - Core stable surface: `packages/datagrid-core/src/public.ts`
 - Vue stable surface: `packages/datagrid-vue/src/public.ts`
-- Orchestration root: advanced adapter-internal surface documented in `docs/datagrid-orchestration-public-contract.md`; it is not an app-facing stable API.
+- Orchestration root: advanced adapter-internal surface documented in `docs/internal/reference/datagrid-orchestration-public-contract.md`; it is not an app-facing stable API.
 - Rule: stable app consumers import only stable package roots. Advanced adapter consumers may use documented advanced entrypoints, including the orchestration root, when they accept that tier's compatibility contract.
 
 ## Runtime Pipeline (Canonical)

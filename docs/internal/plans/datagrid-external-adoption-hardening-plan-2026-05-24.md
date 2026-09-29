@@ -32,15 +32,15 @@ Read before changing this roadmap or implementing slices:
 
 - `README.md`
 - `docs/README.md`
-- `docs/datagrid-product-report.ru.md`
+- `docs/internal/reference/datagrid-product-report.ru.md`
 - `docs/datagrid-feature-catalog.md`
-- `docs/datagrid-vue-stable-entrypoint.md`
+- `docs/reference/datagrid-vue-stable-entrypoint.md`
 - `docs/datagrid-grid-api.md`
 - `docs/server-datasource/quick-start.md`
 - `docs/server-datasource/README.md`
-- `docs/server-datasource/integration-docs-map.md`
-- `docs/datagrid-public-api-inventory.md`
-- `docs/datagrid-versioned-public-protocol.md`
+- `docs/internal/reference/server-datasource-integration-map.md`
+- `docs/internal/reference/datagrid-public-api-inventory.md`
+- `docs/internal/reference/datagrid-versioned-public-protocol.md`
 
 ## Slice Roadmap
 
@@ -49,9 +49,9 @@ Read before changing this roadmap or implementing slices:
 | 1 | Root README adoption pass | Make first 3-5 minutes clear: what it is, install, first grid, package choice. | `README.md` |
 | 2 | Package choice cleanup | Remove ambiguity around `@affino/datagrid` vs `@affino/datagrid-vue-app` and define package roles. | `docs/datagrid-feature-catalog.md`, maybe new `docs/datagrid-package-map.md` |
 | 3 | Docs index reflow | Make `docs/README.md` read like an external navigation map, not an archive. | `docs/README.md` |
-| 4 | Stable API starter narrative | Clarify stable vs starter vs advanced/power-user. | `docs/datagrid-vue-stable-entrypoint.md`, `docs/datagrid-grid-api.md` |
-| 5 | Server datasource onboarding trim | Make read-only server grid the first path; move optional edit/history/fill lower. | `docs/server-datasource/README.md`, `docs/server-datasource/quick-start.md`, `docs/server-datasource/integration-docs-map.md` |
-| 6 | Public API trust summary | Turn protocol/API inventory rigor into external trust signals. | `docs/datagrid-versioned-public-protocol.md`, `docs/datagrid-public-api-inventory.md`, maybe new `docs/datagrid-api-stability.md` |
+| 4 | Stable API starter narrative | Clarify stable vs starter vs advanced/power-user. | `docs/reference/datagrid-vue-stable-entrypoint.md`, `docs/datagrid-grid-api.md` |
+| 5 | Server datasource onboarding trim | Make read-only server grid the first path; move optional edit/history/fill lower. | `docs/server-datasource/README.md`, `docs/server-datasource/quick-start.md`, `docs/internal/reference/server-datasource-integration-map.md` |
+| 6 | Public API trust summary | Turn protocol/API inventory rigor into external trust signals. | `docs/internal/reference/datagrid-versioned-public-protocol.md`, `docs/internal/reference/datagrid-public-api-inventory.md`, maybe new `docs/datagrid-api-stability.md` |
 | 7 | Demo/sandbox entry hierarchy | Add demo-facing sequence without changing grid behavior. | `packages/datagrid-sandbox/src/App.vue`, `packages/datagrid-sandbox/src/router.ts`, maybe docs |
 | 8 | OSS contributor trust layer | Add contributor path and validation tiers. | `CONTRIBUTING.md`, maybe `.github/*`, docs index |
 | 9 | Spreadsheet/Gantt visibility pass | Make these visible as product capabilities without overclaiming. | `README.md`, `docs/README.md`, relevant feature docs |

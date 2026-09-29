@@ -562,28 +562,28 @@ registerFileCheck(
 // 5) Architecture checklist docs.
 registerFileCheck(
   "doc-model-contracts",
-  "docs/datagrid-model-contracts.md",
+  "docs/internal/reference/datagrid-model-contracts.md",
   "Model contracts architecture doc",
 )
 registerFileCheck(
   "doc-gridcore-service-registry",
-  "docs/datagrid-gridcore-service-registry.md",
+  "docs/internal/architecture/datagrid-gridcore-service-registry.md",
   "GridCore service registry architecture doc",
 )
 registerFileCheck("doc-grid-api", "docs/datagrid-grid-api.md", "Unified Grid API architecture doc")
 registerFileCheck(
   "doc-typed-runtime-events",
-  "docs/datagrid-typed-runtime-events.md",
+  "docs/internal/reference/datagrid-typed-runtime-events.md",
   "Typed runtime events architecture doc",
 )
 registerFileCheck(
   "doc-config-decomposition",
-  "docs/datagrid-config-decomposition.md",
+  "docs/internal/architecture/datagrid-config-decomposition.md",
   "Config decomposition architecture doc",
 )
 registerFileCheck(
   "doc-viewport-decomposition",
-  "docs/datagrid-viewport-controller-decomposition.md",
+  "docs/internal/architecture/datagrid-viewport-controller-decomposition.md",
   "Viewport decomposition architecture doc",
 )
 registerAnyFileCheck(
@@ -593,17 +593,17 @@ registerAnyFileCheck(
 )
 registerFileCheck(
   "doc-strict-contract-testing",
-  "docs/datagrid-strict-contract-testing.md",
+  "docs/internal/architecture/datagrid-strict-contract-testing.md",
   "Strict contract testing matrix doc",
 )
 registerFileCheck(
   "doc-headless-a11y-contract",
-  "docs/datagrid-headless-a11y-contract.md",
+  "docs/reference/datagrid-headless-a11y-contract.md",
   "Headless accessibility contract doc",
 )
 registerFileCheck(
   "doc-versioned-public-protocol",
-  "docs/datagrid-versioned-public-protocol.md",
+  "docs/internal/reference/datagrid-versioned-public-protocol.md",
   "Versioned public protocol doc",
 )
 

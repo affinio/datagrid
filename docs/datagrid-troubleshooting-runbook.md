@@ -1,6 +1,6 @@
 # DataGrid Troubleshooting Runbook
 
-Baseline date: `2026-02-07`
+Status: maintained public documentation.
 Scope: overlay, pinned columns, virtualization, selection sync
 
 ## Incident Triage Order

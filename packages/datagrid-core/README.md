@@ -2,6 +2,11 @@
 
 Framework-agnostic data grid core.
 
+## Documentation
+
+- [Core API guide](../../docs/core-api.md)
+- [Unified Grid API](../../docs/datagrid-grid-api.md)
+
 ## Canonical Feature Catalog
 
 Single source of truth for platform capabilities:

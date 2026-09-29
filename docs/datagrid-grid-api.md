@@ -1,6 +1,8 @@
 # DataGrid Unified Grid API
 
-Updated: `2026-05-20`
+Status: current public contract.
+
+Use [API stability](./api-stability.md) for tier and import guarantees.
 
 `DataGridApi` is the semver-safe, namespace-based facade for model/service operations in `@affino/datagrid-core`.
 
@@ -42,6 +44,10 @@ Lifecycle:
 
 Flat API methods are removed from `DataGridApi`.
 
+## Method reference
+
+The complete public method surface is documented in [DataGrid API method reference](./reference/datagrid-grid-api-methods.md). It lists every namespace method with its TypeScript signature, parameters, return value, and capability notes.
+
 ## Capability contract
 
 `api.capabilities` is runtime-resolved:
@@ -71,7 +77,7 @@ Use it as guard before capability-dependent mutating calls.
 - `data.pause()/resume()/flush()` is the public backpressure control surface for supported server/data-source row models.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).
 - `state.migrate(...)` is the explicit payload migration/validation hook before restore.
-- `events.on` is the typed public event surface with documented in-process ordering. See [Event matrix](./datagrid-event-matrix.md) for cross-layer mapping.
+- `events.on` is the typed public event surface with documented in-process ordering. See [Event matrix](./reference/datagrid-event-matrix.md) for cross-layer mapping.
 - `events.on("row-selection:changed", ...)` is the typed row-selection event surface for `selectedRows` / `focusedRow` snapshots.
 - `events` includes explicit state import boundaries (`state:import:begin/end`).
 - `compute.switchMode(...)` is synchronous and does not implicitly trigger recompute.
@@ -182,7 +188,7 @@ Use these for deterministic adapter geometry integration instead of internal sig
 
 ## Related docs
 
-- `docs/datagrid-core-factories-reference.md`
-- `docs/datagrid-core-advanced-reference.md`
+- `docs/reference/datagrid-core-factories-reference.md`
+- `docs/reference/datagrid-core-advanced-reference.md`
 - `docs/datagrid-state-events-compute-diagnostics.md`
 - `docs/datagrid-feature-catalog.md`

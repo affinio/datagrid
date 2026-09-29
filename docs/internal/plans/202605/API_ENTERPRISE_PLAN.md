@@ -5,8 +5,8 @@ This plan converts `docs/audits/API_ENTERPRISE_AUDIT.md` into small, separable i
 Current execution state:
 
 - Slices 1-8 are implemented as of 2026-05-20.
-- The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/datagrid-public-api-inventory.md`.
-- The orchestration package root is classified as `advanced-adapter-internal` in `docs/datagrid-orchestration-public-contract.md`.
+- The first API inventory is now generated under `docs/quality/datagrid-public-api-inventory.json` and summarized in `docs/internal/reference/datagrid-public-api-inventory.md`.
+- The orchestration package root is classified as `advanced-adapter-internal` in `docs/internal/reference/datagrid-orchestration-public-contract.md`.
 - No target blockers remain for this API audit block.
 - Do not change public API or package export maps without a focused slice and migration notes.
 
@@ -17,7 +17,7 @@ Current execution state:
 - Affected packages/files:
   - `scripts/check-datagrid-public-api-inventory.mjs`
   - `docs/quality/datagrid-public-api-inventory.json`
-  - `docs/datagrid-public-api-inventory.md`
+  - `docs/internal/reference/datagrid-public-api-inventory.md`
   - `docs/audits/API_ENTERPRISE_AUDIT.md`
   - `docs/README.md`
   - `package.json`
@@ -36,9 +36,9 @@ Current execution state:
   - `packages/datagrid-core/package.json`
   - `packages/datagrid-core/src/protocol/__tests__/entrypointTiers.contract.spec.ts`
   - `scripts/codemods/datagrid-public-protocol-codemod.mjs`
-  - `docs/datagrid-versioned-public-protocol.md`
-  - `docs/datagrid-migration-guide.md`
-  - `docs/datagrid-public-api-inventory.md`
+  - `docs/internal/reference/datagrid-versioned-public-protocol.md`
+  - `docs/internal/reference/datagrid-legacy-migration-guide.md`
+  - `docs/internal/reference/datagrid-public-api-inventory.md`
 - Expected behavior change: package import behavior may change for unsupported deep imports; stable, advanced, and internal entrypoints remain supported.
 - Tests to add/update:
   - Published-package import assertions for allowed root/advanced/internal entrypoints.
@@ -55,9 +55,9 @@ Current execution state:
   - `packages/datagrid-vue/src/index.ts`
   - `packages/datagrid-vue/src/stable.ts`
   - `packages/datagrid-vue/src/public.ts`
-  - `docs/datagrid-vue-stable-entrypoint.md`
-  - `docs/datagrid-vue-advanced-entrypoint.md`
-  - `docs/datagrid-public-api-inventory.md`
+  - `docs/reference/datagrid-vue-stable-entrypoint.md`
+  - `docs/reference/datagrid-vue-advanced-entrypoint.md`
+  - `docs/internal/reference/datagrid-public-api-inventory.md`
 - Expected behavior change: no runtime behavior change unless exports are moved; any export movement requires migration notes.
 - Tests to add/update:
   - Public type/import checks for stable and advanced Vue entrypoints.
@@ -71,7 +71,7 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: designate the canonical plugin/extension model and define bridge rules for `api.plugins`, `@affino/datagrid-plugins`, and Vue `DataGridFeature`.
 - Affected packages/files:
-  - `docs/datagrid-plugin-capability-model.md`
+  - `docs/reference/datagrid-plugin-capability-model.md`
   - `docs/datagrid-grid-api.md`
   - `packages/datagrid-core/src/core/gridApiContracts.ts`
   - `packages/datagrid-core/src/core/gridApiPluginsRuntime.ts`
@@ -89,7 +89,7 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: document and test custom renderer lifecycle, focus, keyboard, selection, editing, a11y, remount, async, cleanup, and performance expectations.
 - Affected packages/files:
-  - `docs/datagrid-renderer-lifecycle.md`
+  - `docs/reference/datagrid-renderer-lifecycle.md`
   - `packages/datagrid-vue-app/src/config/dataGridFormulaOptions.ts`
   - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
   - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
@@ -109,7 +109,7 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: document event sources, payloads, ordering, reentrancy, and preferred integration path across `api.events`, Vue emits, plugin events, and feature-local events.
 - Affected packages/files:
-  - `docs/datagrid-event-matrix.md`
+  - `docs/reference/datagrid-event-matrix.md`
   - `docs/datagrid-grid-api.md`
   - `packages/datagrid-core/src/core/gridApiContracts.ts`
   - `packages/datagrid-vue-app/src/DataGrid.ts`
@@ -130,8 +130,8 @@ Current execution state:
   - `scripts/check-datagrid-api-report.mjs`
   - `docs/quality/*api-report*.json`
   - `package.json`
-  - `docs/datagrid-public-api-inventory.md`
-  - `docs/datagrid-migration-guide.md`
+  - `docs/internal/reference/datagrid-public-api-inventory.md`
+  - `docs/internal/reference/datagrid-legacy-migration-guide.md`
 - Expected behavior change: no runtime behavior change; public type changes become a release artifact.
 - Tests to add/update:
   - API report generation and baseline comparison for core, Vue, Vue app, orchestration, server adapters, and server client.
@@ -144,8 +144,8 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: close the remaining orchestration tiering blocker without changing package exports by documenting the root as an advanced adapter-internal surface.
 - Affected packages/files:
-  - `docs/datagrid-orchestration-public-contract.md`
-  - `docs/datagrid-public-api-inventory.md`
+  - `docs/internal/reference/datagrid-orchestration-public-contract.md`
+  - `docs/internal/reference/datagrid-public-api-inventory.md`
   - `docs/datagrid-architecture.md`
   - `packages/datagrid-orchestration/README.md`
   - `scripts/check-datagrid-public-api-inventory.mjs`

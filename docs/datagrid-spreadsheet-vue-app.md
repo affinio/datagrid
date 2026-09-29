@@ -1,5 +1,7 @@
 # datagrid-spreadsheet-vue-app
 
+Status: public feature guide.
+
 `@affino/datagrid-spreadsheet-vue-app` is the public workbook shell for spreadsheet-style applications.
 
 ## Layering

@@ -23,8 +23,8 @@ Current execution state:
 - Affected packages/files:
   - `docs/datagrid-history.md`
   - `docs/audits/HISTORY_ENTERPRISE_AUDIT.md`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: no runtime behavior change; host apps now have an explicit contract for client snapshot history versus server stack history, redo invalidation, persistence, reload, and collaborative limitations.
 - Tests added/covered:
   - Docs validation only.
@@ -137,7 +137,7 @@ Current execution state:
   - `backend/app/features/server_demo/fill.py`
   - `backend/alembic/versions/20260506_0005_enforce_server_demo_operation_idempotency.py`
   - `backend/tests/test_server_demo_edits.py`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: duplicate operation ids within the same workspace/table/history scope produce deterministic responses under concurrent requests.
 - Tests added/covered:
   - Existing API duplicate operation id response remains `409 duplicate-operation-id`.
@@ -154,8 +154,8 @@ Current execution state:
   - `backend/packages/affino_grid_backend/affino_grid_backend/history/base.py`
   - `backend/tests/test_server_demo_history_stack.py`
   - `docs/datagrid-history.md`
-  - `docs/server-datasource/protocol.md`
-  - `docs/server-datasource/consistency.md`
+  - `docs/server-datasource/reference/protocol.md`
+  - `docs/server-datasource/reference/consistency.md`
 - Expected behavior change: server-backed history has deterministic capability behavior for row insert/delete, structural operations, remote overlap conflicts, reload recovery, and stale operation replay.
 - Tests added/covered:
   - Local stack undo after another user/session edits the same cell returns `history-conflict`, keeps the operation applied, and preserves the remote value.

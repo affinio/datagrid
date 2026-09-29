@@ -9,9 +9,11 @@ Declarative Vue component layer for Affino DataGrid.
 `@affino/datagrid-vue-app` is the app-facing package.
 It depends on [`@affino/datagrid-vue`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-vue#readme), which remains the adapter and headless foundation between Vue and the grid engine.
 
-Boundary doc:
+Documentation:
 
-- [datagrid-vue-app-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-vue-app-community-vs-enterprise.md)
+- [App layer guide](../../docs/app-layer.md)
+- [App component API](../../docs/app-api.md)
+- [Getting started](../../docs/getting-started.md)
 
 Public export:
 
@@ -19,17 +21,16 @@ Public export:
 - `DataGridModuleHost`
 
 The package ships its own runtime table-stage styles, so the default renderer does not depend on sandbox CSS.
-The supported corrected 0.5.x install is `@affino/datagrid-vue-app@0.5.1`, `@affino/datagrid-vue@0.5.1`, and `@affino/datagrid-theme@0.2.5` with Vue 3. Use package-root imports only. For backend-owned collections, keep one `createDataSourceBackedRowModel(...)` instance and pass it through the documented `row-model` prop; its pull request carries the bounded viewport range, `sortModel`, and `filterModel`, and rows should have a stable `rowId` or a `resolveRowId` resolver. See the [server datasource quick start](../../docs/server-datasource/quick-start.md) for bounded lazy windows, sort/filter resets, selection, and theme tokens.
 
-## Planned enterprise surface
+## Enterprise surface
 
-This package stays community-first and intentionally useful on its own.
+This package is community-first and useful on its own. Enterprise support is additive and is not required for the standard app path.
 
-Planned additive enterprise app layer:
+Available additive enterprise app layer:
 
 - `@affino/datagrid-vue-app-enterprise`
 
-Reserved enterprise candidates:
+Enterprise-only additions may include:
 
 - diagnostics / profiler / explain panels
 - advanced formula runtime controls
@@ -1291,7 +1292,7 @@ Columns can provide a `cellRenderer` callback that returns Vue content for the d
 If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
 For grouped rows, prefer `groupCellRenderer` so you receive structured group metadata instead of reverse-engineering the formatted disclosure label.
 If an authored renderer throws, the stage preserves the cell wrapper and falls back to the resolved `displayValue` for that cell.
-The full lifecycle, remount, cleanup, focus, async, and performance contract is documented in [`docs/datagrid-renderer-lifecycle.md`](../../docs/datagrid-renderer-lifecycle.md).
+The full lifecycle, remount, cleanup, focus, async, and performance contract is documented in [`docs/reference/datagrid-renderer-lifecycle.md`](../../docs/reference/datagrid-renderer-lifecycle.md).
 
 ```vue
 <script setup lang="ts">

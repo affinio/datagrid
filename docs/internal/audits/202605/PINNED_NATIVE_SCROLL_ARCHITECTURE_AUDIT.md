@@ -35,8 +35,8 @@ Pinned bottom rows are rendered in a separate `.grid-body-shell--pinned-bottom`.
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
 - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
-- `docs/datagrid-viewport-controller-decomposition.md`
-- `docs/datagrid-viewport-math-engine.md`
+- `docs/internal/architecture/datagrid-viewport-controller-decomposition.md`
+- `docs/internal/architecture/datagrid-viewport-math-engine.md`
 - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
 - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
 - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`

@@ -22,7 +22,7 @@ The primary app-stage path is mouse-first with touch guards. Cells bind `mousedo
 ## Implementation status
 
 - Slice 1 completed on 2026-05-17: `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` now provides an internal owner snapshot for drag selection, fill, range move, column resize, and row resize. Focused contracts cover single-owner state and start-order transitions.
-- Slice 2 completed on 2026-05-17: `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
+- Slice 2 completed on 2026-05-17: `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md` now define the app-stage, Vue adapter, orchestration, and core ownership boundaries for scroll, selection, fill, range move, resize, keyboard, focus, context menu, and editing.
 - Slice 3 completed on 2026-05-17: the mounted app-stage path now wires mouseup, pointerup, pointercancel, contextmenu capture, window blur, and unmount cleanup into interaction and resize cancellation.
 - Slice 4 completed on 2026-05-17: mounted window pointer/mouse lifecycle listeners now attach only while the app-stage has a pending or active pointer interaction, or while column resize owns the gesture.
 - Slice 5 completed on 2026-05-17: mouse-event prevent-default policy is explicit, linked-surface touch pan listener behavior is covered, and the user interaction doc now includes the prevent-default/passive listener matrix.
@@ -46,11 +46,11 @@ Docs:
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
 - `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
-- `docs/datagrid-viewport-controller-decomposition.md`
-- `docs/datagrid-viewport-math-engine.md`
+- `docs/internal/architecture/datagrid-viewport-controller-decomposition.md`
+- `docs/internal/architecture/datagrid-viewport-math-engine.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_PLAN.md`
-- `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+- `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
 
 Interaction and stage:
 
@@ -186,13 +186,13 @@ Enterprise blocker for mobile claims: the automated architecture and Chromium ga
 1. **Scroll ownership has two parallel implementations.**
    - Evidence: core has `dataGridViewportScrollIo.ts` and app stage uses `useDataGridAppViewport.ts` plus `useDataGridStageViewportRuntime.ts`.
    - Impact: current separation is understandable because the app stage renders a richer layout, but hidden drift can emerge between core viewport controller and app-stage policy.
-   - Status: ownership boundaries are now documented in `docs/datagrid-architecture.md` and `docs/datagrid-sheets-user-interactions-and-integrator-api.md`.
+   - Status: ownership boundaries are now documented in `docs/datagrid-architecture.md` and `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`.
    - Required: keep tests aligned as pointer lifecycle and listener wiring are changed.
 
 2. **PreventDefault policy is mostly intentional but not centrally documented.**
    - Evidence: cell pointer down, fill handle, range move, header resize, managed wheel/touch scroll, context menu, and keyboard commands all call `preventDefault()` in feature-specific code.
    - Impact: this is correct in many cases, but broad enterprise behavior needs a shared policy for native scroll, text editing, context menu, and assistive tech.
-   - Status: addressed in `docs/datagrid-sheets-user-interactions-and-integrator-api.md`, with focused mouse/touch guard coverage.
+   - Status: addressed in `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`, with focused mouse/touch guard coverage.
    - Required: keep the matrix current as touch workflow gates and editor/focus behavior evolve.
 
 3. **Managed touch scroll exists but is not the main body path.**
@@ -228,7 +228,7 @@ Enterprise blocker for mobile claims: the automated architecture and Chromium ga
 
 1. **`docs/INTERACTION_MODEL.md` is referenced by prior planning but does not exist in this checkout.**
    - Impact: Codex/maintainer preflight has no canonical interaction model doc.
-   - Status: the interaction ownership model is now documented in `docs/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md`.
+   - Status: the interaction ownership model is now documented in `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md` and `docs/datagrid-architecture.md`.
    - Required: create a dedicated model doc only if the interaction surface grows beyond those references.
 
 2. **The orchestration package and Vue composable re-exports can obscure source ownership.**

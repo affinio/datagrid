@@ -29,8 +29,8 @@ Documentation:
 - `docs/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - `docs/perf/datagrid-performance-gates.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
-- `docs/datagrid-model-contracts.md`
-- `docs/datagrid-cell-refresh-api.md`
+- `docs/internal/reference/datagrid-model-contracts.md`
+- `docs/reference/datagrid-cell-refresh-api.md`
 
 Core viewport and render sync:
 

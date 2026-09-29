@@ -1,21 +1,35 @@
 # DataGrid Feature Catalog
 
-Updated: 2026-03-11
+Status: maintained public documentation.
 
 This is the canonical feature inventory for Affino DataGrid.
 Use it as a single decision sheet to understand whether the platform fits your product requirements.
 
+For the meaning of capability labels and the current product boundary, see [Support status](./support-status.md). A row in this catalog is an inventory entry; it is not a promise that every runtime mode is complete.
+
 ## How to read this catalog
 
 - Scope:
-  - `Core` means implemented in `@affino/datagrid-core`.
-  - `Adapter` means surfaced through framework adapters (`@affino/datagrid-vue`, `@affino/datagrid-laravel`).
-  - `App` means surfaced through app-facing framework facades (`@affino/datagrid-vue-app`, `@affino/datagrid-laravel-app`).
+  - `Core` means implemented in `@affino@affino/datagrid-core`.
+  - `Adapter` means surfaced through framework adapters (`@affino@affino/datagrid-vue`, `@affino/datagrid-laravel`).
+  - `App` means surfaced through app-facing framework facades (`@affino@affino/datagrid-vue-app`, `@affino/datagrid-laravel-app`).
   - `Backend` means contract exists client-side, but behavior is implemented by your server/data source.
 - Runtime mode:
   - `main-thread` for simpler/smaller workloads.
   - `worker-owned` for interaction-heavy workloads where UI responsiveness is critical.
   - `server-side` when query shape and data shaping should be backend-owned.
+
+## Choose by task
+
+| If you need to... | Start with | Then read |
+| --- | --- | --- |
+| Render a production Vue grid | `@affino/datagrid-vue-app` and `DataGrid` | [Getting started](./getting-started.md), [App component API](./app-api.md) |
+| Add local editing, fill, or undo/redo | App props and column capabilities | [Editing and fill](./examples/editing-and-fill.md), [Editing](./datagrid-editing.md) |
+| Persist filters, layout, selection, or viewport | Unified `state` | [Controlled state](./examples/controlled-state.md), [State reference](./datagrid-state-events-compute-diagnostics.md) |
+| Render your own Vue host | `@affino/datagrid-vue` | [Vue adapter guide](./vue-adapter.md) |
+| Integrate without Vue | `@affino/datagrid-core` | [Core API](./core-api.md), [Unified Grid API](./datagrid-grid-api.md) |
+| Query a large backend-owned table | Datasource-backed row model | [Server quick start](./server-datasource/quick-start.md) |
+| Understand browser/runtime limits | Runtime mode and support matrix | [Virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md) |
 
 ## Capability Matrix
 
@@ -48,7 +62,7 @@ Use it as a single decision sheet to understand whether the platform fits your p
 | Pivot | Pivot drilldown (`getPivotCellDrilldown`) | Core + Adapter | main-thread, worker-owned, server-side* | Details path from pivot cell back to source rows. |
 | Pivot | Pivot layout export/import + interop snapshot | Core + Adapter | main-thread, worker-owned, server-side* | Persist/restore pivot layout and cross-boundary interop payloads. |
 | Pagination | Pagination model/snapshot | Core + Adapter | all | Deterministic paging inputs and snapshot outputs. |
-| Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets; see the [virtualization support matrix](./datagrid-virtualization-support-matrix.md) for enterprise limits. |
+| Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets; see the [virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md) for enterprise limits. |
 | Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support; enabled explicitly for wide app grids. |
 | Columns | Visibility, order, sizing, pinning | Core + Adapter | all | Canonical column model (`pin` contract, snapshots, state updates). |
 | App UX | Built-in column menu with declarative trigger, section/action config, disabled reasons, custom items, and async value filters | App | main-thread, worker-owned, server-side* | `columnMenu` supports boolean enablement plus object-form `trigger`, `items`, `disabled`, `disabledReasons`, `labels`, `actions`, `customItems`, and per-column overrides for the standard `sort/group/pin/filter` menu. Value-filter lists can resolve from async row-model histograms and forward server-side search. |
@@ -104,9 +118,9 @@ For install paths, tiering, and community/enterprise status, see the [DataGrid P
 
 | Package | Intended consumer | Typical use |
 | --- | --- | --- |
-| `@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
-| `@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
-| `@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
+| `@affino@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
+| `@affino@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
+| `@affino@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
 | `@affino/datagrid-laravel` | Laravel/Livewire teams | Community-safe Laravel facade. |
 | `@affino/datagrid-laravel-app` | Laravel app teams | App-facing Laravel facade with future opinionated DX boundary. |
 | `@affino/datagrid-vue/advanced` | Power users | Low-level interaction/layout primitives for custom renderer wiring. |

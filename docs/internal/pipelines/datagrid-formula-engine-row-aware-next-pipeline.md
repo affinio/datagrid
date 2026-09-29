@@ -72,10 +72,10 @@ interface DataGridDependencyTokenDescriptor {
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/contracts.ts](packages/datagrid-formula-engine/src/contracts.ts)
-- [packages/datagrid-formula-engine/src/runtime/compile.ts](packages/datagrid-formula-engine/src/runtime/compile.ts)
-- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryFormulaCompilationRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedRegistryFormulaCompilationRuntime.ts)
-- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryTokenResolverRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedRegistryTokenResolverRuntime.ts)
+- [packages/datagrid-formula-engine/src/contracts.ts](../../../packages/datagrid-formula-engine/src/contracts.ts)
+- [packages/datagrid-formula-engine/src/runtime/compile.ts](../../../packages/datagrid-formula-engine/src/runtime/compile.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryFormulaCompilationRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedRegistryFormulaCompilationRuntime.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryTokenResolverRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedRegistryTokenResolverRuntime.ts)
 
 ### Done when
 
@@ -122,10 +122,10 @@ interface DataGridFormulaIdentifierRef {
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/syntax/tokenizer.ts](packages/datagrid-formula-engine/src/syntax/tokenizer.ts)
-- [packages/datagrid-formula-engine/src/syntax/parser.ts](packages/datagrid-formula-engine/src/syntax/parser.ts)
-- [packages/datagrid-formula-engine/src/syntax/optimizer.ts](packages/datagrid-formula-engine/src/syntax/optimizer.ts)
-- [packages/datagrid-formula-engine/src/runtime/compile.ts](packages/datagrid-formula-engine/src/runtime/compile.ts)
+- [packages/datagrid-formula-engine/src/syntax/tokenizer.ts](../../../packages/datagrid-formula-engine/src/syntax/tokenizer.ts)
+- [packages/datagrid-formula-engine/src/syntax/parser.ts](../../../packages/datagrid-formula-engine/src/syntax/parser.ts)
+- [packages/datagrid-formula-engine/src/syntax/optimizer.ts](../../../packages/datagrid-formula-engine/src/syntax/optimizer.ts)
+- [packages/datagrid-formula-engine/src/runtime/compile.ts](../../../packages/datagrid-formula-engine/src/runtime/compile.ts)
 
 ### Done when
 
@@ -166,9 +166,9 @@ Dependency edges should carry row semantics:
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/graph/executionPlan.ts](packages/datagrid-formula-engine/src/graph/executionPlan.ts)
-- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedRegistryRuntime.ts)
-- [packages/datagrid-core/src/models/__tests__/formulaExecutionPlan.spec.ts](packages/datagrid-core/src/models/__tests__/formulaExecutionPlan.spec.ts)
+- [packages/datagrid-formula-engine/src/graph/executionPlan.ts](../../../packages/datagrid-formula-engine/src/graph/executionPlan.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedRegistryRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedRegistryRuntime.ts)
+- [packages/datagrid-core/src/models/__tests__/formulaExecutionPlan.spec.ts](../../../packages/datagrid-core/src/models/__tests__/formulaExecutionPlan.spec.ts)
 
 ### Done when
 
@@ -206,8 +206,8 @@ Introduce explicit row-direction policy for row-aware formulas:
 
 ### Main files
 
-- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedExecutionRuntime.ts)
-- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedExecutionRuntime.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts)
 
 ### Done when
 
@@ -245,9 +245,9 @@ Support vectorized relative reads for:
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/evaluators/vector.ts](packages/datagrid-formula-engine/src/evaluators/vector.ts)
-- [packages/datagrid-formula-engine/src/evaluators/columnar.ts](packages/datagrid-formula-engine/src/evaluators/columnar.ts)
-- [packages/datagrid-formula-engine/src/runtime/compile.ts](packages/datagrid-formula-engine/src/runtime/compile.ts)
+- [packages/datagrid-formula-engine/src/evaluators/vector.ts](../../../packages/datagrid-formula-engine/src/evaluators/vector.ts)
+- [packages/datagrid-formula-engine/src/evaluators/columnar.ts](../../../packages/datagrid-formula-engine/src/evaluators/columnar.ts)
+- [packages/datagrid-formula-engine/src/runtime/compile.ts](../../../packages/datagrid-formula-engine/src/runtime/compile.ts)
 
 ### Done when
 
@@ -283,9 +283,9 @@ when fed a pure row window reference.
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/evaluators/vector.ts](packages/datagrid-formula-engine/src/evaluators/vector.ts)
-- [packages/datagrid-formula-engine/src/syntax/functions.ts](packages/datagrid-formula-engine/src/syntax/functions.ts)
-- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts](packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts)
+- [packages/datagrid-formula-engine/src/evaluators/vector.ts](../../../packages/datagrid-formula-engine/src/evaluators/vector.ts)
+- [packages/datagrid-formula-engine/src/syntax/functions.ts](../../../packages/datagrid-formula-engine/src/syntax/functions.ts)
+- [packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts](../../../packages/datagrid-core/src/models/compute/clientRowComputedExecutionExecutorRuntime.ts)
 
 ### Done when
 
@@ -315,8 +315,8 @@ That is acceptable now, but must be guarded if future syntax adds:
 
 ### Main files
 
-- [packages/datagrid-formula-engine/src/syntax/tokenizer.ts](packages/datagrid-formula-engine/src/syntax/tokenizer.ts)
-- [packages/datagrid-formula-engine/src/syntax/parser.ts](packages/datagrid-formula-engine/src/syntax/parser.ts)
+- [packages/datagrid-formula-engine/src/syntax/tokenizer.ts](../../../packages/datagrid-formula-engine/src/syntax/tokenizer.ts)
+- [packages/datagrid-formula-engine/src/syntax/parser.ts](../../../packages/datagrid-formula-engine/src/syntax/parser.ts)
 
 ### Done when
 

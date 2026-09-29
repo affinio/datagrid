@@ -6,7 +6,7 @@ This package contains pure TypeScript logic (state commands, interaction policie
 
 Public contract tier: `advanced-adapter-internal`.
 
-The package root is exported for adapter and framework integration code, not for app-facing stable product integrations. See [DataGrid Orchestration Public Contract](../../docs/datagrid-orchestration-public-contract.md).
+The package root is exported for adapter and framework integration code, not for app-facing stable product integrations. See [DataGrid Orchestration Public Contract](../../docs/internal/reference/datagrid-orchestration-public-contract.md).
 
 ## Source structure
 

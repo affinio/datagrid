@@ -4,7 +4,7 @@
 
 DataGrid has useful accessibility foundations, but the rendered enterprise grid is **not yet enterprise-grade for screen reader users**.
 
-Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/datagrid-headless-a11y-contract.md`.
+Update `2026-05-20`: this audit predates several implemented stage accessibility slices. The current `datagrid-vue-app` stage now exposes baseline virtualized grid semantics for the body viewport: `role="grid"`, logical row/column counts, row roles, body/pinned cell `gridcell` fallback, one-based row/column indexes, deterministic rendered selection state, placeholder disabled state, and app status live regions. The implemented current-state contract is tracked in `docs/datagrid-accessibility.md` and `docs/reference/datagrid-headless-a11y-contract.md`.
 
 The strongest current pieces are keyboard navigation, focus restoration helpers, baseline virtualized body ARIA metadata, leaf header/sort semantics, stable mounted cell/header ids, row-selection checkbox semantics, grouped row expansion context, placeholder row disabled/context metadata, a stage-native normal-mode tab-stop invariant, interactive cell labels, contextual inline editor labels, editor keyboard handling, documented grid status live-region coverage, browser-level mounted-grid a11y gates, large-grid A11Y browser performance diagnostics, and a deterministic headless a11y state machine in core. The biggest remaining gap is integration depth: the main virtualized `datagrid-vue-app` stage intentionally keeps roving DOM focus instead of app-stage `aria-activedescendant`, and still needs manual assistive-technology validation.
 
@@ -29,7 +29,7 @@ Docs:
 - `AGENTS.md`
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
-- `docs/datagrid-headless-a11y-contract.md`
+- `docs/reference/datagrid-headless-a11y-contract.md`
 - `docs/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 - `docs/SELECTION_ENTERPRISE_AUDIT.md`
 - `docs/EDITING_ENTERPRISE_AUDIT.md`
@@ -100,7 +100,7 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
 ### High
 
 1. **Two accessibility architectures exist but are not unified.**
-   - Evidence: `docs/datagrid-headless-a11y-contract.md` documents headless state machine guarantees. The app stage uses selection snapshot, DOM focus helpers, and interaction-controller keyboard routing instead.
+   - Evidence: `docs/reference/datagrid-headless-a11y-contract.md` documents headless state machine guarantees. The app stage uses selection snapshot, DOM focus helpers, and interaction-controller keyboard routing instead.
    - Impact: future fixes can improve the headless API without improving the real rendered DataGrid unless docs and tests stay explicit about the current mounted-stage owner.
    - Required: keep the current roving DOM focus decision documented, and only migrate to `aria-activedescendant` through a dedicated focus-model proposal with browser validation.
 
@@ -138,7 +138,7 @@ None after the 2026-05-20 rebaseline and stage slices. The mounted stage now has
    - Impact: good for avoiding duplicate noise, but users need non-visual state announcements.
 
 2. **Headless and mounted-stage accessibility docs now need to stay in sync.**
-   - Evidence: `docs/datagrid-headless-a11y-contract.md` documents headless adapter behavior while `docs/datagrid-accessibility.md` documents mounted-stage current state.
+   - Evidence: `docs/reference/datagrid-headless-a11y-contract.md` documents headless adapter behavior while `docs/datagrid-accessibility.md` documents mounted-stage current state.
    - Impact: future runtime slices can accidentally update one contract but leave the other stale.
    - Required: update both docs when a slice changes focus, ARIA mapping, ids, status regions, or mounted-stage semantics.
 

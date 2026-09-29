@@ -40,7 +40,7 @@ The existing package split is sound. The architecture should be hardened in plac
 Documentation:
 
 - `AGENTS.md`
-- `docs/datagrid-sheets-user-interactions-and-integrator-api.md`
+- `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
 - `docs/datagrid-format.md`
 - `docs/perf/datagrid-performance-gates.md`
 - `docs/perf/datagrid-browser-performance-next-slices.md`

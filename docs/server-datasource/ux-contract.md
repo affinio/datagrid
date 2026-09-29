@@ -151,39 +151,25 @@ That path bypasses the built-in sort/filter stale-while-refresh contract. Use it
 
 ## Edits
 
-Use datasource `commitEdits(request)` for inline editing.
+Use datasource `commitEdits(request)` for inline editing. The general editor
+state machine, keyboard behavior, validation, and focus ownership are defined
+in [DataGrid Editing](../datagrid-editing.md). This server contract adds only
+the reconciliation rule: prefer returned row snapshots or narrow invalidation
+over a full row-model reset.
 
-The backend should return:
-
-- `operationId`
-- `revision`
-- `datasetVersion`
-- `committed` / `committedRowIds`
-- `rejected`
-- `invalidation`
-- history status fields when history is enabled
-
-The host app should not force a full row-model reset after every edit. Prefer the datasource invalidation or returned row snapshots so only affected rows/cells are reconciled.
-
-If a host app provides a custom `patchRows` fallback, it must not degrade to `commitEdits() -> full refresh` unless there is no better invalidation information. That fallback will feel slower than the sandbox path.
+The exact mutation response fields are maintained in the
+[protocol reference](./reference/protocol.md). A custom `patchRows` fallback
+must not silently turn every edit into `commitEdits() -> full refresh` when the
+backend provides a narrower result.
 
 ## Undo And Redo
 
-For server-backed undo/redo, use server history endpoints through the datasource/history adapter.
-
-Best response shape:
-
-- `operationId`
-- `canUndo`
-- `canRedo`
-- `latestUndoOperationId`
-- `latestRedoOperationId`
-- `datasetVersion`
-- `rows` or `updatedRows` with row snapshots
-
-When row snapshots are returned, apply them through the datasource-backed row model's row snapshot path. Fall back to invalidation only when snapshots are unavailable. Fall back to full refresh only when neither snapshots nor a usable invalidation are available.
-
-This order is what makes undo/redo feel fast in the sandbox.
+The ownership decision and client history modes are defined in the
+[History API guide](../datagrid-history.md). For server-backed grids, route
+undo/redo through server stack history. Apply returned row snapshots first,
+then narrow invalidation, and use a full refresh only when neither is
+available. Server undo/redo is a mutation and must advance the backend version
+state; see the [consistency reference](./reference/consistency.md).
 
 ## Change Feed And Polling
 
@@ -205,22 +191,13 @@ Do not:
 
 ## Backend Requirements
 
-Pull responses must provide:
-
-- stable row ids
-- stable row indexes within the returned projection
-- `total`
-- `revision`
-- `datasetVersion`
-
-Sort and filter must be deterministic. If two rows compare equal for the active sort, include a stable tie-breaker such as row index or id.
-
-Mutation responses should return enough information for narrow reconciliation:
-
-- row snapshots when the changed row values are known
-- otherwise invalidation for cells, rows, ranges, or dataset
-- updated `datasetVersion`
-- updated history status when applicable
+The complete request/response and consistency requirements live in the
+[protocol reference](./reference/protocol.md) and
+[consistency reference](./reference/consistency.md). At the UX boundary, the
+important rule is that every response must give the row model enough
+information to reconcile without unnecessarily blanking or remounting the
+grid: return row snapshots when possible, otherwise return a narrow
+invalidation, and always advance the relevant version token.
 
 ## Host App Anti-Patterns
 

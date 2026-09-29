@@ -18,7 +18,7 @@ Virtualization is split across these layers:
 - `datagrid-orchestration` owns cross-cutting interaction helpers such as visibility scrolling and scroll performance telemetry.
 - Sandbox/demo integrations exercise base grids, server datasource demos, placeholder rows, and scroll-to-row behavior.
 
-The documented intent in `docs/datagrid-architecture.md`, `docs/datagrid-viewport-controller-decomposition.md`, and `docs/datagrid-viewport-math-engine.md` is sound: keep math deterministic, isolate DOM reads/writes, use one transform owner, preserve pin contracts, and avoid duplicating virtualization math in the adapter. The implementation mostly follows that direction in `datagrid-core`, while the Vue app stage currently contains a second substantial virtualization path that needs an explicit contract or shared primitives before the system can be considered enterprise-grade.
+The documented intent in `docs/datagrid-architecture.md`, `docs/internal/architecture/datagrid-viewport-controller-decomposition.md`, and `docs/internal/architecture/datagrid-viewport-math-engine.md` is sound: keep math deterministic, isolate DOM reads/writes, use one transform owner, preserve pin contracts, and avoid duplicating virtualization math in the adapter. The implementation mostly follows that direction in `datagrid-core`, while the Vue app stage currently contains a second substantial virtualization path that needs an explicit contract or shared primitives before the system can be considered enterprise-grade.
 
 ## Exact Files Reviewed
 
@@ -27,13 +27,13 @@ Documentation:
 - `AGENTS.md`
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
-- `docs/datagrid-viewport-controller-decomposition.md`
-- `docs/datagrid-viewport-math-engine.md`
-- `docs/datagrid-viewport-rowmodel-boundary.md`
-- `docs/datagrid-virtualization-support-matrix.md`
+- `docs/internal/architecture/datagrid-viewport-controller-decomposition.md`
+- `docs/internal/architecture/datagrid-viewport-math-engine.md`
+- `docs/internal/architecture/datagrid-viewport-rowmodel-boundary.md`
+- `docs/reference/datagrid-virtualization-support-matrix.md`
 - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - `docs/perf/datagrid-performance-gates.md`
-- `docs/datagrid-headless-a11y-contract.md`
+- `docs/reference/datagrid-headless-a11y-contract.md`
 
 Core viewport and virtualization:
 
@@ -152,7 +152,7 @@ Orchestration, sandbox, tests, and benchmarks:
    `dataGridViewportCoreService.ts` resolves row ids through row model access/scanning patterns. For 1M server rows, enterprise behavior needs a rowId-to-index contract or server resolver rather than relying on local traversal.
 
 2. **Accessibility mapping for virtualized app-stage DOM is covered at the attribute level.**
-   `docs/datagrid-headless-a11y-contract.md` documents the virtualized stage DOM mapping, `a11yAttributesAdapter.ts` has adapter contract coverage, and the Vue app stage now exposes grid row/column counts plus one-based row/column indexes for virtualized center and pinned cells. Remaining gaps are screen-reader device validation and deeper grouped/server placeholder semantics.
+   `docs/reference/datagrid-headless-a11y-contract.md` documents the virtualized stage DOM mapping, `a11yAttributesAdapter.ts` has adapter contract coverage, and the Vue app stage now exposes grid row/column counts plus one-based row/column indexes for virtualized center and pinned cells. Remaining gaps are screen-reader device validation and deeper grouped/server placeholder semantics.
 
 3. **Virtualization telemetry is now wired into a repeatable browser gate.**
    `dgPerfTrace=1` viewport samples expose rendered row/column counts, range resolve timing, row/column overscan, placeholder rows, and blank-viewport flags. The enterprise browser-frame benchmark extracts those samples into `virtualizationTelemetry`, and the CI harness now includes an `enterprise-browser-frames` task with hard virtualization budgets. Remaining gaps are broader 10k-column/1M-row profiles and first-class mount/unmount churn limits.
@@ -172,10 +172,10 @@ Orchestration, sandbox, tests, and benchmarks:
    `dataGridVirtualization.ts` defaults row virtualization on and column virtualization off unless full virtualization is enabled. This is safe for compatibility but should be called out for wide-grid enterprise configurations.
 
 3. **Grouped/tree expansion behavior is now documented for the row-model boundary.**
-   `docs/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, grouped/tree-specific a11y semantics, and server/data-source grouped placeholder metadata.
+   `docs/internal/architecture/datagrid-viewport-rowmodel-boundary.md` defines grouped/tree virtualization as a flattened row-model contract, and `packages/datagrid-core/src/viewport/__tests__/rowModelBoundary.contract.spec.ts` covers grouped collapse and parent-tree collapse/re-expand while the active viewport is near affected rows. Remaining gaps are app-stage browser coverage, grouped/tree-specific a11y semantics, and server/data-source grouped placeholder metadata.
 
 4. **Enterprise support status is explicit.**
-   `docs/datagrid-virtualization-support-matrix.md` documents supported and partial behavior for public virtualization configuration, core/app ownership, server row models, grouped/tree rows, interaction continuity, virtualized a11y, touch/mobile, telemetry, and perf gates. This reduces ambiguity but does not replace the remaining validation work listed below.
+   `docs/reference/datagrid-virtualization-support-matrix.md` documents supported and partial behavior for public virtualization configuration, core/app ownership, server row models, grouped/tree rows, interaction continuity, virtualized a11y, touch/mobile, telemetry, and perf gates. This reduces ambiguity but does not replace the remaining validation work listed below.
 
 ## Correctness Risks
 

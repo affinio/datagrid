@@ -262,7 +262,7 @@ Current execution state:
   - `packages/datagrid-core/src/models/*`
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
-  - `docs/datagrid-viewport-rowmodel-boundary.md`
+  - `docs/internal/architecture/datagrid-viewport-rowmodel-boundary.md`
   - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
 - Expected behavior change: grouped/tree expansion behavior is implemented as a tested flattened row-model contract for client projections, with server/data-source grouped placeholders documented as partial until datasource metadata coverage is added.
 - Tests added/covered:
@@ -297,7 +297,7 @@ Current execution state:
 - Status: Completed. The Vue app stage now exposes grid-level row/column counts, one-based row and column indexes on virtualized rows/cells, deterministic selected state after remount, and placeholder `aria-disabled` metadata. Vue adapter, app component, and Playwright coverage verify the mapping after scroll and keyboard navigation.
 - Objective: verify virtualized rows and cells expose correct accessibility metadata.
 - Affected packages/files:
-  - `docs/datagrid-headless-a11y-contract.md`
+  - `docs/reference/datagrid-headless-a11y-contract.md`
   - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
@@ -353,12 +353,12 @@ Current execution state:
 
 ## Slice 18: Documentation And Support Matrix
 
-- Status: Completed. `docs/datagrid-virtualization-support-matrix.md` now names supported, partial, and unsupported/ungated virtualization behavior across configuration, ownership, server row models, grouped/tree rows, interaction continuity, a11y, touch/mobile, telemetry, and enterprise perf gates.
+- Status: Completed. `docs/reference/datagrid-virtualization-support-matrix.md` now names supported, partial, and unsupported/ungated virtualization behavior across configuration, ownership, server row models, grouped/tree rows, interaction continuity, a11y, touch/mobile, telemetry, and enterprise perf gates.
 - Objective: keep enterprise virtualization behavior, limitations, and validation expectations explicit.
 - Affected packages/files:
   - `docs/audits/VIRTUALIZATION_ENTERPRISE_AUDIT.md`
   - `docs/plans/VIRTUALIZATION_ENTERPRISE_PLAN.md`
-  - `docs/datagrid-viewport-rowmodel-boundary.md`
+  - `docs/internal/architecture/datagrid-viewport-rowmodel-boundary.md`
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - Expected behavior change: documentation names supported, partial, and unsupported virtualization behavior without implying unverified enterprise guarantees.

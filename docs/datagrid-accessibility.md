@@ -1,6 +1,6 @@
 # DataGrid Accessibility
 
-Updated: `2026-05-20`
+Status: maintained public documentation.
 
 This document is the current-state accessibility contract for the Affino DataGrid packages. It records implemented behavior, known gaps, and the validation expected for future enterprise accessibility slices.
 

@@ -1,6 +1,6 @@
 # DataGrid Plugin Lifecycle
 
-Updated: `2026-05-20`
+Status: maintained public documentation.
 
 This document defines the current canonical plugin model for DataGrid integrations. It does not introduce a new plugin system; it classifies the three existing extension shapes and their supported roles.
 

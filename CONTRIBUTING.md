@@ -91,7 +91,7 @@ Update the smallest relevant doc:
 - root `README.md` for first-time adoption or package choice changes
 - `docs/README.md` for docs navigation changes
 - package README for package-local usage
-- `docs/datagrid-migration-guide.md` for migration-impacting behavior
+- the affected public guide or release note for migration-impacting behavior; historical repository migrations belong under `docs/internal/reference/`
 - server datasource docs for backend-owned data contracts
 - internal plan docs under `docs/internal/plans/` when closing an adoption-hardening slice
 

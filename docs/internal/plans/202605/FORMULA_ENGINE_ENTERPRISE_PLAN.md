@@ -240,7 +240,7 @@ Current execution state:
 - Affected packages/files:
   - `docs/datagrid-formula-engine-guide.md`
   - `docs/server-datasource/*`
-  - `docs/datagrid-data-source-protocol.md`
+  - `docs/reference/datagrid-data-source-api.md`
   - `docs/audits/FORMULA_ENGINE_ENTERPRISE_AUDIT.md`
 - Expected behavior change: no runtime behavior change; this slice produces an approval-ready API/protocol proposal.
 - Tests to add/update:

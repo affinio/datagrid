@@ -1,5 +1,7 @@
 # Server Datasource Quick Start
 
+Status: public integration guide.
+
 This is the shortest path for wiring Affino DataGrid to a backend-owned table.
 
 First success only requires one read endpoint:
@@ -11,7 +13,6 @@ POST /api/{tableId}/pull
 Use `@affino/datagrid-server-adapters` first. It provides the current app-facing datasource factory for the Affino HTTP endpoint shape. Reach for `@affino/datagrid-server-client` only when you need lower-level polling, invalidation, or custom transport helpers.
 
 For sandbox-equivalent behavior, follow the [server datasource UX contract](./ux-contract.md). In short: keep one datasource-backed row model alive, let server sort/filter state flow through `pull(request)`, and do not replace it with app-level reloads for normal filtering.
-The supported corrected 0.5.x package matrix is `@affino/datagrid-vue-app@0.5.1`, `@affino/datagrid-vue@0.5.1`, `@affino/datagrid-core@0.5.1`, `@affino/datagrid-orchestration@0.5.1`, `@affino/datagrid-worker@0.5.1`, and `@affino/datagrid-pivot@0.1.3`, with `@affino/datagrid-theme@0.2.5`. These versions are released as a compatible set; consumers should not pin an older pivot or theme package alongside them.
 
 ## 1. Read-Only In 10 Minutes
 
@@ -38,8 +39,8 @@ pip install affino-grid-backend
 See also:
 
 - [Package installation](./package-installation.md)
-- [Backend FastAPI reference](./backend-fastapi.md)
-- [Backend template](./backend-template.md)
+- [Backend FastAPI reference](./reference/backend-fastapi.md)
+- [Backend template](./templates/backend-template.md)
 
 ### Minimal Backend Contract
 
@@ -196,7 +197,7 @@ Read next:
 
 - [UX contract](./ux-contract.md)
 - [Integration playbook](./integration-playbook.md)
-- [Protocol](./protocol.md)
+- [Protocol](./reference/protocol.md)
 
 ## 4. Add Fill
 
@@ -211,8 +212,8 @@ Use these when you want server-backed fill handle operations through the datasou
 
 Read next:
 
-- [Protocol](./protocol.md)
-- [Backend FastAPI reference](./backend-fastapi.md)
+- [Protocol](./reference/protocol.md)
+- [Backend FastAPI reference](./reference/backend-fastapi.md)
 
 ## 5. Add Server History
 
@@ -234,8 +235,8 @@ Use these when you want stack undo/redo backed by the server.
 Read next:
 
 - [History](../datagrid-history.md)
-- [Consistency](./consistency.md)
-- [Protocol](./protocol.md)
+- [Consistency](./reference/consistency.md)
+- [Protocol](./reference/protocol.md)
 
 ## 6. Add Live Updates
 
@@ -249,22 +250,22 @@ Use this for polling-based change feed updates. The `server_demo` backend also d
 
 Read next:
 
-- [Consistency](./consistency.md)
-- [Frontend adapter reference](./frontend-adapter.md)
-- [HTTP protocol](./protocol.md)
+- [Consistency](./reference/consistency.md)
+- [Frontend adapter reference](./reference/frontend-adapter.md)
+- [HTTP protocol](./reference/protocol.md)
 
 ## 7. Advanced Protocol And Consistency
 
 Use the advanced docs when your integration needs revisions, dataset versions, invalidation, conflict behavior, retries, selection semantics, or server-side operation guarantees.
 
-- [HTTP protocol](./protocol.md)
-- [Consistency](./consistency.md)
-- [Server selection operations](./selection-operations.md)
+- [HTTP protocol](./reference/protocol.md)
+- [Consistency](./reference/consistency.md)
+- [Server selection operations](./reference/selection-operations.md)
 - [Integration checklist](./checklist.md)
 
 The `server_demo` backend shows the full shape:
 
-- [Backend FastAPI reference](./backend-fastapi.md)
+- [Backend FastAPI reference](./reference/backend-fastapi.md)
 - [`backend/app/features/server_demo/history_router.py`](../../backend/app/features/server_demo/history_router.py)
 - [`backend/app/features/server_demo/changes_router.py`](../../backend/app/features/server_demo/changes_router.py)
 

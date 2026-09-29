@@ -1,6 +1,6 @@
 # DataGrid History API
 
-Updated: 2026-05-18
+Status: maintained public documentation.
 
 This document describes the public history contract exposed by `@affino/datagrid-vue-app`.
 

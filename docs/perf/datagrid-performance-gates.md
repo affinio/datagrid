@@ -134,7 +134,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
 - CI `benchmark-gates` must run `pnpm exec playwright install --with-deps chromium` before `pnpm run bench:regression`; `quality:perf:datagrid` statically verifies this wiring so browser-frame gates do not start without the Chromium runtime.
 - Browser-frame direct scroll scenarios write at most one scroll position per animation frame. `BENCH_BROWSER_STEP_DELAY_MS` adds delay above a frame, but must not busy-loop scroll writes faster than paint cadence because CI Chromium coalesces rAF and reports synthetic `150ms+` frame gaps that do not describe DataGrid render cost.
 - Virtualization browser gates:
-  - Current supported and partial virtualization guarantees are summarized in `docs/datagrid-virtualization-support-matrix.md`.
+  - Current supported and partial virtualization guarantees are summarized in `docs/reference/datagrid-virtualization-support-matrix.md`.
   - `bench:datagrid:enterprise:virtualization:assert` runs focused vertical, smooth vertical, horizontal, explicit `wide-table-1k-pinned-horizontal` and `wide-table-10k-pinned-horizontal`, and server placeholder browser scenarios. Vertical and placeholder scenarios run at `100k` rows; wide horizontal scenarios run with pinned panes and bounded rendered-column budgets.
   - The CI harness includes `enterprise-browser-frames` with the focused virtualization and rendering scenario sets plus row/column overrides. Its browser-resource warnings are blocking in CI; the current 180ms frame and 100% dropped-interval values remain smoke ceilings until dedicated 60/120Hz UX profiles are calibrated on CI hardware.
   - `BENCH_BROWSER_SCENARIOS` can narrow enterprise browser scenarios for local or CI runs.

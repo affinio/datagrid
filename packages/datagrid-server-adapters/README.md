@@ -148,5 +148,5 @@ If a backend omits one of these endpoints, keep the feature disabled at the host
 
 - [Server datasource quick start](../../docs/server-datasource/quick-start.md)
 - [Server datasource UX contract](../../docs/server-datasource/ux-contract.md)
-- [Frontend adapter reference](../../docs/server-datasource/frontend-adapter.md)
+- [Frontend adapter reference](../../docs/server-datasource/reference/frontend-adapter.md)
 - [Server client package](../datagrid-server-client/README.md)
