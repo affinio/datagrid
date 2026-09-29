@@ -4,6 +4,8 @@
 
 ### Patch Changes
 
+- Bumped the package to `0.1.7`; its Core and server-client dependencies now resolve through the workspace release protocol and are checked by `quality:packages:compatibility`.
+
 - ## Summary
 
   Added Affino adapter support for unified datasource operation execution via `POST /api/{tableId}/operations/execute`.

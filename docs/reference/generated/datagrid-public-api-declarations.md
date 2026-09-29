@@ -285,7 +285,7 @@ Source package: `packages/datagrid-vue-app`
 | `./advanced-filter` | stable-feature | `packages/datagrid-vue-app/dist/advanced-filter.d.ts` | 3 |
 | `./aggregations` | stable-feature | `packages/datagrid-vue-app/dist/aggregations.d.ts` | 3 |
 | `./find-replace` | stable-feature | `packages/datagrid-vue-app/dist/find-replace.d.ts` | 3 |
-| `./gantt` | stable-feature | `packages/datagrid-vue-app/dist/gantt.d.ts` | 36 |
+| `./gantt` | stable-feature | `packages/datagrid-vue-app/dist/gantt.d.ts` | 37 |
 | `./internal` | internal | `packages/datagrid-vue-app/dist/internal.d.ts` | 38 |
 | `./quick-filter` | stable-feature | `packages/datagrid-vue-app/dist/quick-filter.d.ts` | 3 |
 
@@ -299,7 +299,7 @@ Entrypoint exports:
 - `export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridDefinedColumns, DataGridDeclarativeFormulaOptions, } from "./config/dataGridFormulaOptions"`
 - `export type { DataGridAppColumnFilterOptions, DataGridAppFilterValueNormalizationContext, } from "./config/dataGridFilterNormalization"`
 - `export type { DataGridAppToolbarModule, } from "./host/DataGridModuleHost"`
-- `export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from "./gantt/dataGridGantt.types"`
+- `export type { DataGridAppViewMode } from "./config/dataGridAppView"`
 - `export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"`
 - `export type { DataGridCellClassResolver, DataGridCellStyleResolver, DataGridComponent, DataGridComponentFor, DataGridCellEditEvent, DataGridCaptureFocusAnchorOptions, DataGridExposed, DataGridExposedRuntime, DataGridFilterCellReader, DataGridFilterCellStyleReader, DataGridFocusAnchor, DataGridInstance, DataGridProps, DataGridRestoreFocusAnchorOptions, DataGridSelectionCellReader, } from "./DataGrid"`
 - `export type { DataGridCellEditablePredicate, DataGridCellEditablePredicateContext, } from "./dataGridEditability"`
@@ -332,7 +332,7 @@ Entrypoint exports:
 - `export { defineDataGridColumns } from "./config/dataGridFormulaOptions"`
 - `export { normalizeDataGridAppFilterModel, normalizeDataGridAppUnifiedStateFilters, } from "./config/dataGridFilterNormalization"`
 
-Declaration graph hash: `4df8552de5978030277ee35214a17efb2e740b314f3fb88aba63aea47a986cf5`
+Declaration graph hash: `0ce3ebbabe01f1339b5e18af543bc94903d3cc4e1a75dd2a3b4fdc67ca8cec2c`
 
 ### ./advanced-filter
 
@@ -371,7 +371,7 @@ Entrypoint exports:
 - `export { DataGridWithGantt as DataGrid }`
 - `export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from "./gantt/dataGridGantt"`
 
-Declaration graph hash: `7fa4627c22766f9035279ef8ddf4668723ac413676a0443c1b0332097db5ff0d`
+Declaration graph hash: `c22c39f8c25bb5e4e4597c178ac1e4f43f786581175e18f58855e5c550d2b1bc`
 
 ### ./internal
 
@@ -406,7 +406,7 @@ Entrypoint exports:
 - `export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"`
 - `export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"`
 
-Declaration graph hash: `964f9dce25e315a99523b5f4e6fb1bad2d786996c8d70655e2ee68ec17645bb3`
+Declaration graph hash: `f44eeac72cdb837185853274ae30de0f8e55c078d4f446fd947165ed4a5d2242`
 
 ### ./quick-filter
 

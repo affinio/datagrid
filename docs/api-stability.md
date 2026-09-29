@@ -10,6 +10,12 @@ Affino DataGrid publishes three API tiers. Import from the package entrypoint th
 | Advanced | Supported power-user contract for custom renderers, adapters, workers, and runtime integration. It may evolve faster. | `@affino/datagrid-vue/advanced/*`, `@affino/datagrid-core/advanced` |
 | Internal | Implementation detail with no application compatibility promise. | `./internal` subpaths and source-shaped deep imports |
 
+## Cross-package versioning
+
+Internal DataGrid package dependencies use pnpm's `workspace:*` protocol. When a package is published, pnpm resolves that reference to the current published version of the dependency instead of preserving an old repository-local version.
+
+The repository checks this contract with `pnpm run quality:packages:compatibility`. In particular, `@affino/datagrid-server-client` and `@affino/datagrid-server-adapters` must resolve their Core dependency to the current `@affino/datagrid-core` version during publication.
+
 The row-management additions in this slice (`rows.getById`, `rows.removeData`,
 `rows.batchMutations`, and formula/computed-field unregister capability checks) are stable facade
 contracts. Their availability remains capability-gated by the active row model;

@@ -1,5 +1,7 @@
 # @affino/datagrid-server-adapters
 
+Compatibility: `0.1.7` tracks the current `@affino/datagrid-core` and server client through the workspace release protocol. Run `pnpm run quality:packages:compatibility` before publishing.
+
 Opinionated server datasource adapters for Affino DataGrid.
 
 Use this package when you want the simplest path from a backend-owned table to a working grid datasource.

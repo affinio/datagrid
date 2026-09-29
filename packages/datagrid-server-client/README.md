@@ -1,5 +1,7 @@
 # Affino DataGrid Server Client
 
+Compatibility: `0.1.5` tracks the current `@affino/datagrid-core` through the workspace release protocol. Run `pnpm run quality:packages:compatibility` before publishing.
+
 Framework-agnostic transport utilities for server-backed DataGrid:
 
 - HTTP datasource client factory
