@@ -54,6 +54,7 @@ export type DataGridExternalUpdateCapability<TRow = unknown> = {
 
 export type DataGridRowsDataMutationCapability<TRow = unknown> = {
   setRows: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  removeRows?: (rowIds: readonly (string | number)[]) => boolean
   replaceRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   appendRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   prependRows?: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
@@ -270,6 +271,7 @@ export function resolveRowsDataMutationCapability<TRow>(
   }
   return {
     setRows: candidate.setRows.bind(rowModel),
+    removeRows: typeof candidate.removeRows === "function" ? candidate.removeRows.bind(rowModel) : undefined,
     replaceRows: typeof candidate.replaceRows === "function" ? candidate.replaceRows.bind(rowModel) : undefined,
     appendRows: typeof candidate.appendRows === "function" ? candidate.appendRows.bind(rowModel) : undefined,
     prependRows: typeof candidate.prependRows === "function" ? candidate.prependRows.bind(rowModel) : undefined,

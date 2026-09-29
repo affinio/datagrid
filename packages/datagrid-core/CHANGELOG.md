@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.7.0
+
+### Minor Changes
+
+- Added stable row-ID lookup and source-row deletion APIs with capability checks.
+- Added formula and computed-field unregister lifecycle with dependency cleanup.
+- Added `rows.batchMutations()` for coalesced client row-model recomputation.
+- Added opt-in atomic local state restoration via `state.set(..., { atomic: true })`.
+- Clarified mutation origins, index spaces, transaction participation, and lifecycle guarantees.
+
+### Validation
+
+- Core typecheck, public build, contract tests, adapter exposure tests, and package packing passed.
+
 ## 0.6.0
 
 ### Minor Changes

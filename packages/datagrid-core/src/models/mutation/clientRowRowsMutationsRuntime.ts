@@ -20,7 +20,7 @@ export interface ClientRowRowsMutationsRuntimeContext<T> {
   setSourceRows: (rows: DataGridRowNode<T>[]) => void
 
   normalizeSourceRows: (inputRows: readonly DataGridRowNodeInput<T>[] | null | undefined) => DataGridRowNode<T>[]
-  reindexSourceRows: (rows: readonly DataGridRowNode<T>[]) => DataGridRowNode<T>[]
+  reindexSourceRows: (rows: readonly DataGridRowNode<T>[], fromIndex?: number) => DataGridRowNode<T>[]
 
   getRowVersionById: () => Map<DataGridRowId, number>
   setRowVersionById: (index: Map<DataGridRowId, number>) => void
@@ -38,7 +38,11 @@ export interface ClientRowRowsMutationsRuntimeReorderInput {
 }
 
 export interface ClientRowRowsMutationsRuntime<T> {
+  batchMutations<TResult>(fn: () => TResult): TResult
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
+  appendRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  prependRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  removeRows: (rowIds: readonly DataGridRowId[]) => boolean
   reorderRows: (input: ClientRowRowsMutationsRuntimeReorderInput) => boolean
   insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<T>[]) => boolean
   insertRowsBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
@@ -48,7 +52,23 @@ export interface ClientRowRowsMutationsRuntime<T> {
 export function createClientRowRowsMutationsRuntime<T>(
   context: ClientRowRowsMutationsRuntimeContext<T>,
 ): ClientRowRowsMutationsRuntime<T> {
-  const commitSourceRows = (nextSourceRows: readonly DataGridRowNode<T>[]): void => {
+  let mutationBatchDepth = 0
+  let pendingMutation = false
+
+  const finalizeMutation = (): void => {
+    context.applyComputedFields?.()
+    context.bumpRowRevision()
+    context.resetGroupByIncrementalAggregationState()
+    context.invalidateTreeProjectionCaches()
+    context.setProjectionInvalidation(["rowsChanged"])
+    context.recomputeFromProjectionEntryStage()
+    context.emit()
+  }
+
+  const commitSourceRows = (
+    nextSourceRows: readonly DataGridRowNode<T>[],
+    reindexFromIndex = 0,
+  ): void => {
     const duplicateRowIds = findDuplicateRowIds(nextSourceRows)
     if (duplicateRowIds.length > 0) {
       throw new Error(
@@ -58,15 +78,13 @@ export function createClientRowRowsMutationsRuntime<T>(
     context.setRowVersionById(
       context.rebuildRowVersionIndex(context.getRowVersionById(), nextSourceRows),
     )
-    context.setSourceRows(context.reindexSourceRows(nextSourceRows))
-    context.applyComputedFields?.()
+    context.setSourceRows(context.reindexSourceRows(nextSourceRows, reindexFromIndex))
     context.pruneSortCacheRows(nextSourceRows)
-    context.bumpRowRevision()
-    context.resetGroupByIncrementalAggregationState()
-    context.invalidateTreeProjectionCaches()
-    context.setProjectionInvalidation(["rowsChanged"])
-    context.recomputeFromProjectionEntryStage()
-    context.emit()
+    if (mutationBatchDepth > 0) {
+      pendingMutation = true
+      return
+    }
+    finalizeMutation()
   }
 
   const insertRowsAt = (index: number, rows: readonly DataGridRowNodeInput<T>[]): boolean => {
@@ -80,15 +98,62 @@ export function createClientRowRowsMutationsRuntime<T>(
       ? Math.max(0, Math.min(sourceRows.length, Math.trunc(index)))
       : sourceRows.length
     const nextRows = sourceRows.slice(0, safeIndex).concat(normalizedRows, sourceRows.slice(safeIndex))
-    commitSourceRows(nextRows)
+    commitSourceRows(nextRows, safeIndex)
     return true
   }
 
   return {
+    batchMutations<TResult>(fn: () => TResult): TResult {
+      context.ensureActive()
+      mutationBatchDepth += 1
+      try {
+        return fn()
+      } finally {
+        mutationBatchDepth = Math.max(0, mutationBatchDepth - 1)
+        if (mutationBatchDepth === 0 && pendingMutation) {
+          pendingMutation = false
+          finalizeMutation()
+        }
+      }
+    },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       context.ensureActive()
       const nextSourceRows = context.normalizeSourceRows(nextRows ?? [])
       commitSourceRows(nextSourceRows)
+    },
+    appendRows(rows: readonly DataGridRowNodeInput<T>[]) {
+      context.ensureActive()
+      const normalizedRows = context.normalizeSourceRows(rows ?? [])
+      if (normalizedRows.length === 0) {
+        return
+      }
+      const sourceRows = context.getSourceRows()
+      commitSourceRows(sourceRows.concat(normalizedRows), sourceRows.length)
+    },
+    prependRows(rows: readonly DataGridRowNodeInput<T>[]) {
+      context.ensureActive()
+      const normalizedRows = context.normalizeSourceRows(rows ?? [])
+      if (normalizedRows.length === 0) {
+        return
+      }
+      commitSourceRows(normalizedRows.concat(context.getSourceRows()))
+    },
+    removeRows(rowIds: readonly DataGridRowId[]): boolean {
+      context.ensureActive()
+      if (!Array.isArray(rowIds) || rowIds.length === 0) {
+        return false
+      }
+      const ids = new Set(rowIds)
+      const sourceRows = context.getSourceRows()
+      const nextRows = sourceRows.filter(row => !ids.has(row.rowId))
+      if (nextRows.length === sourceRows.length) {
+        return false
+      }
+      const firstRemovedIndex = sourceRows.reduce((firstIndex, row, index) => (
+        ids.has(row.rowId) ? Math.min(firstIndex, index) : firstIndex
+      ), sourceRows.length)
+      commitSourceRows(nextRows, firstRemovedIndex)
+      return true
     },
     reorderRows(input: ClientRowRowsMutationsRuntimeReorderInput): boolean {
       context.ensureActive()

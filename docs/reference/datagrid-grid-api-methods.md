@@ -25,7 +25,12 @@ api.dispose(): Promise<void>
 ```
 
 Call `init()` once after creating the API, then `start()`. `dispose()` is
-terminal: use it when the runtime will not be reused.
+terminal: use it when the runtime will not be reused. `whenIdle()` resolves
+when the API's guarded exclusive-operation queue is empty; it is not a universal
+barrier for unguarded synchronous methods, browser rendering, external network
+work, or adapter scheduling. Await the returned Promise from an operation that
+is explicitly asynchronous, then use `whenIdle()` when you also need the
+guarded queue to drain.
 
 ## Rows and projection
 
@@ -34,10 +39,13 @@ api.rows.getSnapshot(): DataGridRowModelSnapshot<TRow>
 api.rows.getCount(): number
 api.rows.get(index: number): DataGridRowNode<TRow> | undefined
 api.rows.getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
+api.rows.getById(rowId: DataGridRowId): DataGridRowNode<TRow> | undefined
 api.rows.getProjectedRows(): TRow[]
 
 api.rows.hasDataMutationSupport(): boolean
 api.rows.hasInsertSupport(): boolean
+api.rows.hasRowIdLookupSupport(): boolean
+api.rows.hasRemoveSupport(): boolean
 api.rows.setData(rows: readonly DataGridRowNodeInput<TRow>[]): void
 api.rows.replaceData(rows: readonly DataGridRowNodeInput<TRow>[]): void
 api.rows.appendData(rows: readonly DataGridRowNodeInput<TRow>[]): void
@@ -45,6 +53,7 @@ api.rows.prependData(rows: readonly DataGridRowNodeInput<TRow>[]): void
 api.rows.insertDataAt(index: number, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
 api.rows.insertDataBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
 api.rows.insertDataAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<TRow>[]): boolean
+api.rows.removeData(rowIds: readonly DataGridRowId[]): boolean
 
 api.rows.getPagination(): DataGridPaginationSnapshot
 api.rows.setPagination(pagination: DataGridPaginationInput | null): void
@@ -71,22 +80,69 @@ api.rows.applyExternalUpdates(updates: readonly DataGridExternalRowUpdate<TRow>[
 api.rows.setAutoReapply(value: boolean): void
 api.rows.getAutoReapply(): boolean
 api.rows.batch<TResult>(fn: () => TResult): TResult
+api.rows.batchMutations<TResult>(fn: () => TResult): TResult
 ```
 
-`index` and `range` address the current projected row order. Sorting,
-filtering, grouping, tree expansion, pivoting, and pagination can change that
-order. `getProjectedRows()` returns leaf row data only; group/header rows are
-excluded.
+`get` and `getRange` address the current projected row order. Sorting, filtering,
+grouping, tree expansion, pivoting, and pagination can change that order.
+`getById` addresses stable source row identity and is local-only: it does not
+sort, filter, expand, scroll, or request unloaded data. It returns `undefined`
+when the row is not locally available or the row model does not expose the
+lookup capability. Group, header, and pivot nodes are not synthesized by this
+operation.
+`insertDataAt` is different: its index addresses the client row model's source
+row order and is clamped to the source bounds. Prefer `insertDataBefore` and
+`insertDataAfter` when a stable row identity is available. `getProjectedRows()`
+returns leaf row data only; group/header rows are excluded.
+
+`setData` and the append/prepend/insert helpers mutate source data and do not
+participate in `api.transaction` history. `replaceData` uses the row model's
+dedicated replacement capability when present and otherwise follows the same
+source replacement path as `setData`. `patch` updates existing rows by
+`rowId`; sort/filter/group reapplication is controlled by its options and is
+not enabled by default. `applyEdits` is the user-edit pipeline and does not
+automatically enter generic transaction history. `applyExternalUpdates` is the
+external datasource/cache pipeline and is distinct from edit commit handling.
+`removeData` removes matching source rows by stable `rowId`, preserves
+unaffected stable row identities, and updates the projection synchronously for client
+models. Missing and duplicate IDs are ignored; it returns `true` only when at
+least one source row was removed. Removal is a direct mutation and does not
+enter generic transaction history. Selection and focused-row state are cleared
+for removed IDs when row-selection support is available. Models without removal
+support report `hasRemoveSupport() === false` and throw when `removeData` is
+called.
+
+All of these operations are synchronous for synchronous row models. A
+datasource-backed model may return a Promise from `applyEdits` or
+`applyExternalUpdates`; await the returned value when it is present. Row model
+changes emit the normal `rows:changed` and, when the projection version
+changes, `projection:recomputed` events. Unsupported mutation capabilities
+throw rather than returning a support boolean.
+
+`rows.batch` batches public event delivery and preserves the callback result;
+it does not promise one row-model recomputation or one transaction-history
+entry. `rows.batchMutations` additionally coalesces synchronous recomputation
+for supported client row models. Use `transaction.beginBatch`/`commitBatch`
+for generic transaction history.
+
+Computed and formula registrations can be removed by name. Unknown names return
+`false`. Removing a field with registered dependents throws and leaves the
+registry unchanged; removal otherwise rebuilds the dependency plan before
+recomputing rows.
 
 ### Computed and formula fields
 
 ```ts
 api.rows.hasComputedSupport(): boolean
 api.rows.registerComputedField(definition: DataGridComputedFieldDefinition<TRow>): void
+api.rows.hasComputedUnregisterSupport(): boolean
+api.rows.unregisterComputedField(name: string): boolean
 api.rows.getComputedFields(): readonly DataGridComputedFieldSnapshot[]
 api.rows.recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
 api.rows.hasFormulaSupport(): boolean
 api.rows.registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+api.rows.hasFormulaUnregisterSupport(): boolean
+api.rows.unregisterFormulaField(name: string): boolean
 api.rows.getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
 api.rows.recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
 api.rows.hasFormulaFunctionRegistrySupport(): boolean
@@ -259,20 +315,42 @@ api.plugins.list(): readonly string[]
 api.plugins.clear(): void
 ```
 
+`state.get()` is the unified versioned snapshot boundary. `state.set()` applies
+row projection state by default; pass `{ applyRows: false }` to restore column
+layout, selection, and optional viewport state without changing the active
+source rows or their sort/filter/group/pivot/pagination state. The same options
+can independently disable columns, selection, and viewport restoration. State
+Import is sequential by default. With `strict: true`, unsupported sections are
+prevalidated before mutation. `{ atomic: true }` enables best-effort rollback
+for supported local row, column, selection, and viewport state; rollback failure
+is surfaced. `dataSource.atomic` pauses backpressure while the import runs but
+does not make datasource or adapter operations universally reversible.
+
+`rows.batch()` coalesces the facade event cycle. Use `rows.batchMutations()`
+when a supported client row model should also coalesce synchronous row mutation
+recomputation. The callback is synchronous; failures propagate after pending
+source mutations are finalized.
+
 Public event names are `rows:changed`, `columns:changed`,
 `projection:recomputed`, `selection:changed`, `row-selection:changed`,
 `pivot:changed`, `transaction:changed`, `viewport:changed`,
 `state:import:begin`, `state:import:end`, `state:imported`, and `error`.
 `events.on` returns an unsubscribe function.
 
+`view.expandAllGroups()` and `view.collapseAllGroups()` are compatibility
+aliases for the canonical `rows` group-expansion methods. Both paths delegate
+to the same row-model state and produce the same events.
+
 ## Capability checks and errors
 
 The API object exists even when an optional service is not bound. Before an
 optional operation, check its `hasSupport()` method or the matching
-`api.capabilities` flag. Unsupported calls may throw a capability error;
-guarded asynchronous calls can also reject with lifecycle, transaction,
-mutation, or data-source errors. Subscribe to `api.events.on("error", ...)`
-when the host needs recoverable runtime diagnostics.
+`api.capabilities` flag. Unsupported mutation and transaction calls throw a
+capability error. Some optional queries return `null` or `[]`, and some
+adapter-dependent view commands are no-ops unless strict options are used.
+Guarded asynchronous calls can reject with lifecycle, transaction, mutation,
+or data-source errors. Subscribe to `api.events.on("error", ...)` when the
+host needs recoverable runtime diagnostics.
 
 ## Related guides
 

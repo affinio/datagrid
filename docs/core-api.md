@@ -61,14 +61,20 @@ The complete method-level reference is [Unified Grid API](./datagrid-grid-api.md
 ```ts
 await api.rows.applyEdits(edits) // user edit semantics
 api.rows.patch(patches)           // external/streaming data update
-api.rows.batch(() => {      // one logical event cycle
+api.rows.batch(() => {      // one public event-delivery cycle
   api.rows.patch(firstPatch)
   api.rows.patch(secondPatch)
 })
 api.view.reapply()                // projection only
 ```
 
-Use `transaction.apply` when rollback or transaction history is part of the contract. Guard capability-dependent operations through `api.capabilities`.
+`rows.batch` coalesces public event delivery; it does not guarantee one row-model
+recomputation or one transaction-history entry. Use `rows.batchMutations` for
+the explicit client row-model recomputation boundary. Use `transaction.apply` when
+rollback or transaction history is part of the contract. `rows.applyEdits` is
+the user-edit pipeline but does not automatically participate in generic
+transaction history. Guard capability-dependent operations through
+`api.capabilities`.
 
 ## State, events, and determinism
 

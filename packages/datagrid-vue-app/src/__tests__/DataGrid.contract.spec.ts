@@ -6197,7 +6197,12 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    expect(gridRef.value?.getApi?.()?.rows.get(0)?.data).toMatchObject({
+    const api = gridRef.value?.getApi?.()
+    expect(api?.rows.getById("r1")?.rowId).toBe("r1")
+    expect(api?.rows.hasRemoveSupport()).toBe(true)
+    expect(api?.rows.hasComputedUnregisterSupport()).toBe(true)
+    expect(api?.rows.hasFormulaUnregisterSupport()).toBe(true)
+    expect(api?.rows.get(0)?.data).toMatchObject({
       owner: "NOC",
       region: "eu-west",
       amount: 10,

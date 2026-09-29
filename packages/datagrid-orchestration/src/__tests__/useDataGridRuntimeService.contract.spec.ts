@@ -7,6 +7,25 @@ interface Row {
 }
 
 describe("useDataGridRuntimeService contract", () => {
+  it("preserves row identity and formula lifecycle methods on the orchestrated API", () => {
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [
+        { rowId: "r1", name: "alpha" },
+        { rowId: "r2", name: "bravo" },
+      ],
+      columns: [{ key: "name", label: "Name" }],
+    })
+
+    expect(runtime.api.rows.getById("r1")?.rowId).toBe("r1")
+    expect(runtime.api.rows.hasRowIdLookupSupport()).toBe(true)
+    expect(runtime.api.rows.hasRemoveSupport()).toBe(true)
+    expect(runtime.api.rows.hasComputedUnregisterSupport()).toBe(true)
+    expect(runtime.api.rows.hasFormulaUnregisterSupport()).toBe(true)
+    expect(typeof runtime.api.rows.batchMutations).toBe("function")
+    expect(runtime.api.rows.removeData(["r2"])).toBe(true)
+    expect(runtime.api.rows.getById("r2")).toBeUndefined()
+  })
+
   it("exposes canonical virtualWindow snapshot and updates it on range/row/column changes", () => {
     const runtime = useDataGridRuntimeService<Row>({
       rows: [

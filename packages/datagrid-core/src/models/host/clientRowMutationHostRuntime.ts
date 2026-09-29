@@ -29,7 +29,11 @@ export interface CreateClientRowMutationHostRuntimeOptions<T> {
 }
 
 export interface ClientRowMutationHostRuntime<T> {
+  batchMutations<TResult>(fn: () => TResult): TResult
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
+  appendRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  prependRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  removeRows: (rowIds: readonly DataGridRowId[]) => boolean
   reorderRows: (input: ClientRowRowsMutationsRuntimeReorderInput) => boolean
   insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<T>[]) => boolean
   insertRowsBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
@@ -61,7 +65,11 @@ export function createClientRowMutationHostRuntime<T>(
     createClientRowRowsMutationsRuntime(options.rowsMutationsContext)
 
   return {
+    batchMutations: fn => rowsMutationsRuntime.batchMutations(fn),
     setRows: (nextRows) => rowsMutationsRuntime.setRows(nextRows),
+    appendRows: rows => rowsMutationsRuntime.appendRows(rows),
+    prependRows: rows => rowsMutationsRuntime.prependRows(rows),
+    removeRows: rowIds => rowsMutationsRuntime.removeRows(rowIds),
     reorderRows: (input) => rowsMutationsRuntime.reorderRows(input),
     insertRowsAt: (index, rows) => rowsMutationsRuntime.insertRowsAt(index, rows),
     insertRowsBefore: (rowId, rows) => rowsMutationsRuntime.insertRowsBefore(rowId, rows),

@@ -271,7 +271,56 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         return
       }
 
+      const rollbackState = options.atomic
+        ? (() => {
+            const columnSnapshot = columnModel.getSnapshot()
+            const visibility: Record<string, boolean> = {}
+            const widths: Record<string, number | null> = {}
+            const pins: Record<string, DataGridColumnPin> = {}
+            for (const column of columnSnapshot.columns) {
+              visibility[column.key] = column.visible
+              widths[column.key] = column.width
+              pins[column.key] = column.pin
+            }
+            return {
+              version: 1 as const,
+              rows: {
+                snapshot: cloneSerializable(rowModel.getSnapshot()),
+                aggregationModel: cloneSerializable(rowModel.getAggregationModel()),
+              },
+              columns: {
+                order: cloneSerializable(columnSnapshot.order),
+                zoneOrder: cloneSerializable(columnSnapshot.zoneOrder),
+                visibility,
+                widths,
+                pins,
+              },
+              selection: cloneSerializable(getSelectionCapability()?.getSelectionSnapshot() ?? null),
+              rowSelection: cloneSerializable(getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null),
+              transaction: null,
+              view: { viewportPosition: cloneSerializable(getViewportPosition()) },
+            } satisfies DataGridUnifiedState<TRow>
+          })()
+        : null
+
       const dataSourceOptions = options.dataSource
+
+      // Validate failures that are independent of the mutation order before
+      // touching any row, column, selection, or viewport state. State import
+      // remains sequential for runtime failures, but strict capability errors
+      // must not leave a partially applied state behind.
+      if (options.strict && migratedState.transaction) {
+        throw new Error("[DataGridApi] Transaction state restore is not supported by current facade.")
+      }
+      if (options.strict && options.applySelection !== false) {
+        if (migratedState.selection && !getSelectionCapability()) {
+          throw new Error("[DataGridApi] Cannot restore selection state without selection capability.")
+        }
+        if (migratedState.rowSelection && !getRowSelectionCapability()) {
+          throw new Error("[DataGridApi] Cannot restore rowSelection state without rowSelection capability.")
+        }
+      }
+
       const backpressureCapability = dataSourceOptions && dataSourceOptions.atomic !== false
         ? getBackpressureControlCapability?.() ?? null
         : null
@@ -279,7 +328,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
 
       try {
         const rowSnapshot = migratedState.rows?.snapshot
-        if (rowSnapshot) {
+        if (rowSnapshot && options.applyRows !== false) {
           const dataSourceResetViewportRange = normalizeViewportRange(dataSourceOptions?.resetViewportRange)
           if (options.applyViewport !== false && dataSourceResetViewportRange) {
             setViewportRange(dataSourceResetViewportRange)
@@ -374,11 +423,82 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           }
         }
 
-        if (options.strict && migratedState.transaction) {
-          throw new Error("[DataGridApi] Transaction state restore is not supported by current facade.")
-        }
-
         onStateImported?.(cloneSerializable(migratedState))
+      } catch (error) {
+        if (rollbackState) {
+          try {
+            const snapshot = rollbackState.rows.snapshot
+            const sortFilterBatchCapability = getSortFilterBatchCapability()
+            if (options.applyRows !== false) {
+              const input: DataGridSortAndFilterModelInput = {
+                sortModel: normalizeSortModel(snapshot.sortModel),
+                filterModel: normalizeFilterModel(snapshot.filterModel),
+              }
+              if (sortFilterBatchCapability) {
+                sortFilterBatchCapability.setSortAndFilterModel(input)
+              } else {
+                rowModel.setFilterModel(input.filterModel)
+                rowModel.setSortModel(input.sortModel)
+              }
+              rowModel.setGroupBy(normalizeGroupBy(snapshot.groupBy))
+              rowModel.setPivotModel(normalizePivotModel(snapshot.pivotModel))
+              rowModel.setAggregationModel(normalizeAggregationModel(rollbackState.rows.aggregationModel))
+              rowModel.setGroupExpansion(normalizeGroupExpansion(snapshot.groupExpansion))
+              rowModel.setPagination(normalizePaginationInput(snapshot.pagination))
+              const viewportRange = normalizeViewportRange(snapshot.viewportRange)
+              if (viewportRange) {
+                setViewportRange(viewportRange)
+              }
+            }
+            if (options.applyColumns !== false) {
+              columnModel.setColumnOrder(rollbackState.columns.order)
+              for (const [key, value] of Object.entries(rollbackState.columns.visibility)) {
+                columnModel.setColumnVisibility(key, value)
+              }
+              for (const [key, value] of Object.entries(rollbackState.columns.widths)) {
+                columnModel.setColumnWidth(key, value)
+              }
+              for (const [key, value] of Object.entries(rollbackState.columns.pins)) {
+                columnModel.setColumnPin(key, value)
+              }
+              for (const zone of ["pinnedLeft", "center", "pinnedRight"] as const) {
+                columnModel.setColumnZoneOrder(zone, rollbackState.columns.zoneOrder[zone] ?? [])
+              }
+            }
+            if (options.applySelection !== false) {
+              const selectionCapability = getSelectionCapability()
+              if (selectionCapability) {
+                if (rollbackState.selection) {
+                  selectionCapability.setSelectionSnapshot(cloneSerializable(rollbackState.selection))
+                } else {
+                  selectionCapability.clearSelection()
+                }
+                onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
+              }
+              const rowSelectionCapability = getRowSelectionCapability()
+              if (rowSelectionCapability) {
+                if (rollbackState.rowSelection) {
+                  rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(rollbackState.rowSelection))
+                } else {
+                  rowSelectionCapability.clearRowSelection()
+                }
+                onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
+              }
+            }
+            if (options.applyViewport !== false && options.applyViewportPosition !== false) {
+              const viewportPosition = normalizeViewportPosition(rollbackState.view?.viewportPosition)
+              if (viewportPosition) {
+                setViewportPosition(viewportPosition, { strict: false })
+              }
+            }
+          } catch (rollbackError) {
+            const combinedError = new Error("[DataGridApi] State import and rollback failed.")
+            const errorWithCause = combinedError as Error & { cause?: unknown }
+            errorWithCause.cause = { error, rollbackError }
+            throw combinedError
+          }
+        }
+        throw error
       } finally {
         if (pausedByStateImport) {
           backpressureCapability?.resumeBackpressure()

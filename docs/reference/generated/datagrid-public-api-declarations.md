@@ -22,7 +22,7 @@ Entrypoint exports:
 
 - `export * from "./public.js"`
 
-Declaration graph hash: `8ba54669ef8fdb078152a60b5200d92cfb795556d3b9363014779d8c4dc3ff2e`
+Declaration graph hash: `fe4295e7857407a40a6e885d8b3dca455433ed58c7ffa987d88412a9167fa07f`
 
 ### ./advanced
 
@@ -41,7 +41,7 @@ Entrypoint exports:
 - `export { createDataSourceBackedRowModel, createDataGridAggregationRegistry, createDataGridComparatorRegistry, compareDataGridValues, type CreateDataSourceBackedRowModelOptions, type DataSourceBackedRowModel, type DataGridExternalRowUpdate, type DataGridExternalRowUpdateOptions, type DataGridDataSource, type DataGridDataSourceBackpressureDiagnostics, type DataGridDataSourceColumnHistogramRequest, type DataGridDataSourceInvalidation, type DataGridDataSourceCellRange, type DataGridDataSourceClipboardFormat, type DataGridDataSourceOperationKind, type DataGridDataSourceOperationRejection, type DataGridDataSourceOperationRequest, type DataGridDataSourceOperationResult, type DataGridDataSourceOperationStatus, type DataGridDataSourcePaginationPullContext, type DataGridDataSourcePullPriority, type DataGridDataSourcePivotPullContext, type DataGridDataSourcePullReason, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridServerPivotRowIdInput, type DataGridServerPivotRowRole, type DataGridComparatorNullsPolicy, type DataGridComparatorPolicy, type DataGridComparatorPolicyKind, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, type DataGridAggregationDefinition, type DataGridAggregationRegistry, type DataGridAggregationRegistryInput, type DataGridDataSourceTreePullContext, type DataGridDataSourceTreePullOperation, type DataGridDataSourceTreePullScope, type DataGridDataSourcePushEvent, type DataGridDataSourcePushInvalidateEvent, type DataGridDataSourcePushListener, type DataGridDataSourcePushRemoveEvent, type DataGridDataSourcePushUpsertEvent, type DataGridDataSourceRowEntry, createDataGridServerPivotRowId, } from "./models/index.js"`
 - `export { transformDataGridPublicProtocolSource, type DataGridCodemodResult, } from "./protocol/index.js"`
 
-Declaration graph hash: `d10b16f4d3e7be30071e2ec47fea7107bedc2ba80fc7d5ec231f4cbff4103f68`
+Declaration graph hash: `21792a56c0250dbefec990aba71c5eb3be4209f1c4fe64ad64db7362708453bb`
 
 ### ./internal
 
@@ -52,7 +52,7 @@ Entrypoint exports:
 - `export { resolveFirstColumnIndexAfterOffset, resolveFirstColumnIndexAfterPrefixOffset, resolveLastColumnIndexBeforeOffset, resolveLastColumnIndexBeforePrefixOffset, } from "./virtualization/columnSizing.js"`
 - `export { resolveUniformRowIndexAtOffset, resolveUniformRowOffset, } from "./virtualization/verticalGeometry.js"`
 
-Declaration graph hash: `b1de8166b6a8de7f22106364a4dde7ce63d61b400b2a0f08f4d9459efce9de99`
+Declaration graph hash: `566749af5e3b49ad32f2e8f6a6fe5537ec805ea3d632566ecc02401e8cb52a56`
 
 ## @affino/datagrid-vue
 

@@ -49,6 +49,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   getRowModelSnapshot: () => ReturnType<DataGridRowModel<TRow>["getSnapshot"]>
   getRowCount: () => number
   getRow: (index: number) => ReturnType<DataGridRowModel<TRow>["getRow"]>
+  getRowById: (rowId: DataGridRowId) => ReturnType<NonNullable<DataGridRowModel<TRow>["getRowById"]>>
   getRowsInRange: (range: DataGridViewportRange) => ReturnType<DataGridRowModel<TRow>["getRowsInRange"]>
   getProjectedRows: () => TRow[]
   getPaginationSnapshot: () => ReturnType<DataGridRowModel<TRow>["getSnapshot"]>["pagination"]
@@ -71,7 +72,10 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   reapplyView: () => ReturnType<DataGridRowModel<TRow>["refresh"]>
   hasDataMutationSupport: () => boolean
   hasInsertSupport: () => boolean
+  hasRowIdLookupSupport: () => boolean
+  hasRemoveSupport: () => boolean
   setData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
+  removeData: (rowIds: readonly DataGridRowId[]) => boolean
   replaceData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   appendData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
   prependData: (rows: readonly DataGridRowNodeInput<TRow>[]) => void
@@ -82,10 +86,14 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   hasExternalUpdateSupport: () => boolean
   hasComputedSupport: () => boolean
   registerComputedField: (definition: DataGridComputedFieldDefinition<TRow>) => void
+  hasComputedUnregisterSupport: () => boolean
+  unregisterComputedField: (name: string) => boolean
   getComputedFields: () => readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields: (rowIds?: readonly DataGridRowId[]) => number
   hasFormulaSupport: () => boolean
   registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
+  hasFormulaUnregisterSupport: () => boolean
+  unregisterFormulaField: (name: string) => boolean
   getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext: (request: DataGridFormulaContextRecomputeRequest) => number
   hasFormulaFunctionRegistrySupport: () => boolean
@@ -110,6 +118,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   setAutoReapply: (value: boolean) => void
   getAutoReapply: () => boolean
   batch: <TResult>(fn: () => TResult) => TResult
+  batchMutations: <TResult>(fn: () => TResult) => TResult
 }
 
 export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
@@ -118,6 +127,7 @@ export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
   getExternalUpdateCapability: () => DataGridExternalUpdateCapability<TRow> | null
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
+  onRowsRemoved?: (rowIds: readonly DataGridRowId[]) => void
   getProjectionMode?: () => DataGridApiProjectionMode
 }
 
@@ -130,6 +140,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     getExternalUpdateCapability,
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
+    onRowsRemoved,
     getProjectionMode,
   } = input
   let autoReapply = false
@@ -157,6 +168,9 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     getRow(index: number) {
       return rowModel.getRow(index)
+    },
+    getRowById(rowId: DataGridRowId) {
+      return rowModel.getRowById?.(rowId)
     },
     getRowsInRange(range: DataGridViewportRange) {
       return rowModel.getRowsInRange(range)
@@ -240,10 +254,28 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         && typeof capability?.insertRowsBefore === "function"
         && typeof capability?.insertRowsAfter === "function"
     },
+    hasRowIdLookupSupport() {
+      return typeof rowModel.getRowById === "function"
+    },
+    hasRemoveSupport() {
+      return typeof getRowsDataMutationCapability()?.removeRows === "function"
+    },
     setData(rows: readonly DataGridRowNodeInput<TRow>[]) {
       assertMutationsAllowed("set rows")
       const capability = assertRowsDataMutationCapability(getRowsDataMutationCapability())
       capability.setRows(rows)
+    },
+    removeData(rowIds: readonly DataGridRowId[]) {
+      assertMutationsAllowed("remove rows")
+      const capability = getRowsDataMutationCapability()
+      if (!capability || typeof capability.removeRows !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement removeRows data mutation capability.')
+      }
+      const removed = capability.removeRows(rowIds)
+      if (removed) {
+        onRowsRemoved?.(rowIds)
+      }
+      return removed
     },
     replaceData(rows: readonly DataGridRowNodeInput<TRow>[]) {
       assertMutationsAllowed("replace rows")
@@ -303,8 +335,14 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     hasComputedSupport() {
       return typeof rowModel.registerComputedField === "function"
     },
+    hasComputedUnregisterSupport() {
+      return typeof rowModel.unregisterComputedField === "function"
+    },
     hasFormulaSupport() {
       return typeof rowModel.registerFormulaField === "function"
+    },
+    hasFormulaUnregisterSupport() {
+      return typeof rowModel.unregisterFormulaField === "function"
     },
     hasFormulaFunctionRegistrySupport() {
       return typeof rowModel.registerFormulaFunction === "function"
@@ -318,12 +356,26 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       }
       rowModel.registerComputedField(definition)
     },
+    unregisterComputedField(name: string) {
+      assertMutationsAllowed("unregister computed field")
+      if (typeof rowModel.unregisterComputedField !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement computed field unregister capability.')
+      }
+      return rowModel.unregisterComputedField(name)
+    },
     registerFormulaField(definition: DataGridFormulaFieldDefinition) {
       assertMutationsAllowed("register formula field")
       if (typeof rowModel.registerFormulaField !== "function") {
         throw new Error("[DataGridApi] rowModel does not implement formula field capability.")
       }
       rowModel.registerFormulaField(definition)
+    },
+    unregisterFormulaField(name: string) {
+      assertMutationsAllowed("unregister formula field")
+      if (typeof rowModel.unregisterFormulaField !== "function") {
+        throw new Error('[DataGridApi] rowModel does not implement formula field unregister capability.')
+      }
+      return rowModel.unregisterFormulaField(name)
     },
     getComputedFields() {
       if (typeof rowModel.getComputedFields !== "function") {
@@ -336,6 +388,13 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         return []
       }
       return rowModel.getFormulaFields()
+    },
+    batchMutations<TResult>(fn: () => TResult) {
+      assertMutationsAllowed("batch row mutations")
+      if (typeof rowModel.batchMutations !== "function") {
+        return fn()
+      }
+      return rowModel.batchMutations(fn)
     },
     recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest) {
       assertMutationsAllowed("recompute formula context")

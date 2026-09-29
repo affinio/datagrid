@@ -218,6 +218,56 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     })
   }
 
+  const unregisterComputedFieldInternal = (
+    nameInput: string,
+    kind?: "computed" | "formula",
+  ): boolean => {
+    const name = normalizeComputedName(nameInput)
+    const entry = state.computedFieldsByName.get(name)
+    if (!entry) {
+      return false
+    }
+    const isFormula = state.formulaFieldsByName.has(name)
+    if ((kind === "computed" && isFormula) || (kind === "formula" && !isFormula)) {
+      throw new Error(`[DataGridComputed] '${name}' is not a ${kind} field.`)
+    }
+    const dependent = Array.from(state.computedFieldsByName.values()).find(candidate => (
+      candidate.name !== name
+      && candidate.deps.some(dependency => (
+        dependency.domain === "computed"
+          ? dependency.value === name
+          : dependency.domain === "field" && dependency.value === entry.field
+      ))
+    ))
+    if (dependent) {
+      throw new Error(
+        `[DataGridComputed] Cannot unregister '${name}' because computed field '${dependent.name}' depends on it.`,
+      )
+    }
+
+    for (const dependency of entry.deps) {
+      if (dependency.domain === "meta") {
+        continue
+      }
+      const sourceField = dependency.domain === "computed"
+        ? state.computedFieldsByName.get(dependency.value)?.field
+        : dependency.value
+      if (!sourceField) {
+        continue
+      }
+      projectionPolicy.dependencyGraph.removeDependency?.(
+        sourceField,
+        entry.field,
+        { kind: dependency.domain === "field" ? "structural" : "computed" },
+      )
+    }
+    state.computedFieldsByName.delete(name)
+    state.computedFieldNameByTargetField.delete(entry.field)
+    state.formulaFieldsByName.delete(name)
+    rebuildComputedOrder()
+    return true
+  }
+
   const resolveInitialComputedRegistrationOrder = (
     definitions: readonly DataGridComputedFieldDefinition<T>[],
   ): readonly DataGridComputedFieldDefinition<T>[] => {
@@ -362,6 +412,7 @@ export function createComputedRegistryRegistrationRuntime<T>(options: {
     resolveInitialComputedRegistrationOrder,
     registerComputedFieldInternal,
     registerFormulaFieldInternal,
+    unregisterComputedFieldInternal,
     registerFormulaFunction,
     unregisterFormulaFunction,
     getFormulaFunctionNames,

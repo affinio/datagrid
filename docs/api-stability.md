@@ -10,6 +10,15 @@ Affino DataGrid publishes three API tiers. Import from the package entrypoint th
 | Advanced | Supported power-user contract for custom renderers, adapters, workers, and runtime integration. It may evolve faster. | `@affino/datagrid-vue/advanced/*`, `@affino/datagrid-core/advanced` |
 | Internal | Implementation detail with no application compatibility promise. | `./internal` subpaths and source-shaped deep imports |
 
+The row-management additions in this slice (`rows.getById`, `rows.removeData`,
+`rows.batchMutations`, and formula/computed-field unregister capability checks) are stable facade
+contracts. Their availability remains capability-gated by the active row model;
+unsupported operations retain the existing explicit error behavior.
+
+`state.set(..., { atomic: true })` is a stable opt-in consistency contract for
+best-effort rollback of local state components; it does not claim rollback for
+irreversible datasource or adapter work.
+
 ## Import rules
 
 Use package-root or documented subpath imports:

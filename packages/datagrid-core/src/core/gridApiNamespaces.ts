@@ -49,11 +49,15 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getRowModelSnapshot: DataGridApi<TRow>["rows"]["getSnapshot"]
   getRowCount: DataGridApi<TRow>["rows"]["getCount"]
   getRow: DataGridApi<TRow>["rows"]["get"]
+  getRowById: DataGridApi<TRow>["rows"]["getById"]
   getRowsInRange: DataGridApi<TRow>["rows"]["getRange"]
   getProjectedRows: DataGridApi<TRow>["rows"]["getProjectedRows"]
   hasDataMutationSupport: DataGridApi<TRow>["rows"]["hasDataMutationSupport"]
   hasInsertSupport: DataGridApi<TRow>["rows"]["hasInsertSupport"]
+  hasRowIdLookupSupport: DataGridApi<TRow>["rows"]["hasRowIdLookupSupport"]
+  hasRemoveSupport: DataGridApi<TRow>["rows"]["hasRemoveSupport"]
   setData: DataGridApi<TRow>["rows"]["setData"]
+  removeData: DataGridApi<TRow>["rows"]["removeData"]
   replaceData: DataGridApi<TRow>["rows"]["replaceData"]
   appendData: DataGridApi<TRow>["rows"]["appendData"]
   prependData: DataGridApi<TRow>["rows"]["prependData"]
@@ -80,10 +84,14 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   hasExternalUpdateSupport: DataGridApi<TRow>["rows"]["hasExternalUpdateSupport"]
   hasComputedSupport: DataGridApi<TRow>["rows"]["hasComputedSupport"]
   registerComputedField: DataGridApi<TRow>["rows"]["registerComputedField"]
+  hasComputedUnregisterSupport: DataGridApi<TRow>["rows"]["hasComputedUnregisterSupport"]
+  unregisterComputedField: DataGridApi<TRow>["rows"]["unregisterComputedField"]
   getComputedFields: DataGridApi<TRow>["rows"]["getComputedFields"]
   recomputeComputedFields: DataGridApi<TRow>["rows"]["recomputeComputedFields"]
   hasFormulaSupport: DataGridApi<TRow>["rows"]["hasFormulaSupport"]
   registerFormulaField: DataGridApi<TRow>["rows"]["registerFormulaField"]
+  hasFormulaUnregisterSupport: DataGridApi<TRow>["rows"]["hasFormulaUnregisterSupport"]
+  unregisterFormulaField: DataGridApi<TRow>["rows"]["unregisterFormulaField"]
   getFormulaFields: DataGridApi<TRow>["rows"]["getFormulaFields"]
   recomputeFormulaContext: DataGridApi<TRow>["rows"]["recomputeFormulaContext"]
   hasFormulaFunctionRegistrySupport: DataGridApi<TRow>["rows"]["hasFormulaFunctionRegistrySupport"]
@@ -96,6 +104,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   setAutoReapply: DataGridApi<TRow>["rows"]["setAutoReapply"]
   getAutoReapply: DataGridApi<TRow>["rows"]["getAutoReapply"]
   batchRows: DataGridApi<TRow>["rows"]["batch"]
+  batchMutations: DataGridApi<TRow>["rows"]["batchMutations"]
   hasBackpressureControlSupport: DataGridApi<TRow>["data"]["hasBackpressureControlSupport"]
   pauseBackpressure: DataGridApi<TRow>["data"]["pause"]
   resumeBackpressure: DataGridApi<TRow>["data"]["resume"]
@@ -165,11 +174,15 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     getSnapshot: methodSet.getRowModelSnapshot,
     getCount: methodSet.getRowCount,
     get: methodSet.getRow,
+    getById: methodSet.getRowById,
     getRange: methodSet.getRowsInRange,
     getProjectedRows: methodSet.getProjectedRows,
     hasDataMutationSupport: methodSet.hasDataMutationSupport,
     hasInsertSupport: methodSet.hasInsertSupport,
+    hasRowIdLookupSupport: methodSet.hasRowIdLookupSupport,
+    hasRemoveSupport: methodSet.hasRemoveSupport,
     setData: methodSet.setData,
+    removeData: methodSet.removeData,
     replaceData: methodSet.replaceData,
     appendData: methodSet.appendData,
     prependData: methodSet.prependData,
@@ -196,10 +209,14 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     hasExternalUpdateSupport: methodSet.hasExternalUpdateSupport,
     hasComputedSupport: methodSet.hasComputedSupport,
     registerComputedField: methodSet.registerComputedField,
+    hasComputedUnregisterSupport: methodSet.hasComputedUnregisterSupport,
+    unregisterComputedField: methodSet.unregisterComputedField,
     getComputedFields: methodSet.getComputedFields,
     recomputeComputedFields: methodSet.recomputeComputedFields,
     hasFormulaSupport: methodSet.hasFormulaSupport,
     registerFormulaField: methodSet.registerFormulaField,
+    hasFormulaUnregisterSupport: methodSet.hasFormulaUnregisterSupport,
+    unregisterFormulaField: methodSet.unregisterFormulaField,
     getFormulaFields: methodSet.getFormulaFields,
     recomputeFormulaContext: methodSet.recomputeFormulaContext,
     hasFormulaFunctionRegistrySupport: methodSet.hasFormulaFunctionRegistrySupport,
@@ -212,6 +229,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     setAutoReapply: methodSet.setAutoReapply,
     getAutoReapply: methodSet.getAutoReapply,
     batch: methodSet.batchRows,
+    batchMutations: methodSet.batchMutations,
   }
 
   const columns: DataGridApiColumnsNamespace = {

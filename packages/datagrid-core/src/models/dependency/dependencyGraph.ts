@@ -77,6 +77,11 @@ export interface DataGridDependencyGraph {
     dependentField: string,
     options?: DataGridRegisterDependencyOptions,
   ) => void
+  removeDependency?: (
+    sourceField: string,
+    dependentField: string,
+    options?: DataGridRegisterDependencyOptions,
+  ) => boolean
   getAffectedFields: (changedFields: ReadonlySet<string>) => ReadonlySet<string>
   affectsAny: (
     changedFields: ReadonlySet<string>,
@@ -176,6 +181,15 @@ export function createDataGridDependencyGraph(
     currentNode.terminalSources.add(sourceField)
   }
 
+  const rebuildStructuralSourceTrie = (): void => {
+    structuralSourceTrieRoot.children.clear()
+    structuralSourceTrieRoot.terminalSources.clear()
+    structuralSourceTrieRoot.subtreeSources.clear()
+    for (const sourceField of structuralDependentsBySource.keys()) {
+      insertStructuralSource(sourceField)
+    }
+  }
+
   const collectOverlappingStructuralSources = (
     fieldPath: string,
     output: Set<string>,
@@ -246,6 +260,39 @@ export function createDataGridDependencyGraph(
       insertStructuralSource(normalizedSourceField)
     }
     addOutgoingEdge(normalizedSourceField, normalizedDependentField)
+  }
+
+  const removeDependency = (
+    sourceField: string,
+    dependentField: string,
+    removeOptions: DataGridRegisterDependencyOptions = {},
+  ): boolean => {
+    const normalizedSourceField = normalizeFieldPath(sourceField)
+    const normalizedDependentField = normalizeFieldPath(dependentField)
+    const kind = removeOptions.kind ?? "structural"
+    const targetMap = kind === "computed"
+      ? computedDependentsBySource
+      : structuralDependentsBySource
+    const dependents = targetMap.get(normalizedSourceField)
+    if (!dependents || !dependents.delete(normalizedDependentField)) {
+      return false
+    }
+    if (dependents.size === 0) {
+      targetMap.delete(normalizedSourceField)
+    }
+
+    const stillRegistered = structuralDependentsBySource.get(normalizedSourceField)?.has(normalizedDependentField) === true
+      || computedDependentsBySource.get(normalizedSourceField)?.has(normalizedDependentField) === true
+    if (!stillRegistered) {
+      outgoingEdgesBySource.get(normalizedSourceField)?.delete(normalizedDependentField)
+      if (outgoingEdgesBySource.get(normalizedSourceField)?.size === 0) {
+        outgoingEdgesBySource.delete(normalizedSourceField)
+      }
+    }
+    if (kind === "structural") {
+      rebuildStructuralSourceTrie()
+    }
+    return true
   }
 
   for (const dependency of initialDependencies) {
@@ -354,6 +401,7 @@ export function createDataGridDependencyGraph(
 
   return {
     registerDependency,
+    removeDependency,
     getAffectedFields,
     affectsAny,
   }

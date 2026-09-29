@@ -359,7 +359,11 @@ describe("data grid api facade contracts", () => {
     api.rows.setGroupBy({ fields: ["team"], expandedByDefault: false })
     api.rows.expandGroup(alphaGroupKey)
     api.rows.collapseGroup(alphaGroupKey)
+    api.rows.expandAllGroups()
+    const expandedByRows = api.rows.getSnapshot().groupExpansion
+    api.rows.collapseAllGroups()
     api.view.expandAllGroups()
+    expect(api.rows.getSnapshot().groupExpansion).toEqual(expandedByRows)
     api.rows.setGroupExpansion({
       expandedByDefault: false,
       toggledGroupKeys: [betaGroupKey],
@@ -621,6 +625,47 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
   })
 
+  it("keeps direct row mutations outside generic transaction history", async () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const transactionService = createDataGridTransactionService({
+      execute() {
+        // The command is intentionally independent of the direct row mutation.
+      },
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        transaction: {
+          name: "transaction",
+          getTransactionSnapshot: transactionService.getSnapshot,
+          beginTransactionBatch: transactionService.beginBatch,
+          commitTransactionBatch: transactionService.commitBatch,
+          rollbackTransactionBatch: transactionService.rollbackBatch,
+          applyTransaction: transactionService.applyTransaction,
+          canUndoTransaction: transactionService.canUndo,
+          canRedoTransaction: transactionService.canRedo,
+          undoTransaction: transactionService.undo,
+          redoTransaction: transactionService.redo,
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.applyEdits([{ rowId: "r1", data: { score: 2 } }])
+    expect(api.transaction.canUndo()).toBe(false)
+
+    await api.transaction.apply({
+      commands: [{ type: "noop", payload: null, rollbackPayload: null }],
+    })
+    expect(api.transaction.canUndo()).toBe(true)
+  })
+
   it("exposes computed field APIs for client row models", () => {
     const rowModel = createClientRowModel<{
       id: number
@@ -646,7 +691,9 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     expect(api.rows.hasComputedSupport()).toBe(true)
+    expect(api.rows.hasComputedUnregisterSupport()).toBe(true)
     expect(api.rows.hasFormulaSupport()).toBe(true)
+    expect(api.rows.hasFormulaUnregisterSupport()).toBe(true)
     expect(api.rows.hasFormulaFunctionRegistrySupport()).toBe(true)
     api.rows.registerFormulaFunction("double", {
       arity: 1,
@@ -681,6 +728,25 @@ describe("data grid api facade contracts", () => {
     expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBe(60)
     expect(() => api.rows.unregisterFormulaFunction("DOUBLE")).toThrow(/Unknown function/i)
     expect(api.rows.getFormulaFunctionNames()).toEqual(["DOUBLE"])
+    expect(api.rows.unregisterFormulaField("doubled")).toBe(true)
+    expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBeUndefined()
+    expect(api.rows.getFormulaFields().map(field => field.name)).toEqual(["grand"])
+    expect(api.rows.unregisterFormulaField("doubled")).toBe(false)
+    expect(() => api.rows.unregisterComputedField("total")).toThrow(/depends on it/i)
+    expect(api.rows.unregisterFormulaField("grand")).toBe(true)
+    expect((api.rows.get(0)?.row as { grand?: number })?.grand).toBeUndefined()
+    expect(api.rows.unregisterComputedField("total")).toBe(true)
+    expect((api.rows.get(0)?.row as { total?: number })?.total).toBeUndefined()
+    expect(api.rows.getComputedFields()).toEqual([])
+    api.rows.registerComputedField({
+      name: "total",
+      deps: ["field:price", "field:quantity"],
+      compute: context => {
+        const row = context.row as { price: number; quantity: number }
+        return row.price * row.quantity
+      },
+    })
+    expect(api.rows.getComputedFields().map(field => field.name)).toEqual(["total"])
     expect(api.rows.unregisterFormulaFunction("MISSING")).toBe(false)
     expect(api.rows.recomputeComputedFields()).toBe(0)
   })
@@ -896,6 +962,65 @@ describe("data grid api facade contracts", () => {
     expect((api.rows.get(0)?.row as { id?: string })?.id).toBe("rx")
   })
 
+  it("looks up and removes client rows by stable row ID", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 },
+        { row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 },
+        { row: { id: "r3", score: 3 }, rowId: "r3", originalIndex: 2 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const original = api.rows.getById("r1")
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+
+    expect(api.rows.hasRowIdLookupSupport()).toBe(true)
+    expect(api.rows.getById("r1")).toBe(original)
+    expect(api.rows.getById("missing")).toBeUndefined()
+    expect(api.rows.hasRemoveSupport()).toBe(true)
+    expect(api.rows.removeData(["r2", "missing", "r2"])).toBe(true)
+    expect(api.rows.getById("r2")).toBeUndefined()
+    expect(api.rows.getCount()).toBe(2)
+    expect(api.rows.removeData(["r2"])).toBe(false)
+    expect(api.rows.getById("r1")?.rowId).toBe(original?.rowId)
+  })
+
+  it("keeps insertDataAt source-indexed when projected rows are sorted", () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 },
+        { row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "score", label: "Score" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    api.rows.setSortModel([{ key: "score", direction: "desc" }])
+    expect(api.rows.insertDataAt(0, [{ row: { id: "r0", score: 0 }, rowId: "r0", originalIndex: 0 }])).toBe(true)
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r1", "r0"])
+
+    api.rows.setSortModel([])
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r0", "r1", "r2"])
+  })
+
   it("reports missing data-mutation capability when row model does not expose setRows", () => {
     const clientRowModel = createClientRowModel({
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
@@ -905,6 +1030,8 @@ describe("data grid api facade contracts", () => {
       replaceRows: _omitReplaceRows,
       appendRows: _omitAppendRows,
       prependRows: _omitPrependRows,
+      getRowById: _omitGetRowById,
+      removeRows: _omitRemoveRows,
       ...rowModelWithoutDataMutation
     } = clientRowModel
     const rowModel = rowModelWithoutDataMutation as unknown as DataGridRowModel<{ id: number }>
@@ -921,6 +1048,9 @@ describe("data grid api facade contracts", () => {
 
     expect(api.rows.hasDataMutationSupport()).toBe(false)
     expect(api.rows.hasInsertSupport()).toBe(false)
+    expect(api.rows.hasRowIdLookupSupport()).toBe(false)
+    expect(api.rows.hasRemoveSupport()).toBe(false)
+    expect(api.rows.getById(1)).toBeUndefined()
     expect(() => api.rows.setData([])).toThrow(/setRows data mutation capability/i)
     expect(() => api.rows.replaceData([])).toThrow(/setRows data mutation capability/i)
     expect(() => api.rows.appendData([])).toThrow(/setRows data mutation capability/i)
@@ -928,6 +1058,7 @@ describe("data grid api facade contracts", () => {
     expect(() => api.rows.insertDataAt(0, [])).toThrow(/insertRowsAt data mutation capability/i)
     expect(() => api.rows.insertDataBefore(1, [])).toThrow(/insertRowsBefore data mutation capability/i)
     expect(() => api.rows.insertDataAfter(1, [])).toThrow(/insertRowsAfter data mutation capability/i)
+    expect(() => api.rows.removeData([1])).toThrow(/removeRows data mutation capability/i)
   })
 
   it("inserts columns through the columns namespace without losing existing layout state", () => {
@@ -1675,6 +1806,29 @@ describe("data grid api facade contracts", () => {
       code: "lifecycle-conflict",
       operation: "compute.switchMode",
     })
+  })
+
+  it("coalesces client row recomputation in rows.batchMutations", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: createDataGridColumnModel() },
+        },
+      }),
+    })
+    const beforeRevision = api.rows.getSnapshot().revision ?? 0
+
+    api.rows.batchMutations(() => {
+      api.rows.appendData([{ row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 }])
+      api.rows.appendData([{ row: { id: "r3", score: 3 }, rowId: "r3", originalIndex: 2 }])
+    })
+
+    expect(api.rows.getCount()).toBe(3)
+    expect(api.rows.getSnapshot().revision).toBe(beforeRevision + 1)
   })
 
   it("registers plugins from constructor/options and dispatches facade events", () => {
@@ -2482,6 +2636,75 @@ describe("data grid api facade contracts", () => {
     expect(events).toEqual(["begin", "imported", "end"])
   })
 
+  it("documents sequential state import when a later column restore fails", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: columnModel },
+        },
+      }),
+    })
+    const state = api.state.get()
+    const importState = {
+      ...state,
+      rows: {
+        ...state.rows,
+        snapshot: {
+          ...state.rows.snapshot,
+          sortModel: [{ key: "id", direction: "desc" as const }],
+        },
+      },
+    }
+    vi.spyOn(columnModel, "setColumnOrder").mockImplementation(() => {
+      throw new Error("column restore failed")
+    })
+    importState.columns.order = ["owner"]
+
+    expect(() => api.state.set(importState)).toThrow("column restore failed")
+    expect(api.rows.getSnapshot().sortModel).toEqual([{ key: "id", direction: "desc" }])
+  })
+
+  it("rolls back local state when atomic state import fails", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: columnModel },
+        },
+      }),
+    })
+    const state = api.state.get()
+    const importState = {
+      ...state,
+      rows: {
+        ...state.rows,
+        snapshot: {
+          ...state.rows.snapshot,
+          sortModel: [{ key: "id", direction: "desc" as const }],
+        },
+      },
+    }
+    vi.spyOn(columnModel, "setColumnOrder").mockImplementationOnce(() => {
+      throw new Error("column restore failed")
+    })
+
+    expect(() => api.state.set(importState, { atomic: true })).toThrow("column restore failed")
+    expect(api.rows.getSnapshot().sortModel).toEqual([])
+  })
+
   it("queues reentrant facade events in deterministic FIFO order", () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
@@ -2780,6 +3003,12 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getAggregationModel()).toEqual(saved.rows.aggregationModel)
     expect(api.columns.getSnapshot().order).toEqual(saved.columns.order)
     expect(api.selection.getSnapshot()).toEqual(saved.selection)
+
+    api.rows.setSortModel([{ key: "id", direction: "desc" }])
+    api.columns.setOrder(["status", "owner", "id"])
+    api.state.set(saved, { applyRows: false })
+    expect(api.rows.getSnapshot().sortModel).toEqual([{ key: "id", direction: "desc" }])
+    expect(api.columns.getSnapshot().order).toEqual(saved.columns.order)
   })
 
   it("preserves projected column zone order through unified state", () => {
@@ -2975,6 +3204,42 @@ describe("data grid api facade contracts", () => {
 
     expect(() => api.state.set(state)).not.toThrow()
     expect(() => api.state.set(state, { strict: true })).toThrow(/setViewportPosition/)
+  })
+
+  it("prevalidates unsupported strict state sections before applying rows", () => {
+    const rowModel = createClientRowModel({
+      rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "owner", label: "Owner" }],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: columnModel },
+        },
+      }),
+    })
+    const state = api.state.get()
+    const importState = {
+      ...state,
+      rows: {
+        ...state.rows,
+        snapshot: {
+          ...state.rows.snapshot,
+          sortModel: [{ key: "owner", direction: "desc" as const }],
+        },
+      },
+      transaction: {
+        id: "unsupported-history",
+        undoDepth: 1,
+        redoDepth: 0,
+      },
+    }
+
+    expect(() => api.state.set(importState, { strict: true })).toThrow(/Transaction state restore/)
+    expect(api.rows.getSnapshot().sortModel).toEqual([])
   })
 
   it("roundtrips serializable column style filters through unified state", () => {

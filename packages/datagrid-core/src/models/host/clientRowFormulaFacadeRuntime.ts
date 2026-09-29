@@ -20,7 +20,9 @@ import type {
 
 export interface ClientRowFormulaFacadeModule<T> {
   registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
+  unregisterComputedField(name: string): boolean
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  unregisterFormulaField(name: string): boolean
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
   registerFormulaFunction(
@@ -49,7 +51,9 @@ export interface CreateClientRowFormulaFacadeRuntimeOptions<T> {
 
 export interface ClientRowFormulaFacadeRuntime<T> {
   registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
+  unregisterComputedField(name: string): boolean
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  unregisterFormulaField(name: string): boolean
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
   registerFormulaFunction(
@@ -80,8 +84,14 @@ export function createClientRowFormulaFacadeRuntime<T>(
     registerComputedField(definition) {
       resolveModule().registerComputedField(definition)
     },
+    unregisterComputedField(name) {
+      return resolveModule().unregisterComputedField(name)
+    },
     registerFormulaField(definition) {
       resolveModule().registerFormulaField(definition)
+    },
+    unregisterFormulaField(name) {
+      return resolveModule().unregisterFormulaField(name)
     },
     getComputedFields() {
       return resolveModule().getComputedFields()

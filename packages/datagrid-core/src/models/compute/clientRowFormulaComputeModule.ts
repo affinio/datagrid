@@ -18,7 +18,9 @@ import type {
 
 export interface DataGridClientFormulaComputeModule<T> extends DataGridClientComputeModule<T> {
   registerComputedField: (definition: DataGridComputedFieldDefinition<T>) => void
+  unregisterComputedField: (name: string) => boolean
   registerFormulaField: (definition: DataGridFormulaFieldDefinition) => void
+  unregisterFormulaField: (name: string) => boolean
   getComputedFields: () => readonly DataGridComputedFieldSnapshot[]
   getFormulaFields: () => readonly DataGridFormulaFieldSnapshot[]
   registerFormulaFunction: (
@@ -38,10 +40,11 @@ export interface DataGridClientFormulaComputeModule<T> extends DataGridClientCom
 export interface CreateClientRowFormulaComputeModuleOptions<T> {
   ensureActive: () => void
   emit?: () => void
-  onFormulaStructureChanged?: () => void
+  onFormulaStructureChanged?: (removedField?: string) => void
   isDataGridRowId: (value: unknown) => value is DataGridRowId
   registerComputedFieldInternal: (definition: DataGridComputedFieldDefinition<T>) => void
   registerFormulaFieldInternal: (definition: DataGridFormulaFieldDefinition) => void
+  unregisterComputedFieldInternal: (name: string, kind?: "computed" | "formula") => boolean
   getComputedFieldSnapshots: () => readonly DataGridComputedFieldSnapshot[]
   getFormulaFieldSnapshots: () => readonly DataGridFormulaFieldSnapshot[]
   hasRegisteredFormulaFields: () => boolean
@@ -77,11 +80,33 @@ export function createClientRowFormulaComputeModule<T>(
       options.registerComputedFieldInternal(definition)
       void options.recomputeComputedFieldsAndRefresh()
     },
+    unregisterComputedField(name) {
+      options.ensureActive()
+      const removedField = options.getComputedFieldSnapshots().find(field => field.name === name)?.field
+      const unregistered = options.unregisterComputedFieldInternal(name, "computed")
+      if (!unregistered) {
+        return false
+      }
+      options.onFormulaStructureChanged?.(removedField)
+      emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
+      return true
+    },
     registerFormulaField(definition) {
       options.ensureActive()
       options.registerFormulaFieldInternal(definition)
       options.onFormulaStructureChanged?.()
       emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
+    },
+    unregisterFormulaField(name) {
+      options.ensureActive()
+      const removedField = options.getFormulaFieldSnapshots().find(field => field.name === name)?.field
+      const unregistered = options.unregisterComputedFieldInternal(name, "formula")
+      if (!unregistered) {
+        return false
+      }
+      options.onFormulaStructureChanged?.(removedField)
+      emitIfNoRowChange(options.recomputeComputedFieldsAndRefresh())
+      return true
     },
     getComputedFields() {
       return options.getComputedFieldSnapshots()

@@ -242,11 +242,19 @@ export function assignDisplayIndexes<T>(rows: readonly DataGridRowNode<T>[]): Da
   return projected
 }
 
-export function reindexSourceRows<T>(rows: readonly DataGridRowNode<T>[]): DataGridRowNode<T>[] {
+export function reindexSourceRows<T>(
+  rows: readonly DataGridRowNode<T>[],
+  fromIndex = 0,
+): DataGridRowNode<T>[] {
   const normalized: DataGridRowNode<T>[] = []
+  const safeFromIndex = Math.max(0, Math.min(rows.length, Math.trunc(fromIndex)))
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
     if (!row) {
+      continue
+    }
+    if (index < safeFromIndex) {
+      normalized.push(row)
       continue
     }
     normalized.push({

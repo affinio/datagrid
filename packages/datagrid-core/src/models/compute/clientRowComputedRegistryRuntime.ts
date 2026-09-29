@@ -143,6 +143,7 @@ export interface ClientRowComputedRegistryRuntime<T> {
       deferRebuild?: boolean
     },
   ) => void
+  unregisterComputedFieldInternal: (name: string, kind?: "computed" | "formula") => boolean
 
   compileFormulaFieldDefinition: (
     definition: DataGridFormulaFieldDefinition,
@@ -364,6 +365,7 @@ export function createClientRowComputedRegistryRuntime<T>(
 
     registerComputedFieldInternal: registrationRuntime.registerComputedFieldInternal,
     registerFormulaFieldInternal: registrationRuntime.registerFormulaFieldInternal,
+    unregisterComputedFieldInternal: registrationRuntime.unregisterComputedFieldInternal,
 
     compileFormulaFieldDefinition: formulaCompilationRuntime.compileFormulaFieldDefinition,
 

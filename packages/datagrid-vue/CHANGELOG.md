@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.7.0
+
+### Minor Changes
+
+- Exposed the completed DataGrid core mutation and state contracts through the
+  Vue runtime API, including row-ID lookup, deletion, formula lifecycle,
+  mutation batching, and atomic local state restoration.
+
+### Validation
+
+- Public Vue build, typecheck, adapter contracts, and package packing passed.
+
 ## 0.6.0
 
 ### Minor Changes

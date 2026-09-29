@@ -452,6 +452,7 @@ export interface DataGridRowModel<T = unknown> {
   getSnapshot(): DataGridRowModelSnapshot<T>
   getRowCount(): number
   getRow(index: number): DataGridRowNode<T> | undefined
+  getRowById?(rowId: DataGridRowId): DataGridRowNode<T> | undefined
   getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<T>[]
   getLoadedRowIntervals?(range: DataGridViewportRange): readonly DataGridViewportRange[]
   setViewportRange(range: DataGridViewportRange): void
@@ -474,10 +475,14 @@ export interface DataGridRowModel<T = unknown> {
   collapseGroup(groupKey: string): void
   expandAllGroups(): void
   collapseAllGroups(): void
+  removeRows?(rowIds: readonly DataGridRowId[]): boolean
+  batchMutations?<TResult>(fn: () => TResult): TResult
   registerComputedField?(definition: DataGridComputedFieldDefinition<T>): void
+  unregisterComputedField?(name: string): boolean
   getComputedFields?(): readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields?(rowIds?: readonly DataGridRowId[]): number
   registerFormulaField?(definition: DataGridFormulaFieldDefinition): void
+  unregisterFormulaField?(name: string): boolean
   getFormulaFields?(): readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext?(request: DataGridFormulaContextRecomputeRequest): number
   setFormulaTable?(name: string, rows: DataGridFormulaTableSource): void

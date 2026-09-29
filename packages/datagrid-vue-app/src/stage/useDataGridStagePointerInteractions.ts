@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, watch, type Ref } from "vue"
+import { getCurrentScope, onScopeDispose, ref, watch, type Ref } from "vue"
 import type {
   DataGridTableMode,
 } from "./dataGridTableStage.types"
@@ -287,9 +287,11 @@ export function useDataGridStagePointerInteractions(
     { immediate: true },
   )
 
-  onScopeDispose(() => {
-    syncGlobalFillDragCursor(false)
-  })
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      syncGlobalFillDragCursor(false)
+    })
+  }
 
   function resetGlobalFillDragCursor(): void {
     syncGlobalFillDragCursor(false)

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.6.0
+
+### Minor Changes
+
+- Exposed the completed DataGrid row mutation contract, including row-ID lookup,
+  deletion, formula/computed-field lifecycle, mutation batching, and atomic
+  state import options through the orchestration runtime.
+
+### Validation
+
+- Orchestration typecheck and runtime contract tests passed.
+
 ## 0.5.0
 
 ### Minor Changes

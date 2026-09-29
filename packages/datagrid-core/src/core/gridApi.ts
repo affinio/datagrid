@@ -243,6 +243,28 @@ export function createDataGridApi<TRow = unknown>(
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
     getProjectionMode: () => projectionMode,
+    onRowsRemoved: rowIds => {
+      const capability = getRowSelectionCapability()
+      if (!capability) {
+        return
+      }
+      const removed = new Set(rowIds)
+      const snapshot = capability.getRowSelectionSnapshot()
+      if (!snapshot) {
+        return
+      }
+      const next = {
+        ...snapshot,
+        focusedRow: snapshot.focusedRow != null && removed.has(snapshot.focusedRow)
+          ? null
+          : snapshot.focusedRow,
+        ...(snapshot.mode === "all"
+          ? { excludedRows: (snapshot.excludedRows ?? []).filter(rowId => !removed.has(rowId)) }
+          : { selectedRows: snapshot.selectedRows.filter(rowId => !removed.has(rowId)) }),
+      }
+      capability.setRowSelectionSnapshot(next)
+      eventsRuntime.emitRowSelectionChanged(capability.getRowSelectionSnapshot())
+    },
   })
   const dataMethods = createDataGridApiDataMethods({
     getBackpressureControlCapability,
@@ -381,6 +403,10 @@ export function createDataGridApi<TRow = unknown>(
     batchRows: (fn) =>
       runGuardedSync("rows.batch", () =>
         eventsRuntime.runBatched(() => rowsMethods.batch(fn))),
+    batchMutations<TResult>(fn: () => TResult): TResult {
+      return runGuardedSync("rows.batchMutations", () =>
+        eventsRuntime.runBatched(() => rowsMethods.batchMutations(fn)))
+    },
     pauseBackpressure: () =>
       runGuardedSync("data.pause", () => dataMethods.pauseBackpressure()),
     resumeBackpressure: () =>

@@ -201,6 +201,8 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   getCount(): number
   /** Returns the projected row node at index, or undefined when out of range. */
   get(index: number): DataGridRowNode<TRow> | undefined
+  /** Returns a locally available source row node by stable row id. */
+  getById(rowId: DataGridRowId): DataGridRowNode<TRow> | undefined
   /** Returns projected row nodes in the inclusive index range. */
   getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
   /**
@@ -215,8 +217,14 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   hasDataMutationSupport(): boolean
   /** Returns true when the row model supports row insertion helpers. */
   hasInsertSupport(): boolean
+  /** Returns true when local stable row-id lookup is supported. */
+  hasRowIdLookupSupport(): boolean
+  /** Returns true when source-row deletion is supported. */
+  hasRemoveSupport(): boolean
   /** Replaces row data using the row model mutation capability. */
   setData(rows: readonly DataGridRowNodeInput<TRow>[]): void
+  /** Removes matching source rows by stable row id. */
+  removeData(rowIds: readonly DataGridRowId[]): boolean
   /** Replaces row data, using a dedicated replace path when available. */
   replaceData(rows: readonly DataGridRowNodeInput<TRow>[]): void
   /** Appends rows to the end of the row model when supported. */
@@ -269,6 +277,10 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   hasComputedSupport(): boolean
   /** Registers a computed field on supported client row models. */
   registerComputedField(definition: DataGridComputedFieldDefinition<TRow>): void
+  /** Returns true when computed-field removal is supported. */
+  hasComputedUnregisterSupport(): boolean
+  /** Unregisters a computed field when no registered field depends on it. */
+  unregisterComputedField(name: string): boolean
   /** Returns registered non-formula computed field snapshots. */
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   /** Recomputes computed/formula fields for all rows or the provided row ids. */
@@ -277,6 +289,10 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   hasFormulaSupport(): boolean
   /** Registers a formula-backed computed field. */
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  /** Returns true when formula-field removal is supported. */
+  hasFormulaUnregisterSupport(): boolean
+  /** Unregisters a formula-backed computed field when no registered field depends on it. */
+  unregisterFormulaField(name: string): boolean
   /** Returns registered formula field snapshots. */
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
   /** Recomputes formulas affected by changed external context keys. */
@@ -313,6 +329,8 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   getAutoReapply(): boolean
   /** Runs row operations in a row-model batch boundary when supported. */
   batch<TResult>(fn: () => TResult): TResult
+  /** Runs synchronous row mutations with one projection recomputation when supported. */
+  batchMutations<TResult>(fn: () => TResult): TResult
 }
 
 export interface DataGridApiDataNamespace {
@@ -564,11 +582,15 @@ export interface DataGridGetStateOptions {
 }
 
 export interface DataGridSetStateOptions {
+  /** Applies persisted row projection state when true (default). */
+  applyRows?: boolean
   applyColumns?: boolean
   applySelection?: boolean
   applyViewport?: boolean
   applyViewportPosition?: boolean
   dataSource?: DataGridSetStateDataSourceOptions
+  /** Restores the supported local state components when a later import step fails. */
+  atomic?: boolean
   strict?: boolean
 }
 

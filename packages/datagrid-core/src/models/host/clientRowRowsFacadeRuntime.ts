@@ -7,12 +7,16 @@ import type {
 export interface CreateClientRowRowsFacadeRuntimeOptions<T> {
   getBaseSourceRows: () => readonly DataGridRowNode<T>[]
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
+  appendRows?: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  prependRows?: (rows: readonly DataGridRowNodeInput<T>[]) => void
+  batchMutations?: <TResult>(fn: () => TResult) => TResult
   insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<T>[]) => boolean
   insertRowsBefore: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
   insertRowsAfter: (rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]) => boolean
 }
 
 export interface ClientRowRowsFacadeRuntime<T> {
+  batchMutations<TResult>(fn: () => TResult): TResult
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
   replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
   appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
@@ -30,19 +34,26 @@ export function createClientRowRowsFacadeRuntime<T>(
   }
 
   return {
+    batchMutations: fn => options.batchMutations ? options.batchMutations(fn) : fn(),
     setRows,
     replaceRows: setRows,
     appendRows(nextRows) {
-      if (nextRows.length === 0) {
+      if (options.appendRows) {
+        options.appendRows(nextRows)
         return
       }
-      options.setRows([...options.getBaseSourceRows(), ...nextRows])
+      if (nextRows.length > 0) {
+        options.setRows([...options.getBaseSourceRows(), ...nextRows])
+      }
     },
     prependRows(nextRows) {
-      if (nextRows.length === 0) {
+      if (options.prependRows) {
+        options.prependRows(nextRows)
         return
       }
-      options.setRows([...nextRows, ...options.getBaseSourceRows()])
+      if (nextRows.length > 0) {
+        options.setRows([...nextRows, ...options.getBaseSourceRows()])
+      }
     },
     insertRowsAt: options.insertRowsAt,
     insertRowsBefore: options.insertRowsBefore,

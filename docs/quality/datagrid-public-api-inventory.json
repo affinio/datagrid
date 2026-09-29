@@ -5,7 +5,7 @@
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "exportCount": 3,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -55,7 +55,7 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "exportCount": 13,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -235,7 +235,7 @@
     {
       "packageName": "@affino/datagrid-vue-app",
       "packageDir": "packages/datagrid-vue-app",
-      "version": "0.6.0",
+      "version": "0.8.0",
       "exportCount": 7,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -301,9 +301,11 @@
           "sourceFile": "src/gantt.ts",
           "sourceExists": true,
           "wildcard": false,
-          "exportDeclarationCount": 1,
+          "exportDeclarationCount": 3,
           "exportDeclarations": [
-            "export { default as DataGridGanttStage } from \"./gantt/DataGridGanttStageEntry\" export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\""
+            "export const DataGridWithGantt = DataGridWithGanttImpl as typeof DataGrid export { DataGridWithGantt as DataGrid }",
+            "export { DataGridGanttStage }",
+            "export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\""
           ]
         },
         {
@@ -337,7 +339,7 @@
     {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.5.1",
+      "version": "0.6.0",
       "exportCount": 1,
       "unclassifiedExports": [],
       "wildcardExports": [],

@@ -252,6 +252,7 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
   getSourceRowsRevision(): number
   getFormulaStructureRevision(): number
   setRows(rows: readonly DataGridRowNodeInput<T>[]): void
+  removeRows(rowIds: readonly DataGridRowId[]): boolean
   replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
   appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
   prependRows(rows: readonly DataGridRowNodeInput<T>[]): void
@@ -265,9 +266,11 @@ export interface ClientRowModel<T> extends DataGridRowModel<T> {
     options?: DataGridClientRowPatchOptions,
   ): void
   registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
+  unregisterComputedField(name: string): boolean
   getComputedFields(): readonly DataGridComputedFieldSnapshot[]
   recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
   registerFormulaField(definition: DataGridFormulaFieldDefinition): void
+  unregisterFormulaField(name: string): boolean
   getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
   recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
   registerFormulaFunction(
@@ -852,6 +855,13 @@ export function createClientRowModel<T>(
     setRows: rows => {
       mutationHostRuntime.setRows(rows)
     },
+    appendRows: rows => {
+      mutationHostRuntime.appendRows(rows)
+    },
+    prependRows: rows => {
+      mutationHostRuntime.prependRows(rows)
+    },
+    batchMutations: fn => mutationHostRuntime.batchMutations(fn),
     insertRowsAt: mutationHostRuntime.insertRowsAt,
     insertRowsBefore: mutationHostRuntime.insertRowsBefore,
     insertRowsAfter: mutationHostRuntime.insertRowsAfter,
@@ -889,12 +899,31 @@ export function createClientRowModel<T>(
     computeModuleHost,
     ensureActive,
     emit,
-    onFormulaStructureChanged: () => {
+    onFormulaStructureChanged: (removedField) => {
       formulaStructureRevision += 1
+      if (!removedField) {
+        return
+      }
+      const sourceRows = getBaseSourceRows()
+      const nextRows = sourceRows.map(rowNode => {
+        if (!isRecord(rowNode.row) || !Object.prototype.hasOwnProperty.call(rowNode.row, removedField)) {
+          return rowNode
+        }
+        const nextRow = { ...rowNode.row } as Record<string, unknown>
+        delete nextRow[removedField]
+        return {
+          ...rowNode,
+          row: nextRow as T,
+        }
+      })
+      if (nextRows.some((rowNode, index) => rowNode !== sourceRows[index])) {
+        mutationHostRuntime.setRows(nextRows)
+      }
     },
     isDataGridRowId,
     registerComputedFieldInternal: computedFieldHostRuntime.registerComputedFieldInternal,
     registerFormulaFieldInternal: computedFieldHostRuntime.registerFormulaFieldInternal,
+    unregisterComputedFieldInternal: computedRegistry.unregisterComputedFieldInternal,
     getComputedFieldSnapshots: computedFieldHostRuntime.getComputedFieldSnapshots,
     getFormulaFieldSnapshots: computedFieldHostRuntime.getFormulaFieldSnapshots,
     hasRegisteredFormulaFields: () => computedFieldHostRuntime.getFormulaFieldsByName().size > 0,
@@ -997,14 +1026,28 @@ export function createClientRowModel<T>(
     getRowCount() {
       return rowAccessHostRuntime.getRowCount()
     },
+    getRowById(rowId: DataGridRowId) {
+      ensureActive()
+      const sourceIndex = getSourceRowIndexById().get(rowId)
+      if (typeof sourceIndex !== "number") {
+        return undefined
+      }
+      return getBaseSourceRows()[sourceIndex]
+    },
     getRow(index: number) {
       return rowAccessHostRuntime.getRow(index)
     },
     getRowsInRange(range: DataGridViewportRange) {
       return rowAccessHostRuntime.getRowsInRange(range)
     },
+    batchMutations<TResult>(fn: () => TResult) {
+      return rowsFacadeRuntime.batchMutations(fn)
+    },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       rowsFacadeRuntime.setRows(nextRows)
+    },
+    removeRows(rowIds: readonly DataGridRowId[]) {
+      return mutationHostRuntime.removeRows(rowIds)
     },
     replaceRows(nextRows: readonly DataGridRowNodeInput<T>[]) {
       rowsFacadeRuntime.replaceRows(nextRows)
@@ -1033,8 +1076,14 @@ export function createClientRowModel<T>(
     registerComputedField(definition: DataGridComputedFieldDefinition<T>) {
       formulaFacadeRuntime.registerComputedField(definition)
     },
+    unregisterComputedField(name: string) {
+      return formulaFacadeRuntime.unregisterComputedField(name)
+    },
     registerFormulaField(definition: DataGridFormulaFieldDefinition) {
       formulaFacadeRuntime.registerFormulaField(definition)
+    },
+    unregisterFormulaField(name: string) {
+      return formulaFacadeRuntime.unregisterFormulaField(name)
     },
     getComputedFields() {
       return formulaFacadeRuntime.getComputedFields()

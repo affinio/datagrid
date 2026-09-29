@@ -71,6 +71,7 @@ Use it as guard before capability-dependent mutating calls.
 - `selection.getRangeRowData()` resolves material cell ranges to de-duplicated projected leaf row data in projected row order; single-cell focus ranges return an empty array.
 - `rows.applyEdits(...)` mutates data (optionally with reapply policy).
 - `rows.batch(...)` is an explicit bulk mutation boundary with one coalesced facade event-cycle.
+- `rows.batchMutations(...)` is the opt-in client row-model mutation boundary; synchronous row mutations inside it publish one recomputation after the callback.
 - `view.reapply()` recomputes projection only.
 - `view.getViewportPosition()/setViewportPosition(...)` expose semantic viewport state when the adapter provides the viewport capability.
 - `pivot` remains a separate analytical subsystem (intentionally not nested under `rows`).
@@ -90,7 +91,7 @@ Use it as guard before capability-dependent mutating calls.
 - Snapshot isolation: public read methods are revision-consistent within the same synchronous call stack.
 - Guarded mutation serialization: high-impact guarded operations are serialized through lifecycle exclusivity.
 - Event reentrancy: reentrant emissions are queued FIFO; mutation from handlers is allowed.
-- State import boundary: `state.set(...)` is a begin/end logical boundary, not single-event atomic payload.
+- State import boundary: `state.set(...)` is a begin/end logical boundary, not a single-event atomic payload. In `strict` mode, unsupported sections are prevalidated before mutation. Use `{ atomic: true }` for best-effort rollback of supported local state components; datasource and adapter failures remain outside a universal rollback guarantee.
 
 ## Concurrency and error model
 
@@ -164,6 +165,10 @@ if (migratedState) {
   })
 }
 ```
+
+To restore a saved presentation without changing the active source rows or
+their sort/filter/group/pivot/pagination state, use
+`api.state.set(migratedState, { applyRows: false })`.
 
 Restore order is semantic: row projection state such as sort, filter, group, pivot, and pagination is applied first, then column layout, selection, and finally viewport position. The viewport anchor prefers `rowId` and `columnKey`; if those cannot be resolved after the new projection or column visibility is applied, it falls back to `rowIndex` and `columnIndex`, then to raw `scroll.top` and `scroll.left`.
 

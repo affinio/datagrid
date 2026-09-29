@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.8.0
+
+### Minor Changes
+
+- Aligned the application package release with the completed DataGrid public
+  API contract exposed by the core and Vue runtime packages.
+- Guarded pointer-interaction scope cleanup so headless composable tests and
+  non-component consumers do not emit Vue scope warnings.
+
+### Validation
+
+- Root application build, typecheck, shell contract tests, and package packing passed.
+
 ## 0.7.0
 
 ### Breaking Changes
