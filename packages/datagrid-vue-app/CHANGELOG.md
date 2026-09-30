@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.10.1
+
+### Fixes
+
+- Rebuilt the published package with the public getServerSelectionSummary() API.
+
 ### Added
 
 - Added DataGridExposed.getServerSelectionSummary() for datasource-backed aggregates over selected ranges without requiring unloaded rows.

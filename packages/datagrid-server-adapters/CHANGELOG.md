@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.1
+
+### Fixes
+
+- Rebuilt the published package with the selection-summary endpoint integration.
+
 ### Added
 
 - Added POST /api/{tableId}/selection-summary transport through summarizeSelection().
