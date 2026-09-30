@@ -2068,3 +2068,15 @@ For advanced integrations you can still pass:
 - `auto-start`
 
 This keeps `@affino/datagrid-vue-app` ergonomic for the common path without blocking advanced usage.
+
+## Server-wide selection summaries
+
+For datasource-backed tables, use the exposed async method when a selected range can include rows outside the loaded viewport:
+
+~~~ts
+const summary = await gridRef.value?.getServerSelectionSummary({
+  columns: [{ key: "profit", aggregations: ["sum", "count"] }],
+})
+~~~
+
+The method delegates to the datasource selection-summary capability and preserves native selection and keyboard navigation. It is independent of local DataGrid history and local selection aggregation.

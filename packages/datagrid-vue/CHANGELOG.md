@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Re-exported the server selection-summary datasource contracts.
+
+
 ## 0.7.0
 
 ### Minor Changes

@@ -42,6 +42,7 @@ function createClient(
     endpoints: {
       pull: "/pull",
       histogram: "/histogram",
+      selectionSummary: "/selection-summary",
       commitEdits: "/edits",
       resolveFillBoundary: "/fill-boundary",
       commitFillOperation: "/fill/commit",
@@ -136,6 +137,33 @@ describe("createServerDatasourceHttpClient", () => {
     })
 
     unsubscribe()
+  })
+
+  it("posts server-wide selection summaries without leaking AbortSignal", async () => {
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe("/selection-summary")
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      expect(body.signal).toBeUndefined()
+      expect(body.columns).toEqual([{ key: "profit", aggregations: ["sum"] }])
+      return createResponse({
+        selectedCells: 200,
+        selectedRows: 200,
+        matchedRowCount: 200,
+        columns: { profit: { key: "profit", selectedCellCount: 200, metrics: { sum: 12345 } } },
+        datasetVersion: 9,
+      })
+    })
+    const client = createClient(fetchImpl)
+    const result = await client.summarizeSelection?.({
+      ranges: [{ startRow: 0, endRow: 199, startCol: 2, endCol: 2 }],
+      columns: [{ key: "profit", aggregations: ["sum"] }],
+      signal: new AbortController().signal,
+      sortModel: [], filterModel: null, groupBy: null,
+      groupExpansion: { expanded: [] }, treeData: null, pivot: null,
+      pagination: { enabled: false },
+    } as never)
+    expect(result?.columns.profit.metrics.sum).toBe(12345)
+    expect(result?.matchedRowCount).toBe(200)
   })
 
   it("keeps datasetVersion monotonic across local mutation updates and empty change feeds", async () => {

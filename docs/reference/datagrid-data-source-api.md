@@ -68,7 +68,7 @@ Histogram `options.search` is scoped only to value-list search. It is independen
 - push application and refetch-on-overlap behavior
 - diagnostics via `getBackpressureDiagnostics()`
 
-Server-backed selection operation semantics are defined in `docs/server-datasource/reference/selection-operations.md`. Current data-source row models expose enough loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, range move, and summary still require explicit backend capability wiring before they can run over unloaded rows.
+Server-backed selection operation semantics are defined in `docs/server-datasource/reference/selection-operations.md`. Current data-source row models expose enough loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, and range move still require explicit backend capability wiring before they can run over unloaded rows; server-wide summaries use the summarizeSelection() contract documented below.
 
 ## Formula Boundary
 
@@ -124,3 +124,23 @@ Required categories:
 - push stream application and invalidation-driven refetch
 - bounded cache contract under long viewport churn
 - data-source-backed histogram delegation, search forwarding, result normalization, and `ignoreSelfFilter` context pruning
+
+## Server-wide selection summaries
+
+A datasource may expose summarizeSelection(request) when the selected range can include rows outside the loaded virtual cache. The request carries the native selection rectangles, stable column keys, and the active sort/filter/group projection. The server must evaluate the range against that projection and return exact aggregates.
+
+~~~ts
+const summary = await grid.getServerSelectionSummary({
+  columns: [{ key: "profit", aggregations: ["sum", "count"] }],
+})
+
+summary?.columns.profit.metrics.sum
+~~~
+
+The standard Affino adapter posts this request to:
+
+~~~text
+POST /api/{tableId}/selection-summary
+~~~
+
+The response contains selectedCells, selectedRows, optional matchedRowCount, consistency metadata (revision/datasetVersion), and per-column metrics. This is separate from api.selection.summarize(), which remains an in-memory summary over loaded or visible rows. Cell selection and keyboard navigation remain owned by the grid.

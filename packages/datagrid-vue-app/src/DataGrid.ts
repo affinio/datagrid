@@ -17,6 +17,8 @@ import {
   type CreateDataGridCoreOptions,
   type DataGridApi,
   type DataGridApiRowSelectionChangedEvent,
+  type DataGridDataSourceSelectionSummaryColumn,
+  type DataGridDataSourceSelectionSummaryResult,
   type DataGridApiSelectionChangedEvent,
   type DataGridApiPluginDefinition,
   type DataGridAggregationModel,
@@ -892,6 +894,11 @@ export type DataGridProps<TRow = unknown> = Omit<
   isCellEditable?: DataGridCellEditablePredicate<TRow> | undefined
 }
 
+export interface DataGridServerSelectionSummaryOptions {
+  columns: readonly DataGridDataSourceSelectionSummaryColumn[]
+  signal?: AbortSignal
+}
+
 export interface DataGridExposed<TRow = unknown> {
   history: DataGridHistoryController
   getHistory: () => DataGridHistoryController
@@ -904,6 +911,7 @@ export interface DataGridExposed<TRow = unknown> {
   ) => Promise<boolean>
   restoreFocus: () => void
   getSelectionAggregatesLabel: () => string
+  getServerSelectionSummary: (options: DataGridServerSelectionSummaryOptions) => Promise<DataGridDataSourceSelectionSummaryResult | null>
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null
   getSavedView: () => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
@@ -1632,6 +1640,49 @@ const DataGridRuntimeComponent = defineComponent({
       getColumnState: () => controlledState.getColumnState(),
       getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
       getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,
+      getServerSelectionSummary: async (
+        options: DataGridServerSelectionSummaryOptions,
+      ): Promise<DataGridDataSourceSelectionSummaryResult | null> => {
+        const rowModel = dataGridRef.value?.rowModel
+        const api = dataGridRef.value?.api
+        const selection = api?.selection.getSnapshot?.() ?? null
+        const dataSource = (rowModel as unknown as {
+          dataSource?: {
+            summarizeSelection?: (request: unknown) => Promise<DataGridDataSourceSelectionSummaryResult>
+          }
+        } | null)?.dataSource
+        if (!rowModel || !selection || !dataSource?.summarizeSelection) {
+          return null
+        }
+        const snapshot = rowModel.getSnapshot()
+        const controller = options.signal ? null : new AbortController()
+        const signal = options.signal ?? controller!.signal
+        try {
+          return await dataSource.summarizeSelection({
+            ranges: selection.ranges.map(range => ({
+              startRow: range.startRow,
+              endRow: range.endRow,
+              startCol: range.startCol,
+              endCol: range.endCol,
+              startRowId: range.startRowId ?? null,
+              endRowId: range.endRowId ?? null,
+            })),
+            columns: options.columns,
+            signal,
+            sortModel: snapshot.sortModel,
+            filterModel: snapshot.filterModel,
+            groupBy: snapshot.groupBy,
+            groupExpansion: snapshot.groupExpansion,
+            treeData: null,
+            pivot: null,
+            pagination: { snapshot: snapshot.pagination, cursor: null },
+            revision: snapshot.revision ?? null,
+            datasetVersion: snapshot.datasetVersion ?? null,
+          })
+        } finally {
+          controller?.abort()
+        }
+      },
       runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => (
         registeredStructuralRowActionRunner.value?.(action, rowId) ?? Promise.resolve(false)
       ),

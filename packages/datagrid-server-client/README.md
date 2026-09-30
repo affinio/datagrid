@@ -181,3 +181,7 @@ Experimental, pre-1.0.
 - Keep HTTP transport helpers internal to the package.
 - Use `@affino/datagrid-server-adapters` for the opinionated application entrypoint.
 - Use `@affino/datagrid-core` for shared datasource contracts and row-model types.
+
+### Server-wide selection summaries
+
+The datasource summarizeSelection() capability sends exact selected-range aggregate requests without requiring every row to be loaded. The Affino adapter uses POST /api/{tableId}/selection-summary; the low-level client accepts endpoints.selectionSummary and optional request/response mappers.

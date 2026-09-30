@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added DataGridExposed.getServerSelectionSummary() for datasource-backed aggregates over selected ranges without requiring unloaded rows.
+
+
 ## 0.9.2
 
 ### Fixes

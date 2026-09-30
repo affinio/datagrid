@@ -13,6 +13,10 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "../rowModel.js"
+import type {
+  DataGridSelectionAggregationKind,
+  DataGridSelectionSummaryColumnSnapshot,
+} from "../../selection/selectionSummary.js"
 import type { DataGridClientRowPatch } from "../clientRowModel.js"
 import type {
   DataGridPivotColumn,
@@ -117,6 +121,45 @@ export interface DataGridDataSourceColumnHistogramRequest {
   treeData: DataGridDataSourceTreePullContext | null
   pivot: DataGridDataSourcePivotPullContext | null
   pagination: DataGridDataSourcePaginationPullContext
+}
+
+/** A selected cell rectangle expressed in the datasource's sorted row space. */
+export interface DataGridDataSourceSelectionSummaryRange {
+  startRow: number
+  endRow: number
+  startCol: number
+  endCol: number
+  startRowId?: DataGridRowId | null
+  endRowId?: DataGridRowId | null
+}
+
+export interface DataGridDataSourceSelectionSummaryColumn {
+  key: string
+  aggregations?: readonly DataGridSelectionAggregationKind[]
+}
+
+export interface DataGridDataSourceSelectionSummaryRequest {
+  ranges: readonly DataGridDataSourceSelectionSummaryRange[]
+  columns: readonly DataGridDataSourceSelectionSummaryColumn[]
+  signal: AbortSignal
+  sortModel: readonly DataGridSortState[]
+  filterModel: DataGridFilterSnapshot | null
+  groupBy: DataGridGroupBySpec | null
+  groupExpansion: DataGridGroupExpansionSnapshot
+  treeData: DataGridDataSourceTreePullContext | null
+  pivot: DataGridDataSourcePivotPullContext | null
+  pagination: DataGridDataSourcePaginationPullContext
+  revision?: string | number | null
+  datasetVersion?: string | number | null
+}
+
+export interface DataGridDataSourceSelectionSummaryResult {
+  columns: Record<string, DataGridSelectionSummaryColumnSnapshot>
+  selectedCells: number
+  selectedRows: number
+  matchedRowCount?: number | null
+  revision?: string | number | null
+  datasetVersion?: string | number | null
 }
 
 export interface DataGridDataSourceRowEntry<T = unknown> {
@@ -387,6 +430,9 @@ export type DataGridDataSourcePushListener<T = unknown> = (
 export interface DataGridDataSource<T = unknown> {
   pull(request: DataGridDataSourcePullRequest): Promise<DataGridDataSourcePullResult<T>>
   getColumnHistogram?(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram>
+  summarizeSelection?(
+    request: DataGridDataSourceSelectionSummaryRequest,
+  ): Promise<DataGridDataSourceSelectionSummaryResult>
   commitEdits?(request: DataGridDataSourceCommitEditsRequest<T>): Promise<DataGridDataSourceCommitEditsResult<T>>
   executeOperation?(request: DataGridDataSourceOperationRequest): Promise<DataGridDataSourceOperationResult<T>>
   commitFillOperation?(request: DataGridDataSourceFillOperationRequest): Promise<DataGridDataSourceFillOperationResult<T>>

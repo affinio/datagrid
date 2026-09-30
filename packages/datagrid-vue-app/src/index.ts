@@ -30,6 +30,7 @@ export type {
   DataGridProps,
   DataGridRestoreFocusAnchorOptions,
   DataGridSelectionCellReader,
+  DataGridServerSelectionSummaryOptions,
 } from "./DataGrid"
 export type {
   DataGridStructuralRowActionContext,

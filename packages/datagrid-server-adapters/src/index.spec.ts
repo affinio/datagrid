@@ -449,6 +449,33 @@ describe("normalizeDataGridServerQuery", () => {
 })
 
 describe("createAffinoDatasource query mapping", () => {
+  it("posts selection summaries through the table-scoped endpoint", async () => {
+    const calls: Array<{ url: string; body: unknown }> = []
+    const fetchImpl: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body ?? "null")) as unknown })
+      return new Response(JSON.stringify({
+        selectedCells: 2, selectedRows: 2, matchedRowCount: 10,
+        columns: { profit: { key: "profit", selectedCellCount: 2, metrics: { sum: 42 } } },
+      }), { status: 200, headers: { "Content-Type": "application/json" } })
+    }
+    const datasource = createAffinoDatasource({ baseUrl: "https://api.test", tableId: "orders", fetchImpl })
+    const result = await datasource.summarizeSelection?.({
+      ranges: [{ startRow: 0, endRow: 1, startCol: 2, endCol: 2 }],
+      columns: [{ key: "profit", aggregations: ["sum"] }],
+      signal: new AbortController().signal,
+      sortModel: [], filterModel: null, groupBy: null,
+      groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+      treeData: null, pivot: null,
+      pagination: { snapshot: {
+        enabled: false, pageSize: 0, currentPage: 0, pageCount: 0,
+        totalRowCount: 10, startIndex: 0, endIndex: 1,
+      }, cursor: null },
+    })
+    expect(calls[0]?.url).toBe("https://api.test/api/orders/selection-summary")
+    expect((calls[0]?.body as { signal?: unknown }).signal).toBeUndefined()
+    expect(result?.columns.profit.metrics.sum).toBe(42)
+  })
+
   it("posts unified datasource operations through the operations execute endpoint", async () => {
     const calls: Array<{ url: string; body: unknown }> = []
     const fetchImpl: typeof fetch = async (input, init) => {

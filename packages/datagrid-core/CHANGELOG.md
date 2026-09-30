@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added the optional DataGridDataSource.summarizeSelection() contract for exact server-side aggregates over selected ranges, including active projection and consistency metadata.
+
+
 ## 0.7.0
 
 ### Minor Changes

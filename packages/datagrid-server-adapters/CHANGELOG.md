@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Added POST /api/{tableId}/selection-summary transport through summarizeSelection().
+
+
 ### Patch Changes
 
 - Bumped the package to `0.1.7`; its Core and server-client dependencies now resolve through the workspace release protocol and are checked by `quality:packages:compatibility`.

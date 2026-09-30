@@ -152,3 +152,7 @@ If a backend omits history endpoints, set `:server-history="false"` on `@affino/
 - [Server datasource UX contract](../../docs/server-datasource/ux-contract.md)
 - [Frontend adapter reference](../../docs/server-datasource/reference/frontend-adapter.md)
 - [Server client package](../datagrid-server-client/README.md)
+
+### Server-wide selection summaries
+
+The datasource summarizeSelection() capability sends exact selected-range aggregate requests without requiring every row to be loaded. The Affino adapter uses POST /api/{tableId}/selection-summary; the low-level client accepts endpoints.selectionSummary and optional request/response mappers.

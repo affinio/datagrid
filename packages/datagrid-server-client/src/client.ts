@@ -4,6 +4,8 @@ import type {
   DataGridDataSourceColumnHistogramRequest,
   DataGridDataSourceInvalidation,
   DataGridDataSourcePullRequest,
+  DataGridDataSourceSelectionSummaryRequest,
+  DataGridDataSourceSelectionSummaryResult,
   DataGridDataSourcePullResult,
   DataGridDataSourcePushEvent,
   DataGridDataSourcePushListener,
@@ -37,6 +39,7 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
   endpoints: {
     pull: string
     histogram: string
+    selectionSummary?: string
     commitEdits: string
     resolveFillBoundary: string
     commitFillOperation: string
@@ -48,6 +51,8 @@ export interface ServerDatasourceHttpClientOptions<TRow> {
 
   mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown
   mapHistogramRequest?: (request: DataGridDataSourceColumnHistogramRequest) => unknown
+  mapSelectionSummaryRequest?: (request: DataGridDataSourceSelectionSummaryRequest) => unknown
+  mapSelectionSummaryResponse?: (response: unknown) => DataGridDataSourceSelectionSummaryResult
 
   mapPullResponse: (response: unknown) => {
     rows: readonly DataGridDataSourceRowEntry<TRow>[]
@@ -302,6 +307,14 @@ export function createServerDatasourceHttpClient<TRow>(
 
   // Histogram requests are also read-only transport concerns. Write/fill/history
   // flows should be implemented by an adapter or host-specific wrapper.
+  function mapSelectionSummaryBody(request: DataGridDataSourceSelectionSummaryRequest): unknown {
+    if (options.mapSelectionSummaryRequest) {
+      return options.mapSelectionSummaryRequest(request)
+    }
+    const { signal: _signal, ...body } = request
+    return body
+  }
+
   function mapHistogramBody(request: DataGridDataSourceColumnHistogramRequest): unknown {
     if (options.mapHistogramRequest) {
       return options.mapHistogramRequest(request)
@@ -331,6 +344,21 @@ export function createServerDatasourceHttpClient<TRow>(
         cursor: mappedResponse.revision == null ? null : String(mappedResponse.revision),
         datasetVersion: latestDatasetVersion,
       }
+    },
+
+    async summarizeSelection(request: DataGridDataSourceSelectionSummaryRequest): Promise<DataGridDataSourceSelectionSummaryResult> {
+      if (!options.endpoints.selectionSummary) {
+        throw new Error("Server datasource selection summary endpoint is not configured")
+      }
+      const response = await postJson<unknown>(
+        fetchImpl,
+        resolveEndpoint(options.baseUrl, options.endpoints.selectionSummary),
+        mapSelectionSummaryBody(request),
+        request.signal,
+        readRetry ?? false,
+      )
+      return options.mapSelectionSummaryResponse?.(response)
+        ?? (response as DataGridDataSourceSelectionSummaryResult)
     },
 
     async getColumnHistogram(request: DataGridDataSourceColumnHistogramRequest): Promise<DataGridColumnHistogram> {

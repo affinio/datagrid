@@ -11,6 +11,7 @@ import {
   type DataGridDataSourceOperationResult,
   type DataGridDataSourcePullRequest,
   type DataGridDataSourceRowEntry,
+  type DataGridDataSourceSelectionSummaryRequest,
   type DataGridDataSourceTreePullContext,
   type DataGridFilterSnapshot,
   type DataGridGroupExpansionSnapshot,
@@ -41,6 +42,7 @@ export interface AffinoDatasourceOptions {
   liveUpdateTransportFactory?: ServerDatasourceLiveUpdateTransportFactory<unknown>
   mapQuery?: (query: DataGridServerQuery, request: DataGridDataSourcePullRequest) => unknown
   mapPullRequest?: (request: DataGridDataSourcePullRequest) => unknown
+  mapSelectionSummaryRequest?: (request: DataGridDataSourceSelectionSummaryRequest) => unknown
 }
 
 export interface AffinoDatasourceHistoryScope {
@@ -1133,6 +1135,40 @@ function mapAffinoHistogramResponse(response: unknown): DataGridColumnHistogram 
   })
 }
 
+function mapAffinoSelectionSummaryRequest(
+  request: DataGridDataSourceSelectionSummaryRequest,
+  options: AffinoDatasourceOptions,
+): unknown {
+  const firstRange = request.ranges[0] ?? { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }
+  const range = request.ranges.reduce(
+    (result, current) => ({
+      start: Math.min(result.start, current.startRow),
+      end: Math.max(result.end, current.endRow),
+    }),
+    { start: firstRange.startRow, end: firstRange.endRow },
+  )
+  const query = normalizeDataGridServerQuery({
+    range,
+    priority: "normal",
+    reason: "refresh",
+    signal: request.signal,
+    sortModel: request.sortModel,
+    filterModel: request.filterModel,
+    groupBy: request.groupBy,
+    groupExpansion: request.groupExpansion,
+    treeData: request.treeData,
+    pivot: request.pivot,
+    pagination: request.pagination,
+  }, options.queryCodec)
+  return {
+    ...query,
+    ranges: request.ranges,
+    columns: request.columns,
+    revision: request.revision ?? null,
+    datasetVersion: request.datasetVersion ?? null,
+  }
+}
+
 function mapAffinoPullRequest(request: DataGridDataSourcePullRequest, options: AffinoDatasourceOptions): unknown {
   if (options.mapPullRequest) {
     return options.mapPullRequest(request)
@@ -1169,6 +1205,7 @@ export function createAffinoDatasource<TRow>(
     endpoints: {
       pull: resolveAffinoEndpoint(tableId, "pull"),
       histogram: resolveAffinoEndpoint(tableId, "histogram"),
+      selectionSummary: resolveAffinoEndpoint(tableId, "selection-summary"),
       commitEdits: resolveAffinoEndpoint(tableId, "edits"),
       resolveFillBoundary: resolveAffinoEndpoint(tableId, "fill-boundary"),
       commitFillOperation: resolveAffinoEndpoint(tableId, "fill/commit"),
@@ -1178,6 +1215,7 @@ export function createAffinoDatasource<TRow>(
       changesSinceVersion: sinceVersion => `/api/changes?tableId=${encodeURIComponent(tableId)}&sinceVersion=${encodeURIComponent(String(sinceVersion))}`,
     },
     mapPullRequest: request => mapAffinoPullRequest(request, options),
+    mapSelectionSummaryRequest: request => options.mapSelectionSummaryRequest?.(request) ?? mapAffinoSelectionSummaryRequest(request, options),
     liveUpdateTransportFactory: options.liveUpdateTransportFactory,
     mapHistogramRequest: request => ({
       columnId: request.columnId,
