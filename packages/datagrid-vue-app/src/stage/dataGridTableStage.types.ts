@@ -8,6 +8,7 @@ import type {
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridEmptyStateProps } from "../config/dataGridEmptyState"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type {
   DataGridColumnMenuActionOptions,
@@ -268,6 +269,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   layoutMode: DataGridLayoutMode
   chromeSignature?: string
   customOverlays?: readonly DataGridTableStageCustomOverlay[]
+  emptyState?: DataGridEmptyStateProps | null
   reportCenterPaneDiagnostics?: (payload: DataGridTableStageCenterPaneDiagnostics) => void
   reportFillPlumbingState?: (layer: string, present: boolean) => void
   reportFillPlumbingDetail?: (layer: string, value: string) => void

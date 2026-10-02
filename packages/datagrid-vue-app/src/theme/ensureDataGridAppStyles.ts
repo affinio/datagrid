@@ -1231,6 +1231,19 @@ const DATA_GRID_APP_STYLES = `
   z-index: 4;
 }
 
+.datagrid-empty-state {
+  align-items: center;
+  box-sizing: border-box;
+  color: var(--datagrid-empty-state-color, var(--datagrid-text-color));
+  display: flex;
+  justify-content: center;
+  min-height: var(--datagrid-empty-state-min-height, 96px);
+  padding: var(--datagrid-empty-state-padding, 24px);
+  text-align: center;
+  width: 100%;
+  background: var(--datagrid-empty-state-background, var(--datagrid-viewport-bg));
+}
+
 .grid-pane-content {
   min-width: 100%;
   position: relative;

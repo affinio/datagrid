@@ -41,8 +41,58 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | grid-lines | Grid-line presentation preset/options. |
 | history | Built-in or injected undo/redo controls. |
 | server-history | Enable synchronization with datasource-backed server history. Defaults to `true`; set `:server-history="false"` when the backend does not expose history endpoints. This is independent from local `history`. |
+| empty-state | Optional typed renderer for content shown inside the row body when no rows are available. |
 | chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. |
 | theme | Theme preset or theme configuration. |
+
+### Empty state
+
+The grid renders a default message inside the row body when the stable row
+model result is empty. Headers, the toolbar, and filter controls remain
+visible. The empty state is not rendered while the row model is loading or in
+an error state.
+
+Use `emptyState` when the application needs localized or domain-specific copy:
+
+```vue
+<script setup lang="ts">
+import { h } from "vue"
+import { DataGrid, type DataGridEmptyStateProps } from "@affino/datagrid-vue-app"
+
+const renderEmptyState = ({ reason }: DataGridEmptyStateProps) =>
+  h("p", { class: "trades-empty-state" }, reason === "filtered"
+    ? "No trades match the current filters."
+    : "No trades have been added yet.")
+</script>
+
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+/>
+```
+
+The renderer receives `{ reason, hasActiveFilters, rowCount }`. `reason` is
+`"no-rows"` when the row model has no rows and `"filtered"` when active filters
+produce zero matches. `rowCount` is always `0` for this renderer. The same
+contract applies to client-side and datasource-backed row models.
+
+The default body uses semantic `role="status"`, a polite live region, and
+public CSS custom properties. Applications can theme it without relying on
+internal DOM selectors:
+
+```css
+.orders-grid {
+  --datagrid-empty-state-color: var(--app-muted-text);
+  --datagrid-empty-state-background: var(--app-surface);
+  --datagrid-empty-state-min-height: 8rem;
+  --datagrid-empty-state-padding: 2rem;
+}
+```
+
+`emptyState` is compatible with `auto-height`, `fill`, and bounded `maxRows`
+layouts. It does not create a row and does not change filtering, selection, or
+server query semantics.
 
 ## State props
 

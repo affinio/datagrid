@@ -143,6 +143,7 @@
           :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
           :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
           :overlay-lanes="centerCustomOverlayLanes"
+          :empty-state="props.emptyState"
           :render-api="centerPaneRenderApi"
         >
           <template #content-chrome>
@@ -150,6 +151,9 @@
               class="grid-chrome-layer--body-center"
               :model="bodyCenterChromeLayerModel"
             />
+          </template>
+          <template #empty-state="slotProps">
+            <slot name="empty-state" v-bind="slotProps" />
           </template>
         </DataGridTableStageCenterPane>
 
@@ -414,6 +418,10 @@ const props = defineProps({
   customOverlays: {
     type: Array as PropType<readonly DataGridTableStageCustomOverlay[]>,
     default: () => [],
+  },
+  emptyState: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["emptyState"]>,
+    default: null,
   },
   reportCenterPaneDiagnostics: {
     type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportCenterPaneDiagnostics"]>,

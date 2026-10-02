@@ -68,6 +68,7 @@ import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import { normalizeDataGridAppFilterModel } from "../config/dataGridFilterNormalization"
 import type { DataGridAppColumnInput } from "../config/dataGridFormulaOptions"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import type { DataGridEmptyStateProps, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
@@ -1155,6 +1156,10 @@ export default defineComponent({
       type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
       default: undefined,
     },
+    emptyStateRenderer: {
+      type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
+      default: undefined,
+    },
     history: {
       type: Object as PropType<DataGridResolvedHistoryOptions>,
       required: true,
@@ -1711,6 +1716,18 @@ export default defineComponent({
     })
 
     const hasActiveFilters = computed(() => activeFilterSummaryItems.value.length > 0)
+    const emptyState = computed<DataGridEmptyStateProps | null>(() => {
+      void rowVersion.value
+      const snapshot = props.runtimeRowModel.getSnapshot()
+      if (snapshot.loading || snapshot.error || snapshot.rowCount > 0) {
+        return null
+      }
+      return {
+        reason: hasActiveFilters.value ? "filtered" : "no-rows",
+        hasActiveFilters: hasActiveFilters.value,
+        rowCount: 0,
+      }
+    })
 
     const resetAllFilters = (): void => {
       filterModelState.value = createEmptyFilterModel()
@@ -4517,6 +4534,7 @@ export default defineComponent({
     const stageProps = computed(() => ({
       ...tableStageProps.value,
       customOverlays: props.customOverlays,
+      emptyState: emptyState.value,
       columns: {
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,
@@ -4782,7 +4800,11 @@ export default defineComponent({
                   ...stageProps.value,
                   stageContext: tableStageContext,
                   onViewportContextMenu: handleViewportContextMenu,
-              }),
+                }, props.emptyStateRenderer
+                  ? {
+                    "empty-state": (slotProps: { state: DataGridEmptyStateProps }) => props.emptyStateRenderer?.(slotProps.state),
+                  }
+                  : undefined),
               renderSortingPending(),
               renderGridStatus(),
               renderContextMenu(),
@@ -4809,10 +4831,14 @@ export default defineComponent({
                 rowVersion: rowVersion.value,
               })
               : h(DataGridTableStage as Component, {
-                ...stageProps.value,
-                stageContext: tableStageContext,
-                onViewportContextMenu: handleViewportContextMenu,
-            }),
+                  ...stageProps.value,
+                  stageContext: tableStageContext,
+                  onViewportContextMenu: handleViewportContextMenu,
+                }, props.emptyStateRenderer
+                  ? {
+                    "empty-state": (slotProps: { state: DataGridEmptyStateProps }) => props.emptyStateRenderer?.(slotProps.state),
+                  }
+                  : undefined),
             renderSortingPending(),
             renderGridStatus(),
             renderContextMenu(),

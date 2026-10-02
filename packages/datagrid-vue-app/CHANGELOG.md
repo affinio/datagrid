@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.11.0
+
+### Added
+
+- Added the typed `emptyState` renderer for empty client-side and server-backed
+  grids, including distinct no-rows and filtered-empty states.
+- Added accessible empty-state styling hooks through public CSS custom
+  properties.
+
 ## 0.10.1
 
 ### Fixes

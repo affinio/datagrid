@@ -27,6 +27,19 @@
     >
       <div :ref="contentRef ?? undefined" class="grid-body-content" :style="layout.gridContentStyle">
         <slot name="content-chrome" />
+        <div
+          v-if="emptyState"
+          class="datagrid-empty-state"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <slot name="empty-state" :state="emptyState">
+            <span>
+              {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
+            </span>
+          </slot>
+        </div>
       <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
       <div
         v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex } in renderedBodyRowSlots"
@@ -236,6 +249,7 @@ import type {
   DataGridElementRefHandler,
   DataGridTableStageCenterPaneDiagnostics,
 } from "./dataGridTableStage.types"
+import type { DataGridEmptyStateProps } from "../config/dataGridEmptyState"
 
 const props = defineProps({
   viewportRef: {
@@ -313,6 +327,10 @@ const props = defineProps({
   overlayLanes: {
     type: Array as PropType<readonly DataGridTableStageOverlayLane[]>,
     default: () => [],
+  },
+  emptyState: {
+    type: Object as PropType<DataGridEmptyStateProps | null>,
+    default: null,
   },
   reportCenterPaneDiagnostics: {
     type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,

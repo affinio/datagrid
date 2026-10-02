@@ -63,6 +63,7 @@ import type {
   DataGridRestoreFocusAnchorOptions,
 } from "./host/DataGridRuntimeHost"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
+import type { DataGridEmptyStateRenderer } from "./config/dataGridEmptyState"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
@@ -838,6 +839,10 @@ const dataGridProps = {
   },
   customOverlays: {
     type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
+    default: undefined,
+  },
+  emptyState: {
+    type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
     default: undefined,
   },
   reportFillWarning: {
@@ -1787,6 +1792,7 @@ const DataGridRuntimeComponent = defineComponent({
         reportToolbarModules,
         toolbarModules: props.toolbarModules,
         customOverlays: props.customOverlays,
+        emptyStateRenderer: props.emptyState,
         runStructuralRowAction: props.runStructuralRowAction,
       }
       return h(

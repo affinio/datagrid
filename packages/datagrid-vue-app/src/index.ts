@@ -38,6 +38,11 @@ export type {
   DataGridStructuralRowActionId,
 } from "./dataGridStructuralRowActions"
 export type {
+  DataGridEmptyStateProps,
+  DataGridEmptyStateReason,
+  DataGridEmptyStateRenderer,
+} from "./config/dataGridEmptyState"
+export type {
   DataGridAppClientRowModelOptions,
   DataGridAppCellRenderer,
   DataGridAppCellRendererContext,

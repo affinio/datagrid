@@ -2025,6 +2025,45 @@ Affino DataGrid is built in layers:
 `@affino/datagrid-vue-app`  
 -> declarative component and default renderer
 
+## Empty state
+
+The grid keeps its toolbar, column headers, and filter controls visible while
+rendering an empty-state message inside the row body. When `emptyState` is not
+provided, the default messages are `No rows to display.` and `No rows match the
+current filters.`.
+
+Provide a typed renderer for localized or domain-specific content:
+
+```vue
+<script setup lang="ts">
+import { h } from "vue"
+import { DataGrid, type DataGridEmptyStateProps } from "@affino/datagrid-vue-app"
+
+const renderEmptyState = ({ reason }: DataGridEmptyStateProps) =>
+  h("p", reason === "filtered"
+    ? "No trades match the current filters."
+    : "No trades have been added yet.")
+</script>
+
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+/>
+```
+
+The renderer payload is `{ reason, hasActiveFilters, rowCount }`. `reason` is
+`"no-rows"` for an empty row model and `"filtered"` when active filters leave
+no matches. It is only rendered after loading completes and never for a row
+model error. The contract is the same for local and datasource-backed grids.
+
+The body uses `role="status"` with a polite live region. The default state can
+be themed with public CSS custom properties, including
+`--datagrid-empty-state-color`, `--datagrid-empty-state-background`,
+`--datagrid-empty-state-min-height`, and `--datagrid-empty-state-padding`.
+These hooks work with light/dark themes and with `auto-height`, `fill`, and
+bounded `maxRows` layouts. No synthetic rows or `customOverlays` are involved.
+
 ## Custom Renderer Slot
 
 If you need to keep the public `DataGrid` runtime but render your own shell, use the default slot.
