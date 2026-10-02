@@ -89,8 +89,11 @@ describe("DataGrid empty state", () => {
       resolveRowId: row => String((row as { rowId: string }).rowId),
       initialTotal: 0,
     })
+    const renderEmptyState = vi.fn((state: DataGridEmptyStateProps) =>
+      h("span", { "data-test": "server-empty" }, state.reason)
+    )
     const wrapper = mount(DataGrid, {
-      props: { rowModel, columns, quickFilter: true },
+      props: { rowModel, columns, quickFilter: true, emptyState: renderEmptyState },
     })
 
     await nextTick()
@@ -99,6 +102,12 @@ describe("DataGrid empty state", () => {
     resolvePull?.({ rows: [], total: 0 })
     await flushRuntimeTasks()
     expect(wrapper.find(".datagrid-empty-state").exists()).toBe(true)
+    expect(wrapper.find("[data-test='server-empty']").text()).toBe("no-rows")
+    expect(renderEmptyState).toHaveBeenCalledWith({
+      reason: "no-rows",
+      hasActiveFilters: false,
+      rowCount: 0,
+    })
     expect(wrapper.find("[data-datagrid-quick-filter-input='true']").exists()).toBe(true)
 
     wrapper.unmount()

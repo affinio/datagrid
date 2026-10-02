@@ -443,6 +443,7 @@ interface DataGridRuntimeHostSlotProps {
     }
   }
   defaultRendererProps?: Record<string, unknown>
+  emptyStateRenderer?: DataGridEmptyStateRenderer
   [key: string]: unknown
 }
 
@@ -1805,6 +1806,7 @@ const DataGridRuntimeComponent = defineComponent({
         onScrollCapture: handleStatePersistenceActivity,
         rowModel: resolvedRowModel.value,
         columns: resolvedColumns.value,
+        emptyStateRenderer: props.emptyState,
         theme: props.theme,
         layoutMode: resolvedLayout.value.layoutMode,
           renderMode: resolvedRenderMode.value,
@@ -1844,6 +1846,7 @@ const DataGridRuntimeComponent = defineComponent({
           : {
               default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
                 ...defaultRendererProps,
+                emptyStateRenderer: slotProps.emptyStateRenderer,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                 runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
                   dataSource?: {

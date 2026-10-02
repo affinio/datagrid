@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.11.1
+
+### Fixes
+
+- Forwarded the public `emptyState` renderer explicitly through the runtime host so datasource-backed empty states render inside the grid body at runtime.
+
+### Validation
+
+- Added a public `DataGrid` DOM contract covering datasource empty results and renderer invocation.
+
 ## 0.11.0
 
 ### Added

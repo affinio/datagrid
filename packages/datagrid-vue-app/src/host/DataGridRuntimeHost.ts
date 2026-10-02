@@ -33,6 +33,7 @@ import {
 } from "../theme/dataGridTheme"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -177,6 +178,10 @@ export default defineComponent({
     pagination: {
       type: Object as PropType<DataGridPaginationInput | null>,
       default: null,
+    },
+    emptyStateRenderer: {
+      type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
+      default: undefined,
     },
   },
   emits: {
@@ -541,6 +546,7 @@ export default defineComponent({
         getBodyRowAtIndex: bodyRuntime.getBodyRowAtIndex,
         resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
         virtualWindow: slotVirtualWindow.value,
+        emptyStateRenderer: props.emptyStateRenderer,
       }) ?? [],
     )
   },
