@@ -16,6 +16,18 @@ const rows = [
   { rowId: "r2", name: "Beta", amount: 2 },
 ] as const
 
+const wideColumns = Array.from({ length: 16 }, (_, index) => ({
+  key: `column-${index}`,
+  label: `Column ${index}`,
+  width: 180,
+}))
+
+const pinnedWideColumns = [
+  { key: "pinned-left", label: "Pinned left", width: 180, initialState: { pin: "left" as const } },
+  ...wideColumns,
+  { key: "pinned-right", label: "Pinned right", width: 180, initialState: { pin: "right" as const } },
+]
+
 async function flushRuntimeTasks(): Promise<void> {
   await nextTick()
   await Promise.resolve()
@@ -39,6 +51,7 @@ describe("DataGrid empty state", () => {
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-empty-state").exists()).toBe(true)
+    expect(wrapper.find(".datagrid-empty-state").element.parentElement?.classList.contains("grid-body-content")).toBe(true)
     expect(wrapper.find("[data-test='custom-empty']").text()).toBe("no-rows")
     expect(renderEmptyState).toHaveBeenCalledWith({
       reason: "no-rows",
@@ -131,6 +144,61 @@ describe("DataGrid empty state", () => {
 
     wrapper.unmount()
     rowModel.dispose()
+  })
+
+  it("anchors viewport alignment to the visible horizontal scrollport for wide and pinned grids", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: [],
+        columns: pinnedWideColumns,
+        emptyStateAlignment: "viewport",
+        layoutMode: "fill",
+      },
+    })
+    await flushRuntimeTasks()
+
+    const emptyState = wrapper.find(".datagrid-empty-state--viewport")
+    const horizontalScrollport = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner")
+    expect(emptyState.exists()).toBe(true)
+    expect(emptyState.element.parentElement).toBe(horizontalScrollport.element)
+    expect(wrapper.find(".grid-body-shell .grid-body-pane--left").exists()).toBe(true)
+    expect(wrapper.find(".grid-body-shell .grid-body-pane--right").exists()).toBe(true)
+
+    horizontalScrollport.element.scrollLeft = 640
+    horizontalScrollport.element.dispatchEvent(new Event("scroll"))
+    await nextTick()
+
+    expect(horizontalScrollport.element.scrollLeft).toBe(640)
+    expect(emptyState.element.parentElement).toBe(horizontalScrollport.element)
+    wrapper.unmount()
+  })
+
+  it("keeps content alignment by default and reports filtered state in viewport mode", async () => {
+    const renderEmptyState = vi.fn((state: DataGridEmptyStateProps) => h("span", { "data-test": "alignment-empty" }, state.reason))
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows,
+        columns: wideColumns,
+        quickFilter: true,
+        emptyState: renderEmptyState,
+        emptyStateAlignment: "viewport",
+      },
+    })
+    await flushRuntimeTasks()
+
+    const input = wrapper.find<HTMLInputElement>("[data-datagrid-quick-filter-input='true']")
+    await input.setValue("missing")
+    await flushRuntimeTasks()
+
+    const emptyState = wrapper.find(".datagrid-empty-state--viewport")
+    expect(emptyState.exists()).toBe(true)
+    expect(emptyState.find("[data-test='alignment-empty']").text()).toBe("filtered")
+    expect(renderEmptyState).toHaveBeenCalledWith({
+      reason: "filtered",
+      hasActiveFilters: true,
+      rowCount: 0,
+    })
+    wrapper.unmount()
   })
 
   it.each([

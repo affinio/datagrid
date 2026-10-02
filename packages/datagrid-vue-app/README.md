@@ -2064,6 +2064,22 @@ be themed with public CSS custom properties, including
 These hooks work with light/dark themes and with `auto-height`, `fill`, and
 bounded `maxRows` layouts. No synthetic rows or `customOverlays` are involved.
 
+For wide tables, set `empty-state-alignment="viewport"` to center the message
+inside the visible center viewport and keep it centered during horizontal
+scrolling. The default `"content"` mode preserves centering across the full
+virtual content width. Pinned columns remain outside the viewport alignment
+area. Both modes support column virtualization, `fill`, `auto-height`, and
+`maxRows`.
+
+```vue
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+  empty-state-alignment="viewport"
+/>
+```
+
 ## Custom Renderer Slot
 
 If you need to keep the public `DataGrid` runtime but render your own shell, use the default slot.

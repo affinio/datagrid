@@ -38,6 +38,7 @@ export type {
   DataGridStructuralRowActionId,
 } from "./dataGridStructuralRowActions"
 export type {
+  DataGridEmptyStateAlignment,
   DataGridEmptyStateProps,
   DataGridEmptyStateReason,
   DataGridEmptyStateRenderer,

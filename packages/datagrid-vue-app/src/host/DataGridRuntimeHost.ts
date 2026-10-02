@@ -33,7 +33,7 @@ import {
 } from "../theme/dataGridTheme"
 import { dataGridAppRootElementKey } from "../dataGridAppContext"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
-import type { DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 
 type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -182,6 +182,10 @@ export default defineComponent({
     emptyStateRenderer: {
       type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
       default: undefined,
+    },
+    emptyStateAlignment: {
+      type: String as PropType<DataGridEmptyStateAlignment>,
+      default: "content",
     },
   },
   emits: {
@@ -547,6 +551,7 @@ export default defineComponent({
         resolveBodyRowIndexById: bodyRuntime.resolveBodyRowIndexById,
         virtualWindow: slotVirtualWindow.value,
         emptyStateRenderer: props.emptyStateRenderer,
+        emptyStateAlignment: props.emptyStateAlignment,
       }) ?? [],
     )
   },

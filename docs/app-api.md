@@ -42,6 +42,7 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | history | Built-in or injected undo/redo controls. |
 | server-history | Enable synchronization with datasource-backed server history. Defaults to `true`; set `:server-history="false"` when the backend does not expose history endpoints. This is independent from local `history`. |
 | empty-state | Optional typed renderer for content shown inside the row body when no rows are available. |
+| empty-state-alignment | `"content"` (default) centers across the virtual content; `"viewport"` centers within the visible center table viewport and remains anchored during horizontal scrolling. |
 | chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. |
 | theme | Theme preset or theme configuration. |
 
@@ -90,9 +91,24 @@ internal DOM selectors:
 }
 ```
 
-`emptyState` is compatible with `auto-height`, `fill`, and bounded `maxRows`
-layouts. It does not create a row and does not change filtering, selection, or
-server query semantics.
+Use `empty-state-alignment="viewport"` for wide tables when the message
+should remain centered in the visible center viewport instead of the full virtual
+content width. The viewport is the center scrollport, excluding pinned columns;
+the message remains anchored there while horizontal scrolling. The default
+`"content"` mode preserves the previous full-content centering behavior.
+
+```vue
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+  empty-state-alignment="viewport"
+/>
+```
+
+Both alignment modes are compatible with `auto-height`, `fill`, bounded `maxRows`,
+column virtualization, and pinned columns. The prop does not create rows or
+change filtering, selection, or server query semantics.
 
 ## State props
 

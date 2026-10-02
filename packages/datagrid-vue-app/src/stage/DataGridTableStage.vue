@@ -144,6 +144,7 @@
           :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
           :overlay-lanes="centerCustomOverlayLanes"
           :empty-state="props.emptyState"
+          :empty-state-alignment="props.emptyStateAlignment"
           :render-api="centerPaneRenderApi"
         >
           <template #content-chrome>
@@ -306,6 +307,7 @@ import {
   provideDataGridTableStageContext,
 } from "./dataGridTableStageContext"
 import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
+import type { DataGridEmptyStateAlignment } from "../config/dataGridEmptyState"
 import {
   hasGroupCellRenderer,
   parsePixelValue,
@@ -422,6 +424,10 @@ const props = defineProps({
   emptyState: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["emptyState"]>,
     default: null,
+  },
+  emptyStateAlignment: {
+    type: String as PropType<DataGridEmptyStateAlignment>,
+    default: "content",
   },
   reportCenterPaneDiagnostics: {
     type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportCenterPaneDiagnostics"]>,

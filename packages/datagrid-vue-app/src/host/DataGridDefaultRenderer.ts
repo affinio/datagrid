@@ -68,7 +68,7 @@ import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import { normalizeDataGridAppFilterModel } from "../config/dataGridFilterNormalization"
 import type { DataGridAppColumnInput } from "../config/dataGridFormulaOptions"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
-import type { DataGridEmptyStateProps, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
@@ -1159,6 +1159,10 @@ export default defineComponent({
     emptyStateRenderer: {
       type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
       default: undefined,
+    },
+    emptyStateAlignment: {
+      type: String as PropType<DataGridEmptyStateAlignment>,
+      default: "content",
     },
     history: {
       type: Object as PropType<DataGridResolvedHistoryOptions>,
@@ -4535,6 +4539,7 @@ export default defineComponent({
       ...tableStageProps.value,
       customOverlays: props.customOverlays,
       emptyState: emptyState.value,
+      emptyStateAlignment: props.emptyStateAlignment,
       columns: {
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,

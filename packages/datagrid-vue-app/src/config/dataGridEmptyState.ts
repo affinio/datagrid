@@ -2,6 +2,8 @@ import type { VNodeChild } from "vue"
 
 export type DataGridEmptyStateReason = "no-rows" | "filtered"
 
+export type DataGridEmptyStateAlignment = "content" | "viewport"
+
 export interface DataGridEmptyStateProps {
   reason: DataGridEmptyStateReason
   hasActiveFilters: boolean

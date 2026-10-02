@@ -63,7 +63,7 @@ import type {
   DataGridRestoreFocusAnchorOptions,
 } from "./host/DataGridRuntimeHost"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
-import type { DataGridEmptyStateRenderer } from "./config/dataGridEmptyState"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateRenderer } from "./config/dataGridEmptyState"
 import {
   resolveDataGridColumns,
   resolveDataGridFormulaRowModelOptions,
@@ -444,6 +444,7 @@ interface DataGridRuntimeHostSlotProps {
   }
   defaultRendererProps?: Record<string, unknown>
   emptyStateRenderer?: DataGridEmptyStateRenderer
+  emptyStateAlignment?: DataGridEmptyStateAlignment
   [key: string]: unknown
 }
 
@@ -845,6 +846,10 @@ const dataGridProps = {
   emptyState: {
     type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
     default: undefined,
+  },
+  emptyStateAlignment: {
+    type: String as PropType<DataGridEmptyStateAlignment>,
+    default: "content",
   },
   reportFillWarning: {
     type: Function as PropType<((message: string) => void) | undefined>,
@@ -1794,6 +1799,7 @@ const DataGridRuntimeComponent = defineComponent({
         toolbarModules: props.toolbarModules,
         customOverlays: props.customOverlays,
         emptyStateRenderer: props.emptyState,
+        emptyStateAlignment: props.emptyStateAlignment,
         runStructuralRowAction: props.runStructuralRowAction,
       }
       return h(
@@ -1807,6 +1813,7 @@ const DataGridRuntimeComponent = defineComponent({
         rowModel: resolvedRowModel.value,
         columns: resolvedColumns.value,
         emptyStateRenderer: props.emptyState,
+        emptyStateAlignment: props.emptyStateAlignment,
         theme: props.theme,
         layoutMode: resolvedLayout.value.layoutMode,
           renderMode: resolvedRenderMode.value,
@@ -1847,6 +1854,7 @@ const DataGridRuntimeComponent = defineComponent({
               default: (slotProps: DataGridRuntimeHostSlotProps) => h(DataGridDefaultRenderer, {
                 ...defaultRendererProps,
                 emptyStateRenderer: slotProps.emptyStateRenderer,
+                emptyStateAlignment: slotProps.emptyStateAlignment,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
                 runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
                   dataSource?: {

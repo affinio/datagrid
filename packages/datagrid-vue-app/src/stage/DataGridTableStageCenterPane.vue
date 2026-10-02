@@ -28,7 +28,7 @@
       <div :ref="contentRef ?? undefined" class="grid-body-content" :style="layout.gridContentStyle">
         <slot name="content-chrome" />
         <div
-          v-if="emptyState"
+          v-if="emptyState && emptyStateAlignment === 'content'"
           class="datagrid-empty-state"
           role="status"
           aria-live="polite"
@@ -214,6 +214,19 @@
         :lanes="overlayLanes"
       />
       </div>
+      <div
+        v-if="emptyState && emptyStateAlignment === 'viewport'"
+        class="datagrid-empty-state datagrid-empty-state--viewport"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <slot name="empty-state" :state="emptyState">
+          <span>
+            {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
+          </span>
+        </slot>
+      </div>
     </div>
   </div>
 </template>
@@ -249,7 +262,7 @@ import type {
   DataGridElementRefHandler,
   DataGridTableStageCenterPaneDiagnostics,
 } from "./dataGridTableStage.types"
-import type { DataGridEmptyStateProps } from "../config/dataGridEmptyState"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps } from "../config/dataGridEmptyState"
 
 const props = defineProps({
   viewportRef: {
@@ -331,6 +344,10 @@ const props = defineProps({
   emptyState: {
     type: Object as PropType<DataGridEmptyStateProps | null>,
     default: null,
+  },
+  emptyStateAlignment: {
+    type: String as PropType<DataGridEmptyStateAlignment>,
+    default: "content",
   },
   reportCenterPaneDiagnostics: {
     type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,

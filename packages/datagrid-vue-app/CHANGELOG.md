@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.11.2
+
+### Added
+
+- Added `emptyStateAlignment="viewport"` to center empty-state content within the visible center table viewport during horizontal scrolling. The default `content` alignment remains backwards compatible.
+
+### Validation
+
+- Added public contract coverage for wide, filtered, pinned-column, fill, and auto-height layouts.
+
 ## 0.11.1
 
 ### Fixes

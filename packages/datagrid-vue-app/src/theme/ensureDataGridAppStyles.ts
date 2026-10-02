@@ -1244,6 +1244,12 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-empty-state-background, var(--datagrid-viewport-bg));
 }
 
+.datagrid-empty-state--viewport {
+  left: 0;
+  position: sticky;
+  width: 100%;
+}
+
 .grid-pane-content {
   min-width: 100%;
   position: relative;
