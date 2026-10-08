@@ -72,6 +72,29 @@ The package also exports generic bar, line, area, histogram, pie, scatter, band-
 
 `createHlocChartGeometry()` accepts strictly timestamp-sorted `{ time, high, low, open, close }` points. It maps each point to a vertical high-low range with an open tick extending left and a close tick extending right; rising, falling, and flat directions are exposed for presentation. It does not calculate trading metrics or add trading semantics.
 
+HLOC overlays use the same geometry and scales:
+
+```ts
+const geometry = createHlocChartGeometry({
+  data: candles,
+  overlays: [{
+    id: "moving-average",
+    label: "Moving average",
+    data: [{ time: Date.UTC(2026, 0, 1), value: 12.4 }],
+    presentation: { color: "#9333ea", lineWidth: 2 },
+  }],
+  markers: [{
+    id: "entry-1",
+    label: "Entry",
+    time: Date.UTC(2026, 0, 1, 12),
+    value: 12.1,
+  }],
+  size: { width: 800, height: 360 },
+})
+```
+
+`HlocChartOptions.overlays` accepts the existing `TimeSeries` contract. Series and markers are validated for finite numeric values, non-empty ids/labels, unique ids, and strictly increasing series timestamps. Marker timestamps may repeat; their supplied order is preserved. The candle timestamps define the shared UTC time domain; overlay points and markers outside the first/last candle are omitted and do not expand either domain. Visible overlay values and in-range marker values participate in the shared price domain, so they are not clipped. Empty inputs are valid; hidden series do not participate in geometry. No interpolation or downsampling is performed.
+
 ## Package boundary
 
 `@affino/charts-core` owns data validation, domains, scales, ticks, tooltip lookup, and geometry. `@affino/charts-vue` owns SVG/DOM rendering, interaction, responsive observation, accessibility, legends, tooltips, crosshair presentation, and themes.

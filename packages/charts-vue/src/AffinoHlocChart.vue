@@ -44,6 +44,46 @@
       </g>
     </g>
 
+    <g class="affino-hloc-chart__overlays">
+      <g
+        v-for="series in geometry.overlays"
+        :key="`overlay-${series.id}`"
+        class="affino-hloc-chart__overlay"
+        :data-series-id="series.id"
+        role="img"
+        :aria-label="`${series.label} overlay`"
+      >
+        <path
+          v-if="series.areaPath"
+          class="affino-hloc-chart__overlay-area"
+          :d="series.areaPath"
+          :style="overlayStyle(series)"
+          aria-hidden="true"
+        />
+        <path
+          class="affino-hloc-chart__overlay-line"
+          :d="series.linePath"
+          :style="overlayStyle(series)"
+          aria-hidden="true"
+        />
+      </g>
+    </g>
+
+    <g class="affino-hloc-chart__markers">
+      <circle
+        v-for="marker in geometry.markers"
+        :key="`marker-${marker.id}`"
+        class="affino-hloc-chart__marker"
+        :cx="marker.x"
+        :cy="marker.y"
+        :r="marker.radius ?? 4"
+        :style="{ '--affino-hloc-marker-color': marker.color ?? 'var(--affino-chart-series-2, #9333ea)' }"
+        :data-marker-id="marker.id"
+        role="img"
+        :aria-label="markerLabel(marker)"
+      />
+    </g>
+
     <template #empty>{{ emptyText }}</template>
   </AffinoChartFrame>
 </template>
@@ -51,7 +91,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { createHlocChartGeometry } from "@affino/charts-core"
-import type { ChartMargin, HlocPoint, HlocPointGeometry, TimeAxisOptions, TimeSeriesYAxisOptions } from "@affino/charts-core"
+import type { ChartMargin, HlocMarker, HlocMarkerGeometry, HlocPoint, HlocPointGeometry, TimeAxisOptions, TimeSeries, TimeSeriesGeometry, TimeSeriesYAxisOptions } from "@affino/charts-core"
 import AffinoChartFrame from "./AffinoChartFrame.vue"
 
 const DEFAULT_WIDTH = 640
@@ -60,6 +100,8 @@ const Y_TICK_COUNT = 5
 
 const props = withDefaults(defineProps<{
   data: readonly HlocPoint[]
+  overlays?: readonly TimeSeries[]
+  markers?: readonly HlocMarker[]
   width?: number
   height?: number
   margin?: Partial<ChartMargin>
@@ -81,6 +123,8 @@ const props = withDefaults(defineProps<{
 
 const geometry = computed(() => createHlocChartGeometry({
   data: props.data,
+  overlays: props.overlays,
+  markers: props.markers,
   size: { width: props.width, height: props.height },
   margin: props.margin,
   timeAxis: props.timeAxis,
@@ -108,6 +152,18 @@ function formatValue(value: number): string {
 function pointLabel(point: HlocPointGeometry): string {
   return `${new Date(point.time).toISOString()}: open ${point.open}, high ${point.high}, low ${point.low}, close ${point.close}`
 }
+
+function markerLabel(marker: HlocMarkerGeometry): string {
+  return `${marker.label}: ${new Date(marker.time).toISOString()}, value ${marker.value}`
+}
+
+function overlayStyle(series: TimeSeriesGeometry): Record<string, string> {
+  return {
+    "--affino-hloc-overlay-color": series.presentation.color ?? "var(--affino-chart-series-2, #9333ea)",
+    "--affino-hloc-overlay-width": String(series.presentation.lineWidth),
+    "--affino-hloc-overlay-opacity": String(series.presentation.areaOpacity),
+  }
+}
 </script>
 
 <style scoped>
@@ -117,6 +173,27 @@ function pointLabel(point: HlocPointGeometry): string {
 .affino-hloc-chart__close {
   fill: none;
   stroke: var(--affino-chart-series-1, #2563eb);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.affino-hloc-chart__overlay-line,
+.affino-hloc-chart__overlay-area {
+  fill: none;
+  stroke: var(--affino-hloc-overlay-color);
+  stroke-width: var(--affino-hloc-overlay-width);
+  vector-effect: non-scaling-stroke;
+}
+
+.affino-hloc-chart__overlay-area {
+  fill: var(--affino-hloc-overlay-color);
+  fill-opacity: var(--affino-hloc-overlay-opacity);
+  stroke: none;
+}
+
+.affino-hloc-chart__marker {
+  fill: var(--affino-hloc-marker-color);
+  stroke: var(--affino-chart-surface, #f8fafc);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }

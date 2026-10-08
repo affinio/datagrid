@@ -25,6 +25,26 @@ import "@affino/charts-vue/styles.css"
 
 HLOC renders the high-low range, an open marker to the left, and a close marker to the right. Green/red theme tokens indicate rising/falling points; flat points use the primary series token. The component is a generic visualization primitive and contains no trading, indicator, or transaction semantics.
 
+Numeric overlays and accessible markers are rendered in the same SVG and coordinate system:
+
+```vue
+<AffinoHlocChart
+  :data="candles"
+  :overlays="[{
+    id: 'moving-average',
+    label: 'Moving average',
+    data: indicatorPoints,
+    presentation: { color: 'var(--affino-chart-series-2)', lineWidth: 2 },
+  }]"
+  :markers="[{
+    id: 'entry-1', label: 'Entry', time: Date.UTC(2026, 0, 1, 12), value: 12.1,
+  }]"
+  title="Price with indicator"
+/>
+```
+
+`overlays` accepts the public `TimeSeries[]` contract (`id`, `label`, `{ time, value }` points, visibility, and line/area presentation). `markers` uses stable `id`, accessible `label`, UTC `time`, numeric `value`, and optional `color`/`radius`; duplicate marker timestamps are allowed and keep input order. Candle timestamps define the shared UTC time domain; out-of-range overlay points and markers are omitted. In-range overlay and marker values extend the shared price domain. Empty inputs are valid, while non-finite values, duplicate ids, and duplicate/unsorted series timestamps are rejected.
+
 ## Balance and equity
 
 ```vue

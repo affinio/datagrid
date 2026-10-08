@@ -20,6 +20,8 @@ export type {
   HistogramGeometryOptions,
   HlocChartGeometry,
   HlocChartOptions,
+  HlocMarker,
+  HlocMarkerGeometry,
   HlocDirection,
   HlocPoint,
   HlocPointGeometry,
@@ -77,7 +79,7 @@ export { createScatterChartGeometry } from "./scatterGeometry.js"
 export { createAreaChartGeometry } from "./areaGeometry.js"
 export { createMetricModel } from "./metricModel.js"
 export { createHistogramGeometry } from "./histogramGeometry.js"
-export { createHlocChartGeometry, validateHlocData } from "./hlocGeometry.js"
+export { createHlocChartGeometry, validateHlocData, validateHlocMarkers } from "./hlocGeometry.js"
 export {
   createTimeAxisTicks,
   createTimeSeriesTooltipResolver,

@@ -391,6 +391,8 @@ export interface HlocPoint {
 
 export interface HlocChartOptions {
   data: readonly HlocPoint[]
+  overlays?: readonly TimeSeries[]
+  markers?: readonly HlocMarker[]
   size: ChartSize
   margin?: Partial<ChartMargin>
   timeAxis?: TimeAxisOptions
@@ -412,8 +414,25 @@ export interface HlocPointGeometry extends HlocPoint {
   direction: HlocDirection
 }
 
+export interface HlocMarker {
+  id: string
+  label: string
+  /** UTC Unix timestamp in milliseconds. */
+  time: number
+  value: number
+  color?: string
+  radius?: number
+}
+
+export interface HlocMarkerGeometry extends HlocMarker {
+  x: number
+  y: number
+}
+
 export interface HlocChartGeometry {
   points: HlocPointGeometry[]
+  overlays: TimeSeriesGeometry[]
+  markers: HlocMarkerGeometry[]
   plotArea: ChartRect
   timeDomain: ChartNumericDomain
   valueDomain: ChartNumericDomain
