@@ -8,6 +8,7 @@
 
 - Re-exported the exact `rows:edited` delta event and source option through the Vue runtime API.
 - Re-exported the server selection-summary datasource contracts.
+- Aligned the orchestration and worker dependencies with DataGrid core 0.9.0.
 
 ### Validation
 

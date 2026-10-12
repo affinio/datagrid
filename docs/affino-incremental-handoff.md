@@ -6,17 +6,27 @@ belong to its separate source repository.
 ## Packages and local installation
 
 The release candidates are `@affino/datagrid-core` 0.9.0,
-`@affino/datagrid-vue` 0.9.0, and `@affino/datagrid-vue-app` 0.12.0. They have
-not been published to npm. After building, the local tarballs are:
+`@affino/datagrid-orchestration` 0.7.0, `@affino/datagrid-worker` 0.7.0,
+`@affino/datagrid-gantt` 0.2.0, `@affino/datagrid-vue` 0.9.0, and
+`@affino/datagrid-vue-app` 0.12.0. They have not been published to npm. After
+building, the local tarballs are:
 
 - `artifacts/incremental/affino-datagrid-core-0.9.0.tgz`
+- `artifacts/incremental/affino-datagrid-orchestration-0.7.0.tgz`
+- `artifacts/incremental/affino-datagrid-worker-0.7.0.tgz`
+- `artifacts/incremental/affino-datagrid-gantt-0.2.0.tgz`
 - `artifacts/incremental/affino-datagrid-vue-0.9.0.tgz`
 - `artifacts/incremental/affino-datagrid-vue-app-0.12.0.tgz`
 
-Install the three local packages together in the consumer with pnpm:
+Install the six local packages together in the consumer with pnpm. This keeps
+the Vue app's direct and optional-peer dependency tree on the same core release
+without overrides:
 
 ```sh
 pnpm add /path/to/affino-datagrid-core-0.9.0.tgz \
+  /path/to/affino-datagrid-orchestration-0.7.0.tgz \
+  /path/to/affino-datagrid-worker-0.7.0.tgz \
+  /path/to/affino-datagrid-gantt-0.2.0.tgz \
   /path/to/affino-datagrid-vue-0.9.0.tgz \
   /path/to/affino-datagrid-vue-app-0.12.0.tgz
 ```

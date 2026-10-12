@@ -8,6 +8,7 @@
 
 - Added the typed `data-change` event for committed edits across inline editing, clipboard, fill, find/replace, checkbox, Gantt, and history replay paths.
 - Documented explicit ID-based insert, remove, and edit calls through `getApi()`.
+- Aligned the optional Gantt peer to 0.2.0, which depends on DataGrid core 0.9.0.
 
 ### Validation
 

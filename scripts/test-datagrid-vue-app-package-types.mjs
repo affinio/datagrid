@@ -11,6 +11,9 @@ const fixtureRoot = mkdtempSync(join(tmpdir(), "affino-datagrid-vue-app-packed-c
 try {
   const tarballs = {
     core: packPackage("datagrid-core"),
+    orchestration: packPackage("datagrid-orchestration"),
+    worker: packPackage("datagrid-worker"),
+    gantt: packPackage("datagrid-gantt"),
     vue: packPackage("datagrid-vue"),
     app: packPackage("datagrid-vue-app"),
   }
@@ -44,9 +47,11 @@ function runFixture(name, tarballs, withGantt) {
     type: "module",
     dependencies: {
       "@affino/datagrid-core": `file:${tarballs.core}`,
+      "@affino/datagrid-orchestration": `file:${tarballs.orchestration}`,
+      "@affino/datagrid-worker": `file:${tarballs.worker}`,
+      "@affino/datagrid-gantt": `file:${tarballs.gantt}`,
       "@affino/datagrid-vue": `file:${tarballs.vue}`,
       "@affino/datagrid-vue-app": `file:${tarballs.app}`,
-      ...(withGantt ? { "@affino/datagrid-gantt": "0.1.2" } : {}),
       vue: "3.5.22",
     },
     devDependencies: {

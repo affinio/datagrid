@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.0
+
+### Changed
+
+- Aligned the exact `@affino/datagrid-core` dependency to 0.9.0 for consumers of the DataGrid Vue runtime.
+
+### Validation
+
+- Worker type checks, build, and tests passed.
+
 ## 0.6.0
 
 ### Minor Changes

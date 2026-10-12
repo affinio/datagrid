@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.0
+
+### Changed
+
+- Updated the exact `@affino/datagrid-core` dependency to 0.9.0 so consumers of the orchestration runtime receive the matching core API without package-manager overrides.
+
+### Validation
+
+- Orchestration type checks, build, unit tests, and contract tests passed.
+
 ## 0.6.0
 
 ### Minor Changes
