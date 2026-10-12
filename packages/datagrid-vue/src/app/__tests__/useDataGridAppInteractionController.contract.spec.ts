@@ -115,6 +115,7 @@ async function flushAsync(): Promise<void> {
 function createControllerHarness(options: {
   rowCount?: number
   loadedRowCount?: number
+  exposeRuntimeBodyRowAtIndex?: boolean
   columnCount?: number
   rowData?: readonly DemoRow[]
   missingRowIndices?: readonly number[]
@@ -211,6 +212,7 @@ function createControllerHarness(options: {
       return {
         rowId: `__datagrid_placeholder__:${rowIndex}`,
         __placeholder: true,
+        __visualRowIndex: rowIndex,
         kind: "leaf",
         data: {},
       }
@@ -458,6 +460,9 @@ function createControllerHarness(options: {
         },
       },
       setViewportRange,
+      ...(options.exposeRuntimeBodyRowAtIndex
+        ? { getBodyRowAtIndex: (rowIndex: number) => rows[rowIndex] ?? null }
+        : {}),
       rowModel: {
         getSnapshot: options.rowModelSnapshot,
         subscribe: options.rowModelSubscribe,
@@ -1085,6 +1090,7 @@ describe("useDataGridAppInteractionController contract", () => {
     const { controller, row, applySelectionRange } = createControllerHarness({
       rowCount: 3,
       columnCount: 4,
+      exposeRuntimeBodyRowAtIndex: true,
     })
     const keydown = new KeyboardEvent("keydown", {
       key: "a",
@@ -1100,6 +1106,30 @@ describe("useDataGridAppInteractionController contract", () => {
       endRow: 2,
       startColumn: 0,
       endColumn: 3,
+    })
+  })
+
+  it("excludes trailing visual placeholder rows from Ctrl+A", () => {
+    const { controller, row, applySelectionRange } = createControllerHarness({
+      rowCount: 5,
+      loadedRowCount: 3,
+      columnCount: 2,
+      exposeRuntimeBodyRowAtIndex: true,
+    })
+    const keydown = new KeyboardEvent("keydown", {
+      key: "a",
+      ctrlKey: true,
+      cancelable: true,
+    })
+
+    controller.handleCellKeydown(keydown, row, 0, 0)
+
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(applySelectionRange).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 2,
+      startColumn: 0,
+      endColumn: 1,
     })
   })
 

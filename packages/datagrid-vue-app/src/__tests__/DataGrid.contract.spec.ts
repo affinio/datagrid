@@ -2704,6 +2704,52 @@ describe("DataGrid app facade contract", () => {
     }
   })
 
+  it("copies Ctrl+A selection without including visual placeholder rows", async () => {
+    const originalClipboard = navigator.clipboard
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS.slice(0, 2),
+        columns: COLUMNS,
+        renderMode: "pagination",
+        layoutMode: "auto-height",
+        placeholderRows: {
+          count: 2,
+          createRowAt: ({ visualRowIndex }) => ({
+            rowId: `ph-${visualRowIndex}`,
+            owner: "",
+            region: "",
+            amount: 0,
+          }),
+        },
+      },
+      attachTo: document.body,
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const gridViewport = wrapper.find(".grid-body-shared-vertical-scroll-shell")
+      expect(gridViewport.exists()).toBe(true)
+      await gridViewport.trigger("keydown", { key: "a", ctrlKey: true })
+      await gridViewport.trigger("keydown", { key: "c", ctrlKey: true })
+      await flushRuntimeTasks()
+
+      expect(writeText).toHaveBeenCalledWith("false\tNOC\teu-west\t10\nfalse\tNOC\tus-east\t20")
+      expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining("unloaded"))
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
   it("supports Paste special values from the native cellMenu", async () => {
     const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
     const readText = vi.fn<() => Promise<string>>().mockResolvedValue("clipboard-fallback")

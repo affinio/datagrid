@@ -17,6 +17,7 @@ This document defines the enterprise clipboard contract for the mounted DataGrid
 - `Ctrl/Cmd+C` and the cell context menu copy the resolved active selection range.
 - `Ctrl/Cmd+X` and the cell context menu cut by staging a copy operation and later clearing editable source cells during paste.
 - `Ctrl/Cmd+V` and the cell context menu paste a parsed clipboard matrix at the active cell or selected target range.
+- `Ctrl/Cmd+A` selects the data rows and visible columns; trailing visual placeholder rows are excluded so the resulting clipboard range contains only rows that belong to the grid data.
 - `Paste special -> Values only` uses the same app clipboard pipeline and can reuse an internal copied range when available.
 - Scalar paste into multiple committed ranges is supported; the scalar value is applied to each normalized target range.
 - Row-index copy/cut/paste actions are app-renderer row operations. They keep a trusted same-session row payload for DataGrid paste and write external TSV/HTML fallbacks for spreadsheet paste.

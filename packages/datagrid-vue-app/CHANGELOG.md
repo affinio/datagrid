@@ -7,6 +7,7 @@
 ### Changed
 
 - Aligned the app package with `@affino/datagrid-vue@0.10.0`, which depends on the updated DataGrid orchestration release.
+- The stage fallback for Ctrl+A now uses data-row bounds and excludes appended visual placeholder rows from clipboard selections.
 
 ### Validation
 

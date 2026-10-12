@@ -2634,14 +2634,25 @@ export function useDataGridAppInteractionController<
       if (!supportsCellSelectionMode()) {
         return
       }
-      const lastRowIndex = options.totalRows.value - 1
+      let selectAllEndRowIndex = options.totalRows.value - 1
+      while (selectAllEndRowIndex >= 0) {
+        const lastRow = options.runtime.getBodyRowAtIndex(selectAllEndRowIndex) as (
+          DataGridRowNode<TRow> & { __placeholder?: boolean; __visualRowIndex?: number }
+        ) | null
+        if (lastRow?.__placeholder !== true) {
+          break
+        }
+        selectAllEndRowIndex = typeof lastRow.__visualRowIndex === "number"
+          ? lastRow.__visualRowIndex - 1
+          : selectAllEndRowIndex - 1
+      }
       const lastColumnIndex = options.visibleColumns.value.length - 1
-      if (lastRowIndex < 0 || lastColumnIndex < 0) {
+      if (selectAllEndRowIndex < 0 || lastColumnIndex < 0) {
         return
       }
       options.applySelectionRange({
         startRow: 0,
-        endRow: lastRowIndex,
+        endRow: selectAllEndRowIndex,
         startColumn: 0,
         endColumn: lastColumnIndex,
       })

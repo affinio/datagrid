@@ -7,6 +7,7 @@
 ### Changed
 
 - Released the Vue adapter against `@affino/datagrid-orchestration@0.7.0` and the aligned worker package, so npm consumers receive the updated orchestration without overrides.
+- Ctrl+A now excludes trailing visual placeholder rows while preserving their normal keyboard navigation and editing behavior.
 
 ### Validation
 

@@ -1966,7 +1966,7 @@ export function useDataGridTableStageRuntime<
   const viewportKeyboardService = useDataGridTableStageViewportKeyboard<TRow>({
     runtime: selectableRuntime,
     selectionSnapshot: options.selectionSnapshot,
-    totalRows: totalSelectableRows,
+    totalRows: totalBodyRows,
     orderedVisibleColumns,
     viewportRowStart,
     applySelectionRange: applyClipboardSelectionRange,
