@@ -2659,7 +2659,7 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(applyEdits).toHaveBeenCalledWith([
       { rowId: "r1", data: { a: "" } },
       { rowId: "r2", data: { b: "A1" } },
-    ])
+    ], { source: "grid" })
     expect(recordIntentTransaction).toHaveBeenCalledTimes(1)
     expect(recordIntentTransaction.mock.calls[0]?.[0]).toMatchObject({
       intent: "move",

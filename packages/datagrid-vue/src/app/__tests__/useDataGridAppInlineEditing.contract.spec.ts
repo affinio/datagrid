@@ -80,7 +80,7 @@ describe("useDataGridAppInlineEditing contract", () => {
         data: { owner: "Grace" },
         previousData: { owner: "Ada" },
       },
-    ])
+    ], { source: "grid" })
     expect(harness.applyCellSelection).toHaveBeenCalledWith({
       rowIndex: 0,
       columnIndex: 2,
@@ -176,7 +176,7 @@ describe("useDataGridAppInlineEditing contract", () => {
         data: { owner: "Grace" },
         previousData: { owner: "Ada" },
       },
-    ])
+    ], { source: "grid" })
     expect(applyCellSelection).toHaveBeenCalledWith({
       rowIndex: 1,
       columnIndex: 0,
@@ -465,7 +465,7 @@ describe("useDataGridAppInlineEditing contract", () => {
         data: { owner: "Legacy" },
         previousData: { owner: "Ada" },
       },
-    ])
+    ], { source: "grid" })
     expect(harness.applyCellSelection).not.toHaveBeenCalled()
     expect(harness.ensureActiveCellVisible).not.toHaveBeenCalled()
   })

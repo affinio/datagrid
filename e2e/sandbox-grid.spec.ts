@@ -766,7 +766,9 @@ test.describe("sandbox touch scroll contracts", () => {
     expectPassiveTouchDrag(touchDrag)
     await expect(targetCell).toHaveClass(/grid-cell--selected/)
 
-    await dispatchTouchEndAt(selectionHandle, targetCell)
+    // Moving the selection can unmount the original handle; native touchend
+    // still reaches the grid's stage-level listener after that DOM change.
+    await dispatchTouchEndAt(stage, targetCell)
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
 
