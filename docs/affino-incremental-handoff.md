@@ -31,7 +31,7 @@ pnpm add /path/to/affino-datagrid-core-0.9.0.tgz \
   /path/to/affino-datagrid-vue-app-0.12.0.tgz
 ```
 
-Source commit: `08281293` (`feat(datagrid): publish exact row edit deltas`).
+Release source commit: `09a1ba7f` (`chore(datagrid): align core dependent package releases`), including the API implementation from `08281293`.
 Publish these versions only after the release owner authorizes the npm release.
 
 ## Public contracts
