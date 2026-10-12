@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+## 0.9.0
+
 ### Added
 
+- Added `rows:edited`, an exact post-apply row delta event with row IDs, changed fields, old/new values, and grid/application source metadata.
 - Added the optional DataGridDataSource.summarizeSelection() contract for exact server-side aggregates over selected ranges, including active projection and consistency metadata.
+
+### Validation
+
+- Core and dependent package type checks, package builds, row-delta contracts, and packed consumer type checks passed.
 
 
 ## 0.7.0

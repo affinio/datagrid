@@ -525,7 +525,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
             [currentEditingCell.columnKey]: oldValue,
           } as Partial<TRow>,
         },
-      ]))
+      ], { source: "grid" }))
     } catch (error) {
       commitPromise = Promise.reject(error)
     }

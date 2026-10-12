@@ -23,6 +23,7 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "../models/index.js"
+import type { DataGridApplyEditsOptions } from "./gridApiContracts.js"
 import {
   assertPatchCapability,
   assertExternalUpdateCapability,
@@ -35,14 +36,14 @@ import {
 
 type DataGridApiProjectionMode = "mutable" | "immutable" | "excel-like"
 
-export interface DataGridRowsRefreshOptions {
-  reset?: boolean
+function snapshotRowData<TRow>(data: TRow): TRow {
+  if (!data || typeof data !== "object") return data
+  if (Array.isArray(data)) return data.slice() as TRow
+  return Object.assign(Object.create(Object.getPrototypeOf(data)) as object, data) as TRow
 }
 
-export interface DataGridRowsApplyEditsOptions {
-  emit?: boolean
-  reapply?: boolean
-  signal?: AbortSignal | null
+export interface DataGridRowsRefreshOptions {
+  reset?: boolean
 }
 
 export interface DataGridApiRowsMethods<TRow = unknown> {
@@ -109,7 +110,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   ) => void | Promise<void>
   applyEdits: (
     updates: readonly DataGridClientRowPatch<TRow>[],
-    options?: DataGridRowsApplyEditsOptions,
+    options?: DataGridApplyEditsOptions,
   ) => void | Promise<void>
   applyExternalUpdates: (
     updates: readonly DataGridExternalRowUpdate<TRow>[],
@@ -128,6 +129,7 @@ export interface CreateDataGridApiRowsMethodsInput<TRow = unknown> {
   getRowsDataMutationCapability: () => DataGridRowsDataMutationCapability<TRow> | null
   getSortFilterBatchCapability: () => DataGridSortFilterBatchCapability | null
   onRowsRemoved?: (rowIds: readonly DataGridRowId[]) => void
+  onRowsEdited?: (event: import("./gridApiContracts.js").DataGridApiRowsEditedEvent<TRow>) => void
   getProjectionMode?: () => DataGridApiProjectionMode
 }
 
@@ -141,6 +143,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
     onRowsRemoved,
+    onRowsEdited,
     getProjectionMode,
   } = input
   let autoReapply = false
@@ -444,7 +447,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     applyEdits(
       updates: readonly DataGridClientRowPatch<TRow>[],
-      options?: DataGridRowsApplyEditsOptions,
+      options?: DataGridApplyEditsOptions,
     ) {
       assertMutationsAllowed("apply edits")
       assertNotAborted(options?.signal, "rows.applyEdits")
@@ -452,13 +455,48 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
       const shouldReapply = typeof options?.reapply === "boolean"
         ? options.reapply
         : autoReapply
-      return capability.patchRows(updates, {
+      if (updates.length === 0) {
+        return
+      }
+      const previousById = new Map<DataGridRowId, TRow>()
+      const affectedIds = new Set<DataGridRowId>()
+      for (const update of updates) {
+        const row = rowModel.getRowById?.(update.rowId)
+        if (row?.kind === "leaf" && !previousById.has(update.rowId)) {
+          previousById.set(update.rowId, snapshotRowData(row.data))
+        }
+        affectedIds.add(update.rowId)
+      }
+      capability.patchRows(updates, {
         recomputeSort: shouldReapply,
         recomputeFilter: shouldReapply,
         recomputeGroup: shouldReapply,
         emit: options?.emit,
         signal: options?.signal,
       })
+      const publish = (): void => {
+        if (options?.emit === false || !onRowsEdited) return
+        const edits: Array<{ rowId: DataGridRowId; oldData: TRow; newData: TRow; patch: Partial<TRow> }> = []
+        for (const rowId of affectedIds) {
+          const row = rowModel.getRowById?.(rowId)
+          if (!previousById.has(rowId) || row?.kind !== "leaf") continue
+          const oldData = previousById.get(rowId) as TRow
+          const patch: Partial<TRow> = {}
+          const keys = new Set([
+            ...Object.keys(oldData as object),
+            ...Object.keys(row.data as object),
+          ] as Array<keyof TRow>)
+          for (const key of keys) {
+            if (!Object.is((oldData as TRow)[key], row.data[key])) {
+              ;(patch as Record<keyof TRow, unknown>)[key] = row.data[key]
+            }
+          }
+          if (Object.keys(patch as object).length > 0) edits.push({ rowId, oldData: oldData as TRow, newData: row.data, patch })
+        }
+        if (edits.length > 0) onRowsEdited({ source: options?.source ?? "application", edits })
+      }
+      publish()
+      return
     },
     applyExternalUpdates(
       updates: readonly DataGridExternalRowUpdate<TRow>[],

@@ -1570,6 +1570,7 @@ function commitDrag(): void {
     props.gantt,
   )], {
     reapply: true,
+    source: "grid",
   })
   scheduleRedraw("body")
 }

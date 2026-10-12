@@ -949,12 +949,20 @@ export interface DataGridCellEditEvent<TRow = unknown> {
   }
 }
 
+export interface DataGridRowsEditedEvent<TRow = unknown> {
+  /** `grid` means a user-facing grid operation; `application` means a host API update. */
+  source: "grid" | "application"
+  /** One entry per changed row, with values after successful application. */
+  edits: readonly { rowId: DataGridRowId; oldData: TRow; newData: TRow; patch: Partial<TRow> }[]
+}
+
 const DataGridRuntimeComponent = defineComponent({
   name: "DataGrid",
   inheritAttrs: false,
   props: dataGridProps,
   emits: {
     "cell-change": (_payload: unknown) => true,
+    "data-change": (_payload: DataGridRowsEditedEvent<Record<string, unknown>>) => true,
     "cell-edit": (_payload: DataGridCellEditEvent<Record<string, unknown>>) => true,
     "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
     "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
@@ -1363,6 +1371,10 @@ const DataGridRuntimeComponent = defineComponent({
 
     const handleCellEdit = (payload: DataGridCellEditEvent<Record<string, unknown>>): void => {
       emit("cell-edit", payload)
+    }
+
+    const handleDataChange = (payload: DataGridRowsEditedEvent<Record<string, unknown>>): void => {
+      emit("data-change", payload)
     }
 
     const handleSelectionChange = (payload: DataGridApiSelectionChangedEvent): void => {
@@ -1823,6 +1835,7 @@ const DataGridRuntimeComponent = defineComponent({
           startupOrder: props.startupOrder,
         autoStart: props.autoStart,
         onCellChange: handleCellChange,
+        onDataChange: handleDataChange,
         onCellEdit: handleCellEdit,
         onSelectionChange: handleSelectionChange,
         onRowSelectionChange: handleRowSelectionChange,

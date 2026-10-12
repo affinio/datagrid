@@ -91,6 +91,8 @@ export interface DataGridApplyEditsOptions {
   emit?: boolean
   reapply?: boolean
   signal?: AbortSignal | null
+  /** Identifies edits made by the grid UI versus updates supplied by the host application. */
+  source?: "grid" | "application"
 }
 
 export interface DataGridApiMutationControlOptions {
@@ -616,6 +618,16 @@ export interface DataGridApiRowsChangedEvent<TRow = unknown> {
   snapshot: DataGridRowModelSnapshot<TRow>
 }
 
+export interface DataGridApiRowsEditedEvent<TRow = unknown> {
+  source: "grid" | "application"
+  edits: readonly {
+    rowId: DataGridRowId
+    oldData: TRow
+    newData: TRow
+    patch: Partial<TRow>
+  }[]
+}
+
 export interface DataGridApiColumnsChangedEvent {
   snapshot: DataGridColumnModelSnapshot
 }
@@ -681,6 +693,7 @@ export interface DataGridApiErrorEvent {
 
 export interface DataGridApiEventMap<TRow = unknown> {
   "rows:changed": DataGridApiRowsChangedEvent<TRow>
+  "rows:edited": DataGridApiRowsEditedEvent<TRow>
   "columns:changed": DataGridApiColumnsChangedEvent
   "projection:recomputed": DataGridApiProjectionRecomputedEvent<TRow>
   "selection:changed": DataGridApiSelectionChangedEvent

@@ -1773,7 +1773,7 @@ export function useDataGridTableStageRuntime<
     await options.runtime.api.rows.applyEdits(Array.from(rowPatchDataById.entries()).map(([rowId, data]) => ({
       rowId,
       data: data as Partial<TRow>,
-    })))
+    })), { source: "grid" })
     applyClipboardSelectionRange(normalizedTargetRange)
     recordHistoryIntentTransaction({
       intent: "move",

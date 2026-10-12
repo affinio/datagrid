@@ -625,6 +625,48 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
   })
 
+  it("emits one exact rows:edited delta after applyEdits, including filtered rows, and omits no-ops", async () => {
+    const rowModel = createClientRowModel({
+      rows: [
+        { row: { id: "a", status: "visible", count: 1 }, rowId: "a", originalIndex: 0 },
+        { row: { id: "b", status: "hidden", count: 2 }, rowId: "b", originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "status", label: "Status" }] })
+    const core = createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } })
+    const api = createDataGridApi({ core })
+    const events: Array<{ source: string; edits: readonly { rowId: string | number; oldData: unknown; newData: unknown; patch: unknown }[] }> = []
+    api.events.on("rows:edited", event => events.push(event))
+    api.rows.setFilterModel({ columnFilters: { status: { kind: "valueSet", tokens: ["string:visible"] } }, advancedFilters: {} })
+
+    await api.rows.applyEdits([
+      { rowId: "b", data: { count: 3 } },
+      { rowId: "b", data: { status: "changed" } },
+    ], { source: "grid" })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      source: "grid",
+      edits: [{ rowId: "b", oldData: { id: "b", status: "hidden", count: 2 }, newData: { id: "b", status: "changed", count: 3 }, patch: { count: 3, status: "changed" } }],
+    })
+    await api.rows.applyEdits([{ rowId: "b", data: { count: 3 } }], { source: "grid" })
+    expect(events).toHaveLength(1)
+    await api.rows.applyEdits([{ rowId: "b", data: { count: 4 } }])
+    expect(events[1]?.source).toBe("application")
+    expect(events[1]?.edits[0]?.newData).toMatchObject({ count: 4 })
+    api.rows.batchMutations(() => {
+      api.rows.applyEdits([{ rowId: "b", data: { count: 5 } }], { source: "grid" })
+      api.rows.applyEdits([{ rowId: "b", data: { count: 4 } }], { source: "grid" })
+      api.rows.applyEdits([{ rowId: "a", data: { count: 8 } }], { source: "grid" })
+    })
+    expect(events).toHaveLength(3)
+    expect(events[2]?.edits.map(edit => edit.rowId)).toEqual(["a"])
+    expect(events[2]?.edits[0]?.patch).toEqual({ count: 8 })
+  })
+
   it("keeps direct row mutations outside generic transaction history", async () => {
     const rowModel = createClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],

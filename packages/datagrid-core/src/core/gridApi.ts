@@ -80,6 +80,7 @@ export type {
   DataGridApiEventPayload,
   DataGridApiErrorCode,
   DataGridApiErrorEvent,
+  DataGridApiRowsEditedEvent,
   DataGridApiRowSelectionChangedEvent,
   DataGridApiSelectionChangedEvent,
   DataGridGetStateOptions,
@@ -243,6 +244,7 @@ export function createDataGridApi<TRow = unknown>(
     getRowsDataMutationCapability,
     getSortFilterBatchCapability,
     getProjectionMode: () => projectionMode,
+    onRowsEdited: event => eventsRuntime.emitRowsEdited(event),
     onRowsRemoved: rowIds => {
       const capability = getRowSelectionCapability()
       if (!capability) {

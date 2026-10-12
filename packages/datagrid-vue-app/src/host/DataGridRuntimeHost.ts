@@ -14,6 +14,7 @@ import {
 import type {
   CreateDataGridCoreOptions,
   DataGridApiPluginDefinition,
+  DataGridApiRowsEditedEvent,
   DataGridColumnInput,
   DataGridCoreServiceRegistry,
   DataGridPaginationInput,
@@ -83,6 +84,8 @@ export interface DataGridRestoreFocusAnchorOptions {
 interface DataGridRowsChangedEvent {
   snapshot: DataGridRowModelSnapshot<unknown>
 }
+
+type DataGridRowsEditedEvent = DataGridApiRowsEditedEvent<unknown>
 
 function cloneSerializable<T>(value: T): T {
   if (value == null) {
@@ -190,6 +193,7 @@ export default defineComponent({
   },
   emits: {
     "cell-change": (_payload: DataGridRowsChangedEvent) => true,
+    "data-change": (_payload: DataGridRowsEditedEvent) => true,
     "selection-change": (_payload: DataGridSelectionChangedEvent) => true,
     "row-selection-change": (_payload: DataGridRowSelectionChangedEvent) => true,
   },
@@ -286,6 +290,9 @@ export default defineComponent({
     const unsubscribeRowsChanged = runtime.api.events.on("rows:changed", payload => {
       emit("cell-change", payload as DataGridRowsChangedEvent)
     })
+    const unsubscribeRowsEdited = runtime.api.events.on("rows:edited", payload => {
+      emit("data-change", payload as DataGridRowsEditedEvent)
+    })
     const unsubscribeSelectionChanged = runtime.api.events.on("selection:changed", payload => {
       emit("selection-change", payload as DataGridSelectionChangedEvent)
     })
@@ -295,6 +302,7 @@ export default defineComponent({
 
     onBeforeUnmount(() => {
       unsubscribeRowsChanged()
+      unsubscribeRowsEdited()
       unsubscribeSelectionChanged()
       unsubscribeRowSelectionChanged()
       themeObserver?.disconnect()

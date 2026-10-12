@@ -59,6 +59,7 @@ export interface DataGridApiEventsRuntime<TRow = unknown> {
   runBatched<TResult>(fn: () => TResult): TResult
   emitSelectionChanged(snapshot: DataGridSelectionSnapshot | null): void
   emitRowSelectionChanged(snapshot: DataGridRowSelectionSnapshot | null): void
+  emitRowsEdited(event: DataGridApiEventMap<TRow>["rows:edited"]): void
   emitTransactionChanged(snapshot: DataGridTransactionSnapshot | null): void
   emitStateImportBegin(state: DataGridUnifiedState<TRow>): void
   emitStateImportEnd(state: DataGridUnifiedState<TRow>): void
@@ -77,6 +78,7 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
 ): DataGridApiEventsRuntime<TRow> {
   const listeners: DataGridApiEventListenerMap<TRow> = {
     "rows:changed": new Set(),
+    "rows:edited": new Set(),
     "columns:changed": new Set(),
     "projection:recomputed": new Set(),
     "selection:changed": new Set(),
@@ -121,6 +123,7 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     const orderedEvents: readonly (keyof DataGridApiEventMap<TRow>)[] = [
       "state:import:begin",
       "rows:changed",
+      "rows:edited",
       "columns:changed",
       "projection:recomputed",
       "pivot:changed",
@@ -138,6 +141,9 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
         continue
       }
       batchedPayloads.delete(event)
+      if (event === "rows:edited" && (payload as DataGridApiEventMap<TRow>["rows:edited"]).edits.length === 0) {
+        continue
+      }
       emit(event, payload as DataGridApiEventMap<TRow>[typeof event])
     }
 
@@ -157,6 +163,31 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     if (batchDepth > 0) {
       if (event === "error") {
         batchedErrors.push(payload as DataGridApiErrorEvent)
+      } else if (event === "rows:edited") {
+        const previous = batchedPayloads.get(event) as DataGridApiEventMap<TRow>["rows:edited"] | undefined
+        const next = payload as DataGridApiEventMap<TRow>["rows:edited"]
+        if (!previous) {
+          batchedPayloads.set(event, next)
+        } else {
+          const byId = new Map(previous.edits.map(edit => [edit.rowId, edit]))
+          for (const edit of next.edits) {
+            const prior = byId.get(edit.rowId)
+            if (!prior) {
+              byId.set(edit.rowId, edit)
+              continue
+            }
+            const keys = new Set([...Object.keys(prior.patch), ...Object.keys(edit.patch)])
+            const patch: Record<string, unknown> = {}
+            for (const key of keys) {
+              if (!Object.is((prior.oldData as Record<string, unknown>)[key], (edit.newData as Record<string, unknown>)[key])) {
+                patch[key] = (edit.newData as Record<string, unknown>)[key]
+              }
+            }
+            if (Object.keys(patch).length === 0) byId.delete(edit.rowId)
+            else byId.set(edit.rowId, { ...edit, oldData: prior.oldData, patch: patch as Partial<TRow> })
+          }
+          batchedPayloads.set(event, { source: next.source, edits: [...byId.values()] })
+        }
       } else {
         batchedPayloads.set(event, payload)
       }
@@ -259,6 +290,9 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     },
     emitRowSelectionChanged(snapshot) {
       emit("row-selection:changed", { snapshot })
+    },
+    emitRowsEdited(event) {
+      emit("rows:edited", event)
     },
     emitTransactionChanged(snapshot) {
       emit("transaction:changed", { snapshot })

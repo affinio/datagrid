@@ -292,7 +292,7 @@ export function useDataGridAppIntentHistory<TRow>(
         await options.runtime.api.rows.applyEdits(snapshot.rows.map(entry => ({
           rowId: entry.rowId,
           data: cloneReplayRowData(entry.row) as Partial<TRow>,
-        })))
+        })), { source: "grid" })
         refreshComputedSnapshotRows(rowIds)
         return
       }

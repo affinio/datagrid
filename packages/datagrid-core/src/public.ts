@@ -106,6 +106,7 @@ export {
   type DataGridApiEventPayload,
   type DataGridApiErrorCode,
   type DataGridApiErrorEvent,
+  type DataGridApiRowsEditedEvent,
   type DataGridApiRowSelectionChangedEvent,
   type DataGridApiSelectionChangedEvent,
   type DataGridGetStateOptions,

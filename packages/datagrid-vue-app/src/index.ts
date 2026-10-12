@@ -20,6 +20,7 @@ export type {
   DataGridComponent,
   DataGridComponentFor,
   DataGridCellEditEvent,
+  DataGridRowsEditedEvent,
   DataGridCaptureFocusAnchorOptions,
   DataGridExposed,
   DataGridExposedRuntime,

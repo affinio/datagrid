@@ -118,7 +118,7 @@ export function useDataGridTableStageCellIo<TRow extends Record<string, unknown>
           [column.key]: newValue,
         } as Partial<TRow>,
       },
-    ])
+    ], { source: "grid" })
     options.onCellEdit?.({
       rowId: editableRow.rowId,
       columnKey: column.key,

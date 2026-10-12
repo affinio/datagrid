@@ -1450,6 +1450,15 @@ describe("DataGrid app facade contract", () => {
         },
       },
     })
+    expect(wrapper.emitted("data-change")?.[0]?.[0]).toMatchObject({
+      source: "grid",
+      edits: [{
+        rowId: "r1",
+        oldData: { owner: "NOC" },
+        newData: { owner: "Legacy" },
+        patch: { owner: "Legacy" },
+      }],
+    })
     expect(wrapper.find(".datagrid-app-status[role='status']").text()).toContain("Edited Owner, row 1")
 
     wrapper.unmount()

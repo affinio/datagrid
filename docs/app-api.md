@@ -131,6 +131,7 @@ For persistence, prefer the unified `state` prop or the saved-view helpers and c
 | ready | { api, rowModel } after runtime initialization. |
 | cell-change | Cell mutation notification. |
 | cell-edit | { rowId, columnKey, oldValue, newValue, patch }. |
+| data-change | `{ source, edits }` for successfully applied row value changes; one event per call, coalesced inside `rows.batchMutations()`. |
 | selection-change | Cell/range selection snapshot change. |
 | row-selection-change | Full-row selection snapshot change. |
 | update:state | New unified state snapshot or null. |
@@ -145,6 +146,35 @@ For persistence, prefer the unified `state` prop or the saved-view helpers and c
 | toolbar-modules-change | Resolved toolbar module list when the host owns toolbar placement. |
 
 Vue templates use kebab-case event names, for example @cell-edit and @update:state.
+
+`data-change` includes changes from inline edits, checkbox edits, paste, paste special,
+fill, clear, find/replace, and local undo/redo that replay row edits. Its `edits`
+contain one entry per changed row (`rowId`, `oldData`, `newData`, and the fields
+actually changed in `patch`). It is emitted after the row model has applied the
+operation, including edits to filtered or collapsed rows. Empty and no-op edits
+produce no event. `cell-change` remains the row-model snapshot notification and
+`cell-edit` remains the single-cell inline-edit notification.
+
+`source: "grid"` marks an operation initiated by grid UI or history replay.
+`source: "application"` marks a call made through the public API; this is the
+default. When synchronizing an application-owned model from `data-change`, apply
+only events with `source === "grid"`. This keeps the echo from the host out of the
+domain update path. The event's `newData` is the value after the successful edit.
+
+The public row API already supports explicit ID-based deltas. It avoids diffing a
+replacement array and keeps the current model/component instance:
+
+```ts
+const api = gridRef.value?.getApi()
+api?.rows.insertDataAfter("r1", [{ row: { id: "r2", amount: 4 }, rowId: "r2" }])
+api?.rows.removeData(["r3"])
+api?.rows.applyEdits([{ rowId: "r1", data: { amount: 5 } }], { source: "application" })
+```
+
+Use `rowsUpdateMode="patch"` for declarative replacement arrays with unchanged
+row count and ID order. It still scans the old and new arrays and compares their
+values. A length or ID-order change uses the existing replace path. It does not
+represent an O(changed rows) delta; use the explicit row API above for that.
 
 ## Component ref
 

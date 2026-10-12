@@ -426,7 +426,7 @@ export function useDataGridAppFindReplace<
           draft: nextText,
         }),
       } as Partial<TRow>,
-    }])
+    }], { source: "grid" })
     options.recordHistoryIntentTransaction({
       intent: "edit",
       label: "Replace",
@@ -542,7 +542,7 @@ export function useDataGridAppFindReplace<
     options.runtime.api.rows.applyEdits(Array.from(updatesByRowId.entries(), ([rowId, data]) => ({
       rowId,
       data,
-    })))
+    })), { source: "grid" })
     options.recordHistoryIntentTransaction({
       intent: "edit",
       label: "Replace all",

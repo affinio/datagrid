@@ -583,7 +583,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const afterSnapshot = beforeSnapshot != null
       ? buildAfterEditSnapshot(beforeSnapshot, updates)
       : null
-    await options.runtime.api.rows.applyEdits(updates)
+    await options.runtime.api.rows.applyEdits(updates, { source: "grid" })
     options.applySelectionRange(normalized)
     if (beforeSnapshot != null) {
       options.recordEditTransaction(
@@ -769,7 +769,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const afterSnapshot = beforeSnapshot != null
       ? buildAfterEditSnapshot(beforeSnapshot, updates)
       : null
-    await options.runtime.api.rows.applyEdits(updates)
+    await options.runtime.api.rows.applyEdits(updates, { source: "grid" })
     if (beforeSnapshot != null) {
       options.recordEditTransaction(
         beforeSnapshot,
@@ -1083,7 +1083,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
           if (updates.length === 0 || targetCollection.summary.appliedCells <= 0) {
             return false
           }
-          await options.runtime.api.rows.applyEdits(updates)
+          await options.runtime.api.rows.applyEdits(updates, { source: "grid" })
         } else {
           const appliedRows = await applyClipboardEdits(normalizedTargetRange, matrix, { recordHistory: false })
           if (appliedRows <= 0) {

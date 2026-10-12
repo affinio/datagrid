@@ -816,7 +816,7 @@ export function useDataGridAppInteractionController<
           [columnKey]: nextValue,
         } as Partial<TRow>,
       },
-    ])
+    ], { source: "grid" })
     void options.recordIntentTransaction({
       intent: "edit",
       label,
@@ -1357,7 +1357,7 @@ export function useDataGridAppInteractionController<
     const beforeSnapshot = captureRowsSnapshotForRanges([baseRange, targetRange])
 
     try {
-      await Promise.resolve(options.runtime.api.rows.applyEdits(updates))
+      await Promise.resolve(options.runtime.api.rows.applyEdits(updates, { source: "grid" }))
     } catch (error) {
       options.reportFillWarning?.(
         error instanceof Error ? error.message : "range move commit failed",
@@ -1665,7 +1665,7 @@ export function useDataGridAppInteractionController<
             await Promise.resolve(options.runtime.api.rows.applyEdits(Array.from(optimisticUpdatesByRowId.entries()).map(([rowId, data]) => ({
               rowId,
               data: data as Partial<TRow>,
-            }))))
+            })), { source: "grid" }))
           }
           else {
             optimisticRollbackUpdates = null
@@ -1724,7 +1724,7 @@ export function useDataGridAppInteractionController<
       }
       catch {
         if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
-          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates, { source: "grid" }))
         }
         options.reportFillWarning?.("server fill commit failed")
         return null
@@ -1734,7 +1734,7 @@ export function useDataGridAppInteractionController<
       }
       if (!result) {
         if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
-          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates, { source: "grid" }))
         }
         options.reportFillWarning?.("server fill commit failed")
         return null
@@ -1744,7 +1744,7 @@ export function useDataGridAppInteractionController<
       const warnings = result.warnings ?? []
       if (affectedCellCount <= 0) {
         if (optimisticRollbackUpdates && optimisticRollbackUpdates.length > 0) {
-          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates))
+          await Promise.resolve(options.runtime.api.rows.applyEdits(optimisticRollbackUpdates, { source: "grid" }))
         }
         if (warnings.length > 0) {
           for (const warning of warnings) {

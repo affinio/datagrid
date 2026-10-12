@@ -9,15 +9,20 @@ const packageDirectory = resolve(workspace, "packages/datagrid-vue-app")
 const fixtureRoot = mkdtempSync(join(tmpdir(), "affino-datagrid-vue-app-packed-consumer-"))
 
 try {
-  const tarball = packPackage()
-  runFixture("base", tarball, false)
-  runFixture("gantt", tarball, true)
+  const tarballs = {
+    core: packPackage("datagrid-core"),
+    vue: packPackage("datagrid-vue"),
+    app: packPackage("datagrid-vue-app"),
+  }
+  runFixture("base", tarballs, false)
+  runFixture("gantt", tarballs, true)
   console.log("AFFINO_DATAGRID_VUE_APP_PACKED_CONSUMERS_OK")
 } finally {
   rmSync(fixtureRoot, { recursive: true, force: true })
 }
 
-function packPackage() {
+function packPackage(packageName) {
+  const packageDirectory = resolve(workspace, `packages/${packageName}`)
   const output = execFileSync("pnpm", ["pack", "--pack-destination", fixtureRoot], {
     cwd: packageDirectory,
     encoding: "utf8",
@@ -25,12 +30,12 @@ function packPackage() {
   })
   const filename = output.trim().split("\n").at(-1)
   if (!filename) {
-    throw new Error("pnpm pack produced no datagrid-vue-app tarball")
+    throw new Error(`pnpm pack produced no tarball for ${packageName}`)
   }
   return resolve(fixtureRoot, filename)
 }
 
-function runFixture(name, tarball, withGantt) {
+function runFixture(name, tarballs, withGantt) {
   const fixture = join(fixtureRoot, name)
   mkdirSync(join(fixture, "src"), { recursive: true })
   writeFileSync(join(fixture, "package.json"), JSON.stringify({
@@ -38,9 +43,11 @@ function runFixture(name, tarball, withGantt) {
     private: true,
     type: "module",
     dependencies: {
-      "@affino/datagrid-vue-app": `file:${tarball}`,
+      "@affino/datagrid-core": `file:${tarballs.core}`,
+      "@affino/datagrid-vue": `file:${tarballs.vue}`,
+      "@affino/datagrid-vue-app": `file:${tarballs.app}`,
       ...(withGantt ? { "@affino/datagrid-gantt": "0.1.2" } : {}),
-      vue: "3.4.38",
+      vue: "3.5.22",
     },
     devDependencies: {
       typescript: "7.0.2",
@@ -69,11 +76,16 @@ function runFixture(name, tarball, withGantt) {
       "",
     ].join("\n")
     : [
-      'import { DataGrid, type DataGridProps } from "@affino/datagrid-vue-app"',
+      'import { DataGrid, type DataGridProps, type DataGridRowsEditedEvent } from "@affino/datagrid-vue-app"',
+      'import type { DataGridApiRowsEditedEvent, DataGridApplyEditsOptions } from "@affino/datagrid-vue"',
       "const component: typeof DataGrid = DataGrid",
       "const propsType: DataGridProps | undefined = undefined",
+      "const event: DataGridRowsEditedEvent<{ id: string }> | DataGridApiRowsEditedEvent<{ id: string }> | undefined = undefined",
+      'const options: DataGridApplyEditsOptions = { source: "grid" }',
       "void component",
       "void propsType",
+      "void event",
+      "void options",
       "",
     ].join("\n"))
 

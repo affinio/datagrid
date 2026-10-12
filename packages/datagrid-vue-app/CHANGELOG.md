@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.12.0
+
+### Added
+
+- Added the typed `data-change` event for committed edits across inline editing, clipboard, fill, find/replace, checkbox, Gantt, and history replay paths.
+- Documented explicit ID-based insert, remove, and edit calls through `getApi()`.
+
+### Validation
+
+- Vue app type checks, package build, consumer type checks, mounted component contracts, and core row-delta contracts passed.
+
+
 ## 0.11.2
 
 ### Added

@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+## 0.9.0
+
 ### Added
 
+- Re-exported the exact `rows:edited` delta event and source option through the Vue runtime API.
 - Re-exported the server selection-summary datasource contracts.
+
+### Validation
+
+- Vue type check and public build passed.
 
 
 ## 0.7.0
