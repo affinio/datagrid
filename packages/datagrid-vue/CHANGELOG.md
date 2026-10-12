@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.10.1
+
+### Fixed
+
+- Excluded trailing visual placeholder rows from Ctrl+A selections.
+
 ## 0.10.0
 
 ### Changed

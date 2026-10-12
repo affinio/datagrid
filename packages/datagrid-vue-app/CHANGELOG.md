@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.13.1
+
+### Fixed
+
+- Ctrl+A followed by Ctrl+C now copies data rows without visual placeholders.
+
 ## 0.13.0
 
 ### Changed
