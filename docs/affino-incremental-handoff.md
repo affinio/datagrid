@@ -21,8 +21,8 @@ pnpm add /path/to/affino-datagrid-core-0.9.0.tgz \
   /path/to/affino-datagrid-vue-app-0.12.0.tgz
 ```
 
-The source commit is recorded here after commit creation. Publish these versions
-only after the release owner authorizes the npm release.
+Source commit: `08281293` (`feat(datagrid): publish exact row edit deltas`).
+Publish these versions only after the release owner authorizes the npm release.
 
 ## Public contracts
 
