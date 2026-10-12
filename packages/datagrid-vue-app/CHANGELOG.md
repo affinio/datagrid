@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.13.0
+
+### Changed
+
+- Aligned the app package with `@affino/datagrid-vue@0.10.0`, which depends on the updated DataGrid orchestration release.
+
+### Validation
+
+- Vue app build, type checks, and packed consumer type checks passed.
+
 ## 0.12.0
 
 ### Added

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.0
+
+### Changed
+
+- Released the Vue adapter against `@affino/datagrid-orchestration@0.7.0` and the aligned worker package, so npm consumers receive the updated orchestration without overrides.
+
+### Validation
+
+- Public build, type checks, and strict adapter contracts passed.
+
 ## 0.9.0
 
 ### Added
