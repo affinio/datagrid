@@ -667,6 +667,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  centerScrollLeft: {
+    type: Number,
+    required: true,
+  },
   onLinkedViewportWheel: {
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
@@ -728,18 +732,21 @@ const resizeClickGuard = useDataGridResizeClickGuard()
 const headerShellElement = ref<HTMLElement | null>(null)
 const leftPaneElement = ref<HTMLElement | null>(null)
 const rightPaneElement = ref<HTMLElement | null>(null)
-const centerScrollLeft = ref(0)
 const paneWidths = ref({ left: 0, center: 0, right: 0 })
 const groupLabelWidths = ref<Record<string, number>>({})
 let groupHeaderFrame: number | null = null
 let groupHeaderResizeObserver: ResizeObserver | null = null
 function syncGroupHeaderGeometry(): void {
   groupHeaderFrame = null
-  centerScrollLeft.value = centerHeaderViewportElement?.scrollLeft ?? 0
-  paneWidths.value = {
+  const nextPaneWidths = {
     left: leftPaneElement.value?.clientWidth ?? 0,
     center: centerHeaderViewportElement?.clientWidth ?? 0,
     right: rightPaneElement.value?.clientWidth ?? 0,
+  }
+  if (paneWidths.value.left !== nextPaneWidths.left
+    || paneWidths.value.center !== nextPaneWidths.center
+    || paneWidths.value.right !== nextPaneWidths.right) {
+    paneWidths.value = nextPaneWidths
   }
 }
 function scheduleGroupHeaderGeometry(): void {
@@ -991,7 +998,7 @@ function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
 
 function groupLabelStyle(group: DataGridHeaderGroup, pane: "left" | "center" | "right", depth: number): CSSProperties {
   const viewportWidth = paneWidths.value[pane]
-  const scrollLeft = pane === "center" ? centerScrollLeft.value : 0
+  const scrollLeft = pane === "center" ? props.centerScrollLeft : 0
   const geometry = resolveDataGridGroupHeaderGeometry({
     groupStart: group.start,
     groupWidth: group.width,
@@ -1106,12 +1113,10 @@ function headerViewportRef(value: Element | { $el?: unknown } | null): void {
         : null
   if (centerHeaderViewportElement === element) return
   if (centerHeaderViewportElement) {
-    centerHeaderViewportElement.removeEventListener("scroll", scheduleGroupHeaderGeometry)
     groupHeaderResizeObserver?.unobserve(centerHeaderViewportElement)
   }
   centerHeaderViewportElement = element
   if (element) {
-    element.addEventListener("scroll", scheduleGroupHeaderGeometry, { passive: true })
     if (groupHeaderResizeObserver) groupHeaderResizeObserver.observe(element)
     scheduleGroupHeaderGeometry()
   }

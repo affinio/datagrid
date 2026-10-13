@@ -48,6 +48,7 @@ Checks:
 - The app stage synchronizes the header scrollport width from the body viewport during its existing resize/metric sync path.
 - Header ref rebinding must preserve scroll position through Vue rerenders. After width synchronization, the header immediately receives the body's current offset again.
 - Body horizontal movement mirrors directly to the header and both pinned row viewports; peer-originated scrolling propagates the offset actually accepted by the body, including boundary clamping. Reactive state and chrome redraw stay frame-batched.
+- Group header labels read the mirrored header scroll offset directly from its browser scroll event; pane widths remain measured through the resize observer. This avoids adding a second animation-frame delay before a clipped group label appears at its visible edge.
 
 Relevant test:
 - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`

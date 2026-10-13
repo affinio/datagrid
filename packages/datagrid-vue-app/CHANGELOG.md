@@ -1,5 +1,15 @@
 # @affino/datagrid-vue-app
 
+## 0.14.1
+
+### Fixed
+
+- Grouped header labels now update their clipped position from the same center-scroll event, removing the extra animation-frame delay that made labels appear to flicker during fast horizontal scrolling.
+
+### Validation
+
+- Rapid grouped-header scroll browser regression and stage contract tests passed.
+
 ## 0.14.0
 
 ### Changed

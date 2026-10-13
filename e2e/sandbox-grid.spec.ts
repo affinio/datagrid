@@ -25,6 +25,46 @@ test("grouped headers retain body scroll offsets across animation frames and dir
   }
 })
 
+test("group labels follow the visible group edge in the same frame during rapid horizontal scrolling", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=1000&cols=32")
+  await expect(page.locator(".grid-header-row--pivot-groups").first()).toBeVisible()
+  await expect(page.locator(".grid-header-row--pivot-groups .col-head__pivot-group-label").first()).toBeVisible()
+
+  const samples = await page.evaluate(async () => {
+    const body = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+    const header = document.querySelector<HTMLElement>(".grid-header-viewport")!
+    const label = header.querySelector<HTMLElement>(".grid-header-row--pivot-groups .col-head__pivot-group-label")!
+    const group = label.parentElement!
+    const maximum = body.scrollWidth - body.clientWidth
+    const measurements: Array<{ actual: number; expected: number; visibleWidth: number; scrollLeft: number; groupLeft: number }> = []
+
+    for (let step = 1; step <= 48; step += 1) {
+      body.scrollLeft = maximum * step / 48
+      body.dispatchEvent(new Event("scroll"))
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      await Promise.resolve()
+      const viewportRect = header.getBoundingClientRect()
+      const groupRect = group.getBoundingClientRect()
+      const labelRect = label.getBoundingClientRect()
+      const visibleStart = Math.max(groupRect.left, viewportRect.left)
+      const visibleEnd = Math.min(groupRect.right, viewportRect.right)
+      const visibleWidth = Math.max(0, visibleEnd - visibleStart)
+      if (visibleWidth > 0) {
+        const labelWidth = Math.min(label.scrollWidth, visibleWidth)
+        const expected = Math.min(visibleEnd - labelWidth, Math.max(visibleStart, groupRect.left))
+        measurements.push({ actual: labelRect.left, expected, visibleWidth, scrollLeft: header.scrollLeft, groupLeft: groupRect.left })
+      }
+    }
+
+    return measurements
+  })
+
+  expect(samples.length).toBeGreaterThan(0)
+  for (const sample of samples) {
+    expect(Math.abs(sample.actual - sample.expected), JSON.stringify(sample)).toBeLessThanOrEqual(1)
+  }
+})
+
 test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () => {
   test("@a11y vue base grid exposes mounted grid semantics after scroll and pinning", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=32")

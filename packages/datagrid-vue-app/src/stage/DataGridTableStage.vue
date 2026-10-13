@@ -27,6 +27,7 @@
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
       :is-coarse-pointer="isCoarsePointer"
+      :center-scroll-left="groupHeaderScrollLeft"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #left-chrome>
@@ -1278,6 +1279,7 @@ const gridFocusOwned = ref(false)
 const hoveredRowIndex = ref<number | null>(null)
 const isCoarsePointer = ref(false)
 const isBodyViewportScrolling = ref(false)
+const groupHeaderScrollLeft = ref(0)
 const interactionModeInput = computed(() => ({
   interactionMode: "auto" as const,
   isCoarsePointer: isCoarsePointer.value,
@@ -1474,6 +1476,10 @@ function closeColumnMenuForViewportScroll(
 }
 
 function handleCenterViewportScroll(event: Event): void {
+  const target = readScrollEventElement(event)
+  if (target && groupHeaderScrollLeft.value !== target.scrollLeft) {
+    groupHeaderScrollLeft.value = target.scrollLeft
+  }
   closeColumnMenuForViewportScroll(event, { horizontal: true })
   handleCenterViewportScrollRaw(event)
 }
