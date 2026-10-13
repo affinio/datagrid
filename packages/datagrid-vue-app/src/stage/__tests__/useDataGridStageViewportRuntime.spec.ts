@@ -912,6 +912,48 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("samples shared vertical geometry before writing pane offsets, including uncached dimensions", () => {
+    const harness = createHarness()
+    const body = createViewportElement()
+    const vertical = createViewportElement()
+    harness.runtime.captureBodyViewportRef(body)
+    harness.runtime.captureSharedVerticalViewportRef(vertical)
+    const operations: string[] = []
+    for (const [element, property, value] of [
+      [vertical, "scrollTop", 72],
+      [vertical, "scrollLeft", 0],
+      [body, "scrollLeft", 16],
+      [body, "clientWidth", 320],
+      [vertical, "clientHeight", 240],
+    ] as const) {
+      Object.defineProperty(element, property, {
+        configurable: true,
+        get() {
+          operations.push(`read:${property}`)
+          return value
+        },
+      })
+    }
+    const originalSetProperty = vertical.style.setProperty.bind(vertical.style)
+    vi.spyOn(vertical.style, "setProperty").mockImplementation((name, value, priority) => {
+      operations.push("write:offset")
+      originalSetProperty(name, value, priority)
+    })
+
+    harness.runtime.handleSharedVerticalViewportScroll({ target: vertical } as unknown as Event)
+
+    expect(operations).toEqual([
+      "read:scrollLeft", "read:scrollTop", "read:scrollLeft",
+      "read:clientWidth", "read:clientHeight", "write:offset",
+    ])
+    expect(vertical.style.getPropertyValue("--datagrid-body-scroll-top")).toBe("72px")
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalledTimes(1)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalledWith(expect.objectContaining({
+      target: expect.objectContaining({ scrollTop: 72, scrollLeft: 16, clientWidth: 320, clientHeight: 240 }),
+    }))
+    harness.unmount()
+  })
+
   it("skips redundant body scroll events when offsets did not change", () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

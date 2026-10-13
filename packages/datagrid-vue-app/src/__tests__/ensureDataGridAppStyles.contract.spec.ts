@@ -119,5 +119,8 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain("clip: rect(0 0 0 0)")
     expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--clipboard-pending::after")
     expect(style?.textContent).toContain("animation-play-state: paused")
+    expect(style?.textContent).toContain(
+      ".grid-stage--scrolling .grid-checkbox-indicator,\n.grid-stage--scrolling .grid-checkbox-indicator__mark {\n  transition: none;",
+    )
   })
 })

@@ -2034,6 +2034,12 @@ body.datagrid-fill-drag-cursor * {
   opacity: 1;
 }
 
+/* Virtualized rows reuse checkbox DOM nodes while the viewport is moving. */
+.grid-stage--scrolling .grid-checkbox-indicator,
+.grid-stage--scrolling .grid-checkbox-indicator__mark {
+  transition: none;
+}
+
 .grid-cell--checkbox[role="checkbox"]:focus-visible .grid-checkbox-indicator {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--datagrid-accent-strong) 28%, transparent);
 }

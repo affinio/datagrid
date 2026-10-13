@@ -1,5 +1,24 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("right-pinned checkbox indicators do not animate recycled row states during vertical scroll", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=1000&cols=32")
+  const stage = page.locator(".grid-stage").first()
+  const viewport = page.locator(".grid-body-shared-vertical-scroll-shell").first()
+  const checkbox = page.locator('.grid-body-pane--right .grid-cell[data-column-key="critical"] .grid-checkbox-indicator').first()
+  await expect(checkbox).toBeVisible({ timeout: 20_000 })
+
+  const idleTransition = await checkbox.evaluate(element => getComputedStyle(element).transitionDuration)
+  await viewport.evaluate(element => {
+    element.scrollTop = 240
+    element.dispatchEvent(new Event("scroll", { bubbles: true }))
+  })
+  await expect(stage).toHaveClass(/grid-stage--scrolling/)
+  await expect.poll(() => checkbox.evaluate(element => getComputedStyle(element).transitionDuration)).toBe("0s")
+
+  await expect(stage).not.toHaveClass(/grid-stage--scrolling/, { timeout: 2_000 })
+  await expect.poll(() => checkbox.evaluate(element => getComputedStyle(element).transitionDuration)).toBe(idleTransition)
+})
+
 test("grouped headers retain body scroll offsets across animation frames and direction changes", async ({ page }) => {
   await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=1000&cols=32")
   await expect(page.locator(".grid-header-row--pivot-groups").first()).toBeVisible()

@@ -457,16 +457,20 @@ export function useDataGridStageViewportRuntime(
     if (!element) {
       return
     }
+    const scrollState = readBodyViewportScrollState(element)
+    const viewportScrollEvent = createSharedViewportScrollEvent(element, scrollState)
     if (element === resolveCenterHorizontalViewport()) {
-      syncSharedHorizontalPeers(element.scrollLeft, element)
+      syncSharedHorizontalPeers(scrollState.scrollLeft, element)
     }
+    queueBodyViewportScroll(scrollState, viewportScrollEvent)
+  }
+
+  function queueBodyViewportScroll(scrollState: BodyViewportScrollState, viewportScrollEvent: Event): void {
     const previousScrollTop = observedBodyViewportScrollTop
     const previousScrollLeft = observedBodyViewportScrollLeft
-    const scrollState = readBodyViewportScrollState(element)
     if (!hasBodyViewportScrollStateChanged(scrollState)) {
       return
     }
-    const viewportScrollEvent = createSharedViewportScrollEvent(element, scrollState)
     options.viewport.value.handleViewportScroll(viewportScrollEvent)
     markBodyViewportScrolling()
     scheduleBodyViewportScrollStateSync(scrollState)
@@ -490,11 +494,16 @@ export function useDataGridStageViewportRuntime(
     if (!verticalViewport || !horizontalViewport || verticalViewport !== resolveVerticalBodyViewport()) {
       return
     }
-    if (verticalViewport.scrollLeft !== 0) {
+    // Finish layout-dependent reads before updating the inherited pane offset.
+    // Reading scrollTop/clientWidth after that write can force style/layout work.
+    const strayScrollLeft = verticalViewport.scrollLeft
+    const scrollState = readBodyViewportScrollState(verticalViewport)
+    const viewportScrollEvent = createSharedViewportScrollEvent(verticalViewport, scrollState)
+    if (strayScrollLeft !== 0) {
       verticalViewport.scrollLeft = 0
     }
-    syncSharedVerticalScrollOffset(verticalViewport.scrollTop)
-    handleCenterViewportScroll(event)
+    syncSharedVerticalScrollOffset(scrollState.scrollTop)
+    queueBodyViewportScroll(scrollState, viewportScrollEvent)
   }
 
   function handlePinnedBottomViewportScroll(event: Event): void {

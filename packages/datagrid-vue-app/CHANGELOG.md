@@ -1,5 +1,19 @@
 # @affino/datagrid-vue-app
 
+## 0.14.3
+
+### Performance
+
+- Shared vertical scrolling captures offsets and viewport dimensions before updating pane styles, avoiding duplicate scroll reads and a possible synchronous layout flush in the scroll handler.
+
+### Fixed
+
+- Checkbox indicators in virtualized rows no longer animate between recycled row values while the body is scrolling, preventing flicker in pinned panes. Their normal state transition resumes when scrolling becomes idle.
+
+### Validation
+
+- Vue app style contracts and the grouped-header-grid browser regression pass. Sandbox production build completed for the browser check.
+
 ## 0.14.2
 
 ### Fixed
