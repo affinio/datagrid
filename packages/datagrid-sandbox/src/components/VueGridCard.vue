@@ -8,6 +8,9 @@
         <h2>{{ title }}</h2>
         <div class="mode-badge">{{ modeBadge }}</div>
       </div>
+      <p v-if="props.groupedHeaderShowcase" class="grouped-header-demo-help">
+        Scroll horizontally: group labels follow their group, then stick to its first visible portion and stay clipped to the group. Drag a group’s right edge to resize its last visible column. Identity is split across the left and center panes; Plan includes a right-pinned column.
+      </p>
       <div class="controls">
         <label>
           Rows
@@ -508,6 +511,7 @@ type PivotLayoutId = "department-month-revenue" | "channel-status-deals" | "mont
 const props = defineProps<{
   title: string
   mode: Mode
+  groupedHeaderShowcase?: boolean
 }>()
 
 const cardRootRef = ref<HTMLElement | null>(null)
@@ -598,7 +602,39 @@ const rows = computed(() => {
   }
   return buildVueRows(props.mode, rowCount.value, columnCount.value)
 })
-const columns = computed(() => buildVueColumns(props.mode, columnCount.value))
+const columns = computed(() => {
+  const built = buildVueColumns(props.mode, columnCount.value)
+  if (!props.groupedHeaderShowcase) return built
+  const groups: Record<string, { id: string; label: string }> = {
+    id: { id: "identity", label: "Identity" },
+    name: { id: "identity", label: "Identity" },
+    amount: { id: "value", label: "Value" },
+    start: { id: "timeline", label: "Timeline" },
+    end: { id: "timeline", label: "Timeline" },
+    updatedAt: { id: "timeline", label: "Timeline" },
+    stage: { id: "workflow", label: "Workflow" },
+    region: { id: "workflow", label: "Workflow" },
+    category: { id: "workflow", label: "Workflow" },
+    status: { id: "workflow", label: "Workflow" },
+    baselineStart: { id: "plan", label: "Plan" },
+    baselineEnd: { id: "plan", label: "Plan" },
+    progress: { id: "plan", label: "Plan" },
+    dependencies: { id: "plan", label: "Plan" },
+    critical: { id: "plan", label: "Plan" },
+  }
+  return built.map(column => {
+    const group = groups[column.key]
+    if (!group) return column
+    return {
+      ...column,
+      columnGroup: group,
+      initialState: {
+        ...column.initialState,
+        ...(column.key === "critical" ? { pin: "right" as const } : {}),
+      },
+    }
+  })
+})
 let syncViewportFromDom = (): void => {}
 
 const cloneRowData = <TRow,>(row: TRow): TRow => {

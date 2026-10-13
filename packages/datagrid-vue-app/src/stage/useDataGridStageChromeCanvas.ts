@@ -418,7 +418,18 @@ export function useDataGridStageChromeCanvas(
     options.bodyViewportTopOffset.value = Math.max(0, viewportRect.top - shellRect.top)
     options.headerShellHeight.value = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell")?.getBoundingClientRect().height ?? 0
     const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport")
-    options.headerViewportClientWidth.value = headerViewport?.clientWidth ?? options.bodyViewportClientWidth.value
+    if (headerViewport && viewportClientWidth > 0) {
+      const synchronizedWidth = `${viewportClientWidth}px`
+      if (headerViewport.style.width !== synchronizedWidth) {
+        headerViewport.style.width = synchronizedWidth
+      }
+      options.headerViewportClientWidth.value = viewportClientWidth
+      if (headerViewport.scrollLeft !== viewport.scrollLeft) {
+        headerViewport.scrollLeft = viewport.scrollLeft
+      }
+    } else {
+      options.headerViewportClientWidth.value = headerViewport?.clientWidth ?? viewportClientWidth
+    }
     syncPinnedBottomViewportMetrics()
     syncPinnedBottomViewportScrollLeft()
   }

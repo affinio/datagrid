@@ -1,5 +1,30 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("grouped headers retain body scroll offsets across animation frames and direction changes", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=1000&cols=32")
+  await expect(page.locator(".grid-header-row--pivot-groups").first()).toBeVisible()
+  await expect(page.locator(".grid-body-viewport .grid-row").first()).toBeVisible()
+  const samples = await page.evaluate(async () => {
+    const body = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+    const header = document.querySelector<HTMLElement>(".grid-header-viewport")!
+    const maximum = body.scrollWidth - body.clientWidth
+    const samples: Array<{ body: number; header: number }> = []
+    for (const fraction of [0.2, 0.7, 1, 0.5, 0, 0.9]) {
+      body.scrollLeft = maximum * fraction
+      body.dispatchEvent(new Event("scroll"))
+      for (let frame = 0; frame < 3; frame += 1) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+        samples.push({ body: body.scrollLeft, header: header.scrollLeft })
+      }
+    }
+    return { maximum, samples }
+  })
+  expect(samples.maximum).toBeGreaterThan(0)
+  for (const sample of samples.samples) {
+    expect(Math.abs(sample.header - sample.body)).toBeLessThanOrEqual(1)
+  }
+})
+
 test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () => {
   test("@a11y vue base grid exposes mounted grid semantics after scroll and pinning", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=32")

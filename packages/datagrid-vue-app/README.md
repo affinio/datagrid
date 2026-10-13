@@ -1758,7 +1758,8 @@ Notes:
 - Multiple flex columns share leftover available stage width by their flex weight.
 - If there is no free space, the column falls back to its base width.
 - Pinned and unpinned columns participate in the same effective width calculation.
-- `columnGroup` can be a string id, `{ id, label }`, or a nested path. The stage renders group headers across left-pinned, center, and right-pinned panes; visibility, resize, reorder, and pinning recalculate group spans from the current visible column snapshot.
+- `columnGroup` can be a string id, `{ id, label }`, or a nested path. The stage renders group headers across left-pinned, center, and right-pinned panes; visibility, resize, reorder, and pinning recalculate group spans from the current visible column snapshot. Labels start with a small inset from the group's left edge and remain visible at the left edge of the visible group while scrolling; their position is clamped at the group's right edge so text stays within the group. The label disappears when no part of its group remains visible, and ellipsis appears when the visible space is too narrow.
+- Each labeled group has a right-edge resize handle that resizes its last visible leaf column. It uses that column's normal min/max constraints, resize interaction, and persisted column state; adjacent groups share one handle at their common boundary.
 
 Unified column-state object:
 

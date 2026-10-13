@@ -273,6 +273,13 @@ body,
   margin: 0;
 }
 
+.grouped-header-demo-help {
+  margin: 0 0 8px;
+  color: var(--datagrid-muted-text-color, #5b6472);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;

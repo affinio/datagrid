@@ -176,6 +176,10 @@ export function useDataGridStageViewportRuntime(
     if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
       headerViewport.scrollLeft = scrollLeft
     }
+    const pinnedTopViewport = topViewportEl.value
+    if (pinnedTopViewport && pinnedTopViewport !== source && pinnedTopViewport.scrollLeft !== scrollLeft) {
+      pinnedTopViewport.scrollLeft = scrollLeft
+    }
     const pinnedBottomViewport = bottomViewportEl.value
     if (pinnedBottomViewport && pinnedBottomViewport !== source && pinnedBottomViewport.scrollLeft !== scrollLeft) {
       pinnedBottomViewport.scrollLeft = scrollLeft
@@ -501,7 +505,7 @@ export function useDataGridStageViewportRuntime(
       return
     }
     horizontalViewport.scrollLeft = element.scrollLeft
-    syncSharedHorizontalPeers(element.scrollLeft, element)
+    syncSharedHorizontalPeers(horizontalViewport.scrollLeft, horizontalViewport)
     markBodyViewportScrolling()
     const scrollState = readBodyViewportScrollState(verticalViewport)
     options.viewport.value.handleViewportScroll(createSharedViewportScrollEvent(verticalViewport, scrollState))

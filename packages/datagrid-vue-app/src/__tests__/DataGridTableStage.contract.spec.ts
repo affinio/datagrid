@@ -1359,6 +1359,19 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("preserves horizontal header position through header rerenders", async () => {
+    const props = createStageProps(() => false)
+    const wrapper = mount(DataGridTableStage, { props, attachTo: document.body })
+    const header = wrapper.get(".grid-header-viewport").element as HTMLElement
+    header.scrollLeft = 96.5
+
+    await wrapper.setProps({ columns: { ...props.columns, sortIndicator: () => "↑" } })
+
+    expect(header.scrollLeft).toBe(96.5)
+    expect(wrapper.get(".grid-header-viewport").element).toBe(header)
+    wrapper.unmount()
+  })
+
   it("renders accessible header roles, logical indexes, labels, and sort state", () => {
     const baseProps = createStageProps(() => false)
     const wrapper = mount(DataGridTableStage, {
@@ -1396,6 +1409,7 @@ describe("DataGridTableStage contract", () => {
   })
 
   it("renders column group headers across pinned and center panes", () => {
+    const startResize = vi.fn()
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
       props: createStageProps(() => false, {
@@ -1405,6 +1419,7 @@ describe("DataGridTableStage contract", () => {
           { key: "centerB", pin: "center", width: 130, groupPath: [{ id: "metrics", label: "Metrics", depth: 0 }], column: { key: "centerB", label: "Center B" } },
           { key: "right", pin: "right", width: 90, groupPath: [{ id: "actions", label: "Actions", depth: 0 }], column: { key: "right", label: "Right" } },
         ] as unknown as readonly DataGridColumnSnapshot[],
+        startResize,
       }),
     })
 
@@ -1413,6 +1428,19 @@ describe("DataGridTableStage contract", () => {
     expect(metricsGroup.exists()).toBe(true)
     expect(metricsGroup.attributes("data-datagrid-column-group-span")).toBe("2")
     expect(wrapper.find('.grid-header-pane--right [data-datagrid-column-group-label="Actions"]').exists()).toBe(true)
+    const resizeHandles = wrapper.findAll(".col-resize--group")
+    expect(resizeHandles).toHaveLength(3)
+    expect(resizeHandles.map(handle => handle.attributes("data-column-key"))).toEqual(["left", "centerB", "right"])
+    expect(resizeHandles.map(handle => handle.attributes("data-datagrid-resize-column-width"))).toEqual(["80", "130", "90"])
+    expect(resizeHandles.map(handle => handle.attributes("aria-label"))).toEqual([
+      "Resize Identity group",
+      "Resize Metrics group",
+      "Resize Actions group",
+    ])
+
+    resizeHandles[1]!.element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }))
+    expect(startResize).toHaveBeenCalledTimes(1)
+    expect(startResize.mock.calls[0]?.[1]).toBe("centerB")
 
     wrapper.unmount()
   })

@@ -41,6 +41,19 @@ Relevant tests:
 - `packages/datagrid-core/src/viewport/__tests__/horizontalUpdate.contract.spec.ts`
 - `packages/datagrid-core/src/viewport/__tests__/horizontalVirtualization.stress.contract.spec.ts`
 
+## Symptom: Header drifts from body near the end of horizontal scrolling
+
+Checks:
+- Compare the center header scrollport width with the body's measured horizontal viewport width. Classic vertical scrollbars can reduce the body width while leaving the header's natural grid width unchanged.
+- The app stage synchronizes the header scrollport width from the body viewport during its existing resize/metric sync path.
+- Header ref rebinding must preserve scroll position through Vue rerenders. After width synchronization, the header immediately receives the body's current offset again.
+- Body horizontal movement mirrors directly to the header and both pinned row viewports; peer-originated scrolling propagates the offset actually accepted by the body, including boundary clamping. Reactive state and chrome redraw stay frame-batched.
+
+Relevant test:
+- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
+- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+- `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+
 ## Symptom: Fill handle and selection rectangles are desynced
 
 Checks:

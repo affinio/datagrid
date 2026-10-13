@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.10.2
+
+### Fixed
+
+- Released the group-boundary resize initialization fix from `@affino/datagrid-orchestration@0.7.1` through the Vue adapter dependency chain.
+
+### Validation
+
+- Vue public build, type checks, and adapter contracts passed.
+
 ## 0.10.1
 
 ### Fixed

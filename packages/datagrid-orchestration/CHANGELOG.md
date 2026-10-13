@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.1
+
+### Fixed
+
+- Group-boundary resize now starts from the current width of the group's final visible leaf column, preventing a horizontal jump on the first pointer movement.
+
+### Validation
+
+- Header resize orchestration contract tests passed.
+
 ## 0.7.0
 
 ### Changed

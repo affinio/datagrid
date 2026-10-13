@@ -47,6 +47,7 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
 
 interface ResizeEventTargetLike {
   closest?: (selector: string) => ResizeDomRectHostLike | null
+  getAttribute?: (name: string) => string | null
   getBoundingClientRect?: () => { width?: number } | null | undefined
 }
 
@@ -64,6 +65,10 @@ function resolveRenderedColumnWidthFromEvent(event: MouseEvent): number | null {
   const target = event.currentTarget as ResizeEventTargetLike | null | undefined
   if (!target) {
     return null
+  }
+  const explicitWidth = Number(target.getAttribute?.("data-datagrid-resize-column-width"))
+  if (Number.isFinite(explicitWidth) && explicitWidth > 0) {
+    return explicitWidth
   }
   const cellWidth = readResizeHostWidth(target.closest?.(".grid-cell") ?? null)
   if (cellWidth !== null) {

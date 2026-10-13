@@ -192,6 +192,22 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
 
     orchestration.applyColumnResizeFromPointer(130)
     expect(applyColumnWidth).toHaveBeenLastCalledWith("service", 198)
+
+    orchestration.stopColumnResize()
+    orchestration.onHeaderResizeHandleMouseDown("service", {
+      button: 0,
+      clientX: 100,
+      currentTarget: {
+        getAttribute: (name: string) => name === "data-datagrid-resize-column-width" ? "124" : null,
+        closest: () => ({ getBoundingClientRect: () => ({ width: 600 }) }),
+      },
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent)
+    expect(orchestration.activeColumnResize.value?.startWidth).toBe(124)
+
+    orchestration.applyColumnResizeFromPointer(110)
+    expect(applyColumnWidth).toHaveBeenLastCalledWith("service", 134)
   })
 
   it("coalesces live resize updates in raf mode and flushes latest width", () => {

@@ -1,6 +1,19 @@
 # @affino/datagrid-vue-app
 
-## Unreleased
+## 0.14.0
+
+### Changed
+
+- Grouped header labels stay within the visible portion of their own group as horizontal scrolling clips its child columns, and use ellipsis when the visible fragment is narrow.
+- Added a small default inset before group label text and accessible group-boundary resize handles that resize the group's last visible leaf column through the existing resize and persistence path.
+- Header and body horizontal scrollports now remain aligned across rerenders, viewport resizing, pinned panes, and classic vertical scrollbars. Header width follows the measured body scrollport width.
+- Group-boundary resize now starts at the current leaf width to avoid a jump on initial pointer movement.
+
+### Validation
+
+- Group geometry and mounted stage contracts pass, including pinned panes and choosing the final leaf column for group resize.
+- Vue app type checks, build, unit/contract suite, and focused browser synchronization checks pass.
+- Release uses `@affino/datagrid-orchestration@0.7.1` and `@affino/datagrid-vue@0.10.2`.
 
 ## 0.13.1
 

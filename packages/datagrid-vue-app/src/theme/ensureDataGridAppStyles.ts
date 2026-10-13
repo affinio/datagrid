@@ -1708,6 +1708,8 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-cell--header-group {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2111,15 +2113,21 @@ body.datagrid-fill-drag-cursor * {
 
 .col-head__pivot-group-label {
   display: inline-block;
+  box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-left: 6px;
   font-size: 0.72rem;
   line-height: 1.1;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   opacity: 0.82;
+}
+
+.col-resize--group {
+  z-index: 5;
 }
 
 .grid-cell--header-group[data-datagrid-pivot-group-depth="0"] .col-head__pivot-group-label {

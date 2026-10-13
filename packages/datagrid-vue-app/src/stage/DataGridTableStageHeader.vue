@@ -1,8 +1,8 @@
 <template>
-  <div class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture">
+  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture">
     <slot name="center-chrome" />
 
-    <div class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
+    <div ref="leftPaneElement" class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="left-chrome" />
       <div
         v-for="(headerGroups, rowIndex) in leftHeaderGroupRows"
@@ -32,7 +32,8 @@
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
-          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+          <span v-if="group.label" class="col-head__pivot-group-label" :data-datagrid-group-label-measure-key="groupLabelMeasureKey(group, 'left', rowIndex)" :style="groupLabelStyle(group, 'left', rowIndex)">{{ group.label }}</span>
+          <button v-if="group.label && group.resizeColumnKey" type="button" class="col-resize col-resize--group" :aria-label="`Resize ${group.label} group`" :data-column-key="group.resizeColumnKey" :data-datagrid-resize-column-width="group.resizeColumnWidth" @mousedown.stop="startResize($event, group.resizeColumnKey)" @touchstart.stop.passive="startTouchResize($event, group.resizeColumnKey)" @touchmove.stop.prevent="handleTouchResizeMove" @touchend.stop="handleTouchResizeEnd" @touchcancel.stop="handleTouchResizeEnd" @dblclick.stop="handleResizeDoubleClick($event, group.resizeColumnKey)" @click.stop />
         </div>
       </div>
       <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
@@ -267,7 +268,8 @@
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
-          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+          <span v-if="group.label" class="col-head__pivot-group-label" :data-datagrid-group-label-measure-key="groupLabelMeasureKey(group, 'center', rowIndex)" :style="groupLabelStyle(group, 'center', rowIndex)">{{ group.label }}</span>
+          <button v-if="group.label && group.resizeColumnKey" type="button" class="col-resize col-resize--group" :aria-label="`Resize ${group.label} group`" :data-column-key="group.resizeColumnKey" :data-datagrid-resize-column-width="group.resizeColumnWidth" @mousedown.stop="startResize($event, group.resizeColumnKey)" @touchstart.stop.passive="startTouchResize($event, group.resizeColumnKey)" @touchmove.stop.prevent="handleTouchResizeMove" @touchend.stop="handleTouchResizeEnd" @touchcancel.stop="handleTouchResizeEnd" @dblclick.stop="handleResizeDoubleClick($event, group.resizeColumnKey)" @click.stop />
         </div>
         <div
           v-if="rightColumnSpacerWidth > 0"
@@ -424,7 +426,7 @@
       </div>
     </div>
 
-    <div class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="onLinkedViewportWheel">
+    <div ref="rightPaneElement" class="grid-header-pane grid-header-pane--right" :style="rightPaneStyle" @wheel="onLinkedViewportWheel">
       <slot name="right-chrome" />
       <div
         v-for="(headerGroups, rowIndex) in rightHeaderGroupRows"
@@ -448,7 +450,8 @@
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
-          <span v-if="group.label" class="col-head__pivot-group-label">{{ group.label }}</span>
+          <span v-if="group.label" class="col-head__pivot-group-label" :data-datagrid-group-label-measure-key="groupLabelMeasureKey(group, 'right', rowIndex)" :style="groupLabelStyle(group, 'right', rowIndex)">{{ group.label }}</span>
+          <button v-if="group.label && group.resizeColumnKey" type="button" class="col-resize col-resize--group" :aria-label="`Resize ${group.label} group`" :data-column-key="group.resizeColumnKey" :data-datagrid-resize-column-width="group.resizeColumnWidth" @mousedown.stop="startResize($event, group.resizeColumnKey)" @touchstart.stop.passive="startTouchResize($event, group.resizeColumnKey)" @touchmove.stop.prevent="handleTouchResizeMove" @touchend.stop="handleTouchResizeEnd" @touchcancel.stop="handleTouchResizeEnd" @dblclick.stop="handleResizeDoubleClick($event, group.resizeColumnKey)" @click.stop />
         </div>
       </div>
       <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
@@ -586,7 +589,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, type CSSProperties, type PropType } from "vue"
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties, type PropType } from "vue"
 import { useDataGridResizeClickGuard } from "@affino/datagrid-vue/advanced"
 import type { DataGridColumnMenuTriggerMode } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
@@ -604,6 +607,7 @@ import {
   DATA_GRID_STAGE_ROW_INDEX_HEADER_ID,
   resolveDataGridStageHeaderId,
 } from "./dataGridTableStageA11y"
+import { resolveDataGridGroupHeaderGeometry } from "./dataGridGroupHeaderGeometry"
 
 interface DataGridPivotHeaderMeta {
   groupLabels?: readonly string[]
@@ -616,6 +620,9 @@ interface DataGridHeaderGroup {
   label: string | null
   width: number
   columns: readonly TableColumn[]
+  start: number
+  resizeColumnKey: string | null
+  resizeColumnWidth: number | null
 }
 
 type DataGridHeaderAriaSort = "ascending" | "descending" | "none"
@@ -696,8 +703,17 @@ const columnHeaderGroupDepth = computed(() => visibleColumns.value.reduce((maxDe
 ), 0))
 const headerGroupDepth = computed(() => Math.max(pivotHeaderGroupDepth.value, columnHeaderGroupDepth.value))
 const hasHeaderGroups = computed(() => headerGroupDepth.value > 0)
-const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedLeftColumns.value))
-const centerHeaderGroupRows = computed(() => buildHeaderGroupRows(centerHeaderColumns.value))
+const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(
+  pinnedLeftColumns.value,
+  props.showIndexColumn ? Number.parseFloat(String(props.rowIndexColumnStyle.width ?? "0")) || 0 : 0,
+))
+const centerHeaderGroupRows = computed(() => {
+  const groups = buildHeaderGroupRows(centerHeaderColumns.value, viewport.value.leftColumnSpacerWidth)
+  if (viewport.value.rightColumnSpacerWidth <= 0) return groups
+  return groups.map(row => row.map((group, index) => index === row.length - 1
+    ? { ...group, resizeColumnKey: null }
+    : group))
+})
 const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
 const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
 const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
@@ -709,8 +725,71 @@ const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
 let suppressHeaderClick = false
 let activeTouchResizeId: number | null = null
 const resizeClickGuard = useDataGridResizeClickGuard()
+const headerShellElement = ref<HTMLElement | null>(null)
+const leftPaneElement = ref<HTMLElement | null>(null)
+const rightPaneElement = ref<HTMLElement | null>(null)
+const centerScrollLeft = ref(0)
+const paneWidths = ref({ left: 0, center: 0, right: 0 })
+const groupLabelWidths = ref<Record<string, number>>({})
+let groupHeaderFrame: number | null = null
+let groupHeaderResizeObserver: ResizeObserver | null = null
+function syncGroupHeaderGeometry(): void {
+  groupHeaderFrame = null
+  centerScrollLeft.value = centerHeaderViewportElement?.scrollLeft ?? 0
+  paneWidths.value = {
+    left: leftPaneElement.value?.clientWidth ?? 0,
+    center: centerHeaderViewportElement?.clientWidth ?? 0,
+    right: rightPaneElement.value?.clientWidth ?? 0,
+  }
+}
+function scheduleGroupHeaderGeometry(): void {
+  if (groupHeaderFrame != null || typeof window === "undefined") return
+  groupHeaderFrame = window.requestAnimationFrame(syncGroupHeaderGeometry)
+}
+let centerHeaderViewportElement: HTMLElement | null = null
+function groupLabelMeasureKey(group: DataGridHeaderGroup, pane: "left" | "center" | "right", depth: number): string {
+  return `${pane}:${depth}:${group.key}`
+}
+function measureGroupLabelWidths(): void {
+  const labels = headerShellElement.value?.querySelectorAll<HTMLElement>("[data-datagrid-group-label-measure-key]")
+  const nextWidths: Record<string, number> = {}
+  for (const label of Array.from(labels ?? [])) {
+    const key = label.dataset.datagridGroupLabelMeasureKey
+    const width = label.scrollWidth
+    if (key && width > 0) {
+      nextWidths[key] = width
+    }
+  }
+  const currentKeys = Object.keys(groupLabelWidths.value)
+  const nextKeys = Object.keys(nextWidths)
+  if (currentKeys.length !== nextKeys.length || nextKeys.some(key => groupLabelWidths.value[key] !== nextWidths[key])) {
+    groupLabelWidths.value = nextWidths
+  }
+}
+onMounted(() => {
+  syncGroupHeaderGeometry()
+  void nextTick(measureGroupLabelWidths)
+  if (typeof ResizeObserver !== "undefined") {
+    groupHeaderResizeObserver = new ResizeObserver(scheduleGroupHeaderGeometry)
+    for (const element of [leftPaneElement.value, rightPaneElement.value, centerHeaderViewportElement]) {
+      if (element) groupHeaderResizeObserver.observe(element)
+    }
+  }
+  window.addEventListener("resize", scheduleGroupHeaderGeometry, { passive: true })
+})
+watch(
+  [leftHeaderGroupRows, centerHeaderGroupRows, rightHeaderGroupRows],
+  () => measureGroupLabelWidths(),
+  { flush: "post" },
+)
 onBeforeUnmount(() => {
   resizeClickGuard.dispose()
+  groupHeaderResizeObserver?.disconnect()
+  groupHeaderResizeObserver = null
+  if (typeof window !== "undefined") {
+    window.removeEventListener("resize", scheduleGroupHeaderGeometry)
+    if (groupHeaderFrame != null) window.cancelAnimationFrame(groupHeaderFrame)
+  }
 })
 
 function hasColumnMenu(): boolean {
@@ -862,6 +941,7 @@ function resolveColumnGroupLabel(column: TableColumn, depth: number): string | n
 
 function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): readonly DataGridHeaderGroup[] {
   const groups: DataGridHeaderGroup[] = []
+  let start = 0
   for (const column of columnsList) {
     const label = resolveColumnGroupLabel(column, depth)
     const width = resolveColumnWidth(column)
@@ -869,6 +949,9 @@ function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): 
     if (previous && previous.label === label) {
       previous.width += width
       previous.columns = [...previous.columns, column]
+      previous.resizeColumnKey = column.key
+      previous.resizeColumnWidth = width
+      start += width
       continue
     }
     groups.push({
@@ -876,18 +959,22 @@ function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): 
       label,
       width,
       columns: [column],
+      start,
+      resizeColumnKey: label ? column.key : null,
+      resizeColumnWidth: label ? width : null,
     })
+    start += width
   }
   return groups
 }
 
-function buildHeaderGroupRows(columnsList: readonly TableColumn[]): readonly (readonly DataGridHeaderGroup[])[] {
+function buildHeaderGroupRows(columnsList: readonly TableColumn[], initialOffset = 0): readonly (readonly DataGridHeaderGroup[])[] {
   if (!hasHeaderGroups.value) {
     return []
   }
   const rows: Array<readonly DataGridHeaderGroup[]> = []
   for (let depth = 0; depth < headerGroupDepth.value; depth += 1) {
-    rows.push(buildHeaderGroups(columnsList, depth))
+    rows.push(buildHeaderGroups(columnsList, depth).map(group => ({ ...group, start: group.start + initialOffset })))
   }
   return rows
 }
@@ -899,6 +986,26 @@ function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
     minWidth: width,
     maxWidth: width,
     textAlign: "center",
+  }
+}
+
+function groupLabelStyle(group: DataGridHeaderGroup, pane: "left" | "center" | "right", depth: number): CSSProperties {
+  const viewportWidth = paneWidths.value[pane]
+  const scrollLeft = pane === "center" ? centerScrollLeft.value : 0
+  const geometry = resolveDataGridGroupHeaderGeometry({
+    groupStart: group.start,
+    groupWidth: group.width,
+    scrollLeft,
+    viewportWidth,
+    labelWidth: groupLabelWidths.value[groupLabelMeasureKey(group, pane, depth)] ?? 0,
+  })
+  if (!geometry.visible) return { display: "none" }
+  return {
+    position: "absolute",
+    left: `${geometry.left}px`,
+    width: `${geometry.width}px`,
+    maxWidth: `${geometry.width}px`,
+    textAlign: geometry.alignment,
   }
 }
 
@@ -997,8 +1104,16 @@ function headerViewportRef(value: Element | { $el?: unknown } | null): void {
       : value && "$el" in value && value.$el instanceof HTMLElement
         ? value.$el
         : null
-  if (element && element.scrollLeft !== 0) {
-    element.scrollLeft = 0
+  if (centerHeaderViewportElement === element) return
+  if (centerHeaderViewportElement) {
+    centerHeaderViewportElement.removeEventListener("scroll", scheduleGroupHeaderGeometry)
+    groupHeaderResizeObserver?.unobserve(centerHeaderViewportElement)
+  }
+  centerHeaderViewportElement = element
+  if (element) {
+    element.addEventListener("scroll", scheduleGroupHeaderGeometry, { passive: true })
+    if (groupHeaderResizeObserver) groupHeaderResizeObserver.observe(element)
+    scheduleGroupHeaderGeometry()
   }
   viewport.value.headerViewportRef(value as never)
 }

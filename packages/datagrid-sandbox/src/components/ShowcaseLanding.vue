@@ -51,6 +51,12 @@ const groups: ShowcaseGroup[] = [
     description: "Feature demos for data modeling, analytics, formulas, and planning.",
     demos: [
       {
+        title: "Grouped Header Resize",
+        to: "/vue/grouped-header-grid",
+        description: "Inspect clipped group labels, pinned panes, and resizing a group's final visible column.",
+        meta: "Column groups",
+      },
+      {
         title: "Grouped Operations",
         to: "/vue/shell/grouped-grid",
         description: "Group rows and inspect aggregate-backed parent rows.",

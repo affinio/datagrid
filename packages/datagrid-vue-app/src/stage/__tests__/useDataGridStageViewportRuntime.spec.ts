@@ -536,7 +536,7 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
-  it("syncs header and pinned bottom from the center owner", () => {
+  it("syncs header and both pinned row viewports immediately from the center owner", () => {
     const stageRoot = document.createElement("section")
     const headerViewport = createViewportElement()
     headerViewport.className = "grid-header-viewport"
@@ -545,17 +545,45 @@ describe("useDataGridStageViewportRuntime", () => {
     const bodyViewport = createViewportElement({ scrollLeft: 96 })
     const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
     const pinnedBottomViewport = createViewportElement()
+    const pinnedTopViewport = createViewportElement()
 
     harness.runtime.captureBodyViewportRef(bodyViewport)
     harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
     harness.runtime.capturePinnedBottomViewportRef(pinnedBottomViewport)
+    harness.runtime.capturePinnedTopViewportRef(pinnedTopViewport)
     vi.mocked(harness.syncers.syncPinnedBottomViewportScrollLeft).mockClear()
     harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
 
     expect(headerViewport.scrollLeft).toBe(96)
     expect(pinnedBottomViewport.scrollLeft).toBe(96)
+    expect(pinnedTopViewport.scrollLeft).toBe(96)
     expect(sharedVerticalViewport.scrollLeft).toBe(0)
 
+    harness.unmount()
+  })
+
+  it("mirrors the body's accepted offset back to pinned rows when a peer exceeds the body's scroll limit", () => {
+    const stageRoot = document.createElement("section")
+    const header = createViewportElement()
+    header.className = "grid-header-viewport"
+    stageRoot.append(header)
+    const harness = createHarness({ stageRoot })
+    const body = createViewportElement()
+    let acceptedLeft = 0
+    Object.defineProperty(body, "scrollLeft", {
+      get: () => acceptedLeft,
+      set: (value: number) => { acceptedLeft = Math.max(0, Math.min(100.5, value)) },
+    })
+    const top = createViewportElement()
+    const bottom = createViewportElement()
+    harness.runtime.captureBodyViewportRef(body)
+    harness.runtime.capturePinnedTopViewportRef(top)
+    harness.runtime.capturePinnedBottomViewportRef(bottom)
+
+    top.scrollLeft = 130
+    harness.runtime.handlePinnedTopViewportScroll({ target: top } as unknown as Event)
+
+    expect([body.scrollLeft, header.scrollLeft, top.scrollLeft, bottom.scrollLeft]).toEqual([100.5, 100.5, 100.5, 100.5])
     harness.unmount()
   })
 

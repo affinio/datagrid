@@ -28,6 +28,11 @@ const routes = [
     props: { title: "Vue: Base Grid (Adapter)", mode: "base" },
   },
   {
+    path: "/vue/grouped-header-grid",
+    component: VueGridCard,
+    props: { title: "Vue: Grouped Header Resize Check", mode: "base", groupedHeaderShowcase: true },
+  },
+  {
     path: "/vue/tree-grid",
     component: VueGridCard,
     props: { title: "Vue: Tree Grid", mode: "tree" },

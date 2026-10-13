@@ -53,17 +53,28 @@ function installCanvasContextMock(): CanvasContextStub {
   return context
 }
 
-function createChromeCanvasApi(perfTraceEnabled = false) {
-  const stageRoot = document.createElement("div")
+function createChromeCanvasApi(
+  perfTraceEnabled = false,
+  elements: {
+    stageRoot?: HTMLElement
+    bodyShell?: HTMLElement
+    bodyViewport?: HTMLElement
+    verticalBodyViewport?: HTMLElement
+  } = {},
+) {
+  const stageRoot = elements.stageRoot ?? document.createElement("div")
   document.body.append(stageRoot)
+  const bodyShell = elements.bodyShell ?? document.createElement("div")
+  const bodyViewport = elements.bodyViewport ?? document.createElement("div")
+  const verticalBodyViewport = elements.verticalBodyViewport ?? document.createElement("div")
 
   const canvasRefs = Array.from({ length: 9 }, () => ref(document.createElement("canvas")))
 
   return useDataGridStageChromeCanvas({
     stageRootEl: ref(stageRoot),
-    bodyShellRef: ref(document.createElement("div")),
-    bodyViewportEl: ref(document.createElement("div")),
-    verticalBodyViewportEl: ref(document.createElement("div")),
+    bodyShellRef: ref(bodyShell),
+    bodyViewportEl: ref(bodyViewport),
+    verticalBodyViewportEl: ref(verticalBodyViewport),
     bottomViewportEl: ref(document.createElement("div")),
     leftHeaderChromeCanvasEl: canvasRefs[0]!,
     centerHeaderChromeCanvasEl: canvasRefs[1]!,
@@ -121,6 +132,35 @@ describe("useDataGridStageChromeCanvas", () => {
       bodyBandCount: 3,
       pinnedBottomBandCount: 3,
     })
+  })
+
+  it("sets the header scrollport width to the body width after a classic vertical scrollbar reduces it", () => {
+    const stageRoot = document.createElement("div")
+    const headerViewport = document.createElement("div")
+    headerViewport.className = "grid-header-viewport"
+    Object.defineProperty(headerViewport, "clientWidth", { configurable: true, value: 640 })
+    stageRoot.append(headerViewport)
+
+    const bodyShell = document.createElement("div")
+    Object.defineProperty(bodyShell, "clientWidth", { configurable: true, value: 640 })
+    const bodyViewport = document.createElement("div")
+    Object.defineProperty(bodyViewport, "clientWidth", { configurable: true, value: 625 })
+    Object.defineProperty(bodyViewport, "clientHeight", { configurable: true, value: 400 })
+    bodyShell.append(bodyViewport)
+    bodyViewport.scrollLeft = 375
+    headerViewport.scrollLeft = 360
+
+    const api = createChromeCanvasApi(false, {
+      stageRoot,
+      bodyShell,
+      bodyViewport,
+      verticalBodyViewport: bodyViewport,
+    })
+
+    api.syncBodyViewportMetrics()
+
+    expect(headerViewport.style.width).toBe("625px")
+    expect(headerViewport.scrollLeft).toBe(375)
   })
 
   it("records merged chrome redraw sources when a pending full redraw is flushed", () => {
