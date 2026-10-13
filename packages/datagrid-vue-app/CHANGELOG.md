@@ -1,5 +1,20 @@
 # @affino/datagrid-vue-app
 
+## 0.14.2
+
+### Fixed
+
+- Group header bands now keep stable identities across horizontal virtualization windows and retain measured label widths, preventing grouped text from unmounting or flashing during fast scroll.
+- Columns without a title at the trailing group levels (including the row index and ungrouped columns) span those empty levels so the header content remains vertically centered without blank horizontal dividers.
+- System checkbox headers use the same header surface as neighboring columns, and canvas-backed grouped headers draw one vertical divider per boundary with the shared header divider color.
+- Newly visible grouped-header labels render immediately with a bounded first-frame width while their precise text width is measured.
+- Untitled leaf headers such as Extra columns now paint above empty group bands, keeping their vertically centered labels visible.
+- The center horizontal scroll owner and grid stage suppress horizontal boundary overscroll to prevent a left-edge trackpad gesture from triggering browser back navigation.
+
+### Validation
+
+- Vue app type-check, package build, focused scroll/header contracts, and grouped-header browser regressions passed.
+
 ## 0.14.1
 
 ### Fixed

@@ -43,7 +43,7 @@ Completed in Phase 1:
 - Scroll sampling cleanup: body scroll handling samples `scrollTop` / `scrollLeft` once per raw scroll event and reuses the captured state for owner-level vertical offset sync, pinned-bottom sync, and chrome redraw mode selection.
 - Resize metric batching: window resize metric sync is rAF-batched so resize bursts do not run layout metric reads directly from the resize event.
 - Header scroll ownership cleanup: the center body remains the horizontal owner; the header no longer forwards header-origin scroll events into the body, and horizontal header wheel intent routes through the linked-wheel path into the center owner.
-- Center header horizontal sync: the center header is externally owned by the table stage and mirrors the center horizontal owner through native `scrollLeft` with native cell dividers; horizontal overscroll is contained on grid scroll surfaces to avoid macOS elastic drift and browser history navigation.
+- Center header horizontal sync: the center header is externally owned by the table stage and mirrors the center horizontal owner through native `scrollLeft` with native cell dividers. The center horizontal owner and grid stage suppress horizontal boundary overscroll (`overscroll-behavior-x: none`) to prevent browser history navigation; vertical touch panning remains native.
 - Body virtual row shell recycling: center and pinned body panes now use fixed row-offset slots for virtual body windows, reducing row/cell DOM mount churn and DOM moves during large vertical window replacement while keeping pinned top/bottom rows row-keyed. Native non-interactive renderer VNodes patch in place inside recycled cells, while component, array, and interactive native renderer outputs stay keyed by row identity.
 
 Still open:

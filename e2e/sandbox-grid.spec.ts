@@ -7,6 +7,8 @@ test("grouped headers retain body scroll offsets across animation frames and dir
   const samples = await page.evaluate(async () => {
     const body = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
     const header = document.querySelector<HTMLElement>(".grid-header-viewport")!
+    const overscrollBehaviorX = getComputedStyle(body).overscrollBehaviorX
+    const stageOverscrollBehaviorX = getComputedStyle(body.closest<HTMLElement>(".grid-stage")!).overscrollBehaviorX
     const maximum = body.scrollWidth - body.clientWidth
     const samples: Array<{ body: number; header: number }> = []
     for (const fraction of [0.2, 0.7, 1, 0.5, 0, 0.9]) {
@@ -17,9 +19,11 @@ test("grouped headers retain body scroll offsets across animation frames and dir
         samples.push({ body: body.scrollLeft, header: header.scrollLeft })
       }
     }
-    return { maximum, samples }
+    return { maximum, samples, overscrollBehaviorX, stageOverscrollBehaviorX }
   })
   expect(samples.maximum).toBeGreaterThan(0)
+  expect(samples.overscrollBehaviorX).toBe("none")
+  expect(samples.stageOverscrollBehaviorX).toBe("none")
   for (const sample of samples.samples) {
     expect(Math.abs(sample.header - sample.body)).toBeLessThanOrEqual(1)
   }
@@ -37,6 +41,7 @@ test("group labels follow the visible group edge in the same frame during rapid 
     const group = label.parentElement!
     const maximum = body.scrollWidth - body.clientWidth
     const measurements: Array<{ actual: number; expected: number; visibleWidth: number; scrollLeft: number; groupLeft: number }> = []
+    const visibleLabelWidths: number[] = []
 
     for (let step = 1; step <= 48; step += 1) {
       body.scrollLeft = maximum * step / 48
@@ -54,15 +59,117 @@ test("group labels follow the visible group edge in the same frame during rapid 
         const expected = Math.min(visibleEnd - labelWidth, Math.max(visibleStart, groupRect.left))
         measurements.push({ actual: labelRect.left, expected, visibleWidth, scrollLeft: header.scrollLeft, groupLeft: groupRect.left })
       }
+      for (const visibleLabel of Array.from(header.querySelectorAll<HTMLElement>(".grid-header-row--pivot-groups .col-head__pivot-group-label"))) {
+        const visibleGroup = visibleLabel.parentElement!.getBoundingClientRect()
+        if (Math.min(visibleGroup.right, viewportRect.right) > Math.max(visibleGroup.left, viewportRect.left)) {
+          visibleLabelWidths.push(visibleLabel.getBoundingClientRect().width)
+        }
+      }
     }
 
-    return measurements
+    return { measurements, visibleLabelWidths }
   })
 
-  expect(samples.length).toBeGreaterThan(0)
-  for (const sample of samples) {
+  expect(samples.measurements.length).toBeGreaterThan(0)
+  expect(samples.visibleLabelWidths.length).toBeGreaterThan(0)
+  expect(samples.visibleLabelWidths.every(width => width > 0)).toBe(true)
+  for (const sample of samples.measurements) {
     expect(Math.abs(sample.actual - sample.expected), JSON.stringify(sample)).toBeLessThanOrEqual(1)
   }
+})
+
+test("a partially visible group's header node stays mounted while its columns virtualize", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=100&cols=128")
+  const target = page.locator('.grid-header-viewport [data-datagrid-column-group-label="Identity"] .col-head__pivot-group-label').first()
+  await expect(target).toBeVisible()
+  const mergedIndexGeometry = await page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>(".grid-header-pane--left")!
+    const groupBand = shell.querySelector<HTMLElement>(".grid-header-row--pivot-groups")!
+    const index = shell.querySelector<HTMLElement>(".grid-cell--index-header[role='columnheader']")!
+    const groupRect = groupBand.getBoundingClientRect()
+    const indexRect = index.getBoundingClientRect()
+    const leafRect = shell.querySelector<HTMLElement>(".grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--index-header")!.getBoundingClientRect()
+    const contentRect = index.querySelector<HTMLElement>(".col-head")!.getBoundingClientRect()
+    const expectedContentCenter = (groupRect.top + leafRect.bottom) / 2
+    const emptyGroupBorders = Array.from(document.querySelectorAll<HTMLElement>(".grid-header-row--pivot-groups .grid-cell--header-group-empty"))
+      .map(cell => getComputedStyle(cell).borderBottomColor)
+    const checkboxHeader = document.querySelector<HTMLElement>(".grid-header-shell .grid-cell--row-selection")
+    const regularHeader = document.querySelector<HTMLElement>(".grid-header-viewport .grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--header[data-column-key]")
+    const centerHeaderBorders = Array.from(document.querySelectorAll<HTMLElement>(".grid-header-viewport .grid-header-row .grid-cell:not(:first-child)"))
+      .map(cell => {
+        const style = getComputedStyle(cell)
+        return {
+          width: Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.borderRightWidth),
+          color: Number.parseFloat(style.borderLeftWidth) > 0 ? style.borderLeftColor : style.borderRightColor,
+        }
+      })
+    return {
+      contentCenterOffset: contentRect.top + contentRect.height / 2 - expectedContentCenter,
+      groupHeight: groupRect.height,
+      leafHeight: leafRect.height,
+      merged: index.classList.contains("grid-cell--header-merged-untitled"),
+      emptyGroupBorders,
+      hasCheckboxHeader: Boolean(checkboxHeader),
+      checkboxBackground: checkboxHeader ? getComputedStyle(checkboxHeader).backgroundColor : null,
+      regularBackground: regularHeader ? getComputedStyle(regularHeader).backgroundColor : null,
+      centerHeaderBorders,
+    }
+  })
+  expect(mergedIndexGeometry.merged).toBe(true)
+  expect(Math.abs(mergedIndexGeometry.contentCenterOffset), JSON.stringify(mergedIndexGeometry)).toBeLessThanOrEqual(1)
+  expect(mergedIndexGeometry.emptyGroupBorders.length).toBeGreaterThan(0)
+  expect(mergedIndexGeometry.emptyGroupBorders.every(color => color === "rgba(0, 0, 0, 0)")).toBe(true)
+  expect(mergedIndexGeometry.hasCheckboxHeader).toBe(true)
+  if (mergedIndexGeometry.checkboxBackground && mergedIndexGeometry.regularBackground) {
+    expect(mergedIndexGeometry.checkboxBackground).toBe(mergedIndexGeometry.regularBackground)
+  }
+  expect(mergedIndexGeometry.centerHeaderBorders.length).toBeGreaterThan(0)
+  expect(Math.max(...mergedIndexGeometry.centerHeaderBorders.map(border => border.width))).toBeLessThanOrEqual(1.1)
+  expect(new Set(mergedIndexGeometry.centerHeaderBorders.map(border => border.color)).size).toBeLessThanOrEqual(1)
+  const stayedMounted = await page.evaluate(async () => {
+    const body = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+    const header = document.querySelector<HTMLElement>(".grid-header-viewport")!
+    const selector = '.grid-header-viewport [data-datagrid-column-group-label="Identity"] .col-head__pivot-group-label'
+    const original = header.querySelector<HTMLElement>(selector)
+    if (!original) return false
+    for (const scrollLeft of [24, 56, 96, 144, 192]) {
+      body.scrollLeft = scrollLeft
+      body.dispatchEvent(new Event("scroll"))
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      if (!original.isConnected || header.querySelector(selector) !== original || original.textContent !== "Identity") return false
+    }
+    return true
+  })
+  expect(stayedMounted).toBe(true)
+})
+
+test("untitled Extra headers render above the empty grouped-header bands", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=100&cols=32")
+  const body = page.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
+  await body.evaluate(element => {
+    const viewport = element as HTMLElement
+    viewport.scrollLeft = viewport.scrollWidth
+    viewport.dispatchEvent(new Event("scroll"))
+  })
+
+  const extraHeader = page.locator('.grid-header-viewport .grid-header-row:not(.grid-header-row--pivot-groups) [data-column-key^="extra_"]').first()
+  await expect(extraHeader).toBeVisible()
+  await expect(extraHeader.locator(".col-head__label")).toContainText("Extra")
+  const visibleText = await extraHeader.evaluate(element => {
+    const label = element.querySelector<HTMLElement>(".col-head__label")!
+    const rect = label.getBoundingClientRect()
+    const header = element.closest<HTMLElement>(".grid-header-viewport")!
+    const viewport = header.getBoundingClientRect()
+    const leafRow = element.parentElement!
+    return {
+      labelHeight: rect.height,
+      labelInsideViewportVertically: rect.top >= viewport.top && rect.bottom <= viewport.bottom,
+      rowZIndex: getComputedStyle(leafRow).zIndex,
+    }
+  })
+  expect(visibleText.labelHeight).toBeGreaterThan(0)
+  expect(visibleText.labelInsideViewportVertically, JSON.stringify(visibleText)).toBe(true)
+  expect(visibleText.rowZIndex).toBe("7")
 })
 
 test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () => {

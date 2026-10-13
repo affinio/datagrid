@@ -29,6 +29,7 @@
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
           :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-id="group.key"
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
@@ -40,7 +41,8 @@
         <div
           v-if="showIndexColumn"
           class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
-          :style="rowIndexColumnStyle"
+          :class="{ 'grid-cell--header-merged-untitled': headerGroupDepth > 0 }"
+          :style="indexColumnHeaderStyle"
           :id="DATA_GRID_STAGE_ROW_INDEX_HEADER_ID"
           role="columnheader"
           aria-colindex="1"
@@ -56,7 +58,8 @@
             <div
               v-if="isRowSelectionColumn(column)"
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0 }"
+              :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
@@ -83,7 +86,7 @@
               v-else
               class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
               :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
@@ -155,7 +158,8 @@
             <div
               v-if="isRowSelectionColumn(column)"
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0 }"
+              :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
@@ -182,7 +186,7 @@
               v-else
               class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-left"
               :class="resolveHeaderCellClasses(column)"
-              :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+              :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
               v-bind="headerCellA11y(column)"
@@ -265,6 +269,7 @@
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
           :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-id="group.key"
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
@@ -289,7 +294,7 @@
             :key="`header-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable"
             :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :style="headerColumnStyle(column)"
             :data-column-key="column.key"
             :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
@@ -368,7 +373,7 @@
             :key="`header-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable"
             :class="resolveHeaderCellClasses(column)"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :style="headerColumnStyle(column)"
             :data-column-key="column.key"
             :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
@@ -447,6 +452,7 @@
           :data-datagrid-pivot-group-span="group.columns.length"
           :data-datagrid-pivot-group-depth="rowIndex"
           :data-datagrid-column-group-label="group.label ?? undefined"
+          :data-datagrid-column-group-id="group.key"
           :data-datagrid-column-group-span="group.columns.length"
           :data-datagrid-column-group-depth="rowIndex"
         >
@@ -461,7 +467,7 @@
             :key="`header-right-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
             :class="resolveHeaderCellClasses(column, { menuEnabled: true, menuOpen: isColumnMenuOpen(column.key) })"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :style="headerColumnStyle(column)"
             :data-column-key="column.key"
             :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
@@ -540,7 +546,7 @@
             :key="`header-right-${column.key}`"
             class="grid-cell grid-cell--header grid-cell--header-sortable grid-cell--pinned-right"
             :class="resolveHeaderCellClasses(column)"
-            :style="[columnStyle(column.key), headerCellPresentationStyle(column)]"
+            :style="headerColumnStyle(column)"
             :data-column-key="column.key"
             :id="headerCellId(column)"
             v-bind="headerCellA11y(column)"
@@ -619,10 +625,12 @@ interface DataGridHeaderGroup {
   key: string
   label: string | null
   width: number
-  columns: readonly TableColumn[]
+  columns: TableColumn[]
   start: number
   resizeColumnKey: string | null
   resizeColumnWidth: number | null
+  renderedWidth?: number
+  renderedStart?: number
 }
 
 type DataGridHeaderAriaSort = "ascending" | "descending" | "none"
@@ -687,6 +695,8 @@ const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>
 const visibleColumns = computed(() => columns.value.visibleColumns)
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const centerHeaderColumns = computed(() => renderedColumns.value)
+const allCenterHeaderColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
+const allCenterHeaderWidth = computed(() => allCenterHeaderColumns.value.reduce((sum, column) => sum + resolveColumnWidth(column), 0))
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 const interactionModeInput = computed(() => ({
@@ -711,12 +721,23 @@ const leftHeaderGroupRows = computed(() => buildHeaderGroupRows(
   pinnedLeftColumns.value,
   props.showIndexColumn ? Number.parseFloat(String(props.rowIndexColumnStyle.width ?? "0")) || 0 : 0,
 ))
+const allCenterHeaderGroupRows = computed(() => buildHeaderGroupRows(allCenterHeaderColumns.value))
 const centerHeaderGroupRows = computed(() => {
-  const groups = buildHeaderGroupRows(centerHeaderColumns.value, viewport.value.leftColumnSpacerWidth)
-  if (viewport.value.rightColumnSpacerWidth <= 0) return groups
-  return groups.map(row => row.map((group, index) => index === row.length - 1
-    ? { ...group, resizeColumnKey: null }
-    : group))
+  const windowStart = viewport.value.leftColumnSpacerWidth
+  const totalWidth = allCenterHeaderWidth.value
+  const windowEnd = Math.max(windowStart, totalWidth - viewport.value.rightColumnSpacerWidth)
+  return allCenterHeaderGroupRows.value.map(row => row.flatMap(group => {
+    const groupEnd = group.start + group.width
+    const renderedStart = Math.max(group.start, windowStart)
+    const renderedEnd = Math.min(groupEnd, windowEnd)
+    if (renderedEnd <= renderedStart) return []
+    return [{
+      ...group,
+      renderedStart,
+      renderedWidth: renderedEnd - renderedStart,
+      resizeColumnKey: renderedEnd >= groupEnd ? group.resizeColumnKey : null,
+    }]
+  }))
 })
 const rightHeaderGroupRows = computed(() => buildHeaderGroupRows(pinnedRightColumns.value))
 const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
@@ -759,13 +780,17 @@ function groupLabelMeasureKey(group: DataGridHeaderGroup, pane: "left" | "center
 }
 function measureGroupLabelWidths(): void {
   const labels = headerShellElement.value?.querySelectorAll<HTMLElement>("[data-datagrid-group-label-measure-key]")
-  const nextWidths: Record<string, number> = {}
+  const nextWidths: Record<string, number> = { ...groupLabelWidths.value }
   for (const label of Array.from(labels ?? [])) {
     const key = label.dataset.datagridGroupLabelMeasureKey
     const width = label.scrollWidth
     if (key && width > 0) {
       nextWidths[key] = width
     }
+  }
+  const keys = Object.keys(nextWidths)
+  if (keys.length > 512) {
+    for (const key of keys.slice(0, keys.length - 512)) delete nextWidths[key]
   }
   const currentKeys = Object.keys(groupLabelWidths.value)
   const nextKeys = Object.keys(nextWidths)
@@ -870,6 +895,7 @@ function resolveHeaderCellClasses(
     "grid-cell--header-menu-enabled": options.menuEnabled === true,
     "grid-cell--header-menu-open": options.menuOpen === true,
     "grid-cell--header-reorderable": isHeaderColumnDraggable(column),
+    "grid-cell--header-merged-untitled": trailingEmptyHeaderGroupDepth(column) > 0,
     "grid-cell--header-reorder-source": draggedHeaderColumnKey.value === column.key,
     "grid-cell--header-drop-before": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "before",
     "grid-cell--header-drop-after": dragOverHeaderColumnKey.value === column.key && dragOverHeaderPlacement.value === "after",
@@ -955,7 +981,7 @@ function buildHeaderGroups(columnsList: readonly TableColumn[], depth: number): 
     const previous = groups[groups.length - 1]
     if (previous && previous.label === label) {
       previous.width += width
-      previous.columns = [...previous.columns, column]
+      previous.columns.push(column)
       previous.resizeColumnKey = column.key
       previous.resizeColumnWidth = width
       start += width
@@ -987,7 +1013,7 @@ function buildHeaderGroupRows(columnsList: readonly TableColumn[], initialOffset
 }
 
 function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
-  const width = `${Math.max(0, group.width)}px`
+  const width = `${Math.max(0, group.renderedWidth ?? group.width)}px`
   return {
     width,
     minWidth: width,
@@ -999,22 +1025,56 @@ function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
 function groupLabelStyle(group: DataGridHeaderGroup, pane: "left" | "center" | "right", depth: number): CSSProperties {
   const viewportWidth = paneWidths.value[pane]
   const scrollLeft = pane === "center" ? props.centerScrollLeft : 0
+  const measureKey = groupLabelMeasureKey(group, pane, depth)
+  const measuredLabelWidth = groupLabelWidths.value[measureKey]
   const geometry = resolveDataGridGroupHeaderGeometry({
     groupStart: group.start,
     groupWidth: group.width,
     scrollLeft,
     viewportWidth,
-    labelWidth: groupLabelWidths.value[groupLabelMeasureKey(group, pane, depth)] ?? 0,
+    labelWidth: measuredLabelWidth ?? estimateGroupLabelWidth(group.label ?? ""),
   })
   if (!geometry.visible) return { display: "none" }
   return {
     position: "absolute",
-    left: `${geometry.left}px`,
+    left: `${geometry.left - ((group.renderedStart ?? group.start) - group.start)}px`,
     width: `${geometry.width}px`,
     maxWidth: `${geometry.width}px`,
     textAlign: geometry.alignment,
   }
 }
+
+function estimateGroupLabelWidth(label: string): number {
+  // Give newly virtualized labels a useful first-frame width before their DOM
+  // width is measured after mount. This prevents a visible group from flashing
+  // an empty label while preserving the measured width on the next render.
+  return Math.max(12, label.length * 8 + 12)
+}
+
+function trailingEmptyHeaderGroupDepth(column: TableColumn): number {
+  let emptyDepth = 0
+  for (let depth = headerGroupDepth.value - 1; depth >= 0; depth -= 1) {
+    if (resolveColumnGroupLabel(column, depth)) break
+    emptyDepth += 1
+  }
+  return emptyDepth
+}
+
+function mergedHeaderCellStyle(depth: number): CSSProperties {
+  return depth > 0 ? {
+    "--datagrid-header-merge-offset": `${depth * 34}px`,
+    "--datagrid-header-merge-center-offset": `${depth * 17}px`,
+  } as CSSProperties : {}
+}
+
+function headerColumnStyle(column: TableColumn): CSSProperties[] {
+  return [columnStyle(column.key), headerCellPresentationStyle(column), mergedHeaderCellStyle(trailingEmptyHeaderGroupDepth(column))]
+}
+
+const indexColumnHeaderStyle = computed<CSSProperties>(() => ({
+  ...props.rowIndexColumnStyle,
+  ...mergedHeaderCellStyle(headerGroupDepth.value),
+}))
 
 function sortIndicator(columnKey: string): string {
   return columns.value.sortIndicator(columnKey)

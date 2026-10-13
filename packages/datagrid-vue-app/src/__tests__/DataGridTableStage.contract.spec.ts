@@ -1445,6 +1445,32 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("merges untitled header levels into the column header and vertically centers its content", () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: [
+          { key: "nested", pin: "center", width: 120, groupPath: [{ id: "system", label: "System", depth: 0 }], column: { key: "nested", label: "Nested" } },
+          { key: "extra1", pin: "center", width: 130, column: { key: "extra1", label: "Extra 1" } },
+          { key: "deep", pin: "center", width: 130, groupPath: [{ id: "system", label: "System", depth: 0 }, { id: "detail", label: "Detail", depth: 1 }], column: { key: "deep", label: "Deep" } },
+        ] as unknown as readonly DataGridColumnSnapshot[],
+      }),
+    })
+
+    const extraHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="extra1"]')
+    const nestedHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="nested"]')
+    const indexHeader = wrapper.find(".grid-header-pane--left .grid-cell--index-header[role='columnheader']")
+
+    expect(extraHeader.classes()).toContain("grid-cell--header-merged-untitled")
+    expect(extraHeader.attributes("style")).toContain("--datagrid-header-merge-offset: 68px")
+    expect(nestedHeader.classes()).toContain("grid-cell--header-merged-untitled")
+    expect(nestedHeader.attributes("style")).toContain("--datagrid-header-merge-offset: 34px")
+    expect(indexHeader.classes()).toContain("grid-cell--header-merged-untitled")
+    expect(indexHeader.attributes("style")).toContain("--datagrid-header-merge-offset: 68px")
+
+    wrapper.unmount()
+  })
+
   it("renders stable sanitized header and body cell ids across panes and remounts", async () => {
     const visibleColumns = [
       { key: "left%", pin: "left", width: 80, column: { key: "left%", label: "Left" } },

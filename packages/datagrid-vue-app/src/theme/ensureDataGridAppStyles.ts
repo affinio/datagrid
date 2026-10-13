@@ -956,6 +956,7 @@ const DATA_GRID_APP_STYLES = `
   border: 0;
   border-radius: 8px;
   overflow: hidden;
+  overscroll-behavior-x: none;
   background: var(--datagrid-background-color);
 }
 
@@ -1012,6 +1013,7 @@ const DATA_GRID_APP_STYLES = `
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-x: none;
   position: relative;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;
@@ -1066,7 +1068,7 @@ const DATA_GRID_APP_STYLES = `
   max-height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  overscroll-behavior-x: contain;
+  overscroll-behavior-x: none;
   touch-action: pan-x pan-y;
 }
 
@@ -1695,8 +1697,17 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-header-row--pivot-groups {
+  height: 34px;
+  min-height: 34px;
   position: relative;
   z-index: 6;
+}
+
+/* Merged untitled leaf headers extend above their row to cover empty group
+   levels. Raise the row stacking context so that content is not clipped by
+   the group-band rows above it. */
+.grid-header-shell--pivot-groups .grid-header-row:not(.grid-header-row--pivot-groups) {
+  z-index: 7;
 }
 
 .grid-header-shell--pivot-groups .grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--header {
@@ -1705,6 +1716,11 @@ body.datagrid-fill-drag-cursor * {
 
 .grid-header-shell--pivot-groups .grid-header-row--pivot-groups .grid-cell--header-group {
   border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+}
+
+.grid-stage--canvas-chrome .grid-header-shell--pivot-groups .grid-header-viewport .grid-cell,
+.grid-stage--canvas-chrome .grid-header-shell--pivot-groups .grid-header-viewport .grid-column-spacer {
+  border-right: 0;
 }
 
 .grid-cell--header-group {
@@ -1736,6 +1752,51 @@ body.datagrid-fill-drag-cursor * {
 
 .grid-cell--header-group-empty {
   color: transparent;
+  border-bottom-color: transparent;
+}
+
+.grid-cell--header-merged-untitled {
+  isolation: isolate;
+  position: relative;
+  z-index: 7;
+}
+
+.grid-cell--header-merged-untitled::before {
+  content: "";
+  position: absolute;
+  inset: calc(0px - var(--datagrid-header-merge-offset, 0px)) 0 0;
+  z-index: -1;
+  background: var(--datagrid-header-cell-bg);
+  pointer-events: none;
+}
+
+.grid-cell--pinned-left.grid-cell--header-merged-untitled::before {
+  background: var(--datagrid-pinned-left-bg);
+}
+
+.grid-cell--pinned-right.grid-cell--header-merged-untitled::before {
+  background: var(--datagrid-pinned-right-bg);
+}
+
+.grid-cell--header-merged-untitled > * {
+  position: relative;
+  top: calc(0px - var(--datagrid-header-merge-center-offset, 0px));
+}
+
+.grid-cell--header.grid-cell--checkbox {
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-cell--header.grid-cell--checkbox {
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-cell--header.grid-cell--checkbox.grid-cell--header-merged-untitled::before {
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-cell--header.grid-cell--checkbox.grid-cell--header-merged-untitled::before {
+  background: var(--datagrid-header-cell-bg);
 }
 
 .grid-cell--pinned-left,

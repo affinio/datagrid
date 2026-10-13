@@ -41,6 +41,18 @@ describe("ensureDataGridAppStyles", () => {
     expect(styleText).toContain(".grid-stage--canvas-chrome .grid-header-viewport .grid-cell:not(:first-child),")
     expect(styleText).toContain("border-left: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color)")
     expect(styleText).toContain(".grid-body-center-horizontal-scrollport--scroll-owner")
+    const horizontalOwnerStart = styleText.indexOf(".grid-body-center-horizontal-scrollport--scroll-owner {")
+    const horizontalOwnerEnd = styleText.indexOf("}", horizontalOwnerStart)
+    const horizontalOwnerRule = horizontalOwnerStart >= 0 && horizontalOwnerEnd > horizontalOwnerStart
+      ? styleText.slice(horizontalOwnerStart, horizontalOwnerEnd)
+      : ""
+    expect(horizontalOwnerRule).toContain("overscroll-behavior-x: none")
+    const stageStart = styleText.indexOf(".grid-stage {\n  display: grid;")
+    const stageEnd = styleText.indexOf("}", stageStart)
+    const stageRule = stageStart >= 0 && stageEnd > stageStart
+      ? styleText.slice(stageStart, stageEnd)
+      : ""
+    expect(stageRule).toContain("overscroll-behavior-x: none")
     expect(styleText).toContain(".datagrid-empty-state--viewport")
     expect(styleText).toContain("position: sticky")
     expect(styleText).toContain("left: 0")
