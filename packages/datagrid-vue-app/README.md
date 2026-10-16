@@ -1497,6 +1497,15 @@ Supported preset names:
 - `industrialNeutral`
 - `sugar`
 
+Live canvas chrome follows changes to the `theme` prop and, for configurations
+that inherit from the document, changes to `document.documentElement`'s
+`data-theme` attribute or configured dark-mode class. The app applies the theme
+tokens before invalidating the stage palette, then batches a full header, body,
+and pinned-bottom chrome redraw. Static CSS custom-property overrides are
+supported before rendering; changing CSS variables through another class,
+inline-style, or stylesheet mutation does not notify the canvas runtime. Use
+the `theme` prop or the document theme attributes for live theme switching.
+
 ## Unified State
 
 The public component exposes full grid state round-tripping.

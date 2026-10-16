@@ -198,6 +198,38 @@ describe("useDataGridStageChromeCanvas", () => {
     cancelAnimationFrameSpy.mockRestore()
   })
 
+  it("refreshes an invalidated theme palette and keeps the full redraw for every pane", () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined)
+    const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      getPropertyValue: () => "",
+    } as unknown as CSSStyleDeclaration)
+    const api = createChromeCanvasApi(true)
+
+    api.flushGridChromeRedraw("full", "stage-mounted")
+    getComputedStyleSpy.mockClear()
+    api.invalidateGridChromeStyle()
+    api.scheduleGridChromeRedraw("full", "theme-change")
+    api.scheduleGridChromeRedraw("body-scroll", "scroll-frame")
+
+    expect(frameCallbacks).toHaveLength(1)
+    frameCallbacks[0]?.(0)
+    expect(getComputedStyleSpy).toHaveBeenCalled()
+    expect(resolveDataGridPerfStore()?.latest("chromeDraw")).toMatchObject({
+      redrawMode: "full",
+      redrawSources: "theme-change|scroll-frame",
+      drawnPaneCount: 9,
+    })
+
+    requestAnimationFrameSpy.mockRestore()
+    cancelAnimationFrameSpy.mockRestore()
+    getComputedStyleSpy.mockRestore()
+  })
+
   it("reuses cached chrome styles for body scroll redraws", () => {
     const getComputedStyleSpy = vi.spyOn(window, "getComputedStyle").mockReturnValue({
       getPropertyValue: () => "",

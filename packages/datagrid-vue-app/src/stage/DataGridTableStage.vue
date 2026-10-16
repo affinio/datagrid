@@ -278,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -317,6 +317,7 @@ import {
   resolveTextAlign,
 } from "./dataGridTableStageHelpers"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
+import { dataGridAppThemeRevisionKey } from "../dataGridAppContext"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 import { resolveDataGridPerfTraceEnabled } from "../perf/dataGridPerfTrace"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
@@ -1259,6 +1260,7 @@ const emptyOverlaySegments = computed(() => [])
 const emptyOverlayLanes = computed(() => [])
 
 const stageRootEl = ref<HTMLElement | null>(null)
+const themeRevision = inject(dataGridAppThemeRevisionKey, null)
 const bodyShellRef = ref<HTMLElement | null>(null)
 const leftPaneContentRef = ref<HTMLElement | null>(null)
 const rightPaneContentRef = ref<HTMLElement | null>(null)
@@ -1731,6 +1733,7 @@ const {
   syncPinnedBottomViewportScrollLeft,
   scheduleGridChromeRedraw,
   flushGridChromeRedraw,
+  invalidateGridChromeStyle,
   connectGridChromeResizeObserver,
   disconnectGridChromeResizeObserver,
 } = useDataGridStageChromeCanvas({
@@ -1814,6 +1817,19 @@ watch(
     void nextTick(() => {
       syncBodyViewportMetrics()
       scheduleGridChromeRedraw("full", "chrome-signature")
+    })
+  },
+)
+
+watch(
+  () => themeRevision?.value,
+  (revision, previousRevision) => {
+    if (revision == null || revision === previousRevision) {
+      return
+    }
+    invalidateGridChromeStyle()
+    void nextTick(() => {
+      scheduleGridChromeRedraw("full", "theme-change")
     })
   },
 )

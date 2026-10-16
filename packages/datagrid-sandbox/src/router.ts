@@ -11,6 +11,7 @@ import VueServerDataSourceGridCard from "./components/VueServerDataSourceGridCar
 import VueShellGridCard from "./components/VueShellGridCard.vue"
 import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
 import VueTypedFacadeGridCard from "./components/VueTypedFacadeGridCard.vue"
+import ThemeCanvasGridFixture from "./components/ThemeCanvasGridFixture.vue"
 import WorldMapDemo from "./features/world-map/WorldMapDemo.vue"
 
 const routes = [
@@ -31,6 +32,10 @@ const routes = [
     path: "/vue/grouped-header-grid",
     component: VueGridCard,
     props: { title: "Vue: Grouped Header Resize Check", mode: "base", groupedHeaderShowcase: true },
+  },
+  {
+    path: "/vue/theme-canvas-grid",
+    component: ThemeCanvasGridFixture,
   },
   {
     path: "/vue/tree-grid",

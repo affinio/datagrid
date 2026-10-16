@@ -32,7 +32,7 @@ import {
   resolveDataGridThemeTokens,
   type DataGridThemeProp,
 } from "../theme/dataGridTheme"
-import { dataGridAppRootElementKey } from "../dataGridAppContext"
+import { dataGridAppRootElementKey, dataGridAppThemeRevisionKey } from "../dataGridAppContext"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 
@@ -43,11 +43,9 @@ type DataGridRuntimeOverrides = Omit<
   viewport?: DataGridCoreServiceRegistry["viewport"]
 }
 
-type DataGridThemeStyleVars = Record<string, string>
-
-function resolveDataGridThemeStyleVars(theme: DataGridThemeProp): DataGridThemeStyleVars {
+function resolveDataGridThemeStyleVars(theme: DataGridThemeProp): Record<string, string> {
   const tokens = resolveDataGridThemeTokens(theme)
-  const style: DataGridThemeStyleVars = {}
+  const style: Record<string, string> = {}
   for (const [tokenKey, cssVar] of Object.entries(THEME_TOKEN_VARIABLE_MAP)) {
     const value = tokens[tokenKey as keyof DataGridThemeTokens]
     if (value != null) {
@@ -55,6 +53,12 @@ function resolveDataGridThemeStyleVars(theme: DataGridThemeProp): DataGridThemeS
     }
   }
   return style
+}
+
+function haveSameDataGridThemeTokens(left: DataGridThemeTokens, right: DataGridThemeTokens): boolean {
+  const keys = Object.keys(left) as Array<keyof DataGridThemeTokens>
+  return keys.length === Object.keys(right).length
+    && keys.every(key => Object.is(left[key], right[key]))
 }
 
 export interface DataGridFocusAnchor<TRowKey = DataGridRowId> {
@@ -200,6 +204,17 @@ export default defineComponent({
   setup(props, { attrs, slots, emit, expose }) {
     const rootElementRef = ref<HTMLElement | null>(null)
     provide(dataGridAppRootElementKey, rootElementRef)
+    const themeRevision = ref(0)
+    provide(dataGridAppThemeRevisionKey, themeRevision)
+    let lastAppliedThemeTokens: DataGridThemeTokens | null = null
+    const applyThemeAndNotify = (rootElement: HTMLElement): void => {
+      const nextTokens = applyDataGridTheme(rootElement, props.theme)
+      if (lastAppliedThemeTokens && haveSameDataGridThemeTokens(lastAppliedThemeTokens, nextTokens)) {
+        return
+      }
+      lastAppliedThemeTokens = nextTokens
+      themeRevision.value += 1
+    }
     let themeObserver: MutationObserver | null = null
     const runtime = useDataGridRuntime({
       rows: computed(() => props.rows),
@@ -267,7 +282,7 @@ export default defineComponent({
         if (!rootElement) {
           return
         }
-        applyDataGridTheme(rootElement, props.theme)
+        applyThemeAndNotify(rootElement)
       })
       themeObserver.observe(document.documentElement, {
         attributes: true,
@@ -282,7 +297,7 @@ export default defineComponent({
         if (!rootElement) {
           return
         }
-        applyDataGridTheme(rootElement, props.theme)
+        applyThemeAndNotify(rootElement)
       },
       { immediate: true, deep: true },
     )

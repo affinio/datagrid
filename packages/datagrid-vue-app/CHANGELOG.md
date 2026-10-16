@@ -1,5 +1,15 @@
 # @affino/datagrid-vue-app
 
+## 0.14.4
+
+### Fixed
+
+- Reactive document and `theme` prop changes now invalidate the cached canvas palette and coalesce into a full chrome redraw, updating pinned headers, body panes, and pinned-bottom canvases without resetting grid state. Equal effective tokens do not schedule a redraw.
+
+### Validation
+
+- Vue app type-check, focused theme/canvas contracts, sandbox type-check, and browser pixel regressions for document attributes, class-based dark mode, reactive and fixed theme props, multiple grids, scrolled selection, and pinned-bottom panes pass.
+
 ## 0.14.3
 
 ### Performance

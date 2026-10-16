@@ -49,6 +49,7 @@ export interface UseDataGridStageChromeCanvasResult {
   syncPinnedBottomViewportScrollLeft: () => void
   scheduleGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
   flushGridChromeRedraw: (mode?: GridChromeRedrawMode, source?: GridChromeRedrawSource) => void
+  invalidateGridChromeStyle: () => void
   connectGridChromeResizeObserver: () => void
   disconnectGridChromeResizeObserver: () => void
 }
@@ -387,6 +388,10 @@ export function useDataGridStageChromeCanvas(
     return cachedGridChromeStyle
   }
 
+  function invalidateGridChromeStyle(): void {
+    cachedGridChromeStyle = null
+  }
+
   function syncPinnedBottomViewportScrollLeft(): void {
     const viewport = options.bottomViewportEl.value
     if (!viewport || viewport.scrollLeft === options.bodyViewportScrollLeft.value) {
@@ -652,6 +657,7 @@ export function useDataGridStageChromeCanvas(
     syncPinnedBottomViewportScrollLeft,
     scheduleGridChromeRedraw,
     flushGridChromeRedraw,
+    invalidateGridChromeStyle,
     connectGridChromeResizeObserver,
     disconnectGridChromeResizeObserver,
   }

@@ -8616,6 +8616,24 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("disconnects the document theme observer when the grid unmounts", async () => {
+    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect")
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        theme: "default",
+      },
+    })
+
+    await flushRuntimeTasks()
+    disconnect.mockClear()
+    wrapper.unmount()
+
+    expect(disconnect).toHaveBeenCalled()
+    disconnect.mockRestore()
+  })
+
   it("applies declarative grid line presets to layout chrome vars", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,

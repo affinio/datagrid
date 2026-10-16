@@ -1,5 +1,181 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("document and reactive theme changes repaint canvas chrome for every mounted grid", async ({ page }) => {
+  await page.goto("/vue/theme-canvas-grid?dgPerfTrace=1")
+  const stages = page.locator("[data-testid^='theme-grid-'] .grid-stage")
+  await expect(stages).toHaveCount(2)
+  await expect(page.locator(".grid-body-shell--pinned-bottom")).toHaveCount(0)
+  await expect(page.locator(".grid-body-pane--left")).toHaveCount(2)
+  await expect(page.locator(".grid-body-pane--right")).toHaveCount(2)
+
+  const readCanvasSignatures = async (): Promise<number[][]> => page.evaluate(() => {
+    const hashCanvas = (canvas: HTMLCanvasElement): number => {
+      if (canvas.width === 0 || canvas.height === 0) return 0
+      const sample = document.createElement("canvas")
+      sample.width = 128
+      sample.height = 128
+      const context = sample.getContext("2d")
+      if (!context) return 0
+      context.drawImage(canvas, 0, 0, sample.width, sample.height)
+      const { data } = context.getImageData(0, 0, sample.width, sample.height)
+      let hash = 2166136261
+      for (let index = 0; index < data.length; index += 4) {
+        if (data[index + 3] === 0) continue
+        hash = Math.imul(hash ^ data[index]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 1]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 2]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 3]!, 16777619)
+      }
+      return hash >>> 0
+    }
+    return Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='theme-grid-'] .grid-stage"), stage =>
+      Array.from(stage.querySelectorAll<HTMLCanvasElement>("canvas.grid-chrome-canvas"), hashCanvas),
+    )
+  })
+  const waitForPaint = async (): Promise<void> => {
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  }
+  const changedCanvasCount = (before: number[][], after: number[][]): number[] => before.map((grid, gridIndex) =>
+    grid.reduce((count, hash, canvasIndex) => count + (hash !== after[gridIndex]?.[canvasIndex] ? 1 : 0), 0),
+  )
+
+  await page.evaluate(() => { document.documentElement.dataset.theme = "light" })
+  await waitForPaint()
+  const light = await readCanvasSignatures()
+  const selectedCell = page.locator('[data-testid="theme-grid-first"] .grid-body-viewport .grid-cell[data-column-key="value"]').first()
+  await selectedCell.evaluate(element => {
+    element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1 }))
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }))
+  })
+  const selectedRowId = await selectedCell.getAttribute("data-row-id")
+  const selectedCellWidthBefore = await selectedCell.evaluate(element => element.getBoundingClientRect().width)
+  await page.evaluate(() => {
+    const store = (window as typeof window & { __AFFINO_DATAGRID_PERF__?: { samples: unknown[] } }).__AFFINO_DATAGRID_PERF__
+    if (store) store.samples.length = 0
+  })
+  const scrollBeforeTheme = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-testid="theme-grid-first"]')!
+    const stage = root.querySelector<HTMLElement>(".grid-stage")!
+    const vertical = stage.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")!
+    const horizontal = stage.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+    ;(window as typeof window & { __themeCanvasGridRoot?: HTMLElement }).__themeCanvasGridRoot = root
+    vertical.scrollTop = 31
+    vertical.dispatchEvent(new Event("scroll", { bubbles: true }))
+    horizontal.scrollLeft = Math.min(100, horizontal.scrollWidth - horizontal.clientWidth)
+    horizontal.dispatchEvent(new Event("scroll", { bubbles: true }))
+    document.documentElement.dataset.theme = "dark"
+    document.documentElement.dataset.theme = "light"
+    document.documentElement.dataset.theme = "dark"
+    return { top: vertical.scrollTop, left: horizontal.scrollLeft }
+  })
+  await expect.poll(async () => changedCanvasCount(light, await readCanvasSignatures())).toEqual([3, 3])
+  const themeDraws = await page.evaluate(() => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { samples: Array<Record<string, string | number>> }
+    }).__AFFINO_DATAGRID_PERF__
+    return store?.samples.filter(sample => sample.scope === "chromeDraw" && String(sample.redrawSources).includes("theme-change")) ?? []
+  })
+  expect(themeDraws).toHaveLength(2)
+  expect(themeDraws.every(sample => sample.redrawMode === "full")).toBe(true)
+  expect(themeDraws.map(sample => Number(sample.drawnPaneCount))).toEqual([4, 4])
+  const stateAfterTheme = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-testid="theme-grid-first"]')!
+    const stage = root.querySelector<HTMLElement>(".grid-stage")!
+    return {
+      sameRoot: (window as typeof window & { __themeCanvasGridRoot?: HTMLElement }).__themeCanvasGridRoot === root,
+      top: stage.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")!.scrollTop,
+      left: stage.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!.scrollLeft,
+      selectedCellWidth: stage.querySelector<HTMLElement>(".grid-cell.grid-cell--selection-anchor[data-column-key='value']")?.getBoundingClientRect().width ?? 0,
+    }
+  })
+  expect(stateAfterTheme).toMatchObject({ sameRoot: true, ...scrollBeforeTheme })
+  expect(stateAfterTheme.selectedCellWidth).toBe(selectedCellWidthBefore)
+  await expect(page.locator(`[data-testid="theme-grid-first"] .grid-cell[data-row-id="${selectedRowId}"][data-column-key="value"]`)).toHaveClass(/grid-cell--selection-anchor/)
+
+  await page.evaluate(() => {
+    document.documentElement.dataset.theme = "light"
+    document.documentElement.classList.remove("dark")
+  })
+  await waitForPaint()
+  const lightScrolled = await readCanvasSignatures()
+  await page.evaluate(() => {
+    delete document.documentElement.dataset.theme
+    document.documentElement.classList.add("dark")
+  })
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
+
+  await page.evaluate(() => document.documentElement.classList.remove("dark"))
+  await page.getByTestId("theme-prop-industrial").click()
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
+
+  await page.getByTestId("theme-prop-default").click()
+  await waitForPaint()
+  const defaultProp = await readCanvasSignatures()
+  await page.getByTestId("theme-prop-fixed").click()
+  await waitForPaint()
+  const fixedTheme = await readCanvasSignatures()
+  await page.evaluate(() => {
+    const store = (window as typeof window & { __AFFINO_DATAGRID_PERF__?: { samples: unknown[] } }).__AFFINO_DATAGRID_PERF__
+    if (store) store.samples.length = 0
+  })
+  await page.evaluate(() => { document.documentElement.dataset.theme = "dark" })
+  await waitForPaint()
+  expect(await readCanvasSignatures()).toEqual(fixedTheme)
+  const fixedThemeRedraws = await page.evaluate(() => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { samples: Array<Record<string, string | number>> }
+    }).__AFFINO_DATAGRID_PERF__
+    return store?.samples.filter(sample => sample.scope === "chromeDraw" && String(sample.redrawSources).includes("theme-change")).length ?? 0
+  })
+  expect(fixedThemeRedraws).toBe(0)
+  expect(defaultProp).not.toEqual(fixedTheme)
+})
+
+test("document theme changes repaint pinned-bottom canvas chrome", async ({ page }) => {
+  await gotoSandboxRoute(page, "/vue/shell/timesheet-grid?dgPerfTrace=1")
+  const bottom = page.locator(".grid-body-shell--pinned-bottom").first()
+  await expect(bottom).toBeVisible()
+  await expect(bottom.locator("canvas.grid-chrome-canvas")).toHaveCount(3)
+
+  const readBottomCanvasSignatures = async (): Promise<number[]> => bottom.locator("canvas.grid-chrome-canvas").evaluateAll(canvases =>
+    canvases.map(element => {
+      const canvas = element as HTMLCanvasElement
+      if (canvas.width === 0 || canvas.height === 0) return 0
+      const sample = document.createElement("canvas")
+      sample.width = 128
+      sample.height = 64
+      const context = sample.getContext("2d")!
+      context.drawImage(canvas, 0, 0, sample.width, sample.height)
+      const { data } = context.getImageData(0, 0, sample.width, sample.height)
+      let hash = 2166136261
+      for (let index = 0; index < data.length; index += 4) {
+        if (data[index + 3] === 0) continue
+        hash = Math.imul(hash ^ data[index]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 1]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 2]!, 16777619)
+        hash = Math.imul(hash ^ data[index + 3]!, 16777619)
+      }
+      return hash >>> 0
+    }),
+  )
+  const waitForPaint = async (): Promise<void> => {
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+  }
+
+  await page.evaluate(() => { document.documentElement.dataset.theme = "light" })
+  await waitForPaint()
+  const light = await readBottomCanvasSignatures()
+  await page.evaluate(() => { document.documentElement.dataset.theme = "dark" })
+  await expect.poll(readBottomCanvasSignatures).not.toEqual(light)
+  const draw = await page.evaluate(() => {
+    const store = (window as typeof window & {
+      __AFFINO_DATAGRID_PERF__?: { samples: Array<Record<string, string | number>> }
+    }).__AFFINO_DATAGRID_PERF__
+    return store?.samples.filter(sample => sample.scope === "chromeDraw" && String(sample.redrawSources).includes("theme-change")).at(-1) ?? null
+  })
+  expect(draw).toMatchObject({ redrawMode: "full" })
+})
+
 test("right-pinned checkbox indicators do not animate recycled row states during vertical scroll", async ({ page }) => {
   await gotoSandboxRoute(page, "/vue/grouped-header-grid?rows=1000&cols=32")
   const stage = page.locator(".grid-stage").first()

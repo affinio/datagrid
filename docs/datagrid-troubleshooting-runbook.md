@@ -55,6 +55,17 @@ Relevant test:
 - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
 - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
 
+## Symptom: Pinned canvas chrome keeps the previous theme
+
+Checks:
+- The default theme observes `data-theme` and the configured dark-mode class on `document.documentElement`; custom themes update through the `theme` prop.
+- Successful changes to the resolved theme tokens invalidate the cached canvas palette and schedule one full chrome redraw. A full redraw covers pinned header/body panes and pinned-bottom chrome; pinned-top rows use DOM rendering and inherit the updated CSS variables.
+- Direct live CSS variable changes from unrelated classes, inline styles, or stylesheet replacement do not trigger canvas invalidation. Use the `theme` prop or the observed document attributes for reactive switching.
+- Equal resolved tokens do not schedule a redraw, including document changes under a non-inheriting explicit theme.
+
+Relevant browser regression:
+- `e2e/sandbox-grid.spec.ts` (`document and reactive theme changes repaint canvas chrome for every mounted grid`, `document theme changes repaint pinned-bottom canvas chrome`)
+
 ## Symptom: Fill handle and selection rectangles are desynced
 
 Checks:
