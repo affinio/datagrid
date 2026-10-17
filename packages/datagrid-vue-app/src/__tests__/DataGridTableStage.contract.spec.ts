@@ -129,6 +129,11 @@ function createStageProps(
     selectionRange?: DataGridOverlayRange | null
     selectionRanges?: readonly DataGridOverlayRange[]
     selectionAnchorCell?: { rowIndex: number; columnIndex: number } | null
+    selectColumn?: (columnIndex: number) => void
+    selectColumnRange?: (startColumnIndex: number, endColumnIndex: number) => void
+    selectCell?: (rowIndex: number, columnIndex: number) => void
+    selectColumnThroughRow?: (rowIndex: number, columnIndex: number) => void
+    clearCellSelection?: () => void
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
     fillHandleEnabled?: boolean
@@ -274,6 +279,11 @@ function createStageProps(
       selectionRanges: options?.selectionRanges,
       selectionAnchorCell,
       totalRowCount: options?.totalRowCount ?? rows.length + pinnedBottomRows.length,
+      selectColumn: options?.selectColumn,
+      selectColumnRange: options?.selectColumnRange,
+      selectCell: options?.selectCell,
+      selectColumnThroughRow: options?.selectColumnThroughRow,
+      clearCellSelection: options?.clearCellSelection,
       fillPreviewRange: options?.fillPreviewRange ?? null,
       rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
       fillHandleEnabled: options?.fillHandleEnabled ?? false,
@@ -1404,6 +1414,56 @@ describe("DataGridTableStage contract", () => {
     expect(sortedHeader.attributes("aria-label")).toBe("Center B, sorted descending")
     expect(sortedHeader.find(".col-resize").attributes("aria-label")).toBe("Resize Center B column")
     expect(filteredHeader.find(".col-filter-input").attributes("aria-label")).toBe("Filter Center A column")
+
+    wrapper.unmount()
+  })
+
+  it("moves keyboard focus into headers and selects the focused body column", async () => {
+    const toggleSortForColumn = vi.fn()
+    const selectColumn = vi.fn()
+    const selectColumnRange = vi.fn()
+    const selectCell = vi.fn()
+    const selectColumnThroughRow = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        totalRowCount: 2,
+        selectColumn,
+        selectColumnRange,
+        selectCell,
+        selectColumnThroughRow,
+        toggleSortForColumn,
+      }),
+    })
+    await nextTick()
+
+    const bodyCell = wrapper.get('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="centerA"]')
+    const centerAHeader = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+    const centerBHeader = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerB"]')
+
+    expect(centerAHeader.attributes("tabindex")).toBe("-1")
+    await bodyCell.trigger("keydown", { key: "ArrowUp" })
+    expect(document.activeElement).toBe(centerAHeader.element)
+    expect(selectColumn).toHaveBeenLastCalledWith(1)
+
+    await centerAHeader.trigger("keydown", { key: "ArrowRight" })
+    expect(document.activeElement).toBe(centerBHeader.element)
+    expect(selectColumn).toHaveBeenLastCalledWith(2)
+
+    await centerBHeader.trigger("keydown", { key: "ArrowLeft", shiftKey: true })
+    expect(selectColumnRange).toHaveBeenCalledWith(2, 1)
+    expect(document.activeElement).toBe(centerAHeader.element)
+
+    await centerBHeader.trigger("keydown", { key: "Enter" })
+    expect(toggleSortForColumn).toHaveBeenCalledWith("centerB", false)
+
+    await centerBHeader.trigger("keydown", { key: "ArrowDown" })
+    expect(selectCell).toHaveBeenCalledWith(0, 2)
+
+    await centerAHeader.trigger("keydown", { key: "ArrowDown", shiftKey: true })
+    expect(selectColumnThroughRow).toHaveBeenCalledWith(1, 1)
 
     wrapper.unmount()
   })
@@ -3453,10 +3513,13 @@ describe("DataGridTableStage contract", () => {
 
   it("separates row checkbox column from the row-number cell and routes number clicks to full-row selection", async () => {
     const handleRowIndexClick = vi.fn()
+    const handleToggleAllVisibleRows = vi.fn()
+    const clearCellSelection = vi.fn()
     const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const
     const baseProps = createStageProps(() => false, {
       selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 },
       visibleColumns,
+      clearCellSelection,
     })
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -3469,7 +3532,7 @@ describe("DataGridTableStage contract", () => {
         rows: {
           ...baseProps.rows,
           handleRowIndexClick,
-          handleToggleAllVisibleRows: () => undefined,
+          handleToggleAllVisibleRows,
           isRowCheckboxSelected: row => row.rowId === "r1",
         },
         cells: {
@@ -3488,6 +3551,15 @@ describe("DataGridTableStage contract", () => {
     expect(rowSelectionHeader.exists()).toBe(true)
     expect(rowSelectionHeader.find(".col-resize").exists()).toBe(false)
     expect(wrapper.find(".grid-body-pane--left .grid-cell--row-selection[role='checkbox']").exists()).toBe(true)
+    const selectAllButton = rowSelectionHeader.get(".grid-checkbox-trigger")
+    await wrapper.get('.grid-header-pane--left .grid-cell--header[data-column-key="left"]').trigger("keydown", { key: "ArrowLeft" })
+    expect(clearCellSelection).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(selectAllButton.element)
+    await selectAllButton.trigger("keydown", { key: "ArrowDown" })
+    expect(document.activeElement).toBe(wrapper.get('.grid-body-pane--left .grid-cell--row-selection[data-row-index="0"]').element)
+    await selectAllButton.trigger("keydown", { key: " " })
+    await selectAllButton.trigger("keydown", { key: "Enter" })
+    expect(handleToggleAllVisibleRows).toHaveBeenCalledTimes(2)
 
     const indexCell = wrapper.find(".grid-body-pane--left .grid-cell--index-number")
     expect(indexCell.classes()).toContain("grid-cell--index-selected")

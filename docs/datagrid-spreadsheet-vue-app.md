@@ -107,6 +107,7 @@ Useful customization props:
 - The shell can show a bottom-right aggregate overlay for the current workbook selection.
 - `Ctrl/Cmd + click` appends independent cells or ranges to the committed selection.
 - Clicking a column header selects the whole visible column; `Shift` extends from the current anchor column and `Ctrl/Cmd` adds another full-column range.
+- From the first body row, `ArrowUp` moves keyboard focus to that column's header and selects the whole body column; `Left`/`Right` navigates leaf headers and updates the selected body column, while `Shift+Left`/`Shift+Right` extends selection across columns. `Down` collapses the column selection to one cell and `Shift+Down` extends a cell range. Moving to the system select-all header clears the cell selection; `Down` moves to the first row checkbox, and the header checkbox responds to `Enter` and `Space`.
 - `theme` accepts the same `DataGridThemeProp` shapes as `@affino/datagrid-vue-app`, with workbook shell tokens merged on top.
 
 Slots:

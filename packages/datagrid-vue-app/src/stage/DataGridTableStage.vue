@@ -699,6 +699,37 @@ function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number
 
 function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
   if (
+    event.key === "ArrowUp"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && resolveAbsoluteRowIndex(row, rowOffset) === 0
+  ) {
+    const columnKey = visibleColumns.value[columnIndex]?.key
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const headerCell = columnKey
+      ? Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])
+        .find(element => element.dataset.columnKey === columnKey)
+      : undefined
+    if (headerCell) {
+      event.preventDefault()
+      const column = visibleColumns.value[columnIndex]
+      const isRowSelection = column?.column.meta?.rowSelection === true
+      if (column && !isRowSelection) {
+        selection.value.selectColumn?.(columnIndex)
+      } else if (isRowSelection) {
+        selection.value.clearCellSelection?.()
+      }
+      const focusTarget = isRowSelection
+        ? headerCell.querySelector<HTMLElement>(".grid-checkbox-trigger") ?? headerCell
+        : headerCell
+      focusTarget.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
     row.kind === "group"
     && !hasExplicitGroupCellRenderer.value
     && !event.ctrlKey

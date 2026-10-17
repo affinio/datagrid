@@ -23,6 +23,9 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - normal body cells expose `role="gridcell"` unless an interactive role such as `checkbox` or `rowheader` overrides it;
 - rendered selected cells expose deterministic `aria-selected` state after virtualized unmount/remount;
 - leaf header cells expose `role="columnheader"`, one-based `aria-colindex`, sortable-column `aria-sort`, and contextual accessible names;
+- leaf headers are programmatically focusable without adding tab stops; ArrowUp from the first body row focuses its header and selects that body column, Left/Right moves among visible leaf headers and updates the selected body column, Shift+Left/Right extends selection across columns, Down collapses a full-column selection to the active cell, and Shift+Down extends a cell range in the column;
+- moving focus to the system row-selection header clears the prior cell selection; Down moves to the first row checkbox, and the header checkbox toggles filtered-row selection with Enter or Space;
+- Enter/Space on a focused leaf header runs its normal header action;
 - leaf header and body cells expose deterministic sanitized DOM ids across center, pinned, and virtualized remount paths;
 - header resize and text-filter controls include the target column in their accessible names;
 - normal-mode keyboard tabbing exposes one stage owner: focused row index first, visible selection anchor cell second, and body viewport fallback only when no visible focus target exists;

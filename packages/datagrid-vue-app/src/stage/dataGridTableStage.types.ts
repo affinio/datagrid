@@ -5,6 +5,7 @@ import type {
   DataGridColumnSnapshot,
   DataGridOverlayRange,
   DataGridRowNode,
+  DataGridViewportColumnTarget,
 } from "@affino/datagrid-vue"
 import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
@@ -98,6 +99,7 @@ export interface DataGridTableStageViewportSection {
 export interface DataGridTableStageColumnsSection {
   visibleColumns: readonly DataGridColumnSnapshot[]
   renderedColumns: readonly DataGridColumnSnapshot[]
+  scrollToColumn?: (target: DataGridViewportColumnTarget) => void
   columnFilterTextByKey: Readonly<Record<string, string>>
   reorderColumnsByHeader?: (payload: {
     sourceColumnKey: string
@@ -176,6 +178,11 @@ export interface DataGridTableStageSelectionSection {
   selectionRanges?: readonly DataGridOverlayRange[]
   selectionAnchorCell?: DataGridTableStageAnchorCell | null
   totalRowCount?: number
+  selectColumn?: (columnIndex: number) => void
+  selectColumnRange?: (startColumnIndex: number, endColumnIndex: number) => void
+  selectCell?: (rowIndex: number, columnIndex: number) => void
+  selectColumnThroughRow?: (rowIndex: number, columnIndex: number) => void
+  clearCellSelection?: () => void
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
   fillHandleEnabled: boolean

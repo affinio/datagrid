@@ -1,5 +1,5 @@
 <template>
-  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture">
+  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture" @keydown="handleHeaderKeyboardNavigation">
     <slot name="center-chrome" />
 
     <div ref="leftPaneElement" class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
@@ -75,6 +75,8 @@
                   @mousedown.stop
                   @click.stop
                   @click="headerRowSelectionInteraction.activate()"
+                  @keydown.enter.stop.prevent="headerRowSelectionInteraction.activate()"
+                  @keydown.space.stop.prevent="headerRowSelectionInteraction.activate()"
                 >
                   <span class="grid-checkbox-indicator" :class="headerRowSelectionInteraction.triggerClass" aria-hidden="true">
                     <span class="grid-checkbox-indicator__mark" :class="headerRowSelectionInteraction.markClass" />
@@ -175,6 +177,8 @@
                   @mousedown.stop
                   @click.stop
                   @click="headerRowSelectionInteraction.activate()"
+                  @keydown.enter.stop.prevent="headerRowSelectionInteraction.activate()"
+                  @keydown.space.stop.prevent="headerRowSelectionInteraction.activate()"
                 >
                   <span class="grid-checkbox-indicator" :class="headerRowSelectionInteraction.triggerClass" aria-hidden="true">
                     <span class="grid-checkbox-indicator__mark" :class="headerRowSelectionInteraction.markClass" />
@@ -637,6 +641,7 @@ type DataGridHeaderAriaSort = "ascending" | "descending" | "none"
 
 interface DataGridHeaderCellA11yAttributes {
   role: "columnheader"
+  tabindex: -1
   "aria-colindex": number
   "aria-label": string
   "aria-sort"?: DataGridHeaderAriaSort
@@ -748,6 +753,7 @@ const draggedHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
 let suppressHeaderClick = false
+let keyboardHeaderSelectionAnchorColumnIndex: number | null = null
 let activeTouchResizeId: number | null = null
 const resizeClickGuard = useDataGridResizeClickGuard()
 const headerShellElement = ref<HTMLElement | null>(null)
@@ -1258,6 +1264,7 @@ function headerCellA11y(column: TableColumn): DataGridHeaderCellA11yAttributes {
   const sortDirection = resolveHeaderSortDirection(column)
   const attributes: DataGridHeaderCellA11yAttributes = {
     role: "columnheader",
+    tabindex: -1,
     "aria-colindex": resolveHeaderColumnIndex(column),
     "aria-label": resolveColumnHeaderLabel(column),
   }
@@ -1265,6 +1272,147 @@ function headerCellA11y(column: TableColumn): DataGridHeaderCellA11yAttributes {
     attributes["aria-sort"] = sortDirection
   }
   return attributes
+}
+
+function resolveHeaderCellElement(columnKey: string): HTMLElement | null {
+  const stageRoot = headerShellElement.value?.closest(".grid-stage")
+  return Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])
+    .find(element => element.dataset.columnKey === columnKey) ?? null
+}
+
+function focusHeaderColumn(columnKey: string, selectColumn = true): void {
+  const headerCell = resolveHeaderCellElement(columnKey)
+  if (headerCell) {
+    const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
+    const column = visibleColumns.value[columnIndex]
+    if (column && !isRowSelectionColumn(column)) {
+      if (selectColumn) {
+        selection.value.selectColumn?.(columnIndex)
+        keyboardHeaderSelectionAnchorColumnIndex = columnIndex
+      }
+    } else if (column && isRowSelectionColumn(column)) {
+      selection.value.clearCellSelection?.()
+      keyboardHeaderSelectionAnchorColumnIndex = null
+    }
+    const focusTarget = column && isRowSelectionColumn(column)
+      ? headerCell.querySelector<HTMLElement>(".grid-checkbox-trigger") ?? headerCell
+      : headerCell
+    focusTarget.focus()
+    return
+  }
+  columns.value.scrollToColumn?.({ columnKey, align: "nearest" })
+  void nextTick(() => focusHeaderColumn(columnKey))
+}
+
+function focusSelectionAnchorBodyCell(stageRoot: ParentNode): void {
+  const anchor = selection.value.selectionAnchorCell
+  if (anchor) {
+    focusBodyCell(stageRoot, anchor.rowIndex, anchor.columnIndex)
+    return
+  }
+  stageRoot.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")?.focus({ preventScroll: true })
+}
+
+function focusBodyCell(stageRoot: ParentNode, rowIndex: number, columnIndex: number): void {
+  const bodyCell = Array.from(stageRoot.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]"))
+    .find(element => Number(element.dataset.rowIndex) === rowIndex && Number(element.dataset.columnIndex) === columnIndex)
+  if (bodyCell) bodyCell.focus({ preventScroll: true })
+  else stageRoot.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")?.focus({ preventScroll: true })
+}
+
+function focusFirstRowSelectionCell(stageRoot: ParentNode): void {
+  const firstCheckboxCell = stageRoot.querySelector<HTMLElement>(
+    ".grid-body-pane--left .grid-cell--row-selection[data-row-index], .grid-body-viewport .grid-cell--row-selection[data-row-index]",
+  )
+  if (firstCheckboxCell) {
+    firstCheckboxCell.focus({ preventScroll: true })
+    return
+  }
+  stageRoot.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")?.focus({ preventScroll: true })
+}
+
+function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
+  const target = event.target
+  if (!(target instanceof HTMLElement)) {
+    return
+  }
+  const headerCell = target.closest<HTMLElement>(".grid-cell--header[data-column-key]")
+  if (!headerCell) return
+  const columnKey = headerCell.dataset.columnKey
+  if (!columnKey || event.ctrlKey || event.metaKey || event.altKey) {
+    return
+  }
+  const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
+  const stageRoot = target.closest(".grid-stage")
+  if (columnIndex < 0 || !stageRoot) {
+    return
+  }
+  if (event.shiftKey && event.key === "ArrowDown") {
+    event.preventDefault()
+    const targetRow = Math.min(1, (selection.value.totalRowCount ?? 0) - 1)
+    if (targetRow >= 0) {
+      selection.value.selectColumnThroughRow?.(targetRow, columnIndex)
+      focusBodyCell(stageRoot, targetRow, columnIndex)
+    }
+    return
+  }
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    event.preventDefault()
+    const nextColumnIndex = columnIndex + (event.key === "ArrowRight" ? 1 : -1)
+    const nextColumn = visibleColumns.value[nextColumnIndex]
+    if (nextColumn) {
+      if (event.shiftKey) {
+        if (isRowSelectionColumn(nextColumn)) {
+          focusHeaderColumn(nextColumn.key)
+          return
+        }
+        const currentRange = selection.value.selectionRange
+        const hasMultiColumnRange = currentRange != null && currentRange.startColumn !== currentRange.endColumn
+        const anchorColumnIndex = hasMultiColumnRange
+          ? keyboardHeaderSelectionAnchorColumnIndex ?? selection.value.selectionAnchorCell?.columnIndex ?? columnIndex
+          : columnIndex
+        selection.value.selectColumnRange?.(anchorColumnIndex, nextColumnIndex)
+        keyboardHeaderSelectionAnchorColumnIndex = anchorColumnIndex
+        focusHeaderColumn(nextColumn.key, false)
+      } else {
+        focusHeaderColumn(nextColumn.key)
+      }
+    }
+    return
+  }
+  if (event.shiftKey) return
+  if (event.key === "ArrowDown" || event.key === "Escape") {
+    event.preventDefault()
+    if (event.key === "ArrowDown") {
+      const anchor = selection.value.selectionAnchorCell
+      const column = visibleColumns.value[columnIndex]
+      if (column && isRowSelectionColumn(column)) {
+        focusFirstRowSelectionCell(stageRoot)
+      } else if (column) {
+        const rowIndex = anchor?.rowIndex ?? 0
+        selection.value.selectCell?.(rowIndex, columnIndex)
+        focusBodyCell(stageRoot, rowIndex, columnIndex)
+      } else {
+        focusSelectionAnchorBodyCell(stageRoot)
+      }
+    } else {
+      focusSelectionAnchorBodyCell(stageRoot)
+    }
+    return
+  }
+  if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+    // Let the native checkbox button synthesize its click for Enter/Space.
+    if (target !== headerCell && target.closest(".grid-checkbox-trigger")) return
+    event.preventDefault()
+    const column = visibleColumns.value[columnIndex]
+    if (column) {
+      if (isRowSelectionColumn(column)) {
+        headerRowSelectionInteraction.value.activate()
+      } else {
+        handleHeaderColumnClick(column, { additive: false, extend: false })
+      }
+    }
+  }
 }
 
 function resolveColumnResizeLabel(column: TableColumn): string {

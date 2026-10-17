@@ -1,5 +1,15 @@
 # @affino/datagrid-vue-app
 
+## 0.15.0
+
+### Added
+
+- Keyboard navigation can enter leaf headers from the first body row, select full columns, extend ranges across headers with Shift+Left/Right, and return to cell selection with ArrowDown. The system select-all header supports Enter/Space and ArrowDown moves to the first row checkbox.
+
+### Validation
+
+- Vue app type-check, stage keyboard contracts, and browser regressions for header/body navigation, checkbox focus, cell ranges, and multi-column header selection pass.
+
 ## 0.14.4
 
 ### Fixed

@@ -283,6 +283,62 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => activeElementSignature(page)).toBe(targetSignature)
   })
 
+  test("keyboard navigation enters, traverses, and leaves leaf column headers", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const bodyCell = stage.locator('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]').first()
+    const amountCell = stage.locator('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="amount"]').first()
+    const nameHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="name"]')
+    const amountHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="amount"]')
+    await expect(bodyCell).toBeVisible({ timeout: 20_000 })
+    await bodyCell.click()
+    await page.keyboard.press("ArrowUp")
+    await expect(nameHeader).toBeFocused()
+    await expect(nameHeader).toHaveCSS("outline-style", "solid")
+
+    await page.keyboard.press("ArrowRight")
+    await expect(amountHeader).toBeFocused()
+    const amountSignature = await cellSignature(amountCell)
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(amountSignature)
+
+    await page.keyboard.press("ArrowDown")
+    await expect(amountCell).toBeFocused()
+    expect(await selectionAnchorSignature(page)).toBe(amountSignature)
+    await expect.poll(async () => stage.locator('.grid-body-viewport .grid-cell[aria-selected="true"]').count()).toBe(1)
+
+    await page.keyboard.press("ArrowUp")
+    await expect(amountHeader).toBeFocused()
+    await page.keyboard.press("Shift+ArrowDown")
+    await expect.poll(async () => stage.locator('.grid-body-viewport .grid-cell[aria-selected="true"]').count()).toBe(2)
+    await page.keyboard.press("ArrowUp")
+    await page.keyboard.press("ArrowUp")
+    await expect(amountHeader).toBeFocused()
+    await page.keyboard.press("Shift+ArrowLeft")
+    await expect(nameHeader).toBeFocused()
+    await expect(nameHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(amountHeader).toHaveClass(/grid-cell--header-selected/)
+  })
+
+  test("keeps every column header selected while Shift extends the range", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/height-sizing-grid")
+    const stage = page.locator(".grid-stage:visible").first()
+    const bodyCell = stage.locator('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="name"]').first()
+    const nameHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="name"]')
+    const valueHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="value"]')
+    const statusHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="status"]')
+    await expect(bodyCell).toBeVisible({ timeout: 20_000 })
+    await bodyCell.click()
+    await page.keyboard.press("ArrowUp")
+    await expect(nameHeader).toBeFocused()
+    await page.keyboard.press("Shift+ArrowRight")
+    await page.keyboard.press("Shift+ArrowRight")
+    await expect(statusHeader).toBeFocused()
+    await expect(nameHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(valueHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(statusHeader).toHaveClass(/grid-cell--header-selected/)
+  })
+
   test("selection anchor remounts with overlay fill handle after horizontal virtualization", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 

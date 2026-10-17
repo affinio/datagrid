@@ -2076,6 +2076,7 @@ export function useDataGridTableStageRuntime<
     rowHover: computed(() => options.rowHover?.value === true),
     stripedRows: computed(() => options.stripedRows?.value === true),
     columnFilterTextByKey: options.columnFilterTextByKey,
+    scrollToColumn: options.runtime.scrollToColumn,
     gridContentStyle,
     mainTrackStyle,
     indexColumnStyle: stageIndexColumnStyle,
@@ -2102,6 +2103,29 @@ export function useDataGridTableStageRuntime<
     selectionRanges,
     selectionAnchorCell,
     totalRowCount: totalSelectableRows,
+    selectColumn: (columnIndex: number) => {
+      const endRow = totalSelectableRows.value - 1
+      if (endRow < 0 || columnIndex < 0 || columnIndex >= orderedVisibleColumns.value.length) return
+      applyClipboardSelectionRange({ startRow: 0, endRow, startColumn: columnIndex, endColumn: columnIndex })
+    },
+    selectColumnRange: (startColumnIndex: number, endColumnIndex: number) => {
+      const endRow = totalSelectableRows.value - 1
+      if (endRow < 0) return
+      const lastColumnIndex = orderedVisibleColumns.value.length - 1
+      const startColumn = Math.max(0, Math.min(lastColumnIndex, startColumnIndex))
+      const endColumn = Math.max(0, Math.min(lastColumnIndex, endColumnIndex))
+      if (startColumn > lastColumnIndex || endColumn < 0) return
+      applyClipboardSelectionRange({ startRow: 0, endRow, startColumn, endColumn })
+    },
+    selectCell: (rowIndex: number, columnIndex: number) => {
+      if (rowIndex < 0 || rowIndex >= totalSelectableRows.value || columnIndex < 0 || columnIndex >= orderedVisibleColumns.value.length) return
+      applyClipboardSelectionRange({ startRow: rowIndex, endRow: rowIndex, startColumn: columnIndex, endColumn: columnIndex })
+    },
+    selectColumnThroughRow: (rowIndex: number, columnIndex: number) => {
+      if (rowIndex < 0 || rowIndex >= totalSelectableRows.value || columnIndex < 0 || columnIndex >= orderedVisibleColumns.value.length) return
+      applyClipboardSelectionRange({ startRow: 0, endRow: rowIndex, startColumn: columnIndex, endColumn: columnIndex })
+    },
+    clearCellSelection,
     fillPreviewRange,
     rangeMovePreviewRange,
     customOverlays: lastServerFillCustomOverlays,
