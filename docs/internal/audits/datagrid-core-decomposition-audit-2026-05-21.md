@@ -123,6 +123,8 @@ Risk:
 - `workbookModel.ts` remains the current spreadsheet workbook runtime and still owns graph/sync scheduling inline.
 - Future workbook decomposition should extract shared graph/scheduler helpers from this runtime instead of reintroducing a row-model workbook API.
 
+Progress (`2026-10-18`): extracted deterministic strongly connected component grouping and dependency-first scheduling to `spreadsheet/workbookDependencyScheduler.ts`. The workbook facade now owns when to schedule and synchronize; the scheduler owns graph ordering. Focused workbook tests and package type-check/build passed. Remaining workbook orchestration still owns graph construction, invalidation, and sync passes.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`
