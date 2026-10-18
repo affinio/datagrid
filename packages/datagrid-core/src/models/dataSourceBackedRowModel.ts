@@ -69,11 +69,15 @@ import {
   rangeContains,
   rangesOverlap,
   resolvePriorityRank,
-  serializePullState,
   type DataGridDataSourceInFlightPull as InFlightPull,
   type DataGridDataSourcePendingPull as PendingPull,
   type DataGridDataSourcePullRangeOptions as PullRangeOptions,
 } from "./server/dataSourceTransportCoordinator.js"
+import {
+  buildDataSourceCacheStoreKey,
+  buildDataSourcePullStateKey,
+  buildDataSourceRequestKey,
+} from "./server/dataSourceRequestIdentity.js"
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
 import {
   createDataSourceOptimisticMutationEngine,
@@ -1364,7 +1368,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function buildRequestStateKey(): string {
-    return serializePullState({
+    return buildDataSourcePullStateKey({
       sortModel,
       filterModel,
       groupBy,
@@ -1379,12 +1383,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   function buildCacheStoreKey(
     treePullContext: DataGridDataSourceTreePullContext | null,
   ): string {
-    if (!treePullContext) {
-      return activeCacheStore.key
-    }
-    return groupBy
-      ? serializePullState({ groupBy, treeData: treePullContext })
-      : "__root__"
+    return buildDataSourceCacheStoreKey(activeCacheStore.key, groupBy, treePullContext)
   }
 
   function buildRequestKey(
@@ -1394,12 +1393,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
     treePullContext: DataGridDataSourceTreePullContext | null,
     stateKey: string,
   ): string {
-    return serializePullState({
+    return buildDataSourceRequestKey({
       range: requestRange,
       reason,
       priority,
-      treeData: treePullContext,
-      state: stateKey,
+      treePullContext,
+      stateKey,
     })
   }
 
