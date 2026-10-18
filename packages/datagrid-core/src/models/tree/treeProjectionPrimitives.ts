@@ -13,3 +13,18 @@ export function normalizeLeafRow<T>(row: DataGridRowNode<T>): DataGridRowNode<T>
     groupMeta: undefined,
   }
 }
+
+export function normalizeTreePathSegments(raw: readonly (string | number)[]): string[] {
+  const segments: string[] = []
+  for (const value of raw) {
+    const normalized = String(value).trim()
+    if (normalized.length > 0) segments.push(normalized)
+  }
+  return segments
+}
+
+export function createTreePathGroupKey(segments: readonly string[]): string {
+  let encoded = "tree:path:"
+  for (const segment of segments) encoded += `${segment.length}:${segment}`
+  return encoded
+}

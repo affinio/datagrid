@@ -237,6 +237,8 @@ Progress (`2026-10-18`): moved incremental expansion/collapse subtree replacemen
 
 Progress (`2026-10-18`): moved parent-mode hierarchy construction, filter inclusion, orphan/cycle handling, and aggregate setup into `tree/treeProjectionParentCache.ts`; shared leaf normalization and row-id validation now live in `tree/treeProjectionPrimitives.ts`. Core type-check/build and tree workload assertion passed.
 
+Progress (`2026-10-18`): moved path-mode hierarchy construction, filter matching, and aggregate cache setup into `tree/treeProjectionPathCache.ts`. Tree path normalization and stable group-key encoding now share the internal primitives module. Core type-check/build, focused projection tests, and tree workload assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`
