@@ -233,6 +233,8 @@ Progress (`2026-10-18`): moved parent-mode tree row materialization and its shar
 
 Progress (`2026-10-18`): moved path-mode group-row creation and visible tree materialization to `tree/treeProjectionPathMaterializer.ts`, with path cache contracts now colocated in `tree/treeProjectionTypes.ts`. The facade retains path cache construction, patching, and incremental toggle decisions. Core type-check/build and focused projection tests passed.
 
+Progress (`2026-10-18`): moved incremental expansion/collapse subtree replacement for both path and parent modes into `tree/treeProjectionToggleRuntime.ts`. The projection facade now delegates cache creation, materialization, and localized expansion updates to distinct modules. Core type-check/build, focused projection tests, and tree workload assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`

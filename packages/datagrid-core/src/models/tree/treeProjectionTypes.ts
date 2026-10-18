@@ -1,4 +1,4 @@
-import type { DataGridRowId, DataGridRowNode } from "../rowModel.js"
+import type { DataGridGroupExpansionSnapshot, DataGridRowId, DataGridRowNode, DataGridTreeDataResolvedSpec } from "../rowModel.js"
 import type {
   DataGridIncrementalAggregationGroupState,
   DataGridIncrementalAggregationLeafContribution,
@@ -71,4 +71,31 @@ export interface TreeParentProjectionCache<T> {
   aggregateStateByGroupRowId?: Map<DataGridRowId, DataGridIncrementalAggregationGroupState>
   leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
   dirtyBranchRootIds: Set<DataGridRowId>
+}
+
+export interface TreePathProjectionCacheState<T> {
+  key: string
+  cache: TreePathProjectionCache<T>
+}
+
+export interface TreeParentProjectionCacheState<T> {
+  key: string
+  cache: TreeParentProjectionCache<T>
+}
+
+export interface TreePathSubtreeToggleInput<T> {
+  rows: readonly DataGridRowNode<T>[]
+  cacheState: TreePathProjectionCacheState<T>
+  treeData: Extract<DataGridTreeDataResolvedSpec<T>, { mode: "path" }>
+  previousExpansionSnapshot: DataGridGroupExpansionSnapshot
+  nextExpansionSnapshot: DataGridGroupExpansionSnapshot
+  groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>
+}
+
+export interface TreeParentSubtreeToggleInput<T> {
+  rows: readonly DataGridRowNode<T>[]
+  cacheState: TreeParentProjectionCacheState<T>
+  previousExpansionSnapshot: DataGridGroupExpansionSnapshot
+  nextExpansionSnapshot: DataGridGroupExpansionSnapshot
+  groupIndexByRowId?: ReadonlyMap<DataGridRowId, number>
 }
