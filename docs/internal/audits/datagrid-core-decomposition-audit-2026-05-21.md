@@ -29,6 +29,8 @@ Progress (`2026-10-18`): moved field-intersection policy for deciding whether op
 
 Progress (`2026-10-18`): moved serialization of datasource pull-state, cache-store, and request identities to `models/server/dataSourceRequestIdentity.ts`. The facade still snapshots live model state, while the module owns deterministic request identity formatting. Focused datasource tests (89), core type-check/build, and datasource churn assertion passed.
 
+Progress (`2026-10-18`): moved `applyExternalUpdates` mutation handling into `models/server/dataSourceExternalUpdateRuntime.ts`; the facade supplies cache, refresh, and notification capabilities. Public update types remain re-exported from the existing row-model module. Focused datasource tests (89), core type-check/build, and datasource churn assertion passed.
+
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:

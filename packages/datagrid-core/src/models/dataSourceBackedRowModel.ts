@@ -45,9 +45,6 @@ import {
 import { isSameFilterModel, isSameSortModel } from "./projection/clientRowProjectionPrimitives.js"
 import { applyRowDataPatch, mergeRowPatch } from "./clientRowRuntimeUtils.js"
 import {
-  collectChangedFieldsFromPatches,
-} from "./mutation/rowPatchAnalyzer.js"
-import {
   shouldRefreshAfterExternalUpdate as resolveExternalProjectionRefresh,
   shouldRefreshAfterOptimisticCommit as resolveOptimisticProjectionRefresh,
 } from "./server/dataSourceProjectionRefreshPolicy.js"
@@ -78,6 +75,11 @@ import {
   buildDataSourcePullStateKey,
   buildDataSourceRequestKey,
 } from "./server/dataSourceRequestIdentity.js"
+import {
+  createDataSourceExternalUpdateRuntime,
+  type DataGridExternalRowUpdate,
+  type DataGridExternalRowUpdateOptions,
+} from "./server/dataSourceExternalUpdateRuntime.js"
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
 import {
   createDataSourceOptimisticMutationEngine,
@@ -155,30 +157,7 @@ export interface DataSourceBackedRowModel<T = unknown> extends DataGridRowModel<
   getColumnHistogram?: (columnId: string, options?: DataGridColumnHistogramOptions) => DataGridColumnHistogramResult
 }
 
-export type DataGridExternalRowUpdate<T = unknown> =
-  | {
-      rowId: DataGridRowId
-      data: Partial<T> | null
-      row?: never
-      index?: number | null
-    }
-  | {
-      rowId: DataGridRowId
-      row: T | null
-      data?: never
-      index?: number | null
-    }
-
-export interface DataGridExternalRowUpdateOptions {
-  recompute?: boolean | {
-    sort?: boolean
-    filter?: boolean
-    group?: boolean
-    pivot?: boolean
-    aggregation?: boolean
-  }
-  signal?: AbortSignal | null
-}
+export type { DataGridExternalRowUpdate, DataGridExternalRowUpdateOptions } from "./server/dataSourceExternalUpdateRuntime.js"
 
 const DEFAULT_ROW_CACHE_LIMIT = 4096
 const DEFAULT_PREFETCH_MAX_BATCH_SIZE = 512
@@ -2124,77 +2103,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
           },
         }
       : {}
-  const externalUpdateMethods: Pick<DataSourceBackedRowModel<T>, "applyExternalUpdates"> = {
-    applyExternalUpdates(updates, updateOptions) {
-      ensureActive()
-      if (updateOptions?.signal?.aborted) {
-        const abortError = new Error("[DataGridDataSource] applyExternalUpdates aborted.")
-        abortError.name = "AbortError"
-        throw abortError
-      }
-      if (!Array.isArray(updates) || updates.length === 0) {
-        return
-      }
-
-      let changed = false
-      const changedRowsById = new Map<DataGridRowId, Partial<T>>()
-      for (const update of updates) {
-        if (!update || typeof update.rowId !== "string" && typeof update.rowId !== "number") {
-          continue
-        }
-
-        const hasRow = "row" in update && update.row !== null && typeof update.row !== "undefined"
-        const hasData = "data" in update && update.data !== null && typeof update.data !== "undefined"
-        if (!hasRow && !hasData) {
-          continue
-        }
-
-        const rawIndex = update.index
-        const hasIndex = Number.isFinite(rawIndex)
-        if (hasRow && hasIndex) {
-          const entry = {
-            index: Math.max(0, Math.trunc(rawIndex as number)),
-            row: update.row as T,
-            rowId: update.rowId,
-          }
-          changed = applyRows([entry]) || changed
-          changedRowsById.set(update.rowId, update.row as Partial<T>)
-          continue
-        }
-
-        const cached = findCachedRowById(update.rowId)
-        if (!cached) {
-          continue
-        }
-
-        const nextRow = hasRow
-          ? update.row as T
-          : applyRowDataPatch(cached.node.row, update.data as Partial<T>)
-        if (nextRow === cached.node.row) {
-          continue
-        }
-        writeRowCache(cached.index, {
-          ...cached.node,
-          data: nextRow,
-          row: nextRow,
-        })
-        changedRowsById.set(update.rowId, hasRow ? update.row as Partial<T> : update.data as Partial<T>)
-        changed = true
-      }
-
-      if (!changed) {
-        return
-      }
-
-      bumpRevision()
-      const changedFields = collectChangedFieldsFromPatches(changedRowsById)
-      if (shouldRefreshAfterExternalUpdate(changedFields, updateOptions?.recompute)) {
-        return pullRange(toSourceRange(viewportRange), "refresh", "normal", null, { affectsLoading: false })
-      }
-      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
-      emit()
-    },
-  }
+  const externalUpdateMethods: Pick<DataSourceBackedRowModel<T>, "applyExternalUpdates"> = createDataSourceExternalUpdateRuntime({
+    ensureActive,
+    findCachedRowById,
+    applyRows,
+    writeRowCache,
+    bumpRevision,
+    shouldRefresh: shouldRefreshAfterExternalUpdate,
+    refreshVisibleRows: () => pullRange(toSourceRange(viewportRange), "refresh", "normal", null, { affectsLoading: false }),
+    updateCachedCoverage: () => updateCachedCoverageDiagnostics(toSourceRange(viewportRange)),
+    emit,
+  })
 
   return {
     kind: "server",
