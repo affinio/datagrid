@@ -137,6 +137,8 @@ Progress (`2026-10-18`): moved stable forward/reverse dependency adjacency const
 
 Progress (`2026-10-18`): moved per-sheet formula dependency extraction and alias normalization to `spreadsheet/workbookFormulaDependencies.ts`. Workbook orchestration now consumes an explicit dependency snapshot while retaining revision-based cache invalidation.
 
+Progress (`2026-10-18`): moved scheduled view-sheet materialization and writeback to `spreadsheet/workbookViewMaterializer.ts`. The workbook facade supplies graph order, sheet lookup, model options, and export-cache invalidation; view results remain owned by the view pipeline.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`

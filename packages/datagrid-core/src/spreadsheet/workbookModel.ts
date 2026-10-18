@@ -23,7 +23,6 @@ import {
 } from "./derivedSheetModel.js"
 import {
   materializeDataGridSpreadsheetViewRuntimeResult,
-  materializeDataGridSpreadsheetViewSheetResult,
   type DataGridSpreadsheetViewGroupStageState,
   type DataGridSpreadsheetViewJoinStageState,
   type DataGridSpreadsheetViewMaterializationDiagnostic,
@@ -38,6 +37,7 @@ import {
   type DataGridSpreadsheetDerivedSheetRuntime,
 } from "./derivedSheetRuntime.js"
 import { createSpreadsheetWorkbookComponentSchedule } from "./workbookDependencyScheduler.js"
+import { materializeSpreadsheetWorkbookViewSheets } from "./workbookViewMaterializer.js"
 import {
   createSpreadsheetWorkbookDependencyGraph,
   type SpreadsheetWorkbookDependencyGraph,
@@ -906,84 +906,6 @@ export function createDataGridSpreadsheetWorkbookModel(
     return true
   }
 
-  const materializeWorkbookViewSheets = (
-    scheduledComponents: readonly (readonly string[])[],
-    graph: SpreadsheetWorkbookDependencyGraph,
-  ): void => {
-    for (const componentSheetIds of scheduledComponents) {
-      if (componentSheetIds.length === 0) {
-        continue
-      }
-      const componentIsCyclic = componentSheetIds.length > 1 || componentSheetIds.some(sheetId => (
-        graph.dependencySheetIdsBySheetId.get(sheetId)?.includes(sheetId) ?? false
-      ))
-      const cycleMessage = componentIsCyclic
-        ? `Circular view dependency detected: ${componentSheetIds
-          .map(sheetId => sheetsById.get(sheetId)?.name ?? sheetId)
-          .join(" -> ")}`
-        : null
-
-      for (const sheetId of componentSheetIds) {
-        const targetSheet = sheetsById.get(sheetId)
-        if (!targetSheet || targetSheet.kind !== "view" || !targetSheet.viewDefinition) {
-          continue
-        }
-        let viewSheetChanged = false
-        if (targetSheet.derivedSheetModel) {
-          const nextState = materializeDataGridSpreadsheetViewRuntimeResult({
-            sheetId: targetSheet.id,
-            sheetName: targetSheet.name,
-            sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
-            sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
-            resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
-            pipeline: targetSheet.viewDefinition.pipeline,
-            sheetModelOptions: targetSheet.viewSheetModelOptions,
-            errorMessage: cycleMessage,
-            previousJoinStageStatesByKey: targetSheet.viewJoinStageStatesByKey,
-            previousGroupStageStatesByKey: targetSheet.viewGroupStageStatesByKey,
-            previousPivotStageStatesByKey: targetSheet.viewPivotStageStatesByKey,
-          })
-          targetSheet.viewDiagnostics = nextState.diagnostics
-          targetSheet.derivedRuntime = nextState.derivedRuntime
-          targetSheet.viewJoinStageStatesByKey = nextState.joinStageStatesByKey
-          targetSheet.viewGroupStageStatesByKey = nextState.groupStageStatesByKey
-          targetSheet.viewPivotStageStatesByKey = nextState.pivotStageStatesByKey
-          viewSheetChanged = targetSheet.derivedSheetModel.replaceRuntime(
-            nextState.derivedRuntime,
-            createDerivedSheetModelOptions(
-              targetSheet.id,
-              targetSheet.name,
-              targetSheet.viewSheetModelOptions,
-            ),
-          )
-        } else {
-          const nextState = materializeDataGridSpreadsheetViewSheetResult({
-            sheetId: targetSheet.id,
-            sheetName: targetSheet.name,
-            sourceSheetId: targetSheet.viewDefinition.sourceSheetId,
-            sourceSheetModel: sheetsById.get(targetSheet.viewDefinition.sourceSheetId)?.sheetModel ?? null,
-            resolveSheetModel: (sheetId) => sheetsById.get(sheetId)?.sheetModel ?? null,
-            pipeline: targetSheet.viewDefinition.pipeline,
-            sheetModelOptions: targetSheet.viewSheetModelOptions,
-            errorMessage: cycleMessage,
-            previousJoinStageStatesByKey: targetSheet.viewJoinStageStatesByKey,
-            previousGroupStageStatesByKey: targetSheet.viewGroupStageStatesByKey,
-            previousPivotStageStatesByKey: targetSheet.viewPivotStageStatesByKey,
-          })
-          targetSheet.viewDiagnostics = nextState.diagnostics
-          targetSheet.derivedRuntime = nextState.derivedRuntime
-          targetSheet.viewJoinStageStatesByKey = nextState.joinStageStatesByKey
-          targetSheet.viewGroupStageStatesByKey = nextState.groupStageStatesByKey
-          targetSheet.viewPivotStageStatesByKey = nextState.pivotStageStatesByKey
-          viewSheetChanged = targetSheet.sheetModel.restoreState(nextState.sheetState)
-        }
-        if (viewSheetChanged) {
-          invalidateSheetExportCache(targetSheet)
-        }
-      }
-    }
-  }
-
   const syncSheetComponent = (
     componentSheetIds: readonly string[],
     graph: SpreadsheetWorkbookDependencyGraph,
@@ -1083,7 +1005,18 @@ export function createDataGridSpreadsheetWorkbookModel(
       resolvedGraphState.graph.dependencySheetIdsBySheetId,
       resolvedGraphState.sheetOrderById,
     )
-    materializeWorkbookViewSheets(scheduledComponents, resolvedGraphState.graph)
+    materializeSpreadsheetWorkbookViewSheets(
+      scheduledComponents,
+      resolvedGraphState.graph.dependencySheetIdsBySheetId,
+      sheetId => sheetsById.get(sheetId) ?? null,
+      createDerivedSheetModelOptions,
+      sheet => {
+        const workbookSheet = sheetsById.get(sheet.id)
+        if (workbookSheet) {
+          invalidateSheetExportCache(workbookSheet)
+        }
+      },
+    )
     let passCount = 0
     let converged = true
 
