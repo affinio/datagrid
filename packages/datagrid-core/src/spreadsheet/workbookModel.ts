@@ -39,6 +39,10 @@ import {
 } from "./derivedSheetRuntime.js"
 import { createSpreadsheetWorkbookComponentSchedule } from "./workbookDependencyScheduler.js"
 import {
+  createSpreadsheetWorkbookDependencyGraph,
+  type SpreadsheetWorkbookDependencyGraph,
+} from "./workbookDependencyGraph.js"
+import {
   createSpreadsheetWorkbookRestoreDescriptor,
   hydrateSpreadsheetWorkbookDataSheetModel,
   createSpreadsheetWorkbookSheetStateExport,
@@ -191,11 +195,6 @@ interface SpreadsheetWorkbookSheetState {
   viewJoinStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewJoinStageState>
   viewGroupStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewGroupStageState>
   viewPivotStageStatesByKey: ReadonlyMap<string, DataGridSpreadsheetViewPivotStageState>
-}
-
-interface SpreadsheetWorkbookDependencyGraph {
-  dependencySheetIdsBySheetId: ReadonlyMap<string, readonly string[]>
-  dependentSheetIdsBySheetId: ReadonlyMap<string, readonly string[]>
 }
 
 interface SpreadsheetWorkbookGraphState {
@@ -781,12 +780,7 @@ export function createDataGridSpreadsheetWorkbookModel(
   const buildDependencyGraph = (
     aliasToSheet: ReadonlyMap<string, SpreadsheetWorkbookSheetState>,
   ): SpreadsheetWorkbookDependencyGraph => {
-    const dependencySheetIdsBySheetId = new Map<string, readonly string[]>()
-    const dependentSheetIdsBySheetId = new Map<string, Set<string>>()
-
-    for (const sheet of sheets) {
-      dependentSheetIdsBySheetId.set(sheet.id, new Set<string>())
-    }
+    const dependenciesBySheetId = new Map<string, ReadonlySet<string>>()
 
     for (const targetSheet of sheets) {
       const dependencySheetIds = new Set<string>()
@@ -821,30 +815,13 @@ export function createDataGridSpreadsheetWorkbookModel(
         }
       }
 
-      const orderedDependencySheetIds = Object.freeze(
-        sheets
-          .map(sheet => sheet.id)
-          .filter(sheetId => dependencySheetIds.has(sheetId)),
-      )
-      dependencySheetIdsBySheetId.set(targetSheet.id, orderedDependencySheetIds)
-      for (const dependencySheetId of orderedDependencySheetIds) {
-        dependentSheetIdsBySheetId.get(dependencySheetId)?.add(targetSheet.id)
-      }
+      dependenciesBySheetId.set(targetSheet.id, dependencySheetIds)
     }
 
-    return {
-      dependencySheetIdsBySheetId,
-      dependentSheetIdsBySheetId: new Map(
-        sheets.map(sheet => [
-          sheet.id,
-          Object.freeze(
-            sheets
-              .map(candidate => candidate.id)
-              .filter(sheetId => dependentSheetIdsBySheetId.get(sheet.id)?.has(sheetId) ?? false),
-          ),
-        ]),
-      ),
-    }
+    return createSpreadsheetWorkbookDependencyGraph(
+      sheets.map(sheet => sheet.id),
+      dependenciesBySheetId,
+    )
   }
 
   const createWorkbookGraphState = (): SpreadsheetWorkbookGraphState => {

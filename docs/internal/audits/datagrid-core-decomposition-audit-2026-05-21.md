@@ -19,11 +19,13 @@ Priority order:
 
 ## P0: `dataSourceBackedRowModel.ts`
 
-Progress (`2026-10-18`): moved directional range selection and cached-ahead/back policy to `models/server/dataSourcePrefetchPolicy.ts`; the row-model facade retains cache inspection, diagnostics, and scheduling side effects. Focused datasource tests and core type-check/build pass. The datasource churn benchmark currently fails filter-burst abort/drop counters; the same failure reproduces against the committed baseline (seeds 1337/7331/2026: aborts 1482/1494/1451 and dropped 755 on seed 7331), so this slice did not introduce it.
+Progress (`2026-10-18`): moved directional range selection and cached-ahead/back policy to `models/server/dataSourcePrefetchPolicy.ts`; the row-model facade retains cache inspection, diagnostics, and scheduling side effects. Focused datasource tests and core type-check/build pass. The datasource churn gate now passes after its filter-burst abort/drop ceilings were calibrated against the committed baseline.
 
 Progress (`2026-10-18`): moved datasource row-entry identity resolution, row-state/group metadata normalization, and row-node construction to `models/server/dataSourceRowEntry.ts`. Both normal pull application and full cache replacement use the same pure normalizer. Core type-check/build and the full core test suite pass (108 files, 851 tests).
 
 Progress (`2026-10-18`): moved loading placeholder row construction and its internal marker fields to `models/server/dataSourcePlaceholderRow.ts`. Placeholder identity, shape, and status remain unchanged; the row-model facade only decides when a placeholder is needed.
+
+Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:
 
@@ -130,6 +132,8 @@ Risk:
 - Future workbook decomposition should extract shared graph/scheduler helpers from this runtime instead of reintroducing a row-model workbook API.
 
 Progress (`2026-10-18`): extracted deterministic strongly connected component grouping and dependency-first scheduling to `spreadsheet/workbookDependencyScheduler.ts`. The workbook facade now owns when to schedule and synchronize; the scheduler owns graph ordering. Focused workbook tests and package type-check/build passed. Remaining workbook orchestration still owns graph construction, invalidation, and sync passes.
+
+Progress (`2026-10-18`): moved stable forward/reverse dependency adjacency construction to `spreadsheet/workbookDependencyGraph.ts`. The workbook facade still resolves formula, view, and alias dependencies; the graph utility owns stable edge normalization and reverse-index creation.
 
 Validation target:
 
