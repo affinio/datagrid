@@ -213,6 +213,8 @@ Validation target:
 
 ## P2: `treeProjectionRuntime.ts`
 
+Status: closed for the safe internal decomposition scope (`2026-10-18`). `treeProjectionRuntime.ts` is a composition facade; path/parent cache construction, materialization, cache patching, expansion toggles, and shared primitives each have focused internal modules. Follow-up changes should keep mode-specific behavior in those modules and preserve the facade boundary.
+
 Current responsibilities:
 
 - tree path projection cache.
