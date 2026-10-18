@@ -139,6 +139,8 @@ Progress (`2026-10-18`): moved per-sheet formula dependency extraction and alias
 
 Progress (`2026-10-18`): moved scheduled view-sheet materialization and writeback to `spreadsheet/workbookViewMaterializer.ts`. The workbook facade supplies graph order, sheet lookup, model options, and export-cache invalidation; view results remain owned by the view pipeline.
 
+Progress (`2026-10-18`): moved managed formula-table patch reconciliation to `spreadsheet/workbookFormulaTableSync.ts`. The workbook facade retains dependency scheduling and supplies sheet/export-cache access; the helper owns table alias diffing and patch application.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`

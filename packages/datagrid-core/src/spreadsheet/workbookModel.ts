@@ -38,6 +38,7 @@ import {
 } from "./derivedSheetRuntime.js"
 import { createSpreadsheetWorkbookComponentSchedule } from "./workbookDependencyScheduler.js"
 import { materializeSpreadsheetWorkbookViewSheets } from "./workbookViewMaterializer.js"
+import { applySpreadsheetWorkbookManagedTablePatch } from "./workbookFormulaTableSync.js"
 import {
   createSpreadsheetWorkbookDependencyGraph,
   type SpreadsheetWorkbookDependencyGraph,
@@ -847,65 +848,6 @@ export function createDataGridSpreadsheetWorkbookModel(
     )
   }
 
-  const applyManagedTablePatch = (
-    targetSheet: SpreadsheetWorkbookSheetState,
-    dependencySheetIds: readonly string[],
-  ): boolean => {
-    const desiredTableRowsByAlias = new Map<string, SpreadsheetWorkbookTableSource>()
-    for (const dependencySheetId of dependencySheetIds) {
-      const sourceSheet = sheetsById.get(dependencySheetId)
-      if (!sourceSheet || sourceSheet.id === targetSheet.id) {
-        continue
-      }
-      const exportedRows = getSheetExportTableSource(sourceSheet)
-      for (const alias of sourceSheet.aliases) {
-        desiredTableRowsByAlias.set(alias, exportedRows)
-      }
-    }
-
-    const removedAliases: string[] = []
-    for (const alias of targetSheet.managedTableAliases) {
-      if (!desiredTableRowsByAlias.has(alias)) {
-        removedAliases.push(alias)
-      }
-    }
-
-    const setEntries: { name: string; source: SpreadsheetWorkbookTableSource }[] = []
-    for (const [alias, exportedRows] of desiredTableRowsByAlias.entries()) {
-      if (
-        targetSheet.managedTableAliases.has(alias)
-        && targetSheet.appliedTableRowsByAlias.get(alias) === exportedRows
-      ) {
-        continue
-      }
-      setEntries.push({ name: alias, source: exportedRows })
-    }
-
-    if (removedAliases.length === 0 && setEntries.length === 0) {
-      return false
-    }
-
-    const previousTableRevision = targetSheet.sheetModel.getTableSourceRevision()
-    targetSheet.sheetModel.patchFormulaTables({
-      remove: removedAliases,
-      set: setEntries,
-    })
-
-    for (const alias of removedAliases) {
-      targetSheet.managedTableAliases.delete(alias)
-      targetSheet.appliedTableRowsByAlias.delete(alias)
-    }
-    for (const entry of setEntries) {
-      targetSheet.managedTableAliases.add(entry.name)
-      targetSheet.appliedTableRowsByAlias.set(entry.name, entry.source)
-    }
-
-    if (targetSheet.sheetModel.getTableSourceRevision() !== previousTableRevision) {
-      invalidateSheetExportCache(targetSheet)
-    }
-    return true
-  }
-
   const syncSheetComponent = (
     componentSheetIds: readonly string[],
     graph: SpreadsheetWorkbookDependencyGraph,
@@ -923,9 +865,12 @@ export function createDataGridSpreadsheetWorkbookModel(
       if (targetSheet.kind === "view") {
         return { passCount: 0, converged: true }
       }
-      applyManagedTablePatch(
+      applySpreadsheetWorkbookManagedTablePatch(
         targetSheet,
         graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
+        sheetId => sheetsById.get(sheetId) ?? null,
+        getSheetExportTableSource,
+        invalidateSheetExportCache,
       )
       if (targetSheet.sheetModel.recompute()) {
         invalidateSheetExportCache(targetSheet)
@@ -943,9 +888,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         }
         mutableSheetVisited = true
         if (
-          applyManagedTablePatch(
+          applySpreadsheetWorkbookManagedTablePatch(
             targetSheet,
             graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
+            sheetId => sheetsById.get(sheetId) ?? null,
+            getSheetExportTableSource,
+            invalidateSheetExportCache,
           )
         ) {
           changed = true
