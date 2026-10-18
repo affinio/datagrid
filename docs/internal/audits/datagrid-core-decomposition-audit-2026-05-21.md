@@ -178,6 +178,8 @@ Recommended decomposition:
 - Extract `viewportControllerUpdatePipeline` for prepare/apply sequencing, dirty signatures, and after-scroll scheduling.
 - Keep horizontal clamp in `dataGridViewportHorizontalClamp.ts`; do not move it back into controller code.
 
+Progress (`2026-10-18`): extracted CSS zoom normalization and smoothing/lower-bound policy for auto row-height estimates to `viewport/dataGridViewportRowHeightEstimate.ts`. DOM sampling, cache lifecycle, and estimate application remain controller-owned. Focused row-height/viewport contracts, core type-check/build, and enterprise virtualization assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/viewport/__tests__/horizontalClamp.contract.spec.ts`

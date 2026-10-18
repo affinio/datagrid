@@ -128,6 +128,10 @@ import {
 } from "./dataGridViewportModelBridgeService"
 import { createDataGridViewportRenderSyncService } from "./dataGridViewportRenderSyncService"
 import { createDataGridViewportRowHeightCache } from "./dataGridViewportRowHeightCache"
+import {
+	normalizeAutoMeasuredHeight,
+	resolveAutoRowHeightEstimate,
+} from "./dataGridViewportRowHeightEstimate"
 export type { DataGridViewportState, RowPoolItem } from "./dataGridViewportSignals"
 
 
@@ -164,8 +168,6 @@ export interface DataGridViewportController<TRow = unknown> extends DataGridView
 }
 
 const AUTO_ROW_HEIGHT_CACHE_LIMIT = 512
-const AUTO_ROW_HEIGHT_EPSILON = 0.6
-const AUTO_ROW_HEIGHT_SMOOTHING = 0.5
 
 interface AutoRowHeightEstimateSyncOptions {
 	preserveLowerBound?: number
@@ -463,39 +465,14 @@ export function createDataGridViewportController<TRow = unknown>(
 			autoRowHeightHasMeasurements = false
 		}
 
-		function normalizeAutoMeasuredHeight(height: number, layoutScale: number): number | null {
-			if (!Number.isFinite(height) || height <= 0) {
-				return null
-			}
-			const normalizedScale = Number.isFinite(layoutScale) && layoutScale > 0 ? layoutScale : 1
-			const normalized = height / normalizedScale
-			if (!Number.isFinite(normalized) || normalized <= 0) {
-				return null
-			}
-			return normalized
-		}
-
 		function syncAutoRowHeightEstimateFromCache(options: AutoRowHeightEstimateSyncOptions = {}): boolean {
-			const nextEstimateCandidate = autoRowHeightCache.resolveEstimatedHeight(baseRowHeight)
-			const lowerBound = Number.isFinite(options.preserveLowerBound)
-				? Math.max(1, options.preserveLowerBound as number)
-				: null
-			const nextEstimate = lowerBound != null
-				? Math.max(nextEstimateCandidate, lowerBound)
-				: nextEstimateCandidate
-			if (!Number.isFinite(nextEstimate) || nextEstimate <= 0) {
-				return false
-			}
-			const delta = nextEstimate - autoRowHeightEstimate
-			if (Math.abs(delta) < AUTO_ROW_HEIGHT_EPSILON) {
-				return false
-			}
-			const smoothed = autoRowHeightEstimate + (delta * AUTO_ROW_HEIGHT_SMOOTHING)
-			const normalized = Math.round(smoothed * 10) / 10
-			if (Math.abs(normalized - autoRowHeightEstimate) < AUTO_ROW_HEIGHT_EPSILON) {
-				return false
-			}
-			autoRowHeightEstimate = normalized
+			const nextEstimate = resolveAutoRowHeightEstimate({
+				currentEstimate: autoRowHeightEstimate,
+				cachedEstimate: autoRowHeightCache.resolveEstimatedHeight(baseRowHeight),
+				preserveLowerBound: options.preserveLowerBound,
+			})
+			if (nextEstimate == null) return false
+			autoRowHeightEstimate = nextEstimate
 			return true
 		}
 
