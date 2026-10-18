@@ -1294,6 +1294,7 @@ describe("DataGrid app facade contract", () => {
           toolbarGap: 0,
           workspaceGap: 8,
         },
+        theme: { surfaceRadius: "14px" },
       },
     })
 
@@ -1307,6 +1308,7 @@ describe("DataGrid app facade contract", () => {
     expect(layoutStyle.style.getPropertyValue("--datagrid-app-layout-gap")).toBe("0px")
     expect(layoutStyle.style.getPropertyValue("--datagrid-app-workspace-gap")).toBe("8px")
     expect(layoutStyle.style.getPropertyValue("--datagrid-app-toolbar-button-height")).toBe("28px")
+    expect((wrapper.element as HTMLElement).style.getPropertyValue("--datagrid-surface-radius")).toBe("14px")
     expect(wrapper.find(".datagrid-app-stage-surface--integrated .datagrid-app-toolbar--integrated").exists()).toBe(true)
     expect(wrapper.findAll(".datagrid-app-layout > .datagrid-app-toolbar")).toHaveLength(0)
 
@@ -1350,20 +1352,52 @@ describe("DataGrid app facade contract", () => {
     expect(gridWrapper.find(".datagrid-app-layout .datagrid-app-toolbar").exists()).toBe(false)
     expect(publishedModules).toHaveLength(2)
 
+    const toolbarTheme = {
+      inheritThemeFromDocument: false,
+      tokens: { gridAccentStrong: "#b45309" },
+    } as const
+    const toolbarChrome = { density: "compact" } as const
     const hostWrapper = mount(DataGridModuleHost, {
       props: {
         modules: publishedModules,
+        theme: toolbarTheme,
+        chrome: toolbarChrome,
       },
     })
 
     expect(hostWrapper.find('[data-datagrid-toolbar-action="undo"]').exists()).toBe(true)
     expect(hostWrapper.find('[data-datagrid-toolbar-action="redo"]').exists()).toBe(true)
+    const toolbarStyle = hostWrapper.get(".datagrid-app-toolbar").element.getAttribute("style") ?? ""
+    expect(toolbarStyle).toContain("--datagrid-accent-strong: #b45309")
+    expect(toolbarStyle).toContain("--datagrid-app-toolbar-button-height: 28px")
 
     await hostWrapper.find('[data-datagrid-toolbar-action="undo"]').trigger("click")
   expect(runHistoryAction).toHaveBeenCalledWith("undo")
 
     hostWrapper.unmount()
     gridWrapper.unmount()
+  })
+
+  it("passes the active theme and density to the built-in toolbar", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: { controls: true, shortcuts: false },
+        theme: {
+          inheritThemeFromDocument: false,
+          tokens: { gridAccentStrong: "#b45309" },
+        },
+        chrome: { density: "compact" },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const toolbarStyle = wrapper.get(".datagrid-app-toolbar").element.getAttribute("style") ?? ""
+    expect(toolbarStyle).toContain("--datagrid-accent-strong: #b45309")
+    expect(toolbarStyle).toContain("--datagrid-app-toolbar-button-height: 28px")
+    wrapper.unmount()
   })
 
   it("keeps a column editable cell read-only when the public predicate returns false", async () => {
@@ -1980,6 +2014,170 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("stages a column condition until the shared Apply action and clears it immediately", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: SEARCH_FILTER_ROWS,
+        columns: COLUMNS,
+        columnMenu: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    queryColumnMenuAction("filter-by-condition")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const conditionSelect = document.body.querySelector<HTMLSelectElement>('[aria-label="Filter condition"]')
+    expect(conditionSelect).toBeTruthy()
+    conditionSelect!.value = "equals"
+    conditionSelect!.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const formula = document.body.querySelector<HTMLInputElement>('[aria-label="Filter formula"]')
+    expect(formula).toBeTruthy()
+    formula!.value = "NOC"
+    formula!.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState?.()).not.toMatchObject({
+      rows: expect.objectContaining({ snapshot: expect.objectContaining({
+        filterModel: expect.objectContaining({
+          advancedExpression: expect.objectContaining({ key: "owner", value: "NOC" }),
+        }),
+      }) }),
+    })
+
+    document.body.querySelector<HTMLElement>('[data-datagrid-column-menu-action="apply-filter"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({ snapshot: expect.objectContaining({
+        filterModel: expect.objectContaining({
+          advancedExpression: expect.objectContaining({
+            kind: "condition", key: "owner", operator: "equals", value: "NOC",
+          }),
+        }),
+      }) }),
+    })
+
+    const headerFilterIcon = wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"] path[d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"]')
+    expect(headerFilterIcon.exists()).toBe(true)
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("filter-by-condition")?.querySelector(".datagrid-column-menu__condition-badge")).toBeTruthy()
+    queryColumnMenuAction("filter-by-condition")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(document.body.querySelector('[data-datagrid-column-menu-action="clear-condition"]')).toBeTruthy()
+    document.body.querySelector<HTMLElement>('[data-datagrid-column-menu-action="clear-condition"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState?.()).not.toMatchObject({
+      rows: expect.objectContaining({ snapshot: expect.objectContaining({
+        filterModel: expect.objectContaining({
+          advancedExpression: expect.objectContaining({ key: "owner" }),
+        }),
+      }) }),
+    })
+    expect(wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"] path[d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it("offers numeric comparison and range conditions for numeric data types", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [{ rowId: "r1", amount: 12.5 }],
+        columns: [{ key: "amount", label: "Amount", dataType: "currency" }],
+        columnMenu: true,
+      },
+    })
+    await flushRuntimeTasks()
+    await wrapper.find('.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    queryColumnMenuAction("filter-by-condition")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    const conditionSelect = document.body.querySelector<HTMLSelectElement>('[aria-label="Filter condition"]')!
+    const optionValues = Array.from(conditionSelect.options).map(option => option.value)
+    expect(optionValues).toEqual(expect.arrayContaining(["gt", "gte", "lt", "lte", "between", "in"]))
+    conditionSelect.value = "between"
+    conditionSelect.dispatchEvent(new Event("change", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(document.body.querySelector('[aria-label="Filter formula end"]')).toBeTruthy()
+    const formulaStart = document.body.querySelector<HTMLInputElement>('[aria-label="Filter formula"]')!
+    const formulaEnd = document.body.querySelector<HTMLInputElement>('[aria-label="Filter formula end"]')!
+    formulaStart.value = "10"
+    formulaStart.dispatchEvent(new Event("input", { bubbles: true }))
+    formulaEnd.value = "20"
+    formulaEnd.dispatchEvent(new Event("input", { bubbles: true }))
+    document.body.querySelector<HTMLElement>('[data-datagrid-column-menu-action="apply-filter"]')?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    )
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState?.()).toMatchObject({
+      rows: expect.objectContaining({
+        snapshot: expect.objectContaining({
+          filterModel: expect.objectContaining({
+            advancedExpression: expect.objectContaining({
+              kind: "condition",
+              key: "amount",
+              type: "number",
+              operator: "between",
+              value: 10,
+              value2: 20,
+            }),
+          }),
+        }),
+      }),
+    })
+    wrapper.unmount()
+  })
+
+  it("allows the column-menu condition action to be hidden globally or per column", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: {
+          enabled: true,
+          columns: {
+            owner: { hide: ["condition"] },
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("filter-by-condition")).toBeFalsy()
+
+    await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("filter-by-condition")).toBeTruthy()
+
+    wrapper.unmount()
+
+    const globallyHiddenWrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: { enabled: true, hide: ["condition"] },
+      },
+    })
+    await flushRuntimeTasks()
+    await globallyHiddenWrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("filter-by-condition")).toBeFalsy()
+    globallyHiddenWrapper.unmount()
+  })
+
   it("supports declarative columnMenu trigger modes", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -2535,8 +2733,8 @@ describe("DataGrid app facade contract", () => {
       ranges: [{
         startRow: 0,
         endRow: 0,
-        startCol: 0,
-        endCol: 0,
+        startCol: 1,
+        endCol: 1,
         anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
         focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
         startRowId: "r1",
@@ -3196,6 +3394,53 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("reorders columns in the real grid runtime with Shift+Option arrow keys", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        columnMenu: false,
+        columnReorder: true,
+      },
+    })
+    await flushRuntimeTasks()
+
+    const ownerHeader = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    ownerHeader.element.focus()
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    ownerHeader.element.dispatchEvent(event)
+    await flushRuntimeTasks()
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(wrapper.findAll('.grid-header-viewport .grid-cell--header[data-column-key]').map(header => header.attributes("data-column-key")))
+      .toEqual(["region", "owner", "amount"])
+    expect(document.activeElement?.getAttribute("data-column-key")).toBe("owner")
+
+    const repeatedOwnerHeader = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+    const repeatedEvent = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    repeatedOwnerHeader.element.dispatchEvent(repeatedEvent)
+    await flushRuntimeTasks()
+
+    expect(repeatedEvent.defaultPrevented).toBe(true)
+    expect(wrapper.findAll('.grid-header-viewport .grid-cell--header[data-column-key]').map(header => header.attributes("data-column-key")))
+      .toEqual(["region", "amount", "owner"])
+    expect(document.activeElement?.getAttribute("data-column-key")).toBe("owner")
+    wrapper.unmount()
+  })
+
   it("keeps active-cell continuity after column reorder so keyboard navigation stays on the moved logical column", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -3220,29 +3465,39 @@ describe("DataGrid app facade contract", () => {
       ranges: [{
         startRow: 1,
         endRow: 1,
-        startCol: 0,
-        endCol: 0,
+        startCol: 1,
+        endCol: 1,
         startRowId: "r2",
         endRowId: "r2",
-        anchor: { rowIndex: 1, colIndex: 0, rowId: "r2" },
-        focus: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+        anchor: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
       }],
       activeRangeIndex: 0,
-      activeCell: { rowIndex: 1, colIndex: 0, rowId: "r2" },
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
     })
     await flushRuntimeTasks()
 
     const ownerHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
-    const amountHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
     expect(ownerHeader.exists()).toBe(true)
-    expect(amountHeader.exists()).toBe(true)
-
-    await dragDropElement(ownerHeader.element as HTMLElement, amountHeader.element as HTMLElement, {
-      targetClientX: 96,
+    ownerHeader.element.focus()
+    const reorderEvent = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
     })
-    await flushAnimationFrame()
+    ownerHeader.element.dispatchEvent(reorderEvent)
     await flushRuntimeTasks()
 
+    expect(reorderEvent.defaultPrevented).toBe(true)
+    expect(api?.selection?.getSnapshot?.()).toMatchObject({
+      activeCell: expect.objectContaining({ rowIndex: 1, colIndex: 2, rowId: "r2" }),
+    })
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r2"][data-column-key="owner"]').classes())
+      .toContain("grid-cell--selection-anchor")
+    expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-row-id="r2"][data-column-key="amount"]').classes())
+      .not.toContain("grid-cell--selection-anchor")
     expect(api?.selection?.getSnapshot?.()).toMatchObject({
       ranges: [expect.objectContaining({
         startRow: 1,
@@ -4094,6 +4349,8 @@ describe("DataGrid app facade contract", () => {
     await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
+    expect(queryColumnMenuRoot()?.textContent).toContain("Filter by value")
+
     queryColumnMenuAction("clear-all-values")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await flushRuntimeTasks()
 
@@ -4257,6 +4514,8 @@ describe("DataGrid app facade contract", () => {
     expect(input.exists()).toBe(true)
     expect(input.element.type).toBe("text")
     expect(input.element.placeholder).toBe("Search owner")
+    expect(input.attributes("aria-label")).toBe("Quick filter")
+    expect(wrapper.find(".datagrid-app-quick-filter__label").exists()).toBe(false)
 
     await input.setValue("Payments")
     await flushRuntimeTasks()
@@ -5607,6 +5866,30 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps the default filter panel headings concise and uses compact actions", async () => {
+    await preloadAdvancedFilterPopover()
+
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: { rows: BASE_ROWS, columns: COLUMNS, advancedFilter: true },
+    })
+    const trigger = await findAdvancedFilterTrigger(wrapper)
+    await trigger!.trigger("click")
+    await flushRuntimeTasks()
+
+    const popover = queryAdvancedFilterRoot()!
+    expect(popover.querySelectorAll(".datagrid-advanced-filter__eyebrow")).toHaveLength(0)
+    expect(popover.querySelector(".datagrid-advanced-filter__title")?.textContent).toBe("Filter")
+    expect(popover.querySelector(".datagrid-advanced-filter__applied-title")?.textContent).toBe("Current filters")
+    expect(popover.textContent).not.toContain("Applied on table")
+    const close = popover.querySelector<HTMLButtonElement>(".datagrid-advanced-filter__close")!
+    expect(close.textContent?.trim()).toBe("×")
+    expect(close.getAttribute("aria-label")).toBe("Close")
+    expect(popover.querySelector(".datagrid-advanced-filter__clear-link")).toBeTruthy()
+
+    wrapper.unmount()
+  })
+
   it("applies declarative advancedFilter through an external data-source row model", async () => {
     await preloadAdvancedFilterPopover()
 
@@ -5759,7 +6042,7 @@ describe("DataGrid app facade contract", () => {
       top: initialPosition!.top + 56,
     })
 
-    draggedRoot?.querySelector<HTMLButtonElement>(".datagrid-advanced-filter__ghost")?.dispatchEvent(
+    draggedRoot?.querySelector<HTMLButtonElement>(".datagrid-advanced-filter__close")?.dispatchEvent(
       new MouseEvent("click", { bubbles: true }),
     )
     await flushRuntimeTasks()
@@ -7980,7 +8263,7 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("expands pinned flex columns from the full stage shell width", async () => {
+  it("keeps pinned flex columns at their authored width", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -8013,7 +8296,7 @@ describe("DataGrid app facade contract", () => {
     const regionHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="region"]')
     const amountHeaderCell = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="amount"]')
 
-    expect(ownerHeaderCell.attributes("style")).toContain("width: 348px")
+    expect(ownerHeaderCell.attributes("style")).toContain("width: 180px")
     expect(regionHeaderCell.attributes("style")).toContain("width: 160px")
     expect(amountHeaderCell.attributes("style")).toContain("width: 140px")
 
@@ -8058,6 +8341,200 @@ describe("DataGrid app facade contract", () => {
     target.unmount()
   })
 
+  it("restores async persistence before ready and keeps controlled sort without clearing filters", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const saved = resolveVm(source).getState!()!
+    saved.columns.widths.owner = 235
+    saved.rows.snapshot.filterModel = { columnFilters: {}, advancedFilters: {}, quickFilter: { query: "a" } }
+    source.unmount()
+    let complete!: (value: unknown) => void
+    const save = vi.fn()
+    const ready = vi.fn()
+    const wrapper = mount(DataGrid, { props: {
+      rows: BASE_ROWS, columns: COLUMNS, sortModel: [{ key: "amount", direction: "desc" }],
+      statePersistence: { key: "async", load: () => new Promise(resolve => { complete = resolve }), save, debounceMs: 0 },
+      onReady: ready,
+    } })
+    await flushRuntimeTasks()
+    expect(ready).not.toHaveBeenCalled()
+    expect(wrapper.attributes("data-persistence-loading")).toBe("true")
+    expect(save).not.toHaveBeenCalled()
+    complete(saved)
+    await flushRuntimeTasks()
+    expect(ready).toHaveBeenCalledTimes(1)
+    const restored = resolveVm(wrapper).getState!()!
+    expect(restored.columns.widths.owner).toBe(235)
+    expect(restored.rows.snapshot.filterModel?.quickFilter?.query).toBe("a")
+    expect(restored.rows.snapshot.sortModel).toEqual([{ key: "amount", direction: "desc" }])
+    expect(wrapper.attributes("data-persistence-loading")).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it("waits for async columns and discards removed persisted column keys", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const saved = resolveVm(source).getState!()!
+    saved.columns.widths.owner = 244
+    saved.columns.order.push("removed")
+    saved.columns.widths.removed = 900
+    source.unmount()
+    const load = vi.fn(() => saved)
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: [], statePersistence: { key: "columns", load, save: vi.fn() } } })
+    await flushRuntimeTasks()
+    expect(load).not.toHaveBeenCalled()
+    await wrapper.setProps({ columns: [...COLUMNS, { key: "new", label: "New", initialState: { width: 123 } }] })
+    await flushRuntimeTasks()
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(resolveVm(wrapper).getState!()!.columns.widths).toMatchObject({ owner: 244, new: 123 })
+    expect(resolveVm(wrapper).getState!()!.columns.order).not.toContain("removed")
+    expect(wrapper.attributes("data-persistence-loading")).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it("ignores stale async loads when the persistence key changes", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const stateA = resolveVm(source).getState!()!
+    const stateB = structuredClone(stateA)
+    stateA.columns.widths.owner = 201
+    stateB.columns.widths.owner = 302
+    source.unmount()
+    const loads: Record<string, (value: unknown) => void> = {}
+    const load = ({ key }: { key: string }) => new Promise(resolve => { loads[key] = resolve })
+    const save = vi.fn()
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS, statePersistence: { key: "A", load, save } } })
+    await flushRuntimeTasks()
+    await wrapper.setProps({ statePersistence: { key: "B", load, save } })
+    await flushRuntimeTasks()
+    loads.B!(stateB)
+    await flushRuntimeTasks()
+    loads.A!(stateA)
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState!()!.columns.widths.owner).toBe(302)
+    expect(wrapper.emitted("persistence-change")?.at(-1)?.[0]).toMatchObject({ key: "B", status: "ready" })
+    wrapper.unmount()
+  })
+
+  it("keeps unreadable persistence intact and reports the load error", async () => {
+    const storage = createMemoryStorage({ corrupt: "not json" })
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS, statePersistence: { key: "corrupt", storage, debounceMs: 0 } } })
+    await flushRuntimeTasks()
+    expect(wrapper.emitted("persistence-change")?.at(-1)?.[0]).toMatchObject({ status: "error", operation: "load" })
+    wrapper.unmount()
+    expect(storage.read("corrupt")).toBe("not json")
+  })
+
+  it("serializes async saves and persists reset after an in-flight save", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const initial = resolveVm(source).getState!()!
+    source.unmount()
+    const releases: Array<() => void> = []
+    const save = vi.fn(() => new Promise<void>(resolve => releases.push(resolve)))
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS, statePersistence: { key: "serial", load: () => initial, save, debounceMs: 0 } } })
+    await flushRuntimeTasks()
+    const vm = wrapper.vm as unknown as DataGridInstance<Record<string, unknown>>
+    vm.getApi()!.columns.setWidth("owner", 311)
+    await flushRuntimeTasks()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(save).toHaveBeenCalledTimes(1)
+    const reset = vm.resetPersistedState()
+    await flushRuntimeTasks()
+    expect(save).toHaveBeenCalledTimes(1)
+    releases.shift()!()
+    await flushRuntimeTasks()
+    expect(save).toHaveBeenCalledTimes(2)
+    expect((save.mock.calls as unknown as Array<[{ state: DataGridUnifiedState }]>)[1]![0].state.columns.widths.owner).toBe(initial.columns.widths.owner)
+    releases.shift()!()
+    await expect(reset).resolves.toBe(true)
+    wrapper.unmount()
+  })
+
+  it("keeps controlled unified state authoritative over persisted state", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const controlled = resolveVm(source).getState!()!
+    controlled.columns.widths.owner = 210
+    const saved = structuredClone(controlled)
+    saved.columns.widths.owner = 390
+    source.unmount()
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS, state: controlled,
+      statePersistence: { key: "controlled", load: () => saved, save: vi.fn() },
+    } })
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getState!()!.columns.widths.owner).toBe(210)
+    wrapper.unmount()
+  })
+
+  it("flushes pending preferences under the old key and excludes transient state by default", async () => {
+    const storage = createMemoryStorage()
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS,
+      statePersistence: { key: "A", storage, debounceMs: 1000 },
+    } })
+    await flushRuntimeTasks()
+    const vm = wrapper.vm as unknown as DataGridInstance<Record<string, unknown>>
+    vm.getApi()!.columns.setWidth("owner", 312)
+    await flushRuntimeTasks()
+    await wrapper.setProps({ statePersistence: { key: "B", storage, debounceMs: 1000 } })
+    await flushRuntimeTasks()
+    const saved = JSON.parse(storage.read("A")!)
+    expect(saved.columns.widths.owner).toBe(312)
+    expect(saved.view).toBeUndefined()
+    expect(saved.selection).toBeNull()
+    expect(saved.rowSelection).toBeNull()
+    expect(saved.transaction).toBeNull()
+    expect(vm.getState()!.columns.widths.owner).not.toBe(312)
+    wrapper.unmount()
+  })
+
+  it("reports save failures and retries on the next preference change", async () => {
+    const source = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS } })
+    await flushRuntimeTasks()
+    const state = resolveVm(source).getState!()!
+    source.unmount()
+    const save = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined)
+    const wrapper = mount(DataGrid, { props: { rows: BASE_ROWS, columns: COLUMNS,
+      statePersistence: { key: "retry", load: () => state, save, debounceMs: 0 },
+    } })
+    await flushRuntimeTasks()
+    const vm = wrapper.vm as unknown as DataGridInstance<Record<string, unknown>>
+    vm.getApi()!.columns.setWidth("owner", 250)
+    await flushRuntimeTasks()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(wrapper.emitted("persistence-change")?.at(-1)?.[0]).toMatchObject({ status: "error", operation: "save" })
+    vm.getApi()!.columns.setWidth("owner", 260)
+    await flushRuntimeTasks()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted("persistence-change")?.at(-1)?.[0]).toMatchObject({ status: "ready" })
+    wrapper.unmount()
+  })
+
+  it("does not restart persistence when a parent recreates the options object", async () => {
+    const rows = ref(BASE_ROWS)
+    const columns = ref(COLUMNS)
+    const parentRenders = ref(0)
+    const load = vi.fn(() => null)
+    const save = vi.fn()
+    const Parent = defineComponent({
+      setup() {
+        return () => h(DataGrid, {
+          rows: rows.value,
+          columns: columns.value,
+          statePersistence: { key: "inline", load: async () => load(), save: async payload => save(payload) },
+          onPersistenceChange: () => { parentRenders.value += 1 },
+        })
+      },
+    })
+    const wrapper = mount(Parent)
+    await flushRuntimeTasks()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(parentRenders.value).toBeGreaterThan(0)
+    wrapper.unmount()
+  })
+
   it("persists unified state with viewport position through declarative statePersistence", async () => {
     const storage = createMemoryStorage()
     const wrapper = mount(DataGrid, {
@@ -8069,6 +8546,7 @@ describe("DataGrid app facade contract", () => {
           key: "grid-state",
           storage,
           debounceMs: 0,
+          includeViewportPosition: true,
         },
       },
     })
@@ -8654,7 +9132,7 @@ describe("DataGrid app facade contract", () => {
     expect(layoutElement.style.getPropertyValue("--datagrid-row-divider-size")).toBe("1px")
     expect(layoutElement.style.getPropertyValue("--datagrid-column-divider-size")).toBe("0px")
     expect(layoutElement.style.getPropertyValue("--datagrid-header-column-divider-size")).toBe("0px")
-    expect(layoutElement.style.getPropertyValue("--datagrid-pinned-pane-separator-size")).toBe("2px")
+    expect(layoutElement.style.getPropertyValue("--datagrid-pinned-pane-separator-size")).toBe("1px")
 
     wrapper.unmount()
   })

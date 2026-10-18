@@ -41,12 +41,17 @@
         <div
           v-if="showIndexColumn"
           class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
-          :class="{ 'grid-cell--header-merged-untitled': headerGroupDepth > 0 }"
+          :class="{ 'grid-cell--header-merged-untitled': headerGroupDepth > 0, 'grid-cell--header-selected': isIndexHeaderSelected, 'grid-cell--focus-axis': focusedBodyColumnKey === null && focusedBodyRowIndex !== null }"
           :style="indexColumnHeaderStyle"
           :id="DATA_GRID_STAGE_ROW_INDEX_HEADER_ID"
           role="columnheader"
+          tabindex="-1"
+          data-datagrid-row-index-header="true"
           aria-colindex="1"
           aria-label="Row index"
+          :aria-selected="isIndexHeaderSelected"
+          @focus="selectAllIndexedRows"
+          @click="focusRowIndexHeaderFromClick"
         >
           <div class="col-head col-head--index">
             <span>#</span>
@@ -58,7 +63,7 @@
             <div
               v-if="isRowSelectionColumn(column)"
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
-              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0 }"
+              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0, 'grid-cell--focus-axis': focusedBodyColumnKey === column.key }"
               :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
@@ -160,7 +165,7 @@
             <div
               v-if="isRowSelectionColumn(column)"
               class="grid-cell grid-cell--header grid-cell--pinned-left grid-cell--checkbox grid-cell--row-selection"
-              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0 }"
+              :class="{ 'grid-cell--header-merged-untitled': trailingEmptyHeaderGroupDepth(column) > 0, 'grid-cell--focus-axis': focusedBodyColumnKey === column.key }"
               :style="headerColumnStyle(column)"
               :data-column-key="column.key"
               :id="headerCellId(column)"
@@ -234,7 +239,7 @@
                   :disabled="!isColumnFilterable(column)"
                   placeholder="Filter..."
                   @mousedown.stop
-                  @keydown.stop
+                  @keydown.stop="handleColumnFilterKeydown"
                   @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
                 />
               </div>
@@ -421,7 +426,7 @@
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
                 @mousedown.stop
-                @keydown.stop
+                @keydown.stop="handleColumnFilterKeydown"
                 @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
               />
             </div>
@@ -587,7 +592,7 @@
                 :disabled="!isColumnFilterable(column)"
                 placeholder="Filter..."
                 @mousedown.stop
-                @keydown.stop
+                @keydown.stop="handleColumnFilterKeydown"
                 @input="setColumnFilterText(column.key, ($event.target as HTMLInputElement).value)"
               />
             </div>
@@ -676,6 +681,22 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
+  navigateToRowIndex: {
+    type: Function as PropType<(rowIndex: number, extend: boolean) => boolean>,
+    default: undefined,
+  },
+  focusedBodyColumnKey: {
+    type: String as PropType<string | null>,
+    default: null,
+  },
+  focusedBodyRowIndex: {
+    type: Number as PropType<number | null>,
+    default: null,
+  },
+  copySelectedCells: {
+    type: Function as PropType<(trigger?: "keyboard" | "context-menu") => Promise<boolean>>,
+    default: undefined,
+  },
   isCoarsePointer: {
     type: Boolean,
     default: false,
@@ -698,6 +719,25 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 
 const visibleColumns = computed(() => columns.value.visibleColumns)
+const isIndexHeaderSelected = computed(() => {
+  const range = selection.value.selectionRange
+  const lastColumn = visibleColumns.value.length - 1
+  const lastRow = (selection.value.totalRowCount ?? 0) - 1
+  return range != null && lastColumn >= 0 && lastRow >= 0
+    && range.startRow === 0 && range.endRow >= lastRow
+    && range.startColumn === 0 && range.endColumn >= lastColumn
+})
+
+function selectAllIndexedRows(): void {
+  if (visibleColumns.value.length > 0) {
+    selection.value.selectColumnRange?.(0, visibleColumns.value.length - 1)
+  }
+}
+
+function focusRowIndexHeaderFromClick(event: MouseEvent): void {
+  (event.currentTarget as HTMLElement).focus({ preventScroll: true })
+  selectAllIndexedRows()
+}
 const renderedColumns = computed(() => columns.value.renderedColumns)
 const centerHeaderColumns = computed(() => renderedColumns.value)
 const allCenterHeaderColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
@@ -752,6 +792,8 @@ const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey
 const draggedHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
+const pendingHeaderFocusColumnKey = ref<string | null>(null)
+let pendingHeaderFocusSelectColumn = true
 let suppressHeaderClick = false
 let keyboardHeaderSelectionAnchorColumnIndex: number | null = null
 let activeTouchResizeId: number | null = null
@@ -818,6 +860,23 @@ onMounted(() => {
 watch(
   [leftHeaderGroupRows, centerHeaderGroupRows, rightHeaderGroupRows],
   () => measureGroupLabelWidths(),
+  { flush: "post" },
+)
+watch(
+  [renderedColumns, visibleColumns],
+  () => {
+    const columnKey = pendingHeaderFocusColumnKey.value
+    if (!columnKey) return
+    if (!visibleColumns.value.some(column => column.key === columnKey)) {
+      pendingHeaderFocusColumnKey.value = null
+      return
+    }
+    const headerCell = resolveHeaderCellElement(columnKey)
+    if (headerCell) {
+      pendingHeaderFocusColumnKey.value = null
+      focusMountedHeaderColumn(headerCell, columnKey, pendingHeaderFocusSelectColumn)
+    }
+  },
   { flush: "post" },
 )
 onBeforeUnmount(() => {
@@ -896,8 +955,18 @@ function resolveHeaderCellClasses(
   column: TableColumn,
   options: { menuEnabled?: boolean; menuOpen?: boolean } = {},
 ): Record<string, boolean> {
+  const isTerminalCenterColumn = column.pin !== "left"
+    && column.pin !== "right"
+    && pinnedRightColumns.value.length === 0
+    && allCenterHeaderColumns.value[allCenterHeaderColumns.value.length - 1]?.key === column.key
+  const selectionEdges = resolveFullColumnSelectionRangeEdges(column)
   return {
-    "grid-cell--header-selected": isFullColumnSelection(column),
+    "grid-cell--header-selected": selectionEdges.selected,
+    "grid-cell--focus-axis": props.focusedBodyColumnKey === column.key,
+    "grid-cell--header-selection-range": selectionEdges.selected,
+    "grid-cell--header-selection-range-start": selectionEdges.start,
+    "grid-cell--header-selection-range-end": selectionEdges.end,
+    "grid-cell--header-terminal": isTerminalCenterColumn,
     "grid-cell--header-menu-enabled": options.menuEnabled === true,
     "grid-cell--header-menu-open": options.menuOpen === true,
     "grid-cell--header-reorderable": isHeaderColumnDraggable(column),
@@ -908,24 +977,28 @@ function resolveHeaderCellClasses(
   }
 }
 
-function isFullColumnSelection(column: TableColumn): boolean {
+function resolveFullColumnSelectionRangeEdges(column: TableColumn): { selected: boolean; start: boolean; end: boolean } {
   const columnIndex = visibleColumns.value.findIndex(entry => entry.key === column.key)
   const totalRowCount = selection.value.totalRowCount ?? 0
   if (columnIndex < 0 || totalRowCount <= 0) {
-    return false
+    return { selected: false, start: false, end: false }
   }
   const ranges = selection.value.selectionRanges
     ?? (selection.value.selectionRange ? [selection.value.selectionRange] : [])
-  return ranges.some(range => {
+  let selected = false
+  let start = false
+  let end = false
+  for (const range of ranges) {
     const startRow = Math.min(range.startRow, range.endRow)
     const endRow = Math.max(range.startRow, range.endRow)
     const startColumn = Math.min(range.startColumn, range.endColumn)
     const endColumn = Math.max(range.startColumn, range.endColumn)
-    return startRow === 0
-      && endRow >= totalRowCount - 1
-      && columnIndex >= startColumn
-      && columnIndex <= endColumn
-  })
+    if (startRow !== 0 || endRow < totalRowCount - 1 || columnIndex < startColumn || columnIndex > endColumn) continue
+    selected = true
+    start ||= columnIndex === startColumn
+    end ||= columnIndex === endColumn
+  }
+  return { selected, start, end }
 }
 
 function columnStyle(key: string): CSSProperties {
@@ -1280,28 +1353,101 @@ function resolveHeaderCellElement(columnKey: string): HTMLElement | null {
     .find(element => element.dataset.columnKey === columnKey) ?? null
 }
 
+function captureHeaderCellPositions(): Map<string, { element: HTMLElement; left: number; top: number }> {
+  const stageRoot = headerShellElement.value?.closest(".grid-stage")
+  const positions = new Map<string, { element: HTMLElement; left: number; top: number }>()
+  for (const element of Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])) {
+    const key = element.dataset.columnKey
+    if (!key || positions.has(key)) continue
+    const bounds = element.getBoundingClientRect()
+    positions.set(key, { element, left: bounds.left, top: bounds.top })
+  }
+  return positions
+}
+
+function animateHeaderReorder(previous: Map<string, { element: HTMLElement; left: number; top: number }>): void {
+  if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+  const stageRoot = headerShellElement.value?.closest(".grid-stage")
+  for (const element of Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])) {
+    const key = element.dataset.columnKey
+    const before = key ? previous.get(key) : undefined
+    if (!before || typeof element.animate !== "function") continue
+    const bounds = element.getBoundingClientRect()
+    const deltaX = before.left - bounds.left
+    const deltaY = before.top - bounds.top
+    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue
+    element.animate(
+      [{ transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
+      { duration: 140, easing: "ease-out" },
+    )
+  }
+}
+
+function revealHeaderColumnInBodyViewport(headerCell: HTMLElement): void {
+  if (!headerCell.closest(".grid-header-viewport")) return
+  const stageRoot = headerShellElement.value?.closest(".grid-stage")
+  const bodyViewport = stageRoot?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
+    ?? stageRoot?.querySelector<HTMLElement>(".grid-body-viewport")
+  const headerViewport = centerHeaderViewportElement
+  if (!bodyViewport || !headerViewport) return
+
+  const headerBounds = headerViewport.getBoundingClientRect()
+  const cellBounds = headerCell.getBoundingClientRect()
+  const columnLeft = cellBounds.left - headerBounds.left + headerViewport.scrollLeft
+  const columnRight = columnLeft + cellBounds.width
+  const viewportLeft = bodyViewport.scrollLeft
+  const viewportRight = viewportLeft + bodyViewport.clientWidth
+  if (columnLeft < viewportLeft) {
+    bodyViewport.scrollLeft = columnLeft
+  } else if (columnRight > viewportRight) {
+    bodyViewport.scrollLeft = columnRight - bodyViewport.clientWidth
+  }
+}
+
+function focusMountedHeaderColumn(headerCell: HTMLElement, columnKey: string, selectColumn: boolean): void {
+  revealHeaderColumnInBodyViewport(headerCell)
+  const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
+  const column = visibleColumns.value[columnIndex]
+  if (column && !isRowSelectionColumn(column)) {
+    if (selectColumn) {
+      selection.value.selectColumn?.(columnIndex)
+      keyboardHeaderSelectionAnchorColumnIndex = columnIndex
+    }
+  } else if (column && isRowSelectionColumn(column)) {
+    selection.value.clearCellSelection?.()
+    keyboardHeaderSelectionAnchorColumnIndex = null
+  }
+  const focusTarget = column && isRowSelectionColumn(column)
+    ? headerCell.querySelector<HTMLElement>(".grid-checkbox-trigger") ?? headerCell
+    : headerCell
+  focusTarget.focus({ preventScroll: true })
+}
+
 function focusHeaderColumn(columnKey: string, selectColumn = true): void {
   const headerCell = resolveHeaderCellElement(columnKey)
   if (headerCell) {
-    const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
-    const column = visibleColumns.value[columnIndex]
-    if (column && !isRowSelectionColumn(column)) {
-      if (selectColumn) {
-        selection.value.selectColumn?.(columnIndex)
-        keyboardHeaderSelectionAnchorColumnIndex = columnIndex
-      }
-    } else if (column && isRowSelectionColumn(column)) {
-      selection.value.clearCellSelection?.()
-      keyboardHeaderSelectionAnchorColumnIndex = null
-    }
-    const focusTarget = column && isRowSelectionColumn(column)
-      ? headerCell.querySelector<HTMLElement>(".grid-checkbox-trigger") ?? headerCell
-      : headerCell
-    focusTarget.focus()
+    pendingHeaderFocusColumnKey.value = null
+    focusMountedHeaderColumn(headerCell, columnKey, selectColumn)
     return
   }
-  columns.value.scrollToColumn?.({ columnKey, align: "nearest" })
-  void nextTick(() => focusHeaderColumn(columnKey))
+  if (!columns.value.scrollToColumn) return
+  pendingHeaderFocusColumnKey.value = columnKey
+  pendingHeaderFocusSelectColumn = selectColumn
+  columns.value.scrollToColumn({ columnKey, align: "nearest" })
+  // One post-render check handles the synchronous model update. Further
+  // waiting is driven by the rendered-column watch, never a recursive tick loop.
+  void nextTick(() => {
+    if (pendingHeaderFocusColumnKey.value !== columnKey) return
+    const mountedHeaderCell = resolveHeaderCellElement(columnKey)
+    if (!mountedHeaderCell) return
+    pendingHeaderFocusColumnKey.value = null
+    focusMountedHeaderColumn(mountedHeaderCell, columnKey, pendingHeaderFocusSelectColumn)
+  })
+}
+
+function focusRowIndexHeader(stageRoot: ParentNode): void {
+  const header = stageRoot.querySelector<HTMLElement>("[data-datagrid-row-index-header='true']")
+  header?.focus({ preventScroll: true })
 }
 
 function focusSelectionAnchorBodyCell(stageRoot: ParentNode): void {
@@ -1331,22 +1477,96 @@ function focusFirstRowSelectionCell(stageRoot: ParentNode): void {
   stageRoot.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")?.focus({ preventScroll: true })
 }
 
+function handleColumnFilterKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return
+  event.preventDefault()
+  const stageRoot = (event.target as HTMLElement).closest(".grid-stage")
+  if (!stageRoot) return
+  void nextTick(() => focusSelectionAnchorBodyCell(stageRoot))
+}
+
 function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
   const target = event.target
   if (!(target instanceof HTMLElement)) {
     return
   }
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "c") {
+    const isTextInput = target.closest("input, textarea, [contenteditable]:not([contenteditable='false'])") !== null
+    if (!isTextInput && props.copySelectedCells) {
+      event.preventDefault()
+      void props.copySelectedCells("keyboard")
+    }
+    return
+  }
+  const stageRoot = target.closest(".grid-stage")
+  const isIndexHeader = target.closest("[data-datagrid-row-index-header='true']") !== null
+  if (isIndexHeader) {
+    if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault()
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    if (event.key === "ArrowRight") {
+      const firstColumn = visibleColumns.value[0]
+      if (firstColumn) {
+        event.preventDefault()
+        focusHeaderColumn(firstColumn.key)
+      }
+    } else if (event.key === "ArrowDown" && stageRoot) {
+      if (props.navigateToRowIndex?.(0, false) === true) {
+        event.preventDefault()
+        return
+      }
+      const firstRowIndexCell = stageRoot.querySelector<HTMLElement>(".grid-cell--index-number[data-row-index='0']")
+      if (firstRowIndexCell) {
+        event.preventDefault()
+        firstRowIndexCell.focus({ preventScroll: true })
+      }
+    }
+    return
+  }
   const headerCell = target.closest<HTMLElement>(".grid-cell--header[data-column-key]")
   if (!headerCell) return
   const columnKey = headerCell.dataset.columnKey
-  if (!columnKey || event.ctrlKey || event.metaKey || event.altKey) {
-    return
-  }
+  if (!columnKey) return
   const columnIndex = visibleColumns.value.findIndex(column => column.key === columnKey)
-  const stageRoot = target.closest(".grid-stage")
   if (columnIndex < 0 || !stageRoot) {
     return
   }
+  const keyboardDirection = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
+  const isKeyboardReorder = keyboardDirection !== 0
+    && event.shiftKey
+    && ((event.ctrlKey || event.metaKey) !== event.altKey)
+  if (isKeyboardReorder) {
+    const column = visibleColumns.value[columnIndex]
+    const nextColumn = visibleColumns.value[columnIndex + keyboardDirection]
+    if (column && nextColumn && column.pin === nextColumn.pin
+      && isHeaderColumnDraggable(column) && isHeaderColumnDraggable(nextColumn)) {
+      const previousHeaderPositions = captureHeaderCellPositions()
+      const moved = columns.value.reorderColumnsByHeader?.({
+        sourceColumnKey: column.key,
+        targetColumnKey: nextColumn.key,
+        placement: keyboardDirection > 0 ? "after" : "before",
+      }) === true
+      if (moved) {
+        event.preventDefault()
+        // Reorder may replace or move the focused header node. Restore focus only
+        // after Vue has committed the new keyed DOM order so repeated chords keep
+        // acting on the same logical column.
+        void nextTick(() => {
+          focusHeaderColumn(column.key, false)
+          animateHeaderReorder(previousHeaderPositions)
+        })
+      }
+    }
+    return
+  }
+  if (keyboardDirection !== 0 && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    event.preventDefault()
+    columns.value.resizeColumnByKeyboard?.(columnKey, keyboardDirection as -1 | 1)
+    return
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) return
   if (event.shiftKey && event.key === "ArrowDown") {
     event.preventDefault()
     const targetRow = Math.min(1, (selection.value.totalRowCount ?? 0) - 1)
@@ -1360,6 +1580,10 @@ function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
     event.preventDefault()
     const nextColumnIndex = columnIndex + (event.key === "ArrowRight" ? 1 : -1)
     const nextColumn = visibleColumns.value[nextColumnIndex]
+    if (event.key === "ArrowLeft" && columnIndex === 0 && props.showIndexColumn) {
+      focusRowIndexHeader(stageRoot)
+      return
+    }
     if (nextColumn) {
       if (event.shiftKey) {
         if (isRowSelectionColumn(nextColumn)) {
@@ -1387,6 +1611,7 @@ function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
       const anchor = selection.value.selectionAnchorCell
       const column = visibleColumns.value[columnIndex]
       if (column && isRowSelectionColumn(column)) {
+        selection.value.selectCell?.(0, columnIndex)
         focusFirstRowSelectionCell(stageRoot)
       } else if (column) {
         const rowIndex = anchor?.rowIndex ?? 0
@@ -1432,7 +1657,19 @@ function handleHeaderColumnClick(
   }
   if (columns.value.handleHeaderColumnClick) {
     columns.value.handleHeaderColumnClick(column.key, modifiers)
+    focusHeaderColumn(column.key, false)
     return
+  }
+  const columnIndex = visibleColumns.value.findIndex(entry => entry.key === column.key)
+  if (columnIndex >= 0) {
+    if (modifiers.extend) {
+      const anchor = keyboardHeaderSelectionAnchorColumnIndex ?? selection.value.selectionAnchorCell?.columnIndex ?? columnIndex
+      selection.value.selectColumnRange?.(anchor, columnIndex)
+      keyboardHeaderSelectionAnchorColumnIndex = anchor
+      focusHeaderColumn(column.key, false)
+    } else {
+      focusHeaderColumn(column.key)
+    }
   }
   if (!isColumnSortable(column)) {
     return

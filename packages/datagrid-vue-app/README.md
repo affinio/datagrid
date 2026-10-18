@@ -206,9 +206,9 @@ The shared formatter implementation lives in `@affino/datagrid-format`, so the s
 
 ## Layout Modes
 
-`DataGrid` exposes a package-level height contract so pages do not need to wrap the grid in ad-hoc `height: 100%` containers.
+`DataGrid` exposes a package-level height contract. `fill` is the default and occupies a bounded host; `auto-height` follows the row content for ordinary document flow.
 
-- `fill`: app-shell behavior; the grid fills the available container height
+- `fill`: the grid fills the height assigned by its host, including the built-in toolbar. The host must have a definite height from its own parent or layout.
 - `auto-height`: the grid computes its own table height from header and rows
 - `minRows`: optional lower bound for `auto-height`
 - `maxRows`: optional upper bound for `auto-height`; scrolling stays inside the body after this clamp
@@ -229,7 +229,7 @@ Normalization rules:
 - `fill` always ignores `minRows` and `maxRows`
 - `0`, negative, `NaN`, and non-finite row limits are treated as unset
 - if both limits are present and `maxRows < minRows`, `maxRows` is clamped up to `minRows`
-- prefer `fill` for full-screen shells such as split gantt layouts and `auto-height` for embedded cards, stacked dashboard sections, and form flows
+- use `fill` for bounded application panels and `auto-height` for normal document flow, embedded cards, and forms
 
 ## Chrome Layout
 
@@ -273,22 +273,32 @@ import {
 } from "@affino/datagrid-vue-app"
 
 const toolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
+const gridTheme = 'industrial-neutral' as const
+const gridChrome = { toolbarPlacement: 'hidden' as const, density: 'compact' as const }
 </script>
 
 <template>
   <header class="sheet-header">
-    <DataGridModuleHost :modules="toolbarModules" />
+    <DataGridModuleHost
+      :modules="toolbarModules"
+      :theme="gridTheme"
+      :chrome="gridChrome"
+    />
   </header>
 
   <DataGrid
     :rows="rows"
     :columns="columns"
     :history="{ controls: true }"
-    :chrome="{ toolbarPlacement: 'hidden' }"
+    :theme="gridTheme"
+    :chrome="gridChrome"
     @toolbar-modules-change="toolbarModules = $event"
   />
 </template>
 ```
+
+Pass the same `theme` and `chrome` values to `DataGridModuleHost`; its CSS
+scope is separate from the sibling DataGrid root.
 
 ## Placeholder Rows
 
@@ -604,6 +614,13 @@ Enable the built-in header menu with one prop:
 
 `column-menu` also accepts a declarative object when you want to control the
 built-in sections instead of replacing the menu renderer.
+
+Built-in menu items and the `Cancel`/`Apply` footer buttons use compact spacing
+by default. In the value filter,
+`Select all` and `Clear all` are text links, and the value list omits the
+repetitive visible-count and scroll instructions. Loading, error, empty-result,
+and selected-count states remain available. The value list uses a compact
+default height and scrolls internally when it contains more values.
 
 ```vue
 <script setup lang="ts">
@@ -1539,6 +1556,8 @@ The object form controls placeholder text, explicit searchable columns, and matc
 />
 ```
 
+The toolbar renders quick filter as a search field without a separate visible label. Its accessible name remains `Quick filter`; set `placeholder` to the concise prompt shown inside the field.
+
 This prop is a shell convenience API. By default, typing in the input updates `filterModel.quickFilter` immediately. `applyMode: 'debounce'` commits after `debounceMs`, while `applyMode: 'manual'` keeps a local draft until Enter or the built-in Apply button. Clearing the input removes quick filter from the snapshot. It does not add a separate `update:quickFilter` event or a second state channel.
 
 Controlled consumers can still manage quick filter directly through the same `filter-model` contract:
@@ -1561,6 +1580,19 @@ Controlled consumers can still manage quick filter directly through the same `fi
 ```
 
 The app facade remains `filterModel`-first. `quick-filter` only drives the existing filter snapshot, so quick filter stays serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/datagrid/blob/main/docs/datagrid-quick-filter.md).
+
+Automatic preferences (recommended for ordinary integrations):
+
+```vue
+<DataGrid :rows="rows" :columns="columns" state-persistence="orders:v1:user-42" />
+```
+
+Supports local/session storage or async `load`/`save` callbacks, loading/error
+status through `persistence-change`, and `resetPersistedState()` on the component
+ref. Resize saves after release; restoration finishes before `ready`. Scroll,
+selection and group expansion are opt-in; history is excluded. See
+[Saved table preferences](../../docs/datagrid-state-persistence.md) for defaults,
+controlled-prop priority, async examples and migration notes.
 
 Controlled state:
 
@@ -1766,7 +1798,7 @@ Notes:
 - `flex` is declared on the column definition, not in unified column state.
 - Multiple flex columns share leftover available stage width by their flex weight.
 - If there is no free space, the column falls back to its base width.
-- Pinned and unpinned columns participate in the same effective width calculation.
+- Only visible center columns participate in flex fill. Pinned columns keep their authored or user-resized width, so resizing center columns does not resize pinned panes or move the center boundary.
 - `columnGroup` can be a string id, `{ id, label }`, or a nested path. The stage renders group headers across left-pinned, center, and right-pinned panes; visibility, resize, reorder, and pinning recalculate group spans from the current visible column snapshot. Labels start with a small inset from the group's left edge and remain visible at the left edge of the visible group while scrolling; their position is clamped at the group's right edge so text stays within the group. The label disappears when no part of its group remains visible, and ellipsis appears when the visible space is too narrow.
 - Each labeled group has a right-edge resize handle that resizes its last visible leaf column. It uses that column's normal min/max constraints, resize interaction, and persisted column state; adjacent groups share one handle at their common boundary.
 
@@ -1859,7 +1891,8 @@ The component emits:
 
 ## Advanced Filter UX
 
-- When at least one filter is active, the `Advanced filter` toolbar button shows an active filter icon and active button styling.
+- The global filter editor is labeled `Filter` by default. When at least one filter is active, its toolbar button shows an active filter icon and active button styling.
+- The column menu's `Filter by condition` submenu provides a condition dropdown and a value/formula field without opening the global editor. It can be hidden with `columnMenu.hide: ["condition"]` or per column with `columns.<key>.hide: ["condition"]`.
 - Removing the only advanced-filter clause does not lock the UI; the builder keeps one empty clause row so the user can clear and rebuild the expression in place.
 - `advancedFilter.labels` customizes the toolbar text, panel headings, field labels, action labels, logical join labels, and operator labels. This is the supported localization path for built-in advanced-filter copy.
 
@@ -1921,7 +1954,8 @@ Column drag-and-drop is declarative and opt-in.
 - `columnReorder: false` keeps header cells non-draggable
 - the feature reorders regular visible data columns and can move them across `left` / `center` / `right` pin lanes by dropping onto a target header in that lane
 - row-selection headers and pivot header layouts do not participate in header drag reorder
-- after reorder, keyboard navigation continuity stays attached to the moved logical column instead of the previous visual column index
+- after reorder, keyboard navigation and any active body selection stay attached to the moved logical column instead of the previous visual column index
+- with a focused leaf header, `Shift+Alt/Option+←/→` moves the column within its pin zone; `Ctrl/⌘+Shift+←/→` remains supported
 
 ```vue
 <DataGrid

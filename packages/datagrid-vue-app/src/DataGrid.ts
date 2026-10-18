@@ -89,9 +89,10 @@ import {
 } from "./config/dataGridPublicProps"
 import {
   resolveDataGridStatePersistence,
-  resolveDataGridStatePersistenceStorage,
+  type DataGridPersistenceChangeEvent,
   type DataGridStatePersistenceProp,
 } from "./config/dataGridStatePersistence"
+import { useDataGridStatePersistence } from "./useDataGridStatePersistence"
 import {
   resolveDataGridAdvancedFilter,
   type DataGridAdvancedFilterOptions,
@@ -924,6 +925,7 @@ export interface DataGridExposed<TRow = unknown> {
   getSelectionAggregatesLabel: () => string
   getServerSelectionSummary: (options: DataGridServerSelectionSummaryOptions) => Promise<DataGridDataSourceSelectionSummaryResult | null>
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
+  resetPersistedState: () => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null
   getSavedView: () => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
   migrateSavedView: (
@@ -975,6 +977,7 @@ const DataGridRuntimeComponent = defineComponent({
     "update:groupBy": (_payload: DataGridGroupBySpec | null) => true,
     "update:viewMode": (_payload: DataGridAppViewMode) => true,
     "update:state": (_payload: DataGridUnifiedState<Record<string, unknown>> | null) => true,
+    "persistence-change": (_payload: DataGridPersistenceChangeEvent) => true,
     "toolbar-modules-change": (_payload: readonly DataGridAppToolbarModule[]) => true,
     "ready": (_payload: { api: DataGridApi<Record<string, unknown>>; rowModel: DataGridRowModel<Record<string, unknown>> | null }) => true,
   },
@@ -986,9 +989,6 @@ const DataGridRuntimeComponent = defineComponent({
     const resolvedToolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
     let queuedToolbarModules: readonly DataGridAppToolbarModule[] | null = null
     let toolbarModulesEmitScheduled = false
-    let statePersistenceSaveTimer: ReturnType<typeof globalThis.setTimeout> | null = null
-    let statePersistenceRestoreAttempted = false
-    let statePersistenceRuntimeReady = false
     const currentViewMode = ref<DataGridAppViewMode>(props.viewMode === "gantt" ? "gantt" : "table")
     const runtimeUnifiedState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(props.state ?? null)
     const resolvedStatePersistence = computed(() => resolveDataGridStatePersistence(props.statePersistence))
@@ -1245,6 +1245,25 @@ const DataGridRuntimeComponent = defineComponent({
       },
     })
 
+    const persistence = useDataGridStatePersistence({
+      config: resolvedStatePersistence,
+      columnKeys: () => props.columns.map(column => column.key),
+      getState: includeViewportPosition => dataGridRef.value?.api.state.get({ includeViewportPosition }) ?? null,
+      migrate: value => controlledState.migrateState(value),
+      apply: (state, setOptions) => {
+        controlledState.applyState(normalizeDataGridAppUnifiedStateFilters(state, props.columns), setOptions)
+        controlledState.reconcileControlledInputs()
+      },
+      emit: event => emit("persistence-change", event),
+      ready: () => {
+        const api = dataGridRef.value?.api
+        if (api) emit("ready", {
+          api,
+          rowModel: resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null,
+        })
+      },
+    })
+
     const controlledState = useDataGridAppControlledState({
       gridRef: dataGridRef,
       props: controlledProps,
@@ -1258,108 +1277,19 @@ const DataGridRuntimeComponent = defineComponent({
         state: payload => {
           runtimeUnifiedState.value = payload
           emit("update:state", payload)
-          scheduleStatePersistenceSave()
+          persistence.scheduleSave()
         },
-        ready: payload => {
-          statePersistenceRuntimeReady = true
-          restorePersistedStateIfReady()
-          emit("ready", {
-            api: payload.api,
-            rowModel: (resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null),
-          })
-        },
+        ready: () => persistence.runtimeReady(),
       },
     })
 
-    function clearStatePersistenceSaveTimer(): void {
-      if (statePersistenceSaveTimer == null) {
-        return
-      }
-      globalThis.clearTimeout(statePersistenceSaveTimer)
-      statePersistenceSaveTimer = null
-    }
-
-    function savePersistedState(): void {
-      const options = resolvedStatePersistence.value
-      if (!options || !statePersistenceRestoreAttempted) {
-        return
-      }
-      const storage = resolveDataGridStatePersistenceStorage(options.storage)
-      if (!storage) {
-        return
-      }
-      const api = dataGridRef.value?.api
-      const state = api?.state.get(options.getOptions) ?? controlledState.getState()
-      if (!state) {
-        return
-      }
-      try {
-        storage.setItem(options.key, JSON.stringify(state))
-      }
-      catch {
-        // Storage failures are non-fatal for grid interaction.
-      }
-    }
-
-    function scheduleStatePersistenceSave(): void {
-      const options = resolvedStatePersistence.value
-      if (!options || !statePersistenceRestoreAttempted) {
-        return
-      }
-      clearStatePersistenceSaveTimer()
-      statePersistenceSaveTimer = globalThis.setTimeout(() => {
-        statePersistenceSaveTimer = null
-        savePersistedState()
-      }, options.debounceMs)
-    }
-
-    function restorePersistedStateIfReady(): void {
-      const options = resolvedStatePersistence.value
-      if (
-        !options
-        || statePersistenceRestoreAttempted
-        || !statePersistenceRuntimeReady
-      ) {
-        return
-      }
-      if (!options.restoreOnReady) {
-        statePersistenceRestoreAttempted = true
-        return
-      }
-      statePersistenceRestoreAttempted = true
-      const storage = resolveDataGridStatePersistenceStorage(options.storage)
-      if (!storage) {
-        return
-      }
-      let payload: unknown
-      try {
-        const rawValue = storage.getItem(options.key)
-        if (!rawValue) {
-          return
-        }
-        payload = JSON.parse(rawValue)
-      }
-      catch {
-        return
-      }
-      const migrated = controlledState.migrateState(payload)
-      if (!migrated) {
-        return
-      }
-      controlledState.applyState(migrated, options.setOptions)
-    }
-
-    function handleStatePersistenceActivity(): void {
-      scheduleStatePersistenceSave()
-    }
-
     function handleStatePersistencePageHide(): void {
-      savePersistedState()
+      void persistence.save()
     }
 
     function handleStatePersistenceVisibilityChange(): void {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-        savePersistedState()
+        void persistence.save()
       }
     }
 
@@ -1605,16 +1535,6 @@ const DataGridRuntimeComponent = defineComponent({
       return true
     }
 
-    watch(
-      resolvedStatePersistence,
-      () => {
-        clearStatePersistenceSaveTimer()
-        statePersistenceRestoreAttempted = false
-        restorePersistedStateIfReady()
-      },
-      { deep: true },
-    )
-
     onMounted(() => {
       if (typeof window !== "undefined") {
         window.addEventListener("pagehide", handleStatePersistencePageHide)
@@ -1626,8 +1546,6 @@ const DataGridRuntimeComponent = defineComponent({
     })
 
     onBeforeUnmount(() => {
-      savePersistedState()
-      clearStatePersistenceSaveTimer()
       if (typeof window !== "undefined") {
         window.removeEventListener("pagehide", handleStatePersistencePageHide)
         window.removeEventListener("beforeunload", handleStatePersistencePageHide)
@@ -1640,6 +1558,7 @@ const DataGridRuntimeComponent = defineComponent({
     })
 
     expose({
+      resetPersistedState: persistence.resetPersistedState,
       grid: dataGridRef,
       rowModel: resolvedRowModel,
       history: historyController,
@@ -1805,6 +1724,7 @@ const DataGridRuntimeComponent = defineComponent({
         history: resolvedHistory.value,
         serverHistory: props.serverHistory,
         chrome: resolvedChrome.value,
+        theme: props.theme ?? "default",
         registerHistoryController,
         registerStructuralRowActionRunner,
         reportToolbarModules,
@@ -1821,7 +1741,15 @@ const DataGridRuntimeComponent = defineComponent({
           ref: dataGridRef,
           key: dataGridInstanceKey.value,
           rows: props.rows,
-        onScrollCapture: handleStatePersistenceActivity,
+          "data-persistence-loading": persistence.loading.value ? "true" : undefined,
+          "aria-busy": persistence.loading.value || undefined,
+          inert: persistence.loading.value ? true : undefined,
+          onMousedownCapture: persistence.startResize,
+          onPointerdownCapture: persistence.startResize,
+          onTouchstartCapture: persistence.startResize,
+          onScrollCapture: () => {
+            if (resolvedStatePersistence.value?.includeViewportPosition) persistence.scheduleSave()
+          },
         rowModel: resolvedRowModel.value,
         columns: resolvedColumns.value,
         emptyStateRenderer: props.emptyState,

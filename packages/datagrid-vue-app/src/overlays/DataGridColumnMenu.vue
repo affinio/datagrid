@@ -80,7 +80,7 @@
           <span v-if="grouped && groupOrderLabel" class="datagrid-column-menu__state">{{ groupOrderLabel }}</span>
         </UiMenuItem>
 
-        <UiSubMenu v-else-if="entry.kind === 'section' && entry.key === 'pin' && showPinSection" :options="submenuOptions">
+        <UiSubMenu v-else-if="entry.kind === 'section' && entry.key === 'pin' && showPinSection" :options="pinSubmenuOptions">
           <UiSubMenuTrigger
             class="datagrid-column-menu__item datagrid-column-menu__item--submenu"
             data-datagrid-column-menu-action="pin-submenu"
@@ -136,6 +136,70 @@
           </UiSubMenuContent>
         </UiSubMenu>
 
+        <UiSubMenu
+          v-else-if="entry.kind === 'section' && entry.key === 'condition'"
+          :id="`${conditionSubmenuId}-item`"
+          :options="conditionSubmenuOptions"
+        >
+          <UiSubMenuTrigger class="datagrid-column-menu__item datagrid-column-menu__item--submenu" data-datagrid-column-menu-action="filter-by-condition">
+            <span>{{ labels.condition ?? "Filter by condition" }}</span>
+            <span v-if="conditionActive" class="datagrid-column-menu__condition-badge" aria-label="Condition active">●</span>
+          </UiSubMenuTrigger>
+          <UiSubMenuContent
+            class-name="ui-submenu-content datagrid-column-menu__submenu-panel datagrid-column-menu__condition-panel"
+            :style="menuThemeVars"
+          >
+            <div class="datagrid-column-menu__condition-fields" @mousedown.stop @click.stop>
+              <div class="datagrid-column-menu__condition-field">
+                <div class="datagrid-column-menu__condition-heading">
+                  <span>{{ labels.conditionOperator ?? "Condition" }}</span>
+                  <button
+                    v-if="conditionActive"
+                    type="button"
+                    class="datagrid-column-menu__link"
+                    data-datagrid-column-menu-action="clear-condition"
+                    @click.stop="handleClearCondition"
+                  >
+                    {{ clearFilterLabel }}
+                  </button>
+                </div>
+                <select
+                  v-model="draftConditionOperator"
+                  class="datagrid-column-menu__search datagrid-column-menu__condition-select"
+                  aria-label="Filter condition"
+                  data-datagrid-column-menu-action="condition-select"
+                >
+                  <option v-for="option in conditionOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+              <label v-if="conditionNeedsFormula" class="datagrid-column-menu__condition-field">
+                <span>{{ labels.conditionFormula ?? "Formula" }}</span>
+                <input
+                  v-model="draftConditionFormula"
+                  class="datagrid-column-menu__search"
+                  type="text"
+                  :placeholder="labels.conditionFormulaPlaceholder ?? 'Enter a value or formula'"
+                  aria-label="Filter formula"
+                  @keydown.enter.prevent="handleApplyFilter"
+                />
+              </label>
+              <label v-if="draftConditionOperator === 'between'" class="datagrid-column-menu__condition-field">
+                <span>{{ labels.conditionFormulaTo ?? "Through" }}</span>
+                <input
+                  v-model="draftConditionFormula2"
+                  class="datagrid-column-menu__search"
+                  type="text"
+                  :placeholder="labels.conditionFormulaPlaceholder ?? 'Enter a value or formula'"
+                  aria-label="Filter formula end"
+                  @keydown.enter.prevent="handleApplyFilter"
+                />
+              </label>
+            </div>
+          </UiSubMenuContent>
+        </UiSubMenu>
+
         <section
           v-else-if="entry.kind === 'section' && entry.key === 'filter'"
           :class="[
@@ -177,7 +241,7 @@
           :title="resolveSectionDisabledTitle('filter', filterSectionDisabled)"
           @mousedown.stop
           @click.stop
-          @keydown.stop
+          @keydown.stop="handleTextFilterKeydown"
           @input="handleTextFilterInput"
         />
 
@@ -296,35 +360,8 @@
           </div>
         </div>
 
-        <div v-if="effectiveValueFilterEnabled && hiddenMatchCount > 0" class="datagrid-column-menu__summary">
-          {{ valuesWindowSummaryLabel }}
-        </div>
-
         <UiMenuSeparator v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__section-separator" />
 
-        <div v-if="effectiveValueFilterEnabled" class="datagrid-column-menu__footer">
-          <button
-            v-if="isActionVisible('cancelFilter')"
-            type="button"
-            class="datagrid-column-menu__button datagrid-column-menu__button--secondary"
-            data-datagrid-column-menu-action="cancel-filter"
-            @click="closeMenu"
-          >
-            {{ cancelFilterLabel }}
-          </button>
-          <button
-            v-if="isActionVisible('applyFilter')"
-            type="button"
-            class="datagrid-column-menu__button datagrid-column-menu__button--primary"
-            data-datagrid-column-menu-action="apply-filter"
-            :data-disabled-reason="applyFilterDisabledTitle"
-            :disabled="isActionDisabled('applyFilter', filterSectionDisabled || valueEntriesBusy || !canApplyFilter)"
-            :title="applyFilterDisabledTitle"
-            @click="handleApplyFilter"
-          >
-            {{ applyFilterLabel }}
-          </button>
-        </div>
         </section>
 
         <DataGridColumnMenuCustomEntry
@@ -335,6 +372,30 @@
           @select="handleCustomItemSelect"
         />
       </template>
+
+      <div v-if="showFilterFooter" class="datagrid-column-menu__footer">
+        <button
+          v-if="isActionVisible('cancelFilter')"
+          type="button"
+          class="datagrid-column-menu__button datagrid-column-menu__button--secondary"
+          data-datagrid-column-menu-action="cancel-filter"
+          @click="closeMenu"
+        >
+          {{ cancelFilterLabel }}
+        </button>
+        <button
+          v-if="isActionVisible('applyFilter')"
+          type="button"
+          class="datagrid-column-menu__button datagrid-column-menu__button--primary"
+          data-datagrid-column-menu-action="apply-filter"
+          :data-disabled-reason="applyFilterDisabledTitle"
+          :disabled="isActionDisabled('applyFilter', (effectiveValueFilterEnabled && filterSectionDisabled) || valueEntriesBusy || !canApplyMenuFilters)"
+          :title="applyFilterDisabledTitle"
+          @click="handleApplyFilter"
+        >
+          {{ applyFilterLabel }}
+        </button>
+      </div>
     </template>
   </DataGridMenuOverlay>
 </template>
@@ -403,6 +464,10 @@ const props = defineProps<{
   columnKey: string
   columnLabel: string
   columnDataType?: string
+  conditionOperator?: string
+  conditionFormula?: string
+  conditionFormula2?: string
+  conditionActive?: boolean
   sortDirection: "asc" | "desc" | null
   sortEnabled: boolean
   pin: DataGridColumnPin
@@ -427,12 +492,18 @@ const emit = defineEmits<{
   (event: "apply-filter", tokens: readonly string[]): void
   (event: "clear-filter"): void
   (event: "update-text-filter", value: string): void
+  (event: "apply-condition", condition: { operator: string; formula?: string; formula2?: string }): void
+  (event: "clear-condition"): void
   (event: "close"): void
 }>()
 
 const menuRef = ref<DataGridMenuOverlayController | null>(null)
 const rootElementRef = inject(dataGridAppRootElementKey, ref<HTMLElement | null>(null))
 const open = ref(false)
+const draftConditionOperator = ref("contains")
+const draftConditionFormula = ref("")
+const draftConditionFormula2 = ref("")
+const initialConditionDraft = ref("")
 const query = ref("")
 const addCurrentSelectionToFilter = ref(false)
 const valuesListRef = ref<HTMLElement | null>(null)
@@ -447,6 +518,66 @@ let valueEntriesRequestId = 0
 let suppressNextQueryReload = false
 let deferredValueEntriesLoadCancel: (() => void) | null = null
 const sortLabels = computed(() => resolveColumnMenuSortLabels(props.columnDataType))
+const conditionOptions = computed(() => {
+  const dataType = props.columnDataType?.toLowerCase() ?? "text"
+  const emptyAndNullOptions = [
+    { value: "is-empty", label: "Is empty" },
+    { value: "not-empty", label: "Is not empty" },
+    { value: "is-null", label: "Is null" },
+    { value: "not-null", label: "Is not null" },
+  ]
+  if (["number", "integer", "float", "date", "datetime", "currency", "percent", "numeric"].includes(dataType)) {
+    return [
+      { value: "equals", label: "Equals" },
+      { value: "not-equals", label: "Not equals" },
+      { value: "gt", label: "Greater than" },
+      { value: "gte", label: "Greater than or equal" },
+      { value: "lt", label: "Less than" },
+      { value: "lte", label: "Less than or equal" },
+      { value: "between", label: "Between" },
+      { value: "in", label: "In" },
+      ...emptyAndNullOptions,
+    ]
+  }
+  if (dataType === "boolean") {
+    return [
+      { value: "is-true", label: "Is true" },
+      { value: "is-false", label: "Is false" },
+      { value: "equals", label: "Equals" },
+      { value: "not-equals", label: "Not equals" },
+      ...emptyAndNullOptions,
+    ]
+  }
+  return [
+    { value: "contains", label: "Contains" },
+    { value: "equals", label: "Equals" },
+    { value: "not-equals", label: "Not equals" },
+    { value: "starts-with", label: "Starts with" },
+    { value: "ends-with", label: "Ends with" },
+    { value: "in", label: "In" },
+    ...emptyAndNullOptions,
+  ]
+})
+const conditionNeedsFormula = computed(() => !["is-empty", "not-empty", "is-null", "not-null", "is-true", "is-false"].includes(draftConditionOperator.value))
+const canApplyCondition = computed(() => {
+  if (!conditionNeedsFormula.value) return true
+  const first = draftConditionFormula.value.trim()
+  return first.length > 0 && (draftConditionOperator.value !== "between" || draftConditionFormula2.value.trim().length > 0)
+})
+const currentConditionDraft = computed(() => JSON.stringify({
+  operator: draftConditionOperator.value,
+  formula: conditionNeedsFormula.value ? draftConditionFormula.value.trim() : undefined,
+  formula2: draftConditionOperator.value === "between" ? draftConditionFormula2.value.trim() : undefined,
+}))
+const conditionDraftDirty = computed(() => currentConditionDraft.value !== initialConditionDraft.value)
+const hasConditionSection = computed(() => props.items.includes("condition") && !disabledItems.value.has("condition"))
+const showFilterFooter = computed(() => effectiveValueFilterEnabled.value || hasConditionSection.value)
+const canApplyMenuFilters = computed(() => (
+  !valueEntriesBusy.value
+  && (!conditionDraftDirty.value || canApplyCondition.value)
+  && ((effectiveValueFilterEnabled.value && canApplyFilter.value) || conditionDraftDirty.value)
+))
+
 const disabledItems = computed(() => new Set(props.disabledItems))
 const contextMenuEnabled = computed(() => props.triggerMode !== "button")
 const groupOrderLabel = computed(() => {
@@ -519,7 +650,7 @@ const groupActionLabel = computed(() => resolveActionLabel(
   props.labels.group ?? (props.grouped ? "Ungroup column" : "Group by this column"),
 ))
 const pinMenuLabel = computed(() => resolveActionLabel("pinMenu", props.labels.pin ?? "Pin column"))
-const filterSectionLabel = computed(() => props.labels.filter ?? (effectiveValueFilterEnabled.value ? "Filter" : "Filter by text"))
+const filterSectionLabel = computed(() => props.labels.filter ?? (effectiveValueFilterEnabled.value ? "Filter by value" : "Filter by text"))
 const sortAscLabel = computed(() => resolveActionLabel("sortAsc", sortLabels.value.asc))
 const sortDescLabel = computed(() => resolveActionLabel("sortDesc", sortLabels.value.desc))
 const clearSortLabel = computed(() => resolveActionLabel("clearSort", "Clear sort"))
@@ -574,13 +705,6 @@ const visibleValues = computed(() => {
   return matchedValues.value.slice(0, renderedValueCount.value)
 })
 
-const hiddenMatchCount = computed(() => {
-  if (hasSearchQuery.value) {
-    return 0
-  }
-  return Math.max(0, matchedValues.value.length - visibleValues.value.length)
-})
-
 const appliedFilterTokens = computed(() => {
   if (hasSearchQuery.value && !addCurrentSelectionToFilter.value) {
     const visibleTokenSet = new Set(visibleValues.value.map(entry => entry.token))
@@ -608,15 +732,6 @@ const selectedValuesSummaryLabel = computed(() => formatColumnMenuLabel(
   },
 ))
 
-const valuesWindowSummaryLabel = computed(() => formatColumnMenuLabel(
-  props.labels.valuesWindowSummary,
-  "Showing {visible} of {total} values. Scroll to load more or search.",
-  {
-    visible: visibleValues.value.length,
-    total: matchedValues.value.length,
-  },
-))
-
 const isAllValuesSelected = computed(() => (
   valueEntries.value.length > 0
   && draftSelectedTokens.value.length === valueEntries.value.length
@@ -630,14 +745,12 @@ const canApplyFilter = computed(() => (
 ))
 
 const applyFilterDisabledTitle = computed(() => {
-  const disabledTitle = resolveActionDisabledTitle(
-    "applyFilter",
-    filterSectionDisabled.value || valueEntriesBusy.value || !canApplyFilter.value,
-    "filter",
-  )
-  if (disabledTitle) {
-    return disabledTitle
-  }
+  const disabled = (effectiveValueFilterEnabled.value && filterSectionDisabled.value)
+    || valueEntriesBusy.value
+    || !canApplyMenuFilters.value
+  const disabledTitle = resolveActionDisabledTitle("applyFilter", disabled, "filter")
+  if (disabledTitle) return disabledTitle
+  if (conditionDraftDirty.value && !canApplyCondition.value) return "Complete the condition before applying"
   if (effectiveValueFilterEnabled.value && !valueEntriesBusy.value && appliedFilterTokens.value.length === 0) {
     return selectAtLeastOneValueHintLabel.value
   }
@@ -664,11 +777,27 @@ const submenuOptions: MenuOptions = {
   openDelay: 0,
   closeDelay: 120,
 }
-
+let nextConditionSubmenuId = 0
+const conditionSubmenuId = `datagrid-column-condition-${++nextConditionSubmenuId}`
+const pinSubmenuOptions: MenuOptions = {
+  ...submenuOptions,
+  id: `${conditionSubmenuId}-pin`,
+}
+const conditionSubmenuOptions: MenuOptions = {
+  ...submenuOptions,
+  id: `${conditionSubmenuId}-condition`,
+  closeOnSelect: false,
+}
 function handleMenuOpen(): void {
   open.value = true
   syncMenuThemeVars()
   resetFilterDraft()
+  draftConditionOperator.value = conditionOptions.value.some(option => option.value === props.conditionOperator)
+    ? props.conditionOperator as string
+    : conditionOptions.value[0]?.value ?? "contains"
+  draftConditionFormula.value = props.conditionFormula ?? ""
+  draftConditionFormula2.value = props.conditionFormula2 ?? ""
+  initialConditionDraft.value = currentConditionDraft.value
 }
 
 function handleMenuClose(): void {
@@ -1087,13 +1216,20 @@ function toggleAddCurrentSelectionToFilter(event: Event): void {
 }
 
 function handleApplyFilter(): void {
-  if (filterSectionDisabled.value || !canApplyFilter.value) {
-    return
+  if (!canApplyMenuFilters.value) return
+  if (effectiveValueFilterEnabled.value && canApplyFilter.value) {
+    if (!hasSearchQuery.value && appliedFilterTokens.value.length === valueEntries.value.length) {
+      emit("clear-filter")
+    } else {
+      emit("apply-filter", [...appliedFilterTokens.value])
+    }
   }
-  if (!hasSearchQuery.value && appliedFilterTokens.value.length === valueEntries.value.length) {
-    emit("clear-filter")
-  } else {
-    emit("apply-filter", [...appliedFilterTokens.value])
+  if (conditionDraftDirty.value && canApplyCondition.value) {
+    emit("apply-condition", {
+      operator: draftConditionOperator.value,
+      ...(conditionNeedsFormula.value ? { formula: draftConditionFormula.value.trim() } : {}),
+      ...(draftConditionOperator.value === "between" ? { formula2: draftConditionFormula2.value.trim() } : {}),
+    })
   }
   closeMenu()
 }
@@ -1103,6 +1239,17 @@ function handleTextFilterInput(event: Event): void {
     return
   }
   emit("update-text-filter", (event.target as HTMLInputElement).value)
+}
+
+function handleTextFilterKeydown(event: KeyboardEvent): void {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return
+  event.preventDefault()
+  closeMenu()
+}
+
+function handleClearCondition(): void {
+  emit("clear-condition")
+  closeMenu()
 }
 
 function handleClearFilter(): void {

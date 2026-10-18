@@ -106,6 +106,7 @@ export interface DataGridTableStageColumnsSection {
     targetColumnKey: string
     placement: "before" | "after"
   }) => boolean
+  resizeColumnByKeyboard?: (columnKey: string, direction: -1 | 1) => boolean
   toggleSortForColumn: (columnKey: string, additive?: boolean) => void
   handleHeaderColumnClick?: (columnKey: string, options: { additive: boolean; extend: boolean }) => void
   sortIndicator: (columnKey: string) => string
@@ -132,6 +133,9 @@ export interface DataGridTableStageColumnsSection {
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
+  resolveColumnMenuCondition?: (columnKey: string) => { operator: string; formula?: string; formula2?: string } | null
+  applyColumnMenuCondition?: (columnKey: string, condition: { operator: string; formula?: string; formula2?: string }) => void
+  clearColumnMenuCondition?: (columnKey: string) => void
   activeColumnMenu?: DataGridActiveColumnMenuState | null
   openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
   closeColumnMenu?: () => void
@@ -183,6 +187,7 @@ export interface DataGridTableStageSelectionSection {
   selectCell?: (rowIndex: number, columnIndex: number) => void
   selectColumnThroughRow?: (rowIndex: number, columnIndex: number) => void
   clearCellSelection?: () => void
+  copySelectedCells?: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
   fillPreviewRange: DataGridOverlayRange | null
   rangeMovePreviewRange: DataGridOverlayRange | null
   fillHandleEnabled: boolean

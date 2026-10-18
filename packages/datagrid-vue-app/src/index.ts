@@ -138,6 +138,7 @@ export type {
   DataGridSavedViewStorageLike,
 } from "./config/dataGridSavedView"
 export type {
+  DataGridPersistenceChangeEvent,
   DataGridStatePersistenceOptions,
   DataGridStatePersistenceProp,
   DataGridStatePersistenceStorage,

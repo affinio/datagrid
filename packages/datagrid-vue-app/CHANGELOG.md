@@ -1,5 +1,23 @@
 # @affino/datagrid-vue-app
 
+## 0.16.0
+
+### Added
+
+- Added async state persistence adapters (`load`/`save`), persistence status events, and `resetPersistedState()` for local, session, or application-managed storage.
+- Added flexible column sizing so visible columns can use available host width as ordering, pinning, and visibility change.
+- Added keyboard column resizing and header auto-scroll near the viewport edge.
+
+### Changed
+
+- Simplified host-height behavior and keep the grid viewport and row-height layout synchronized during resize interactions.
+- Compactened column filter menus, clarified the “Filter by value” action, and simplified quick-filter presentation.
+- Empty states no longer draw body grid lines through the message.
+
+### Validation
+
+- Enterprise app type-check and unit suite passed; focused grid contracts and sandbox regressions were added for the updated behavior.
+
 ## 0.15.0
 
 ### Added

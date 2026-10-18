@@ -6,6 +6,7 @@ export {
 export { readDataGridOverlayThemeVars } from "./overlays/dataGridOverlayThemeVars"
 export { default as DataGridDefaultRenderer } from "./host/DataGridDefaultRenderer"
 export { default as DataGridGanttStage } from "./gantt/DataGridGanttStage.vue"
+export { dataGridGanttStageKey } from "./gantt/dataGridGanttStageContext"
 export { default as DataGridModuleHost } from "./host/DataGridModuleHost"
 export { default as DataGridAdvancedFilterPopover } from "./overlays/DataGridAdvancedFilterPopover.vue"
 export { default as DataGridFindReplacePopover } from "./overlays/DataGridFindReplacePopover.vue"

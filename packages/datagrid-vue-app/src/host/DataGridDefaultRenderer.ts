@@ -30,6 +30,7 @@ import type {
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
+  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   useDataGridContextMenu,
   type GridSelectionPointLike,
@@ -62,6 +63,7 @@ import {
   type DataGridResolvedAdvancedFilterLabels,
 } from "../config/dataGridAdvancedFilter"
 import type { DataGridResolvedQuickFilterOptions } from "../config/dataGridQuickFilter"
+import type { DataGridThemeProp } from "../theme/dataGridTheme"
 import type { DataGridAggregationsOptions, DataGridAggregationPanelItem } from "../config/dataGridAggregations"
 import type { DataGridFindReplaceOptions } from "../config/dataGridFindReplace"
 import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
@@ -1172,6 +1174,10 @@ export default defineComponent({
       type: Object as PropType<DataGridResolvedChromeOptions>,
       required: true,
     },
+    theme: {
+      type: [String, Object] as PropType<DataGridThemeProp>,
+      default: "default",
+    },
     registerHistoryController: {
       type: Function as PropType<(controller: DataGridHistoryController | null) => void>,
       default: () => undefined,
@@ -1199,7 +1205,7 @@ export default defineComponent({
       "--datagrid-row-divider-size": props.gridLines.bodyRows ? "1px" : "0px",
       "--datagrid-column-divider-size": props.gridLines.bodyColumns ? "1px" : "0px",
       "--datagrid-header-column-divider-size": props.gridLines.headerColumns ? "1px" : "0px",
-      "--datagrid-pinned-pane-separator-size": props.gridLines.pinnedSeparators ? "2px" : "0px",
+      "--datagrid-pinned-pane-separator-size": props.gridLines.pinnedSeparators ? "1px" : "0px",
       "--datagrid-app-layout-gap": `${props.chrome.toolbarGap}px`,
       "--datagrid-app-workspace-gap": `${props.chrome.workspaceGap}px`,
       "--datagrid-app-toolbar-gap": props.chrome.density === "compact" ? "10px" : "12px",
@@ -1532,12 +1538,17 @@ export default defineComponent({
 
     const isColumnFilterActive = (columnKey: string): boolean => {
       const entry = filterModelState.value.columnFilters?.[columnKey]
-      if (!entry) {
-        return false
+      if (entry && (entry.kind !== "valueSet" || entry.tokens.length > 0)) {
+        return true
       }
-      return entry.kind === "valueSet"
-        ? entry.tokens.length > 0
-        : true
+      const expression = filterModelState.value.advancedExpression
+        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
+      const expressionHasColumn = (node: DataGridAdvancedExpressionEntry): boolean => {
+        if (node.kind === "condition") return node.key === columnKey || node.field === columnKey
+        if (node.kind === "not") return expressionHasColumn(node.child)
+        return node.children.some(expressionHasColumn)
+      }
+      return expression ? expressionHasColumn(expression) : false
     }
 
     const resolveCurrentValueFilterTokens = (columnKey: string): readonly string[] => {
@@ -2178,6 +2189,154 @@ export default defineComponent({
       applySortAndFilter(nextFilterModel, { filterModelNormalized: nextFilterModelNormalized })
     }
 
+    const resolveColumnMenuCondition = (columnKey: string): { operator: string; formula?: string; formula2?: string } | null => {
+      const expression = filterModelState.value.advancedExpression
+        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
+      const findLastCondition = (
+        entry: DataGridAdvancedExpressionEntry,
+      ): Extract<DataGridAdvancedExpressionEntry, { kind: "condition" }> | null => {
+        if (entry.kind === "condition") return entry.key === columnKey ? entry : null
+        if (entry.kind === "not") return findLastCondition(entry.child)
+        for (let index = entry.children.length - 1; index >= 0; index -= 1) {
+          const matchingChildCondition = findLastCondition(entry.children[index]!)
+          if (matchingChildCondition) {
+            return matchingChildCondition
+          }
+        }
+        return null
+      }
+      const matchingCondition = expression ? findLastCondition(expression) : null
+      return matchingCondition
+        ? {
+            operator: matchingCondition.operator,
+            ...(matchingCondition.value !== undefined ? { formula: String(matchingCondition.value) } : {}),
+            ...(matchingCondition.value2 !== undefined ? { formula2: String(matchingCondition.value2) } : {}),
+          }
+        : null
+    }
+
+    const applyColumnMenuCondition = (
+      columnKey: string,
+      condition: { operator: string; formula?: string; formula2?: string },
+    ): void => {
+      const column = allColumns.value.find(candidate => candidate.key === columnKey)
+      if (!column) return
+      const dataType = column.column.dataType?.toLowerCase() ?? "text"
+      const type = ["number", "integer", "float", "numeric", "currency", "percent"].includes(dataType)
+        ? "number"
+        : dataType === "date" || dataType === "datetime"
+          ? "date"
+          : dataType === "boolean"
+            ? "boolean"
+            : "text"
+      const operator = condition.operator
+      const operandlessOperators = new Set(["is-empty", "not-empty", "is-null", "not-null", "is-true", "is-false"])
+      const formula = condition.formula?.trim() ?? ""
+      const formula2 = condition.formula2?.trim() ?? ""
+      if (!operandlessOperators.has(operator) && !formula) return
+      if (operator === "between" && !formula2) return
+      const parseOperand = (input: string): unknown => {
+        if (operator === "in") {
+          return input.split(",").map(value => value.trim()).filter(Boolean).map(value =>
+            type === "number" ? Number(value) : value,
+          )
+        }
+        return type === "number" ? Number(input) : input
+      }
+      const value = operandlessOperators.has(operator) ? undefined : parseOperand(formula)
+      const value2 = operator === "between" ? parseOperand(formula2) : undefined
+      if (type === "number" && !operandlessOperators.has(operator)) {
+        const values = operator === "in" ? value as number[] : [value, ...(value2 === undefined ? [] : [value2])]
+        if (values.some(candidate => typeof candidate !== "number" || !Number.isFinite(candidate))) return
+      }
+      const nextCondition: DataGridAdvancedExpressionEntry = {
+        kind: "condition",
+        key: columnKey,
+        type,
+        operator,
+        value,
+        ...(value2 !== undefined ? { value2 } : {}),
+      }
+
+      const currentExpression = filterModelState.value.advancedExpression
+        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
+      const replaceForColumn = (
+        expression: DataGridAdvancedExpressionEntry,
+      ): { expression: DataGridAdvancedExpressionEntry; replaced: boolean } => {
+        if (expression.kind === "condition") {
+          return expression.key === columnKey
+            ? { expression: nextCondition, replaced: true }
+            : { expression, replaced: false }
+        }
+        if (expression.kind === "not") {
+          const child = replaceForColumn(expression.child)
+          return child.replaced
+            ? { expression: { ...expression, child: child.expression }, replaced: true }
+            : { expression, replaced: false }
+        }
+        let replaced = false
+        const children = expression.children.map(child => {
+          const result = replaceForColumn(child)
+          replaced ||= result.replaced
+          return result.expression
+        })
+        return replaced
+          ? { expression: { ...expression, children }, replaced: true }
+          : { expression, replaced: false }
+      }
+      const replaced = currentExpression ? replaceForColumn(currentExpression) : null
+      const nextExpression = replaced?.replaced
+        ? replaced.expression
+        : currentExpression
+          ? { kind: "group" as const, operator: "and" as const, children: [currentExpression, nextCondition] }
+          : nextCondition
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      nextFilterModel.advancedFilters = {}
+      nextFilterModel.advancedExpression = nextExpression
+      filterModelState.value = nextFilterModel
+      filterModelStateNormalized.value = false
+      applySortAndFilter(nextFilterModel)
+    }
+
+    const clearColumnMenuCondition = (columnKey: string): void => {
+      const currentExpression = filterModelState.value.advancedExpression
+        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
+      if (!currentExpression) return
+      const removeForColumn = (
+        expression: DataGridAdvancedExpressionEntry,
+      ): { expression: DataGridAdvancedExpressionEntry | null; changed: boolean } => {
+        if (expression.kind === "condition") {
+          return expression.key === columnKey
+            ? { expression: null, changed: true }
+            : { expression, changed: false }
+        }
+        if (expression.kind === "not") {
+          const child = removeForColumn(expression.child)
+          return child.changed
+            ? { expression: child.expression ? { ...expression, child: child.expression } : null, changed: true }
+            : { expression, changed: false }
+        }
+        let changed = false
+        const children = expression.children.flatMap(child => {
+          const result = removeForColumn(child)
+          changed ||= result.changed
+          return result.expression ? [result.expression] : []
+        })
+        if (!changed) return { expression, changed: false }
+        if (children.length === 0) return { expression: null, changed: true }
+        if (children.length === 1) return { expression: children[0]!, changed: true }
+        return { expression: { ...expression, children }, changed: true }
+      }
+      const result = removeForColumn(currentExpression)
+      if (!result.changed) return
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      nextFilterModel.advancedFilters = {}
+      nextFilterModel.advancedExpression = result.expression
+      filterModelState.value = nextFilterModel
+      filterModelStateNormalized.value = false
+      applySortAndFilter(nextFilterModel)
+    }
+
     const stageHostRef = ref<HTMLElement | null>(null)
     const rowClipboardSourceInstanceId = `datagrid-row-clipboard-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const rowClipboardSourceGridId = rowClipboardSourceInstanceId
@@ -2313,9 +2472,15 @@ export default defineComponent({
         : null
     }
 
+    const resolveSelectionColumnKeys = (projectedColumnKeys = visibleColumns.value.map(column => column.key)): string[] => (
+      props.rowSelection
+        ? ["__datagrid_row_selection__", ...projectedColumnKeys]
+        : [...projectedColumnKeys]
+    )
+
     const captureColumnSelectionState = (): CapturedColumnSelectionState | null => {
       const snapshot = props.selectionSnapshot.value
-      const columnKeys = visibleColumns.value.map(column => column.key)
+      const columnKeys = resolveSelectionColumnKeys()
       if (!snapshot || columnKeys.length === 0) {
         return null
       }
@@ -2377,8 +2542,9 @@ export default defineComponent({
 
     const buildColumnSelectionSnapshotFromCapturedState = (
       captured: CapturedColumnSelectionState,
+      projectedColumnKeys: readonly string[] = resolveSelectionColumnKeys(),
     ): import("@affino/datagrid-vue").DataGridSelectionSnapshot | null => {
-      const currentColumnKeys = visibleColumns.value.map(column => column.key)
+      const currentColumnKeys = projectedColumnKeys
       if (currentColumnKeys.length === 0) {
         return null
       }
@@ -2443,11 +2609,25 @@ export default defineComponent({
       }
     }
 
-    const restoreColumnInteractionAfterReorder = (captured: CapturedColumnSelectionState | null): void => {
+    const restoreColumnInteractionAfterReorder = (
+      captured: CapturedColumnSelectionState | null,
+      projectedColumnKeys?: readonly string[],
+    ): void => {
       const nextSelectionSnapshot = captured
-        ? buildColumnSelectionSnapshotFromCapturedState(captured)
+        ? buildColumnSelectionSnapshotFromCapturedState(captured, projectedColumnKeys)
         : null
       if (nextSelectionSnapshot) {
+        const activeRange = nextSelectionSnapshot.ranges[nextSelectionSnapshot.activeRangeIndex]
+        if (activeRange?.anchor) {
+          // The app keeps an explicit anchor beside the runtime snapshot. Keep
+          // that coordinate in the same projected order or the body renderer
+          // will continue drawing the old cell as the selection anchor.
+          props.selectionAnchor.value = {
+            rowIndex: activeRange.anchor.rowIndex,
+            colIndex: activeRange.anchor.colIndex,
+            rowId: normalizeSelectionRowId(activeRange.anchor.rowId),
+          }
+        }
         props.runtime.api.selection.setSnapshot(nextSelectionSnapshot)
         props.syncSelectionSnapshotFromRuntime()
       }
@@ -3327,6 +3507,8 @@ export default defineComponent({
       }
 
       const previousSelection = captureColumnSelectionState()
+      const previousVisibleColumns = visibleColumns.value
+      const previousVisibleKeys = new Set(previousVisibleColumns.map(column => column.key))
       const targetPin = (targetColumn.pin ?? "none") as DataGridColumnPin
       const sourcePin = (sourceColumn.pin ?? "none") as DataGridColumnPin
       const targetZone = resolveColumnZone(targetPin)
@@ -3341,12 +3523,25 @@ export default defineComponent({
         normalizedTargetColumnKey,
         payload.placement,
       )
+      const nextVisibleColumnKeys = (["pinnedLeft", "center", "pinnedRight"] as const).flatMap(zone => {
+        if (zone === targetZone) {
+          return nextZoneOrder.filter(key => previousVisibleKeys.has(key))
+        }
+        return previousVisibleColumns
+          .filter(column => column.key !== normalizedSourceColumnKey
+            && resolveColumnZone((column.pin ?? "none") as DataGridColumnPin) === zone)
+          .map(column => column.key)
+      })
       if (sourcePin !== targetPin) {
         props.runtime.api.columns.setPin(normalizedSourceColumnKey, targetPin)
       }
       const columnsApi = props.runtime.api.columns as DataGridProjectedColumnsApi
       columnsApi.setZoneOrder?.(targetZone, nextZoneOrder)
-      restoreColumnInteractionAfterReorder(previousSelection)
+      const nextSelectionColumnKeys = resolveSelectionColumnKeys(nextVisibleColumnKeys)
+      // The public column snapshot may publish its new order on the next runtime
+      // update. Remap selection against the order we just applied so body cells
+      // follow the same stable column keys immediately as the header does.
+      restoreColumnInteractionAfterReorder(previousSelection, nextSelectionColumnKeys)
       return true
     }
 
@@ -3553,6 +3748,9 @@ export default defineComponent({
       applyColumnMenuGroupBy,
       applyColumnMenuFilter,
       clearColumnMenuFilter,
+      resolveColumnMenuCondition,
+      applyColumnMenuCondition,
+      clearColumnMenuCondition,
       activeColumnMenu,
       openColumnMenu,
       closeColumnMenu,
@@ -4561,6 +4759,9 @@ export default defineComponent({
         applyColumnMenuGroupBy,
         applyColumnMenuFilter,
         clearColumnMenuFilter,
+        resolveColumnMenuCondition,
+        applyColumnMenuCondition,
+        clearColumnMenuCondition,
         activeColumnMenu: activeColumnMenu.value,
         openColumnMenu,
         closeColumnMenu,
@@ -4756,6 +4957,8 @@ export default defineComponent({
         ? h(DataGridModuleHost as Component, {
           modules: toolbarModules.value,
           variant: "standalone",
+          theme: props.theme,
+          chrome: props.chrome,
         })
         : null,
       h("div", {
@@ -4779,6 +4982,8 @@ export default defineComponent({
             h(DataGridModuleHost as Component, {
               modules: toolbarModules.value,
               variant: "integrated",
+              theme: props.theme,
+              chrome: props.chrome,
             }),
             h("div", {
               class: [

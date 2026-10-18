@@ -43,8 +43,39 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | server-history | Enable synchronization with datasource-backed server history. Defaults to `true`; set `:server-history="false"` when the backend does not expose history endpoints. This is independent from local `history`. |
 | empty-state | Optional typed renderer for content shown inside the row body when no rows are available. |
 | empty-state-alignment | `"content"` (default) centers across the virtual content; `"viewport"` centers within the visible center table viewport and remains anchored during horizontal scrolling. |
-| chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. |
+| chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. `DataGridModuleHost` accepts the same `theme` and `chrome` props when modules are rendered outside the grid. |
 | theme | Theme preset or theme configuration. |
+
+### Column-menu filter conditions
+
+When the column menu is enabled, it includes **Filter by condition** by
+default. Its submenu keeps the controls in the column menu: choose an available
+condition from the native dropdown and enter its value or formula below. When
+the condition is active, the column header's filter icon is shown as well as
+the badge on **Filter by condition**.
+The condition remains a draft until the column menu's shared **Apply** button
+is pressed. **Clear filter** applies immediately and closes the column menu.
+The available operators follow the column data type: numeric/date columns expose
+comparison operators, ranges, and membership; text columns expose text matching;
+boolean columns expose true/false comparisons. Empty and null checks are also
+available. Applying edits the selected column's condition in place, preserving
+other conditions and adding an AND condition when that column has no condition yet.
+Closing the menu without applying leaves the current filter unchanged.
+
+Hide the action globally or for selected columns:
+
+```ts
+const columnMenu = {
+  enabled: true,
+  hide: ["condition"],
+  columns: {
+    internalNote: { hide: ["condition"] },
+  },
+}
+```
+
+The `advancedFilter` prop and `advanced-filter` package entrypoint remain
+available for compatibility. Their default visible label is now **Filter**.
 
 ### Empty state
 
@@ -122,7 +153,7 @@ state is the unified controlled state boundary. It can include model projection,
 - row-selection-state
 - view-mode
 
-For persistence, prefer the unified `state` prop or the saved-view helpers and component ref methods documented below. Restore state after the row model and columns are ready.
+For automatic preferences, use [`state-persistence`](./datagrid-state-persistence.md). It owns restore timing and saving after resize; do not restore again from `ready`. Use `state` for parent-controlled state and saved-view helpers for explicit named views.
 
 ## Events
 

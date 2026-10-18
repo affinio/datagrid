@@ -1,6 +1,15 @@
 # @affino/datagrid-theme
 
-## Unreleased
+## 0.3.0
+
+### Added
+
+- Added the public `surfaceRadius` token, defaulting to `8px`, for consistent rounding across DataGrid surfaces.
+- Added the `gridFocusAxisBackgroundColor` token for focused row and column emphasis.
+
+### Validation
+
+- Theme token coverage and downstream DataGrid app builds passed.
 
 ## 0.2.5
 

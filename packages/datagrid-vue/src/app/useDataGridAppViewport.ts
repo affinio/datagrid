@@ -315,6 +315,11 @@ export function useDataGridAppViewport<TRow>(
     if (!column) {
       return 0
     }
+    // Pinned panes have no remaining viewport to distribute. Keep their authored
+    // widths stable so center-column resize cannot move the center pane boundary.
+    if (column.pin === "left" || column.pin === "right") {
+      return 0
+    }
     const value = column.column?.flex
     return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
   }

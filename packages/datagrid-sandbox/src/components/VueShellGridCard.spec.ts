@@ -291,6 +291,11 @@ describe("VueShellGridCard", () => {
     await flushUi()
     await flushUi()
 
+    const grid = wrapper.findComponent({ name: "DataGrid" })
+    const gridVm = grid.vm as { $props?: Record<string, unknown>; $attrs?: Record<string, unknown> }
+    expect(grid.props("layoutMode") ?? gridVm.$props?.layoutMode ?? gridVm.$attrs?.layoutMode ?? gridVm.$attrs?.["layout-mode"])
+      .toBe("fill")
+
     const toolbarButton = wrapper.find('[data-datagrid-toolbar-action="sandbox-summary"]')
     expect(toolbarButton.exists()).toBe(true)
     expect(toolbarButton.text()).toBe("Capture summary")
@@ -327,6 +332,16 @@ describe("VueShellGridCard", () => {
     const grid = wrapper.findComponent({ name: "DataGrid" })
     expect(grid.exists()).toBe(true)
     const gridVm = grid.vm as { $props?: Record<string, unknown>; $attrs?: Record<string, unknown> }
+    const readGridInput = (key: string, kebabKey: string) => (
+      grid.props(key)
+      ?? gridVm.$props?.[key]
+      ?? gridVm.$attrs?.[key]
+      ?? gridVm.$attrs?.[kebabKey]
+    )
+    expect(readGridInput("layoutMode", "layout-mode")).toBe("fill")
+    expect(readGridInput("minRows", "min-rows")).toBeUndefined()
+    expect(readGridInput("maxRows", "max-rows")).toBeUndefined()
+    expect(readGridInput("quickFilter", "quick-filter")).toMatchObject({ placeholder: "Search" })
     const resolvedGroupBy = grid.props("groupBy")
       ?? gridVm.$props?.groupBy
       ?? gridVm.$attrs?.groupBy

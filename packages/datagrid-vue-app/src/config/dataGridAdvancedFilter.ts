@@ -96,7 +96,7 @@ export type DataGridAdvancedFilterProp =
     }
   | null
 
-const DEFAULT_BUTTON_LABEL = "Advanced filter"
+const DEFAULT_BUTTON_LABEL = "Filter"
 
 const DEFAULT_OPERATOR_LABELS: Readonly<Record<DataGridAdvancedFilterOperatorLabelKey, string>> = Object.freeze({
   contains: "Contains",
@@ -123,10 +123,10 @@ const DEFAULT_JOIN_LABELS: Readonly<Record<"and" | "or", string>> = Object.freez
 
 export const DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS: DataGridResolvedAdvancedFilterLabels = Object.freeze({
   buttonLabel: DEFAULT_BUTTON_LABEL,
-  eyebrow: "Advanced filter",
-  title: "Build clause-based filter",
+  eyebrow: "",
+  title: "Filter",
   close: "Close",
-  appliedEyebrow: "Applied on table",
+  appliedEyebrow: "",
   appliedTitle: "Current filters",
   resetAllFilters: "Reset all filters",
   noFiltersApplied: "No filters applied",
@@ -158,6 +158,10 @@ function resolveLabel(value: string | undefined, fallback: string): string {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback
 }
 
+function resolveOptionalLabel(value: string | undefined, fallback: string): string {
+  return value === undefined ? fallback : value.trim()
+}
+
 function normalizeOperatorLabels(
   input: DataGridAdvancedFilterLabels["operators"] | undefined,
 ): Readonly<Record<DataGridAdvancedFilterOperatorLabelKey, string>> {
@@ -184,10 +188,10 @@ function resolveAdvancedFilterLabels(
   const buttonLabel = resolveLabel(buttonLabelOverride, resolveLabel(input?.buttonLabel, DEFAULT_BUTTON_LABEL))
   return Object.freeze({
     buttonLabel,
-    eyebrow: resolveLabel(input?.eyebrow, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.eyebrow),
+    eyebrow: resolveOptionalLabel(input?.eyebrow, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.eyebrow),
     title: resolveLabel(input?.title, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.title),
     close: resolveLabel(input?.close, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.close),
-    appliedEyebrow: resolveLabel(input?.appliedEyebrow, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.appliedEyebrow),
+    appliedEyebrow: resolveOptionalLabel(input?.appliedEyebrow, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.appliedEyebrow),
     appliedTitle: resolveLabel(input?.appliedTitle, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.appliedTitle),
     resetAllFilters: resolveLabel(input?.resetAllFilters, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.resetAllFilters),
     noFiltersApplied: resolveLabel(input?.noFiltersApplied, DEFAULT_DATAGRID_ADVANCED_FILTER_LABELS.noFiltersApplied),

@@ -41,9 +41,16 @@ Keep `presentation` separate from data transformation: editing, clipboard, and r
 />
 ```
 
-Use `layout-mode="fill"` for an app shell and `auto-height` for embedded cards or forms. Use `chrome.toolbarPlacement="hidden"` when the host renders toolbar modules itself.
+Use `layout-mode="fill"` (the default) when the application gives the grid a bounded area; use `auto-height` for document flow, embedded cards, or forms. `fill` occupies the host height, including the built-in toolbar. The host must establish that height. See [Getting started: filling an application panel](./getting-started.md#filling-an-application-panel) for a full-height layout recipe.
 
-The app package also provides opt-in subpaths for `quick-filter`, `advanced-filter`, `find-replace`, `aggregations`, and `gantt`. Ordinary tables should import from the package root; Gantt usage should import `DataGrid` from `@affino/datagrid-vue-app/gantt`.
+`min-rows` and `max-rows` limit the body rows in `auto-height`; after `max-rows`, scrolling stays inside the body. They do not define the full component height. `row-height-mode="auto"` measures individual rows and is separate from component layout. With `chrome.toolbarPlacement="hidden"`, the external toolbar is outside the grid height, so the application allocates its own toolbar row and gives the remaining row to DataGrid. Use hidden placement when the host renders toolbar modules itself.
+
+The DataGrid root owns theme scope and layout, and stays transparent so the
+surrounding application controls the page background. The table stage paints
+its own surface. When toolbar modules are placed outside the grid, pass the
+same `theme` and `chrome` values to `DataGridModuleHost`.
+
+The app package also provides opt-in subpaths for `quick-filter`, `advanced-filter` (the UI is labeled **Filter**), `find-replace`, `aggregations`, and `gantt`. Ordinary tables should import from the package root; Gantt usage should import `DataGrid` from `@affino/datagrid-vue-app/gantt`.
 
 ## State and refs
 

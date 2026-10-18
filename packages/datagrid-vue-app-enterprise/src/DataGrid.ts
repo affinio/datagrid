@@ -2,13 +2,16 @@ import {
   computed,
   defineComponent,
   h,
+  provide,
   ref,
   type Component,
   type PropType,
   type VNode,
 } from "vue"
 import CommunityDataGrid from "@affino/datagrid-vue-app"
+import { DataGridGanttStage } from "@affino/datagrid-vue-app/gantt"
 import {
+  dataGridGanttStageKey,
   resolveDataGridFormulaRowModelOptions,
   useDataGridAppRowModel,
   type DataGridAppClientRowModelOptions,
@@ -211,6 +214,7 @@ export default defineComponent({
     },
   },
   setup(props, { attrs, slots, expose }) {
+    provide(dataGridGanttStageKey, DataGridGanttStage)
     const dataGridRef = ref<Record<string, unknown> | null>(null)
     const injectedLicenseKey = useAffinoDataGridEnterpriseLicenseKey()
     const communityAttrs = computed<CommunityDataGridAttrs>(() => ({

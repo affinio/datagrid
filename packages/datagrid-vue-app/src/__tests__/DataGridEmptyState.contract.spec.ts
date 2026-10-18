@@ -51,6 +51,7 @@ describe("DataGrid empty state", () => {
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-empty-state").exists()).toBe(true)
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--empty-state")
     expect(wrapper.find(".datagrid-empty-state").element.parentElement?.classList.contains("grid-body-content")).toBe(true)
     expect(wrapper.find("[data-test='custom-empty']").text()).toBe("no-rows")
     expect(renderEmptyState).toHaveBeenCalledWith({
@@ -82,12 +83,14 @@ describe("DataGrid empty state", () => {
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-empty-state").text()).toContain("No rows match the current filters.")
+    expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--empty-state")
     expect(wrapper.find(".grid-header-shell").exists()).toBe(true)
 
     await input.setValue("")
     await flushRuntimeTasks()
 
     expect(wrapper.find(".datagrid-empty-state").exists()).toBe(false)
+    expect(wrapper.find(".grid-stage").classes()).not.toContain("grid-stage--empty-state")
     expect(wrapper.findAll(".grid-row").length).toBeGreaterThan(0)
     wrapper.unmount()
   })

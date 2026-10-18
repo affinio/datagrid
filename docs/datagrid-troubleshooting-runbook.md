@@ -30,6 +30,18 @@ Relevant tests:
 - `packages/datagrid-core/src/columns/__tests__/pinning.spec.ts`
 - `packages/datagrid-vue/src/adapters/__tests__/columnPinNormalization.spec.ts`
 
+## Symptom: Center pane shifts while resizing columns beside pinned flex columns
+
+Checks:
+- Flex fill applies only to visible center columns. A pinned column has no remaining viewport to absorb, so it keeps its authored or user-resized width.
+- Resizing a center column must not change pinned pane width or the center pane's left boundary.
+- Center flex columns continue to absorb the remaining center viewport width after pinned panes and fixed center columns are accounted for.
+
+Relevant regression:
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`
+- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `e2e/sandbox-grid.spec.ts` (`column flex resize does not move the pinned pane boundary or overflow the sandbox route`)
+
 ## Symptom: Horizontal virtualization not deterministic
 
 Checks:
@@ -48,12 +60,24 @@ Checks:
 - The app stage synchronizes the header scrollport width from the body viewport during its existing resize/metric sync path.
 - Header ref rebinding must preserve scroll position through Vue rerenders. After width synchronization, the header immediately receives the body's current offset again.
 - Body horizontal movement mirrors directly to the header and both pinned row viewports; peer-originated scrolling propagates the offset actually accepted by the body, including boundary clamping. Reactive state and chrome redraw stay frame-batched.
+- Keyboard movement between center headers reveals the focused column by scrolling the body horizontal owner. Header focus uses `preventScroll` so the browser cannot move the header independently of the body.
 - Group header labels read the mirrored header scroll offset directly from its browser scroll event; pane widths remain measured through the resize observer. This avoids adding a second animation-frame delay before a clipped group label appears at its visible edge.
 
 Relevant test:
 - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
 - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
 - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+- `e2e/sandbox-interactions.spec.ts` (`keyboard navigation across virtualized headers scrolls without focus retry churn`)
+
+## Symptom: The final header column has no right divider
+
+Checks:
+- In canvas-chrome mode, header cell `border-right` is suppressed and the canvas owns column dividers.
+- Interior dividers remain at cell boundaries; the outer edge is drawn only when a modeled boundary reaches the rightmost pane edge. Do not draw edges on clipped center columns or internal pane seams.
+- Pivot/group headers still render their internal dividers through CSS; canvas paints only the outer right edge.
+
+Relevant test:
+- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
 
 ## Symptom: Pinned canvas chrome keeps the previous theme
 
@@ -106,3 +130,14 @@ Escalate as release blocker if any apply:
 - Roll back to last green commit where quality and performance gates passed.
 - Keep compatibility shims enabled during rollback window.
 - Re-open incident with failing invariant and exact spec path.
+
+### Row resize leaves dividers or selection at old offsets
+
+Manual row height edits must invalidate the shared row-height metrics even when
+the virtual row range and spacer sizes do not change. The app stage runtime tracks
+a reactive height revision in the metrics version resolver and advances it from
+the row-sizing synchronization callback. This updates dividers, selection, pinned
+panes, and total content height during the drag. No public API change is required.
+
+Regression: `row resize keeps dividers and selection aligned before pointer release`
+in `e2e/sandbox-grid.spec.ts`; includes repeated edits, multiple rows, and shrinking.

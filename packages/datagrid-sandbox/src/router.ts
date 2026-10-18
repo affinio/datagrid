@@ -12,9 +12,14 @@ import VueShellGridCard from "./components/VueShellGridCard.vue"
 import VueSpreadsheetWorkbookCard from "./components/VueSpreadsheetWorkbookCard.vue"
 import VueTypedFacadeGridCard from "./components/VueTypedFacadeGridCard.vue"
 import ThemeCanvasGridFixture from "./components/ThemeCanvasGridFixture.vue"
+import DataGridHeightFixture from "./components/DataGridHeightFixture.vue"
+import DataGridSizingModesFixture from "./components/DataGridSizingModesFixture.vue"
+import StatePersistenceDemo from "./components/StatePersistenceDemo.vue"
+import ColumnFlexStressDemo from "./components/ColumnFlexStressDemo.vue"
 import WorldMapDemo from "./features/world-map/WorldMapDemo.vue"
 
 const routes = [
+  { path: "/vue/state-persistence", component: StatePersistenceDemo },
   {
     path: "/",
     redirect: "/vue/base-grid",
@@ -36,6 +41,18 @@ const routes = [
   {
     path: "/vue/theme-canvas-grid",
     component: ThemeCanvasGridFixture,
+  },
+  {
+    path: "/vue/height-sizing-grid",
+    component: DataGridHeightFixture,
+  },
+  {
+    path: "/vue/height-sizing-modes",
+    component: DataGridSizingModesFixture,
+  },
+  {
+    path: "/vue/column-flex-stress",
+    component: ColumnFlexStressDemo,
   },
   {
     path: "/vue/tree-grid",

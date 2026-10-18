@@ -224,10 +224,6 @@ button {
   min-width: 0;
   position: relative;
   flex: 1;
-  border: 1px solid #dbe3ee;
-  border-radius: 8px;
-  background: #fff;
-  overflow: hidden;
 }
 
 .showcase-grid-panel > * {

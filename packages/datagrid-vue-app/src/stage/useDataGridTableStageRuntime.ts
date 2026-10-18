@@ -63,6 +63,7 @@ import { useDataGridTableStageScrollSync } from "./useDataGridTableStageScrollSy
 import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageViewportKeyboard"
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
 import { resolveDataGridTableStageAutoSizeRows } from "./dataGridTableStageAutoSizeRows"
+import { resolveKeyboardColumnWidth } from "./dataGridKeyboardColumnResize"
 import type {
   DataGridActiveColumnMenuState,
   DataGridColumnMenuOpenReason,
@@ -302,6 +303,9 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
   applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
   clearColumnMenuFilter?: (columnKey: string) => void
+  resolveColumnMenuCondition?: (columnKey: string) => { operator: string; formula?: string; formula2?: string } | null
+  applyColumnMenuCondition?: (columnKey: string, condition: { operator: string; formula?: string; formula2?: string }) => void
+  clearColumnMenuCondition?: (columnKey: string) => void
   activeColumnMenu?: Ref<DataGridActiveColumnMenuState | null>
   openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
   closeColumnMenu?: () => void
@@ -470,11 +474,17 @@ export function useDataGridTableStageRuntime<
     rowSelectionColumn,
   } = columnService
 
+  const rowHeightRevision = ref(0)
   const rowHeightMetrics = createDataGridAppRowHeightMetrics({
     totalRows: () => totalSelectableRows.value,
     resolveBaseRowHeight: () => options.normalizedBaseRowHeight.value,
     resolveRowHeightOverride: rowIndex => options.runtime.api.view.getRowHeightOverride(rowIndex),
-    resolveRowHeightVersion: () => options.runtime.api.view.getRowHeightVersion(),
+    resolveRowHeightVersion: () => {
+      // Height overrides live outside Vue; every geometry consumer must track edits
+      // even when the rendered row range and spacer sizes stay unchanged.
+      void rowHeightRevision.value
+      return options.runtime.api.view.getRowHeightVersion()
+    },
     hasRowHeightOverrides: () => options.runtime.api.view.getRowHeightVersion() > 0,
     resolveRowHeightOverridesSnapshot: () => options.runtime.api.view.getRowHeightOverridesSnapshot?.() ?? null,
     resolveLastRowHeightMutation: () => options.runtime.api.view.getLastRowHeightMutation?.() ?? null,
@@ -660,7 +670,10 @@ export function useDataGridTableStageRuntime<
     bodyViewportRef,
     runtime: options.runtime as never,
     minRowHeight: MIN_ROW_HEIGHT,
-    syncViewport: () => syncViewportFromDom(),
+    syncViewport: () => {
+      rowHeightRevision.value += 1
+      syncViewportFromDom()
+    },
   })
 
   const selectionController = useDataGridAppCellSelection<TRow>({
@@ -975,6 +988,7 @@ export function useDataGridTableStageRuntime<
     },
     viewportRowStart,
     selectionAnchorCell,
+    resolveSelectionRange: resolveSelectionRangeForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
   })
   const {
@@ -2005,6 +2019,16 @@ export function useDataGridTableStageRuntime<
     },
   })
 
+  const resizeColumnByKeyboard = (columnKey: string, direction: -1 | 1): boolean => {
+    const nextWidth = resolveKeyboardColumnWidth(orderedVisibleColumns.value, columnKey, direction, {
+      defaultWidth: DEFAULT_COLUMN_WIDTH,
+      minWidth: MIN_COLUMN_WIDTH,
+    })
+    if (nextWidth == null) return false
+    options.runtime.api.columns.setWidth(columnKey, nextWidth)
+    return true
+  }
+
   const globalPointerListenersActive = computed(() => (
     interactionGlobalPointerListenersActive.value
     || isColumnResizing.value
@@ -2126,6 +2150,7 @@ export function useDataGridTableStageRuntime<
       applyClipboardSelectionRange({ startRow: 0, endRow: rowIndex, startColumn: columnIndex, endColumn: columnIndex })
     },
     clearCellSelection,
+    copySelectedCells,
     fillPreviewRange,
     rangeMovePreviewRange,
     customOverlays: lastServerFillCustomOverlays,
@@ -2138,6 +2163,7 @@ export function useDataGridTableStageRuntime<
     bodyViewportRef,
     columnStyle: resolveStageColumnStyle,
     reorderColumnsByHeader: options.reorderColumnsByHeader,
+    resizeColumnByKeyboard,
     toggleSortForColumn: options.toggleSortForColumn,
     handleHeaderColumnClick: options.handleHeaderColumnClick,
     sortIndicator: options.sortIndicator,
@@ -2164,6 +2190,9 @@ export function useDataGridTableStageRuntime<
     applyColumnMenuGroupBy: options.applyColumnMenuGroupBy,
     applyColumnMenuFilter: options.applyColumnMenuFilter,
     clearColumnMenuFilter: options.clearColumnMenuFilter,
+    resolveColumnMenuCondition: options.resolveColumnMenuCondition,
+    applyColumnMenuCondition: options.applyColumnMenuCondition,
+    clearColumnMenuCondition: options.clearColumnMenuCondition,
     activeColumnMenu,
     openColumnMenu,
     closeColumnMenu,

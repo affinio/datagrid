@@ -1,4 +1,5 @@
 import {
+  THEME_TOKEN_VARIABLE_MAP,
   applyGridTheme,
   defaultStyleConfig,
   industrialNeutralTheme,
@@ -27,17 +28,18 @@ const DATA_GRID_THEME_PRESETS: Record<DataGridThemePreset, DataGridStyleConfig> 
 function mergeTokenVariants(
   base: DataGridStyleConfig["tokenVariants"],
   override: DataGridStyleConfig["tokenVariants"],
+  tokenOverrides: DataGridStyleConfig["tokens"],
 ): DataGridStyleConfig["tokenVariants"] {
-  if (!base && !override) {
+  if (!base && !override && !tokenOverrides) {
     return undefined
   }
-  const merged: NonNullable<DataGridStyleConfig["tokenVariants"]> = {
-    ...(base ?? {}),
-  }
-  for (const [variantKey, tokens] of Object.entries(override ?? {})) {
+  const merged: NonNullable<DataGridStyleConfig["tokenVariants"]> = {}
+  const variantKeys = new Set([...Object.keys(base ?? {}), ...Object.keys(override ?? {})])
+  for (const variantKey of variantKeys) {
     merged[variantKey] = {
-      ...(merged[variantKey] ?? {}),
-      ...tokens,
+      ...(base?.[variantKey] ?? {}),
+      ...(tokenOverrides ?? {}),
+      ...(override?.[variantKey] ?? {}),
     }
   }
   return merged
@@ -48,7 +50,7 @@ function mergeStyleConfigs(base: DataGridStyleConfig, override: DataGridStyleCon
     ...base,
     ...override,
     tokens: { ...(base.tokens ?? {}), ...(override.tokens ?? {}) },
-    tokenVariants: mergeTokenVariants(base.tokenVariants, override.tokenVariants),
+    tokenVariants: mergeTokenVariants(base.tokenVariants, override.tokenVariants, override.tokens),
   }
 }
 
@@ -105,6 +107,18 @@ export function resolveDataGridThemeTokens(theme: DataGridThemeProp): DataGridTh
     document: typeof document === "undefined" ? undefined : document,
   })
   return isThemeTokenOverride(theme) ? mergeDefinedThemeTokenOverrides(tokens, theme) : tokens
+}
+
+export function resolveDataGridThemeStyleVars(theme: DataGridThemeProp): Record<string, string> {
+  const tokens = resolveDataGridThemeTokens(theme)
+  const style: Record<string, string> = {}
+  for (const [tokenKey, cssVar] of Object.entries(THEME_TOKEN_VARIABLE_MAP)) {
+    const value = tokens[tokenKey as keyof DataGridThemeTokens]
+    if (value != null) {
+      style[cssVar] = value
+    }
+  }
+  return style
 }
 
 export function applyDataGridTheme(rootElement: HTMLElement, theme: DataGridThemeProp): DataGridThemeTokens {

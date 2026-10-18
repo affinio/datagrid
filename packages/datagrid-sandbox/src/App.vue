@@ -5,6 +5,8 @@ const navGroups = [
     links: [
       { to: "/showcase", label: "Showcase Home" },
       { to: "/vue/shell/base-grid", label: "Data Workbench" },
+      { to: "/vue/state-persistence", label: "Saved Preferences" },
+      { to: "/vue/column-flex-stress", label: "Column Flex Stress" },
       { to: "/vue/server-data-source-grid", label: "Server Datasource" },
       { to: "/vue/spreadsheet-workbook", label: "Spreadsheet Workflow" },
       { to: "/vue/shell/gantt-grid", label: "Gantt Planning" },

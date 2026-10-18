@@ -1,4 +1,4 @@
-export const DATAGRID_COLUMN_MENU_ITEM_KEYS = ["sort", "group", "pin", "filter"] as const
+export const DATAGRID_COLUMN_MENU_ITEM_KEYS = ["sort", "group", "pin", "condition", "filter"] as const
 
 export type DataGridColumnMenuItemKey = (typeof DATAGRID_COLUMN_MENU_ITEM_KEYS)[number]
 
@@ -16,6 +16,12 @@ export interface DataGridColumnMenuLabels {
   group?: string
   pin?: string
   filter?: string
+  condition?: string
+  conditionOperator?: string
+  conditionFormula?: string
+  conditionFormulaPlaceholder?: string
+  conditionFormulaTo?: string
+  applyCondition?: string
   activeState?: string
   groupLevel?: string
   textFilterPlaceholder?: string
@@ -28,6 +34,7 @@ export interface DataGridColumnMenuLabels {
   noMatchingValues?: string
   noValues?: string
   selectedValuesSummary?: string
+  /** @deprecated The visible-window scroll hint is no longer rendered. */
   valuesWindowSummary?: string
   selectAtLeastOneValueHint?: string
   blankValue?: string
@@ -110,6 +117,7 @@ export interface DataGridColumnMenuOptions {
   trigger: DataGridColumnMenuTriggerMode
   maxFilterValues: number
   items: readonly DataGridColumnMenuItemKey[]
+  hide: readonly DataGridColumnMenuItemKey[]
   disabled: readonly DataGridColumnMenuItemKey[]
   disabledReasons: DataGridColumnMenuDisabledReasons
   labels: DataGridColumnMenuItemLabels
@@ -125,6 +133,7 @@ export type DataGridColumnMenuProp =
       trigger?: DataGridColumnMenuTriggerMode
       maxFilterValues?: number
       items?: readonly DataGridColumnMenuItemKey[]
+      hide?: readonly DataGridColumnMenuItemKey[]
       disabled?: readonly DataGridColumnMenuItemKey[]
       disabledReasons?: DataGridColumnMenuDisabledReasons
       labels?: DataGridColumnMenuItemLabels
@@ -154,6 +163,7 @@ export type DataGridColumnMenuInputProp =
       trigger?: DataGridColumnMenuTriggerMode
       maxFilterValues?: number
       items?: readonly DataGridColumnMenuItemInput[]
+      hide?: readonly DataGridColumnMenuItemInput[]
       disabled?: readonly DataGridColumnMenuItemInput[]
       disabledReasons?: Readonly<Partial<Record<DataGridColumnMenuItemInput, string>>>
       labels?: DataGridColumnMenuItemLabels
@@ -226,6 +236,11 @@ function normalizeLabels(input: DataGridColumnMenuItemLabels | undefined): DataG
     "valuesWindowSummary",
     "selectAtLeastOneValueHint",
     "blankValue",
+    "conditionOperator",
+    "conditionFormula",
+    "conditionFormulaPlaceholder",
+    "conditionFormulaTo",
+    "applyCondition",
   ])
   const entries = Object.entries(input)
     .filter(([key, value]) => allowed.has(key) && typeof value === "string")
@@ -380,6 +395,7 @@ export function resolveDataGridColumnMenu(
       trigger: DEFAULT_TRIGGER_MODE,
       maxFilterValues: DEFAULT_MAX_FILTER_VALUES,
       items: [...DATAGRID_COLUMN_MENU_ITEM_KEYS],
+      hide: [],
       disabled: [],
       disabledReasons: Object.freeze({}),
       labels: Object.freeze({}),
@@ -394,6 +410,7 @@ export function resolveDataGridColumnMenu(
       trigger: DEFAULT_TRIGGER_MODE,
       maxFilterValues: DEFAULT_MAX_FILTER_VALUES,
       items: [...DATAGRID_COLUMN_MENU_ITEM_KEYS],
+      hide: [],
       disabled: [],
       disabledReasons: Object.freeze({}),
       labels: Object.freeze({}),
@@ -409,6 +426,7 @@ export function resolveDataGridColumnMenu(
       ? Math.max(20, Math.trunc(input.maxFilterValues as number))
       : DEFAULT_MAX_FILTER_VALUES,
     items: normalizeItems(input.items),
+    hide: normalizeItemSubset(input.hide),
     disabled: normalizeItemSubset(input.disabled),
     disabledReasons: normalizeDisabledReasons(input.disabledReasons),
     labels: normalizeLabels(input.labels),
@@ -424,7 +442,7 @@ export function resolveDataGridColumnMenuItems(
 ): readonly DataGridColumnMenuItemKey[] {
   const columnOptions = options.columns[columnKey]
   const baseItems = columnOptions?.items ? normalizeItems(columnOptions.items) : options.items
-  const hidden = new Set(columnOptions?.hide ?? [])
+  const hidden = new Set([...options.hide, ...(columnOptions?.hide ?? [])])
   const filtered = baseItems.filter(item => !hidden.has(item))
   return filtered.length > 0 ? filtered : []
 }

@@ -90,6 +90,8 @@ export {
 } from "@affino/datagrid-vue-app"
 export type {
   DataGridAppViewMode,
+} from "@affino/datagrid-vue-app"
+export type {
   DataGridGanttDependencyRef,
   DataGridGanttDependencyType,
   DataGridGanttOptions,
@@ -107,7 +109,7 @@ export type {
   DataGridWorkingCalendar,
   BuildDataGridTimelineRenderModelsInput,
   ResolveDataGridTimelineRangeInput,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue-app/gantt"
 export type {
   DataGridClientComputeMode,
   DataGridComputedFieldDefinition,

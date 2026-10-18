@@ -1,6 +1,14 @@
 # @affino/datagrid-vue
 
-## Unreleased
+## 0.10.3
+
+### Fixed
+
+- Applied viewport updates during row-height changes so the grid responds continuously while rows are resized instead of repositioning only after pointer release.
+
+### Validation
+
+- Vue adapter type-check and the enterprise app package test suite passed.
 
 ## 0.10.2
 

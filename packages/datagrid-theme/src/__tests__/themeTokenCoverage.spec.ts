@@ -24,6 +24,8 @@ describe("theme token coverage", () => {
   it("defines every mapped token in default and preset variants", () => {
     expectCompleteTokenSet("defaultThemeTokens", defaultThemeTokens)
     expectCompleteTokenSet("defaultDarkThemeTokens", defaultDarkThemeTokens)
+    expect(defaultThemeTokens.surfaceRadius).toBe("8px")
+    expect(defaultDarkThemeTokens.surfaceRadius).toBe("8px")
     expectCompletePresetVariants("defaultStyleConfig", defaultStyleConfig)
     expectCompletePresetVariants("industrialNeutralTheme", industrialNeutralTheme)
     expectCompletePresetVariants("sugarTheme", sugarTheme)
@@ -60,5 +62,10 @@ describe("theme token coverage", () => {
     } finally {
       delete document.documentElement.dataset.theme
     }
+  })
+
+  it("provides a theme-aware focus-axis color and public CSS variable", () => {
+    expect(THEME_TOKEN_VARIABLE_MAP.gridFocusAxisBackgroundColor).toBe("--datagrid-focus-axis-bg")
+    expect(defaultThemeTokens.gridFocusAxisBackgroundColor).not.toBe(defaultDarkThemeTokens.gridFocusAxisBackgroundColor)
   })
 })

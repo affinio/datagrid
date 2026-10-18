@@ -1043,6 +1043,26 @@ describe("useDataGridAppViewport contract", () => {
     }
   })
 
+  it("keeps pinned flex columns at base width and gives remaining width to center flex columns", () => {
+    const columns = [
+      { key: "pinnedFlex", pin: "left", width: 180, column: { flex: 1 } },
+      { key: "centerFlex", pin: "center", width: 180, column: { flex: 1 } },
+      { key: "fixed", pin: "center", width: 200 },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const viewport = makeViewport({
+      visibleColumns: ref(columns),
+      indexColumnWidth: 0,
+    })
+    const shell = { clientWidth: 800 } as HTMLElement
+    const body = { scrollTop: 0, scrollLeft: 0, clientHeight: 400, clientWidth: 600, parentElement: shell } as HTMLElement
+    viewport.bodyViewportRef.value = body
+    viewport.syncViewportFromDom()
+
+    expect(viewport.columnStyle("pinnedFlex").width).toBe("180px")
+    expect(viewport.columnStyle("centerFlex").width).toBe("420px")
+    expect(viewport.columnStyle("fixed").width).toBe("200px")
+  })
+
   it("columnStyle falls back to defaultColumnWidth for unknown key", () => {
     const viewport = makeViewport({
       visibleColumns: ref(makeColumns(5, 140)),

@@ -42,11 +42,51 @@ const columns = [
 </script>
 
 <template>
-  <DataGrid :rows="rows" :columns="columns" virtualization />
+  <DataGrid :rows="rows" :columns="columns" virtualization layout-mode="auto-height" />
 </template>
 ```
 
-The app layer owns the renderer, keyboard navigation, selection, column controls, and the default interaction shell. `virtualization` should normally remain enabled for product tables.
+The app layer owns the renderer, keyboard navigation, selection, column controls, and the default interaction shell. `virtualization` should normally remain enabled for product tables. This small example uses `auto-height` so it fits a normal document flow; use `fill` when the application gives the grid a bounded area.
+
+## Filling an application panel
+
+`fill` makes the grid occupy the height its host gives it. The host must have a
+height from its own parent or layout; the grid cannot infer the space left by
+page headers outside its host. For a full-height panel with a page header:
+
+```vue
+<div class="orders-page">
+  <header>Orders</header>
+  <main class="orders-page__grid">
+    <DataGrid :rows="rows" :columns="columns" virtualization />
+  </main>
+</div>
+```
+
+```css
+.orders-page {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.orders-page__grid {
+  min-width: 0;
+  min-height: 0;
+}
+```
+
+For a fixed-height report area, the host can be a simple block:
+
+```vue
+<div style="height: 32rem">
+  <DataGrid :rows="rows" :columns="columns" virtualization />
+</div>
+```
+
+The same bounded-host rule applies. For ordinary document flow, use
+`layout-mode="auto-height"`; `min-rows` and `max-rows` control the
+body row area, and the body scrolls after `max-rows`. `row-height-mode="auto"`
+controls individual row sizing and is independent from component layout mode.
 
 ## Choosing the next layer
 

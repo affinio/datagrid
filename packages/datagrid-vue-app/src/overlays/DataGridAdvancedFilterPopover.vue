@@ -39,23 +39,29 @@
           data-datagrid-overlay-drag-handle="true"
           @pointerdown="draggable.handlePointerDown"
         >
-          <div class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.eyebrow }}</div>
+          <div v-if="resolvedLabels.eyebrow" class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.eyebrow }}</div>
           <h3 class="datagrid-advanced-filter__title">{{ resolvedLabels.title }}</h3>
         </div>
-        <button type="button" class="datagrid-advanced-filter__ghost" @click="emit('cancel')">
-          {{ resolvedLabels.close }}
+        <button
+          type="button"
+          class="datagrid-advanced-filter__close"
+          :aria-label="resolvedLabels.close"
+          :title="resolvedLabels.close"
+          @click="emit('cancel')"
+        >
+          ×
         </button>
       </header>
 
       <section class="datagrid-advanced-filter__applied">
         <div class="datagrid-advanced-filter__applied-head">
           <div>
-            <div class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.appliedEyebrow }}</div>
+            <div v-if="resolvedLabels.appliedEyebrow" class="datagrid-advanced-filter__eyebrow">{{ resolvedLabels.appliedEyebrow }}</div>
             <div class="datagrid-advanced-filter__applied-title">{{ resolvedLabels.appliedTitle }}</div>
           </div>
           <button
             type="button"
-            class="datagrid-advanced-filter__ghost"
+            class="datagrid-advanced-filter__clear-link"
             :disabled="!hasAnyFilters"
             data-datagrid-advanced-filter-action="reset-all"
             @click="emit('reset-all')"

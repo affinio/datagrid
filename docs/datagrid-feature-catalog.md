@@ -51,7 +51,7 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | Events | Error surface (`error` event + error codes) | Core + Adapter | all | Structured error payload (`code/operation/recoverable/error`) for integration-safe recovery handling. |
 | Query | Sort model (single/multi column) | Core + Adapter | all | Deterministic sort state and projection stage integration. |
 | Query | Column filters | Core + Adapter | all | Predicate-based column filtering with snapshot state. |
-| Query | Advanced filter expressions | Core + Adapter | all | Structured boolean expression tree normalization/evaluation. |
+| Query | Filter conditions and expressions | Core + Adapter | all | Structured boolean expression tree normalization/evaluation. |
 | Query | Quick filter (`filterModel.quickFilter`) | Core + Adapter + App + Backend | all | Grid-wide text filtering is part of `DataGridFilterSnapshot`, runs inside the filter stage before sort/group/pivot/pagination, and stays structured-clone/serialization safe. Server-side data sources receive it through `DataGridDataSourcePullRequest.filterModel` and must apply it backend-side. See [DataGrid Quick Filter](./datagrid-quick-filter.md). |
 | Grouping | Group by model + expansion state | Core + Adapter | all | Deterministic group projection with expand/collapse controls. |
 | Tree data | Tree projection and subtree toggles | Core + Adapter | all | Tree data projection paths and group-like expansion controls. |

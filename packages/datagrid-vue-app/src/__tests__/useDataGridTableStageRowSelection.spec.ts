@@ -75,6 +75,35 @@ function createRowSelectionColumn(): DataGridColumnSnapshot {
 }
 
 describe("useDataGridTableStageRowSelection", () => {
+  it("keeps the original row-index anchor while Shift crosses back over it", () => {
+    const rows = [createRow("r1"), createRow("r2"), createRow("r3"), createRow("r4")]
+    const { runtime } = createRuntime(rows)
+    const currentRange = ref<{ startRow: number; endRow: number; startColumn: number; endColumn: number } | null>(null)
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => null),
+      orderedVisibleColumns: computed(() => [createRowSelectionColumn(), createRowSelectionColumn()]),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => currentRange.value ? { rowIndex: currentRange.value.startRow, columnIndex: 0 } : null),
+      resolveSelectionRange: () => currentRange.value,
+      applySelectionRange: range => { currentRange.value = range },
+    })
+
+    selection.selectRowRange(rows[2] as never, 2, false)
+    selection.selectRowRange(rows[1] as never, 1, true)
+    expect(currentRange.value).toMatchObject({ startRow: 1, endRow: 2 })
+    selection.selectRowRange(rows[2] as never, 2, true)
+    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 2 })
+    selection.selectRowRange(rows[3] as never, 3, true)
+    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 3 })
+
+    currentRange.value = { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 }
+    selection.selectRowRange(rows[1] as never, 1, true)
+    expect(currentRange.value).toMatchObject({ startRow: 0, endRow: 1 })
+  })
+
   it("syncs the snapshot after toggling a row checkbox", () => {
     const filteredRows = [createRow("r1"), createRow("r2")]
     const { runtime, setSelected } = createRuntime(filteredRows)

@@ -7,6 +7,7 @@
       'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
       'grid-stage--layout-fill': layoutMode === 'fill',
       'grid-stage--layout-auto-height': layoutMode === 'auto-height',
+      'grid-stage--empty-state': Boolean(props.emptyState),
       'grid-stage--fill-dragging': isFillDragging,
       'grid-stage--range-moving': isRangeMoving,
       'grid-stage--scrolling': isBodyViewportScrolling,
@@ -26,6 +27,10 @@
       :right-track-style="rightTrackStyle"
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
+      :navigate-to-row-index="navigateToRowIndex"
+      :focused-body-column-key="focusedBodyColumnKey"
+      :focused-body-row-index="focusedBodyRowIndex"
+      :copy-selected-cells="selection.copySelectedCells"
       :is-coarse-pointer="isCoarsePointer"
       :center-scroll-left="groupHeaderScrollLeft"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
@@ -264,11 +269,17 @@
       :filter-active="activeColumnMenuFilterActive"
       :selected-filter-tokens="activeColumnMenuSelectedTokens"
       :max-filter-values="activeColumnMenuMaxFilterValues"
+      :condition-active="Boolean(activeColumnMenuCondition)"
+      :condition-operator="activeColumnMenuCondition?.operator"
+      :condition-formula="activeColumnMenuCondition?.formula"
+      :condition-formula2="activeColumnMenuCondition?.formula2"
       :anchor-element="activeColumnMenu.anchorEl"
       :open-reason="activeColumnMenu.reason"
       @sort="applyActiveColumnMenuSort"
       @pin="applyActiveColumnMenuPin"
       @group="applyActiveColumnMenuGroupBy"
+      @apply-condition="applyActiveColumnMenuCondition"
+      @clear-condition="clearActiveColumnMenuCondition"
       @apply-filter="applyActiveColumnMenuFilter"
       @update-text-filter="updateActiveColumnMenuTextFilter"
       @clear-filter="clearActiveColumnMenuFilter"
@@ -481,6 +492,10 @@ const gridAriaRowCount = computed(() => Math.max(
 ))
 const gridAriaColumnCount = computed(() => Math.max(0, visibleColumns.value.length))
 const activeColumnMenu = computed(() => columns.value.activeColumnMenu ?? null)
+const activeColumnMenuCondition = computed(() => {
+  const columnKey = resolveActiveColumnMenuKey()
+  return columnKey ? columns.value.resolveColumnMenuCondition?.(columnKey) ?? null : null
+})
 // DataGridColumnMenu closes before emitting some actions, so retain the action column for that synchronous emit.
 const activeColumnMenuActionColumnKey = ref<string | null>(null)
 const activeColumnMenuColumn = computed(() => {
@@ -622,6 +637,18 @@ function applyActiveColumnMenuFilter(tokens: readonly string[]): void {
   }
 }
 
+function applyActiveColumnMenuCondition(condition: { operator: string; formula?: string; formula2?: string }): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuCondition?.(columnKey, condition)
+  }
+}
+
+function clearActiveColumnMenuCondition(): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) columns.value.clearColumnMenuCondition?.(columnKey)
+}
+
 function updateActiveColumnMenuTextFilter(value: string): void {
   const columnKey = resolveActiveColumnMenuKey()
   if (columnKey) {
@@ -641,8 +668,21 @@ function clearActiveColumnMenuFilter(): void {
   columns.value.setColumnFilterText(columnKey, "")
 }
 
+function restoreGridFocusAfterMenuClose(): void {
+  void nextTick(() => {
+    if (typeof window === "undefined") {
+      if (stageRootEl.value) focusRuntime.restoreAnchorCellFocus()
+      return
+    }
+    window.requestAnimationFrame(() => {
+      if (stageRootEl.value) focusRuntime.restoreAnchorCellFocus()
+    })
+  })
+}
+
 function closeActiveColumnMenu(): void {
   columns.value.closeColumnMenu?.()
+  restoreGridFocusAfterMenuClose()
 }
 
 const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
@@ -671,6 +711,8 @@ const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
 const pinnedTopRows = computed(() => rows.value?.pinnedTopRows ?? [])
 const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
 const selectionRange = computed(() => selection.value?.selectionRange ?? null)
+const focusedBodyRowIndex = ref<number | null>(null)
+const focusedBodyColumnKey = ref<string | null>(null)
 const selectionRanges = computed<readonly OverlayRange[]>(() => {
   const ranges = selection.value?.selectionRanges
   if (Array.isArray(ranges) && ranges.length > 0) {
@@ -698,6 +740,78 @@ function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number
 }
 
 function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  clearPendingRowIndexFocus()
+  const currentColumn = visibleColumns.value[columnIndex]
+  const firstColumn = visibleColumns.value[0]
+  const previousColumn = visibleColumns.value[columnIndex - 1]
+  if (
+    event.key === "ArrowLeft"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && previousColumn?.column.meta?.rowSelection === true
+  ) {
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const selectionCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === columnIndex - 1)
+    if (selectionCell) {
+      event.preventDefault()
+      selection.value.selectCell?.(rowIndex, columnIndex - 1)
+      selectionCell.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    event.key === "ArrowRight"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && currentColumn?.column.meta?.rowSelection === true
+  ) {
+    const nextDataColumnIndex = visibleColumns.value.findIndex((column, index) => (
+      index > columnIndex && column.column.meta?.rowSelection !== true
+    ))
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const nextDataCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === nextDataColumnIndex)
+    if (nextDataColumnIndex >= 0 && nextDataCell) {
+      event.preventDefault()
+      selection.value.selectCell?.(rowIndex, nextDataColumnIndex)
+      nextDataCell.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    event.key === "ArrowLeft"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && rows.value.showRowIndex !== false
+    && (
+      currentColumn?.column.meta?.rowSelection === true
+      || (columnIndex === 0 && firstColumn?.column.meta?.rowSelection !== true)
+    )
+  ) {
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const rowIndexCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-cell--index-number[data-row-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex)
+    if (rowIndexCell) {
+      event.preventDefault()
+      rows.value.handleRowIndexClick?.(row, rowOffset, false)
+      retainRowIndexFocus(rowIndex, false, true)
+      rowIndexCell.focus({ preventScroll: true })
+      return
+    }
+  }
   if (
     event.key === "ArrowUp"
     && !event.ctrlKey
@@ -1361,6 +1475,106 @@ function resolveAbsoluteRowIndex(row: TableRow, rowOffset: number): number {
     : viewport.value.viewportRowStart + rowOffset
 }
 
+function navigateFromRowIndexToFirstColumn(row: TableRow, rowOffset: number): boolean {
+  const columnIndex = visibleColumns.value.length > 0 ? 0 : -1
+  if (columnIndex < 0) return false
+  const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+  const stageRoot = stageRootEl.value
+  const resolveTargetCell = () => Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+    .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === columnIndex)
+  const targetCell = resolveTargetCell()
+  if (!targetCell) return false
+  clearPendingRowIndexFocus()
+  selection.value.selectCell?.(rowIndex, columnIndex)
+  targetCell.focus({ preventScroll: true })
+  return true
+}
+
+const pendingRowIndexFocus = ref<{ rowIndex: number; extend: boolean; selectionApplied: boolean } | null>(null)
+let pendingRowIndexFocusFrame: number | null = null
+let pendingRowIndexFocusIdleTimer: number | null = null
+
+function clearPendingRowIndexFocus(): void {
+  pendingRowIndexFocus.value = null
+  if (pendingRowIndexFocusIdleTimer != null) {
+    window.clearTimeout(pendingRowIndexFocusIdleTimer)
+    pendingRowIndexFocusIdleTimer = null
+  }
+}
+
+function retainRowIndexFocus(rowIndex: number, extend: boolean, selectionApplied: boolean): void {
+  pendingRowIndexFocus.value = { rowIndex, extend, selectionApplied }
+  if (pendingRowIndexFocusIdleTimer != null) window.clearTimeout(pendingRowIndexFocusIdleTimer)
+  pendingRowIndexFocusIdleTimer = window.setTimeout(() => {
+    pendingRowIndexFocus.value = null
+    pendingRowIndexFocusIdleTimer = null
+  }, 250)
+}
+
+function scheduleRowIndexFocus(): void {
+  if (pendingRowIndexFocusFrame != null || typeof window === "undefined") return
+  pendingRowIndexFocusFrame = window.requestAnimationFrame(() => {
+    pendingRowIndexFocusFrame = null
+    if (pendingRowIndexFocus.value != null) focusRowIndexCell(pendingRowIndexFocus.value.rowIndex)
+  })
+}
+
+function focusRowIndexCell(rowIndex: number): boolean {
+  const target = Array.from(stageRootEl.value?.querySelectorAll<HTMLElement>(".grid-body-shell:not(.grid-body-shell--pinned-top):not(.grid-body-shell--pinned-bottom) .grid-cell--index-number[data-row-index]") ?? [])
+    .find(cell => Number(cell.dataset.rowIndex) === rowIndex)
+  if (!target) return false
+  const rowOffset = rowIndex - viewport.value.viewportRowStart
+  const targetRow = displayRows.value[rowOffset]
+  if (targetRow && pendingRowIndexFocus.value?.selectionApplied !== true) {
+    rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true)
+    if (pendingRowIndexFocus.value?.rowIndex === rowIndex) {
+      pendingRowIndexFocus.value.selectionApplied = true
+    }
+  }
+  if (document.activeElement !== target) target.focus({ preventScroll: true })
+  return true
+}
+
+function navigateToRowIndex(targetIndex: number, extend: boolean): boolean {
+  const rowTotal = selection.value.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length
+  if (targetIndex < 0 || targetIndex >= rowTotal) return false
+
+  retainRowIndexFocus(targetIndex, extend, false)
+  const scrollOwner = stageRootEl.value?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")
+  if (scrollOwner && scrollOwner.clientHeight > 0) {
+    const rowTop = viewport.value.resolveRowOffset?.(targetIndex)
+      ?? targetIndex * (viewport.value.baseRowHeight ?? 31)
+    const rowHeight = viewport.value.resolveRowHeight?.(targetIndex)
+      ?? viewport.value.baseRowHeight ?? 31
+    if (rowTop < scrollOwner.scrollTop) {
+      scrollOwner.scrollTop = rowTop
+    } else if (rowTop + rowHeight > scrollOwner.scrollTop + scrollOwner.clientHeight) {
+      scrollOwner.scrollTop = rowTop + rowHeight - scrollOwner.clientHeight
+    }
+  }
+  if (!focusRowIndexCell(targetIndex)) {
+    void nextTick(scheduleRowIndexFocus)
+  } else {
+    scheduleRowIndexFocus()
+  }
+  return true
+}
+
+function navigateRowIndex(row: TableRow, rowOffset: number, direction: -1 | 1, extend: boolean): boolean {
+  const currentIndex = pendingRowIndexFocus.value?.rowIndex ?? resolveAbsoluteRowIndex(row, rowOffset)
+  return navigateToRowIndex(currentIndex + direction, extend)
+}
+
+watch(
+  [() => viewport.value.viewportRowStart, displayRows],
+  () => {
+    if (pendingRowIndexFocus.value != null) {
+      void nextTick(scheduleRowIndexFocus)
+    }
+  },
+  { flush: "post" },
+)
+
 function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
   return resolveAbsoluteRowIndex(row, rowOffset) - viewport.value.viewportRowStart
 }
@@ -1433,12 +1647,15 @@ const rowIndexState = useDataGridStageRowIndex({
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   selectionRange,
   selectionRanges,
+  focusedBodyRowIndex,
   visibleColumns,
   isHoveredRow,
   isStripedRow,
   resolveAbsoluteRowIndex,
   resolveInlineRowStateFill,
   isDataGridPlaceholderSurfaceRow,
+  navigateFromRowIndex: navigateFromRowIndexToFirstColumn,
+  navigateRowIndex,
 })
 
 const leftPaneWidth = computed(() => {
@@ -1795,6 +2012,7 @@ const {
   headerChromeRenderModel,
   pinnedBottomChromeRenderModel,
   hasPivotHeaderGroups,
+  hideBodyVerticalLines: computed(() => Boolean(props.emptyState)),
   perfTraceEnabled,
 })
 
@@ -1943,7 +2161,31 @@ watch(
     if (!gridFocusOwned.value) {
       return
     }
+    const previousFocusTarget = document.activeElement
+    const previousIndexCell = previousFocusTarget instanceof HTMLElement
+      ? previousFocusTarget.closest<HTMLElement>(".grid-cell--index-number[data-row-index]")
+      : null
+    const previousIndexRow = previousIndexCell?.dataset.rowIndex ?? null
+    const previousIndexRowId = previousIndexCell?.dataset.rowId ?? null
     await nextTick()
+    const activeTarget = document.activeElement
+    if (previousIndexCell) {
+      if (activeTarget instanceof HTMLElement && stageRootEl.value?.contains(activeTarget)) {
+        const activeIndexCell = activeTarget.closest<HTMLElement>(".grid-cell--index-number[data-row-index]")
+        if (activeTarget !== previousFocusTarget && activeTarget.closest(".datagrid-stage__cell[data-row-index]")) {
+          return
+        }
+        if (activeIndexCell?.dataset.rowIndex === previousIndexRow && activeIndexCell.dataset.rowId === previousIndexRowId) {
+          return
+        }
+      }
+      const restoredIndexCell = Array.from(stageRootEl.value?.querySelectorAll<HTMLElement>(".grid-cell--index-number[data-row-index]") ?? [])
+        .find(cell => cell.dataset.rowIndex === previousIndexRow && cell.dataset.rowId === previousIndexRowId)
+      if (restoredIndexCell) {
+        restoredIndexCell.focus({ preventScroll: true })
+        return
+      }
+    }
     focusRuntime.restoreAnchorCellFocus()
   },
   { flush: "post" },
@@ -2027,15 +2269,35 @@ function isBodyGridFocusTarget(target: EventTarget | null): boolean {
 }
 
 function handleStageFocusIn(event: FocusEvent): void {
+  const focusedElement = event.target instanceof HTMLElement ? event.target : null
+  const bodyCell = focusedElement?.closest<HTMLElement>(".grid-body-shell .grid-cell[data-row-index]")
+  const rowIndex = Number(bodyCell?.dataset.rowIndex)
+  focusedBodyRowIndex.value = bodyCell && Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : null
+  focusedBodyColumnKey.value = bodyCell?.classList.contains("datagrid-stage__cell")
+    ? bodyCell.dataset.columnKey ?? null
+    : null
+  if (focusedElement?.closest("[data-datagrid-row-index-header='true']")) {
+    clearPendingRowIndexFocus()
+  }
   if (isBodyGridFocusTarget(event.target)) {
     gridFocusOwned.value = true
   }
 }
 
+function handleStageClickCapture(): void {
+  clearPendingRowIndexFocus()
+}
+
 function handleStageFocusOut(event: FocusEvent): void {
   const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
   if (!nextTarget) {
+    focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
     return
+  }
+  if (!(nextTarget instanceof Element) || !nextTarget.closest(".grid-body-shell .grid-cell[data-row-index]")) {
+    focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
   }
   if (!isBodyGridFocusTarget(nextTarget)) {
     gridFocusOwned.value = false
@@ -2046,6 +2308,7 @@ onMounted(() => {
   if (stageRootEl.value) {
     stageRootEl.value.addEventListener("focusin", handleStageFocusIn)
     stageRootEl.value.addEventListener("focusout", handleStageFocusOut)
+    stageRootEl.value.addEventListener("click", handleStageClickCapture, true)
   }
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return
@@ -2066,6 +2329,12 @@ onBeforeUnmount(() => {
   columns.value.closeColumnMenu?.()
   stageRootEl.value?.removeEventListener("focusin", handleStageFocusIn)
   stageRootEl.value?.removeEventListener("focusout", handleStageFocusOut)
+  stageRootEl.value?.removeEventListener("click", handleStageClickCapture, true)
+  clearPendingRowIndexFocus()
+  if (pendingRowIndexFocusFrame != null) {
+    window.cancelAnimationFrame(pendingRowIndexFocusFrame)
+    pendingRowIndexFocusFrame = null
+  }
   clearTouchClickSuppressionTimer()
   clearPendingTouchLongPress()
   bodyTouchStart = null

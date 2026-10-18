@@ -134,6 +134,7 @@ function createStageProps(
     selectCell?: (rowIndex: number, columnIndex: number) => void
     selectColumnThroughRow?: (rowIndex: number, columnIndex: number) => void
     clearCellSelection?: () => void
+    copySelectedCells?: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
     fillPreviewRange?: DataGridOverlayRange | null
     rangeMovePreviewRange?: DataGridOverlayRange | null
     fillHandleEnabled?: boolean
@@ -183,6 +184,7 @@ function createStageProps(
     cancelInlineEdit?: () => void
     showRowIndex?: boolean
     visibleColumns?: readonly DataGridColumnSnapshot[]
+    renderedColumns?: readonly DataGridColumnSnapshot[]
     rows?: readonly DataGridTableRow<DemoRow>[]
     firstRowKind?: "data" | "group"
     firstRowExpanded?: boolean
@@ -190,12 +192,16 @@ function createStageProps(
     toggleGroupRow?: (row: DataGridTableRow<DemoRow>) => void
     isRowFocused?: (row: DataGridTableRow<DemoRow>) => boolean
     toggleSortForColumn?: (columnKey: string, additive?: boolean) => void
+    reorderColumnsByHeader?: (payload: { sourceColumnKey: string; targetColumnKey: string; placement: "before" | "after" }) => boolean
+    resizeColumnByKeyboard?: (columnKey: string, direction: -1 | 1) => boolean
+    scrollToColumn?: (target: { columnKey: string; align: "nearest" }) => void
     startResize?: (event: MouseEvent, columnKey: string) => void
     handleViewportKeydown?: (event: KeyboardEvent) => void
   },
 ): DataGridTableStageProps<DemoRow> {
   const visibleColumns = options?.visibleColumns ?? createColumns()
-  const renderedColumns = visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
+  const renderedColumns = options?.renderedColumns
+    ?? visibleColumns.filter(column => column.pin !== "left" && column.pin !== "right")
   const selectionAnchorCell = options?.selectionAnchorCell ?? { rowIndex: 0, columnIndex: 0 }
   const rows = (options?.rows ?? createRows(options?.rowCount ?? 1)).map((row, rowIndex) => {
     if (rowIndex === 0 && options?.firstRowKind === "group") {
@@ -249,6 +255,9 @@ function createStageProps(
     columns: {
       visibleColumns,
       renderedColumns,
+      scrollToColumn: options?.scrollToColumn,
+      reorderColumnsByHeader: options?.reorderColumnsByHeader,
+      resizeColumnByKeyboard: options?.resizeColumnByKeyboard,
       columnFilterTextByKey: {},
       toggleSortForColumn: options?.toggleSortForColumn ?? (() => undefined),
       sortIndicator: () => "",
@@ -284,6 +293,7 @@ function createStageProps(
       selectCell: options?.selectCell,
       selectColumnThroughRow: options?.selectColumnThroughRow,
       clearCellSelection: options?.clearCellSelection,
+      copySelectedCells: options?.copySelectedCells,
       fillPreviewRange: options?.fillPreviewRange ?? null,
       rangeMovePreviewRange: options?.rangeMovePreviewRange ?? null,
       fillHandleEnabled: options?.fillHandleEnabled ?? false,
@@ -481,6 +491,27 @@ function mockCoarsePointer(matches: boolean): void {
 }
 
 describe("DataGridTableStage contract", () => {
+  it("marks the final center header for its CSS-owned outer divider when there is no right pinned pane", async () => {
+    const visibleColumns = [
+      { key: "name", pin: "center", width: 180, column: { key: "name", label: "Name" } },
+      { key: "value", pin: "center", width: 140, column: { key: "value", label: "Value" } },
+      { key: "status", pin: "center", width: 140, column: { key: "status", label: "Status" } },
+    ] as unknown as readonly DataGridColumnSnapshot[]
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, { visibleColumns }),
+    })
+
+    await nextTick()
+
+    expect(wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="status"]').classes())
+      .toContain("grid-cell--header-terminal")
+    expect(wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="value"]').classes())
+      .not.toContain("grid-cell--header-terminal")
+
+    wrapper.unmount()
+  })
+
   it("mounts the shared vertical scroll shell as the main body scroll owner", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -1338,6 +1369,77 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("marks the focused cell's column header and row index across pinned and center panes", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, { rowCount: 2 }),
+    })
+    const focusedHeader = (key: string) => wrapper.get(`.grid-cell--header[data-column-key="${key}"]`)
+    const focusedIndex = (rowIndex: number) => wrapper.get(`.grid-cell--index-number[data-row-index="${rowIndex}"]`)
+
+    wrapper.get('.datagrid-stage__cell[data-row-index="0"][data-column-key="left"]').element.focus()
+    await nextTick()
+    await nextTick()
+    expect(focusedHeader("left").classes()).toContain("grid-cell--focus-axis")
+    expect(focusedIndex(0).classes()).toContain("grid-cell--focus-axis")
+
+    const rightCell = wrapper.get('.datagrid-stage__cell[data-row-index="1"][data-column-key="right"]').element
+    rightCell.focus()
+    expect(document.activeElement).toBe(rightCell)
+    await nextTick()
+    expect(document.activeElement).toBe(rightCell)
+    expect(focusedHeader("left").classes()).not.toContain("grid-cell--focus-axis")
+    expect(focusedHeader("right").classes()).toContain("grid-cell--focus-axis")
+    expect(focusedIndex(0).classes()).not.toContain("grid-cell--focus-axis")
+    expect(focusedIndex(1).classes()).toContain("grid-cell--focus-axis")
+
+    wrapper.get('.grid-cell--header[data-column-key="centerA"]').element.focus()
+    await nextTick()
+    expect(focusedHeader("right").classes()).not.toContain("grid-cell--focus-axis")
+    expect(focusedIndex(1).classes()).not.toContain("grid-cell--focus-axis")
+    wrapper.unmount()
+  })
+
+  it("selects a full column on header click and copies the range from header focus", async () => {
+    const selectColumn = vi.fn()
+    const selectColumnRange = vi.fn()
+    const copySelectedCells = vi.fn(async () => true)
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 3,
+        selectColumn,
+        selectColumnRange,
+        copySelectedCells,
+      }),
+    })
+    const firstHeader = wrapper.get('.grid-cell--header[data-column-key="centerA"]')
+    await firstHeader.trigger("click")
+    expect(selectColumn).toHaveBeenCalledWith(1)
+    expect(document.activeElement).toBe(firstHeader.element)
+
+    const secondHeader = wrapper.get('.grid-cell--header[data-column-key="centerB"]')
+    await secondHeader.trigger("click", { shiftKey: true })
+    expect(selectColumnRange).toHaveBeenCalledWith(1, 2)
+    expect(document.activeElement).toBe(secondHeader.element)
+
+    secondHeader.element.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(copySelectedCells).toHaveBeenCalledWith("keyboard")
+
+    const filterInput = document.createElement("input")
+    secondHeader.element.append(filterInput)
+    filterInput.focus()
+    filterInput.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(copySelectedCells).toHaveBeenCalledTimes(1)
+
+    const cornerHeader = wrapper.get('[data-datagrid-row-index-header="true"]')
+    await cornerHeader.trigger("click")
+    expect(selectColumnRange).toHaveBeenCalledWith(0, 3)
+    cornerHeader.element.dispatchEvent(new KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(copySelectedCells).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
   it("does not sort when a column resize click bubbles through the header", async () => {
     const toggleSortForColumn = vi.fn()
     const startResize = vi.fn((event: MouseEvent) => {
@@ -1464,6 +1566,243 @@ describe("DataGridTableStage contract", () => {
 
     await centerAHeader.trigger("keydown", { key: "ArrowDown", shiftKey: true })
     expect(selectColumnThroughRow).toHaveBeenCalledWith(1, 1)
+
+    wrapper.unmount()
+  })
+
+  it("uses modified header arrows for reorder and local width resize", async () => {
+    const reorderColumnsByHeader = vi.fn(() => true)
+    const resizeColumnByKeyboard = vi.fn(() => true)
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        reorderColumnsByHeader,
+        resizeColumnByKeyboard,
+      }),
+    })
+    const header = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+    header.element.focus()
+
+    const reorderEvent = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    header.element.dispatchEvent(reorderEvent)
+    expect(reorderEvent.defaultPrevented).toBe(true)
+    expect(reorderColumnsByHeader).toHaveBeenCalledWith({
+      sourceColumnKey: "centerA",
+      targetColumnKey: "centerB",
+      placement: "after",
+    })
+
+    const optionReorderEvent = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerB"]').element.dispatchEvent(optionReorderEvent)
+    expect(optionReorderEvent.defaultPrevented).toBe(true)
+    expect(reorderColumnsByHeader).toHaveBeenLastCalledWith({
+      sourceColumnKey: "centerB",
+      targetColumnKey: "centerA",
+      placement: "before",
+    })
+
+    const optionReorderRightEvent = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]').element.dispatchEvent(optionReorderRightEvent)
+    expect(optionReorderRightEvent.defaultPrevented).toBe(true)
+    expect(reorderColumnsByHeader).toHaveBeenLastCalledWith({
+      sourceColumnKey: "centerA",
+      targetColumnKey: "centerB",
+      placement: "after",
+    })
+
+    const resizeEvent = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    header.element.dispatchEvent(resizeEvent)
+    expect(resizeEvent.defaultPrevented).toBe(true)
+    expect(resizeColumnByKeyboard).toHaveBeenCalledWith("centerA", 1)
+    wrapper.unmount()
+  })
+
+  it("requests one virtual header scroll without recursively retrying focus", async () => {
+    const columns = createColumns()
+    const scrollToColumn = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns: columns,
+        renderedColumns: columns.filter(column => column.key === "centerA"),
+        scrollToColumn,
+      }),
+    })
+    const header = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+    header.element.focus()
+    header.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      bubbles: true,
+      cancelable: true,
+    }))
+    await nextTick()
+    await nextTick()
+    expect(scrollToColumn).toHaveBeenCalledTimes(1)
+    expect(scrollToColumn).toHaveBeenCalledWith({ columnKey: "centerB", align: "nearest" })
+    wrapper.unmount()
+  })
+
+  it("returns from a header filter to the selected body cell for keyboard navigation", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        rowCount: 2,
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+      }),
+    })
+    const filter = wrapper.get('.grid-cell--header[data-column-key="centerA"] .col-filter-input')
+    const bodyCell = wrapper.get('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="centerA"]')
+    filter.element.focus()
+    await filter.trigger("keydown", { key: "Enter" })
+    await nextTick()
+    expect(document.activeElement).toBe(bodyCell.element)
+    wrapper.unmount()
+  })
+
+  it("includes the system index header in keyboard navigation", async () => {
+    const selectCell = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        showRowIndex: true,
+        visibleColumns: createColumns(),
+        rows: createRows(1),
+        totalRowCount: 1,
+        selectCell,
+      }),
+    })
+    await nextTick()
+
+    const indexHeader = wrapper.get("#datagrid-stage-header-row-index")
+    const firstRowIndexCell = wrapper.get(".grid-body-pane--left .grid-cell--index-number[data-row-index='0']")
+    const firstDataCell = wrapper.get('.grid-body-pane--left .datagrid-stage__cell[data-row-index="0"][data-column-key="left"]')
+    const firstDataHeader = wrapper.get('.grid-header-pane--left .grid-cell--header[data-column-key="left"]')
+
+    expect(indexHeader.attributes("tabindex")).toBe("-1")
+    firstDataHeader.element.focus()
+    await firstDataHeader.trigger("keydown", { key: "ArrowLeft" })
+    expect(document.activeElement).toBe(indexHeader.element)
+
+    const indexDownEvent = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })
+    indexHeader.element.dispatchEvent(indexDownEvent)
+    expect(indexDownEvent.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(firstRowIndexCell.element)
+
+    await firstRowIndexCell.trigger("keydown", { key: "ArrowRight" })
+    expect(document.activeElement).toBe(firstDataCell.element)
+    expect(selectCell).toHaveBeenLastCalledWith(0, 0)
+    await firstDataCell.trigger("keydown", { key: "ArrowLeft" })
+    expect(document.activeElement).toBe(firstRowIndexCell.element)
+    await firstRowIndexCell.trigger("keydown", { key: "ArrowRight" })
+    expect(document.activeElement).toBe(firstDataCell.element)
+    await firstDataCell.trigger("keydown", { key: "ArrowUp" })
+    expect(document.activeElement).toBe(firstDataHeader.element)
+
+    await wrapper.get("#datagrid-stage-header-row-index").trigger("keydown", { key: "ArrowRight" })
+    expect(document.activeElement).toBe(wrapper.get('.grid-header-pane--left .grid-cell--header[data-column-key="left"]').element)
+
+    wrapper.unmount()
+  })
+
+  it("moves from the system row index body cell into the first data column", async () => {
+    const selectCell = vi.fn()
+    const handleRowIndexClick = vi.fn()
+    const stageProps = createStageProps(() => false, {
+      showRowIndex: true,
+      visibleColumns: [createRowSelectionColumn(), ...createColumns()],
+      rows: createRows(1),
+      totalRowCount: 1,
+      selectCell,
+    })
+    stageProps.rows.handleRowIndexClick = handleRowIndexClick
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+    await nextTick()
+
+    const rowIndexCell = wrapper.get(".grid-body-pane--left .grid-cell--index-number[data-row-index='0']")
+    const selectionCell = wrapper.get(".grid-body-pane--left .grid-cell--row-selection[data-row-index='0']")
+    const firstDataCell = wrapper.get('.grid-body-pane--left .datagrid-stage__cell[data-row-index="0"][data-column-key="left"]')
+    rowIndexCell.element.focus()
+    await rowIndexCell.trigger("keydown", { key: "ArrowRight" })
+
+    expect(selectCell).toHaveBeenLastCalledWith(0, 0)
+    expect(document.activeElement).toBe(selectionCell.element)
+    await selectionCell.trigger("keydown", { key: "ArrowRight" })
+    expect(document.activeElement).toBe(firstDataCell.element)
+    await firstDataCell.trigger("keydown", { key: "ArrowLeft" })
+    expect(document.activeElement).toBe(selectionCell.element)
+    expect(selectCell).toHaveBeenLastCalledWith(0, 0)
+    await selectionCell.trigger("keydown", { key: "ArrowLeft" })
+    expect(document.activeElement).toBe(rowIndexCell.element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r1" }), 0, false)
+    wrapper.unmount()
+  })
+
+  it("navigates index rows and extends whole-row selection with Shift", async () => {
+    const selectColumnRange = vi.fn()
+    const handleRowIndexClick = vi.fn()
+    const stageProps = createStageProps(() => false, {
+      showRowIndex: true,
+      rows: createRows(4),
+      totalRowCount: 4,
+      selectColumnRange,
+    })
+    stageProps.rows.handleRowIndexClick = handleRowIndexClick
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: stageProps,
+    })
+    await nextTick()
+
+    const indexCell = (rowIndex: number) => wrapper.get(`.grid-body-pane--left .grid-cell--index-number[data-row-index="${rowIndex}"]`)
+    const firstDataCell = wrapper.get('.grid-body-pane--left .datagrid-stage__cell[data-row-index="0"][data-column-key="left"]')
+    firstDataCell.element.focus()
+    await firstDataCell.trigger("keydown", { key: "ArrowLeft" })
+    expect(document.activeElement).toBe(indexCell(0).element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r1" }), 0, false)
+
+    await indexCell(0).trigger("keydown", { key: "ArrowDown" })
+    expect(document.activeElement).toBe(indexCell(1).element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r2" }), 1, false)
+    await indexCell(1).trigger("keydown", { key: "ArrowDown", shiftKey: true })
+    expect(document.activeElement).toBe(indexCell(2).element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r3" }), 2, true)
+    await indexCell(2).trigger("keydown", { key: "ArrowUp", shiftKey: true })
+    expect(document.activeElement).toBe(indexCell(1).element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r2" }), 1, true)
+    await indexCell(1).trigger("keydown", { key: "ArrowUp" })
+    await indexCell(0).trigger("keydown", { key: "ArrowUp" })
+    expect(document.activeElement).toBe(wrapper.get("#datagrid-stage-header-row-index").element)
+    expect(selectColumnRange).toHaveBeenLastCalledWith(0, 3)
+    await wrapper.get("#datagrid-stage-header-row-index").trigger("keydown", { key: "ArrowDown" })
+    expect(document.activeElement).toBe(indexCell(0).element)
+    expect(handleRowIndexClick).toHaveBeenLastCalledWith(expect.objectContaining({ rowId: "r1" }), 0, false)
 
     wrapper.unmount()
   })
@@ -3515,11 +3854,13 @@ describe("DataGridTableStage contract", () => {
     const handleRowIndexClick = vi.fn()
     const handleToggleAllVisibleRows = vi.fn()
     const clearCellSelection = vi.fn()
+    const selectCell = vi.fn()
     const visibleColumns = [createRowSelectionColumn(), ...createColumns()] as const
     const baseProps = createStageProps(() => false, {
       selectionRange: { startRow: 0, endRow: 0, startColumn: 0, endColumn: 4 },
       visibleColumns,
       clearCellSelection,
+      selectCell,
     })
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
@@ -3557,6 +3898,7 @@ describe("DataGridTableStage contract", () => {
     expect(document.activeElement).toBe(selectAllButton.element)
     await selectAllButton.trigger("keydown", { key: "ArrowDown" })
     expect(document.activeElement).toBe(wrapper.get('.grid-body-pane--left .grid-cell--row-selection[data-row-index="0"]').element)
+    expect(selectCell).toHaveBeenCalledWith(0, 0)
     await selectAllButton.trigger("keydown", { key: " " })
     await selectAllButton.trigger("keydown", { key: "Enter" })
     expect(handleToggleAllVisibleRows).toHaveBeenCalledTimes(2)

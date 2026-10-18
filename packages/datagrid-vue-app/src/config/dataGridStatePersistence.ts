@@ -1,6 +1,7 @@
 import type {
   DataGridGetStateOptions,
   DataGridSetStateOptions,
+  DataGridUnifiedState,
 } from "@affino/datagrid-vue"
 import type { DataGridSavedViewStorageLike } from "./dataGridSavedView"
 
@@ -9,8 +10,19 @@ export type DataGridStatePersistenceStorage =
   | "session"
   | DataGridSavedViewStorageLike
 
+export interface DataGridPersistenceChangeEvent {
+  key: string
+  status: "loading" | "ready" | "saving" | "error"
+  operation?: "load" | "save"
+  error?: unknown
+}
+
 export interface DataGridStatePersistenceOptions {
   key: string
+  load?: (context: { key: string }) => unknown | Promise<unknown>
+  save?: (context: { key: string; state: DataGridUnifiedState<Record<string, unknown>> }) => void | Promise<void>
+  includeSelection?: boolean
+  includeGroupExpansion?: boolean
   storage?: DataGridStatePersistenceStorage | null
   includeViewportPosition?: boolean
   restoreOnReady?: boolean
@@ -25,9 +37,11 @@ export type DataGridStatePersistenceProp =
   | null
   | undefined
 
-export interface DataGridResolvedStatePersistenceOptions {
+export interface DataGridResolvedStatePersistenceOptions extends Pick<DataGridStatePersistenceOptions, "load" | "save"> {
   key: string
   storage: DataGridStatePersistenceStorage
+  includeSelection: boolean
+  includeGroupExpansion: boolean
   includeViewportPosition: boolean
   restoreOnReady: boolean
   debounceMs: number
@@ -56,17 +70,23 @@ export function resolveDataGridStatePersistence(
   if (!key) {
     return null
   }
-  const includeViewportPosition = options.includeViewportPosition !== false
+  const includeViewportPosition = options.includeViewportPosition === true
   const restoreOnReady = options.restoreOnReady !== false
 
   return {
     key,
+    load: options.load,
+    save: options.save,
+    includeSelection: options.includeSelection === true,
+    includeGroupExpansion: options.includeGroupExpansion === true,
     storage: options.storage ?? "local",
     includeViewportPosition,
     restoreOnReady,
     debounceMs: normalizeDebounceMs(options.debounceMs),
     getOptions: { includeViewportPosition },
     setOptions: {
+      applySelection: options.includeSelection === true,
+      applyViewport: false,
       ...(options.setOptions ?? {}),
       applyViewportPosition: includeViewportPosition,
     },

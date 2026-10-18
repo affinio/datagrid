@@ -292,6 +292,7 @@
         :column-menu="columnMenu"
         :cell-menu="cellMenu"
         :row-index-menu="rowIndexMenu"
+        column-reorder
         column-layout
         diagnostics
         advanced-filter
@@ -1400,7 +1401,7 @@ const showColumnLines = ref(true);
 const showHeaderColumnLines = ref(true);
 const showPinnedSeparators = ref(true);
 const quickFilter = {
-  placeholder: "Search visible columns",
+  placeholder: "Search",
   mode: "tokens" as const,
 };
 const pivotViewMode = ref<PivotViewMode>("pivot");
@@ -1772,7 +1773,9 @@ const benchmarkCustomOverlays = computed<readonly DataGridTableStageCustomOverla
   });
 });
 const sandboxLayoutMode = computed(() => {
-  return viewMode.value === "gantt" ? "fill" : "auto-height";
+  return viewMode.value === "gantt" || (props.mode === "base" && !props.timesheetShowcase)
+    ? "fill"
+    : "auto-height";
 });
 const rowReorder = computed(() => {
   return props.mode === "base"

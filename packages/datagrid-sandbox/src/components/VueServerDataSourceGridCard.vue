@@ -69,6 +69,7 @@
           :column-menu="columnMenu"
           advanced-filter
           :quick-filter="quickFilter"
+          empty-state-alignment="viewport"
           fill-handle
           range-move
           :history="gridHistory"

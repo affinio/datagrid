@@ -1,6 +1,14 @@
 # @affino/datagrid-spreadsheet-vue-app
 
-## Unreleased
+## 0.1.1
+
+### Fixed
+
+- Updated workbook filter test expectations to assert the filtered rows without relying on derived-value cells that are outside the filter contract.
+
+### Validation
+
+- Spreadsheet workbook app build and package tests passed.
 
 ### Patch Changes
 

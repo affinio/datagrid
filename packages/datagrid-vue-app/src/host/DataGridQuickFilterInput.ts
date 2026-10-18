@@ -43,9 +43,6 @@ export default defineComponent({
         props.active ? "datagrid-app-quick-filter--active" : null,
       ],
     }, [
-      h("span", {
-        class: "datagrid-app-quick-filter__label",
-      }, "Quick filter"),
       h("input", {
         class: "datagrid-app-quick-filter__input",
         type: "text",

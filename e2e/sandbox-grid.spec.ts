@@ -1,5 +1,293 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("saved preferences commit resize on release and restore filters without a width flash", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.goto("/vue/state-persistence")
+  const status = page.getByTestId("persistence-status")
+  await expect(status).toContainText("ready")
+  const readWrites = async () => Number((await status.textContent())?.match(/(\d+) writes/)?.[1] ?? 0)
+  await expect.poll(readWrites).toBe(1)
+  const header = page.locator('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+  const before = (await header.boundingBox())!
+  const handle = (await header.locator(".col-resize").boundingBox())!
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2 + 48, handle.y + handle.height / 2)
+  await expect.poll(async () => (await header.boundingBox())!.width).toBeGreaterThan(before.width + 30)
+  // Pause longer than the debounce while still holding the resize handle.
+  await page.waitForTimeout(350)
+  expect(await readWrites()).toBe(1)
+  await page.mouse.up()
+  await expect.poll(readWrites).toBe(2)
+  const resizedWidth = (await header.boundingBox())!.width
+  await page.getByPlaceholder("Search rows").fill("Mira")
+  await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem("sandbox:preferences:v1:local:A") ?? "null")?.rows.snapshot.filterModel?.quickFilter?.query)).toBe("Mira")
+
+  const visibleWidths = await page.evaluate(async () => {
+    const widths: number[] = []
+    document.querySelector<HTMLButtonElement>('[data-testid="persistence-remount"]')!.click()
+    for (let frame = 0; frame < 12; frame += 1) {
+      await new Promise(requestAnimationFrame)
+      const header = document.querySelector<HTMLElement>('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+      if (header && getComputedStyle(header).visibility !== "hidden") widths.push(header.getBoundingClientRect().width)
+    }
+    return widths
+  })
+  expect(visibleWidths.length).toBeGreaterThan(0)
+  for (const width of visibleWidths) expect(width).toBeCloseTo(resizedWidth, 0)
+  await expect(page.getByPlaceholder("Search rows")).toHaveValue("Mira")
+  await page.getByTestId("persistence-reset").click()
+  await expect(page.getByPlaceholder("Search rows")).toHaveValue("")
+  await expect.poll(async () => (await header.boundingBox())!.width).toBeCloseTo(before.width, 0)
+})
+
+test("async saved preferences hide unrestored widths and isolate profile loads", async ({ page }) => {
+  await page.goto("/vue/state-persistence")
+  await expect.poll(async () => Number((await page.getByTestId("persistence-status").textContent())?.match(/(\d+) writes/)?.[1] ?? 0)).toBe(1)
+  await page.evaluate(() => {
+    const base = JSON.parse(localStorage.getItem("sandbox:preferences:v1:local:A")!)
+    for (const [profile, width] of [["A", 200], ["B", 300]] as const) {
+      const state = structuredClone(base)
+      state.columns.widths.owner = width
+      localStorage.setItem(`sandbox:preferences:v1:remote:${profile}`, JSON.stringify(state))
+    }
+  })
+  await page.locator(".persistence-demo__controls select").nth(1).selectOption("remote")
+  const grid = page.locator(".affino-datagrid-app-root")
+  const header = grid.locator('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+  await expect(grid).toHaveAttribute("data-persistence-loading", "true")
+  await expect(header).toHaveCSS("visibility", "hidden")
+  await page.getByTestId("persistence-profile").selectOption("B")
+  await expect(page.getByTestId("persistence-status")).toContainText("ready")
+  await expect.poll(async () => (await header.boundingBox())!.width).toBe(300)
+  await page.getByTestId("persistence-profile").selectOption("A")
+  await expect(header).toHaveCSS("visibility", "hidden")
+  await expect(page.getByTestId("persistence-status")).toContainText("ready")
+  await expect.poll(async () => (await header.boundingBox())!.width).toBe(200)
+})
+
+test("row resize keeps dividers and selection aligned before pointer release", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1200 })
+  await page.goto("/vue/height-sizing-grid")
+  const centerRows = page.locator(".grid-body-content > .grid-row")
+  await centerRows.locator('[data-column-key="name"]').nth(6).click()
+
+  const readAlignment = () => page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"))
+    const pinnedRows = Array.from(document.querySelectorAll<HTMLElement>(".grid-body-pane--left .grid-row"))
+    const lines = Array.from(document.querySelectorAll<HTMLElement>(".grid-chrome-layer__line--horizontal"))
+    const selected = rows.find(row => row.dataset.rowIndex === "6")!.getBoundingClientRect()
+    const overlay = document.querySelector<HTMLElement>(".grid-selection-overlay__segment")!.getBoundingClientRect()
+    return Math.max(
+      ...rows.slice(0, 8).map((row, index) => {
+        const rect = row.getBoundingClientRect()
+        const pinned = pinnedRows[index]!.getBoundingClientRect()
+        return Math.max(
+          Math.abs(lines[index]!.getBoundingClientRect().top - (rect.bottom - 1)),
+          Math.abs(pinned.top - rect.top),
+          Math.abs(pinned.height - rect.height),
+        )
+      }),
+      Math.abs(overlay.top - (selected.top - 1)),
+      Math.abs(overlay.height - (selected.height + 2)),
+    )
+  })
+
+  // Small changes leave the virtual window unchanged; repeating a row also
+  // catches geometry that only refreshes on the first height override.
+  for (const rowIndex of [4, 4, 2]) {
+    const handle = page.locator(`.grid-body-pane--left .grid-row[data-row-index="${rowIndex}"] .row-resize-handle`)
+    const bounds = (await handle.boundingBox())!
+    const targetRow = page.locator(`.grid-body-content > .grid-row[data-row-index="${rowIndex}"]`)
+    const originalHeight = (await targetRow.boundingBox())!.height
+    const x = bounds.x + bounds.width / 2
+    const y = bounds.y + bounds.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    for (const delta of [4, 8, 12, 6]) {
+      await page.mouse.move(x, y + delta)
+      await expect.poll(async () => (await targetRow.boundingBox())!.height).toBe(originalHeight + delta)
+      await expect.poll(readAlignment).toBeLessThanOrEqual(1)
+    }
+    await page.mouse.up()
+    await expect.poll(readAlignment).toBeLessThanOrEqual(1)
+  }
+})
+
+test("fill layout shares bounded host height across toolbar placements", async ({ page }) => {
+  await page.goto("/vue/height-sizing-grid")
+
+  const host = page.getByTestId("bounded-grid-host")
+  const grid = host.locator(".affino-datagrid-app-root")
+  const placementSelect = page.getByTestId("toolbar-placement")
+  const statusHeader = grid.locator('.grid-header-viewport .grid-cell--header[data-column-key="status"]')
+
+  await expect(statusHeader).toHaveClass(/grid-cell--header-terminal/)
+  await expect(statusHeader).toHaveCSS("box-shadow", /1px 0px 0px/)
+
+  for (const placement of ["stacked", "integrated", "hidden"] as const) {
+    await placementSelect.selectOption(placement)
+    await expect(host.locator(".datagrid-app-toolbar")).toHaveCount(1)
+    await expect(grid.locator(`.datagrid-app-layout--toolbar-${placement}`)).toHaveCount(1)
+
+    if (placement === "hidden") {
+      await expect(grid.locator(".datagrid-app-toolbar")).toHaveCount(0)
+    } else {
+      await expect(grid.locator(".datagrid-app-toolbar")).toHaveCount(1)
+    }
+    if (placement === "integrated") {
+      await expect(grid.locator(".datagrid-app-stage-surface--integrated")).toHaveCount(1)
+    }
+
+    const readSizes = () => host.evaluate(hostElement => {
+      const root = hostElement.querySelector<HTMLElement>(".affino-datagrid-app-root")!
+      const height = (selector: string): number => root.querySelector<HTMLElement>(selector)?.getBoundingClientRect().height ?? 0
+      const viewport = root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")
+      const toolbar = hostElement.querySelector<HTMLElement>(".datagrid-app-toolbar")
+      return {
+        root: root.getBoundingClientRect().height,
+        layout: height(".datagrid-app-layout"),
+        toolbar: toolbar?.getBoundingClientRect().height ?? 0,
+        workspace: height(".datagrid-app-workspace"),
+        surface: height(".datagrid-app-stage-surface--integrated"),
+        stage: height(".grid-stage"),
+        viewport: viewport?.getBoundingClientRect().height ?? 0,
+        viewportScrollable: Boolean(viewport && viewport.scrollHeight > viewport.clientHeight),
+      }
+    })
+
+    const initial = await readSizes()
+    expect(initial.root).toBeGreaterThan(300)
+    expect(initial.toolbar).toBeGreaterThan(0)
+    expect(initial.layout).toBeCloseTo(initial.root, 0)
+    expect(initial.stage).toBeGreaterThan(100)
+    expect(initial.viewport).toBeLessThan(initial.stage)
+    expect(initial.viewportScrollable).toBe(true)
+    if (placement === "stacked") {
+      expect(initial.workspace).toBeLessThan(initial.layout - initial.toolbar)
+    }
+    if (placement === "integrated") {
+      expect(initial.surface).toBeCloseTo(initial.workspace, 0)
+      expect(initial.stage).toBeLessThan(initial.surface)
+    }
+    if (placement === "hidden") {
+      expect(initial.root + initial.toolbar).toBeLessThan(520)
+    }
+
+    await host.evaluate(hostElement => {
+      (hostElement as HTMLElement).style.height = "660px"
+    })
+    await expect.poll(async () => Math.round((await readSizes()).root)).toBe(Math.round(initial.root + 140))
+
+    const resized = await readSizes()
+    expect(resized.stage - initial.stage).toBeCloseTo(140, 0)
+    expect(resized.viewport - initial.viewport).toBeCloseTo(140, 0)
+    expect(resized.viewportScrollable).toBe(true)
+
+    await host.evaluate(hostElement => {
+      (hostElement as HTMLElement).style.height = "520px"
+    })
+  }
+
+  await placementSelect.selectOption("hidden")
+  const beforeHide = await host.locator(".affino-datagrid-app-root").evaluate(root => ({
+    root: root.getBoundingClientRect().height,
+    viewport: root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")?.clientHeight ?? 0,
+  }))
+  await host.evaluate(hostElement => {
+    (hostElement as HTMLElement).style.display = "none"
+  })
+  await host.evaluate(hostElement => {
+    (hostElement as HTMLElement).style.removeProperty("display")
+  })
+  await expect.poll(async () => Math.round(await host.locator(".affino-datagrid-app-root").evaluate(root => root.getBoundingClientRect().height)))
+    .toBe(Math.round(beforeHide.root))
+  const afterReveal = await host.locator(".affino-datagrid-app-root").evaluate(root => ({
+    viewport: root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")?.clientHeight ?? 0,
+    scrollable: Boolean(root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")?.scrollHeight
+      && root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")!.scrollHeight
+        > root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")!.clientHeight),
+  }))
+  expect(afterReveal.viewport).toBe(beforeHide.viewport)
+  expect(afterReveal.scrollable).toBe(true)
+})
+
+test("auto-height and Gantt sizing stay bounded by their selected layout", async ({ page }) => {
+  await page.goto("/vue/height-sizing-modes")
+  const autoHost = page.getByTestId("auto-height-host")
+  const autoGrid = autoHost.locator(".affino-datagrid-app-root")
+  await expect(autoGrid).toHaveClass(/--auto-height/)
+  const shortHeight = await autoGrid.evaluate(element => element.getBoundingClientRect().height)
+  await page.getByTestId("load-auto-rows").click()
+  await expect.poll(async () => await autoGrid.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(shortHeight + 10)
+  const maxHeight = await autoGrid.evaluate(element => element.getBoundingClientRect().height)
+  await page.getByTestId("clear-auto-rows").click()
+  await expect(autoGrid.locator(".datagrid-empty-state")).toBeVisible()
+  await expect.poll(async () => await autoGrid.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(maxHeight)
+
+  const inspectorGrid = page.getByTestId("inspector-host").locator(".affino-datagrid-app-root")
+  await expect(inspectorGrid.locator("[data-testid='fixture-inspector']")).toBeVisible()
+  const inspectorSizes = await inspectorGrid.evaluate(root => {
+    const workspace = root.querySelector<HTMLElement>(".datagrid-app-workspace")!
+    const stage = root.querySelector<HTMLElement>(".datagrid-app-stage")!
+    const inspector = root.querySelector<HTMLElement>(".datagrid-app-inspector-shell")!
+    return { workspace: workspace.getBoundingClientRect().height, stage: stage.getBoundingClientRect().height, inspector: inspector.getBoundingClientRect().height }
+  })
+  expect(inspectorSizes.workspace).toBeGreaterThan(300)
+  expect(inspectorSizes.stage).toBeGreaterThan(100)
+  expect(inspectorSizes.inspector).toBeCloseTo(inspectorSizes.workspace, 0)
+
+  const ganttHost = page.getByTestId("gantt-host")
+  const ganttGrid = ganttHost.locator(".affino-datagrid-app-root")
+  await expect(ganttGrid.locator(".datagrid-gantt-stage")).toHaveCount(1)
+  const initial = await ganttGrid.locator(".datagrid-gantt-stage").evaluate(element => element.getBoundingClientRect().height)
+  await ganttHost.evaluate(element => { (element as HTMLElement).style.height = "660px" })
+  await expect.poll(async () => Math.round(await ganttGrid.locator(".datagrid-gantt-stage").evaluate(element => element.getBoundingClientRect().height))).toBe(Math.round(initial + 140))
+})
+
+test("pinned bottom rows stay inside the table stage", async ({ page }) => {
+  await page.goto("/vue/shell/timesheet-grid")
+  const grid = page.locator(".affino-datagrid-app-root").first()
+  await expect(grid.locator(".grid-body-shell--pinned-bottom")).toHaveCount(1)
+  const shellSizes = await grid.evaluate(root => {
+    const stage = root.querySelector<HTMLElement>(".grid-stage")!
+    const body = root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")!
+    const bottom = root.querySelector<HTMLElement>(".grid-body-shell--pinned-bottom")!
+    return { stage: stage.getBoundingClientRect().height, body: body.getBoundingClientRect().height, bottom: bottom.getBoundingClientRect().height }
+  })
+  expect(shellSizes.body + shellSizes.bottom).toBeLessThanOrEqual(shellSizes.stage)
+})
+
+test("column flex resize does not move the pinned pane boundary or overflow the sandbox route", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto("/vue/column-flex-stress")
+  const route = page.locator(".sandbox__route")
+  const routeSize = await route.evaluate(element => ({ client: element.clientHeight, scroll: element.scrollHeight }))
+  expect(routeSize.scroll).toBeLessThanOrEqual(routeSize.client)
+
+  await page.getByRole("button", { name: "Pin flex column left" }).click()
+  const pinned = page.locator(".grid-header-pane--left .grid-cell--header[data-column-key='workstream']")
+  const centerOwner = page.locator(".grid-header-viewport .grid-cell--header[data-column-key='owner']")
+  const before = await page.evaluate(() => ({
+    pinnedWidth: document.querySelector<HTMLElement>(".grid-header-pane--left .grid-cell--header[data-column-key='workstream']")!.getBoundingClientRect().width,
+    centerLeft: document.querySelector<HTMLElement>(".grid-header-viewport .grid-cell--header[data-column-key='owner']")!.getBoundingClientRect().left,
+  }))
+  const handle = await centerOwner.locator(".col-resize").boundingBox()
+  if (!handle) throw new Error("Owner resize handle is missing")
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2 + 30, handle.y + handle.height / 2, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(async () => await centerOwner.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(130)
+  const after = await page.evaluate(() => ({
+    pinnedWidth: document.querySelector<HTMLElement>(".grid-header-pane--left .grid-cell--header[data-column-key='workstream']")!.getBoundingClientRect().width,
+    centerLeft: document.querySelector<HTMLElement>(".grid-header-viewport .grid-cell--header[data-column-key='owner']")!.getBoundingClientRect().left,
+  }))
+  expect(after.pinnedWidth).toBe(before.pinnedWidth)
+  expect(after.centerLeft).toBe(before.centerLeft)
+  expect(pinned).toBeVisible()
+})
+
 test("document and reactive theme changes repaint canvas chrome for every mounted grid", async ({ page }) => {
   await page.goto("/vue/theme-canvas-grid?dgPerfTrace=1")
   const stages = page.locator("[data-testid^='theme-grid-'] .grid-stage")
@@ -68,7 +356,7 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
     document.documentElement.dataset.theme = "dark"
     return { top: vertical.scrollTop, left: horizontal.scrollLeft }
   })
-  await expect.poll(async () => changedCanvasCount(light, await readCanvasSignatures())).toEqual([3, 3])
+  await expect.poll(async () => changedCanvasCount(light, await readCanvasSignatures())).toEqual([4, 4])
   const themeDraws = await page.evaluate(() => {
     const store = (window as typeof window & {
       __AFFINO_DATAGRID_PERF__?: { samples: Array<Record<string, string | number>> }
@@ -102,11 +390,11 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
     delete document.documentElement.dataset.theme
     document.documentElement.classList.add("dark")
   })
-  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([4, 4])
 
   await page.evaluate(() => document.documentElement.classList.remove("dark"))
   await page.getByTestId("theme-prop-industrial").click()
-  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([4, 4])
 
   await page.getByTestId("theme-prop-default").click()
   await waitForPaint()

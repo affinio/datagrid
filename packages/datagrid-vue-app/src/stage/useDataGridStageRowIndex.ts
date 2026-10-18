@@ -9,6 +9,7 @@ import type {
   DataGridTableStageRowsSection,
 } from "./dataGridTableStage.types"
 import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
+import { DATA_GRID_STAGE_ROW_INDEX_HEADER_ID } from "./dataGridTableStageA11y"
 
 export interface UseDataGridStageRowIndexOptions {
   rows: Readonly<Ref<DataGridTableStageRowsSection<Record<string, unknown>>>>
@@ -16,6 +17,7 @@ export interface UseDataGridStageRowIndexOptions {
   viewportRowStart: Readonly<Ref<number>>
   selectionRange: Readonly<Ref<DataGridOverlayRange | null>>
   selectionRanges?: Readonly<Ref<readonly DataGridOverlayRange[]>>
+  focusedBodyRowIndex?: Readonly<Ref<number | null>>
   visibleColumns: Readonly<Ref<readonly DataGridTableStageBodyColumn[]>>
   isHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
   isStripedRow: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
@@ -26,6 +28,8 @@ export interface UseDataGridStageRowIndexOptions {
     options?: { fullBleed?: boolean },
   ) => CSSProperties | null
   isDataGridPlaceholderSurfaceRow: (row: DataGridTableStageBodyRow) => boolean
+  navigateFromRowIndex?: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
+  navigateRowIndex?: (row: DataGridTableStageBodyRow, rowOffset: number, direction: -1 | 1, extend: boolean) => boolean
 }
 
 export interface UseDataGridStageRowIndexResult {
@@ -96,6 +100,51 @@ export function useDataGridStageRowIndex(
   }
 
   function handleRowIndexKeydownSafe(event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
+    if (
+      (event.key === "ArrowUp" || event.key === "ArrowDown")
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+      && event.target === event.currentTarget
+    ) {
+      if (options.navigateRowIndex?.(row, rowOffset, event.key === "ArrowUp" ? -1 : 1, event.shiftKey) === true) {
+        event.preventDefault()
+        return
+      }
+      if (event.shiftKey || event.key === "ArrowDown") {
+        event.preventDefault()
+        return
+      }
+    }
+    if (
+      event.key === "ArrowRight"
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+      && !event.shiftKey
+      && event.target === event.currentTarget
+      && options.navigateFromRowIndex?.(row, rowOffset) === true
+    ) {
+      event.preventDefault()
+      return
+    }
+    if (
+      event.key === "ArrowUp"
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.altKey
+      && !event.shiftKey
+      && event.target === event.currentTarget
+      && options.resolveAbsoluteRowIndex(row, rowOffset) === 0
+    ) {
+      const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+      const header = stageRoot?.querySelector<HTMLElement>(`#${DATA_GRID_STAGE_ROW_INDEX_HEADER_ID}`)
+      if (header) {
+        event.preventDefault()
+        header.focus({ preventScroll: true })
+        return
+      }
+    }
     options.rows.value.handleRowIndexKeydown?.(event, row, rowOffset)
   }
 
@@ -215,6 +264,7 @@ export function useDataGridStageRowIndex(
     const rowIndex = options.resolveAbsoluteRowIndex(row, rowOffset)
     const rowId = row.rowId == null ? null : String(row.rowId)
     const classes: Record<string, boolean> = {
+      "grid-cell--focus-axis": options.focusedBodyRowIndex?.value === rowIndex,
       "grid-cell--index-reorder-source": rowId != null && draggedRowIndexRowId.value === rowId,
       "grid-cell--index-drop-before": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "before",
       "grid-cell--index-drop-after": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "after",

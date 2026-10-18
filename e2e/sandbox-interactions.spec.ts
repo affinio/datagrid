@@ -1,6 +1,45 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
 test.describe("sandbox interaction contracts (adapted from affinio datagrid interactions)", () => {
+  test("highlights focused row and column axes and copies a clicked column header", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/theme-canvas-grid")
+    const stage = page.locator('[data-testid="theme-grid-first"] .grid-stage:visible').first()
+    const firstCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="name"]').first()
+    const nameHeader = stage.locator('.grid-cell--header[data-column-key="name"]').first()
+    const rowIndex = stage.locator('.grid-cell--index-number[data-row-index="0"]').first()
+
+    await firstCell.click()
+    await expect(nameHeader).toHaveClass(/grid-cell--focus-axis/)
+    await expect(rowIndex).toHaveClass(/grid-cell--focus-axis/)
+
+    const lightColor = await nameHeader.evaluate(element => getComputedStyle(element).backgroundColor)
+    await page.evaluate(() => { document.documentElement.dataset.theme = "dark" })
+    await expect.poll(() => nameHeader.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(lightColor)
+    await page.evaluate(() => { document.documentElement.dataset.theme = "light" })
+
+    await nameHeader.click({ position: { x: 12, y: 12 } })
+    await expect(nameHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(nameHeader).not.toHaveClass(/grid-cell--focus-axis/)
+    const clickedHeaderStyle = await nameHeader.evaluate(element => ({
+      background: getComputedStyle(element).backgroundColor,
+      marker: getComputedStyle(element).boxShadow,
+    }))
+    await page.keyboard.press("ArrowDown")
+    await page.keyboard.press("ArrowUp")
+    await expect(nameHeader).toBeFocused()
+    expect(await nameHeader.evaluate(element => ({
+      background: getComputedStyle(element).backgroundColor,
+      marker: getComputedStyle(element).boxShadow,
+    }))).toEqual(clickedHeaderStyle)
+    await page.keyboard.press("Control+C")
+    await expect(firstCell).toHaveClass(/grid-cell--clipboard-pending/)
+
+    const cornerHeader = stage.locator('[data-datagrid-row-index-header="true"]')
+    await cornerHeader.click()
+    await expect(cornerHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(cornerHeader).toHaveAttribute("aria-selected", "true")
+  })
+
   test("filter updates row model and recovers on clear", async ({ page }) => {
     await gotoSandboxRoute(page, "/core/base-grid")
 
@@ -15,6 +54,96 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
 
     await filterInput.fill("")
     await expect.poll(async () => rowsInModel(page)).toBe(before)
+  })
+
+  test("returns keyboard focus to a selected body cell after applying a filter", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    await page.getByLabel("Value filter").selectOption("0")
+    const stage = page.locator(".grid-stage:visible").first()
+    const cell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key]').first()
+    const filterInput = stage.locator('.col-filter-input[aria-label="Filter Task column"]').first()
+    await expect(cell).toBeVisible({ timeout: 20_000 })
+    await expect(filterInput).toBeVisible({ timeout: 20_000 })
+    await cell.click()
+    const beforeFilterRows = await rowsInModel(page)
+    await filterInput.fill("Task 99")
+    await expect.poll(async () => rowsInModel(page)).toBeLessThan(beforeFilterRows)
+    await filterInput.press("Enter")
+
+    const focusedCell = stage.locator(".grid-body-shell .datagrid-stage__cell:focus")
+    await expect(focusedCell).toHaveCount(1)
+    const focusedSignature = await cellSignature(focusedCell)
+    await page.keyboard.press("ArrowDown")
+    await expect.poll(async () => selectionAnchorSignature(page)).not.toBe(focusedSignature)
+    await expect(stage.locator(".grid-body-shell .datagrid-stage__cell:focus")).toHaveCount(1)
+  })
+
+  test("restores body-cell focus after a column menu closes with Escape or Cancel", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const cell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key]').first()
+    const menuButton = stage.locator('[data-datagrid-column-menu-button="true"][aria-label="Open column menu for Task"]').first()
+    const focusedCell = stage.locator(".grid-body-shell .datagrid-stage__cell:focus")
+
+    await expect(cell).toBeVisible({ timeout: 20_000 })
+    await cell.click()
+    await menuButton.click()
+    await expect(page.locator(".datagrid-column-menu__panel")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(focusedCell).toHaveCount(1)
+    const escapeFocus = await cellSignature(focusedCell)
+    await page.keyboard.press("ArrowDown")
+    await expect.poll(async () => selectionAnchorSignature(page)).not.toBe(escapeFocus)
+
+    await cell.click()
+    await menuButton.click()
+    await expect(page.locator('[data-datagrid-column-menu-action="cancel-filter"]')).toBeVisible()
+    await page.locator('[data-datagrid-column-menu-action="cancel-filter"]').click()
+    await expect(focusedCell).toHaveCount(1)
+    const cancelFocus = await cellSignature(focusedCell)
+    await page.keyboard.press("ArrowDown")
+    await expect.poll(async () => selectionAnchorSignature(page)).not.toBe(cancelFocus)
+  })
+
+  test("filters by condition in the column-menu submenu", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const menuButton = stage.getByRole("columnheader", { name: /Task/ }).locator('[data-datagrid-column-menu-button="true"]')
+    await expect(menuButton).toBeVisible({ timeout: 20_000 })
+    await menuButton.click()
+    const conditionAction = page.locator('[data-datagrid-column-menu-action="filter-by-condition"]')
+    await expect(conditionAction).toBeVisible()
+    await conditionAction.click()
+
+    const conditionSelect = page.locator('[aria-label="Filter condition"]')
+    const formula = page.locator('[aria-label="Filter formula"]')
+    await expect(conditionSelect).toBeVisible()
+    await conditionSelect.selectOption("contains")
+    await expect(formula).toBeVisible()
+    await expect(page.locator(".datagrid-column-menu__condition-panel")).toContainText("Formula")
+    await expect(page.locator(".datagrid-advanced-filter")).toHaveCount(0)
+    await formula.fill("Task")
+    await page.locator('[data-datagrid-column-menu-action="apply-filter"]').click()
+    await expect(page.locator('[data-datagrid-column-menu-panel="true"]')).toHaveCount(0)
+    await expect(menuButton.locator('path[d="M2.5 3.5h11L9.25 8.5v3.25l-2.5 1.25V8.5z"]')).toBeVisible()
+  })
+
+  test("reorders the focused header with Shift+Option arrow keys", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const headers = stage.locator(".grid-header-viewport .grid-cell--header[data-column-key]")
+    await expect(headers.nth(1)).toBeVisible({ timeout: 20_000 })
+    const before = await headers.evaluateAll(elements => elements.map(element => element.getAttribute("data-column-key")))
+    await headers.first().focus()
+    await page.keyboard.press("Shift+Alt+ArrowRight")
+
+    await expect.poll(() => headers.evaluateAll(elements => elements.map(element => element.getAttribute("data-column-key"))))
+      .toEqual([before[1], before[0], ...before.slice(2)])
+    await expect(stage.locator(".grid-header-viewport .grid-cell--header:focus")).toHaveAttribute("data-column-key", before[0]!)
   })
 
   test("sort control changes first visible row deterministically", async ({ page }) => {
@@ -291,11 +420,19 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const amountCell = stage.locator('.grid-body-viewport .grid-cell[data-row-index="0"][data-column-key="amount"]').first()
     const nameHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="name"]')
     const amountHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="amount"]')
+    const nameMenuButton = nameHeader.locator(".col-menu-trigger")
     await expect(bodyCell).toBeVisible({ timeout: 20_000 })
+    await expect(nameMenuButton).toBeVisible()
+    expect(await nameMenuButton.evaluate(button => {
+      const cell = button.closest<HTMLElement>(".grid-cell--header")
+      return cell ? cell.getBoundingClientRect().right - button.getBoundingClientRect().right : Number.POSITIVE_INFINITY
+    })).toBeLessThan(16)
+
     await bodyCell.click()
     await page.keyboard.press("ArrowUp")
     await expect(nameHeader).toBeFocused()
-    await expect(nameHeader).toHaveCSS("outline-style", "solid")
+    await expect(nameHeader).toHaveCSS("outline-style", "none")
+    await expect(nameHeader).toHaveCSS("box-shadow", /0px 3px 0px 0px inset/)
 
     await page.keyboard.press("ArrowRight")
     await expect(amountHeader).toBeFocused()
@@ -318,6 +455,173 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(nameHeader).toBeFocused()
     await expect(nameHeader).toHaveClass(/grid-cell--header-selected/)
     await expect(amountHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(nameHeader).toHaveClass(/grid-cell--header-selection-range-start/)
+    await expect(amountHeader).toHaveClass(/grid-cell--header-selection-range-end/)
+  })
+
+  test("keyboard navigation across virtualized headers scrolls without focus retry churn", async ({ page }) => {
+    test.setTimeout(45_000)
+    await gotoSandboxRoute(page, "/vue/base-grid")
+    const stage = page.locator(".grid-stage:visible").first()
+    const firstHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key]').first()
+    await expect(firstHeader).toBeVisible({ timeout: 20_000 })
+    await firstHeader.focus()
+
+    for (let index = 0; index < 24; index += 1) {
+      await page.keyboard.press("ArrowRight")
+    }
+
+    await expect(stage.locator(".grid-header-shell .grid-cell--header[data-column-key]:focus")).toHaveCount(1)
+    const horizontalOffsets = async () => stage.evaluate(element => ({
+      body: element.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")?.scrollLeft ?? 0,
+      header: element.querySelector<HTMLElement>(".grid-header-viewport")?.scrollLeft ?? 0,
+    }))
+    await expect.poll(async () => (await horizontalOffsets()).body).toBeGreaterThan(0)
+    await expect.poll(async () => {
+      const { body, header } = await horizontalOffsets()
+      return Math.abs(body - header)
+    }).toBeLessThan(2)
+    await expect.poll(async () => stage.evaluate(element => {
+      const header = element.querySelector<HTMLElement>(".grid-header-viewport")
+      const focused = element.querySelector<HTMLElement>(".grid-header-viewport .grid-cell--header:focus")
+      if (!header || !focused) return false
+      const viewportBounds = header.getBoundingClientRect()
+      const focusBounds = focused.getBoundingClientRect()
+      return focusBounds.left >= viewportBounds.left - 1 && focusBounds.right <= viewportBounds.right + 1
+    })).toBe(true)
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("ArrowRight")
+    await expect(stage.locator(".grid-header-shell .grid-cell--header[data-column-key]:focus")).toHaveCount(1)
+    await expect.poll(async () => {
+      const { body, header } = await horizontalOffsets()
+      return Math.abs(body - header)
+    }).toBeLessThan(2)
+
+    for (let index = 0; index < 26; index += 1) {
+      await page.keyboard.press("ArrowLeft")
+    }
+    await expect.poll(async () => (await horizontalOffsets()).body).toBe(0)
+    await expect.poll(async () => {
+      const { body, header } = await horizontalOffsets()
+      return Math.abs(body - header)
+    }).toBeLessThan(2)
+  })
+
+  test("keyboard navigation moves from the system row index into a data column and its header", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const rowIndexCell = stage.locator('.grid-body-pane--left .grid-cell--index-number[data-row-index="0"]')
+    await expect(rowIndexCell).toBeVisible({ timeout: 20_000 })
+    await rowIndexCell.click()
+    await page.keyboard.press("ArrowRight")
+
+    const focusedBodyCell = stage.locator(".grid-body-pane--left .datagrid-stage__cell:focus, .grid-body-viewport .datagrid-stage__cell:focus")
+    await expect.poll(async () => focusedBodyCell.count()).toBe(1)
+    const selectionBodyCell = stage.locator('.grid-cell--row-selection[data-row-index="0"]')
+    const startsOnSelectionColumn = (await focusedBodyCell.getAttribute("class"))?.includes("grid-cell--row-selection") === true
+    if (startsOnSelectionColumn) {
+      await expect(focusedBodyCell).toBeFocused()
+      await page.keyboard.press("ArrowRight")
+      await expect.poll(async () => (await focusedBodyCell.getAttribute("class"))?.includes("grid-cell--row-selection") === false).toBe(true)
+    }
+    const focusedColumnKey = await focusedBodyCell.getAttribute("data-column-key")
+    expect(focusedColumnKey).toBeTruthy()
+    expect(await focusedBodyCell.getAttribute("class")).not.toContain("grid-cell--row-selection")
+
+    const focusedHeader = stage.locator(`.grid-header-shell .grid-cell--header[data-column-key="${focusedColumnKey}"]`)
+    await page.keyboard.press("ArrowLeft")
+    if (startsOnSelectionColumn) {
+      await expect(selectionBodyCell).toBeFocused()
+      await page.keyboard.press("ArrowLeft")
+    }
+    await expect(rowIndexCell).toBeFocused()
+    await page.keyboard.press("ArrowRight")
+    if (startsOnSelectionColumn) await page.keyboard.press("ArrowRight")
+    await expect.poll(async () => focusedHeader.count()).toBeGreaterThan(0)
+    await page.keyboard.press("ArrowUp")
+    await expect(focusedHeader).toBeFocused()
+  })
+
+  test("keeps pinned checkbox selection and its overlay aligned during keyboard navigation", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
+    const stage = page.locator(".grid-stage:visible").first()
+    const rowIndexCell = stage.locator('.grid-body-pane--left .grid-cell--index-number[data-row-index="0"]')
+    const selectionCell = stage.locator('.grid-body-pane--left .grid-cell--row-selection[data-row-index="0"]')
+    const firstPinnedDataCell = stage.locator('.grid-body-pane--left .datagrid-stage__cell[data-row-index="0"][data-column-key="id"]')
+    const selectionOverlay = stage.locator('.grid-body-pane--left .grid-pane-content .grid-selection-overlay__segment').first()
+    const expectOverlayOn = async (cell: typeof selectionCell) => {
+      await expect(cell).toHaveAttribute("aria-selected", "true")
+      await expect(selectionOverlay).toBeVisible()
+      const cellBounds = await cell.boundingBox()
+      const overlayBounds = await selectionOverlay.boundingBox()
+      expect(cellBounds).not.toBeNull()
+      expect(overlayBounds).not.toBeNull()
+      expect(Math.abs(overlayBounds!.x - cellBounds!.x)).toBeLessThan(3)
+      expect(Math.abs(overlayBounds!.width - cellBounds!.width)).toBeLessThan(4)
+    }
+
+    await rowIndexCell.click()
+    const clickedIndexStyle = await rowIndexCell.evaluate(element => ({
+      background: getComputedStyle(element).backgroundColor,
+      marker: getComputedStyle(element, "::before").backgroundImage,
+    }))
+    await page.keyboard.press("ArrowRight")
+    await expect(selectionCell).toBeFocused()
+    await expectOverlayOn(selectionCell)
+    await page.keyboard.press("ArrowRight")
+    await expect(firstPinnedDataCell).toBeFocused()
+    await expectOverlayOn(firstPinnedDataCell)
+    await page.keyboard.press("ArrowLeft")
+    await expect(selectionCell).toBeFocused()
+    await expectOverlayOn(selectionCell)
+    await page.keyboard.press("ArrowLeft")
+    await expect(rowIndexCell).toBeFocused()
+    await expect(rowIndexCell).toHaveClass(/grid-cell--index-selected/)
+    await expect(firstPinnedDataCell).toHaveAttribute("aria-selected", "true")
+    await expect(rowIndexCell).toHaveCSS("outline-style", "none")
+    expect(await rowIndexCell.evaluate(element => getComputedStyle(element, "::before").backgroundImage)).toContain("linear-gradient")
+    expect(await rowIndexCell.evaluate(element => ({
+      background: getComputedStyle(element).backgroundColor,
+      marker: getComputedStyle(element, "::before").backgroundImage,
+    }))).toEqual(clickedIndexStyle)
+  })
+
+  test("navigates the index column and extends whole-row selection with Shift", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/base-grid")
+    const stage = page.locator(".grid-stage:visible").first()
+    const indexCell = (rowIndex: number) => stage.locator(`.grid-body-pane--left .grid-cell--index-number[data-row-index="${rowIndex}"]`)
+    const dataCell = (rowIndex: number) => stage.locator(`.grid-body-pane--left .datagrid-stage__cell[data-row-index="${rowIndex}"][data-column-key="id"]`)
+    const indexHeader = stage.locator("#datagrid-stage-header-row-index")
+
+    await indexCell(0).click()
+    await page.keyboard.press("ArrowDown")
+    await expect(indexCell(1)).toBeFocused()
+    await expect(dataCell(1)).toHaveAttribute("aria-selected", "true")
+    await expect(dataCell(0)).toHaveAttribute("aria-selected", "false")
+    await page.keyboard.press("Shift+ArrowDown")
+    await expect(indexCell(2)).toBeFocused()
+    await expect(dataCell(1)).toHaveAttribute("aria-selected", "true")
+    await expect(dataCell(2)).toHaveAttribute("aria-selected", "true")
+    await page.keyboard.press("Shift+ArrowUp")
+    await expect(indexCell(1)).toBeFocused()
+    await expect(dataCell(2)).toHaveAttribute("aria-selected", "false")
+    await page.keyboard.press("ArrowUp")
+    await page.keyboard.press("ArrowUp")
+    await expect(indexHeader).toBeFocused()
+    await expect(indexHeader).toHaveAttribute("aria-selected", "true")
+    await expect(dataCell(2)).toHaveAttribute("aria-selected", "true")
+    await page.keyboard.press("ArrowDown")
+    await expect(indexCell(0)).toBeFocused()
+    await expect(dataCell(2)).toHaveAttribute("aria-selected", "false")
+
+    for (let rowIndex = 1; rowIndex <= 35; rowIndex += 1) {
+      await page.keyboard.press("ArrowDown")
+      await expect.poll(async () => stage.evaluate(() => document.activeElement?.getAttribute("data-row-index"))).toBe(String(rowIndex))
+    }
+    await expect(indexCell(35)).toBeFocused()
+    await expect(dataCell(35)).toHaveAttribute("aria-selected", "true")
+    await expect.poll(async () => stage.locator(".grid-body-shared-vertical-scroll-shell").evaluate(element => element.scrollTop)).toBeGreaterThan(0)
   })
 
   test("keeps every column header selected while Shift extends the range", async ({ page }) => {
@@ -337,6 +641,22 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(nameHeader).toHaveClass(/grid-cell--header-selected/)
     await expect(valueHeader).toHaveClass(/grid-cell--header-selected/)
     await expect(statusHeader).toHaveClass(/grid-cell--header-selected/)
+    await expect(nameHeader).toHaveClass(/grid-cell--header-selection-range-start/)
+    await expect(statusHeader).toHaveClass(/grid-cell--header-selection-range-end/)
+  })
+
+  test("moves from the system select-all header into the first row checkbox", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/row-selection-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const selectAllHeader = stage.locator(".grid-cell--row-selection .grid-checkbox-trigger").first()
+    const firstRowCheckbox = stage.locator('.grid-body-pane--left .grid-cell--row-selection[data-row-index="0"]').first()
+    await expect(selectAllHeader).toBeVisible({ timeout: 20_000 })
+    await expect(firstRowCheckbox).toBeVisible({ timeout: 20_000 })
+    await selectAllHeader.focus()
+    await page.keyboard.press("ArrowDown")
+    await expect(firstRowCheckbox).toBeFocused()
+    await expect(firstRowCheckbox).toHaveAttribute("aria-selected", "true")
   })
 
   test("selection anchor remounts with overlay fill handle after horizontal virtualization", async ({ page }) => {
@@ -808,7 +1128,10 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   try {
     await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
   } catch {
-    await expect(page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()).toBeVisible({ timeout: 20_000 })
+    // Some routes expose more than one body surface, with an inactive pane
+    // before the visible viewport in DOM order. Wait for the active stage,
+    // then let the individual contract target its own visible surface.
+    await expect(page.locator(".grid-stage:visible").first()).toBeVisible({ timeout: 20_000 })
   }
 }
 

@@ -45,6 +45,7 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-vue-app-enterprise": "packages/datagrid-vue-app-enterprise/src/index.ts",
   "@affino/datagrid-vue-app-enterprise/*": "packages/datagrid-vue-app-enterprise/src/*",
   "@affino/datagrid-vue-app/internal": "packages/datagrid-vue-app/src/internal.ts",
+  "@affino/datagrid-vue-app/gantt": "packages/datagrid-vue-app/src/gantt.ts",
   "@affino/datagrid-vue-app": "packages/datagrid-vue-app/src/index.ts",
   "@affino/datagrid-vue-app/*": "packages/datagrid-vue-app/src/*",
   "@affino/datagrid-spreadsheet-vue-app": "packages/datagrid-spreadsheet-vue-app/src/index.ts",

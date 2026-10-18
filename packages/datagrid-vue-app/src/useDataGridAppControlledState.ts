@@ -65,6 +65,7 @@ export interface UseDataGridAppControlledStateResult {
   emitSnapshotUpdates: () => void
   handleGridReady: () => void
   dispose: () => void
+  reconcileControlledInputs: () => void
   getColumnState: () => DataGridUnifiedColumnState | null
   getState: () => DataGridUnifiedState<DataGridRowRecord> | null
   migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<DataGridRowRecord> | null
@@ -246,8 +247,8 @@ export function useDataGridAppControlledState(
       return
     }
     api.rows.setSortAndFilterModel({
-      sortModel: options.props.sortModel ?? [],
-      filterModel: options.props.filterModel ?? null,
+      sortModel: options.props.sortModel ?? api.rows.getSnapshot().sortModel,
+      filterModel: options.props.filterModel === undefined ? api.rows.getSnapshot().filterModel : options.props.filterModel,
     })
   }
 
@@ -530,6 +531,19 @@ export function useDataGridAppControlledState(
     options.emit.ready({ api: grid.api })
   }
 
+  const reconcileControlledInputs = (): void => {
+    lastObservedUnifiedStateKey = null
+    lastObservedColumnStateKey = null
+    lastAppliedStateInputKey = null
+    lastAppliedColumnInputsKey = null
+    syncUnifiedState()
+    syncColumnState()
+    syncSortAndFilterModel()
+    syncGroupBy()
+    syncAggregationModel()
+    syncPivotModel()
+  }
+
   const getState = (): DataGridUnifiedState<DataGridRowRecord> | null => {
     return resolveActiveApi()?.state.get() ?? null
   }
@@ -724,6 +738,7 @@ export function useDataGridAppControlledState(
 
   return {
     emitSnapshotUpdates,
+    reconcileControlledInputs,
     handleGridReady,
     dispose,
     getColumnState,

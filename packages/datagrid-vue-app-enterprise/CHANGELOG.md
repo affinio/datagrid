@@ -1,6 +1,14 @@
 # @affino/datagrid-vue-app-enterprise
 
-## Unreleased
+## 0.1.1
+
+### Fixed
+
+- The enterprise facade now provides the Gantt stage, so `viewMode="gantt"` renders correctly while preserving the facade ref methods.
+
+### Validation
+
+- Enterprise package type-check and all unit tests passed.
 
 ### Patch Changes
 

@@ -255,6 +255,12 @@ body,
   font-size: 16px;
 }
 
+.card__header {
+  min-height: 0;
+  max-height: 46%;
+  overflow-y: auto;
+}
+
 .affino-datagrid-app-root .card__header h2,
 .affino-datagrid-app-root .card__footer,
 .affino-datagrid-app-root .meta,
@@ -955,10 +961,13 @@ body,
 
 .sandbox-core-grid .col-head {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
   padding-right: 8px;
 }
 

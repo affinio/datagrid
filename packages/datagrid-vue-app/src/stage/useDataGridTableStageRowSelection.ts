@@ -25,6 +25,7 @@ export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<st
   applyRowSelectionMutation?: (mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => void
   viewportRowStart: Ref<number>
   selectionAnchorCell: ComputedRef<DataGridTableStageAnchorCell | null>
+  resolveSelectionRange?: () => DataGridCopyRange | null
   applySelectionRange: (range: DataGridCopyRange) => void
 }
 
@@ -56,6 +57,8 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
   const rowSelectionExcludedSet = computed(() => new Set(options.rowSelectionSnapshot.value?.excludedRows ?? []))
   const isAllRowsSelectionMode = computed(() => options.rowSelectionSnapshot.value?.mode === "all")
+  let rowIndexRangeAnchor: number | null = null
+  let lastRowIndexRange: DataGridCopyRange | null = null
   const shouldUseVisibleRowsForAllSelectionState = computed(() => {
     if (isAllRowsSelectionMode.value) {
       return true
@@ -194,21 +197,35 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     }
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (!extend) {
-      options.applySelectionRange({
+      rowIndexRangeAnchor = rowIndex
+      const range = {
         startRow: rowIndex,
         endRow: rowIndex,
         startColumn: 0,
         endColumn: lastColumnIndex,
-      })
+      }
+      options.applySelectionRange(range)
+      lastRowIndexRange = range
       return
     }
-    const anchorRowIndex = options.selectionAnchorCell.value?.rowIndex ?? rowIndex
-    options.applySelectionRange({
+    const currentRange = options.resolveSelectionRange?.() ?? null
+    const stillOwnsSelection = lastRowIndexRange != null && currentRange != null
+      && lastRowIndexRange.startRow === currentRange.startRow
+      && lastRowIndexRange.endRow === currentRange.endRow
+      && lastRowIndexRange.startColumn === currentRange.startColumn
+      && lastRowIndexRange.endColumn === currentRange.endColumn
+    const anchorRowIndex = stillOwnsSelection && rowIndexRangeAnchor != null
+      ? rowIndexRangeAnchor
+      : options.selectionAnchorCell.value?.rowIndex ?? rowIndex
+    rowIndexRangeAnchor = anchorRowIndex
+    const range = {
       startRow: Math.min(anchorRowIndex, rowIndex),
       endRow: Math.max(anchorRowIndex, rowIndex),
       startColumn: 0,
       endColumn: lastColumnIndex,
-    })
+    }
+    options.applySelectionRange(range)
+    lastRowIndexRange = range
   }
 
   return {

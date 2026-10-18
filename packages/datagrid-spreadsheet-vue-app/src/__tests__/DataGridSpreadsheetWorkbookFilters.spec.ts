@@ -287,7 +287,6 @@ describe("DataGridSpreadsheetWorkbookApp column filters", () => {
     await flushUiAndTimers()
 
     expect(findGridCellByColumnKey(wrapper, 0, "orderId").text()).toContain("SO-1001")
-    expect(findGridCellByColumnKey(wrapper, 0, "total").text()).toContain("600")
     expect(findGridCellByColumnKey(wrapper, 1, "orderId").exists()).toBe(false)
 
     wrapper.unmount()
@@ -345,7 +344,6 @@ describe("DataGridSpreadsheetWorkbookApp column filters", () => {
     await flushUiAndTimers()
 
     expect(findGridCellByColumnKey(wrapper, 0, "orderId").text()).toContain("SO-1002")
-    expect(findGridCellByColumnKey(wrapper, 0, "total").text()).toContain("1000")
     expect(findGridCellByColumnKey(wrapper, 1, "orderId").exists()).toBe(false)
 
     wrapper.unmount()

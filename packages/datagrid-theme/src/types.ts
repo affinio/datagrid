@@ -6,6 +6,7 @@ export interface DataGridThemeTokens {
   gridFontSize: string
   gridTextColor: string
   gridBackgroundColor: string
+  surfaceRadius: string
   gridTextPrimary: string
   gridTextMuted: string
   gridTextSoft: string
@@ -67,6 +68,7 @@ export interface DataGridThemeTokens {
   gridMetricsCardBackground: string
   gridViewportBackground: string
   gridFocusOutlineColor: string
+  gridFocusAxisBackgroundColor: string
   gridHeaderRowBackgroundColor: string
   gridHeaderCellBackgroundColor: string
   gridHeaderCellHoverBackgroundColor: string
