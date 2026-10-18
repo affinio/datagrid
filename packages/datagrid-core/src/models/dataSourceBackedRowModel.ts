@@ -43,7 +43,7 @@ import {
   normalizeColumnHistogramResult,
 } from "./dataSourceBackedRowModelHistogram.js"
 import { isSameFilterModel, isSameSortModel } from "./projection/clientRowProjectionPrimitives.js"
-import { applyRowDataPatch, mergeRowPatch } from "./clientRowRuntimeUtils.js"
+import { applyRowDataPatch } from "./clientRowRuntimeUtils.js"
 import {
   shouldRefreshAfterExternalUpdate as resolveExternalProjectionRefresh,
   shouldRefreshAfterOptimisticCommit as resolveOptimisticProjectionRefresh,
@@ -75,6 +75,7 @@ import {
   buildDataSourcePullStateKey,
   buildDataSourceRequestKey,
 } from "./server/dataSourceRequestIdentity.js"
+import { createDataSourceOptimisticPatchRuntime } from "./server/dataSourceOptimisticPatchRuntime.js"
 import {
   createDataSourceExternalUpdateRuntime,
   type DataGridExternalRowUpdate,
@@ -2011,97 +2012,21 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   const patchMethods: Pick<DataSourceBackedRowModel<T>, "patchRows"> =
     typeof getDataSourceCommitEdits === "function"
-      ? {
-          patchRows(updates) {
-            ensureActive()
-            if (!Array.isArray(updates) || updates.length === 0) {
-              return
-            }
-            const transactionId = optimisticMutationEngine.nextTransactionId()
-            const baselinesByRowId = new Map<DataGridRowId, DataGridRowNode<T>>()
-            const updatesByRowId = new Map<DataGridRowId, Partial<T>>()
-            const previousByRowId = new Map<DataGridRowId, Partial<T>>()
-            const revisionsByRowId = new Map<DataGridRowId, Readonly<Record<string, string | number | null>>>()
-            let changed = false
-
-            for (const update of updates) {
-              if (!update || typeof update.rowId !== "string" && typeof update.rowId !== "number") {
-                continue
-              }
-              if (typeof update.data === "undefined" || update.data === null) {
-                continue
-              }
-              const existingPatch = updatesByRowId.get(update.rowId)
-              updatesByRowId.set(
-                update.rowId,
-                existingPatch ? mergeRowPatch(existingPatch, update.data) : update.data,
-              )
-              if (update.previousData) {
-                const existingPrevious = previousByRowId.get(update.rowId)
-                previousByRowId.set(
-                  update.rowId,
-                  existingPrevious ? mergeRowPatch(existingPrevious, update.previousData) : update.previousData,
-                )
-              }
-              if (update.revisions) {
-                revisionsByRowId.set(update.rowId, {
-                  ...(revisionsByRowId.get(update.rowId) ?? {}),
-                  ...update.revisions,
-                })
-              } else if (typeof update.revision !== "undefined") {
-                const revisionByColumn: Record<string, string | number | null> = {
-                  ...(revisionsByRowId.get(update.rowId) ?? {}),
-                }
-                for (const columnKey of Object.keys(update.data as Record<string, unknown>)) {
-                  revisionByColumn[columnKey] = update.revision
-                }
-                revisionsByRowId.set(update.rowId, revisionByColumn)
-              }
-
-              const cached = findCachedRowById(update.rowId)
-              if (!cached) {
-                continue
-              }
-              if (!baselinesByRowId.has(update.rowId)) {
-                baselinesByRowId.set(update.rowId, cached.node)
-              }
-              const nextRow = applyRowDataPatch(cached.node.row, update.data)
-              if (nextRow === cached.node.row) {
-                continue
-              }
-              writeRowCache(cached.index, {
-                ...cached.node,
-                data: nextRow,
-                row: nextRow,
-              })
-              changed = true
-            }
-
-            if (updatesByRowId.size === 0) {
-              return Promise.resolve()
-            }
-
-            const transaction: OptimisticEditTransaction<T> = {
-              id: transactionId,
-              updatesByRowId,
-              previousByRowId,
-              revisionsByRowId,
-              baselinesByRowId,
-            }
-            optimisticMutationEngine.register(transaction)
+      ? createDataSourceOptimisticPatchRuntime({
+          ensureActive,
+          mutationEngine: optimisticMutationEngine,
+          findCachedRowById,
+          writeRowCache,
+          onMutationStarted(transaction) {
             signals.emit("optimisticMutationStarted", {
               transactionId: transaction.id,
               rowIds: Array.from(transaction.updatesByRowId.keys()),
             })
-
-            if (changed) {
-              bumpRevision()
-              emit()
-            }
-
-            return optimisticMutationEngine.enqueueCommit(() => processOptimisticCommit(transaction))
           },
-        }
+          bumpRevision,
+          emit,
+          processCommit: processOptimisticCommit,
+        })
       : {}
   const externalUpdateMethods: Pick<DataSourceBackedRowModel<T>, "applyExternalUpdates"> = createDataSourceExternalUpdateRuntime({
     ensureActive,
