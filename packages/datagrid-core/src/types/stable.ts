@@ -30,8 +30,6 @@ export type {
   DataGridComparatorPolicyKind,
   DataGridSortDirection,
   DataGridSortState,
-  DataGridFilterClause,
-  DataGridAdvancedFilter,
   DataGridAdvancedFilterConditionType,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterGroup,

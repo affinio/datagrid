@@ -232,7 +232,6 @@ describe("worker-owned row model", () => {
       columnFilters: {
         region: { kind: "valueSet", tokens: ["string:AMER"] },
       },
-      advancedFilters: {},
       quickFilter: {
         query: "platform",
         columns: ["team"],
@@ -390,7 +389,6 @@ describe("worker-owned row model", () => {
       columnFilters: {
         region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },
       },
-      advancedFilters: {},
       quickFilter: {
         query: "platform",
         columns: ["team"],

@@ -396,7 +396,6 @@ function buildFilterModel(iteration = 0) {
       team: { kind: "valueSet", tokens: [`string:${team}`] },
       status: { kind: "valueSet", tokens: [`string:${status}`] },
     },
-    advancedFilters: {},
   }
 }
 

@@ -144,7 +144,6 @@ describe("datagrid worker parity", () => {
         columnFilters: {
           region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },
         },
-        advancedFilters: {},
         quickFilter: {
           query: "platform",
           columns: ["team"],

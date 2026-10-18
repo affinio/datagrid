@@ -75,7 +75,6 @@ export type {
   DataGridPivotValueSpec,
 } from "./pivot/pivotContracts.js"
 export type {
-  DataGridAdvancedFilter,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterConditionType,
   DataGridAdvancedFilterExpression,
@@ -88,7 +87,6 @@ export type {
   DataGridColumnStyleFilter,
   DataGridColumnStyleValueSetFilter,
   DataGridColumnValueSetFilter,
-  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,

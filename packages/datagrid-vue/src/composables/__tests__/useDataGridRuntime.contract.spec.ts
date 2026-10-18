@@ -704,7 +704,6 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.listPlugins()).toContain("seed-plugin")
     runtime!.api.rows.setFilterModel({
       columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } },
-      advancedFilters: {},
     })
     await flushRuntimeTasks()
     expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)

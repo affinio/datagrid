@@ -1,12 +1,10 @@
 import type {
-  DataGridAdvancedFilter,
   DataGridColumnFilterSnapshotEntry,
   DataGridColumnStyleFilter,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterExpression,
   DataGridAdvancedFilterGroup,
   DataGridAdvancedFilterNot,
-  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridQuickFilterSnapshot,
 } from "../rowModel.js"
@@ -288,25 +286,6 @@ function evaluateCondition(condition: DataGridAdvancedFilterCondition, candidate
   return true
 }
 
-function normalizeClauseJoin(join: unknown): "and" | "or" {
-  return String(join ?? "and").toLowerCase() === "or" ? "or" : "and"
-}
-
-function normalizeClause(
-  key: string,
-  type: DataGridAdvancedFilter["type"],
-  clause: DataGridFilterClause,
-): DataGridAdvancedFilterCondition {
-  return {
-    kind: "condition",
-    key,
-    type,
-    operator: normalizeOperator(clause.operator),
-    value: clause.value,
-    value2: clause.value2,
-  }
-}
-
 function normalizeGroupOperator(operator: unknown): "and" | "or" {
   return String(operator ?? "and").toLowerCase() === "or" ? "or" : "and"
 }
@@ -387,59 +366,6 @@ export function normalizeDataGridAdvancedFilterExpression(
   return null
 }
 
-export function buildDataGridAdvancedFilterExpressionFromLegacyFilters(
-  advancedFilters: Record<string, DataGridAdvancedFilter> | null | undefined,
-): DataGridAdvancedFilterExpression | null {
-  if (!advancedFilters) {
-    return null
-  }
-
-  const perColumnExpressions: DataGridAdvancedFilterExpression[] = []
-  for (const [key, advanced] of Object.entries(advancedFilters)) {
-    if (!advanced || !Array.isArray(advanced.clauses) || advanced.clauses.length === 0) {
-      continue
-    }
-
-    let current: DataGridAdvancedFilterExpression | null = normalizeClause(key, advanced.type, advanced.clauses[0]!)
-    for (let index = 1; index < advanced.clauses.length; index += 1) {
-      const clause = advanced.clauses[index]
-      if (!clause) {
-        continue
-      }
-      const next = normalizeClause(key, advanced.type, clause)
-      const join = normalizeClauseJoin(clause.join)
-      if (!current) {
-        current = next
-        continue
-      }
-      current = {
-        kind: "group",
-        operator: join,
-        children: [current, next],
-      }
-    }
-
-    const normalized = normalizeDataGridAdvancedFilterExpression(current)
-    if (normalized) {
-      perColumnExpressions.push(normalized)
-    }
-  }
-
-  if (perColumnExpressions.length === 0) {
-    return null
-  }
-
-  if (perColumnExpressions.length === 1) {
-    return perColumnExpressions[0]!
-  }
-
-  return {
-    kind: "group",
-    operator: "and",
-    children: perColumnExpressions,
-  }
-}
-
 export function evaluateDataGridAdvancedFilterExpression(
   expression: DataGridAdvancedFilterExpression | null | undefined,
   resolve: DataGridAdvancedFilterResolver,
@@ -488,7 +414,6 @@ export function cloneDataGridFilterSnapshot(
   const clonedQuickFilter = cloneDataGridQuickFilterSnapshot(input.quickFilter)
   const clonedAdvancedExpression = cloneDataGridAdvancedFilterExpression(input.advancedExpression ?? null)
   const advancedExpression = clonedAdvancedExpression
-    ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(input.advancedFilters)
 
   return {
     columnFilters: Object.fromEntries(

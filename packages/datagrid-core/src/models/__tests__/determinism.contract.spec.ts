@@ -35,7 +35,6 @@ function runRowProgram(): {
   const sortModel: readonly DataGridSortState[] = [{ key: "value", direction: "asc" }]
   const filterModel: DataGridFilterSnapshot = {
     columnFilters: { value: { kind: "valueSet", tokens: ["string:row-1", "string:row-3"] } },
-    advancedFilters: {},
   }
 
   const unsubscribe = model.subscribe(snapshot => {

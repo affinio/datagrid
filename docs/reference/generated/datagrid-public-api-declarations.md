@@ -36,7 +36,7 @@ Entrypoint exports:
 
 - `export * from "./public.js"`
 
-Declaration graph hash: `4856f976cc19df448a22faadd3e4ba8e1af66254043af5e64879f174413211bd`
+Declaration graph hash: `aa536357fffb10020915b53f708cd50e4b1dcfb0a509a16dff3a0339d929c38d`
 
 ### ./advanced
 
@@ -56,7 +56,7 @@ Entrypoint exports:
 - `export { createDataSourceBackedRowModel, createDataGridAggregationRegistry, createDataGridComparatorRegistry, compareDataGridValues, type CreateDataSourceBackedRowModelOptions, type DataSourceBackedRowModel, type DataGridExternalRowUpdate, type DataGridExternalRowUpdateOptions, type DataGridDataSource, type DataGridDataSourceBackpressureDiagnostics, type DataGridDataSourceColumnHistogramRequest, type DataGridDataSourceSelectionSummaryColumn, type DataGridDataSourceSelectionSummaryRange, type DataGridDataSourceSelectionSummaryRequest, type DataGridDataSourceSelectionSummaryResult, type DataGridDataSourceInvalidation, type DataGridDataSourceCellRange, type DataGridDataSourceClipboardFormat, type DataGridDataSourceOperationKind, type DataGridDataSourceOperationRejection, type DataGridDataSourceOperationRequest, type DataGridDataSourceOperationResult, type DataGridDataSourceOperationStatus, type DataGridDataSourcePaginationPullContext, type DataGridDataSourcePullPriority, type DataGridDataSourcePivotPullContext, type DataGridDataSourcePullReason, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridServerPivotRowIdInput, type DataGridServerPivotRowRole, type DataGridComparatorNullsPolicy, type DataGridComparatorPolicy, type DataGridComparatorPolicyKind, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, type DataGridAggregationDefinition, type DataGridAggregationRegistry, type DataGridAggregationRegistryInput, type DataGridDataSourceTreePullContext, type DataGridDataSourceTreePullOperation, type DataGridDataSourceTreePullScope, type DataGridDataSourcePushEvent, type DataGridDataSourcePushInvalidateEvent, type DataGridDataSourcePushListener, type DataGridDataSourcePushRemoveEvent, type DataGridDataSourcePushUpsertEvent, type DataGridDataSourceRowEntry, createDataGridServerPivotRowId, } from "./models/index.js"`
 - `export { transformDataGridPublicProtocolSource, type DataGridCodemodResult, } from "./protocol/index.js"`
 
-Declaration graph hash: `f0905d08ccdf83a182ae0bc366c7c4da12b8c417c36dde723ce9457ec3a70251`
+Declaration graph hash: `8f74209fcf4515d5868d502df538679ad70c405b3e40eec8dd65f9e6613d275a`
 
 ### ./advanced-client-row-model
 
@@ -64,7 +64,7 @@ Entrypoint exports:
 
 - `export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from "./models/clientRowModel.js"`
 
-Declaration graph hash: `da07b7da75ef85c28c0ef3ca1a050d6de066a83de2af0f02a0f72497c147ce1c`
+Declaration graph hash: `0019c15f33c83ca6fdcbcfb90aa0010a5f7f37c968822defae38b9dff1b6d2ee`
 
 ### ./client-row-projection
 
@@ -75,7 +75,7 @@ Entrypoint exports:
 - `export { createClientRowProjectionEngine, type CreateClientRowProjectionEngineOptions, type DataGridClientProjectionEngine, type DataGridClientProjectionFinalizeMeta, type DataGridClientProjectionRecomputeOptions, type DataGridClientProjectionRequestOptions, type DataGridClientProjectionStageHandlers, type DataGridClientProjectionStage, type DataGridClientProjectionFilterStageResult, type DataGridClientProjectionFilterStageContext, type DataGridClientProjectionGroupStageContext, type DataGridClientProjectionStageContext, } from "./models/projection/clientRowProjectionEngine.js"`
 - `export { createClientRowProjectionOrchestrator, type DataGridClientRowProjectionOrchestrator, type DataGridClientProjectionStagePlan, } from "./models/projection/clientRowProjectionOrchestrator.js"`
 
-Declaration graph hash: `d5c7348054dd987b9538e6fdce8419914a4d362bee2d6ea67312a58ef266fa5e`
+Declaration graph hash: `b451b73ad4d9ea04be94ac572c5c92d875b4c443b8559bacea016d016f67df43`
 
 ### ./client-row-projection/aggregate
 
@@ -83,7 +83,7 @@ Entrypoint exports:
 
 - `export { runAggregateProjectionStage, type AggregateProjectionEngine, type RunAggregateProjectionStageParams, type RunAggregateProjectionStageResult, } from "../models/projection/clientRowProjectionAggregateStage.js"`
 
-Declaration graph hash: `cd4a886f5028f819eb596e25bd30b8b19e063327abe904efedb8653baa0e8770`
+Declaration graph hash: `0b642191f05fde094854624d39ad6c14aa8bda1b041d37d16366af1f024d1a73`
 
 ### ./client-row-projection/basic
 
@@ -91,7 +91,7 @@ Entrypoint exports:
 
 - `export { runFilterProjectionStage, runSortProjectionStage, runPaginateProjectionStage, runVisibleProjectionStage, type SortValueCacheEntry, type SortValueCounters, type RunFilterProjectionStageParams, type RunFilterProjectionStageResult, type RunSortProjectionStageParams, type RunSortProjectionStageResult, type RunPaginateProjectionStageParams, type RunPaginateProjectionStageResult, type RunVisibleProjectionStageParams, type RunVisibleProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `e07718951055d783ee248121b33bbd20b7b02fc4320a701ef9bc8700b0648dfe`
+Declaration graph hash: `1ed2dd85ee7b1348f06c8bdf50be66a8c7ab06d4099225e1f20b257e36ae2dca`
 
 ### ./client-row-projection/comparator-registry
 
@@ -99,7 +99,7 @@ Entrypoint exports:
 
 - `export { createDataGridComparatorRegistry, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, } from "../models/comparator/comparatorRegistry.js"`
 
-Declaration graph hash: `d20707393fb5a2a24a079cf199be8233a56a29ed68b9b045a8d008b46990df7f`
+Declaration graph hash: `d10f00a66ee80327c4096953116b82eb1522353448e275f3b649f236e72de32a`
 
 ### ./client-row-projection/filter
 
@@ -107,7 +107,7 @@ Entrypoint exports:
 
 - `export { runFilterProjectionStage, type RunFilterProjectionStageParams, type RunFilterProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `12b41cec2d89961955362ee8862125dd7e1ebcb5a813924f4ef85935480177de`
+Declaration graph hash: `77084a4a4b4e044713320c7caef73cbdbdb59bac56249d9b0d0f8be238ec7604`
 
 ### ./client-row-projection/group
 
@@ -115,7 +115,7 @@ Entrypoint exports:
 
 - `export { runGroupProjectionStage, type GroupProjectionAggregationEngine, type RunGroupProjectionStageParams, type RunGroupProjectionStageResult, } from "../models/projection/clientRowProjectionGroupStage.js"`
 
-Declaration graph hash: `1a16663bf5da4e921428a410ba5c0bb0a594320962c2419b0a18735ebfea8eb2`
+Declaration graph hash: `d2a33e398a0df08f7f9d846837de47405c30238d3d8f2bf37fc4a967922c934f`
 
 ### ./client-row-projection/model
 
@@ -126,7 +126,7 @@ Entrypoint exports:
 - `export interface ClientRowProjectionModelSnapshot<T> { readonly revision: number`
 - `export interface CreateClientRowProjectionModelOptions<T> extends CreateClientRowStoreOptions<T> { initialSortModel?: readonly DataGridSortState[]`
 
-Declaration graph hash: `562fb8e8dc2e4e44e77c4adeb941901d795eb2453008d1b2828bf84be7929427`
+Declaration graph hash: `7d6ec3688f640f4c6f07493798497d5d66e7d4f0c53315ae3743653fe2c7bc02`
 
 ### ./client-row-projection/pagination
 
@@ -134,7 +134,7 @@ Entrypoint exports:
 
 - `export { runPaginateProjectionStage, type RunPaginateProjectionStageParams, type RunPaginateProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `83242176865c4d3e8cb49ae00288fde761759d6a0705ffedef71aac1c40a379a`
+Declaration graph hash: `3f432526278bdbf47d56ffbf9e9b9217baaabc96bcc813b5329d4407735c0fc8`
 
 ### ./client-row-projection/pivot
 
@@ -142,7 +142,7 @@ Entrypoint exports:
 
 - `export { runPivotProjectionStage, type RunPivotProjectionStageParams, type RunPivotProjectionStageResult, } from "../models/projection/clientRowProjectionPivotStage.js"`
 
-Declaration graph hash: `7f7d916d9a88633ebed61f07152c0875105ad5a0fb2de3a3436f6f3ecb5c785e`
+Declaration graph hash: `413d6e1eaba1d37c9bfebe8624b45b6fd2054ede8154dd9a08dfce03d34077b8`
 
 ### ./client-row-projection/sort
 
@@ -150,7 +150,7 @@ Entrypoint exports:
 
 - `export { runFlatSortProjectionStage, runSortProjectionStage, type SortValueCacheEntry, type SortValueCounters, type RunSortProjectionStageParams, type RunSortProjectionStageResult, type RunFlatSortProjectionStageParams, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `ecf4313ee8f68534f2a16a7ace84204988f1883a8cc6b1dcac8ce8cbbca450b5`
+Declaration graph hash: `ed92d02fa2bc7cadb49979154b734d57ee34ec9a52639003837e1f9509d4cc57`
 
 ### ./client-row-projection/sort-cache
 
@@ -166,7 +166,7 @@ Entrypoint exports:
 
 - `export { runFlatVisibleProjectionStage, runVisibleProjectionStage, type RunVisibleProjectionStageParams, type RunVisibleProjectionStageResult, type RunFlatVisibleProjectionStageParams, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `b6361c06c9f128cac81994030a0dd242ea8640dda3716c7433a185ca8d1e96e2`
+Declaration graph hash: `2e592dee50cea804139029330cb84b3197ca53aa598ab205b17a661bd7fedf19`
 
 ### ./client-row-store
 
@@ -178,7 +178,7 @@ Entrypoint exports:
 - `export interface CreateClientRowStoreOptions<T> { rows?: readonly DataGridRowNodeInput<T>[]`
 - `export type ClientRowStoreListener<T> = (snapshot: ClientRowStoreSnapshot<T>) => void`
 
-Declaration graph hash: `79bb68745fb43af50a4be01269828932566053e325f24eb33183395e1ba5d371`
+Declaration graph hash: `cb690b63714fa4df2b365222515fad860d787cec25a043547435385771400122`
 
 ### ./internal
 
@@ -189,7 +189,7 @@ Entrypoint exports:
 - `export { resolveFirstColumnIndexAfterOffset, resolveFirstColumnIndexAfterPrefixOffset, resolveLastColumnIndexBeforeOffset, resolveLastColumnIndexBeforePrefixOffset, } from "./virtualization/columnSizing.js"`
 - `export { resolveUniformRowIndexAtOffset, resolveUniformRowOffset, } from "./virtualization/verticalGeometry.js"`
 
-Declaration graph hash: `45742256389e0fa0eed928a4f4077273b418ae8e8d3f519673f0fcc44419f6e3`
+Declaration graph hash: `a3a4098dc55160d4da6cd9dc6a7839f2c72099fdbcc891f84f749b9732bceed6`
 
 ## @affino/datagrid-vue
 

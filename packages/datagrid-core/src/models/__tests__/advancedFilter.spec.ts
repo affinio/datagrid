@@ -5,7 +5,6 @@ import {
   normalizeDataGridAdvancedFilterExpression,
   type DataGridFilterSnapshot,
 } from "../index"
-import { buildDataGridAdvancedFilterExpressionFromLegacyFilters } from "../filters/advancedFilter"
 
 describe("advanced filter expression", () => {
   it("evaluates nested group + not expression deterministically", () => {
@@ -68,68 +67,10 @@ describe("advanced filter expression", () => {
     expect(rowBResult).toBe(false)
   })
 
-  it("keeps backward compatibility with legacy advancedFilters map", () => {
-    const expression = buildDataGridAdvancedFilterExpressionFromLegacyFilters({
-      latencyMs: {
-        type: "number",
-        clauses: [
-          {
-            operator: "gt",
-            value: 40,
-          },
-          {
-            operator: "lt",
-            value: 120,
-            join: "and",
-          },
-        ],
-      },
-      owner: {
-        type: "text",
-        clauses: [
-          {
-            operator: "contains",
-            value: "oc",
-          },
-        ],
-      },
-    })
-
-    const accepted = evaluateDataGridAdvancedFilterExpression(expression, condition => {
-      const row = {
-        latencyMs: 84,
-        owner: "noc",
-      }
-      return (row as Record<string, unknown>)[condition.key]
-    })
-    const rejected = evaluateDataGridAdvancedFilterExpression(expression, condition => {
-      const row = {
-        latencyMs: 140,
-        owner: "noc",
-      }
-      return (row as Record<string, unknown>)[condition.key]
-    })
-
-    expect(accepted).toBe(true)
-    expect(rejected).toBe(false)
-  })
-
   it("clones filter snapshot without leaking mutable references", () => {
     const source: DataGridFilterSnapshot = {
       columnFilters: {
         owner: { kind: "valueSet", tokens: ["string:noc"] },
-      },
-      advancedFilters: {
-        latencyMs: {
-          type: "number",
-          clauses: [
-            {
-              operator: "between",
-              value: 10,
-              value2: 90,
-            },
-          ],
-        },
       },
       advancedExpression: {
         kind: "condition",
@@ -158,32 +99,13 @@ describe("advanced filter expression", () => {
 
     cloned.columnFilters.owner = { kind: "valueSet", tokens: ["string:ops"] }
     cloned.quickFilter!.columns = ["region"]
+    if (cloned.advancedExpression?.kind === "condition") {
+      cloned.advancedExpression.value = "operations"
+    }
 
     expect(source.columnFilters.owner).toEqual({ kind: "valueSet", tokens: ["string:noc"] })
-    expect(source.advancedFilters.latencyMs.clauses[0]!.operator).toBe("between")
+    expect(source.advancedExpression?.kind === "condition" && source.advancedExpression.value).toBe("noc")
     expect(source.quickFilter?.columns).toEqual(["owner", "service"])
-  })
-
-  it("migrates legacy advanced filters into the canonical expression on clone", () => {
-    const cloned = cloneDataGridFilterSnapshot({
-      columnFilters: {},
-      advancedFilters: {
-        latencyMs: {
-          type: "number",
-          clauses: [{ operator: "between", value: 10, value2: 90 }],
-        },
-      },
-    })
-
-    expect(cloned?.advancedFilters).toBeUndefined()
-    expect(cloned?.advancedExpression).toEqual({
-      kind: "condition",
-      key: "latencyMs",
-      type: "number",
-      operator: "between",
-      value: 10,
-      value2: 90,
-    })
   })
 
   it("supports set/date operators in advanced expression", () => {

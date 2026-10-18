@@ -108,7 +108,6 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
           value2: undefined,
         },
       },
-      advancedFilters: {},
       advancedExpression: null,
     })
   })

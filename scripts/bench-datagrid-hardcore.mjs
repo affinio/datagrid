@@ -368,7 +368,6 @@ function buildFilterModel(tokens) {
         tokens: normalizedTokens,
       },
     },
-    advancedFilters: {},
   }
 }
 

@@ -243,7 +243,6 @@ export function createInMemoryDataGridSettingsAdapter(): DataGridSettingsAdapter
       if (
         !snapshot ||
         (Object.keys(snapshot.columnFilters ?? {}).length === 0 &&
-          Object.keys(snapshot.advancedFilters ?? {}).length === 0 &&
           !snapshot.advancedExpression)
       ) {
         entry.filterSnapshot = null

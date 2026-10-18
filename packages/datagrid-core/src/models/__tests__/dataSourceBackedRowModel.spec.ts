@@ -118,9 +118,6 @@ describe("createDataSourceBackedRowModel", () => {
         columnStyleFilters: {
           status: { kind: "styleValueSet", styleKey: "backgroundColor", tokens: ["string:#fff"] },
         },
-        advancedFilters: {
-          status: { type: "text", clauses: [{ operator: "contains", value: "Blocked" }] },
-        },
       },
     })
 
@@ -149,7 +146,6 @@ describe("createDataSourceBackedRowModel", () => {
       owner: { kind: "valueSet", tokens: ["string:noc"] },
     })
     expect(histogramRequests[0]?.filterModel?.columnStyleFilters).toEqual({})
-    expect(histogramRequests[0]?.filterModel?.advancedFilters).toBeUndefined()
 
     model.dispose()
   })

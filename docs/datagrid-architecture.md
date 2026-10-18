@@ -39,7 +39,7 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 - Flat projection custom comparator registry construction is optional at `@affino/datagrid-core/client-row-projection/comparator-registry`.
 - `@affino/datagrid-core/client-row-projection/model` composes the row store with flat filter/sort/pagination projection. It is a smaller alternative for consumers that do not need group, pivot, aggregate, or formula behavior.
 - The stable core root no longer exports the deprecated `createClientRowModel` name. Full-featured consumers use `@affino/datagrid-core/advanced-client-row-model`; flat and source-only consumers can choose smaller model and store subpaths.
-- Advanced filters use `DataGridFilterSnapshot.advancedExpression` as the canonical contract. Snapshot cloning still migrates incoming deprecated `advancedFilters` maps for persisted state, while emitted snapshots contain only the expression form; the legacy converter is internal and is not exported from stable package roots.
+- Advanced filters use `DataGridFilterSnapshot.advancedExpression` as the only contract. Settings snapshots alias the same row-model filter type, so persistence, adapters, and projection share one shape.
 
 ## Runtime Pipeline (Canonical)
 

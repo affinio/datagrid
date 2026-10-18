@@ -127,10 +127,10 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     api.rows.setSortModel([{ key: "id", direction: "asc" }])
-    api.rows.setFilterModel({ columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } }, advancedFilters: {} })
+    api.rows.setFilterModel({ columnFilters: { name: { kind: "valueSet", tokens: ["string:alpha"] } } })
     api.rows.setSortAndFilterModel({
       sortModel: [{ key: "id", direction: "desc" }],
-      filterModel: { columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } }, advancedFilters: {} },
+      filterModel: { columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } } },
     })
     api.rows.setGroupBy({ fields: ["name"], expandedByDefault: true })
     api.rows.setAggregationModel({ columns: [{ key: "id", op: "count" }] })
@@ -300,7 +300,6 @@ describe("data grid api facade contracts", () => {
           tokens: [serializeColumnValueToToken("#ff0000")],
         },
       },
-      advancedFilters: {},
     })
 
     expect(api.columns.getHistogram("status", { styleKey: "backgroundColor", ignoreSelfFilter: true })).toEqual([
@@ -451,7 +450,6 @@ describe("data grid api facade contracts", () => {
       sortModel: [{ key: "revenue", direction: "desc" }],
       filterModel: {
         columnFilters: { region: { kind: "valueSet", tokens: ["string:amer"] } },
-        advancedFilters: {},
       },
     })
     api.rows.setGroupBy({ fields: ["region"], expandedByDefault: true })
@@ -548,7 +546,6 @@ describe("data grid api facade contracts", () => {
     api.rows.setSortAndFilterModel({
       filterModel: {
         columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
-        advancedFilters: {},
       },
       sortModel: [{ key: "score", direction: "desc" }],
     })
@@ -637,7 +634,7 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
     const events: Array<{ source: string; edits: readonly { rowId: string | number; oldData: unknown; newData: unknown; patch: unknown }[] }> = []
     api.events.on("rows:edited", event => events.push(event))
-    api.rows.setFilterModel({ columnFilters: { status: { kind: "valueSet", tokens: ["string:visible"] } }, advancedFilters: {} })
+    api.rows.setFilterModel({ columnFilters: { status: { kind: "valueSet", tokens: ["string:visible"] } } })
 
     await api.rows.applyEdits([
       { rowId: "b", data: { count: 3 } },
@@ -1628,7 +1625,6 @@ describe("data grid api facade contracts", () => {
           sortModel: [{ key: "owner", direction: "desc" as const }],
           filterModel: {
             columnFilters: { owner: { kind: "valueSet" as const, tokens: ["string:owner-1"] } },
-            advancedFilters: {},
           },
           viewportRange: { start: 90, end: 100 },
         },
@@ -2526,7 +2522,6 @@ describe("data grid api facade contracts", () => {
     api.rows.setSortModel([{ key: "owner", direction: "asc" }])
     api.rows.setFilterModel({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:open"] } },
-      advancedFilters: {},
     })
     api.rows.setGroupBy({ fields: ["status"], expandedByDefault: true })
     api.rows.toggleGroup(`[["status","open"]]`)
@@ -2558,7 +2553,7 @@ describe("data grid api facade contracts", () => {
     const expectedSelection = api.selection.getSnapshot()
 
     api.rows.setSortModel([{ key: "status", direction: "desc" }])
-    api.rows.setFilterModel({ columnFilters: {}, advancedFilters: {} })
+    api.rows.setFilterModel({ columnFilters: {} })
     api.rows.setGroupBy(null)
     api.rows.setPagination({ pageSize: 1, currentPage: 1 })
     api.view.setViewportRange({ start: 1, end: 1 })
@@ -2987,7 +2982,6 @@ describe("data grid api facade contracts", () => {
     api.rows.setSortModel([{ key: "owner", direction: "desc" }])
     api.rows.setFilterModel({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:open"] } },
-      advancedFilters: {},
     })
     api.rows.setGroupBy({ fields: ["status"], expandedByDefault: true })
     api.rows.setPagination({ pageSize: 1, currentPage: 0 })
@@ -3017,7 +3011,7 @@ describe("data grid api facade contracts", () => {
     const saved = api.state.get()
 
     api.rows.setSortModel([{ key: "id", direction: "asc" }])
-    api.rows.setFilterModel({ columnFilters: {}, advancedFilters: {} })
+    api.rows.setFilterModel({ columnFilters: {} })
     api.rows.setGroupBy(null)
     api.rows.setAggregationModel(null)
     api.rows.setPagination({ pageSize: 2, currentPage: 0 })

@@ -416,7 +416,6 @@ describe("normalizeDataGridServerQuery", () => {
     expect(normalizeDataGridServerQuery(createPullRequest({
       filterModel: {
         columnFilters: {},
-        advancedFilters: {},
         quickFilter: { query: "   " },
       },
     }))).toEqual({
@@ -567,7 +566,6 @@ describe("createAffinoDatasource query mapping", () => {
       sortModel: [{ key: " owner ", direction: "asc" }],
       filterModel: {
         columnFilters: {},
-        advancedFilters: {},
         quickFilter: {
           query: " platform ",
           columns: [" owner "],

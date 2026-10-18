@@ -36,12 +36,6 @@ describe("data grid filter normalization", () => {
       columnFilters: {
         roi: { kind: "predicate", operator: "gte", value: 25 },
       },
-      advancedFilters: {
-        roi: {
-          type: "number",
-          clauses: [{ operator: "lte", value: 50 }],
-        },
-      },
       advancedExpression: {
         kind: "condition",
         key: "roi",
@@ -78,9 +72,6 @@ describe("data grid filter normalization", () => {
               status: { kind: "valueSet", tokens: ["string:open"] },
               roi: { kind: "predicate", operator: "gte", value: 15 },
             },
-            advancedFilters: {
-              status: { type: "set", clauses: [{ operator: "in", value: ["open"] }] },
-            },
             advancedExpression: {
               kind: "condition",
               key: "status",
@@ -109,7 +100,6 @@ describe("data grid filter normalization", () => {
     const normalized = normalizeDataGridAppUnifiedStateFilters(state, columns)
 
     expect(normalized.rows.snapshot.filterModel?.columnFilters.status).toBeUndefined()
-    expect(normalized.rows.snapshot.filterModel?.advancedFilters).toBeUndefined()
     expect(normalized.rows.snapshot.filterModel?.advancedExpression).toBeNull()
     expect(normalized.rows.snapshot.filterModel?.columnFilters.roi).toMatchObject({ value: 0.15 })
   })

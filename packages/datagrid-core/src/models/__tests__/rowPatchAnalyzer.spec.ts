@@ -35,7 +35,6 @@ describe("rowPatchAnalyzer change-set", () => {
   it("collects quick filter dependency fields from explicit columns", () => {
     const fields = collectFilterModelFields({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:active"] } },
-      advancedFilters: {},
       quickFilter: {
         query: "platform",
         columns: ["owner", " service ", "", "owner"],

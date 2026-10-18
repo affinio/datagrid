@@ -25,18 +25,6 @@ export interface DataGridSortState {
   comparator?: DataGridComparatorPolicy
 }
 
-export interface DataGridFilterClause {
-  operator: string
-  value: unknown
-  value2?: unknown
-  join?: "and" | "or"
-}
-
-export interface DataGridAdvancedFilter {
-  type: "text" | "number" | "date" | "set"
-  clauses: DataGridFilterClause[]
-}
-
 export type DataGridAdvancedFilterConditionType =
   | "text"
   | "number"
@@ -131,8 +119,6 @@ export interface DataGridQuickFilterSnapshot {
 export interface DataGridFilterSnapshot {
   columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
   columnStyleFilters?: Record<string, DataGridColumnStyleFilter>
-  /** @deprecated Use `advancedExpression`; snapshot cloning migrates this input to the expression form. */
-  advancedFilters?: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
   quickFilter?: DataGridQuickFilterSnapshot | null
 }

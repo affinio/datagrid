@@ -4396,7 +4396,6 @@ describe("DataGrid app facade contract", () => {
   it("applies and clears quick filter through the controlled filterModel prop", async () => {
     const quickFilterModel = {
       columnFilters: {},
-      advancedFilters: {},
       advancedExpression: null,
       quickFilter: {
         query: "payments",
@@ -4443,7 +4442,6 @@ describe("DataGrid app facade contract", () => {
   it("preserves quick filter when app filter controls update the filterModel", async () => {
     const quickFilterModel = {
       columnFilters: {},
-      advancedFilters: {},
       advancedExpression: null,
       quickFilter: {
         query: "eu",
@@ -5037,7 +5035,6 @@ describe("DataGrid app facade contract", () => {
   it("clears declarative quickFilter through controlled filterModel state updates", async () => {
     const controlledFilterModel = ref<DataGridFilterSnapshot | null>({
       columnFilters: {},
-      advancedFilters: {},
       advancedExpression: null,
       quickFilter: {
         query: "Payments",
@@ -5595,7 +5592,6 @@ describe("DataGrid app facade contract", () => {
               tokens: ["string:#ff0000"],
             },
           },
-          advancedFilters: {},
         },
         readFilterCellStyle,
       },
@@ -6388,18 +6384,13 @@ describe("DataGrid app facade contract", () => {
               caseSensitive: false,
             },
           },
-          advancedFilters: {
-            region: {
-              type: "text",
-              clauses: [
-                {
-                  operator: "equals",
-                  value: "eu-west",
-                },
-              ],
-            },
+          advancedExpression: {
+            kind: "condition",
+            key: "region",
+            type: "text",
+            operator: "equals",
+            value: "eu-west",
           },
-          advancedExpression: null,
         },
       },
     })
@@ -6454,7 +6445,6 @@ describe("DataGrid app facade contract", () => {
               value: 25,
             },
           },
-          advancedFilters: {},
           advancedExpression: null,
         },
       },
@@ -6516,32 +6506,27 @@ describe("DataGrid app facade contract", () => {
               caseSensitive: false,
             },
           },
-          advancedFilters: {
-            region: {
-              type: "text",
-              clauses: [
-                {
-                  operator: "equals",
-                  value: "eu-west",
-                },
-              ],
-            },
-            amount: {
-              type: "number",
-              clauses: [
-                {
-                  operator: "gte",
-                  value: 10,
-                },
-                {
-                  operator: "lte",
-                  value: 20,
-                  join: "and",
-                },
-              ],
-            },
+          advancedExpression: {
+            kind: "group",
+            operator: "and",
+            children: [
+              {
+                kind: "condition",
+                key: "region",
+                type: "text",
+                operator: "equals",
+                value: "eu-west",
+              },
+              {
+                kind: "group",
+                operator: "and",
+                children: [
+                  { kind: "condition", key: "amount", type: "number", operator: "gte", value: 10 },
+                  { kind: "condition", key: "amount", type: "number", operator: "lte", value: 20 },
+                ],
+              },
+            ],
           },
-          advancedExpression: null,
         },
         viewMode: "gantt",
       },
@@ -8344,7 +8329,7 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
     const saved = resolveVm(source).getState!()!
     saved.columns.widths.owner = 235
-    saved.rows.snapshot.filterModel = { columnFilters: {}, advancedFilters: {}, quickFilter: { query: "a" } }
+    saved.rows.snapshot.filterModel = { columnFilters: {}, quickFilter: { query: "a" } }
     source.unmount()
     let complete!: (value: unknown) => void
     const save = vi.fn()

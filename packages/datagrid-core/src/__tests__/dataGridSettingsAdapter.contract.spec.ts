@@ -8,36 +8,33 @@ describe("dataGrid settings adapter filter snapshot cloning", () => {
     const now = new Date("2026-02-08T12:34:56.000Z")
     const snapshot: FilterStateSnapshot = {
       columnFilters: {
-        status: ["open"],
+        status: { kind: "valueSet", tokens: ["string:open"] },
       },
-      advancedFilters: {
-        createdAt: {
-          type: "date",
-          clauses: [
-            {
-              id: "created-at-eq",
-              operator: "eq",
-              value: now,
-            },
-          ],
-        },
+      advancedExpression: {
+        kind: "condition",
+        key: "createdAt",
+        type: "date",
+        operator: "eq",
+        value: now,
       },
     }
 
     adapter.setFilterSnapshot("grid-1", snapshot)
 
-    if (Array.isArray(snapshot.columnFilters.status)) {
-      snapshot.columnFilters.status.push("closed")
+    if (snapshot.columnFilters.status?.kind === "valueSet") {
+      snapshot.columnFilters.status.tokens.push("string:closed")
     }
-    const originalValue = snapshot.advancedFilters.createdAt?.clauses[0]?.value
+    const originalValue = snapshot.advancedExpression?.kind === "condition"
+      ? snapshot.advancedExpression.value
+      : undefined
     if (originalValue instanceof Date) {
       originalValue.setUTCFullYear(2030)
     }
 
     const persisted = adapter.getFilterSnapshot("grid-1")
-    expect(persisted?.columnFilters.status).toEqual(["open"])
-    expect(persisted?.advancedFilters.createdAt?.clauses[0]?.value).toBeInstanceOf(Date)
-    expect((persisted?.advancedFilters.createdAt?.clauses[0]?.value as Date).toISOString()).toBe(
+    expect(persisted?.columnFilters.status).toEqual({ kind: "valueSet", tokens: ["string:open"] })
+    expect(persisted?.advancedExpression?.kind === "condition" && persisted.advancedExpression.value).toBeInstanceOf(Date)
+    expect(((persisted?.advancedExpression?.kind === "condition" ? persisted.advancedExpression.value : undefined) as Date).toISOString()).toBe(
       "2026-02-08T12:34:56.000Z",
     )
   })
@@ -46,18 +43,17 @@ describe("dataGrid settings adapter filter snapshot cloning", () => {
     const adapter = createInMemoryDataGridSettingsAdapter()
     adapter.setFilterSnapshot("grid-2", {
       columnFilters: {
-        owner: ["noc"],
+        owner: { kind: "valueSet", tokens: ["string:noc"] },
       },
-      advancedFilters: {},
     })
 
     const firstRead = adapter.getFilterSnapshot("grid-2")
-    if (Array.isArray(firstRead?.columnFilters.owner)) {
-      firstRead.columnFilters.owner.push("platform")
+    if (firstRead?.columnFilters.owner?.kind === "valueSet") {
+      firstRead.columnFilters.owner.tokens.push("string:platform")
     }
 
     const secondRead = adapter.getFilterSnapshot("grid-2")
-    expect(secondRead?.columnFilters.owner).toEqual(["noc"])
+    expect(secondRead?.columnFilters.owner).toEqual({ kind: "valueSet", tokens: ["string:noc"] })
   })
 
   it("persists and restores full column state snapshot defensively", () => {

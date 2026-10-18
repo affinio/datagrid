@@ -32,7 +32,6 @@ function createRowNode(row: Row, index: number): DataGridRowNode<Row> {
 function createFilterModel(quickFilter: DataGridFilterSnapshot["quickFilter"]): DataGridFilterSnapshot {
   return {
     columnFilters: {},
-    advancedFilters: {},
     quickFilter,
   }
 }
@@ -76,7 +75,6 @@ describe("client row projection quick filter predicate", () => {
       columnFilters: {
         service: { kind: "valueSet", tokens: ["string:api"] },
       },
-      advancedFilters: {},
       quickFilter: {
         query: "platform",
         columns: ["owner"],
@@ -93,7 +91,6 @@ describe("client row projection quick filter predicate", () => {
         service: { kind: "valueSet", tokens: ["string:API"] },
         latencyMs: { kind: "valueSet", tokens: ["number:200"] },
       },
-      advancedFilters: {},
     }
     const predicate = createFilterPredicate(filterModel)
 

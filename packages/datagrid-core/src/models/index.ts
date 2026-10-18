@@ -1,5 +1,4 @@
 export type {
-  DataGridAdvancedFilter,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterConditionType,
   DataGridAdvancedFilterExpression,
@@ -17,7 +16,6 @@ export type {
   DataGridColumnHistogramResult,
   DataGridColumnHistogramOptions,
   DataGridFilterCellStyleReader,
-  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridQuickFilterMode,
   DataGridQuickFilterSnapshot,

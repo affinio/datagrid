@@ -9,7 +9,6 @@ export type {
 } from "./contracts.js"
 
 export type {
-  DataGridAdvancedFilter,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterConditionType,
   DataGridAdvancedFilterExpression,
@@ -27,7 +26,6 @@ export type {
   DataGridColumnStyleValueSetFilter,
   DataGridColumnValueSetFilter,
   DataGridColumnPin,
-  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridGroupBySpec,
   DataGridGroupExpansionSnapshot,

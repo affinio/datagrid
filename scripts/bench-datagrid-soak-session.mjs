@@ -378,18 +378,15 @@ function buildFilterModel(iteration) {
   if (step === 1) {
     return {
       columnFilters: { filterBand: { kind: "valueSet", tokens: Array.from({ length: 30 }, (_, index) => toFilterToken(index)) } },
-      advancedFilters: {},
     }
   }
   if (step === 2) {
     return {
       columnFilters: { filterBand: { kind: "valueSet", tokens: [toFilterToken("0")] } },
-      advancedFilters: {},
     }
   }
   return {
     columnFilters: { filterBand: { kind: "valueSet", tokens: [toFilterToken("999")] } },
-    advancedFilters: {},
   }
 }
 

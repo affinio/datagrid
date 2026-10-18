@@ -33,7 +33,6 @@ function createAbortablePullRequest(): DataGridDataSourcePullRequest {
         name: { kind: "predicate", operator: "contains", value: "Account 0001" },
         value: { kind: "predicate", operator: "between", value: 1000, value2: 2000 },
       },
-      advancedFilters: {},
     },
     groupBy: null,
     groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
@@ -72,7 +71,6 @@ function createHistogramRequest(): DataGridDataSourceColumnHistogramRequest {
         region: { kind: "valueSet", tokens: ["string:emea"] },
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
-      advancedFilters: {},
     },
     groupBy: null,
     groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
@@ -883,7 +881,6 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
           region: { kind: "valueSet", tokens: ["string:emea"] },
           status: { kind: "valueSet", tokens: [] },
         },
-        advancedFilters: {},
       },
     })
 
@@ -917,7 +914,6 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       reason: "filter-change",
       filterModel: {
         columnFilters: {},
-        advancedFilters: {},
         quickFilter: {
           query: " platform ",
           columns: ["owner", "service", "owner", ""],
@@ -957,7 +953,6 @@ describe("createServerDemoDatasourceHttpAdapter", () => {
       ...createAbortablePullRequest(),
       filterModel: {
         columnFilters: {},
-        advancedFilters: {},
         advancedExpression: {
           kind: "group",
           operator: "and",

@@ -501,7 +501,6 @@ function runFilterSortScenario(createClientRowModel, rows, seed, options = {}) {
           owner: { kind: "valueSet", tokens: [`string:${owner}`] },
           region: { kind: "valueSet", tokens: [`string:${region}`] },
         },
-        advancedFilters: {},
       }
       if (typeof model.setSortAndFilterModel === "function") {
         model.setSortAndFilterModel({

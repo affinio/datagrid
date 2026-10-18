@@ -25,7 +25,6 @@ export type {
   DataGridColumnGroupDef,
 } from "./column"
 export type {
-  DataGridAdvancedFilter,
   DataGridAdvancedFilterCondition,
   DataGridAdvancedFilterConditionType,
   DataGridAdvancedFilterExpression,
@@ -36,7 +35,6 @@ export type {
   DataGridColumnPredicateFilter,
   DataGridColumnPredicateOperator,
   DataGridColumnValueSetFilter,
-  DataGridFilterClause,
   DataGridFilterSnapshot,
   DataGridQuickFilterMode,
   DataGridQuickFilterSnapshot,

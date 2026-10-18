@@ -199,7 +199,6 @@ describe("createServerDatasourceHttpClient", () => {
     request.reason = "filter-change"
     request.filterModel = {
       columnFilters: {},
-      advancedFilters: {},
       quickFilter: {
         query: " platform ",
         columns: [" owner ", "owner", ""],

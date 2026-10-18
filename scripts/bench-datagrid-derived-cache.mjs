@@ -195,7 +195,6 @@ function createFilter(owner, region) {
       owner: { kind: "valueSet", tokens: [`string:${ownerKey}`] },
       region: { kind: "valueSet", tokens: [`string:${regionKey}`] },
     },
-    advancedFilters: {},
   }
   FILTER_MODEL_CACHE.set(cacheKey, filterModel)
   return filterModel
