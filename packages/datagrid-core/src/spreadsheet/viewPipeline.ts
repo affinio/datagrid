@@ -8,13 +8,18 @@ import type {
 } from "../models/rowModel.js"
 import type {
   CreateDataGridSpreadsheetSheetModelOptions,
-  DataGridSpreadsheetColumnSnapshot,
   DataGridSpreadsheetSheetState,
   DataGridSpreadsheetViewSourceSheet,
 } from "./sheet.js"
 import type { DataGridSpreadsheetViewMaterializationDiagnosticCode } from "./viewPipelineMaterializationError.js"
 import { applySpreadsheetViewGroupStep } from "./viewPipelineGroupStage.js"
 import { applySpreadsheetViewPivotStep } from "./viewPipelinePivotStage.js"
+import {
+  createSpreadsheetViewErrorDataset,
+  EMPTY_SPREADSHEET_VIEW_DIAGNOSTICS,
+  spreadsheetViewDatasetToDerivedRuntime,
+  spreadsheetViewRuntimeToSheetState,
+} from "./viewPipelineOutput.js"
 import { applySpreadsheetViewJoinStep } from "./viewPipelineJoinStage.js"
 import { DataGridSpreadsheetViewMaterializationError } from "./viewPipelineMaterializationError.js"
 import { createSpreadsheetViewDatasetFromSheetModel } from "./viewPipelineDataset.js"
@@ -23,17 +28,8 @@ import {
   applySpreadsheetViewProjectStep,
   applySpreadsheetViewSortStep,
 } from "./viewPipelineBasicStages.js"
-import type {
-  SpreadsheetViewDataset,
-  SpreadsheetViewRowState,
-} from "./viewPipelineDataset.js"
-import {
-  normalizeSpreadsheetViewOutputValue as normalizeOutputValue,
-} from "./viewPipelineValueUtils.js"
-import {
-  createDataGridSpreadsheetDerivedSheetRuntime,
-  type DataGridSpreadsheetDerivedSheetRuntime,
-} from "./derivedSheetRuntime.js"
+import type { SpreadsheetViewRowState } from "./viewPipelineDataset.js"
+import type { DataGridSpreadsheetDerivedSheetRuntime } from "./derivedSheetRuntime.js"
 
 export type DataGridSpreadsheetWorkbookSheetKind = "data" | "view"
 
@@ -199,141 +195,12 @@ export interface DataGridSpreadsheetViewPivotStageState {
   leafRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<Record<string, unknown>>>
 }
 
-const EMPTY_DIAGNOSTICS = Object.freeze([]) as readonly DataGridSpreadsheetViewMaterializationDiagnostic[]
-
-function normalizeSheetModelOptions(
-  options: DataGridSpreadsheetWorkbookViewSheetModelOptions | null | undefined,
-): DataGridSpreadsheetWorkbookViewSheetModelOptions {
-  return {
-    sheetStyle: options?.sheetStyle ?? null,
-    functionRegistry: options?.functionRegistry,
-    referenceParserOptions: options?.referenceParserOptions,
-    runtimeErrorPolicy: options?.runtimeErrorPolicy ?? "error-value",
-    resolveContextValue: options?.resolveContextValue,
-  }
-}
-
-function createMaterializedCellRawInput(value: unknown): string {
-  if (typeof value !== "string") {
-    return ""
-  }
-  return value.trimStart().startsWith("=") ? normalizeOutputValue(value) : ""
-}
-
-function datasetToSheetState(
-  dataset: SpreadsheetViewDataset,
-  options: {
-    sheetId: string
-    sheetName: string
-    sheetModelOptions?: DataGridSpreadsheetWorkbookViewSheetModelOptions | null
-  },
-): DataGridSpreadsheetSheetState {
-  if (dataset.columns.length === 0) {
-    throw new Error("[DataGridSpreadsheetView] materialized view must expose at least one column.")
-  }
-  const normalizedSheetModelOptions = normalizeSheetModelOptions(options.sheetModelOptions)
-  return {
-    sheetId: options.sheetId,
-    sheetName: options.sheetName,
-    columns: Object.freeze(dataset.columns.map(column => ({
-      key: column.key,
-      title: column.title,
-      formulaAlias: column.formulaAlias,
-      style: column.style,
-    } satisfies DataGridSpreadsheetColumnSnapshot))),
-    rows: Object.freeze(dataset.rows.map(row => ({
-      id: row.id,
-      style: null,
-      cells: Object.freeze(dataset.columns.map(column => ({
-        columnKey: column.key,
-        rawInput: createMaterializedCellRawInput(row.values[column.key]),
-        resolvedValue: row.values[column.key],
-        style: null,
-      }))),
-    }))),
-    sheetStyle: normalizedSheetModelOptions.sheetStyle ?? null,
-    formulaTables: Object.freeze([]),
-    functionRegistry: normalizedSheetModelOptions.functionRegistry,
-    referenceParserOptions: normalizedSheetModelOptions.referenceParserOptions,
-    runtimeErrorPolicy: normalizedSheetModelOptions.runtimeErrorPolicy ?? "error-value",
-    resolveContextValue: normalizedSheetModelOptions.resolveContextValue,
-  }
-}
-
-function datasetToDerivedSheetRuntime(
-  dataset: SpreadsheetViewDataset,
-  diagnostics: readonly DataGridSpreadsheetViewMaterializationDiagnostic[] = EMPTY_DIAGNOSTICS,
-): DataGridSpreadsheetDerivedSheetRuntime {
-  return createDataGridSpreadsheetDerivedSheetRuntime({
-    columns: dataset.columns.map(column => ({
-      key: column.key,
-      title: column.title,
-      formulaAlias: column.formulaAlias,
-      style: column.style,
-    })),
-    rows: dataset.rows.map(row => ({
-      id: row.id,
-      values: dataset.columns.map(column => row.values[column.key]),
-    })),
-    diagnostics,
-  })
-}
-
-function createDataGridSpreadsheetViewErrorDataset(
-  options: {
-    sheetId: string
-    message: string
-  },
-): SpreadsheetViewDataset {
-  return {
-    columns: Object.freeze([
-      {
-        key: "status",
-        title: "Status",
-        formulaAlias: "Status",
-        style: Object.freeze({ fontWeight: 700 }),
-      },
-      {
-        key: "message",
-        title: "Message",
-        formulaAlias: "Message",
-        style: null,
-      },
-    ]),
-    rows: Object.freeze([
-      {
-        id: `${options.sheetId}-error`,
-        values: {
-          status: "Error",
-          message: options.message,
-        },
-      },
-    ]),
-  }
-}
-
 export function materializeDataGridSpreadsheetViewSheetResult(
   options: MaterializeDataGridSpreadsheetViewSheetOptions,
 ): MaterializeDataGridSpreadsheetViewSheetResult {
   const runtimeResult = materializeDataGridSpreadsheetViewRuntimeResult(options)
   return {
-    sheetState: datasetToSheetState({
-      columns: runtimeResult.derivedRuntime.columns,
-      rows: runtimeResult.derivedRuntime.rows.map(row => {
-        const values: Record<string, unknown> = {}
-        for (let columnIndex = 0; columnIndex < runtimeResult.derivedRuntime.columns.length; columnIndex += 1) {
-          const column = runtimeResult.derivedRuntime.columns[columnIndex]
-          if (!column) {
-            continue
-          }
-          values[column.key] = row.values[columnIndex]
-        }
-        return {
-          id: row.id,
-          values,
-        }
-      }),
-    }, options),
+    sheetState: spreadsheetViewRuntimeToSheetState(runtimeResult.derivedRuntime, options),
     derivedRuntime: runtimeResult.derivedRuntime,
     diagnostics: runtimeResult.diagnostics,
     joinStageStatesByKey: runtimeResult.joinStageStatesByKey,
@@ -353,12 +220,12 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
         relatedSheetId: null,
       },
     ])
-    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+    const errorDataset = createSpreadsheetViewErrorDataset({
       sheetId: options.sheetId,
       message: options.errorMessage,
     })
     return {
-      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      derivedRuntime: spreadsheetViewDatasetToDerivedRuntime(errorDataset, diagnostics),
       diagnostics,
       joinStageStatesByKey: new Map(),
       groupStageStatesByKey: new Map(),
@@ -373,12 +240,12 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
         relatedSheetId: options.sourceSheetId,
       },
     ])
-    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+    const errorDataset = createSpreadsheetViewErrorDataset({
       sheetId: options.sheetId,
       message: `Source sheet '${options.sourceSheetId}' is missing.`,
     })
     return {
-      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      derivedRuntime: spreadsheetViewDatasetToDerivedRuntime(errorDataset, diagnostics),
       diagnostics,
       joinStageStatesByKey: new Map(),
       groupStageStatesByKey: new Map(),
@@ -430,8 +297,8 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
       }
     }
     return {
-      derivedRuntime: datasetToDerivedSheetRuntime(dataset),
-      diagnostics: EMPTY_DIAGNOSTICS,
+      derivedRuntime: spreadsheetViewDatasetToDerivedRuntime(dataset),
+      diagnostics: EMPTY_SPREADSHEET_VIEW_DIAGNOSTICS,
       joinStageStatesByKey: nextJoinStageStatesByKey,
       groupStageStatesByKey: nextGroupStageStatesByKey,
       pivotStageStatesByKey: nextPivotStageStatesByKey,
@@ -450,12 +317,12 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
         relatedSheetId: null,
       }
     const diagnostics = Object.freeze([diagnostic])
-    const errorDataset = createDataGridSpreadsheetViewErrorDataset({
+    const errorDataset = createSpreadsheetViewErrorDataset({
       sheetId: options.sheetId,
       message,
     })
     return {
-      derivedRuntime: datasetToDerivedSheetRuntime(errorDataset, diagnostics),
+      derivedRuntime: spreadsheetViewDatasetToDerivedRuntime(errorDataset, diagnostics),
       diagnostics,
       joinStageStatesByKey: new Map(),
       groupStageStatesByKey: new Map(),
