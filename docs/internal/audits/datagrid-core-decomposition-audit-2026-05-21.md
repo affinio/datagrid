@@ -35,6 +35,8 @@ Progress (`2026-10-18`): moved optimistic patch preparation, cache overlay, tran
 
 Progress (`2026-10-18`): moved cache-store creation, retained-store activation, cross-store row retention, LRU/size-budget eviction, and retained-store cleanup into `models/server/dataSourceCacheStoreRuntime.ts`. The row-model facade keeps active-cache aliases for its cache operations. Full core tests (109 files, 854 tests), type-check/build, and datasource churn assertion passed on a clean rerun after one transient variance-only failure.
 
+Progress (`2026-10-18`): moved commit request construction and commit success/rejection/failure sequencing to `models/server/dataSourceOptimisticCommitRuntime.ts`. Cache rollback and projection refresh remain explicit row-model capabilities supplied to the runtime. Full core tests (109 files, 854 tests), type-check, and build passed; no hot-path benchmark scenario exercises commit completion.
+
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:

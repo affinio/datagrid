@@ -76,6 +76,7 @@ import {
   buildDataSourceRequestKey,
 } from "./server/dataSourceRequestIdentity.js"
 import { createDataSourceOptimisticPatchRuntime } from "./server/dataSourceOptimisticPatchRuntime.js"
+import { createDataSourceOptimisticCommitRuntime } from "./server/dataSourceOptimisticCommitRuntime.js"
 import {
   createDataSourceExternalUpdateRuntime,
   type DataGridExternalRowUpdate,
@@ -500,88 +501,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
       changed = true
     }
     return changed
-  }
-
-  async function processOptimisticCommit(transaction: OptimisticEditTransaction<T>): Promise<void> {
-    let optimisticMutationSettled = false
-    const settleOptimisticMutation = (
-      status: "committed" | "rejected" | "failed",
-      settledError?: Error,
-    ) => {
-      if (optimisticMutationSettled) {
-        return
-      }
-      optimisticMutationSettled = true
-      signals.emit("optimisticMutationSettled", {
-        transactionId: transaction.id,
-        rowIds: Array.from(transaction.updatesByRowId.keys()),
-        status,
-        ...(settledError ? { error: settledError } : {}),
-      })
-    }
-
-    try {
-      const result = await Promise.resolve(
-        getDataSourceCommitEdits!({
-          edits: Array.from(transaction.updatesByRowId.entries()).map(([rowId, data]) => ({
-            rowId,
-            data,
-            ...(transaction.previousByRowId.has(rowId) ? { previousData: transaction.previousByRowId.get(rowId) } : {}),
-            ...(transaction.revisionsByRowId.has(rowId) ? { revisions: transaction.revisionsByRowId.get(rowId) } : {}),
-          })),
-          ...(datasetVersion != null ? { revision: datasetVersion } : {}),
-        }),
-      )
-
-      if (disposed) {
-        return
-      }
-
-      const rejectedRowIds = new Set<DataGridRowId>((result.rejected ?? []).map(entry => entry.rowId))
-      const hasRejectedRows = rejectedRowIds.size > 0
-      if (hasRejectedRows) {
-        console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)
-        error = new Error(
-          (result.rejected ?? [])
-            .map(entry => entry.reason)
-            .find((reason): reason is string => typeof reason === "string" && reason.length > 0)
-          ?? "commitEdits returned rejected rows",
-        )
-        rollbackOptimisticTransaction(transaction, Array.from(rejectedRowIds))
-        settleOptimisticMutation("rejected", error)
-        bumpRevision()
-        emit()
-        throw error
-      }
-
-      optimisticMutationEngine.remove(transaction.id)
-      settleOptimisticMutation("committed")
-      error = null
-      const changedByMutationResult = applyMutationResult(result)
-      const needsProjectionRefresh = !result.invalidation
-        && readMutationRows(result).length === 0
-        && shouldRefreshAfterOptimisticCommit(transaction)
-      if (needsProjectionRefresh) {
-        await pullRange(toSourceRange(viewportRange), "refresh", "critical")
-      } else {
-        updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
-        if (changedByMutationResult) {
-          bumpRevision()
-        }
-        emit()
-      }
-    } catch (commitError) {
-      if (disposed) {
-        return
-      }
-      console.error("[DataGridDataSource] commitEdits failed.", commitError)
-      error = commitError instanceof Error ? commitError : new Error(String(commitError))
-      rollbackOptimisticTransaction(transaction)
-      settleOptimisticMutation("failed", error)
-      bumpRevision()
-      emit()
-      throw error
-    }
   }
 
   function pruneRowCacheByRowCount() {
@@ -1917,6 +1836,26 @@ export function createDataSourceBackedRowModel<T = unknown>(
 
   const getDataSourceColumnHistogram = dataSource.getColumnHistogram
   const getDataSourceCommitEdits = dataSource.commitEdits
+  const processOptimisticCommit = createDataSourceOptimisticCommitRuntime<T>({
+    commitEdits: request => getDataSourceCommitEdits!(request),
+    getDatasetVersion: () => datasetVersion,
+    isDisposed: () => disposed,
+    removeTransaction: transactionId => optimisticMutationEngine.remove(transactionId),
+    rollbackTransaction: rollbackOptimisticTransaction,
+    settleMutation: (transaction, status, error) => signals.emit("optimisticMutationSettled", {
+      transactionId: transaction.id,
+      rowIds: Array.from(transaction.updatesByRowId.keys()),
+      status,
+      ...(error ? { error } : {}),
+    }),
+    setError: nextError => { error = nextError },
+    applyMutationResult,
+    shouldRefreshAfterCommit: shouldRefreshAfterOptimisticCommit,
+    refreshVisibleRows: () => pullRange(toSourceRange(viewportRange), "refresh", "critical"),
+    updateCachedCoverage: () => updateCachedCoverageDiagnostics(toSourceRange(viewportRange)),
+    bumpRevision,
+    emit,
+  })
   const histogramMethods: Pick<DataSourceBackedRowModel<T>, "getColumnHistogram"> =
     typeof getDataSourceColumnHistogram === "function"
       ? {
