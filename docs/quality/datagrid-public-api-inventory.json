@@ -47,7 +47,7 @@
           "wildcard": false,
           "exportDeclarationCount": 1,
           "exportDeclarations": [
-            "export { createClientRowModel as createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateClientRowModelOptions as CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from \"./models/clientRowModel.js\" "
+            "export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from \"./models/clientRowModel.js\" "
           ]
         },
         {

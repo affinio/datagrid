@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import type { DataGridColumn, DataGridColumnInput, VisibleRow } from "../../types"
-import { createClientRowModel, createDataGridColumnModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 import type { ImperativeRowUpdatePayload } from "../dataGridViewportTypes"
 
@@ -96,7 +96,7 @@ function createPrng(seed: number): () => number {
 function createControllerHarness(options: { scrollHeight?: number } = {}) {
   const rows = createRows(50_000)
   const columns = createColumns(260)
-  const rowModel = createClientRowModel({ rows })
+  const rowModel = createAdvancedClientRowModel({ rows })
   const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
   const containerMetrics = createMeasuredElement({
     clientWidth: 1180,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel } from "../clientRowModel.js"
+import { createAdvancedClientRowModel } from "../clientRowModel.js"
 import type { DataGridRowNode } from "../rowModel.js"
 
 interface PivotRow {
@@ -26,7 +26,7 @@ function createRow(row: PivotRow, index: number): DataGridRowNode<PivotRow> {
 
 describe("createClientRowPivotDrilldownHostRuntime", () => {
   it("returns bounded drilldown rows from sparse pivot output for subtotal and grand total cells", () => {
-    const model = createClientRowModel<PivotRow>({
+    const model = createAdvancedClientRowModel<PivotRow>({
       sparsePivotOutput: true,
       rows: [
         createRow({ id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, 0),

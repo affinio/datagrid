@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridServerPivotRowId,
   createDataSourceBackedRowModel,
 } from "../index"
@@ -4011,7 +4011,7 @@ describe("createDataSourceBackedRowModel", () => {
       columnGrandTotal: true,
     }
 
-    const client = createClientRowModel({
+    const client = createAdvancedClientRowModel({
       rows: sourceRows,
       resolveRowId: row => row.id,
       initialPivotModel: pivotModel,
@@ -4025,7 +4025,7 @@ describe("createDataSourceBackedRowModel", () => {
 
     const dataSource: DataGridDataSource<Record<string, unknown>> = {
       async pull(request) {
-        const serverBuilder = createClientRowModel({
+        const serverBuilder = createAdvancedClientRowModel({
           rows: sourceRows,
           resolveRowId: row => row.id,
           initialPivotModel: request.pivot?.pivotModel ?? pivotModel,

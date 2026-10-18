@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, DataGridColumnInput, VisibleRow } from "../../types"
-import { createClientRowModel, createDataGridColumnModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
@@ -87,7 +87,7 @@ function createRows(count: number): VisibleRow[] {
 function createWideControllerHarness(columnCount: number) {
   const columns = createColumns(columnCount)
   const rows = createRows(100_000)
-  const rowModel = createClientRowModel({ rows })
+  const rowModel = createAdvancedClientRowModel({ rows })
   const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
   const totalScrollableWidth = columns.reduce((sum, column) => sum + (column.width ?? 0), 0)
   const containerMetrics = createMeasuredElement({
@@ -152,7 +152,7 @@ describe("horizontal virtualization stress contract", () => {
   it("keeps bounded windows for 100k rows and 500+ columns with pinned mix", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,
@@ -244,7 +244,7 @@ describe("horizontal virtualization stress contract", () => {
   it("stays deterministic after teleport-like scroll and viewport resize", () => {
     const columns = createColumns(520)
     const rows = createRows(100_000)
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(columns) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1440,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridColumn, DataGridColumnInput, VisibleRow } from "../../types"
-import { createClientRowModel, createDataGridColumnModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 
 interface MutableElementMetrics {
@@ -85,7 +85,7 @@ function createRows(count: number): VisibleRow[] {
 
 describe("viewport perf hot-path contracts", () => {
   it("reuses visibleRows arrays through bounded snapshot pool under scroll churn", () => {
-    const rowModel = createClientRowModel({ rows: createRows(10_000) })
+    const rowModel = createAdvancedClientRowModel({ rows: createRows(10_000) })
     const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(createColumns(24)) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1280,
@@ -138,7 +138,7 @@ describe("viewport perf hot-path contracts", () => {
   })
 
   it("does not emit redundant onRows callbacks for stable frame signature", () => {
-    const rowModel = createClientRowModel({ rows: createRows(1_200) })
+    const rowModel = createAdvancedClientRowModel({ rows: createRows(1_200) })
     const columnModel = createDataGridColumnModel({ columns: toColumnModelInputs(createColumns(12)) })
     const containerMetrics = createMeasuredElement({
       clientWidth: 1024,

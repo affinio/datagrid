@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridDependencyGraph,
 } from "../index"
 
@@ -46,7 +46,7 @@ describe("projection guardrails contract", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow("r1", 10), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow("r2", 20), rowId: "r2", originalIndex: 1, displayIndex: 1 },

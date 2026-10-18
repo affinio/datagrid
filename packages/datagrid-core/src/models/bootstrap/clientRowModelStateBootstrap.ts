@@ -17,7 +17,7 @@ import {
   type DataGridPivotColumn,
   type DataGridPivotSpec,
 } from "@affino/datagrid-pivot"
-import type { CreateClientRowModelOptions } from "../clientRowModel.js"
+import type { CreateAdvancedClientRowModelOptions } from "../clientRowModel.js"
 import { createDataGridProjectionPolicy, type DataGridProjectionPolicy } from "../projection/projectionPolicy.js"
 import { buildRowIdPositionIndex } from "../clientRowRuntimeUtils.js"
 import { createClientRowProjectionTransientStateRuntime, type ClientRowProjectionTransientStateRuntime } from "../state/clientRowProjectionTransientStateRuntime.js"
@@ -46,7 +46,7 @@ export interface ClientRowModelStateBootstrapResult<T> {
 }
 
 export interface CreateClientRowModelStateBootstrapOptions<T> {
-  options: CreateClientRowModelOptions<T>
+  options: CreateAdvancedClientRowModelOptions<T>
   normalizeFormulaColumnCacheMaxColumns: (value: number | null | undefined) => number
 }
 

@@ -270,11 +270,11 @@ export type {
   ClientRowModel,
   DataGridClientRowPatch,
   DataGridClientRowPatchOptions,
-  CreateClientRowModelOptions,
+  CreateAdvancedClientRowModelOptions,
   DataGridClientRowModelDerivedCacheDiagnostics,
   DataGridClientRowReorderInput,
 } from "./clientRowModel.js"
-export { createClientRowModel } from "./clientRowModel.js"
+export { createAdvancedClientRowModel } from "./clientRowModel.js"
 export {
   createClientRowDerivedCacheRuntime,
   type ClientRowDerivedCacheRuntime,

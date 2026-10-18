@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowModel, createDataGridColumnModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../../models"
 import type { DataGridColumnInput } from "../../models"
 import type { VisibleRow } from "../../types"
 import {
@@ -21,7 +21,7 @@ function buildRows(count: number, startIndex = 0): VisibleRow<BridgeRow>[] {
 
 describe("table viewport model bridge service", () => {
   it("keeps deterministic caches and invalidates only on model updates", () => {
-    const rowModel = createClientRowModel<BridgeRow>({ rows: buildRows(8) })
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({ rows: buildRows(8) })
     const rowCalls: number[] = []
     const originalGetRow = rowModel.getRow
     rowModel.getRow = index => {
@@ -36,7 +36,7 @@ describe("table viewport model bridge service", () => {
       ],
     })
     const onInvalidate = vi.fn()
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -83,11 +83,11 @@ describe("table viewport model bridge service", () => {
   })
 
   it("emits axis-scoped invalidation reasons for row and column updates", () => {
-    const rowModel = createClientRowModel<BridgeRow>({ rows: buildRows(3) })
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({ rows: buildRows(3) })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
@@ -127,7 +127,7 @@ describe("table viewport model bridge service", () => {
   })
 
   it("keeps treeData projection updates scoped to row-axis invalidations", () => {
-    const rowModel = createClientRowModel<TreeBridgeRow>({
+    const rowModel = createAdvancedClientRowModel<TreeBridgeRow>({
       rows: [
         { row: { id: 1, path: ["infra"], value: "keep" }, rowId: 1, originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, path: ["infra"], value: "drop" }, rowId: 2, originalIndex: 1, displayIndex: 1 },
@@ -141,7 +141,7 @@ describe("table viewport model bridge service", () => {
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
-    const fallbackRowModel = createClientRowModel<TreeBridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<TreeBridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService<TreeBridgeRow>({
@@ -172,11 +172,11 @@ describe("table viewport model bridge service", () => {
   })
 
   it("does not emit bridge invalidation for viewport-only row model updates", () => {
-    const rowModel = createClientRowModel<BridgeRow>({ rows: buildRows(24) })
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({ rows: buildRows(24) })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
@@ -204,13 +204,13 @@ describe("table viewport model bridge service", () => {
   })
 
   it("keeps row invalidation when row content changes with same rowCount", () => {
-    const rowModel = createClientRowModel<BridgeRow>({
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({
       rows: buildRows(6),
     })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
@@ -243,13 +243,13 @@ describe("table viewport model bridge service", () => {
   })
 
   it("emits normalized row-range payload for row-axis invalidation", () => {
-    const rowModel = createClientRowModel<BridgeRow>({
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({
       rows: buildRows(12),
     })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 160 } }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const invalidations: DataGridViewportModelBridgeInvalidation[] = []
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
@@ -292,7 +292,7 @@ describe("table viewport model bridge service", () => {
         visible: true,
       },
     }))
-    const rowModel = createClientRowModel<BridgeRow>({ rows })
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({ rows })
     const rowCalls: number[] = []
     const originalGetRow = rowModel.getRow
     rowModel.getRow = index => {
@@ -300,7 +300,7 @@ describe("table viewport model bridge service", () => {
       return originalGetRow(index)
     }
     const columnModel = createDataGridColumnModel({ columns })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -335,7 +335,7 @@ describe("table viewport model bridge service", () => {
 
   it("keeps row entry cache bounded with lru eviction on long scroll access", () => {
     const rows = buildRows(2_000)
-    const rowModel = createClientRowModel<BridgeRow>({ rows })
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({ rows })
     const rowCalls: number[] = []
     const originalGetRow = rowModel.getRow
     rowModel.getRow = index => {
@@ -344,7 +344,7 @@ describe("table viewport model bridge service", () => {
     }
 
     const columnModel = createDataGridColumnModel()
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -376,7 +376,7 @@ describe("table viewport model bridge service", () => {
   })
 
   it("maps canonical row nodes to viewport visible-row shape at the boundary", () => {
-    const rowModel = createClientRowModel<BridgeRow>({
+    const rowModel = createAdvancedClientRowModel<BridgeRow>({
       rows: [
         {
           kind: "leaf",
@@ -402,7 +402,7 @@ describe("table viewport model bridge service", () => {
         },
       ],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const columnModel = createDataGridColumnModel()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
@@ -495,7 +495,7 @@ describe("table viewport model bridge service", () => {
       dispose: () => {},
     }
     const columnModel = createDataGridColumnModel()
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -519,7 +519,7 @@ describe("table viewport model bridge service", () => {
   })
 
   it("maps headless column defs to datagrid columns at viewport boundary", () => {
-    const rowModel = createClientRowModel<BridgeRow>()
+    const rowModel = createAdvancedClientRowModel<BridgeRow>()
     const columnModel = createDataGridColumnModel({
       columns: [{
         key: "id",
@@ -527,7 +527,7 @@ describe("table viewport model bridge service", () => {
         meta: { isSystem: true, stickyLeft: true },
       }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -554,7 +554,7 @@ describe("table viewport model bridge service", () => {
   })
 
   it("preserves custom column fields at the bridge boundary", () => {
-    const rowModel = createClientRowModel<BridgeRow>()
+    const rowModel = createAdvancedClientRowModel<BridgeRow>()
     const customColumn = {
       key: "custom",
       initialState: {
@@ -567,7 +567,7 @@ describe("table viewport model bridge service", () => {
     const columnModel = createDataGridColumnModel({
       columns: [customColumn],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,
@@ -589,7 +589,7 @@ describe("table viewport model bridge service", () => {
   })
 
   it("flattens nested semantic column contracts into viewport columns", () => {
-    const rowModel = createClientRowModel<BridgeRow>()
+    const rowModel = createAdvancedClientRowModel<BridgeRow>()
     const columnModel = createDataGridColumnModel({
       columns: [{
         key: "amount",
@@ -613,7 +613,7 @@ describe("table viewport model bridge service", () => {
         },
       }],
     })
-    const fallbackRowModel = createClientRowModel<BridgeRow>()
+    const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
     const fallbackColumnModel = createDataGridColumnModel()
     const bridge = createDataGridViewportModelBridgeService<BridgeRow>({
       initialRowModel: rowModel,

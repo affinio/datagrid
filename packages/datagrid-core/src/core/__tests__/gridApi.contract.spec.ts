@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import {
   createDataGridColumnModel,
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataSourceBackedRowModel,
   serializeColumnValueToToken,
 } from "../../models"
@@ -32,7 +32,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes namespaced API only (no legacy unscoped methods)", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -72,7 +72,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("routes row/column/filter/sort/refresh through core services", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, name: "beta" }, rowId: 2, originalIndex: 1 },
@@ -204,7 +204,7 @@ describe("data grid api facade contracts", () => {
     const rowA = { id: "a", status: "keep", score: 2 }
     const rowB = { id: "b", status: "drop", score: 5 }
     const rowC = { id: "c", status: "keep", score: 1 }
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: rowA, rowId: "a", originalIndex: 0 },
         { row: rowB, rowId: "b", originalIndex: 1 },
@@ -239,7 +239,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("treats viewport position as an optional view capability", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -270,7 +270,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes style histograms through the columns namespace", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, team: "A", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: 2, originalIndex: 1 },
@@ -314,7 +314,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes the effective row height through the view namespace", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -339,7 +339,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("routes explicit group expansion APIs through row model service", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "alpha" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, team: "beta" }, rowId: 2, originalIndex: 1 },
@@ -382,7 +382,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("routes pivot model through row model service", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "alpha", status: "open" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, team: "alpha", status: "done" }, rowId: 2, originalIndex: 1 },
@@ -418,7 +418,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exports and imports pivot layout snapshot with row/column state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         {
           row: { id: 1, region: "AMER", team: "core", owner: "NOC", year: "2024", revenue: 1000 },
@@ -524,7 +524,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("falls back to sequential setFilterModel/setSortModel when row model lacks batched sort+filter capability", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", score: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, owner: "ops", score: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -561,7 +561,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("returns empty histogram map when row model does not expose histogram capability", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
     })
     const { getColumnHistogram: _omitHistogram, ...rowModelWithoutHistogram } = clientRowModel
@@ -581,7 +581,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes rows.patch/rows.applyEdits/view.reapply with Excel-like defaults and optional auto-reapply", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -626,7 +626,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("emits one exact rows:edited delta after applyEdits, including filtered rows, and omits no-ops", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "a", status: "visible", count: 1 }, rowId: "a", originalIndex: 0 },
         { row: { id: "b", status: "hidden", count: 2 }, rowId: "b", originalIndex: 1 },
@@ -668,7 +668,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("keeps direct row mutations outside generic transaction history", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -709,7 +709,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes computed field APIs for client row models", () => {
-    const rowModel = createClientRowModel<{
+    const rowModel = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -794,7 +794,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports missing computed field capability for row models without computed runtime", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
     })
     const {
@@ -830,7 +830,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports missing formula field capability for row models without formula runtime", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
     })
     const {
@@ -878,7 +878,7 @@ describe("data grid api facade contracts", () => {
 
   it("exposes contextual formula recompute through rows api", () => {
     let rate = 2
-    const rowModel = createClientRowModel<{
+    const rowModel = createAdvancedClientRowModel<{
       id: number
       qty: number
       total?: number
@@ -922,7 +922,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports missing patch capability for non-client row models and fails loudly", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 }],
     })
     const { patchRows: _omitPatch, ...rowModelWithoutPatch } = clientRowModel
@@ -956,7 +956,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes rows data-mutation methods for models with setRows capability", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r0", score: 0 }, rowId: "r0", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1005,7 +1005,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("looks up and removes client rows by stable row ID", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 },
         { row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 },
@@ -1038,7 +1038,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("keeps insertDataAt source-indexed when projected rows are sorted", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 },
         { row: { id: "r2", score: 2 }, rowId: "r2", originalIndex: 1 },
@@ -1064,7 +1064,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports missing data-mutation capability when row model does not expose setRows", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
     })
     const {
@@ -1104,7 +1104,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("inserts columns through the columns namespace without losing existing layout state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1136,7 +1136,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("rejects duplicate rowId across rows mutation entrypoints", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1167,7 +1167,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes compute-mode control and diagnostics through dedicated namespaces", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1212,7 +1212,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes formula explain diagnostics snapshot", () => {
-    const rowModel = createClientRowModel<{
+    const rowModel = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1327,7 +1327,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("surfaces meta-domain formula dependencies in explain snapshots", () => {
-    const rowModel = createClientRowModel<{
+    const rowModel = createAdvancedClientRowModel<{
       id: number
       label?: string
     }>({
@@ -1364,7 +1364,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("surfaces expanded reference syntax in explain snapshots", () => {
-    const rowModel = createClientRowModel<{
+    const rowModel = createAdvancedClientRowModel<{
       id: number
       user: { orders: Array<{ price: number }>; metrics: { "tax.rate": number } }
       total?: number
@@ -1422,7 +1422,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports compute namespace as unsupported when row model lacks compute capability", () => {
-    const clientRowModel = createClientRowModel({
+    const clientRowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
     })
     const {
@@ -1552,7 +1552,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("reports data namespace as unsupported when row model lacks backpressure controls", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1706,7 +1706,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes meta schema/capabilities/runtime info without requiring direct model access", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", owner: "noc" }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1754,7 +1754,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("applies projection policy mode and blocks data mutation in immutable mode", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", score: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", score: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -1789,7 +1789,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("supports rows.batch and lifecycle exclusivity guards with typed error events", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1851,7 +1851,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("coalesces client row recomputation in rows.batchMutations", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const api = createDataGridApi({
@@ -1874,7 +1874,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("registers plugins from constructor/options and dispatches facade events", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -1938,7 +1938,7 @@ describe("data grid api facade contracts", () => {
       rowId: `r${index}`,
       originalIndex: index,
     }))
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
       columns: [
         { key: "tested_at", label: "Tested At" },
@@ -1979,7 +1979,7 @@ describe("data grid api facade contracts", () => {
       rowId: `r${index}`,
       originalIndex: index,
     }))
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "tested_at", label: "Tested At" }],
     })
@@ -2005,7 +2005,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("includes pinned left/right metadata in viewport refresh batches", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { rowId: "r1", tested_at: "2026-02-20", control: "alpha" }, rowId: "r1", originalIndex: 0 },
       ],
@@ -2057,7 +2057,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes selection capability checks and fails loudly for missing capability methods", () => {
-    const rowModel = createClientRowModel()
+    const rowModel = createAdvancedClientRowModel()
     const columnModel = createDataGridColumnModel()
 
     const core = createDataGridCore({
@@ -2076,7 +2076,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("delegates selection APIs when selection capability is implemented", () => {
-    const rowModel = createClientRowModel()
+    const rowModel = createAdvancedClientRowModel()
     const columnModel = createDataGridColumnModel()
     let selectionSnapshot: DataGridSelectionSnapshot | null = null
     let clearCount = 0
@@ -2121,7 +2121,7 @@ describe("data grid api facade contracts", () => {
     const rowA = { id: "a", score: 1 }
     const rowB = { id: "b", score: 2 }
     const rowC = { id: "c", score: 3 }
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: rowA, rowId: "a", originalIndex: 0 },
         { row: rowB, rowId: "b", originalIndex: 1 },
@@ -2209,7 +2209,7 @@ describe("data grid api facade contracts", () => {
     const rowA = { id: "a", score: 1 }
     const rowB = { id: "b", score: 2 }
     const rowC = { id: "c", score: 3 }
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: rowA, rowId: "a", originalIndex: 0 },
         { row: rowB, rowId: "b", originalIndex: 1 },
@@ -2265,7 +2265,7 @@ describe("data grid api facade contracts", () => {
     const rowB = { id: "b", score: 2 }
     const rowC = { id: "c", score: 3 }
     const rowD = { id: "d", score: 4 }
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: rowA, rowId: "a", originalIndex: 0 },
         { row: rowB, rowId: "b", originalIndex: 1 },
@@ -2348,7 +2348,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("computes selection summary through api facade when selection capability is present", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", latencyMs: 120 }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops", latencyMs: 80 }, rowId: 2, originalIndex: 1 },
@@ -2492,7 +2492,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("roundtrips row/column/filter/pagination/group/selection snapshots deterministically", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", status: "open" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops", status: "open" }, rowId: 2, originalIndex: 1 },
@@ -2624,7 +2624,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exposes transaction capability checks and fails loudly for missing methods", async () => {
-    const rowModel = createClientRowModel()
+    const rowModel = createAdvancedClientRowModel()
     const columnModel = createDataGridColumnModel()
 
     const core = createDataGridCore({
@@ -2643,7 +2643,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("emits explicit state import begin/end boundaries around state.set", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2679,7 +2679,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("documents sequential state import when a later column restore fails", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2714,7 +2714,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("rolls back local state when atomic state import fails", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2748,7 +2748,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("queues reentrant facade events in deterministic FIFO order", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2799,7 +2799,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("supports state migration hook with strict and non-strict behavior", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2823,7 +2823,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("isolates plugin event-handler failures from core event dispatch", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2860,7 +2860,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("isolates plugin lifecycle failures from core plugin registry state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -2902,7 +2902,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("delegates transaction APIs when transaction capability is implemented", async () => {
-    const rowModel = createClientRowModel()
+    const rowModel = createAdvancedClientRowModel()
     const columnModel = createDataGridColumnModel()
     const values: Record<string, number> = {}
     const transactionService = createDataGridTransactionService({
@@ -2954,7 +2954,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("supports unified state get/set roundtrip for rows/columns/selection", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", status: "open" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops", status: "open" }, rowId: 2, originalIndex: 1 },
@@ -3054,7 +3054,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("preserves projected column zone order through unified state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -3094,7 +3094,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("exports and restores viewport position through unified state opt-in", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops" }, rowId: 2, originalIndex: 1 },
@@ -3144,7 +3144,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("preserves selection anchor while restoring viewport position from unified state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops" }, rowId: 2, originalIndex: 1 },
@@ -3221,7 +3221,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("fails strict viewport position state restore when capability is missing", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -3249,7 +3249,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("prevalidates unsupported strict state sections before applying rows", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({
@@ -3285,7 +3285,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("roundtrips serializable column style filters through unified state", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0 },
         { row: { id: 2, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1 },
@@ -3342,7 +3342,7 @@ describe("data grid api facade contracts", () => {
   })
 
   it("emits facade events for rows/columns/projection/selection/transaction/state", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", score: 100 }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops", score: 200 }, rowId: 2, originalIndex: 1 },

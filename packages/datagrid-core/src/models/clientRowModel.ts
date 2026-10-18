@@ -148,7 +148,7 @@ import {
   normalizeFormulaColumnCacheMaxColumns,
 } from "./clientRowModelRuntimeConfig.js"
 
-export interface CreateClientRowModelOptions<T> {
+export interface CreateAdvancedClientRowModelOptions<T> {
   rows?: readonly DataGridRowNodeInput<T>[]
   resolveRowId?: DataGridRowIdResolver<T>
   readFilterCell?: (rowNode: DataGridRowNode<T>, columnKey: string) => unknown
@@ -314,8 +314,8 @@ export type {
 } from "./snapshot/clientRowCalculationSnapshotRuntime.js"
 export type { DataGridClientRowModelDerivedCacheDiagnostics } from "./projection/clientRowDerivedCacheRuntime.js"
 
-export function createClientRowModel<T>(
-  options: CreateClientRowModelOptions<T> = {},
+export function createAdvancedClientRowModel<T>(
+  options: CreateAdvancedClientRowModelOptions<T> = {},
 ): ClientRowModel<T> {
   const stateBootstrap = createClientRowModelStateBootstrap<T>({
     options,

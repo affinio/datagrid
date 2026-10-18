@@ -1,8 +1,8 @@
 /** Full-featured client row model entrypoint for tree, grouping, pivot, and formula workloads. */
 export {
-  createClientRowModel as createAdvancedClientRowModel,
+  createAdvancedClientRowModel,
   type ClientRowModel as AdvancedClientRowModel,
-  type CreateClientRowModelOptions as CreateAdvancedClientRowModelOptions,
+  type CreateAdvancedClientRowModelOptions,
   type DataGridClientRowPatch,
   type DataGridClientRowPatchOptions,
   type DataGridClientRowReorderInput,

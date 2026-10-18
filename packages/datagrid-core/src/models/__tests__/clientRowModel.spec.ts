@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createChunkedSequence } from "../tree/treeProjectionChunkedSequence"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridDependencyGraph,
   createDataGridProjectionPolicy,
   normalizeViewportRange,
@@ -70,14 +70,14 @@ describe("tree projection chunked sequence contract", () => {
   })
 })
 
-describe("createClientRowModel", () => {
+describe("createAdvancedClientRowModel", () => {
   it("normalizes viewport range to row count", () => {
     expect(normalizeViewportRange({ start: 10, end: 100 }, 3)).toEqual({ start: 2, end: 2 })
     expect(normalizeViewportRange({ start: -10, end: -1 }, 0)).toEqual({ start: 0, end: 0 })
   })
 
   it("updates viewport range and notifies subscribers", () => {
-    const model = createClientRowModel({ rows: buildRows(20) })
+    const model = createAdvancedClientRowModel({ rows: buildRows(20) })
     let notifications = 0
     const unsubscribe = model.subscribe(snapshot => {
       notifications += 1
@@ -96,7 +96,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports pagination state roundtrip and deterministic page projection", () => {
-    const model = createClientRowModel({ rows: buildRows(23) })
+    const model = createAdvancedClientRowModel({ rows: buildRows(23) })
 
     model.setPagination({ pageSize: 5, currentPage: 2 })
     const snapshot = model.getSnapshot()
@@ -130,7 +130,7 @@ describe("createClientRowModel", () => {
   })
 
   it("reorders client source rows deterministically and updates projection snapshot", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: buildRows(6),
     })
 
@@ -147,7 +147,7 @@ describe("createClientRowModel", () => {
 
   it("reorders a large moved block without spreading it into call arguments", () => {
     const rowCount = 150_001
-    const model = createClientRowModel({ rows: buildRows(rowCount) })
+    const model = createAdvancedClientRowModel({ rows: buildRows(rowCount) })
 
     expect(model.reorderRows({ fromIndex: 1, toIndex: rowCount, count: rowCount - 1 })).toBe(true)
     expect(model.getRow(0)?.row.id).toBe(0)
@@ -157,7 +157,7 @@ describe("createClientRowModel", () => {
   })
 
   it("registers initial computed fields and applies incremental recompute on patches", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -209,7 +209,7 @@ describe("createClientRowModel", () => {
     let taxCalls = 0
     let grossCalls = 0
 
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       taxRate: number
@@ -312,7 +312,7 @@ describe("createClientRowModel", () => {
   })
 
   it("registers formula fields and reuses incremental computed pipeline", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -360,7 +360,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports runtime formula function registry with rollback on invalid removal", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       doubled?: number
@@ -397,7 +397,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports expanded reference syntax for nested and quoted field paths", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       user: { orders: Array<{ price: number }>; metrics: { "tax.rate": number } }
       "gross margin"?: number
@@ -449,7 +449,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports array and lookup formula helpers in row-model runtime", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       code: string
       price: number
@@ -487,7 +487,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports row-aware relative and window formula references", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       amount: number
       price: number
@@ -557,7 +557,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports smartsheet-style parser options in client row-model formulas", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       amount: number
       mirrored?: number
@@ -615,7 +615,7 @@ describe("createClientRowModel", () => {
 
   it("recomputes contextual formula functions for targeted rows", () => {
     let rate = 2
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       qty: number
       total?: number
@@ -688,7 +688,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports cross-table dashboard formulas via TABLE()", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       openRevenue?: number
     }>({
@@ -740,7 +740,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps formula table invalidation tied to explicit replacement or patch", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       openRevenue?: number
     }>({
@@ -779,7 +779,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports formula chains that reference computed target fields", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -818,7 +818,7 @@ describe("createClientRowModel", () => {
   })
 
   it("exposes explicit formula graph and row-level recompute causes", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -914,7 +914,7 @@ describe("createClientRowModel", () => {
   })
 
   it("surfaces columnar-jit runtime mode for branchy formulas when JIT is available", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -953,7 +953,7 @@ describe("createClientRowModel", () => {
 
   it("keeps base rows immutable while exposing computed snapshot overlays", () => {
     const baseRow = { id: 1, price: 10, qty: 2 }
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -991,7 +991,7 @@ describe("createClientRowModel", () => {
 
   it("isolates ingested rows from later external mutation by default", () => {
     const baseRow = { id: 1, price: 10, qty: 2 }
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1015,7 +1015,7 @@ describe("createClientRowModel", () => {
 
   it("can reuse ingested row objects when input isolation is disabled", () => {
     const baseRow = { id: 1, price: 10, qty: 2 }
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1041,7 +1041,7 @@ describe("createClientRowModel", () => {
   })
 
   it("exports and restores calculation snapshots for debug-style time travel", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1079,7 +1079,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports calculation snapshot undo and redo history", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1126,7 +1126,7 @@ describe("createClientRowModel", () => {
   })
 
   it("inspects snapshot binding and reconciles overlays after row reordering", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1191,7 +1191,7 @@ describe("createClientRowModel", () => {
   })
 
   it("evaluates formula identifiers with nested object and array paths", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       qty: number
       order: {
@@ -1245,7 +1245,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes formula values after setRows replaces source dataset", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1285,7 +1285,7 @@ describe("createClientRowModel", () => {
     const previousFlag = globalRecord[verifyFlag]
     globalRecord[verifyFlag] = true
     try {
-      const model = createClientRowModel<{
+      const model = createAdvancedClientRowModel<{
         id: number
         price: number
         qty: number
@@ -1327,7 +1327,7 @@ describe("createClientRowModel", () => {
       const previousFlag = globalRecord[verifyFlag]
       globalRecord[verifyFlag] = verify
       try {
-        const model = createClientRowModel<{
+        const model = createAdvancedClientRowModel<{
           id: number
           price: number
           qty: number
@@ -1394,7 +1394,7 @@ describe("createClientRowModel", () => {
 
   it("detects cycles in initial formula fields referenced by target field", () => {
     expect(() => {
-      createClientRowModel<{
+      createAdvancedClientRowModel<{
         id: number
         left?: number
         right?: number
@@ -1416,7 +1416,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports iterative formula cycles when enabled", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       seed: number
       left?: number
@@ -1501,7 +1501,7 @@ describe("createClientRowModel", () => {
   })
 
   it("reports non-converged iterative formula cycles when max iterations are exhausted", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       left?: number
       right?: number
@@ -1556,7 +1556,7 @@ describe("createClientRowModel", () => {
   })
 
   it("exposes formula diagnostics in projection snapshot", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -1600,7 +1600,7 @@ describe("createClientRowModel", () => {
   })
 
   it("captures formula runtime errors in projection diagnostics and recovers after patch", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       qty: number
@@ -1655,7 +1655,7 @@ describe("createClientRowModel", () => {
   })
 
   it("reports compile cache hits for repeated formulas", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       left?: number
@@ -1695,7 +1695,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports first-class meta dependencies in formula fields", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       label?: string
       ordinal?: number
@@ -1763,7 +1763,7 @@ describe("createClientRowModel", () => {
   })
 
   it("marks sort stale when patched fields affect computed sort keys", () => {
-    const model = createClientRowModel<{
+    const model = createAdvancedClientRowModel<{
       id: number
       price: number
       quantity: number
@@ -1820,7 +1820,7 @@ describe("createClientRowModel", () => {
 
   it("returns rows in canonical range", () => {
     const rows = buildRows(10)
-    const model = createClientRowModel({ rows })
+    const model = createAdvancedClientRowModel({ rows })
     const node = model.getRow(3)
     expect(node?.row.id).toBe(3)
     expect(node?.rowKey).toBe(3)
@@ -1861,7 +1861,7 @@ describe("createClientRowModel", () => {
         state: { selected: false, group: false, pinned: "bottom", expanded: false },
       },
     ]
-    const model = createClientRowModel({ rows })
+    const model = createAdvancedClientRowModel({ rows })
 
     const first = model.getRow(0)
     const second = model.getRow(1)
@@ -1877,7 +1877,7 @@ describe("createClientRowModel", () => {
   })
 
   it("assigns deterministic source-index identity for plain rows without ids", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [{ label: "missing-id" }],
     })
 
@@ -1889,7 +1889,7 @@ describe("createClientRowModel", () => {
   })
 
   it("resolves row identity through explicit resolver", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [{ id: 42 }],
       resolveRowId: row => row.id,
     })
@@ -1901,7 +1901,7 @@ describe("createClientRowModel", () => {
   })
 
   it("returns snapshot copies that do not mutate internal state", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: buildRows(5),
     })
 
@@ -1939,7 +1939,7 @@ describe("createClientRowModel", () => {
   })
 
   it("normalizes and toggles group by state through row model API", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: buildRows(3),
     })
 
@@ -1965,7 +1965,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports deterministic expansion snapshot roundtrip and explicit expand/collapse APIs", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: buildRows(6),
     })
 
@@ -1997,7 +1997,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies deterministic projection order: filter -> sort -> group -> flatten", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 3, team: "A", score: 30 }, rowId: "r3", originalIndex: 0, displayIndex: 0 },
         { row: { id: 1, team: "B", score: 10 }, rowId: "r1", originalIndex: 1, displayIndex: 1 },
@@ -2035,7 +2035,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies quick filter inside the filter stage before sort and pagination", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, service: "api", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, service: "worker", score: 40 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2063,7 +2063,7 @@ describe("createClientRowModel", () => {
   })
 
   it("feeds quick filter membership into grouped aggregation", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", status: "enabled", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", status: "disabled", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2088,7 +2088,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses quick filter membership for parent treeData projection", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
@@ -2122,7 +2122,7 @@ describe("createClientRowModel", () => {
       { row: { id: "r3", owner: "noc", score: 10 }, rowId: "r3", originalIndex: 2, displayIndex: 2 },
     ]
 
-    const batched = createClientRowModel({ rows })
+    const batched = createAdvancedClientRowModel({ rows })
     const beforeBatched = batched.getSnapshot().projection?.recomputeVersion ?? 0
     batched.setSortAndFilterModel({
       filterModel: {
@@ -2135,7 +2135,7 @@ describe("createClientRowModel", () => {
     expect(afterBatched - beforeBatched).toBe(1)
     expect(batched.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3"])
 
-    const sequential = createClientRowModel({ rows })
+    const sequential = createAdvancedClientRowModel({ rows })
     const beforeSequential = sequential.getSnapshot().projection?.recomputeVersion ?? 0
     sequential.setFilterModel({
       columnFilters: { owner: { kind: "valueSet", tokens: ["string:noc"] } },
@@ -2150,7 +2150,7 @@ describe("createClientRowModel", () => {
   })
 
   it("builds per-column histogram from filtered projection and can ignore self filter", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "Alice", team: "A" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, owner: "Bob", team: "A" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2186,7 +2186,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses readFilterCell for value-set filters and histograms", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, statusCode: "a" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, statusCode: "b" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2217,7 +2217,7 @@ describe("createClientRowModel", () => {
   })
 
   it("builds style histograms from filtered projection and can ignore the current column style filter", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         {
           row: { id: 1, team: "A", styles: { status: { backgroundColor: "#ff0000" } } },
@@ -2275,7 +2275,7 @@ describe("createClientRowModel", () => {
   })
 
   it("filters rows by style metadata through columnStyleFilters", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, status: "active", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, status: "blocked", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2306,7 +2306,7 @@ describe("createClientRowModel", () => {
   })
 
   it("composes style filters with value filters on the same column", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, statusCode: "a", styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, statusCode: "a", styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2357,7 +2357,7 @@ describe("createClientRowModel", () => {
       advancedFilters: {},
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2382,7 +2382,7 @@ describe("createClientRowModel", () => {
   })
 
   it("computes group aggregates when aggregation model is configured", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2413,7 +2413,7 @@ describe("createClientRowModel", () => {
   })
 
   it("patches grouped identity without aggregate recompute when stage stays in refresh-only pass", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10, label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20, label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2440,7 +2440,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes grouped aggregates when a sorted patch changes the aggregate key", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2462,7 +2462,7 @@ describe("createClientRowModel", () => {
   })
 
   it("updates aggregates reactively when aggregation model changes at runtime", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2487,7 +2487,7 @@ describe("createClientRowModel", () => {
   })
 
   it("sorts client rows with natural and custom comparator policies", () => {
-    const naturalModel = createClientRowModel({
+    const naturalModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, label: "item2" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, label: "item10" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2500,7 +2500,7 @@ describe("createClientRowModel", () => {
       .toEqual(["item1", "item2", "item10"])
     naturalModel.dispose()
 
-    const customModel = createClientRowModel({
+    const customModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, priority: "low" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, priority: "high" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2525,7 +2525,7 @@ describe("createClientRowModel", () => {
   })
 
   it("sorts single numeric-like client rows with nulls after finite values", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, amount: "10" }, rowId: "20", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, amount: 2 }, rowId: "10", originalIndex: 1, displayIndex: 1 },
@@ -2542,7 +2542,7 @@ describe("createClientRowModel", () => {
   })
 
   it("preserves tie ordering when reversing a single numeric sort direction", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, amount: 2 }, rowId: "r20", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, amount: 1 }, rowId: "r10", originalIndex: 1, displayIndex: 1 },
@@ -2571,7 +2571,7 @@ describe("createClientRowModel", () => {
       max: number | null
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 25 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2606,7 +2606,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects pivot rows with deterministic runtime pivot columns", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2658,7 +2658,7 @@ describe("createClientRowModel", () => {
       max: number | null
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2024, score: 30 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2698,7 +2698,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects pivot rows with non-incremental aggregation ops via fallback path", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2024, revenue: 15 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2730,7 +2730,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports nested pivot field paths for rows/columns/values", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         {
           row: {
@@ -2784,7 +2784,7 @@ describe("createClientRowModel", () => {
     ]
 
     const buildProjection = (rows: typeof rowNodes) => {
-      const model = createClientRowModel({
+      const model = createAdvancedClientRowModel({
         rows,
         initialPivotModel: {
           rows: ["team"],
@@ -2814,7 +2814,7 @@ describe("createClientRowModel", () => {
   })
 
   it("normalizes null/undefined pivot axis values into a single blank column bucket", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: null, revenue: 1 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", revenue: 2 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2841,7 +2841,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects pivot row subtotals and grand total deterministically", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2902,7 +2902,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects pivot column subtotals for multi-level column axis", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2943,7 +2943,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects pivot column grand total when enabled", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -2976,7 +2976,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies pivot column order policy for subtotal and grand total placement", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, quarter: "Q1", revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2024, quarter: "Q2", revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3011,7 +3011,7 @@ describe("createClientRowModel", () => {
   })
 
   it("returns pivot cell drilldown rows for subtotal and grand total cells", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3067,7 +3067,7 @@ describe("createClientRowModel", () => {
   })
 
   it("sorts pivot detail rows by generated pivot column and keeps grand total pinned last", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "B", year: 2024, revenue: 35 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3100,7 +3100,7 @@ describe("createClientRowModel", () => {
   })
 
   it("sorts pivot top-level group blocks by generated column while preserving child block order", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 5 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: "AMER", team: "payments", year: 2024, revenue: 15 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3154,7 +3154,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports pivot row-axis expand/collapse for multi-level rows", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: "AMER", team: "core", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: "AMER", team: "payments", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3209,7 +3209,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps pivot projection frozen when recomputeGroup=false and reapplies when recomputeGroup=true", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", team: "A", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", team: "A", year: 2025, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3246,7 +3246,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies value-only pivot patch incrementally and preserves unaffected row identity", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: "AMER", year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: "EMEA", year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3290,7 +3290,7 @@ describe("createClientRowModel", () => {
   })
 
   it("tries incremental pivot patch when an axis patch stays in the same bucket", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", region: 1 as string | number, year: 2024, revenue: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", region: 2 as string | number, year: 2024, revenue: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3319,7 +3319,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects treeData path mode deterministically and toggles expansion by group key", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, path: ["infra", "api"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, path: ["infra", "web"] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3352,7 +3352,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps production tree indexes correct across repeated local replacements", () => {
-    const pathModel = createClientRowModel({
+    const pathModel = createAdvancedClientRowModel({
       rows: Array.from({ length: 80 * 4 }, (_, index) => ({
         row: { id: `path-${index}`, path: [`root-${Math.floor(index / 4)}`, "leaf"] },
         rowId: `path-${index}`,
@@ -3383,7 +3383,7 @@ describe("createClientRowModel", () => {
     expect(pathModel.getRowsInRange({ start: 0, end: 10_000 }).map(row => String(row.rowId))).toEqual(pathInitialIds)
     pathModel.dispose()
 
-    const parentModel = createClientRowModel({
+    const parentModel = createAdvancedClientRowModel({
       rows: Array.from({ length: 80 * 4 }, (_, index) => ({
         row: { id: `parent-${index}`, parentId: index % 4 === 0 ? null : `parent-${index - index % 4}` },
         rowId: `parent-${index}`,
@@ -3417,7 +3417,7 @@ describe("createClientRowModel", () => {
 
   it("toggles a wide path branch without spreading descendants into call arguments", () => {
     const leafCount = 150_000
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: Array.from({ length: leafCount }, (_, index) => ({
         row: { id: index, path: ["root"] },
         rowId: index,
@@ -3451,7 +3451,7 @@ describe("createClientRowModel", () => {
   }, 30_000)
 
   it("computes tree path aggregates from matched leaf rows and keeps them on collapse", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", path: ["workspace", "docs"], score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", path: ["workspace", "design"], score: 5 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3484,7 +3484,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps unrelated root leaves visible when collapsing a path group", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", path: ["workspace", "docs"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", path: [] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3523,7 +3523,7 @@ describe("createClientRowModel", () => {
   })
 
   it("projects treeData parent mode with root orphan policy and cycle-edge ignore", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "a", parentId: "b" }, rowId: "a", originalIndex: 0, displayIndex: 0 },
         { row: { id: "b", parentId: "a" }, rowId: "b", originalIndex: 1, displayIndex: 1 },
@@ -3555,7 +3555,7 @@ describe("createClientRowModel", () => {
   })
 
   it("computes tree parent aggregates from descendant leaves and keeps them on collapse", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, score: 1 }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-a", parentId: "root", score: 10 }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
@@ -3585,7 +3585,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps sibling roots visible when collapsing a parent group", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root-a", parentId: null }, rowId: "root-a", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-a", parentId: "root-a" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
@@ -3614,7 +3614,7 @@ describe("createClientRowModel", () => {
   })
 
   it("orders parent-tree root groups by sort model instead of source index", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root-a", parentId: null, score: 10 }, rowId: "root-a", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-a", parentId: "root-a", score: 1 }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
@@ -3648,7 +3648,7 @@ describe("createClientRowModel", () => {
   })
 
   it("rejects duplicate row identity in tree mode and preserves previous snapshot revision", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, path: ["infra", "api"] }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, path: ["infra", "web"] }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3678,7 +3678,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses include-parents tree filter mode by default for parent treeData", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
@@ -3705,7 +3705,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses aggregation basis filtered by default for grouped rows under active filter", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3727,7 +3727,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies style filters before grouped aggregation projection", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10, styles: { status: { backgroundColor: "#ff0000" } } }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20, styles: { status: { backgroundColor: "#00ff00" } } }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3761,7 +3761,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports aggregation basis source for group and tree projections", () => {
-    const groupedModel = createClientRowModel({
+    const groupedModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3778,7 +3778,7 @@ describe("createClientRowModel", () => {
     expect(groupedRoot?.groupMeta?.aggregates).toEqual({ score: 30 })
     groupedModel.dispose()
 
-    const treeModel = createClientRowModel({
+    const treeModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, score: 0, status: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-a", parentId: "root", score: 10, status: "active" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
@@ -3802,7 +3802,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses aggregation basis filtered by default for tree projections under active filter", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, score: 0, status: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-a", parentId: "root", score: 10, status: "active" }, rowId: "child-a", originalIndex: 1, displayIndex: 1 },
@@ -3829,7 +3829,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses leaf-only tree filter mode to avoid ancestor projection", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-1", parentId: "root", value: "keep" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
@@ -3855,7 +3855,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses include-descendants tree filter mode to keep matched subtree", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, value: "root" }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-1", parentId: "root", value: "drop-1" }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
@@ -3882,7 +3882,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies advanced expression filters before sort/group projection", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", latencyMs: 120, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, owner: "ops", latencyMs: 75, status: "warning" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -3924,7 +3924,7 @@ describe("createClientRowModel", () => {
   })
 
   it("normalizes column filter keys/values and matches non-string runtime values", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         {
           row: { id: 1, status: 1, flags: { active: true } },
@@ -3956,7 +3956,7 @@ describe("createClientRowModel", () => {
   })
 
   it("supports array index access in readByPath-backed filters", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         {
           row: { id: 1, items: [{ name: "alpha" }] },
@@ -4001,7 +4001,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow(1, 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow(2, 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4033,7 +4033,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow(1, 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow(2, 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4071,7 +4071,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow("r1", "noc", 300, ["org", "svc-a"]), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow("r2", "ops", 900, ["org", "svc-b"]), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4122,7 +4122,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow("r1", "noc", 300, ["org", "svc-a"]), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow("r2", "ops", 900, ["org", "svc-b"]), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4156,7 +4156,7 @@ describe("createClientRowModel", () => {
   })
 
   it("uses rowId as deterministic tie-breaker for equal sort values", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10 }, rowId: "z", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, score: 10 }, rowId: "a", originalIndex: 1, displayIndex: 1 },
@@ -4186,7 +4186,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: makeRow(1, "a", 30), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: makeRow(2, "a", 10), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4212,7 +4212,7 @@ describe("createClientRowModel", () => {
   })
 
   it("invalidates filter predicate cache only when filter revision changes", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, owner: "ops" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4245,7 +4245,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps current row order when patchRows updates sort key by default (freeze mode)", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4267,7 +4267,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes row order when patchRows updates sort key with recomputeSort=true", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4288,7 +4288,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes sorted membership for filtered hidden rows", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc", score: 20 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, owner: "ops", score: 10 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4307,7 +4307,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes sorted pagination after a sort-key patch", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4324,7 +4324,7 @@ describe("createClientRowModel", () => {
   })
 
   it("tracks projection diagnostics version and stale stage markers", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4389,7 +4389,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps flat projections synchronized on patchRows without recompute requests", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10, label: "left" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, score: 20, label: "right" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4431,7 +4431,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: rowWithScore(1, 10, "alpha"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: rowWithScore(2, 20, "bravo"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4461,7 +4461,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: rowWithDerivedScore(1, "zzzz"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: rowWithDerivedScore(2, "aa"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4504,7 +4504,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       projectionPolicy,
       rows: [
         { row: rowWithDerivedScore(1, 10), rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -4529,7 +4529,7 @@ describe("createClientRowModel", () => {
       ...createDataGridProjectionPolicy(),
       shouldCacheSortValues: () => false,
     }
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       projectionPolicy,
       rows: [
         { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
@@ -4549,7 +4549,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps filter membership frozen by default and applies it with recomputeFilter=true", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, status: "active" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, status: "inactive" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4575,7 +4575,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes quick filter membership when patchRows updates a searched column", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, label: "target" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, label: "other" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4602,7 +4602,7 @@ describe("createClientRowModel", () => {
   })
 
   it("recomputes aggregate stage only when patch touches aggregation fields", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10, label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20, label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4634,7 +4634,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies incremental aggregate delta for supported ops even when recomputeGroup=false", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4665,7 +4665,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps aggregate stage stale for unsupported incremental ops when recomputeGroup=false", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", score: 20 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4690,7 +4690,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies incremental tree parent aggregation when dependency fields isolate structure", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "root", parentId: null, score: 0 }, rowId: "root", originalIndex: 0, displayIndex: 0 },
         { row: { id: "child-1", parentId: "root", score: 10 }, rowId: "child-1", originalIndex: 1, displayIndex: 1 },
@@ -4723,7 +4723,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps sort stage blocked when recomputeSort=false even if filter stage is recomputed", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, status: "inactive", tested_at: 100 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, status: "active", tested_at: 200 }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4751,7 +4751,7 @@ describe("createClientRowModel", () => {
   })
 
   it("keeps stale grouping by default and restores consistency when recomputeGroup=true", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, team: "A", label: "one" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, team: "A", label: "two" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4794,7 +4794,7 @@ describe("createClientRowModel", () => {
   })
 
   it("skips tree grouping invalidation when patch fields do not intersect tree dependencyFields", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", parentId: null, label: "Root" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", parentId: "r1", label: "Child" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4828,7 +4828,7 @@ describe("createClientRowModel", () => {
   })
 
   it("patches tree path cache rows by changed ids when dependency fields isolate structure", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", path: ["root"], label: "Root" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: "r2", path: ["root", "child"], label: "Child" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4880,7 +4880,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: rowWithScore(1, 10), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: rowWithScore(2, 20), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4920,7 +4920,7 @@ describe("createClientRowModel", () => {
       return row
     }
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: rowWithDerivedScore("r1", "zzzz"), rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: rowWithDerivedScore("r2", "aa"), rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -4957,7 +4957,7 @@ describe("createClientRowModel", () => {
       displayIndex: index,
     }))
 
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows,
       formulaColumnCacheMaxColumns: 2,
       initialFormulaFields: [
@@ -4981,14 +4981,14 @@ describe("createClientRowModel", () => {
   })
 
   it("validates formula column-cache max entries option", () => {
-    expect(() => createClientRowModel({
+    expect(() => createAdvancedClientRowModel({
       rows: [],
       formulaColumnCacheMaxColumns: 0,
     })).toThrow(/formulaColumnCacheMaxColumns/i)
   })
 
   it("reports sync compute diagnostics by default", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       ],
@@ -5006,7 +5006,7 @@ describe("createClientRowModel", () => {
 
   it("supports worker compute mode through custom transport contract", () => {
     const dispatchCalls: string[] = []
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       ],
@@ -5032,7 +5032,7 @@ describe("createClientRowModel", () => {
   })
 
   it("applies comparator policies when worker compute falls back locally", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, label: "item2" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
         { row: { id: 2, label: "item10" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
@@ -5061,7 +5061,7 @@ describe("createClientRowModel", () => {
       originalIndex: index,
       displayIndex: index,
     }))
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows,
       computeMode: "worker",
       workerPatchDispatchThreshold: 4,
@@ -5092,7 +5092,7 @@ describe("createClientRowModel", () => {
   })
 
   it("rejects mutating API calls after dispose", () => {
-    const model = createClientRowModel({
+    const model = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, score: 10 }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       ],
@@ -5107,7 +5107,7 @@ describe("createClientRowModel", () => {
 
 
 it("activates column histogram capability on first read without changing plain rows", () => {
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows: [
       { row: { id: "r1", status: "ready" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
       { row: { id: "r2", status: "pending" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },

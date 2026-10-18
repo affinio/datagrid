@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridColumnModel,
   createDataGridEditModel,
 } from "../../models"
@@ -8,7 +8,7 @@ import { createDataGridCore } from "../gridCore"
 
 describe("grid core state-engine composition contract", () => {
   it("wires row/column/edit/transaction/selection services through shared core registry", async () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({

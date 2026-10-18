@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel, createDataGridColumnModel } from "../index"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../index"
 import type { DataGridFilterSnapshot, DataGridRowModelSnapshot, DataGridRowNodeInput, DataGridSortState } from "../rowModel"
 import type { DataGridColumnInput, DataGridColumnModelSnapshot } from "../columnModel"
 
@@ -30,7 +30,7 @@ function runRowProgram(): {
   rangeIds: Array<string | number>
 } {
   const rows = buildRowInputs(4)
-  const model = createClientRowModel<{ id: number; value: string }>({ rows })
+  const model = createAdvancedClientRowModel<{ id: number; value: string }>({ rows })
   const snapshots: DataGridRowModelSnapshot<{ id: number; value: string }>[] = []
   const sortModel: readonly DataGridSortState[] = [{ key: "value", direction: "asc" }]
   const filterModel: DataGridFilterSnapshot = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel, createDataGridColumnModel, type DataGridViewportRange } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel, type DataGridViewportRange } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 import type { DataGridViewportHostEnvironment } from "../viewportHostEnvironment"
 import { createFakeRafScheduler } from "./utils/fakeRafScheduler"
@@ -96,7 +96,7 @@ function createHostEnvironment(
 
 describe("viewport auto row-height contract", () => {
   it("uses bounded measured cache and resets on structural row invalidation", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: createRows(300),
       resolveRowId: row => row.rowId,
     })
@@ -179,7 +179,7 @@ describe("viewport auto row-height contract", () => {
   })
 
   it("keeps near-bottom scroll stable when auto estimate would otherwise shrink", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: createRows(1800),
       resolveRowId: row => row.rowId,
     })

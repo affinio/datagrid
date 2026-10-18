@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel, createDataGridColumnModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel } from "../../models"
 import type { VisibleRow } from "../../types"
 import { createDataGridViewportModelBridgeService } from "../dataGridViewportModelBridgeService"
 
@@ -42,13 +42,13 @@ describe("table viewport model bridge property contract", () => {
     for (const seed of seeds) {
       const rng = createRng(seed)
       const initialCount = randomInt(rng, 50, 220)
-      const rowModel = createClientRowModel<BridgeRow>({
+      const rowModel = createAdvancedClientRowModel<BridgeRow>({
         rows: buildRows(initialCount),
       })
       const columnModel = createDataGridColumnModel({
         columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
       })
-      const fallbackRowModel = createClientRowModel<BridgeRow>()
+      const fallbackRowModel = createAdvancedClientRowModel<BridgeRow>()
       const fallbackColumnModel = createDataGridColumnModel()
 
       const bridge = createDataGridViewportModelBridgeService<BridgeRow>({

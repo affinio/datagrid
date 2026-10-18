@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel } from "../clientRowModel"
+import { createAdvancedClientRowModel } from "../clientRowModel"
 
 interface SampleRow {
   id: number
@@ -46,7 +46,7 @@ describe("client row model property invariants", () => {
     for (const seed of seeds) {
       const rng = createRng(seed)
       const initialCount = randomInt(rng, 0, 240)
-      const model = createClientRowModel<SampleRow>({
+      const model = createAdvancedClientRowModel<SampleRow>({
         rows: buildRows(initialCount),
         resolveRowId: row => row.id,
       })

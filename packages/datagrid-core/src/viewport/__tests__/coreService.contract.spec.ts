@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridColumnModel,
 } from "../../models"
 import { createDataGridViewportCoreService } from "../dataGridViewportCoreService"
@@ -47,7 +47,7 @@ function createSnapshot(overrides: Partial<ViewportIntegrationSnapshot> = {}): V
 
 describe("data grid viewport core service bridge", () => {
   it("exports semantic viewport position from controller integration snapshots", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: "r1", owner: "noc" }, rowId: "r1", originalIndex: 0 },
         { row: { id: "r2", owner: "ops" }, rowId: "r2", originalIndex: 1 },
@@ -80,7 +80,7 @@ describe("data grid viewport core service bridge", () => {
   })
 
   it("restores semantic row and column anchors through controller commands", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 },
         { row: { id: 2, owner: "ops" }, rowId: 2, originalIndex: 1 },
@@ -130,7 +130,7 @@ describe("data grid viewport core service bridge", () => {
   })
 
   it("falls back to stored scroll offsets when anchors cannot be resolved", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, owner: "noc" }, rowId: 1, originalIndex: 0 }],
     })
     const columnModel = createDataGridColumnModel({

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createClientRowModel, createDataGridColumnModel, createServerBackedRowModel } from "../../models"
+import { createAdvancedClientRowModel, createDataGridColumnModel, createServerBackedRowModel } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
 import type { ServerRowModel } from "../../models/server/serverRowModel.js"
 import type { VisibleRow } from "../../types"
@@ -120,7 +120,7 @@ function latestRowsPayload(onRows: ReturnType<typeof vi.fn>): ImperativeRowUpdat
 describe("table viewport row-model boundary", () => {
   it("syncs visible range into active row model", () => {
     const rows = buildRows(120)
-    const clientModel = createClientRowModel({ rows })
+    const clientModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 180 } }],
     })
@@ -169,7 +169,7 @@ describe("table viewport row-model boundary", () => {
 
   it("keeps client/server-backed visible range parity", () => {
     const rows = buildRows(150)
-    const clientModel = createClientRowModel({ rows })
+    const clientModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "value", label: "Value", initialState: { width: 200 } }],
     })
@@ -236,7 +236,7 @@ describe("table viewport row-model boundary", () => {
   })
 
   it("clamps grouped visible range when collapse removes rows around the active viewport", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: buildGroupedRows(2, 48),
       initialGroupBy: { fields: ["team"], expandedByDefault: true },
     })
@@ -283,7 +283,7 @@ describe("table viewport row-model boundary", () => {
   })
 
   it("rematerializes parent tree rows after collapse and re-expand near the viewport", () => {
-    const rowModel = createClientRowModel({
+    const rowModel = createAdvancedClientRowModel({
       rows: buildParentTreeRows(),
       initialTreeData: {
         mode: "parent",

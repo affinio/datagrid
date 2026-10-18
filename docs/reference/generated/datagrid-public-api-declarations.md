@@ -36,7 +36,7 @@ Entrypoint exports:
 
 - `export * from "./public.js"`
 
-Declaration graph hash: `b9954fad2cbcceec3438e096083aab77cb53cdf681a5f76a4b6ef3bc873fcc7e`
+Declaration graph hash: `d4a942eff9f416813a7e0f8d30fd13188fd30af3fe24e88a67d8c5365e9bd58d`
 
 ### ./advanced
 
@@ -56,15 +56,15 @@ Entrypoint exports:
 - `export { createDataSourceBackedRowModel, createDataGridAggregationRegistry, createDataGridComparatorRegistry, compareDataGridValues, type CreateDataSourceBackedRowModelOptions, type DataSourceBackedRowModel, type DataGridExternalRowUpdate, type DataGridExternalRowUpdateOptions, type DataGridDataSource, type DataGridDataSourceBackpressureDiagnostics, type DataGridDataSourceColumnHistogramRequest, type DataGridDataSourceSelectionSummaryColumn, type DataGridDataSourceSelectionSummaryRange, type DataGridDataSourceSelectionSummaryRequest, type DataGridDataSourceSelectionSummaryResult, type DataGridDataSourceInvalidation, type DataGridDataSourceCellRange, type DataGridDataSourceClipboardFormat, type DataGridDataSourceOperationKind, type DataGridDataSourceOperationRejection, type DataGridDataSourceOperationRequest, type DataGridDataSourceOperationResult, type DataGridDataSourceOperationStatus, type DataGridDataSourcePaginationPullContext, type DataGridDataSourcePullPriority, type DataGridDataSourcePivotPullContext, type DataGridDataSourcePullReason, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridServerPivotRowIdInput, type DataGridServerPivotRowRole, type DataGridComparatorNullsPolicy, type DataGridComparatorPolicy, type DataGridComparatorPolicyKind, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, type DataGridAggregationDefinition, type DataGridAggregationRegistry, type DataGridAggregationRegistryInput, type DataGridDataSourceTreePullContext, type DataGridDataSourceTreePullOperation, type DataGridDataSourceTreePullScope, type DataGridDataSourcePushEvent, type DataGridDataSourcePushInvalidateEvent, type DataGridDataSourcePushListener, type DataGridDataSourcePushRemoveEvent, type DataGridDataSourcePushUpsertEvent, type DataGridDataSourceRowEntry, createDataGridServerPivotRowId, } from "./models/index.js"`
 - `export { transformDataGridPublicProtocolSource, type DataGridCodemodResult, } from "./protocol/index.js"`
 
-Declaration graph hash: `65405be0cd3f17916d212c2621bcc9956d05948b5bfdd77dabf5651b29425962`
+Declaration graph hash: `58110b5b6f0693ccc555b67d9dfbceed1cb101043308fd8700ab55ee8b57e3aa`
 
 ### ./advanced-client-row-model
 
 Entrypoint exports:
 
-- `export { createClientRowModel as createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateClientRowModelOptions as CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from "./models/clientRowModel.js"`
+- `export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from "./models/clientRowModel.js"`
 
-Declaration graph hash: `7a100465febd11e7c88919e33efc1459fe21a750e54cbacedf72afe573186a3d`
+Declaration graph hash: `dcab40ecb0ddc546be54761d566f416a16fb6a5d0d89118190d4722594047339`
 
 ### ./client-row-projection
 
@@ -126,7 +126,7 @@ Entrypoint exports:
 - `export interface ClientRowProjectionModelSnapshot<T> { readonly revision: number`
 - `export interface CreateClientRowProjectionModelOptions<T> extends CreateClientRowStoreOptions<T> { initialSortModel?: readonly DataGridSortState[]`
 
-Declaration graph hash: `050f7836a90f3f5af76178c89726079331dfc1b213f8c632431c531fe0e075ea`
+Declaration graph hash: `af04982b5916ef93ce2e77078e319b9e9211213b1bc84484e669d83c2982af60`
 
 ### ./client-row-projection/pagination
 
@@ -178,7 +178,7 @@ Entrypoint exports:
 - `export interface CreateClientRowStoreOptions<T> { rows?: readonly DataGridRowNodeInput<T>[]`
 - `export type ClientRowStoreListener<T> = (snapshot: ClientRowStoreSnapshot<T>) => void`
 
-Declaration graph hash: `02e57e757ab52b64f239db86f7d57a2ff8a0482aac1a6b21de47547d1af94168`
+Declaration graph hash: `497488a4c542cbe05171df1b8cef1a443ca09311219e899e8efefc54498b40cf`
 
 ### ./internal
 

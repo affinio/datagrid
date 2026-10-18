@@ -17,7 +17,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/index.d.ts",
           "declarationExists": true,
           "declarationFileCount": 111,
-          "declarationHash": "b9954fad2cbcceec3438e096083aab77cb53cdf681a5f76a4b6ef3bc873fcc7e",
+          "declarationHash": "d4a942eff9f416813a7e0f8d30fd13188fd30af3fe24e88a67d8c5365e9bd58d",
           "entrypointExportCount": 1,
           "entrypointExports": [
             "export * from \"./public.js\""
@@ -89,7 +89,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "28c19bfc1724f85100b7cbaf3cddf95d3170685fc5eb10085167e0b1f07b956f"
+              "hash": "505715a8c0e32fdd62d83af97224ee865892f7bd00909a233426c309509cf8fa"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -197,7 +197,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/index.d.ts",
-              "hash": "afe70e9431af5d0b6c095135506530c4c9ba40a1b8bcca4fae3000757644f922"
+              "hash": "204bbe4f494ab23ab21c1e39fcfddc4985731f4245dab01cdedc82390b8568c1"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/materialization/clientRowComputedSnapshotFieldsRuntime.d.ts",
@@ -476,7 +476,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/advanced.d.ts",
           "declarationExists": true,
           "declarationFileCount": 117,
-          "declarationHash": "65405be0cd3f17916d212c2621bcc9956d05948b5bfdd77dabf5651b29425962",
+          "declarationHash": "58110b5b6f0693ccc555b67d9dfbceed1cb101043308fd8700ab55ee8b57e3aa",
           "entrypointExportCount": 13,
           "entrypointExports": [
             "export type { DataGridAdvancedEventMap, DataGridAdvancedEventName, DataGridEventAffectedRange, DataGridEventEnvelope, DataGridEventPhase, DataGridEventSource, DataGridEventTier, DataGridInternalEventMap, DataGridInternalEventName, DataGridStableEventMap, DataGridStableEventName, } from \"./protocol/index.js\"",
@@ -508,7 +508,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/advanced-client-row-model.d.ts",
-              "hash": "7212a32af2ddee238adbdbdea5fcef29e35543dad71c663786da43fff857bf1c"
+              "hash": "efa230f8acddd30f27b0d1c670e5acfe136fa758ae29acc6ca253d4345eb4792"
             },
             {
               "path": "packages/datagrid-core/dist/src/advanced.d.ts",
@@ -556,7 +556,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "28c19bfc1724f85100b7cbaf3cddf95d3170685fc5eb10085167e0b1f07b956f"
+              "hash": "505715a8c0e32fdd62d83af97224ee865892f7bd00909a233426c309509cf8fa"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -664,7 +664,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/index.d.ts",
-              "hash": "afe70e9431af5d0b6c095135506530c4c9ba40a1b8bcca4fae3000757644f922"
+              "hash": "204bbe4f494ab23ab21c1e39fcfddc4985731f4245dab01cdedc82390b8568c1"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/materialization/clientRowComputedSnapshotFieldsRuntime.d.ts",
@@ -971,15 +971,15 @@
           "declarationFile": "packages/datagrid-core/dist/src/advanced-client-row-model.d.ts",
           "declarationExists": true,
           "declarationFileCount": 25,
-          "declarationHash": "7a100465febd11e7c88919e33efc1459fe21a750e54cbacedf72afe573186a3d",
+          "declarationHash": "dcab40ecb0ddc546be54761d566f416a16fb6a5d0d89118190d4722594047339",
           "entrypointExportCount": 1,
           "entrypointExports": [
-            "export { createClientRowModel as createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateClientRowModelOptions as CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from \"./models/clientRowModel.js\""
+            "export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from \"./models/clientRowModel.js\""
           ],
           "declarationFiles": [
             {
               "path": "packages/datagrid-core/dist/src/advanced-client-row-model.d.ts",
-              "hash": "7212a32af2ddee238adbdbdea5fcef29e35543dad71c663786da43fff857bf1c"
+              "hash": "efa230f8acddd30f27b0d1c670e5acfe136fa758ae29acc6ca253d4345eb4792"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/aggregation/aggregationEngine.d.ts",
@@ -987,7 +987,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "28c19bfc1724f85100b7cbaf3cddf95d3170685fc5eb10085167e0b1f07b956f"
+              "hash": "505715a8c0e32fdd62d83af97224ee865892f7bd00909a233426c309509cf8fa"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/comparator/comparatorPolicy.d.ts",
@@ -1443,7 +1443,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/client-row-projection/model.d.ts",
           "declarationExists": true,
           "declarationFileCount": 112,
-          "declarationHash": "050f7836a90f3f5af76178c89726079331dfc1b213f8c632431c531fe0e075ea",
+          "declarationHash": "af04982b5916ef93ce2e77078e319b9e9211213b1bc84484e669d83c2982af60",
           "entrypointExportCount": 4,
           "entrypointExports": [
             "export declare function createClientRowProjectionModel<T>(options?: CreateClientRowProjectionModelOptions<T>): ClientRowProjectionModel<T>",
@@ -1522,7 +1522,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "28c19bfc1724f85100b7cbaf3cddf95d3170685fc5eb10085167e0b1f07b956f"
+              "hash": "505715a8c0e32fdd62d83af97224ee865892f7bd00909a233426c309509cf8fa"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -1630,7 +1630,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/index.d.ts",
-              "hash": "afe70e9431af5d0b6c095135506530c4c9ba40a1b8bcca4fae3000757644f922"
+              "hash": "204bbe4f494ab23ab21c1e39fcfddc4985731f4245dab01cdedc82390b8568c1"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/materialization/clientRowComputedSnapshotFieldsRuntime.d.ts",
@@ -2148,7 +2148,7 @@
           "declarationFile": "packages/datagrid-core/dist/src/client-row-store.d.ts",
           "declarationExists": true,
           "declarationFileCount": 111,
-          "declarationHash": "02e57e757ab52b64f239db86f7d57a2ff8a0482aac1a6b21de47547d1af94168",
+          "declarationHash": "497488a4c542cbe05171df1b8cef1a443ca09311219e899e8efefc54498b40cf",
           "entrypointExportCount": 5,
           "entrypointExports": [
             "export declare function createClientRowStore<T>(options?: CreateClientRowStoreOptions<T>): ClientRowStore<T>",
@@ -2224,7 +2224,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/clientRowModel.d.ts",
-              "hash": "28c19bfc1724f85100b7cbaf3cddf95d3170685fc5eb10085167e0b1f07b956f"
+              "hash": "505715a8c0e32fdd62d83af97224ee865892f7bd00909a233426c309509cf8fa"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/columnModel.d.ts",
@@ -2332,7 +2332,7 @@
             },
             {
               "path": "packages/datagrid-core/dist/src/models/index.d.ts",
-              "hash": "afe70e9431af5d0b6c095135506530c4c9ba40a1b8bcca4fae3000757644f922"
+              "hash": "204bbe4f494ab23ab21c1e39fcfddc4985731f4245dab01cdedc82390b8568c1"
             },
             {
               "path": "packages/datagrid-core/dist/src/models/materialization/clientRowComputedSnapshotFieldsRuntime.d.ts",

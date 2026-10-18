@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel } from "../clientRowModel"
+import { createAdvancedClientRowModel } from "../clientRowModel"
 
 interface StressRow {
   id: number
@@ -18,7 +18,7 @@ describe("client row model stress suite", () => {
     const rowCount = 120_000
     const rangeSize = 180
     const iterations = 1_200
-    const model = createClientRowModel<StressRow>({
+    const model = createAdvancedClientRowModel<StressRow>({
       rows: buildRows(rowCount),
       resolveRowId: row => row.id,
     })

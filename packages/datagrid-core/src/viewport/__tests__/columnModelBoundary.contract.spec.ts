@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createDataGridColumnModel,
 } from "../../models"
 import { createDataGridViewportController } from "../dataGridViewportController"
@@ -41,7 +41,7 @@ function mountLayoutNodes() {
 describe("table viewport column-model boundary", () => {
   it("takes order/visibility/pin/width from DataGridColumnModel", () => {
     const rows = buildRows(120)
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columns: DataGridColumnInput[] = [
       { key: "a", label: "A", initialState: { width: 120 } },
       { key: "b", label: "B", initialState: { width: 140 } },
@@ -80,7 +80,7 @@ describe("table viewport column-model boundary", () => {
 
   it("feeds projected column order into horizontal virtualization", () => {
     const rows = buildRows(20)
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const columnModel = createDataGridColumnModel({
       columns: [
         { key: "a", initialState: { width: 120, pin: "left" } },
@@ -116,7 +116,7 @@ describe("table viewport column-model boundary", () => {
 
   it("supports switching to another column model at runtime", () => {
     const rows = buildRows(60)
-    const rowModel = createClientRowModel({ rows })
+    const rowModel = createAdvancedClientRowModel({ rows })
     const firstColumns: DataGridColumnInput[] = [
       { key: "x", label: "X", initialState: { width: 120 } },
       { key: "y", label: "Y", initialState: { width: 120 } },

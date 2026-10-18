@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createClientRowModel } from "../clientRowModel.js"
+import { createAdvancedClientRowModel } from "../clientRowModel.js"
 
 interface FormulaParityRow {
   id: number
@@ -101,7 +101,7 @@ function assertRowParity(actualRow: FormulaParityRow | undefined, sourceRow: For
 }
 
 function createFormulaParityModel(rows: FormulaParityRow[]) {
-  return createClientRowModel<FormulaParityRow>({
+  return createAdvancedClientRowModel<FormulaParityRow>({
     rows: rows.map((row, index) => ({
       row,
       rowId: row.id,
