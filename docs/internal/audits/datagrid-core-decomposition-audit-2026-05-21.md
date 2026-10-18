@@ -231,6 +231,8 @@ Progress (`2026-10-18`): extracted shared expansion snapshot caching/delta detec
 
 Progress (`2026-10-18`): moved parent-mode tree row materialization and its shared cache/result types into `tree/treeProjectionParentMaterializer.ts` and `tree/treeProjectionTypes.ts`. The projection facade retains cache construction and incremental subtree-toggle orchestration. Core type-check/build, focused projection tests, and the tree workload assertion passed.
 
+Progress (`2026-10-18`): moved path-mode group-row creation and visible tree materialization to `tree/treeProjectionPathMaterializer.ts`, with path cache contracts now colocated in `tree/treeProjectionTypes.ts`. The facade retains path cache construction, patching, and incremental toggle decisions. Core type-check/build and focused projection tests passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`
