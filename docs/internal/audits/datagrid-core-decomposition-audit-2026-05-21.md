@@ -239,6 +239,8 @@ Progress (`2026-10-18`): moved parent-mode hierarchy construction, filter inclus
 
 Progress (`2026-10-18`): moved path-mode hierarchy construction, filter matching, and aggregate cache setup into `tree/treeProjectionPathCache.ts`. Tree path normalization and stable group-key encoding now share the internal primitives module. Core type-check/build, focused projection tests, and tree workload assertion passed.
 
+Progress (`2026-10-18`): moved path/parent cache row identity patching to `tree/treeProjectionCachePatcher.ts`. `treeProjectionRuntime.ts` is now a 200-line composition facade for cache keys, mode dispatch, and the extracted build/materialize/toggle/patch runtimes. Core type-check/build, focused projection tests, and tree workload assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`
