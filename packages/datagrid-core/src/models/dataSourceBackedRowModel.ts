@@ -90,8 +90,7 @@ import {
   rangeFromIndexes,
   resolveVisibleRangeInvalidation,
 } from "./server/dataSourceInvalidationEngine.js"
-import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
-import { createDataSourceCacheStoreRegistry } from "./server/dataSourceCacheStoreRegistry.js"
+import { createDataSourceCacheStoreRuntime } from "./server/dataSourceCacheStoreRuntime.js"
 import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
@@ -239,28 +238,13 @@ export function createDataSourceBackedRowModel<T = unknown>(
     } as const
   })()
 
-  type CacheStore = {
-    key: string
-    cacheManager: ReturnType<typeof createDataSourceCacheManager<T>>
-    cacheStateKeyByIndex: Map<number, string>
-  }
-  const cacheStoreRegistry = createDataSourceCacheStoreRegistry({ maxStores: 8 })
-  const cacheStores = new Map<string, CacheStore>()
-  const createCacheStore = (key: string): CacheStore => {
-    const cacheManager = createDataSourceCacheManager<T>({
-      rowCacheLimit,
-      maxBytes: options.rowCacheMaxBytes,
-      rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
-    })
-    cacheManager.init()
-    cacheManager.attach()
-    const store = { key, cacheManager, cacheStateKeyByIndex: new Map<number, string>() }
-    cacheStores.set(key, store)
-    return store
-  }
-  const rootCacheStore = createCacheStore("__root__")
-  cacheStoreRegistry.acquire({ key: rootCacheStore.key, signature: rootCacheStore.key })
-  let activeCacheStore = rootCacheStore
+  const cacheStoreRuntime = createDataSourceCacheStoreRuntime<T>({
+    rowCacheLimit,
+    rowCacheMaxBytes: options.rowCacheMaxBytes,
+    rangeCacheChunkSize: DEFAULT_RANGE_CACHE_CHUNK_SIZE,
+    maxStores: 8,
+  })
+  let activeCacheStore = cacheStoreRuntime.activeCacheStore
   let cacheManager = activeCacheStore.cacheManager
   let rowCache = cacheManager.rowCache
   let staleRetainedRowIndexes = cacheManager.staleRetainedRowIndexes
@@ -365,65 +349,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
       })
     : null
 
-  function disposeCacheStore(key: string): void {
-    if (key === activeCacheStore.key) return
-    const store = cacheStores.get(key)
-    if (!store) return
-    store.cacheManager.dispose()
-    store.cacheStateKeyByIndex.clear()
-    cacheStores.delete(key)
-  }
-
   function enforceGlobalCacheRowBudget(): void {
-    const maxRows = rowCacheLimit
-    const maxBytes = Number.isFinite(options.rowCacheMaxBytes) && (options.rowCacheMaxBytes as number) > 0
-      ? Math.max(1, Math.trunc(options.rowCacheMaxBytes as number))
-      : Number.POSITIVE_INFINITY
-    const getTotals = (): { rows: number; bytes: number } => {
-      let rows = 0
-      let bytes = 0
-      for (const store of cacheStores.values()) {
-        rows += store.cacheManager.rowCache.size
-        bytes += store.cacheManager.getEstimatedBytes()
-      }
-      return { rows, bytes }
-    }
-    let totals = getTotals()
-    while (totals.rows > maxRows || totals.bytes > maxBytes) {
-      const evictedKey = cacheStoreRegistry.evictLeastRecentlyUsedRetained()
-      if (!evictedKey) return
-      disposeCacheStore(evictedKey)
-      totals = getTotals()
-    }
+    cacheStoreRuntime.enforceGlobalCacheRowBudget()
   }
 
   function activateCacheStore(key: string): void {
     if (activeCacheStore.key === key) return
-    const previousRowCache = rowCache
-    const previousCacheStateKeyByIndex = cacheStateKeyByIndex
-    cacheStoreRegistry.retain(activeCacheStore.key)
-    cacheStoreRegistry.acquire({ key, signature: key })
-    let nextStore = cacheStores.get(key)
-    if (!nextStore) nextStore = createCacheStore(key)
-    activeCacheStore = nextStore
-    cacheManager = nextStore.cacheManager
+    activeCacheStore = cacheStoreRuntime.activateCacheStore(key)
+    cacheManager = activeCacheStore.cacheManager
     rowCache = cacheManager.rowCache
     staleRetainedRowIndexes = cacheManager.staleRetainedRowIndexes
     rangeCache = cacheManager.rangeCache
-    cacheStateKeyByIndex = nextStore.cacheStateKeyByIndex
-    if (rowCache.size === 0 && previousRowCache.size > 0) {
-      for (const [index, row] of previousRowCache) {
-        rowCache.set(index, row)
-        staleRetainedRowIndexes.add(index)
-        rangeCache.setRow(index, row)
-        cacheStateKeyByIndex.set(index, previousCacheStateKeyByIndex.get(index) ?? "__retained__")
-      }
-    }
-    for (const evictedKey of cacheStoreRegistry.enforceLimit()) {
-      if (evictedKey === activeCacheStore.key) continue
-      disposeCacheStore(evictedKey)
-    }
-    enforceGlobalCacheRowBudget()
+    cacheStateKeyByIndex = activeCacheStore.cacheStateKeyByIndex
   }
 
   function getProtectedSourceRanges(): readonly DataGridViewportRange[] {
@@ -2650,11 +2587,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       diagnostics.paused = false
       diagnostics.hasPendingPull = false
       diagnostics.rowCacheSize = 0
-      for (const store of cacheStores.values()) {
-        if (store.cacheManager !== cacheManager) store.cacheManager.dispose()
-      }
-      cacheStores.clear()
-      cacheStoreRegistry.clear()
+      cacheStoreRuntime.disposeRetainedStores()
       disposeRuntimeServices()
       unsubscribePush?.()
     },
