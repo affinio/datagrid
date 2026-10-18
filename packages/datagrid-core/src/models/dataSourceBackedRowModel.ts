@@ -84,6 +84,11 @@ import {
 } from "./server/dataSourceExternalUpdateRuntime.js"
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
 import {
+  countCoveredRowsBackward as countCoveredRowsBackwardPolicy,
+  countCoveredRowsForward as countCoveredRowsForwardPolicy,
+  measureDataSourceViewportCoverage,
+} from "./server/dataSourceCoveragePolicy.js"
+import {
   createDataSourceOptimisticMutationEngine,
   type DataSourceOptimisticEditTransaction as OptimisticEditTransaction,
 } from "./server/dataSourceOptimisticMutationEngine.js"
@@ -608,31 +613,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function countCoveredRowsForward(startIndex: number, upperBound: number): number {
-    if (startIndex > upperBound) {
-      return 0
-    }
-    let covered = 0
-    for (let index = startIndex; index <= upperBound; index += 1) {
-      if (!isIndexCached(index)) {
-        break
-      }
-      covered += 1
-    }
-    return covered
+    return countCoveredRowsForwardPolicy(startIndex, upperBound, isIndexCached)
   }
 
   function countCoveredRowsBackward(startIndex: number, lowerBound: number): number {
-    if (startIndex < lowerBound) {
-      return 0
-    }
-    let covered = 0
-    for (let index = startIndex; index >= lowerBound; index -= 1) {
-      if (!isIndexCached(index)) {
-        break
-      }
-      covered += 1
-    }
-    return covered
+    return countCoveredRowsBackwardPolicy(startIndex, lowerBound, isIndexCached)
   }
 
   function updateCachedCoverageDiagnostics(sourceViewport: DataGridViewportRange): void {
@@ -653,24 +638,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
       })
       return
     }
-    const bounded = normalizeViewportRange(sourceViewport, rowCount)
-    let hitRows = 0
-    let missRows = 0
-    for (let index = bounded.start; index <= bounded.end; index += 1) {
-      if (isIndexCached(index)) {
-        hitRows += 1
-      } else {
-        missRows += 1
-      }
-    }
-    const viewportRows = hitRows + missRows
-    const blankViewportActive = viewportRows > 0 && hitRows === 0
+    const coverage = measureDataSourceViewportCoverage(sourceViewport, rowCount, isIndexCached)
+    const { hitRows, missRows, blankViewportActive } = coverage
     if (blankViewportActive && !diagnostics.blankViewportActive) {
       diagnostics.blankViewportEvents += 1
     }
     diagnostics.viewportCacheHitRows = hitRows
     diagnostics.viewportCacheMissRows = missRows
-    diagnostics.viewportCacheHitRatio = viewportRows > 0 ? hitRows / viewportRows : 1
+    diagnostics.viewportCacheHitRatio = coverage.hitRatio
     diagnostics.blankViewportActive = blankViewportActive
     diagnostics.cachedAheadRows = countCoveredRowsForward(
       sourceViewport.end + 1,

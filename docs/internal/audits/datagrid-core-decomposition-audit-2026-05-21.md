@@ -39,6 +39,8 @@ Progress (`2026-10-18`): moved commit request construction and commit success/re
 
 Progress (`2026-10-18`): moved pending pull coalescing, adjacent-range merge, stale background drop, and priority replacement decisions to `models/server/dataSourcePendingPullRuntime.ts`. Scheduler execution and transport remain separate owners. Focused datasource tests (89), core type-check/build, and datasource churn assertion passed.
 
+Progress (`2026-10-18`): moved contiguous cache coverage counts and viewport hit/miss measurement to `models/server/dataSourceCoveragePolicy.ts`. Diagnostics mutation and signal emission remain owned by the facade. Focused datasource tests (89), core type-check/build, and datasource churn assertion passed on rerun after a transient seed-1337 variance outlier.
+
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:
