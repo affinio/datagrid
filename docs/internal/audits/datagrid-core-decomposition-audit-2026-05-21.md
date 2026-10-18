@@ -141,6 +141,8 @@ Progress (`2026-10-18`): moved scheduled view-sheet materialization and writebac
 
 Progress (`2026-10-18`): moved managed formula-table patch reconciliation to `spreadsheet/workbookFormulaTableSync.ts`. The workbook facade retains dependency scheduling and supplies sheet/export-cache access; the helper owns table alias diffing and patch application.
 
+Progress (`2026-10-18`): moved per-component formula recompute and fixed-point convergence to `spreadsheet/workbookFormulaSyncRuntime.ts`. `workbookModel.ts` retains graph scheduling and aggregate sync diagnostics.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`

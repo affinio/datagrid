@@ -39,6 +39,7 @@ import {
 import { createSpreadsheetWorkbookComponentSchedule } from "./workbookDependencyScheduler.js"
 import { materializeSpreadsheetWorkbookViewSheets } from "./workbookViewMaterializer.js"
 import { applySpreadsheetWorkbookManagedTablePatch } from "./workbookFormulaTableSync.js"
+import { syncSpreadsheetWorkbookSheetComponent } from "./workbookFormulaSyncRuntime.js"
 import {
   createSpreadsheetWorkbookDependencyGraph,
   type SpreadsheetWorkbookDependencyGraph,
@@ -211,11 +212,6 @@ interface SpreadsheetWorkbookGraphState {
 interface SpreadsheetWorkbookSyncOptions {
   dirtySheetIds?: ReadonlySet<string>
   structural?: boolean
-}
-
-interface SpreadsheetWorkbookComponentSyncResult {
-  passCount: number
-  converged: boolean
 }
 
 function isSpreadsheetWorkbookTableRowsSource(
@@ -848,81 +844,6 @@ export function createDataGridSpreadsheetWorkbookModel(
     )
   }
 
-  const syncSheetComponent = (
-    componentSheetIds: readonly string[],
-    graph: SpreadsheetWorkbookDependencyGraph,
-    maxPasses: number,
-  ): SpreadsheetWorkbookComponentSyncResult => {
-    if (componentSheetIds.length === 0) {
-      return { passCount: 0, converged: true }
-    }
-
-    if (componentSheetIds.length === 1) {
-      const targetSheet = sheetsById.get(componentSheetIds[0] ?? "")
-      if (!targetSheet) {
-        return { passCount: 0, converged: true }
-      }
-      if (targetSheet.kind === "view") {
-        return { passCount: 0, converged: true }
-      }
-      applySpreadsheetWorkbookManagedTablePatch(
-        targetSheet,
-        graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
-        sheetId => sheetsById.get(sheetId) ?? null,
-        getSheetExportTableSource,
-        invalidateSheetExportCache,
-      )
-      if (targetSheet.sheetModel.recompute()) {
-        invalidateSheetExportCache(targetSheet)
-      }
-      return { passCount: 1, converged: true }
-    }
-
-    for (let passIndex = 0; passIndex < maxPasses; passIndex += 1) {
-      let changed = false
-      let mutableSheetVisited = false
-      for (const sheetId of componentSheetIds) {
-        const targetSheet = sheetsById.get(sheetId)
-        if (!targetSheet || targetSheet.kind === "view") {
-          continue
-        }
-        mutableSheetVisited = true
-        if (
-          applySpreadsheetWorkbookManagedTablePatch(
-            targetSheet,
-            graph.dependencySheetIdsBySheetId.get(targetSheet.id) ?? Object.freeze([]),
-            sheetId => sheetsById.get(sheetId) ?? null,
-            getSheetExportTableSource,
-            invalidateSheetExportCache,
-          )
-        ) {
-          changed = true
-        }
-        if (targetSheet.sheetModel.recompute()) {
-          invalidateSheetExportCache(targetSheet)
-          changed = true
-        }
-      }
-      if (!mutableSheetVisited) {
-        return {
-          passCount: 0,
-          converged: true,
-        }
-      }
-      if (!changed) {
-        return {
-          passCount: passIndex + 1,
-          converged: true,
-        }
-      }
-    }
-
-    return {
-      passCount: maxPasses,
-      converged: false,
-    }
-  }
-
   const applyWorkbookSync = (syncOptions: SpreadsheetWorkbookSyncOptions = {}): void => {
     if (sheets.length === 0) {
       lastSync = {
@@ -969,7 +890,20 @@ export function createDataGridSpreadsheetWorkbookModel(
     let converged = true
 
     for (const componentSheetIds of scheduledComponents) {
-      const componentResult = syncSheetComponent(componentSheetIds, resolvedGraphState.graph, maxPasses)
+      const componentResult = syncSpreadsheetWorkbookSheetComponent(
+        componentSheetIds,
+        resolvedGraphState.graph.dependencySheetIdsBySheetId,
+        maxPasses,
+        sheetId => sheetsById.get(sheetId) ?? null,
+        (sheet, dependencies) => applySpreadsheetWorkbookManagedTablePatch(
+          sheet,
+          dependencies,
+          dependencyId => sheetsById.get(dependencyId) ?? null,
+          getSheetExportTableSource,
+          invalidateSheetExportCache,
+        ),
+        invalidateSheetExportCache,
+      )
       passCount += componentResult.passCount
       if (!componentResult.converged) {
         converged = false
