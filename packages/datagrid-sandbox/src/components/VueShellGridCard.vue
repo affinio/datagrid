@@ -2599,7 +2599,7 @@ const collapseAllGroups = (): void => {
 
 .grid-host {
   display: flex;
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
   min-height: 0;
 }
