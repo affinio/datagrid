@@ -1,6 +1,8 @@
 import type {
   DataGridSpreadsheetViewFilterClause,
   DataGridSpreadsheetViewFilterStep,
+  DataGridSpreadsheetViewProjectColumn,
+  DataGridSpreadsheetViewProjectStep,
   DataGridSpreadsheetViewSortField,
   DataGridSpreadsheetViewSortStep,
 } from "./viewPipeline.js"
@@ -18,6 +20,15 @@ function normalizeColumnKey(value: unknown, label: string): string {
     throw new Error(`[DataGridSpreadsheetView] ${label} must be non-empty.`)
   }
   return normalized
+}
+
+function normalizeColumnTitle(value: unknown, fallback: string): string {
+  const normalized = String(value ?? "").trim()
+  return normalized.length > 0 ? normalized : fallback
+}
+
+function createSpreadsheetViewValues(): Record<string, unknown> {
+  return {}
 }
 
 function matchesFilterClause(row: SpreadsheetViewRowState, clause: DataGridSpreadsheetViewFilterClause): boolean {
@@ -106,4 +117,47 @@ export function applySpreadsheetViewSortStep(
     return String(left.id).localeCompare(String(right.id))
   })
   return { columns: dataset.columns, rows }
+}
+
+function normalizeProjectColumns(
+  columns: readonly (string | DataGridSpreadsheetViewProjectColumn)[],
+): readonly DataGridSpreadsheetViewProjectColumn[] {
+  return columns.map(column => (
+    typeof column === "string"
+      ? { key: normalizeColumnKey(column, "projection column") }
+      : {
+        key: normalizeColumnKey(column.key, "projection column"),
+        as: column.as ? normalizeColumnKey(column.as, "projection alias") : undefined,
+        label: column.label,
+      }
+  ))
+}
+
+export function applySpreadsheetViewProjectStep(
+  dataset: SpreadsheetViewDataset,
+  step: DataGridSpreadsheetViewProjectStep,
+): SpreadsheetViewDataset {
+  const projections = normalizeProjectColumns(step.columns)
+  if (projections.length === 0) {
+    throw new Error("[DataGridSpreadsheetView] project step must include at least one column.")
+  }
+  const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
+  const columns = projections.map(projection => {
+    const sourceColumn = sourceColumnsByKey.get(projection.key)
+    const nextKey = projection.as ?? projection.key
+    return {
+      key: nextKey,
+      title: normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
+      formulaAlias: sourceColumn?.formulaAlias ?? normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
+      style: sourceColumn?.style ?? null,
+    }
+  })
+  const rows = dataset.rows.map(row => {
+    const values = createSpreadsheetViewValues()
+    for (const projection of projections) {
+      values[projection.as ?? projection.key] = row.values[projection.key] ?? null
+    }
+    return { id: row.id, values }
+  })
+  return { columns, rows }
 }

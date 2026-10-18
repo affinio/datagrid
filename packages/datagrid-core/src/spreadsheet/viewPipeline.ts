@@ -16,7 +16,11 @@ import type {
   DataGridSpreadsheetViewSourceSheet,
 } from "./sheet.js"
 import type { DataGridFormulaTableRowsSource, DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
-import { applySpreadsheetViewFilterStep, applySpreadsheetViewSortStep } from "./viewPipelineBasicStages.js"
+import {
+  applySpreadsheetViewFilterStep,
+  applySpreadsheetViewProjectStep,
+  applySpreadsheetViewSortStep,
+} from "./viewPipelineBasicStages.js"
 import type {
   SpreadsheetViewColumnState,
   SpreadsheetViewDataset,
@@ -373,55 +377,6 @@ function createDatasetFromSheetModel(sheetModel: DataGridSpreadsheetViewSourceSh
     const values = sourceRow
       ? resolveRow(sourceRow, rowIndex) as Record<string, unknown>
       : createSpreadsheetViewValues()
-    return {
-      id: row.id,
-      values,
-    }
-  })
-  return {
-    columns,
-    rows,
-  }
-}
-
-function normalizeProjectColumns(
-  columns: readonly (string | DataGridSpreadsheetViewProjectColumn)[],
-): readonly DataGridSpreadsheetViewProjectColumn[] {
-  return columns.map(column => (
-    typeof column === "string"
-      ? { key: normalizeColumnKey(column, "projection column") }
-      : {
-        key: normalizeColumnKey(column.key, "projection column"),
-        as: column.as ? normalizeColumnKey(column.as, "projection alias") : undefined,
-        label: column.label,
-      }
-  ))
-}
-
-function applyProjectStep(
-  dataset: SpreadsheetViewDataset,
-  step: DataGridSpreadsheetViewProjectStep,
-): SpreadsheetViewDataset {
-  const projections = normalizeProjectColumns(step.columns)
-  if (projections.length === 0) {
-    throw new Error("[DataGridSpreadsheetView] project step must include at least one column.")
-  }
-  const sourceColumnsByKey = new Map(dataset.columns.map(column => [column.key, column]))
-  const columns = projections.map(projection => {
-    const sourceColumn = sourceColumnsByKey.get(projection.key)
-    const nextKey = projection.as ?? projection.key
-    return {
-      key: nextKey,
-      title: normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
-      formulaAlias: sourceColumn?.formulaAlias ?? normalizeColumnTitle(projection.label, sourceColumn?.title ?? nextKey),
-      style: sourceColumn?.style ?? null,
-    }
-  })
-  const rows = dataset.rows.map(row => {
-    const values = createSpreadsheetViewValues()
-    for (const projection of projections) {
-      values[projection.as ?? projection.key] = row.values[projection.key] ?? null
-    }
     return {
       id: row.id,
       values,
@@ -1290,7 +1245,7 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
           dataset = applySpreadsheetViewSortStep(dataset, step)
           break
         case "project":
-          dataset = applyProjectStep(dataset, step)
+          dataset = applySpreadsheetViewProjectStep(dataset, step)
           break
         case "join":
           dataset = applyJoinStep(
