@@ -60,7 +60,6 @@ import {
   isSamePullAggregationModel,
   normalizePivotColumnsFromUnknown,
 } from "./server/pullRowModelSerialization.js"
-import { type DataGridRangeCacheIndexState } from "./server/rangeCache.js"
 import {
   resolveDataGridVelocityOverscanRange,
   type DataGridVelocityOverscanSample,
@@ -90,6 +89,7 @@ import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js
 import { createDataSourceCacheStoreRegistry } from "./server/dataSourceCacheStoreRegistry.js"
 import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
+import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
 import {
   createDataSourceRuntimeLifecycle,
@@ -186,20 +186,6 @@ const DEFAULT_RANGE_CACHE_CHUNK_SIZE = 256
 const DATA_SOURCE_VELOCITY_OVERSCAN_EXPECTED_LOAD_MS = 180
 const DATA_SOURCE_VELOCITY_OVERSCAN_MAX_ROWS = 512
 const DATA_SOURCE_VELOCITY_OVERSCAN_MIN_SAMPLE_MS = 12
-const DATA_SOURCE_LOADING_ROW_ID_PREFIX = "__affino_datagrid_data_source_loading__:"
-const DATA_SOURCE_LOADING_ROW_DATA_FLAG = "__affinoDataGridDataSourceLoadingRow"
-const DATA_SOURCE_LOADING_ROW_STATUS_FIELD = "__affinoDataGridDataSourceRowStatus"
-
-type DataGridDataSourceLoadingRowData = {
-  [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true
-  [DATA_SOURCE_LOADING_ROW_STATUS_FIELD]: DataGridRangeCacheIndexState
-}
-
-type DataGridDataSourceLoadingRowNode<T> = DataGridRowNode<T> & {
-  readonly __dataSourceLoadingRow: true
-  readonly __placeholder: true
-}
-
 function normalizeTotal(total: number | null | undefined): number | null {
   if (!Number.isFinite(total)) {
     return null
@@ -1031,36 +1017,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     if (maxIndex >= rowCount) {
       rowCount = maxIndex + 1
-    }
-  }
-
-  function createLoadingRowNode(
-    visibleIndex: number,
-    sourceIndex: number,
-    status: DataGridRangeCacheIndexState,
-  ): DataGridDataSourceLoadingRowNode<T> {
-    const rowId = `${DATA_SOURCE_LOADING_ROW_ID_PREFIX}${sourceIndex}`
-    const row = {
-      [DATA_SOURCE_LOADING_ROW_DATA_FLAG]: true,
-      [DATA_SOURCE_LOADING_ROW_STATUS_FIELD]: status,
-    } as DataGridDataSourceLoadingRowData as T
-    return {
-      __dataSourceLoadingRow: true,
-      __placeholder: true,
-      kind: "leaf",
-      data: row,
-      row,
-      rowKey: rowId,
-      rowId,
-      sourceIndex,
-      originalIndex: sourceIndex,
-      displayIndex: visibleIndex,
-      state: {
-        selected: false,
-        group: false,
-        pinned: "none",
-        expanded: false,
-      },
     }
   }
 
@@ -2352,7 +2308,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         if (row) {
           rows.push(row)
         } else {
-          rows.push(createLoadingRowNode(index, sourceIndex, rangeCache.readIndex(sourceIndex).state))
+          rows.push(createDataSourcePlaceholderRow<T>(index, sourceIndex, rangeCache.readIndex(sourceIndex).state))
         }
       }
       return rows

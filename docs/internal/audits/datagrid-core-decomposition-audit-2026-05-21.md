@@ -23,6 +23,8 @@ Progress (`2026-10-18`): moved directional range selection and cached-ahead/back
 
 Progress (`2026-10-18`): moved datasource row-entry identity resolution, row-state/group metadata normalization, and row-node construction to `models/server/dataSourceRowEntry.ts`. Both normal pull application and full cache replacement use the same pure normalizer. Core type-check/build and the full core test suite pass (108 files, 851 tests).
 
+Progress (`2026-10-18`): moved loading placeholder row construction and its internal marker fields to `models/server/dataSourcePlaceholderRow.ts`. Placeholder identity, shape, and status remain unchanged; the row-model facade only decides when a placeholder is needed.
+
 Current responsibilities:
 
 - `DataGridRowModel` facade.
