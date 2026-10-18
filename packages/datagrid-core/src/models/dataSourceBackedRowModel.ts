@@ -92,6 +92,7 @@ import {
   resolveVisibleRangeInvalidation,
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheStoreRuntime } from "./server/dataSourceCacheStoreRuntime.js"
+import { createDataSourcePendingPullRuntime } from "./server/dataSourcePendingPullRuntime.js"
 import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
@@ -1238,74 +1239,16 @@ export function createDataSourceBackedRowModel<T = unknown>(
     })
   }
 
-  function queuePendingPull(
-    requestRange: DataGridViewportRange,
-    reason: DataGridDataSourcePullReason,
-    priority: DataGridDataSourcePullPriority,
-    requestKey: string,
-    requestStateKey: string,
-    treePullContext: DataGridDataSourceTreePullContext | null,
-  ): Promise<void> {
-    const active = readLaneInFlight(priority)
-    const pending = readPendingPull(priority)
-    if (pending && pending.key === requestKey) {
-      diagnostics.pullCoalesced += 1
-      if (priority === "background") {
-        diagnostics.prefetchCoalesced += 1
-      }
-      return active?.promise ?? Promise.resolve()
-    }
-    if (priority === "background" && pending && pending.stateKey === requestStateKey) {
-      if (rangeContains(pending.range, requestRange)) {
-        diagnostics.pullCoalesced += 1
-        diagnostics.prefetchCoalesced += 1
-        return active?.promise ?? Promise.resolve()
-      }
-      if (rangesOverlap(pending.range, requestRange) || pending.range.end + 1 === requestRange.start || requestRange.end + 1 === pending.range.start) {
-        writePendingPull(priority, {
-          range: {
-            start: Math.min(pending.range.start, requestRange.start),
-            end: Math.max(pending.range.end, requestRange.end),
-          },
-          reason,
-          priority,
-          key: buildRequestKey(
-            {
-              start: Math.min(pending.range.start, requestRange.start),
-              end: Math.max(pending.range.end, requestRange.end),
-            },
-            reason,
-            priority,
-            treePullContext,
-            requestStateKey,
-          ),
-          stateKey: requestStateKey,
-          treeData: treePullContext,
-        })
-        diagnostics.pullCoalesced += 1
-        diagnostics.prefetchCoalesced += 1
-        diagnostics.pullDeferred += 1
-        emit()
-        return active?.promise ?? Promise.resolve()
-      }
-      diagnostics.prefetchDroppedStale += 1
-    }
-    const pendingRank = pending ? resolvePriorityRank(pending.priority) : -1
-    const nextRank = resolvePriorityRank(priority)
-    if (nextRank >= pendingRank) {
-      writePendingPull(priority, {
-        range: requestRange,
-        reason,
-        priority,
-        key: requestKey,
-        stateKey: requestStateKey,
-        treeData: treePullContext,
-      })
-    }
-    diagnostics.pullDeferred += 1
-    emit()
-    return active?.promise ?? Promise.resolve()
-  }
+  const pendingPullRuntime = createDataSourcePendingPullRuntime({
+    diagnostics,
+    readLaneInFlight,
+    readPendingPull,
+    writePendingPull,
+    buildRequestKey,
+    emit,
+  })
+
+  const queuePendingPull = pendingPullRuntime.queue
 
   function scheduleViewportPull(
     requestRange: DataGridViewportRange,
