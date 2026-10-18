@@ -1,44 +1,32 @@
 // Main composition root for the client-side row engine. This file should wire
 // subsystems together and expose the public row-model API, but avoid owning
 // domain logic that already lives in host/state/projection/materialization runtimes.
-import{
+import {
   cloneGroupBySpec,
   normalizePaginationInput,
   normalizeViewportRange,
   type DataGridComputedFieldComputeContext,
-  type DataGridGroupExpansionSnapshot,
   type DataGridPaginationInput,
   type DataGridComputedFieldDefinition,
-  type DataGridComputedFieldSnapshot,
   type DataGridFormulaCyclePolicy,
   type DataGridFormulaContextRecomputeRequest,
   type DataGridFormulaFieldDefinition,
-  type DataGridFormulaFieldSnapshot,
   type DataGridFormulaTablePatch,
   type DataGridFormulaTableSource,
-  type DataGridFormulaReferenceParserOptions,
-  type DataGridFormulaComputeStageDiagnostics,
-  type DataGridFormulaIterativeCalculationOptions,
-  type DataGridFormulaRowRecomputeDiagnostics,
   type DataGridFormulaValue,
-  type DataGridColumnHistogram,
   type DataGridColumnHistogramOptions,
   type DataGridFilterSnapshot,
+  type DataGridGroupExpansionSnapshot,
   type DataGridSortAndFilterModelInput,
   type DataGridAggregationModel,
   type DataGridGroupBySpec,
-  type DataGridProjectionStageTimer,
-  type DataGridFilterCellStyleReader,
   type DataGridRowId,
-  type DataGridRowIdResolver,
   type DataGridRowNode,
   type DataGridRowNodeInput,
-  type DataGridRowModel,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
   type DataGridRowModelSnapshot,
   type DataGridSortState,
-  type DataGridTreeDataSpec,
   type DataGridViewportRange,
 } from "./rowModel.js"
 import {
@@ -51,11 +39,8 @@ import type {
 import { expandClientProjectionStages } from "./projection/clientRowProjectionEngine.js"
 import { DATAGRID_CLIENT_ALL_PROJECTION_STAGES } from "./projection/projectionStages.js"
 import {
-  type DataGridClientComputeDiagnostics,
   type DataGridClientComputeMode,
-  type DataGridClientComputeTransport,
 } from "./compute/clientRowComputeRuntime.js"
-import type { DataGridClientPerformanceMode, DataGridProjectionPolicy } from "./projection/projectionPolicy.js"
 import { createClientRowLifecycle } from "./clientRowLifecycle.js"
 import { createClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
 import type { ClientRowComputedSnapshotFieldsRuntime } from "./materialization/clientRowComputedSnapshotFieldsRuntime.js"
@@ -70,7 +55,6 @@ import {
   applyRowDataPatch,
   mergeRowPatch,
 } from "./clientRowRuntimeUtils.js"
-import type { DataGridFieldDependency } from "./dependency/dependencyGraph.js"
 import { createClientRowPivotDrilldownHostRuntime } from "./pivot/clientRowPivotDrilldownHostRuntime.js"
 import { createClientRowSourceColumnHostRuntime } from "./host/clientRowSourceColumnHostRuntime.js"
 import {
@@ -83,15 +67,7 @@ import { cloneAggregationModel } from "./clientRowModelHelpers.js"
 import { createClientRowRowVersionRuntime } from "./state/clientRowRowVersionRuntime.js"
 import {
   createClientRowDerivedCacheRuntime,
-  type DataGridClientRowModelDerivedCacheDiagnostics,
 } from "./projection/clientRowDerivedCacheRuntime.js"
-import {
-  type DataGridCalculationHistory,
-  type DataGridCalculationHistoryEntry,
-  type DataGridCalculationSnapshot,
-  type DataGridCalculationSnapshotInspection,
-  type DataGridCalculationSnapshotRestoreOptions,
-} from "./snapshot/clientRowCalculationSnapshotRuntime.js"
 import { createClientRowCalculationSnapshotRestoreRuntime } from "./snapshot/clientRowCalculationSnapshotRestoreRuntime.js"
 import {
   createClientRowComputedSnapshotRuntime,
@@ -119,7 +95,6 @@ import { createClientRowComputedApplyRuntime } from "./compute/clientRowComputed
 import { createClientRowComputedRefreshRuntime } from "./compute/clientRowComputedRefreshRuntime.js"
 import {
   type DataGridFormulaFunctionDefinition,
-  type DataGridFormulaFunctionRegistry,
 } from "./formula/formulaEngine.js"
 import { createClientRowModelStateBootstrap } from "./bootstrap/clientRowModelStateBootstrap.js"
 import { createClientRowModelAccessorBootstrap } from "./bootstrap/clientRowModelAccessorBootstrap.js"
@@ -128,16 +103,16 @@ import { createClientRowModelProjectionBootstrap } from "./bootstrap/clientRowMo
 import { createClientRowModelComputeBootstrap } from "./bootstrap/clientRowModelComputeBootstrap.js"
 import { createClientRowModelSnapshotBootstrap } from "./bootstrap/clientRowModelSnapshotBootstrap.js"
 import { createDataGridComparatorRegistry } from "./comparator/comparatorRegistry.js"
-import type { DataGridComparatorRegistryInput } from "./comparator/comparatorRegistry.js"
 import type {
-  DataGridAggregationRegistry,
-  DataGridAggregationRegistryInput,
-} from "./aggregation/aggregationEngine.js"
+  ClientRowModel,
+  CreateAdvancedClientRowModelOptions,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
+  DataGridClientRowReorderInput,
+} from "./advancedClientRowModelContracts.js"
 import {
   snapshotDataGridFormulaGraph,
   snapshotDataGridFormulaExecutionPlan,
-  type DataGridFormulaGraphSnapshot,
-  type DataGridFormulaExecutionPlanSnapshot,
 } from "@affino/datagrid-formula-engine"
 import {
   DATAGRID_COMPUTE_VECTOR_BATCH_SIZE,
@@ -148,162 +123,13 @@ import {
   normalizeFormulaColumnCacheMaxColumns,
 } from "./clientRowModelRuntimeConfig.js"
 
-export interface CreateAdvancedClientRowModelOptions<T> {
-  rows?: readonly DataGridRowNodeInput<T>[]
-  resolveRowId?: DataGridRowIdResolver<T>
-  readFilterCell?: (rowNode: DataGridRowNode<T>, columnKey: string) => unknown
-  readFilterCellStyle?: DataGridFilterCellStyleReader<T>
-  /**
-   * Clones row payloads on ingest to isolate the model from later external mutation.
-   * Disable only for tightly controlled perf-sensitive paths.
-   * Default: `true`.
-   */
-  isolateInputRows?: boolean
-  initialTreeData?: DataGridTreeDataSpec<T> | null
-  initialSortModel?: readonly DataGridSortState[]
-  initialFilterModel?: DataGridFilterSnapshot | null
-  initialGroupBy?: DataGridGroupBySpec | null
-  initialPivotModel?: DataGridPivotSpec | null
-  initialAggregationModel?: DataGridAggregationModel<T> | null
-  comparatorRegistry?: DataGridComparatorRegistryInput<T> | null
-  aggregationRegistry?: DataGridAggregationRegistryInput<T> | DataGridAggregationRegistry<T> | null
-  /** Optional fail-closed cap for dense client pivot output cells. */
-  maxPivotOutputCells?: number
-  /** Omits absent aggregate fields from client pivot row payloads. */
-  sparsePivotOutput?: boolean
-  sparsePivotStorage?: boolean
-  initialPagination?: DataGridPaginationInput | null
-  performanceMode?: DataGridClientPerformanceMode
-  projectionPolicy?: DataGridProjectionPolicy
-  fieldDependencies?: readonly DataGridFieldDependency[]
-  initialComputedFields?: readonly DataGridComputedFieldDefinition<T>[]
-  initialFormulaFields?: readonly DataGridFormulaFieldDefinition[]
-  initialFormulaFunctionRegistry?: DataGridFormulaFunctionRegistry
-  formulaReferenceParserOptions?: DataGridFormulaReferenceParserOptions
-  formulaCyclePolicy?: DataGridFormulaCyclePolicy
-  formulaIterativeCalculation?: DataGridFormulaIterativeCalculationOptions
-  computeMode?: DataGridClientComputeMode
-  computeTransport?: DataGridClientComputeTransport | null
-  /**
-   * Worker-mode patch routing threshold.
-   * Execution-plan recomputes with `changedRowCount <= threshold` stay local;
-   * larger patch plans dispatch through worker transport.
-   * Default: `64`.
-   */
-  workerPatchDispatchThreshold?: number | null
-  /**
-   * Optional cap for formula source column-cache entries.
-   * `null`/`undefined` keeps cache unlimited.
-   */
-  formulaColumnCacheMaxColumns?: number | null
-  /**
-   * Captures verbose per-row formula recompute diagnostics.
-   * Disable for benchmarks or perf runs to reduce transient allocations.
-   * Default: `true`.
-   */
-  captureFormulaRowRecomputeDiagnostics?: boolean
-  /**
-   * Captures formula explain diagnostics (dirty causes per node/row).
-   * Disable for benchmarks or perf runs to reduce bookkeeping overhead.
-   * Default: `true`.
-   */
-  captureFormulaExplainDiagnostics?: boolean
-  projectionStageTimer?: DataGridProjectionStageTimer
-}
-
-export interface DataGridClientRowReorderInput {
-  fromIndex: number
-  toIndex: number
-  count?: number
-}
-
-export interface DataGridClientRowPatch<T = unknown> {
-  rowId: DataGridRowId
-  data: Partial<T>
-  previousData?: Partial<T>
-  revisions?: Readonly<Record<string, string | number | null>>
-  revision?: string | number | null
-}
-
-export interface DataGridClientRowPatchOptions {
-  /**
-   * `false` by default for Excel-like edit flow: keep current projection order
-   * until explicit reapply (`refresh`) or recompute-enabled patch.
-   */
-  recomputeSort?: boolean
-  /**
-   * `false` by default for Excel-like edit flow: keep current filter membership
-   * until explicit reapply (`refresh`) or recompute-enabled patch.
-   */
-  recomputeFilter?: boolean
-  /**
-   * `false` by default for Excel-like edit flow: keep current grouping/aggregation
-   * and pivot layout until explicit reapply (`refresh`) or recompute-enabled patch.
-   */
-  recomputeGroup?: boolean
-  emit?: boolean
-  signal?: AbortSignal | null
-}
-
-export interface ClientRowModel<T> extends DataGridRowModel<T> {
-  getSourceRows(): readonly DataGridRowNode<T>[]
-  getSourceRowsRevision(): number
-  getFormulaStructureRevision(): number
-  setRows(rows: readonly DataGridRowNodeInput<T>[]): void
-  removeRows(rowIds: readonly DataGridRowId[]): boolean
-  replaceRows(rows: readonly DataGridRowNodeInput<T>[]): void
-  appendRows(rows: readonly DataGridRowNodeInput<T>[]): void
-  prependRows(rows: readonly DataGridRowNodeInput<T>[]): void
-  insertRowsAt(index: number, rows: readonly DataGridRowNodeInput<T>[]): boolean
-  insertRowsBefore(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean
-  insertRowsAfter(rowId: DataGridRowId, rows: readonly DataGridRowNodeInput<T>[]): boolean
-  setSortAndFilterModel(input: DataGridSortAndFilterModelInput): void
-  getColumnHistogram(columnId: string, options?: DataGridColumnHistogramOptions): DataGridColumnHistogram
-  patchRows(
-    updates: readonly DataGridClientRowPatch<T>[],
-    options?: DataGridClientRowPatchOptions,
-  ): void
-  registerComputedField(definition: DataGridComputedFieldDefinition<T>): void
-  unregisterComputedField(name: string): boolean
-  getComputedFields(): readonly DataGridComputedFieldSnapshot[]
-  recomputeComputedFields(rowIds?: readonly DataGridRowId[]): number
-  registerFormulaField(definition: DataGridFormulaFieldDefinition): void
-  unregisterFormulaField(name: string): boolean
-  getFormulaFields(): readonly DataGridFormulaFieldSnapshot[]
-  recomputeFormulaContext(request: DataGridFormulaContextRecomputeRequest): number
-  registerFormulaFunction(
-    name: string,
-    definition: DataGridFormulaFunctionDefinition | ((args: readonly DataGridFormulaValue[], context?: DataGridComputedFieldComputeContext<unknown>) => unknown),
-  ): void
-  unregisterFormulaFunction(name: string): boolean
-  getFormulaFunctionNames(): readonly string[]
-  setFormulaTable(name: string, rows: DataGridFormulaTableSource): void
-  patchFormulaTables(patch: DataGridFormulaTablePatch): boolean
-  removeFormulaTable(name: string): boolean
-  getFormulaTableNames(): readonly string[]
-  getFormulaExecutionPlan(): DataGridFormulaExecutionPlanSnapshot | null
-  getFormulaGraph(): DataGridFormulaGraphSnapshot | null
-  getFormulaComputeStageDiagnostics(): DataGridFormulaComputeStageDiagnostics | null
-  getFormulaRowRecomputeDiagnostics(): DataGridFormulaRowRecomputeDiagnostics | null
-  reorderRows(input: DataGridClientRowReorderInput): boolean
-  createCalculationSnapshot(): DataGridCalculationSnapshot<T>
-  restoreCalculationSnapshot(
-    snapshot: DataGridCalculationSnapshot<T>,
-    options?: DataGridCalculationSnapshotRestoreOptions,
-  ): boolean
-  inspectCalculationSnapshot(
-    snapshot: DataGridCalculationSnapshot<T>,
-    options?: Pick<DataGridCalculationSnapshotRestoreOptions, "rowBindingPolicy">,
-  ): DataGridCalculationSnapshotInspection
-  pushCalculationSnapshot(label?: string): DataGridCalculationHistoryEntry<T>
-  undoCalculationSnapshot(options?: DataGridCalculationSnapshotRestoreOptions): boolean
-  redoCalculationSnapshot(options?: DataGridCalculationSnapshotRestoreOptions): boolean
-  getCalculationSnapshotHistory(): DataGridCalculationHistory<T>
-  getComputeMode(): DataGridClientComputeMode
-  switchComputeMode(mode: DataGridClientComputeMode): boolean
-  getDerivedCacheDiagnostics(): DataGridClientRowModelDerivedCacheDiagnostics
-  getComputeDiagnostics(): DataGridClientComputeDiagnostics
-}
+export type {
+  ClientRowModel,
+  CreateAdvancedClientRowModelOptions,
+  DataGridClientRowPatch,
+  DataGridClientRowPatchOptions,
+  DataGridClientRowReorderInput,
+} from "./advancedClientRowModelContracts.js"
 
 export type {
   DataGridCalculationHistory,

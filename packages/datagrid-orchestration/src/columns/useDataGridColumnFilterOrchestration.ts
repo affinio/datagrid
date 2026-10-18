@@ -1,6 +1,7 @@
 import {
   evaluateColumnPredicateFilter,
   serializeColumnValueToToken,
+  type DataGridAdvancedFilterCondition,
   type DataGridColumnPredicateFilter,
   type DataGridFilterSnapshot,
 } from "@affino/datagrid-core"
@@ -388,6 +389,7 @@ export function useDataGridColumnFilterOrchestration<TRow>(
       return null
     }
     const columnFilterEntries: Array<[string, DataGridFilterSnapshot["columnFilters"][string]]> = []
+    const advancedConditions: DataGridAdvancedFilterCondition[] = []
     for (const key of keys) {
       const filter = filters[key]
       if (!filter) {
@@ -401,44 +403,36 @@ export function useDataGridColumnFilterOrchestration<TRow>(
         continue
       }
       const predicateOperator = mapOperatorToPredicateOperator(filter.operator)
-      if (!predicateOperator) {
-        continue
-      }
-      columnFilterEntries.push([
-        key,
-        {
-          kind: "predicate",
-          operator: predicateOperator,
+      if (predicateOperator) {
+        columnFilterEntries.push([
+          key,
+          {
+            kind: "predicate",
+            operator: predicateOperator,
+            value: filter.value,
+            value2: filter.value2,
+          },
+        ])
+      } else {
+        advancedConditions.push({
+          kind: "condition",
+          key,
+          type: filter.kind === "number" ? "number" : "text",
+          operator: filter.operator,
           value: filter.value,
           value2: filter.value2,
-        },
-      ])
+        })
+      }
     }
 
     return {
       columnFilters: Object.fromEntries(columnFilterEntries),
-      advancedFilters: Object.fromEntries(
-        keys.flatMap(key => {
-          const filter = filters[key]
-          if (!filter || filter.operator === "in-list") {
-            return []
-          }
-          const type = filter.kind === "number" ? "number" : "text"
-          return [[
-            key,
-            {
-              type,
-              clauses: [
-                {
-                  operator: filter.operator,
-                  value: filter.value,
-                  value2: filter.value2,
-                },
-              ],
-            },
-          ]]
-        }),
-      ),
+      advancedFilters: {},
+      advancedExpression: advancedConditions.length === 0
+        ? null
+        : advancedConditions.length === 1
+          ? advancedConditions[0]!
+          : { kind: "group", operator: "and", children: advancedConditions },
     }
   }
 

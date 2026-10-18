@@ -108,16 +108,8 @@ describe("useDataGridColumnFilterOrchestration contract", () => {
           value2: undefined,
         },
       },
-      advancedFilters: {
-        service: {
-          type: "text",
-          clauses: [{ operator: "contains", value: "api", value2: undefined }],
-        },
-        latencyMs: {
-          type: "number",
-          clauses: [{ operator: "gte", value: "100", value2: undefined }],
-        },
-      },
+      advancedFilters: {},
+      advancedExpression: null,
     })
   })
 
