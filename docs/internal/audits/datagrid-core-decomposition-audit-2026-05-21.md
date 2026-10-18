@@ -184,6 +184,8 @@ Recommended decomposition:
 - Extract per-stage runtimes: `viewFilterStage`, `viewSortStage`, `viewProjectStage`, `viewJoinStage`, `viewGroupStage`, `viewPivotStage`.
 - Extract shared value/ordering helpers and dataset conversion helpers.
 
+Progress (`2026-10-18`): moved shared ordering, equivalence, emptiness, text normalization, and numeric coercion helpers to `spreadsheet/viewPipelineValueUtils.ts`. Stage execution and public materializers remain in `viewPipeline.ts`; per-stage extraction and dataset conversion remain open. Focused view-pipeline and workbook tests passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/viewPipeline.spec.ts`
