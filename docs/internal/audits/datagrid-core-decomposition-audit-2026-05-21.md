@@ -133,7 +133,9 @@ Risk:
 
 Progress (`2026-10-18`): extracted deterministic strongly connected component grouping and dependency-first scheduling to `spreadsheet/workbookDependencyScheduler.ts`. The workbook facade now owns when to schedule and synchronize; the scheduler owns graph ordering. Focused workbook tests and package type-check/build passed. Remaining workbook orchestration still owns graph construction, invalidation, and sync passes.
 
-Progress (`2026-10-18`): moved stable forward/reverse dependency adjacency construction to `spreadsheet/workbookDependencyGraph.ts`. The workbook facade still resolves formula, view, and alias dependencies; the graph utility owns stable edge normalization and reverse-index creation.
+Progress (`2026-10-18`): moved stable forward/reverse dependency adjacency construction to `spreadsheet/workbookDependencyGraph.ts`. The workbook facade still resolves view and alias dependencies; the graph utility owns stable edge normalization and reverse-index creation.
+
+Progress (`2026-10-18`): moved per-sheet formula dependency extraction and alias normalization to `spreadsheet/workbookFormulaDependencies.ts`. Workbook orchestration now consumes an explicit dependency snapshot while retaining revision-based cache invalidation.
 
 Validation target:
 
