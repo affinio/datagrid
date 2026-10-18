@@ -155,7 +155,6 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.sortModel).toEqual([{ key: "id", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
       columnFilters: { name: { kind: "valueSet", tokens: ["string:beta"] } },
-      advancedFilters: {},
     })
     expect(rowSnapshot.groupBy).toEqual({
       fields: ["name"],
@@ -227,7 +226,6 @@ describe("data grid api facade contracts", () => {
 
     api.rows.setFilterModel({
       columnFilters: { status: { kind: "valueSet", tokens: ["string:keep"] } },
-      advancedFilters: {},
     })
     api.rows.setSortModel([{ key: "score", direction: "asc" }])
 
@@ -502,7 +500,6 @@ describe("data grid api facade contracts", () => {
     expect(rowSnapshot.sortModel).toEqual([{ key: "revenue", direction: "desc" }])
     expect(rowSnapshot.filterModel).toEqual({
       columnFilters: { region: { kind: "valueSet", tokens: ["string:amer"] } },
-      advancedFilters: {},
     })
     expect(rowSnapshot.groupBy).toEqual({ fields: ["region"], expandedByDefault: true })
     expect(rowSnapshot.pivotModel).toEqual({
@@ -1652,8 +1649,6 @@ describe("data grid api facade contracts", () => {
     expect(requests[1]?.sortModel).toEqual([{ key: "owner", direction: "desc" }])
     expect(requests[1]?.filterModel).toEqual({
       columnFilters: { owner: { kind: "valueSet", tokens: ["string:owner-1"] } },
-      advancedFilters: {},
-      advancedExpression: null,
     })
   })
 
@@ -3316,7 +3311,6 @@ describe("data grid api facade contracts", () => {
           tokens: [serializeColumnValueToToken("#ff0000")],
         },
       },
-      advancedFilters: {},
     })
 
     const exported = api.state.get()
@@ -3329,7 +3323,6 @@ describe("data grid api facade contracts", () => {
           tokens: [serializeColumnValueToToken("#ff0000")],
         },
       },
-      advancedFilters: {},
     })
 
     api.rows.setFilterModel(null)

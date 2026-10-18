@@ -95,7 +95,8 @@ export const useDataGridSettingsStore = defineStore("dataGridSettingsStore", {
     setFilterSnapshot(tableId: string, snapshot: DataGridStoredFilterSnapshot) {
       const isEmpty = !snapshot ||
         (Object.keys(snapshot.columnFilters ?? {}).length === 0 &&
-          Object.keys(snapshot.advancedFilters ?? {}).length === 0)
+          Object.keys(snapshot.advancedFilters ?? {}).length === 0 &&
+          !snapshot.advancedExpression)
       if (isEmpty) {
         delete this.filterSnapshots[tableId]
         return

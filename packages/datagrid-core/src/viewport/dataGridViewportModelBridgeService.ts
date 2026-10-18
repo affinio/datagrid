@@ -140,49 +140,8 @@ function areFilterModelsEqual(
     }
   }
 
-  const leftAdvanced = left.advancedFilters ?? {}
-  const rightAdvanced = right.advancedFilters ?? {}
-  const leftAdvancedKeys = Object.keys(leftAdvanced)
-  const rightAdvancedKeys = Object.keys(rightAdvanced)
-  if (leftAdvancedKeys.length !== rightAdvancedKeys.length) {
+  if (!areFilterValuesEqual(left.advancedExpression ?? null, right.advancedExpression ?? null)) {
     return false
-  }
-  for (const key of leftAdvancedKeys) {
-    if (!Object.prototype.hasOwnProperty.call(rightAdvanced, key)) {
-      return false
-    }
-    const leftFilter = leftAdvanced[key]
-    const rightFilter = rightAdvanced[key]
-    if (!leftFilter || !rightFilter) {
-      return false
-    }
-    if (leftFilter.type !== rightFilter.type) {
-      return false
-    }
-    const leftClauses = Array.isArray(leftFilter.clauses) ? leftFilter.clauses : []
-    const rightClauses = Array.isArray(rightFilter.clauses) ? rightFilter.clauses : []
-    if (leftClauses.length !== rightClauses.length) {
-      return false
-    }
-    for (let index = 0; index < leftClauses.length; index += 1) {
-      const leftClause = leftClauses[index]
-      const rightClause = rightClauses[index]
-      if (!leftClause || !rightClause) {
-        return false
-      }
-      if (leftClause.operator !== rightClause.operator) {
-        return false
-      }
-      if ((leftClause.join ?? null) !== (rightClause.join ?? null)) {
-        return false
-      }
-      if (!areFilterValuesEqual(leftClause.value, rightClause.value)) {
-        return false
-      }
-      if (!areFilterValuesEqual(leftClause.value2, rightClause.value2)) {
-        return false
-      }
-    }
   }
 
   return true

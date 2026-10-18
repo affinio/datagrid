@@ -149,7 +149,7 @@ describe("createDataSourceBackedRowModel", () => {
       owner: { kind: "valueSet", tokens: ["string:noc"] },
     })
     expect(histogramRequests[0]?.filterModel?.columnStyleFilters).toEqual({})
-    expect(histogramRequests[0]?.filterModel?.advancedFilters).toEqual({})
+    expect(histogramRequests[0]?.filterModel?.advancedFilters).toBeUndefined()
 
     model.dispose()
   })
@@ -1037,7 +1037,6 @@ describe("createDataSourceBackedRowModel", () => {
       columnFilters: {
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
-      advancedFilters: {},
       quickFilter: {
         query: "filtered",
         columns: ["value"],
@@ -1278,7 +1277,6 @@ describe("createDataSourceBackedRowModel", () => {
       columnFilters: {
         status: { kind: "valueSet", tokens: ["string:active"] },
       },
-      advancedFilters: {},
     } satisfies DataGridFilterSnapshot
     const setSortAndFilterModel = model.setSortAndFilterModel
     if (setSortAndFilterModel) {

@@ -606,7 +606,6 @@ watch([() => sortState.value?.key ?? "", () => sortState.value?.direction ?? "",
   const nextFilter: DataGridFilterSnapshot | null = hasColumnFilters || advancedExpression
     ? {
         columnFilters: nextColumnFilters,
-        advancedFilters: {},
         advancedExpression,
       }
     : null

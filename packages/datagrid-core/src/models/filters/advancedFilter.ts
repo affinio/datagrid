@@ -486,24 +486,18 @@ export function cloneDataGridFilterSnapshot(
     Object.entries(input.columnStyleFilters ?? {}).map(([key, entry]) => [key, cloneColumnStyleFilterEntry(entry)]),
   )
   const clonedQuickFilter = cloneDataGridQuickFilterSnapshot(input.quickFilter)
+  const clonedAdvancedExpression = cloneDataGridAdvancedFilterExpression(input.advancedExpression ?? null)
+  const advancedExpression = clonedAdvancedExpression
+    ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(input.advancedFilters)
 
   return {
     columnFilters: Object.fromEntries(
       Object.entries(input.columnFilters ?? {}).map(([key, entry]) => [key, cloneColumnFilterEntry(entry)]),
     ),
     ...(input.columnStyleFilters != null ? { columnStyleFilters: clonedColumnStyleFilters } : {}),
-    advancedFilters: Object.fromEntries(
-      Object.entries(input.advancedFilters ?? {}).map(([key, condition]) => [
-        key,
-        {
-          ...condition,
-          clauses: Array.isArray(condition?.clauses)
-            ? condition.clauses.map(clause => ({ ...clause }))
-            : [],
-        },
-      ]),
-    ),
-    advancedExpression: cloneDataGridAdvancedFilterExpression(input.advancedExpression ?? null),
+    ...(advancedExpression || Object.prototype.hasOwnProperty.call(input, "advancedExpression")
+      ? { advancedExpression }
+      : {}),
     ...(clonedQuickFilter ? { quickFilter: clonedQuickFilter } : {}),
   }
 }

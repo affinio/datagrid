@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
   type DataGridFilterSnapshot,
 } from "../index"
+import { buildDataGridAdvancedFilterExpressionFromLegacyFilters } from "../filters/advancedFilter"
 
 describe("advanced filter expression", () => {
   it("evaluates nested group + not expression deterministically", () => {
@@ -146,19 +146,44 @@ describe("advanced filter expression", () => {
 
     const cloned = cloneDataGridFilterSnapshot(source)
     expect(cloned).not.toBeNull()
-    expect(cloned).toEqual(source)
+    expect(cloned).toMatchObject({
+      columnFilters: source.columnFilters,
+      advancedExpression: source.advancedExpression,
+      quickFilter: source.quickFilter,
+    })
 
     if (!cloned) {
       return
     }
 
     cloned.columnFilters.owner = { kind: "valueSet", tokens: ["string:ops"] }
-    cloned.advancedFilters.latencyMs.clauses[0]!.operator = "gt"
     cloned.quickFilter!.columns = ["region"]
 
     expect(source.columnFilters.owner).toEqual({ kind: "valueSet", tokens: ["string:noc"] })
     expect(source.advancedFilters.latencyMs.clauses[0]!.operator).toBe("between")
     expect(source.quickFilter?.columns).toEqual(["owner", "service"])
+  })
+
+  it("migrates legacy advanced filters into the canonical expression on clone", () => {
+    const cloned = cloneDataGridFilterSnapshot({
+      columnFilters: {},
+      advancedFilters: {
+        latencyMs: {
+          type: "number",
+          clauses: [{ operator: "between", value: 10, value2: 90 }],
+        },
+      },
+    })
+
+    expect(cloned?.advancedFilters).toBeUndefined()
+    expect(cloned?.advancedExpression).toEqual({
+      kind: "condition",
+      key: "latencyMs",
+      type: "number",
+      operator: "between",
+      value: 10,
+      value2: 90,
+    })
   })
 
   it("supports set/date operators in advanced expression", () => {

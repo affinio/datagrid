@@ -1,5 +1,4 @@
 import {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,
   serializeColumnValueToToken,
@@ -333,7 +332,6 @@ function matchesFilterModel(row: ServerDemoRow, filterModel: DataGridFilterSnaps
     }
   }
   const expression = filterModel.advancedExpression
-    ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
   if (!expression) {
     return true
   }

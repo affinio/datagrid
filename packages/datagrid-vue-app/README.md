@@ -1569,7 +1569,6 @@ Controlled consumers can still manage quick filter directly through the same `fi
   :columns="columns"
   :filter-model="{
     columnFilters: {},
-    advancedFilters: {},
     advancedExpression: null,
     quickFilter: {
       query: 'platform eu',

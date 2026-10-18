@@ -131,7 +131,8 @@ export interface DataGridQuickFilterSnapshot {
 export interface DataGridFilterSnapshot {
   columnFilters: Record<string, DataGridColumnFilterSnapshotEntry>
   columnStyleFilters?: Record<string, DataGridColumnStyleFilter>
-  advancedFilters: Record<string, DataGridAdvancedFilter>
+  /** @deprecated Use `advancedExpression`; snapshot cloning migrates this input to the expression form. */
+  advancedFilters?: Record<string, DataGridAdvancedFilter>
   advancedExpression?: DataGridAdvancedFilterExpression | null
   quickFilter?: DataGridQuickFilterSnapshot | null
 }

@@ -6,7 +6,6 @@ export {
   createDataGridColumnModel,
   createDataGridSelectionSummary,
   createInMemoryDataGridSettingsAdapter,
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,

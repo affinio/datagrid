@@ -55,9 +55,6 @@ describe("data grid filter normalization", () => {
       columnFilters: {
         roi: { value: 0.25 },
       },
-      advancedFilters: {
-        roi: { clauses: [{ value: 0.5 }] },
-      },
       advancedExpression: {
         value: 0.1,
       },
@@ -112,7 +109,7 @@ describe("data grid filter normalization", () => {
     const normalized = normalizeDataGridAppUnifiedStateFilters(state, columns)
 
     expect(normalized.rows.snapshot.filterModel?.columnFilters.status).toBeUndefined()
-    expect(normalized.rows.snapshot.filterModel?.advancedFilters.status).toBeUndefined()
+    expect(normalized.rows.snapshot.filterModel?.advancedFilters).toBeUndefined()
     expect(normalized.rows.snapshot.filterModel?.advancedExpression).toBeNull()
     expect(normalized.rows.snapshot.filterModel?.columnFilters.roi).toMatchObject({ value: 0.15 })
   })

@@ -1,7 +1,4 @@
-import {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
-  type DataGridFilterSnapshot,
-} from "@affino/datagrid-vue"
+import type { DataGridFilterSnapshot } from "@affino/datagrid-vue"
 import type {
   DataGridAppAdvancedFilterClauseDraft,
   DataGridAppAdvancedFilterClauseJoin,
@@ -132,7 +129,6 @@ export function resolveAdvancedFilterDraftClausesFromFilterModel(
   }
   const columnClauses = resolveAdvancedFilterDraftClausesFromColumnFilters(filterModel)
   const expression = filterModel.advancedExpression
-    ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
   const advancedClauses = resolveAdvancedFilterDraftClausesFromExpression(expression ?? null)
   const combinedClauses: DataGridAppAdvancedFilterClauseDraft[] = [
     ...columnClauses,

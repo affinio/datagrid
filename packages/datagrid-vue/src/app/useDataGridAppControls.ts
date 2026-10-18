@@ -202,7 +202,6 @@ export function useDataGridAppControls<TRow, TPivotLayoutId extends string = str
     const nextFilter: DataGridFilterSnapshot | null = hasColumnFilters || advancedExpression
       ? {
           columnFilters: nextColumnFilters,
-          advancedFilters: {},
           advancedExpression,
         }
       : null

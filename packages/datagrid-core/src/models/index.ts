@@ -236,7 +236,6 @@ export {
 } from "@affino/datagrid-formula-engine"
 
 export {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,

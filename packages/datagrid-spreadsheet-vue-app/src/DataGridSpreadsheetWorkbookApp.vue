@@ -682,7 +682,6 @@ function cloneRowData<TRow,>(row: TRow): TRow {
 function createEmptyFilterModel(): DataGridFilterSnapshot {
   return {
     columnFilters: {},
-    advancedFilters: {},
     advancedExpression: null,
   }
 }

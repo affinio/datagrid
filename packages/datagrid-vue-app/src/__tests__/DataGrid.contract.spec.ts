@@ -5934,7 +5934,6 @@ describe("DataGrid app facade contract", () => {
       reason: "filter-change",
       filterModel: expect.objectContaining({
         columnFilters: {},
-        advancedFilters: {},
         advancedExpression: {
           kind: "condition",
           key: "owner",
@@ -6213,7 +6212,6 @@ describe("DataGrid app facade contract", () => {
         snapshot: expect.objectContaining({
           filterModel: expect.objectContaining({
             columnFilters: {},
-            advancedFilters: {},
             advancedExpression: expect.objectContaining({
               kind: "condition",
               key: "owner",

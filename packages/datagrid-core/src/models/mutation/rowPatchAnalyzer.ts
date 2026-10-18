@@ -14,10 +14,7 @@ import {
   type DataGridClientPatchStage,
   type DataGridClientProjectionStage,
 } from "../projection/projectionStages.js"
-import {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
-  normalizeDataGridAdvancedFilterExpression,
-} from "../filters/advancedFilter.js"
+import { normalizeDataGridAdvancedFilterExpression } from "../filters/advancedFilter.js"
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -29,11 +26,7 @@ export function resolveAdvancedExpression(
   if (!filterModel) {
     return null
   }
-  const explicit = normalizeDataGridAdvancedFilterExpression(filterModel.advancedExpression ?? null)
-  if (explicit) {
-    return explicit
-  }
-  return buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModel.advancedFilters)
+  return normalizeDataGridAdvancedFilterExpression(filterModel.advancedExpression ?? null)
 }
 
 function collectAdvancedExpressionFields(

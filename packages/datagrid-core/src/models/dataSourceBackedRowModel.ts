@@ -237,16 +237,9 @@ function cloneFilterSnapshotForHistogram(
       columnStyleFilters[rawKey] = entry
     }
   }
-  const advancedFilters: NonNullable<DataGridFilterSnapshot["advancedFilters"]> = {}
-  for (const [rawKey, entry] of Object.entries(cloned.advancedFilters ?? {})) {
-    if (rawKey.trim() !== ignoredColumnId) {
-      advancedFilters[rawKey] = entry
-    }
-  }
   return {
     columnFilters,
     columnStyleFilters,
-    advancedFilters,
     advancedExpression: cloned.advancedExpression ?? null,
     ...(cloned.quickFilter ? { quickFilter: cloned.quickFilter } : {}),
   }

@@ -30,7 +30,6 @@ import type {
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
 import {
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   useDataGridContextMenu,
   type GridSelectionPointLike,
@@ -168,7 +167,6 @@ const DATA_GRID_PERF_STORE_KEY = "__AFFINO_DATAGRID_PERF__"
 const DATA_GRID_SLOW_SORT_THRESHOLD_MS = 50
 
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
-type DataGridLegacyAdvancedFilterEntry = DataGridFilterSnapshot["advancedFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
 type DataGridDefaultRendererRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
@@ -350,7 +348,6 @@ function areSortToggleStatesEqual(left: readonly SortToggleState[], right: reado
 function createEmptyFilterModel(): DataGridFilterSnapshot {
   return {
     columnFilters: {},
-    advancedFilters: {},
     advancedExpression: null,
   }
 }
@@ -401,17 +398,14 @@ function pruneFilterModel(filterModel: DataGridFilterSnapshot): DataGridFilterSn
       caseSensitive: entry.caseSensitive,
     }
   }
-  const advancedFilters = { ...(filterModel.advancedFilters ?? {}) }
   const advancedExpression = filterModel.advancedExpression ?? null
   const quickFilter = cloneDataGridFilterSnapshot({
     columnFilters: {},
-    advancedFilters: {},
     advancedExpression: null,
     quickFilter: filterModel.quickFilter,
   })?.quickFilter ?? null
   if (
     Object.keys(columnFilters).length === 0
-    && Object.keys(advancedFilters).length === 0
     && !advancedExpression
     && !quickFilter
   ) {
@@ -419,7 +413,6 @@ function pruneFilterModel(filterModel: DataGridFilterSnapshot): DataGridFilterSn
   }
   return {
     columnFilters,
-    advancedFilters,
     advancedExpression,
     ...(quickFilter ? { quickFilter } : {}),
   }
@@ -699,36 +692,6 @@ function formatColumnFilterSummary(
     return `${label} ${formatColumnFilterOperator(filter.operator, labels)}`
   }
   return `${label} ${formatColumnFilterOperator(filter.operator, labels)} ${formatFilterDisplayValue(filter.value)}`
-}
-
-function formatLegacyAdvancedFilterSummary(
-  label: string,
-  filter: DataGridLegacyAdvancedFilterEntry,
-  labels: DataGridResolvedAdvancedFilterLabels,
-): string {
-  const parts = filter.clauses
-    .map((clause, clauseIndex) => {
-      const join = clause.join === "or" ? labels.joins.or : labels.joins.and
-      const prefix = clauseIndex === 0 ? "" : `${join} `
-      if (clause.operator === "between") {
-        return `${prefix}${formatColumnFilterOperator(clause.operator, labels)} ${formatFilterDisplayValue(clause.value)} ${labels.betweenJoiner} ${formatFilterDisplayValue(clause.value2)}`
-      }
-      if (
-        clause.operator === "isEmpty"
-        || clause.operator === "notEmpty"
-        || clause.operator === "isNull"
-        || clause.operator === "notNull"
-      ) {
-        return `${prefix}${formatColumnFilterOperator(clause.operator, labels)}`
-      }
-      return `${prefix}${formatColumnFilterOperator(clause.operator, labels)} ${formatFilterDisplayValue(clause.value)}`
-    })
-    .filter(part => part.length > 0)
-
-  if (parts.length === 0) {
-    return `${label}: ${labels.activeSummaryFallback}`
-  }
-  return `${label} ${parts.join(" ")}`
 }
 
 function formatAdvancedExpressionSummary(
@@ -1542,7 +1505,6 @@ export default defineComponent({
         return true
       }
       const expression = filterModelState.value.advancedExpression
-        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
       const expressionHasColumn = (node: DataGridAdvancedExpressionEntry): boolean => {
         if (node.kind === "condition") return node.key === columnKey || node.field === columnKey
         if (node.kind === "not") return expressionHasColumn(node.child)
@@ -1635,7 +1597,6 @@ export default defineComponent({
       const nextFilterModel = props.advancedFilter.enabled
         ? {
             ...filterModelInput,
-            advancedFilters: {},
             advancedExpression,
           }
         : {
@@ -1705,16 +1666,6 @@ export default defineComponent({
           continue
         }
         items.push(formatColumnFilterSummary(resolveColumnLabel(columnKey), entry, advancedLabels))
-      }
-
-      for (const [columnKey, entry] of Object.entries(filterModelState.value.advancedFilters ?? {})) {
-        if (!entry) {
-          continue
-        }
-        items.push(formatAdvancedSummaryPrefix(
-          formatLegacyAdvancedFilterSummary(resolveColumnLabel(columnKey), entry, advancedLabels),
-          advancedLabels,
-        ))
       }
 
       if (effectiveAdvancedExpression.value) {
@@ -1866,7 +1817,6 @@ export default defineComponent({
       const nextFilterModel = {
         ...cloneFilterModelState(filterModelState.value),
         columnFilters: {},
-        advancedFilters: {},
         advancedExpression,
       }
       filterModelState.value = nextFilterModel
@@ -2191,7 +2141,6 @@ export default defineComponent({
 
     const resolveColumnMenuCondition = (columnKey: string): { operator: string; formula?: string; formula2?: string } | null => {
       const expression = filterModelState.value.advancedExpression
-        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
       const findLastCondition = (
         entry: DataGridAdvancedExpressionEntry,
       ): Extract<DataGridAdvancedExpressionEntry, { kind: "condition" }> | null => {
@@ -2259,7 +2208,6 @@ export default defineComponent({
       }
 
       const currentExpression = filterModelState.value.advancedExpression
-        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
       const replaceForColumn = (
         expression: DataGridAdvancedExpressionEntry,
       ): { expression: DataGridAdvancedExpressionEntry; replaced: boolean } => {
@@ -2291,7 +2239,6 @@ export default defineComponent({
           ? { kind: "group" as const, operator: "and" as const, children: [currentExpression, nextCondition] }
           : nextCondition
       const nextFilterModel = cloneFilterModelState(filterModelState.value)
-      nextFilterModel.advancedFilters = {}
       nextFilterModel.advancedExpression = nextExpression
       filterModelState.value = nextFilterModel
       filterModelStateNormalized.value = false
@@ -2300,7 +2247,6 @@ export default defineComponent({
 
     const clearColumnMenuCondition = (columnKey: string): void => {
       const currentExpression = filterModelState.value.advancedExpression
-        ?? buildDataGridAdvancedFilterExpressionFromLegacyFilters(filterModelState.value.advancedFilters)
       if (!currentExpression) return
       const removeForColumn = (
         expression: DataGridAdvancedExpressionEntry,
@@ -2330,7 +2276,6 @@ export default defineComponent({
       const result = removeForColumn(currentExpression)
       if (!result.changed) return
       const nextFilterModel = cloneFilterModelState(filterModelState.value)
-      nextFilterModel.advancedFilters = {}
       nextFilterModel.advancedExpression = result.expression
       filterModelState.value = nextFilterModel
       filterModelStateNormalized.value = false

@@ -54,9 +54,6 @@ export function createClientRowModelStateBootstrap<T>(
   input: CreateClientRowModelStateBootstrapOptions<T>,
 ): ClientRowModelStateBootstrapResult<T> {
   const { options, normalizeFormulaColumnCacheMaxColumns } = input
-  const structuredCloneRef = (globalThis as typeof globalThis & {
-    structuredClone?: <U>(value: U) => U
-  }).structuredClone
 
   const cloneSortModel = (value: readonly DataGridSortState[]): readonly DataGridSortState[] =>
     value.map(item => ({ ...item }))
@@ -64,13 +61,6 @@ export function createClientRowModelStateBootstrap<T>(
   const cloneFilterModel = (value: DataGridFilterSnapshot | null): DataGridFilterSnapshot | null => {
     if (!value) {
       return null
-    }
-    if (typeof structuredCloneRef === "function") {
-      try {
-        return structuredCloneRef(value)
-      } catch {
-        // Fall through to deterministic JS clone for non-cloneable payloads.
-      }
     }
     return cloneFilterSnapshot(value)
   }

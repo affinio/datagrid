@@ -5,7 +5,6 @@ import {
 } from "@affino/datagrid-vue"
 
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
-type DataGridLegacyAdvancedFilterEntry = DataGridFilterSnapshot["advancedFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
 
 export interface DataGridAppFilterValueNormalizationContext {
@@ -81,36 +80,6 @@ function normalizeColumnFilterEntry(
   }
 }
 
-function normalizeLegacyAdvancedFilterEntry(
-  optionsByColumn: ReadonlyMap<string, DataGridAppColumnFilterOptions>,
-  columnKey: string,
-  entry: DataGridLegacyAdvancedFilterEntry,
-): DataGridLegacyAdvancedFilterEntry | null {
-  if (entry.type === "set" && !isValueSetAllowed(optionsByColumn, columnKey)) {
-    return null
-  }
-  return {
-    ...entry,
-    clauses: (entry.clauses ?? []).map(clause => ({
-      ...clause,
-      value: normalizeValue(optionsByColumn, {
-        columnKey,
-        value: clause.value,
-        operator: clause.operator,
-        source: "advanced",
-        role: "value",
-      }),
-      value2: normalizeValue(optionsByColumn, {
-        columnKey,
-        value: clause.value2,
-        operator: clause.operator,
-        source: "advanced",
-        role: "value2",
-      }),
-    })),
-  }
-}
-
 function normalizeAdvancedExpression(
   optionsByColumn: ReadonlyMap<string, DataGridAppColumnFilterOptions>,
   expression: DataGridAdvancedExpressionEntry | null | undefined,
@@ -170,17 +139,9 @@ export function normalizeDataGridAppFilterModel(
       columnFilters[columnKey] = normalized
     }
   }
-  const advancedFilters: DataGridFilterSnapshot["advancedFilters"] = {}
-  for (const [columnKey, entry] of Object.entries(cloned.advancedFilters ?? {})) {
-    const normalized = normalizeLegacyAdvancedFilterEntry(optionsByColumn, columnKey, entry)
-    if (normalized) {
-      advancedFilters[columnKey] = normalized
-    }
-  }
   return {
     ...cloned,
     columnFilters,
-    advancedFilters,
     advancedExpression: normalizeAdvancedExpression(optionsByColumn, cloned.advancedExpression),
   }
 }

@@ -155,8 +155,8 @@ async function loadCore() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return { createClientRowModel: module.createClientRowModel }
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return { createAdvancedClientRowModel: module.createAdvancedClientRowModel }
       }
     } catch (error) {
       lastError = error
@@ -197,7 +197,6 @@ function createRows(count, seed) {
 function createQuickFilter(query, columns) {
   return {
     columnFilters: {},
-    advancedFilters: {},
     quickFilter: {
       query,
       columns,
@@ -210,7 +209,6 @@ function createColumnFilter() {
     columnFilters: {
       status: { kind: "valueSet", tokens: ["string:active"] },
     },
-    advancedFilters: {},
   }
 }
 
@@ -219,7 +217,6 @@ function createQuickAndColumnFilter(query, columns) {
     columnFilters: {
       status: { kind: "valueSet", tokens: ["string:active"] },
     },
-    advancedFilters: {},
     quickFilter: {
       query,
       columns,
@@ -227,8 +224,8 @@ function createQuickAndColumnFilter(query, columns) {
   }
 }
 
-function createModel(createClientRowModel, rows) {
-  return createClientRowModel({
+function createModel(createAdvancedClientRowModel, rows) {
+  return createAdvancedClientRowModel({
     rows,
     resolveRowId: row => row.id,
     isolateInputRows: false,
@@ -265,9 +262,9 @@ function refresh(model) {
   return model.getSnapshot()
 }
 
-function runWarmup(createClientRowModel, rows, columns) {
+function runWarmup(createAdvancedClientRowModel, rows, columns) {
   for (let iteration = 0; iteration < WARMUP_RUNS; iteration += 1) {
-    const model = createModel(createClientRowModel, rows)
+    const model = createModel(createAdvancedClientRowModel, rows)
     applyFilter(model, createQuickFilter("api", columns))
     applyFilter(model, createQuickFilter("platform", columns))
     applyFilter(model, null)
@@ -277,7 +274,7 @@ function runWarmup(createClientRowModel, rows, columns) {
   }
 }
 
-function runScenario(createClientRowModel, rows, columns, searchableColumnCount) {
+function runScenario(createAdvancedClientRowModel, rows, columns, searchableColumnCount) {
   const durations = {
     noQuickFilterRefresh: [],
     firstApply: [],
@@ -294,10 +291,10 @@ function runScenario(createClientRowModel, rows, columns, searchableColumnCount)
     quickFilterAndColumnFilter: [],
   }
 
-  runWarmup(createClientRowModel, rows, columns)
+  runWarmup(createAdvancedClientRowModel, rows, columns)
 
   for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-    const model = createModel(createClientRowModel, rows)
+    const model = createModel(createAdvancedClientRowModel, rows)
 
     let measured = measure(() => refresh(model))
     durations.noQuickFilterRefresh.push(measured.durationMs)
@@ -344,7 +341,7 @@ function runScenario(createClientRowModel, rows, columns, searchableColumnCount)
   }
 }
 
-async function benchmarkSeed(seed, createClientRowModel) {
+async function benchmarkSeed(seed, createAdvancedClientRowModel) {
   const heapBefore = await sampleHeapUsed()
   const startedAt = performance.now()
   const rowCountResults = []
@@ -352,8 +349,8 @@ async function benchmarkSeed(seed, createClientRowModel) {
   for (const rowCount of ROW_COUNTS) {
     const rows = createRows(rowCount, seed)
     const scenarios = [
-      runScenario(createClientRowModel, rows, QUICK_FILTER_COLUMNS_1, 1),
-      runScenario(createClientRowModel, rows, QUICK_FILTER_COLUMNS_5, 5),
+      runScenario(createAdvancedClientRowModel, rows, QUICK_FILTER_COLUMNS_1, 1),
+      runScenario(createAdvancedClientRowModel, rows, QUICK_FILTER_COLUMNS_5, 5),
     ]
     rowCountResults.push({ rowCount, scenarios })
   }
@@ -410,10 +407,10 @@ function checkBudget(label, stat, budget, budgetErrors) {
   }
 }
 
-const { createClientRowModel } = await loadCore()
+const { createAdvancedClientRowModel } = await loadCore()
 const runResults = []
 for (const seed of BENCH_SEEDS) {
-  const result = await benchmarkSeed(seed, createClientRowModel)
+  const result = await benchmarkSeed(seed, createAdvancedClientRowModel)
   runResults.push(result)
   const firstApply = collectOperationP95([result], "firstApply")
   const queryChange = collectOperationP95([result], "queryChange")

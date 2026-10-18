@@ -495,7 +495,6 @@ export {
   DATAGRID_PROJECTION_CACHE_POLICY_MATRIX,
   createDataGridProjectionPolicy,
   resolveDataGridProjectionCachePolicy,
-  buildDataGridAdvancedFilterExpressionFromLegacyFilters,
   cloneDataGridFilterSnapshot,
   evaluateColumnPredicateFilter,
   evaluateDataGridAdvancedFilterExpression,

@@ -1927,7 +1927,6 @@ describe("createAdvancedClientRowModel", () => {
     expect(nextSnapshot.sortModel).toEqual([{ key: "id", direction: "asc" }])
     expect(nextSnapshot.filterModel).toEqual({
       columnFilters: { id: { kind: "valueSet", tokens: ["string:1"] } },
-      advancedFilters: {},
     })
     expect(nextSnapshot.groupBy).toEqual({ fields: ["id"], expandedByDefault: true })
     expect(nextSnapshot.groupExpansion).toEqual({

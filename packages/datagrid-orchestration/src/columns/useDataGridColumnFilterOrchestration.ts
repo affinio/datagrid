@@ -427,7 +427,6 @@ export function useDataGridColumnFilterOrchestration<TRow>(
 
     return {
       columnFilters: Object.fromEntries(columnFilterEntries),
-      advancedFilters: {},
       advancedExpression: advancedConditions.length === 0
         ? null
         : advancedConditions.length === 1

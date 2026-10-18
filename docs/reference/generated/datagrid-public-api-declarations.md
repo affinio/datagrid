@@ -12,22 +12,22 @@ Source package: `packages/datagrid-core`
 
 | Entrypoint | Tier | Declaration | Files in declaration graph |
 | --- | --- | --- | ---: |
-| `.` | stable | `packages/datagrid-core/dist/src/index.d.ts` | 112 |
-| `./advanced` | advanced | `packages/datagrid-core/dist/src/advanced.d.ts` | 118 |
-| `./advanced-client-row-model` | advanced | `packages/datagrid-core/dist/src/advanced-client-row-model.d.ts` | 25 |
+| `.` | stable | `packages/datagrid-core/dist/src/index.d.ts` | 116 |
+| `./advanced` | advanced | `packages/datagrid-core/dist/src/advanced.d.ts` | 122 |
+| `./advanced-client-row-model` | advanced | `packages/datagrid-core/dist/src/advanced-client-row-model.d.ts` | 29 |
 | `./client-row-projection` | advanced | `packages/datagrid-core/dist/src/client-row-projection.d.ts` | 15 |
 | `./client-row-projection/aggregate` | advanced | `packages/datagrid-core/dist/src/client-row-projection/aggregate.d.ts` | 12 |
 | `./client-row-projection/basic` | advanced | `packages/datagrid-core/dist/src/client-row-projection/basic.d.ts` | 10 |
 | `./client-row-projection/comparator-registry` | advanced | `packages/datagrid-core/dist/src/client-row-projection/comparator-registry.d.ts` | 7 |
 | `./client-row-projection/filter` | advanced | `packages/datagrid-core/dist/src/client-row-projection/filter.d.ts` | 10 |
 | `./client-row-projection/group` | advanced | `packages/datagrid-core/dist/src/client-row-projection/group.d.ts` | 12 |
-| `./client-row-projection/model` | advanced | `packages/datagrid-core/dist/src/client-row-projection/model.d.ts` | 113 |
+| `./client-row-projection/model` | advanced | `packages/datagrid-core/dist/src/client-row-projection/model.d.ts` | 117 |
 | `./client-row-projection/pagination` | advanced | `packages/datagrid-core/dist/src/client-row-projection/pagination.d.ts` | 10 |
 | `./client-row-projection/pivot` | advanced | `packages/datagrid-core/dist/src/client-row-projection/pivot.d.ts` | 9 |
 | `./client-row-projection/sort` | advanced | `packages/datagrid-core/dist/src/client-row-projection/sort.d.ts` | 10 |
 | `./client-row-projection/sort-cache` | advanced | `packages/datagrid-core/dist/src/client-row-projection/sort-cache.d.ts` | 2 |
 | `./client-row-projection/visible` | advanced | `packages/datagrid-core/dist/src/client-row-projection/visible.d.ts` | 10 |
-| `./client-row-store` | stable | `packages/datagrid-core/dist/src/client-row-store.d.ts` | 112 |
+| `./client-row-store` | stable | `packages/datagrid-core/dist/src/client-row-store.d.ts` | 116 |
 | `./internal` | internal | `packages/datagrid-core/dist/src/internal.d.ts` | 9 |
 
 ### .
@@ -36,7 +36,7 @@ Entrypoint exports:
 
 - `export * from "./public.js"`
 
-Declaration graph hash: `017f4ce5cd5654fd0d5f585ae8303e9872d0eed01a68cb304fa8fcba62385c81`
+Declaration graph hash: `4856f976cc19df448a22faadd3e4ba8e1af66254043af5e64879f174413211bd`
 
 ### ./advanced
 
@@ -56,7 +56,7 @@ Entrypoint exports:
 - `export { createDataSourceBackedRowModel, createDataGridAggregationRegistry, createDataGridComparatorRegistry, compareDataGridValues, type CreateDataSourceBackedRowModelOptions, type DataSourceBackedRowModel, type DataGridExternalRowUpdate, type DataGridExternalRowUpdateOptions, type DataGridDataSource, type DataGridDataSourceBackpressureDiagnostics, type DataGridDataSourceColumnHistogramRequest, type DataGridDataSourceSelectionSummaryColumn, type DataGridDataSourceSelectionSummaryRange, type DataGridDataSourceSelectionSummaryRequest, type DataGridDataSourceSelectionSummaryResult, type DataGridDataSourceInvalidation, type DataGridDataSourceCellRange, type DataGridDataSourceClipboardFormat, type DataGridDataSourceOperationKind, type DataGridDataSourceOperationRejection, type DataGridDataSourceOperationRequest, type DataGridDataSourceOperationResult, type DataGridDataSourceOperationStatus, type DataGridDataSourcePaginationPullContext, type DataGridDataSourcePullPriority, type DataGridDataSourcePivotPullContext, type DataGridDataSourcePullReason, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridServerPivotRowIdInput, type DataGridServerPivotRowRole, type DataGridComparatorNullsPolicy, type DataGridComparatorPolicy, type DataGridComparatorPolicyKind, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, type DataGridAggregationDefinition, type DataGridAggregationRegistry, type DataGridAggregationRegistryInput, type DataGridDataSourceTreePullContext, type DataGridDataSourceTreePullOperation, type DataGridDataSourceTreePullScope, type DataGridDataSourcePushEvent, type DataGridDataSourcePushInvalidateEvent, type DataGridDataSourcePushListener, type DataGridDataSourcePushRemoveEvent, type DataGridDataSourcePushUpsertEvent, type DataGridDataSourceRowEntry, createDataGridServerPivotRowId, } from "./models/index.js"`
 - `export { transformDataGridPublicProtocolSource, type DataGridCodemodResult, } from "./protocol/index.js"`
 
-Declaration graph hash: `a9cfe71643eb7a1590e0d78a6e4c49b2403a2839c5921b90854dd7f9943b9373`
+Declaration graph hash: `f0905d08ccdf83a182ae0bc366c7c4da12b8c417c36dde723ce9457ec3a70251`
 
 ### ./advanced-client-row-model
 
@@ -64,7 +64,7 @@ Entrypoint exports:
 
 - `export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from "./models/clientRowModel.js"`
 
-Declaration graph hash: `0d3a5e39920b66539eac02db994c5c009a2810c8ba332c6962283dd468f88732`
+Declaration graph hash: `da07b7da75ef85c28c0ef3ca1a050d6de066a83de2af0f02a0f72497c147ce1c`
 
 ### ./client-row-projection
 
@@ -126,7 +126,7 @@ Entrypoint exports:
 - `export interface ClientRowProjectionModelSnapshot<T> { readonly revision: number`
 - `export interface CreateClientRowProjectionModelOptions<T> extends CreateClientRowStoreOptions<T> { initialSortModel?: readonly DataGridSortState[]`
 
-Declaration graph hash: `206b6b848549d3299763762fb69bcf9a9f43b5545bbc6166f47e7e3d1171a195`
+Declaration graph hash: `562fb8e8dc2e4e44e77c4adeb941901d795eb2453008d1b2828bf84be7929427`
 
 ### ./client-row-projection/pagination
 
@@ -178,7 +178,7 @@ Entrypoint exports:
 - `export interface CreateClientRowStoreOptions<T> { rows?: readonly DataGridRowNodeInput<T>[]`
 - `export type ClientRowStoreListener<T> = (snapshot: ClientRowStoreSnapshot<T>) => void`
 
-Declaration graph hash: `f14504bfb5f04d5585a644921363e9cf7746bbd8ce006e1cb618a430ddcc3c83`
+Declaration graph hash: `79bb68745fb43af50a4be01269828932566053e325f24eb33183395e1ba5d371`
 
 ### ./internal
 
@@ -217,7 +217,7 @@ Entrypoint exports:
 
 - `export * from "./stable"`
 
-Declaration graph hash: `e38fdf2f9f643d3fe5b48e8b6ac19a0fba2096d34fcd7118114e1fb44570b1c4`
+Declaration graph hash: `084274689e317a4226b629a1e12146b7ddf4028faba7350531379bc89fcd9a7c`
 
 ### ./advanced
 
@@ -401,7 +401,7 @@ Entrypoint exports:
 
 - `export * from "./public"`
 
-Declaration graph hash: `ae6ca896e789972c970beb8f990058f094266b079797eae04e8b719ef17d5e7e`
+Declaration graph hash: `0ee19e0264118ca86764abf291c1ceaccb048c7cd3f3897ff6dbbf338e659ab1`
 
 ### ./worker
 

@@ -1,4 +1,4 @@
-import type { DataGridAdvancedFilter, DataGridColumnFilterSnapshotEntry, DataGridColumnPredicateFilter, DataGridColumnStyleFilter, DataGridFilterSnapshot, DataGridRowNode, DataGridTreeDataResolvedSpec } from "../rowModel.js"
+import type { DataGridColumnFilterSnapshotEntry, DataGridColumnPredicateFilter, DataGridColumnStyleFilter, DataGridFilterSnapshot, DataGridRowNode, DataGridTreeDataResolvedSpec } from "../rowModel.js"
 import { evaluateDataGridAdvancedFilterExpression } from "../filters/advancedFilter.js"
 import { evaluateColumnPredicateFilter, serializeColumnValueToToken } from "../filters/columnFilterUtils.js"
 import { resolveAdvancedExpression } from "../mutation/rowPatchAnalyzer.js"
@@ -230,14 +230,6 @@ export function createFilterPredicate<T>(
         caseSensitive: values.caseSensitive,
       }
     }
-    const nextAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
-    for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
-      if (rawKey.trim() === ignoredColumnKey) {
-        changed = true
-        continue
-      }
-      nextAdvancedFilters[rawKey] = advancedFilter
-    }
     const nextColumnStyleFilters: Record<string, DataGridColumnStyleFilter> = {}
     for (const [rawKey, styleFilter] of Object.entries(filterModel.columnStyleFilters ?? {})) {
       if (rawKey.trim() === ignoredColumnKey) {
@@ -256,7 +248,6 @@ export function createFilterPredicate<T>(
     return {
       columnFilters: nextColumnFilters,
       columnStyleFilters: nextColumnStyleFilters,
-      advancedFilters: nextAdvancedFilters,
       advancedExpression: filterModel.advancedExpression ?? null,
       ...(filterModel.quickFilter ? { quickFilter: filterModel.quickFilter } : {}),
     } satisfies DataGridFilterSnapshot
@@ -380,10 +371,6 @@ export function hasActiveFilterModel(filterModel: DataGridFilterSnapshot | null)
   if (columnStyleFilters.some(entry => entry.tokens.length > 0)) {
     return true
   }
-  const advancedKeys = Object.keys(filterModel.advancedFilters ?? {})
-  if (advancedKeys.length > 0) {
-    return true
-  }
   if (resolveAdvancedExpression(filterModel) !== null) {
     return true
   }
@@ -494,18 +481,9 @@ function serializeFilterModelForSignature(filterModel: DataGridFilterSnapshot | 
     }
     normalizedColumnStyleFilters[key] = normalizeColumnStyleFilterEntryForSignature(entry)
   }
-  const normalizedAdvancedFilters: Record<string, DataGridAdvancedFilter> = {}
-  for (const [rawKey, advancedFilter] of Object.entries(filterModel.advancedFilters ?? {})) {
-    const key = rawKey.trim()
-    if (!key) {
-      continue
-    }
-    normalizedAdvancedFilters[key] = advancedFilter
-  }
   return stableSerializeUnknown({
     columnFilters: normalizedColumnFilters,
     columnStyleFilters: normalizedColumnStyleFilters,
-    advancedFilters: normalizedAdvancedFilters,
     advancedExpression: resolveAdvancedExpression(filterModel),
     quickFilter: normalizeQuickFilterForSignature(filterModel.quickFilter),
   })

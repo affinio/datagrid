@@ -923,16 +923,16 @@ function supportsHttpReadPath(request: Pick<DataGridDataSourcePullRequest, "grou
 }
 
 function hasComplexValueRangeFilter(filterModel: DataGridFilterSnapshot | null): boolean {
-  if (!filterModel) {
+  const expression = filterModel?.advancedExpression
+  if (!expression) {
     return false
   }
-
-  const valueFilter = filterModel.advancedFilters?.value
-  if (!valueFilter || !Array.isArray(valueFilter.clauses)) {
-    return false
+  const countValueConditions = (node: NonNullable<DataGridFilterSnapshot["advancedExpression"]>): number => {
+    if (node.kind === "condition") return node.key === "value" ? 1 : 0
+    if (node.kind === "not") return countValueConditions(node.child)
+    return node.children.reduce((count, child) => count + countValueConditions(child), 0)
   }
-
-  return valueFilter.clauses.filter(clause => clause != null).length > 1
+  return countValueConditions(expression) > 1
 }
 
 function supportsHttpHistogramPath(
@@ -1924,7 +1924,6 @@ function handleStateUpdate(state: unknown): void {
     ? [
         ...Object.keys(filterModel.columnFilters ?? {}),
         ...(filterModel.advancedExpression ? ["advanced"] : []),
-        ...(Object.keys(filterModel.advancedFilters ?? {}).length > 0 ? ["legacy-advanced"] : []),
         ...(filterModel.quickFilter ? ["quick"] : []),
       ].join(", ") || "active"
     : "none"
