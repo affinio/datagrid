@@ -60,3 +60,51 @@ export function coerceSpreadsheetViewNumber(value: unknown): number | null {
 export function normalizeSpreadsheetViewText(value: unknown, caseSensitive = false): string {
   return normalizeTextComparisonValue(value, caseSensitive)
 }
+
+export function normalizeSpreadsheetViewOutputValue(value: unknown): string {
+  if (value == null) return ""
+  if (typeof value === "string") return value.startsWith("=") ? `=${JSON.stringify(value)}` : value
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value)
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString()
+  return String(value)
+}
+
+export function cloneSpreadsheetViewValues(source: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return { ...source }
+}
+
+export function spreadsheetViewValuesEqual(
+  left: Readonly<Record<string, unknown>>,
+  right: Readonly<Record<string, unknown>>,
+): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  for (const key of leftKeys) {
+    if (!Object.is(left[key], right[key])) return false
+  }
+  return true
+}
+
+export function createSpreadsheetViewJoinLookupKey(value: unknown): string {
+  if (value == null) return "null:"
+  if (value instanceof Date) return `date:${Number.isNaN(value.getTime()) ? "" : value.toISOString()}`
+  switch (typeof value) {
+    case "string": return `string:${value}`
+    case "number": return `number:${Number.isFinite(value) ? value : ""}`
+    case "boolean": return `boolean:${value ? "1" : "0"}`
+    case "bigint": return `bigint:${String(value)}`
+    default: return `other:${String(value)}`
+  }
+}
+
+export function createSpreadsheetViewExplodedRowId(
+  leftRowId: DataGridRowId,
+  rightRowId: DataGridRowId | null,
+  matchIndex: number,
+): string {
+  const encodedLeft = String(leftRowId)
+  const encodedRight = rightRowId == null ? "null" : String(rightRowId)
+  return `join:${encodedLeft.length}:${encodedLeft}|${encodedRight.length}:${encodedRight}|${matchIndex}`
+}
+import type { DataGridRowId } from "../models/rowModel.js"
