@@ -1,5 +1,6 @@
-import { buildPaginationSnapshot, type DataGridFilterSnapshot, type DataGridPaginationInput, type DataGridRowId, type DataGridRowNode, type DataGridSortState, type DataGridTreeDataResolvedSpec } from "../rowModel.js"
-import type { DataGridProjectionPolicy } from "./projectionPolicy.js"
+import { buildPaginationSnapshot } from "../pagination.js"
+import type { DataGridFilterSnapshot, DataGridPaginationInput, DataGridRowId, DataGridRowNode, DataGridSortState, DataGridTreeDataResolvedSpec } from "../rowModel.js"
+import type { DataGridSortValueCachePolicy } from "./projectionCachePolicy.js"
 import { preservePivotProjectionRowIdentity } from "../pivot/clientRowPivotProjectionUtils.js"
 import { serializeSortValueModelForCache, shouldUseFilteredRowsForTreeSort, sortLeafRows } from "./clientRowProjectionPrimitives.js"
 import { assignDisplayIndexes, enforceCacheCap, patchProjectedRowsByIdentity, preserveRowOrder, remapRowsByIdentity } from "../clientRowRuntimeUtils.js"
@@ -69,7 +70,7 @@ export interface RunSortProjectionStageParams<T> {
   previousSortedRowsProjection: readonly DataGridRowNode<T>[]
   shouldRecompute: boolean
   sortModel: readonly DataGridSortState[]
-  projectionPolicy: DataGridProjectionPolicy
+  projectionPolicy: DataGridSortValueCachePolicy
   sortValueCache: Map<DataGridRowId, SortValueCacheEntry>
   sortValueCacheKey: string
   sortProjectionKey: string
@@ -177,6 +178,22 @@ export function runSortProjectionStage<T>(
         ? params.filteredRowsProjection
         : params.sourceRows)
     : params.filteredRowsProjection
+  return runSortProjectionStageForRows(params, rowsForSort, !params.treeData)
+}
+
+export type RunFlatSortProjectionStageParams<T> = Omit<RunSortProjectionStageParams<T>, "treeData" | "filterModel">
+
+export function runFlatSortProjectionStage<T>(
+  params: RunFlatSortProjectionStageParams<T>,
+): RunSortProjectionStageResult<T> {
+  return runSortProjectionStageForRows(params, params.filteredRowsProjection, true)
+}
+
+function runSortProjectionStageForRows<T>(
+  params: RunSortProjectionStageParams<T> | RunFlatSortProjectionStageParams<T>,
+  rowsForSort: readonly DataGridRowNode<T>[],
+  allowDirectionReversal: boolean,
+): RunSortProjectionStageResult<T> {
   const shouldRecomputeSort = params.shouldRecompute || params.previousSortedRowsProjection.length === 0
   if (shouldRecomputeSort) {
     const shouldCacheSortValues = params.projectionPolicy.shouldCacheSortValues()
@@ -210,7 +227,7 @@ export function runSortProjectionStage<T>(
       return resolved
     }
     const singleSortDescriptor = resolveSingleSortDescriptor(params.sortModel)
-    const directionReversedRows = singleSortDescriptor && !params.treeData
+    const directionReversedRows = singleSortDescriptor && allowDirectionReversal
       ? tryReverseSingleSortDirectionProjection({
           descriptor: singleSortDescriptor,
           rowsForSort,
@@ -352,6 +369,24 @@ export function runVisibleProjectionStage<T>(
       rows: params.pivotEnabled
         ? preservePivotProjectionRowIdentity(params.previousRows, nextVisibleRows, { includeDisplayIndex: true })
         : nextVisibleRows,
+      recomputed: true,
+    }
+  }
+  return {
+    rows: patchProjectedRowsByIdentity(params.previousRows, params.sourceById),
+    recomputed: false,
+  }
+}
+
+export type RunFlatVisibleProjectionStageParams<T> = Omit<RunVisibleProjectionStageParams<T>, "pivotEnabled">
+
+export function runFlatVisibleProjectionStage<T>(
+  params: RunFlatVisibleProjectionStageParams<T>,
+): RunVisibleProjectionStageResult<T> {
+  const shouldRecomputeVisible = params.shouldRecompute || params.previousRows.length === 0
+  if (shouldRecomputeVisible) {
+    return {
+      rows: assignDisplayIndexes(params.paginatedRowsProjection),
       recomputed: true,
     }
   }

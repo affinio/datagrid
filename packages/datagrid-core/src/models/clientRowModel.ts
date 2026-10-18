@@ -127,10 +127,8 @@ import { createClientRowModelMutationBootstrap } from "./bootstrap/clientRowMode
 import { createClientRowModelProjectionBootstrap } from "./bootstrap/clientRowModelProjectionBootstrap.js"
 import { createClientRowModelComputeBootstrap } from "./bootstrap/clientRowModelComputeBootstrap.js"
 import { createClientRowModelSnapshotBootstrap } from "./bootstrap/clientRowModelSnapshotBootstrap.js"
-import {
-  createDataGridComparatorRegistry,
-  type DataGridComparatorRegistryInput,
-} from "./comparator/comparatorPolicy.js"
+import { createDataGridComparatorRegistry } from "./comparator/comparatorRegistry.js"
+import type { DataGridComparatorRegistryInput } from "./comparator/comparatorRegistry.js"
 import type {
   DataGridAggregationRegistry,
   DataGridAggregationRegistryInput,

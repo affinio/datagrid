@@ -28,5 +28,5 @@ Removed legacy viewport APIs:
 
 ## Migration Targets
 
-- `setProcessedRows(rows)` -> `setRowModel(createClientRowModel({ rows }))`
+- `setProcessedRows(rows)` -> `setRowModel(createAdvancedClientRowModel({ rows }))` from `@affino/datagrid-core/advanced-client-row-model`
 - `setServerIntegration(...)` -> `setRowModel(createServerBackedRowModel({ source }))`

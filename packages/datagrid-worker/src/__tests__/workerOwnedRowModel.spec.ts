@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
   type DataGridAggregationModel,
   type DataGridFilterSnapshot,
   type DataGridRowModelSnapshot,
   type DataGridRowNodeInput,
 } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 import {
   DATAGRID_WORKER_ROW_MODEL_PAYLOAD_SCHEMA_VERSION,
   DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION,
@@ -382,7 +382,7 @@ describe("worker-owned row model", () => {
       target: channel.main,
     })
 
-    const expected = createClientRowModel<BenchRow>({ rows })
+    const expected = createAdvancedClientRowModel<BenchRow>({ rows })
     await flushMessages()
 
     mirror.setSortModel([{ key: "revenue", direction: "desc" }])

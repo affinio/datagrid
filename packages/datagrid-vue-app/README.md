@@ -92,6 +92,7 @@ Practical implications:
 
 - ordinary `DataGrid` table usage no longer needs to install or resolve `@affino/datagrid-gantt`; the optional peer is required only by the explicit Gantt entrypoint
 - gantt stage code is loaded lazily only when the gantt view is rendered
+- the column options menu is loaded on demand; pointer hover or keyboard focus on its trigger starts loading before activation
 - advanced filter, quick filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
 
 Consumer-side chunk tuning can still help, but it is now an optimization rather than a workaround for the package boundary.

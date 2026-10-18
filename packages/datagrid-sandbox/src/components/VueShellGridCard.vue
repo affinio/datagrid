@@ -373,7 +373,6 @@ import {
   type DataGridStyleConfig,
 } from "@affino/datagrid-theme";
 import type {
-  ClientRowModel,
   DataGridAggregationModel,
   DataGridColumnInput,
   DataGridColumnPin,
@@ -388,6 +387,7 @@ import type {
   DataGridUnifiedColumnState,
   DataGridUnifiedState,
 } from "@affino/datagrid-vue";
+import type { AdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model";
 import {
   buildVueColumns,
   buildVueRows,
@@ -428,7 +428,7 @@ interface TimesheetRow {
 }
 
 interface PublicDataGridExpose {
-  rowModel?: ClientRowModel<TimesheetRow> | null | undefined;
+  rowModel?: AdvancedClientRowModel<TimesheetRow> | null | undefined;
   getApi: () => unknown | null;
   getRuntime: () => unknown | null;
   getColumnState: () => DataGridUnifiedColumnState | null;

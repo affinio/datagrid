@@ -18,6 +18,12 @@ export {
 } from "./runtime/dataGridRuntime.js"
 
 export {
+  createAdvancedClientRowModel,
+  type AdvancedClientRowModel,
+  type CreateAdvancedClientRowModelOptions,
+} from "./advanced-client-row-model.js"
+
+export {
   createDataGridAdapterRuntime,
   resolveDataGridAdapterEventName,
   type DataGridAdapterKind,

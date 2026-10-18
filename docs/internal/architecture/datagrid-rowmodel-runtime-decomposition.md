@@ -5,7 +5,7 @@ Scope: `@affino/datagrid-core` client row model internals.
 
 ## Why
 
-`createClientRowModel` accumulated multiple subsystems:
+`createAdvancedClientRowModel` accumulated multiple subsystems:
 
 - projection orchestration,
 - tree projection caches + subtree toggles,
@@ -38,7 +38,7 @@ This document fixes ownership boundaries so perf work does not increase architec
     - tree path incremental delta apply
     - tree parent incremental delta apply
     - unified patch gate (`applyIncrementalAggregationPatch(...)`)
-- [x] `Phase D`: keep `createClientRowModel` as orchestration shell only (state + stage wiring + lifecycle).
+- [x] `Phase D`: keep `createAdvancedClientRowModel` as orchestration shell only (state + stage wiring + lifecycle).
   - [x] extracted row runtime utility layer:
     - module: `packages/datagrid-core/src/models/clientRowRuntimeUtils.ts`
     - moved patch/remap/order/reindex/versioning helpers out of `clientRowModel`.

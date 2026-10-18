@@ -36,7 +36,7 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | Area | Capability | Scope | Runtime mode | Notes |
 | --- | --- | --- | --- | --- |
 | API | Stable namespace-based facade (`DataGridApi`) | Core + Adapter | all | Single public surface: `lifecycle/rows/data/columns/view/pivot/selection/transaction/state/events/meta/policy/compute/diagnostics/plugins`. |
-| Row models | Client row model (`createClientRowModel`) | Core + Adapter | main-thread, worker-owned | Sorting/filtering/grouping/pagination/visible projection pipeline. |
+| Row models | Advanced client row model (`createAdvancedClientRowModel` from `@affino/datagrid-core/advanced-client-row-model`) | Core + Adapter | main-thread, worker-owned | Sorting/filtering/grouping/pagination/visible projection pipeline. |
 | Row models | Worker-owned row model (`createDataGridWorkerOwnedRowModel`) | Core worker + Adapter | worker-owned | Compute/state owned by worker, main thread consumes snapshots/windows. |
 | Row models | Data source backed row model (`createDataSourceBackedRowModel`) | Core + Adapter + Backend | server-side | Protocol-first pull/push/invalidation/backpressure contract for backend-driven datasets. |
 | Row models | Server backed row model (`createServerBackedRowModel`) | Core + Adapter + Backend | server-side | Server-fetch oriented model with explicit lazy/block fetch flow and cached snapshots. |

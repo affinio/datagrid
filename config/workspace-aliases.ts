@@ -24,6 +24,7 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-pivot": "packages/datagrid-pivot/src/index.ts",
   "@affino/datagrid-pivot/*": "packages/datagrid-pivot/src/*",
   "@affino/datagrid-core/advanced": "packages/datagrid-core/src/advanced.ts",
+  "@affino/datagrid-core/advanced-client-row-model": "packages/datagrid-core/src/advanced-client-row-model.ts",
   "@affino/datagrid-core/internal": "packages/datagrid-core/src/internal.ts",
   "@affino/datagrid-core": "packages/datagrid-core/src/index.ts",
   "@affino/datagrid-core/*": "packages/datagrid-core/src/*",

@@ -23,6 +23,32 @@ Base formula APIs now have a dedicated package boundary:
 Keep row-model orchestration and formula integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
 
+## Modular client rows
+
+`@affino/datagrid-core/client-row-store` exposes a formula-free source-row store for consumers that need canonical row identity, mutation, and subscriptions without client projection or formula execution. Import it directly to keep the heavier row-model runtime out of that consumer bundle:
+
+```ts
+import { createClientRowStore } from "@affino/datagrid-core/client-row-store"
+```
+
+The stable core root no longer exports the full client model. Tree, grouping, pivot, and formula workloads use `@affino/datagrid-core/advanced-client-row-model`:
+
+```ts
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
+```
+
+For simple flat rows, use `@affino/datagrid-core/client-row-projection/model`; source-only consumers can use `client-row-store`.
+
+Consumers that need projection scheduling can import `@affino/datagrid-core/client-row-projection`. It provides the projection stage engine, orchestrator, stage graph, and cache policy without constructing a full client row model. The stage handlers are supplied by the consumer, so computed/formula execution can remain outside the projection layer.
+
+For direct composition, stage executors have separate subpaths: `@affino/datagrid-core/client-row-projection/filter`, `/sort`, `/pagination`, `/visible`, `/group`, `/pivot`, and `/aggregate`. The `/sort` entry includes both the tree-aware `runSortProjectionStage` and the flat-only `runFlatSortProjectionStage`; the latter avoids tree filter resolution. Likewise, `/visible` exports `runFlatVisibleProjectionStage` without pivot identity handling. The `/basic` entry remains a convenience barrel for filter, sort, pagination, and visible stages. Import individual subpaths when the consumer cannot tree-shake unused named exports; runtimes such as tree projection, pivot, and aggregation are supplied explicitly.
+
+Consumers that need only sort-value cache sizing can import `createDataGridSortValueCachePolicy` from `@affino/datagrid-core/client-row-projection/sort-cache`. It shares the standard performance-mode limits without constructing the projection dependency graph.
+
+Custom comparator support is opt-in for the flat model: build a registry with `createDataGridComparatorRegistry` from `@affino/datagrid-core/client-row-projection/comparator-registry` and pass that registry as `comparatorRegistry`. The model does not bundle registry construction when custom comparators are unused.
+
+For a ready flat client model, `@affino/datagrid-core/client-row-projection/model` composes `client-row-store` with filtering, sorting, pagination, and display indexes. It intentionally does not provide grouping, pivoting, aggregation, or formulas. Row payloads are retained by reference; call `refresh()` after in-place payload changes so filters and sort values are recomputed.
+
 ## Pivot boundary
 
 Base pivot APIs now also have a dedicated package boundary:
@@ -54,7 +80,7 @@ Semver-safe surface for application integrations.
 import {
   createDataGridApi,
   createDataGridCore,
-  createClientRowModel,
+  createAdvancedClientRowModel,
   createServerBackedRowModel,
 } from "@affino/datagrid-core"
 ```
@@ -82,7 +108,7 @@ Core naming is fully canonicalized to `DataGrid*` across stable, advanced, and i
 
 ## Row Updates: `setRows` vs `patchRows`
 
-`createClientRowModel()` now supports two update modes:
+`createAdvancedClientRowModel()` supports two update modes:
 
 - `setRows(rows)`:
   - full source replacement.
@@ -120,10 +146,10 @@ For `treeData`, set `dependencyFields` to avoid unnecessary regroup/tree project
 
 When displayed values differ from the raw row payload, keep filters, histogram entries, and selection aggregates aligned with the effective value the user sees.
 
-`createClientRowModel(...)` accepts `readFilterCell(rowNode, columnKey)` for value-set filters, advanced-filter predicates, and `getColumnHistogram(...)`:
+`createAdvancedClientRowModel(...)` accepts `readFilterCell(rowNode, columnKey)` for value-set filters, advanced-filter predicates, and `getColumnHistogram(...)`:
 
 ```ts
-const rowModel = createClientRowModel({
+const rowModel = createAdvancedClientRowModel({
   rows,
   readFilterCell(rowNode, columnKey) {
     if (columnKey !== "status") {

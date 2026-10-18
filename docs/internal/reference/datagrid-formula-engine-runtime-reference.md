@@ -12,7 +12,7 @@ Canonical package boundary:
 
 Formula support is split by surface:
 
-- Row-model formulas: supported through `createClientRowModel`, computed/formula fields, dependency tokens, dirty propagation, calculation snapshots, and worker-owned row-model parity.
+- Row-model formulas: supported through `createAdvancedClientRowModel` from `@affino/datagrid-core/advanced-client-row-model`, computed/formula fields, dependency tokens, dirty propagation, calculation snapshots, and worker-owned row-model parity.
 - Spreadsheet/workbook formulas: supported through `sheetModel` and `workbookModel` for sheet-local formulas, cross-sheet references, formula tables, derived sheets, and workbook snapshot restore.
 - Enterprise formula package: additive packs, runtime configuration, diagnostics, and performance presets; it does not replace the community parser/compiler.
 - Worker-owned row models: supported for row-model formula registration, recompute, execution-plan diagnostics, and formula state mirroring.
@@ -473,7 +473,7 @@ Cycles are still rejected by default.
 If a model intentionally uses circular formulas, opt in at row-model creation time:
 
 ```ts
-const model = createClientRowModel({
+const model = createAdvancedClientRowModel({
   rows,
   formulaCyclePolicy: "iterative",
   formulaIterativeCalculation: {

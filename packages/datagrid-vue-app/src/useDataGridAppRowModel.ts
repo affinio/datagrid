@@ -1,11 +1,13 @@
 import { computed, nextTick, onUnmounted, ref, shallowRef, watch, type Ref } from "vue"
 import {
-  createClientRowModel,
-  type ClientRowModel,
-  type CreateClientRowModelOptions,
   type DataGridRowModel,
   type DataGridRowNodeInput,
 } from "@affino/datagrid-vue"
+import {
+  createAdvancedClientRowModel,
+  type AdvancedClientRowModel,
+  type CreateAdvancedClientRowModelOptions,
+} from "@affino/datagrid-core/advanced-client-row-model"
 
 function getProjectionStageNow(): number {
   const performanceApi = globalThis.performance
@@ -15,7 +17,7 @@ function getProjectionStageNow(): number {
   return Date.now()
 }
 
-const defaultProjectionStageTimer: NonNullable<CreateClientRowModelOptions<unknown>["projectionStageTimer"]> = (_stage, run) => {
+const defaultProjectionStageTimer: NonNullable<CreateAdvancedClientRowModelOptions<unknown>["projectionStageTimer"]> = (_stage, run) => {
   const startedAt = getProjectionStageNow()
   const result = run()
   return {
@@ -25,8 +27,8 @@ const defaultProjectionStageTimer: NonNullable<CreateClientRowModelOptions<unkno
 }
 
 function resolveClientRowModelOptions(
-  value: Omit<CreateClientRowModelOptions<unknown>, "rows"> | undefined,
-): Omit<CreateClientRowModelOptions<unknown>, "rows"> {
+  value: Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows"> | undefined,
+): Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows"> {
   return {
     projectionStageTimer: defaultProjectionStageTimer,
     ...(value ?? {}),
@@ -169,7 +171,7 @@ function resolveRowDiff(
 export interface UseDataGridAppRowModelOptions {
   rows: Ref<readonly unknown[]>
   rowModel: Ref<DataGridRowModel<unknown> | undefined>
-  clientRowModelOptions: Ref<Omit<CreateClientRowModelOptions<unknown>, "rows"> | undefined>
+  clientRowModelOptions: Ref<Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows"> | undefined>
   rowsUpdateMode?: DataGridAppRowsUpdateMode
   onOwnedRowModelRecreated?: () => void
 }
@@ -187,11 +189,11 @@ export function useDataGridAppRowModel(
   let lastRowsForDiff = options.rows.value
   let lastClientRowModelOptions = options.clientRowModelOptions.value
   let lastClientRowModelOptionsSnapshot = cloneClientRowModelOptionValue(lastClientRowModelOptions)
-  const fallbackRowModel = createClientRowModel<unknown>()
-  const internalRowModel = shallowRef<ClientRowModel<unknown> | null>(
+  const fallbackRowModel = createAdvancedClientRowModel<unknown>()
+  const internalRowModel = shallowRef<AdvancedClientRowModel<unknown> | null>(
     options.rowModel.value
       ? null
-      : createClientRowModel<unknown>({
+      : createAdvancedClientRowModel<unknown>({
           rows: options.rows.value as readonly DataGridRowNodeInput<unknown>[],
           ...resolveClientRowModelOptions(options.clientRowModelOptions.value),
         }),
@@ -220,7 +222,7 @@ export function useDataGridAppRowModel(
       return
     }
     const previousModel = internalRowModel.value
-    internalRowModel.value = createClientRowModel<unknown>({
+    internalRowModel.value = createAdvancedClientRowModel<unknown>({
       rows: options.rows.value as readonly DataGridRowNodeInput<unknown>[],
       ...resolveClientRowModelOptions(options.clientRowModelOptions.value),
     })

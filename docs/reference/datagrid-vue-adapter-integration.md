@@ -110,9 +110,9 @@ Adapter interface is defined in:
 Keep one client row model alive for edit bursts and route changed records through `patchRows`:
 
 ```ts
-import { createClientRowModel } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 
-const rowModel = createClientRowModel({
+const rowModel = createAdvancedClientRowModel({
   rows: initialRows,
   resolveRowId: row => row.id,
 })

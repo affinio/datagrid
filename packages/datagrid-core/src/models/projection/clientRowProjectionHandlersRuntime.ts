@@ -34,10 +34,10 @@ import {
   runSortProjectionStage,
   runVisibleProjectionStage,
   type SortValueCacheEntry,
-} from "./clientRowProjectionBasicStages.js"
-import { runGroupProjectionStage } from "./clientRowProjectionGroupStage.js"
-import { runPivotProjectionStage } from "./clientRowProjectionPivotStage.js"
-import { runAggregateProjectionStage } from "./clientRowProjectionAggregateStage.js"
+} from "../../client-row-projection/basic.js"
+import { runGroupProjectionStage } from "../../client-row-projection/group.js"
+import { runPivotProjectionStage } from "../../client-row-projection/pivot.js"
+import { runAggregateProjectionStage } from "../../client-row-projection/aggregate.js"
 import type { DataGridComparatorRegistry } from "../comparator/comparatorPolicy.js"
 
 export interface ClientRowProjectionHandlersDiagnosticsState {

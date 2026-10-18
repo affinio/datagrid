@@ -6,7 +6,6 @@
 // for common configuration/state/filter/sort/row-model typing and helper functions.
 export {
   buildDataGridCellRenderModel,
-  createClientRowModel,
   createDataSourceBackedRowModel,
   createServerBackedRowModel,
   createServerRowModel,
@@ -256,8 +255,6 @@ export type {
   DataGridSortDirection,
   DataGridSortState,
   DataGridViewportRange,
-  ClientRowModel,
-  CreateClientRowModelOptions,
   ResolveDataGridCellInteractionOptions,
 } from "@affino/datagrid-core"
 

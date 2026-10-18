@@ -148,7 +148,9 @@ Backpressure semantics (abort/coalesce/defer) are identical to non-tree pulls an
 Path mode:
 
 ```ts
-const rowModel = createClientRowModel({
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
+
+const rowModel = createAdvancedClientRowModel({
   rows,
   initialTreeData: {
     mode: "path",
@@ -162,7 +164,7 @@ const rowModel = createClientRowModel({
 Parent mode:
 
 ```ts
-const rowModel = createClientRowModel({
+const rowModel = createAdvancedClientRowModel({
   rows,
   initialTreeData: {
     mode: "parent",

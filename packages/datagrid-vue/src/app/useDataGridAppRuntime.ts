@@ -1,11 +1,11 @@
 import { isRef, onBeforeUnmount, ref, watch, type Ref } from "vue"
 import type {
   DataGridColumnInput,
-  CreateClientRowModelOptions,
   DataGridRowModelSnapshot,
   DataGridRowNodeInput,
   DataGridTreeDataFilterMode,
 } from "@affino/datagrid-core"
+import type { CreateAdvancedClientRowModelOptions } from "@affino/datagrid-core/advanced-client-row-model"
 import type { DataGridPivotSpec } from "@affino/datagrid-pivot"
 import { useDataGridRuntime, type UseDataGridRuntimeOptions, type UseDataGridRuntimeResult } from "../composables/useDataGridRuntime"
 import {
@@ -30,7 +30,7 @@ export interface UseDataGridAppRuntimeOptions<TRow> {
   mode: MaybeRef<DataGridAppRuntimeMode>
   rows: Ref<readonly TRow[]>
   columns: Ref<readonly DataGridColumnInput[]>
-  clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows">
+  clientRowModelOptions?: Omit<CreateAdvancedClientRowModelOptions<TRow>, "rows">
   services?: UseDataGridRuntimeOptions<TRow>["services"]
   treeData?: {
     getDataPath: (row: TRow) => readonly string[]

@@ -5,7 +5,8 @@ Status: public API guide.
 The core package is framework-agnostic. It is the communication boundary for row models, projection, lifecycle, state, events, and the namespaced `DataGridApi`. It does not render DOM and does not depend on Vue.
 
 ```ts
-import { createClientRowModel, createDataGridApi } from "@affino/datagrid-core"
+import { createDataGridApi } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 ```
 
 ## Runtime model
@@ -21,7 +22,7 @@ Each stage has state and invalidation semantics. A mutation may update cell valu
 ## Client row model
 
 ```ts
-const rowModel = createClientRowModel({
+const rowModel = createAdvancedClientRowModel({
   rows: [
     { rowId: "r-1", team: "Platform", amount: 1200 },
     { rowId: "r-2", team: "Payments", amount: 860 },
@@ -90,13 +91,13 @@ For framework-independent integrations, assemble a core registry from row and co
 
 ```ts
 import {
-  createClientRowModel,
   createDataGridApi,
   createDataGridColumnModel,
   createDataGridCore,
 } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 
-const rowModel = createClientRowModel({ rows })
+const rowModel = createAdvancedClientRowModel({ rows })
 const columnModel = createDataGridColumnModel({ columns })
 const core = createDataGridCore({
   services: {

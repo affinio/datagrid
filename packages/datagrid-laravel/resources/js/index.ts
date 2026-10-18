@@ -5,7 +5,6 @@
  */
 
 export {
-  createClientRowModel,
   createDataSourceBackedRowModel,
   createServerBackedRowModel,
   createServerRowModel,
@@ -18,6 +17,7 @@ export {
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
 } from "@affino/datagrid-core"
+export { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 
 export {
   normalizePivotSpec,

@@ -119,6 +119,8 @@
                   :data-column-key="column.key"
                   data-datagrid-column-menu-trigger="true"
                   data-datagrid-column-menu-button="true"
+                  @pointerenter="preloadColumnMenu"
+                  @focus="preloadColumnMenu"
                   @mousedown.stop
                   @click.stop="handleColumnMenuButtonClick(column, $event)"
                   @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
@@ -336,6 +338,8 @@
                 :data-column-key="column.key"
                 data-datagrid-column-menu-trigger="true"
                 data-datagrid-column-menu-button="true"
+                @pointerenter="preloadColumnMenu"
+                @focus="preloadColumnMenu"
                 @mousedown.stop
                 @click.stop="handleColumnMenuButtonClick(column, $event)"
                 @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
@@ -509,6 +513,8 @@
                 :data-column-key="column.key"
                 data-datagrid-column-menu-trigger="true"
                 data-datagrid-column-menu-button="true"
+                @pointerenter="preloadColumnMenu"
+                @focus="preloadColumnMenu"
                 @mousedown.stop
                 @click.stop="handleColumnMenuButtonClick(column, $event)"
                 @keydown.enter.stop.prevent="handleColumnMenuButtonKeydown(column, $event)"
@@ -1836,6 +1842,10 @@ function openColumnMenuFromElement(
     return
   }
   columns.value.openColumnMenu?.(column.key, element, reason)
+}
+
+function preloadColumnMenu(): void {
+  void import("../overlays/DataGridColumnMenu.vue").catch(() => undefined)
 }
 
 function toggleColumnMenuFromElement(

@@ -1,9 +1,11 @@
 import {
-  createClientRowModel,
-  type CreateClientRowModelOptions,
   type DataGridRowNodeInput,
   type DataGridRowNode,
 } from "@affino/datagrid-core"
+import {
+  createAdvancedClientRowModel,
+  type CreateAdvancedClientRowModelOptions,
+} from "@affino/datagrid-core/advanced-client-row-model"
 import type {
   DataGridWorkerMessageEvent,
   DataGridWorkerMessageSource,
@@ -21,7 +23,7 @@ import {
 } from "./workerOwnedRowModelProtocol.js"
 
 export interface CreateDataGridWorkerOwnedRowModelHostOptions<T = unknown>
-  extends Omit<CreateClientRowModelOptions<T>, "rows"> {
+  extends Omit<CreateAdvancedClientRowModelOptions<T>, "rows"> {
   rows?: readonly DataGridRowNodeInput<T>[]
   source: DataGridWorkerMessageSource
   target: DataGridWorkerMessageTarget
@@ -34,7 +36,7 @@ export interface DataGridWorkerOwnedRowModelHost {
 }
 
 function executeCommand<T>(
-  model: ReturnType<typeof createClientRowModel<T>>,
+  model: ReturnType<typeof createAdvancedClientRowModel<T>>,
   command: DataGridWorkerRowModelCommand<T>,
 ): void {
   switch (command.type) {
@@ -118,7 +120,7 @@ export function createDataGridWorkerOwnedRowModelHost<T = unknown>(
     rows,
     ...clientRowModelOptions
   } = options
-  const model = createClientRowModel<T>({
+  const model = createAdvancedClientRowModel<T>({
     ...clientRowModelOptions,
     rows: rows ?? [],
   })

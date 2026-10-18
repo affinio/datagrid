@@ -4,8 +4,15 @@ import {
   createDataGridProjectionPolicy,
   resolveDataGridProjectionCachePolicy,
 } from "../projection/projectionPolicy"
+import { createDataGridSortValueCachePolicy } from "../projection/projectionCachePolicy"
 
 describe("projectionPolicy", () => {
+  it("creates sort cache policy without projection graph state", () => {
+    const policy = createDataGridSortValueCachePolicy("memory")
+    expect(policy.shouldCacheSortValues()).toBe(true)
+    expect(policy.maxSortValueCacheSize(1_000)).toBe(1_250)
+  })
+
   it("maps performance modes to deterministic cache policy limits", () => {
     expect(resolveDataGridProjectionCachePolicy("memory", 1_000)).toEqual({
       sortValues: {

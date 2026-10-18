@@ -32,6 +32,13 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 - Vue stable surface: `packages/datagrid-vue/src/public.ts`
 - Orchestration root: advanced adapter-internal surface documented in `docs/internal/reference/datagrid-orchestration-public-contract.md`; it is not an app-facing stable API.
 - Rule: stable app consumers import only stable package roots. Advanced adapter consumers may use documented advanced entrypoints, including the orchestration root, when they accept that tier's compatibility contract.
+- Formula-free source-row consumers may import `@affino/datagrid-core/client-row-store`; it owns row identity, source mutations, and subscriptions only. Projection and formula execution remain separate opt-in layers.
+- Projection composition may import `@affino/datagrid-core/client-row-projection`; it owns stage scheduling and cache policy, while consumers provide stage handlers.
+- Projection executors are available independently from `@affino/datagrid-core/client-row-projection/filter`, `/sort`, `/pagination`, `/visible`, `/group`, `/pivot`, and `/aggregate`. The sort entry exposes a tree-aware executor and a flat-only executor; the latter avoids tree filter resolution. The visible entry similarly exposes a flat path without pivot identity handling. The `/basic` convenience barrel groups the flat stages; consumers that cannot tree-shake should use individual entries.
+- Sort cache sizing is available from `@affino/datagrid-core/client-row-projection/sort-cache` without constructing dependency tracking.
+- Flat projection custom comparator registry construction is optional at `@affino/datagrid-core/client-row-projection/comparator-registry`.
+- `@affino/datagrid-core/client-row-projection/model` composes the row store with flat filter/sort/pagination projection. It is a smaller alternative for consumers that do not need group, pivot, aggregate, or formula behavior.
+- The stable core root no longer exports the deprecated `createClientRowModel` name. Full-featured consumers use `@affino/datagrid-core/advanced-client-row-model`; flat and source-only consumers can choose smaller model and store subpaths.
 
 ## Runtime Pipeline (Canonical)
 

@@ -16,6 +16,62 @@
     "./internal": {
       "types": "./dist/src/internal.d.ts",
       "import": "./dist/src/internal.js"
+    },
+    "./client-row-store": {
+      "types": "./dist/src/client-row-store.d.ts",
+      "import": "./dist/src/client-row-store.js"
+    },
+    "./advanced-client-row-model": {
+      "types": "./dist/src/advanced-client-row-model.d.ts",
+      "import": "./dist/src/advanced-client-row-model.js"
+    },
+    "./client-row-projection": {
+      "types": "./dist/src/client-row-projection.d.ts",
+      "import": "./dist/src/client-row-projection.js"
+    },
+    "./client-row-projection/model": {
+      "types": "./dist/src/client-row-projection/model.d.ts",
+      "import": "./dist/src/client-row-projection/model.js"
+    },
+    "./client-row-projection/basic": {
+      "types": "./dist/src/client-row-projection/basic.d.ts",
+      "import": "./dist/src/client-row-projection/basic.js"
+    },
+    "./client-row-projection/filter": {
+      "types": "./dist/src/client-row-projection/filter.d.ts",
+      "import": "./dist/src/client-row-projection/filter.js"
+    },
+    "./client-row-projection/sort": {
+      "types": "./dist/src/client-row-projection/sort.d.ts",
+      "import": "./dist/src/client-row-projection/sort.js"
+    },
+    "./client-row-projection/sort-cache": {
+      "types": "./dist/src/client-row-projection/sort-cache.d.ts",
+      "import": "./dist/src/client-row-projection/sort-cache.js"
+    },
+    "./client-row-projection/pagination": {
+      "types": "./dist/src/client-row-projection/pagination.d.ts",
+      "import": "./dist/src/client-row-projection/pagination.js"
+    },
+    "./client-row-projection/visible": {
+      "types": "./dist/src/client-row-projection/visible.d.ts",
+      "import": "./dist/src/client-row-projection/visible.js"
+    },
+    "./client-row-projection/group": {
+      "types": "./dist/src/client-row-projection/group.d.ts",
+      "import": "./dist/src/client-row-projection/group.js"
+    },
+    "./client-row-projection/pivot": {
+      "types": "./dist/src/client-row-projection/pivot.d.ts",
+      "import": "./dist/src/client-row-projection/pivot.js"
+    },
+    "./client-row-projection/aggregate": {
+      "types": "./dist/src/client-row-projection/aggregate.d.ts",
+      "import": "./dist/src/client-row-projection/aggregate.js"
+    },
+    "./client-row-projection/comparator-registry": {
+      "types": "./dist/src/client-row-projection/comparator-registry.d.ts",
+      "import": "./dist/src/client-row-projection/comparator-registry.js"
     }
   },
   "main": "dist/src/index.js",

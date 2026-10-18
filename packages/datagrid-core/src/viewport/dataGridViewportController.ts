@@ -10,8 +10,8 @@ import { flushMeasurements } from "../runtime/measurementQueue"
 import type { DataGridViewportResizeObserver } from "./viewportHostEnvironment"
 
 import type { DataGridColumn, VisibleRow } from "../types"
+import { createAdvancedClientRowModel } from "../advanced-client-row-model.js"
 import {
-	createClientRowModel,
 	createDataGridColumnModel,
 	type DataGridColumnModel,
 	type DataGridRowModel,
@@ -346,7 +346,7 @@ export function createDataGridViewportController<TRow = unknown>(
 		const columnSnapshot = createEmptyColumnSnapshot<DataGridColumn>()
 		// Cache layout metrics from observers so the heavy path never touches the DOM.
 		const layoutCache: LayoutMeasurementCache = createLayoutMeasurementCache()
-		const fallbackClientRowModel = createClientRowModel<TRow>({ rows: [] })
+		const fallbackClientRowModel = createAdvancedClientRowModel<TRow>({ rows: [] })
 		const fallbackColumnModel = createDataGridColumnModel({ columns: [] })
 		let container: HTMLDivElement | null = null
 		let header: HTMLElement | null = null

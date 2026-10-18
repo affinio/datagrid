@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
-  createClientRowModel,
-  type ClientRowModel,
   type DataGridFilterSnapshot,
   type DataGridRowNodeInput,
 } from "@affino/datagrid-core"
+import {
+  createAdvancedClientRowModel,
+  type AdvancedClientRowModel,
+} from "@affino/datagrid-core/advanced-client-row-model"
 import {
   createDataGridWorkerMessageHost,
   createDataGridWorkerPostMessageTransport,
@@ -88,7 +90,7 @@ function buildRows(count: number): DataGridRowNodeInput<BenchRow>[] {
   })
 }
 
-function summarizeProjection(model: ClientRowModel<BenchRow>): Array<Record<string, unknown>> {
+function summarizeProjection(model: AdvancedClientRowModel<BenchRow>): Array<Record<string, unknown>> {
   const rowCount = model.getRowCount()
   if (rowCount <= 0) {
     return []
@@ -112,7 +114,7 @@ describe("datagrid worker parity", () => {
     const formulaFields = [
       { name: "formulaScore", formula: "revenue * 2" },
     ]
-    const syncModel = createClientRowModel<BenchRow>({
+    const syncModel = createAdvancedClientRowModel<BenchRow>({
       rows,
       initialFormulaFields: formulaFields,
     })
@@ -130,14 +132,14 @@ describe("datagrid worker parity", () => {
       dispatchStrategy: "sync-fallback",
       requestTimeoutMs: 2_000,
     })
-    const workerModeModel = createClientRowModel<BenchRow>({
+    const workerModeModel = createAdvancedClientRowModel<BenchRow>({
       rows,
       computeMode: "worker",
       computeTransport: transport,
       initialFormulaFields: formulaFields,
     })
 
-    const applyScenario = (model: ClientRowModel<BenchRow>): void => {
+    const applyScenario = (model: AdvancedClientRowModel<BenchRow>): void => {
       const filterModel = {
         columnFilters: {
           region: { kind: "valueSet", tokens: ["string:AMER", "string:EMEA"] },

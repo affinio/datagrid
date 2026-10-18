@@ -249,7 +249,6 @@ export {
 } from "./filters/columnFilterUtils.js"
 
 export {
-  createDataGridComparatorRegistry,
   compareDataGridValues,
   type DataGridComparator,
   type DataGridComparatorContext,
@@ -257,6 +256,8 @@ export {
   type DataGridComparatorRegistry,
   type DataGridComparatorRegistryInput,
 } from "./comparator/comparatorPolicy.js"
+
+export { createDataGridComparatorRegistry } from "./comparator/comparatorRegistry.js"
 
 export {
   createDataGridAggregationRegistry,

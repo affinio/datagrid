@@ -1,5 +1,4 @@
 export {
-  createClientRowModel,
   createDataSourceBackedRowModel,
   createServerBackedRowModel,
   createServerRowModel,
@@ -11,6 +10,7 @@ export {
   cloneDataGridFilterSnapshot,
   evaluateDataGridAdvancedFilterExpression,
   normalizeDataGridAdvancedFilterExpression,
+  createAdvancedClientRowModel,
 } from "@affino/datagrid-laravel"
 
 export {

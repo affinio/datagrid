@@ -289,13 +289,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
 import DataGridTableStageChromeLayer from "./DataGridTableStageChromeLayer.vue"
 import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
-import DataGridColumnMenu from "../overlays/DataGridColumnMenu.vue"
 import {
   DATAGRID_COLUMN_MENU_ITEM_KEYS,
   type DataGridColumnMenuActionOptions,
@@ -354,6 +353,8 @@ import {
   shouldPrioritizeNativeScrollForMouseDown,
 } from "./dataGridMouseEventGuards"
 import { resolveDataGridStageCellId } from "./dataGridTableStageA11y"
+
+const DataGridColumnMenu = defineAsyncComponent(() => import("../overlays/DataGridColumnMenu.vue"))
 
 ensureDataGridAppStyles()
 

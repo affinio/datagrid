@@ -34,8 +34,6 @@ export interface DataGridColumnMenuLabels {
   noMatchingValues?: string
   noValues?: string
   selectedValuesSummary?: string
-  /** @deprecated The visible-window scroll hint is no longer rendered. */
-  valuesWindowSummary?: string
   selectAtLeastOneValueHint?: string
   blankValue?: string
 }
@@ -233,7 +231,6 @@ function normalizeLabels(input: DataGridColumnMenuItemLabels | undefined): DataG
     "noMatchingValues",
     "noValues",
     "selectedValuesSummary",
-    "valuesWindowSummary",
     "selectAtLeastOneValueHint",
     "blankValue",
     "conditionOperator",

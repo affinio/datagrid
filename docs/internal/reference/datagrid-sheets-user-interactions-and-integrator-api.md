@@ -140,14 +140,14 @@ Use stable core API from package root and advanced transaction service from adva
 
 ```ts
 import {
-  createClientRowModel,
   createDataGridApi,
   createDataGridColumnModel,
   createDataGridCore,
 } from "@affino/datagrid-core"
 import { createDataGridTransactionService } from "@affino/datagrid-core/advanced"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 
-const rowModel = createClientRowModel({ rows })
+const rowModel = createAdvancedClientRowModel({ rows })
 const columnModel = createDataGridColumnModel({ columns })
 
 const transaction = createDataGridTransactionService({

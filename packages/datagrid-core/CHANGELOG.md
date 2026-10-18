@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking Changes
+
+- Removed `createClientRowModel`, `ClientRowModel`, and `CreateClientRowModelOptions` from the stable package root. Full-featured consumers can migrate imports to `@affino/datagrid-core/advanced-client-row-model`, where the factory and types use the explicit `Advanced` names. This keeps grouping, pivot, aggregation, and formula capabilities available while making their bundle cost opt-in.
+
 ## 0.9.0
 
 ### Added

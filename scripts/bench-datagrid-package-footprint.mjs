@@ -36,6 +36,10 @@ async function treeShakenBundleSample(entry) {
     minify: true,
     format: "esm",
     platform: "browser",
+    // Package footprint must resolve emitted package exports. The workspace
+    // root tsconfig maps these package names back to src and can bundle both
+    // source and dist copies when measuring a built package entry.
+    tsconfigRaw: { compilerOptions: { baseUrl: ".", paths: {} } },
     write: false,
     sourcemap: false,
     logLevel: "silent",
@@ -78,6 +82,6 @@ for (const [name, packagePath, entryRelative] of packageProfiles) {
   })
 }
 
-const report = { generatedAt: new Date().toISOString(), node: process.version, startupIterations: iterations, measurement: "all JS/CSS files in the production dist directory plus minified esbuild tree-shaken entry bundle; startup is isolated Node import of the documented entrypoint", profiles }
+const report = { generatedAt: new Date().toISOString(), node: process.version, startupIterations: iterations, measurement: "all JS/CSS files in the production dist directory plus minified esbuild consumer bundle of the emitted entrypoint with workspace source aliases disabled; startup is isolated Node import of the documented entrypoint", profiles }
 await import("node:fs/promises").then(({ mkdir, writeFile }) => mkdir(dirname(outputPath), { recursive: true }).then(() => writeFile(outputPath, JSON.stringify(report, null, 2) + "\n")))
 for (const profile of profiles) console.log(`${profile.name}: dist=${profile.distBytes} gzip=${profile.gzipBytes} brotli=${profile.brotliBytes} treeShaken=${profile.treeShaken.bytes} startupP50=${profile.startupMs.p50.toFixed(2)}ms`)

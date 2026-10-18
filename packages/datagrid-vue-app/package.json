@@ -50,6 +50,7 @@
     "test": "pnpm run type-check && pnpm run test:unit"
   },
   "dependencies": {
+    "@affino/datagrid-core": "workspace:*",
     "@affino/datagrid-chrome": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",

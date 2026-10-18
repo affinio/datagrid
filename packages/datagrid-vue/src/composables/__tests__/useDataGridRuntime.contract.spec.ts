@@ -2,12 +2,12 @@ import { defineComponent, h, nextTick, ref } from "vue"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import {
-  createClientRowModel,
   createDataSourceBackedRowModel,
   type DataGridDataSource,
   type DataGridRowNodeInput,
   type DataGridRowNodeState,
 } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 import {
   createDataGridWorkerOwnedRowModel,
   createDataGridWorkerOwnedRowModelHost,
@@ -341,7 +341,7 @@ describe("useDataGridRuntime contract", () => {
       name: "RuntimePinnedBottomPartitionHost",
       setup() {
         runtime = useDataGridRuntime<RuntimeRow>({
-          rowModel: createClientRowModel<RuntimeRow>({ rows }),
+          rowModel: createAdvancedClientRowModel<RuntimeRow>({ rows }),
           columns: COLUMNS,
         })
         return () => h("div")
@@ -386,7 +386,7 @@ describe("useDataGridRuntime contract", () => {
       name: "RuntimePinnedTopBottomPartitionHost",
       setup() {
         runtime = useDataGridRuntime<RuntimeRow>({
-          rowModel: createClientRowModel<RuntimeRow>({ rows }),
+          rowModel: createAdvancedClientRowModel<RuntimeRow>({ rows }),
           columns: COLUMNS,
         })
         return () => h("div")
@@ -465,7 +465,7 @@ describe("useDataGridRuntime contract", () => {
       name: "RuntimeBodyRowCacheHost",
       setup() {
         runtime = useDataGridRuntime<RuntimeRow>({
-          rowModel: createClientRowModel<RuntimeRow>({ rows }),
+          rowModel: createAdvancedClientRowModel<RuntimeRow>({ rows }),
           columns: COLUMNS,
         })
         return () => h("div")

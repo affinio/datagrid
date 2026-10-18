@@ -1,9 +1,7 @@
 import {
-  createClientRowModel,
   createDataGridApi,
   createDataGridColumnModel,
   createDataGridCore,
-  type CreateClientRowModelOptions,
   type CreateDataGridCoreOptions,
   type CreateDataGridColumnModelOptions,
   type DataGridApi,
@@ -18,6 +16,10 @@ import {
   type DataGridViewportRange,
   type DataGridViewportRowTarget,
 } from "@affino/datagrid-core"
+import {
+  createAdvancedClientRowModel,
+  type CreateAdvancedClientRowModelOptions,
+} from "@affino/datagrid-core/advanced-client-row-model"
 
 export type DataGridRuntimeOverrides = Omit<
   Partial<DataGridCoreServiceRegistry>,
@@ -30,7 +32,7 @@ export interface CreateDataGridRuntimeOptions<TRow = unknown> {
   rows?: readonly TRow[]
   rowModel?: DataGridRowModel<TRow>
   plugins?: readonly DataGridApiPluginDefinition<TRow>[]
-  clientRowModelOptions?: Omit<CreateClientRowModelOptions<TRow>, "rows">
+  clientRowModelOptions?: Omit<CreateAdvancedClientRowModelOptions<TRow>, "rows">
   columns: CreateDataGridColumnModelOptions["columns"]
   services?: DataGridRuntimeOverrides
   startupOrder?: CreateDataGridCoreOptions["startupOrder"]
@@ -69,7 +71,7 @@ function normalizeScrollOffset(value: unknown): number {
 export function createDataGridRuntime<TRow = unknown>(
   options: CreateDataGridRuntimeOptions<TRow>,
 ): DataGridRuntime<TRow> {
-  const rowModel = options.rowModel ?? createClientRowModel<TRow>({
+  const rowModel = options.rowModel ?? createAdvancedClientRowModel<TRow>({
     ...(options.clientRowModelOptions ?? {}),
     rows: options.rows ?? [],
   })

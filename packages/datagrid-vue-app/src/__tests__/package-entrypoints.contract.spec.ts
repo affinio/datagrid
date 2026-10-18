@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
@@ -26,5 +26,16 @@ describe("datagrid-vue-app package entrypoints", () => {
     expect(existsSync(resolve(distRoot, "gantt.d.ts"))).toBe(true)
     expect(readFileSync(resolve(distRoot, "gantt.js"), "utf8")).toContain("DataGridGanttStage")
     expect(readFileSync(resolve(distRoot, "gantt.d.ts"), "utf8")).toContain("./gantt/dataGridGantt.types")
+  })
+
+  it("loads the column menu from an on-demand chunk", () => {
+    const chunksRoot = resolve(distRoot, "chunks")
+    const appChunkName = readdirSync(chunksRoot).find(name => /^useDataGridAppRowModel-.*\.js$/.test(name))
+    const menuChunkName = readdirSync(chunksRoot).find(name => /^DataGridColumnMenu-.*\.js$/.test(name))
+
+    expect(appChunkName).toBeDefined()
+    expect(menuChunkName).toBeDefined()
+    expect(readFileSync(resolve(chunksRoot, appChunkName!), "utf8"))
+      .toContain(`import("./${menuChunkName}")`)
   })
 })

@@ -4,12 +4,14 @@ import { describe, expect, it } from "vitest"
 import * as stable from "../../public"
 import * as advanced from "../../advanced"
 import * as internal from "../../internal"
+import * as advancedRowModel from "../../advanced-client-row-model"
 
 describe("entrypoint tier contract", () => {
   it("keeps stable root surface free from advanced and internal helpers", () => {
     expect(typeof stable.createDataGridApi).toBe("function")
     expect(typeof stable.createDataGridCore).toBe("function")
-    expect(typeof stable.createClientRowModel).toBe("function")
+    expect("createClientRowModel" in stable).toBe(false)
+    expect(typeof advancedRowModel.createAdvancedClientRowModel).toBe("function")
     expect(typeof stable.createServerBackedRowModel).toBe("function")
 
     expect("createDataGridViewportController" in stable).toBe(false)
@@ -43,6 +45,7 @@ describe("entrypoint tier contract", () => {
     expect(packageJson.exports).toHaveProperty(".")
     expect(packageJson.exports).toHaveProperty("./advanced")
     expect(packageJson.exports).toHaveProperty("./internal")
+    expect(packageJson.exports).toHaveProperty("./advanced-client-row-model")
     expect(packageJson.exports).not.toHaveProperty("./*")
   })
 })

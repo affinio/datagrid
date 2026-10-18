@@ -883,68 +883,7 @@ export function normalizeViewportRange(
   }
 }
 
-function normalizePaginationPageSize(value: number | null | undefined): number {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-  const normalized = Math.max(0, Math.trunc(value as number))
-  return normalized
-}
-
-function normalizePaginationPage(value: number | null | undefined): number {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-  return Math.max(0, Math.trunc(value as number))
-}
-
-export function normalizePaginationInput(
-  input: DataGridPaginationInput | null | undefined,
-): DataGridPaginationInput {
-  return {
-    pageSize: normalizePaginationPageSize(input?.pageSize),
-    currentPage: normalizePaginationPage(input?.currentPage),
-  }
-}
-
-export function buildPaginationSnapshot(
-  totalRowCount: number,
-  input: DataGridPaginationInput | null | undefined,
-): DataGridPaginationSnapshot {
-  const normalizedTotal = Number.isFinite(totalRowCount) ? Math.max(0, Math.trunc(totalRowCount)) : 0
-  const normalizedInput = normalizePaginationInput(input)
-  const enabled = normalizedInput.pageSize > 0
-  if (!enabled) {
-    return {
-      enabled: false,
-      pageSize: 0,
-      currentPage: 0,
-      pageCount: normalizedTotal > 0 ? 1 : 0,
-      totalRowCount: normalizedTotal,
-      startIndex: normalizedTotal > 0 ? 0 : -1,
-      endIndex: normalizedTotal > 0 ? normalizedTotal - 1 : -1,
-    }
-  }
-
-  const pageCount = Math.ceil(normalizedTotal / normalizedInput.pageSize)
-  const maxPage = Math.max(0, pageCount - 1)
-  const currentPage = Math.min(normalizedInput.currentPage, maxPage)
-  const startIndex = normalizedTotal > 0
-    ? currentPage * normalizedInput.pageSize
-    : -1
-  const endIndex = normalizedTotal > 0
-    ? Math.min(normalizedTotal - 1, startIndex + normalizedInput.pageSize - 1)
-    : -1
-  return {
-    enabled: true,
-    pageSize: normalizedInput.pageSize,
-    currentPage,
-    pageCount,
-    totalRowCount: normalizedTotal,
-    startIndex,
-    endIndex,
-  }
-}
+export { buildPaginationSnapshot, normalizePaginationInput } from "./pagination.js"
 
 export type DataGridRowNodeInput<T = unknown> = DataGridRowNode<T> | T
 

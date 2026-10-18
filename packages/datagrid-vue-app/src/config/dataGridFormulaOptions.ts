@@ -1,6 +1,5 @@
 import type { VNodeChild } from "vue"
 import type {
-  CreateClientRowModelOptions,
   DataGridCellInteractionInvocationTrigger,
   DataGridCellInteractionKeyboardTrigger,
   DataGridCellInteractionRole,
@@ -12,6 +11,7 @@ import type {
   DataGridRowNode,
   DataGridRowRenderMeta,
 } from "@affino/datagrid-vue"
+import type { CreateAdvancedClientRowModelOptions } from "@affino/datagrid-core/advanced-client-row-model"
 import type { DataGridBivariantCallback } from "../types/bivariance"
 import type { DataGridAppColumnFilterOptions } from "./dataGridFilterNormalization"
 
@@ -102,7 +102,7 @@ export interface DataGridDeclarativeFormulaOptions<TRow = unknown> {
 }
 
 export type DataGridAppClientRowModelOptions<TRow = unknown> = Omit<
-  CreateClientRowModelOptions<TRow>,
+  CreateAdvancedClientRowModelOptions<TRow>,
   "rows" | "computeMode" | "workerPatchDispatchThreshold" | "formulaColumnCacheMaxColumns"
 > & {
   readFilterCell?: DataGridBivariantCallback<[rowNode: DataGridRowNode<TRow>, columnKey: string], unknown>
@@ -127,7 +127,7 @@ const CLIENT_ROW_MODEL_OPTIONS_CACHE = new WeakMap<
 >()
 const MERGED_ROW_MODEL_OPTIONS_CACHE = new WeakMap<
   object,
-  WeakMap<object, Omit<CreateClientRowModelOptions<unknown>, "rows">>
+  WeakMap<object, Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows">>
 >()
 
 function cloneClientRowModelOptions<TRow>(
@@ -228,7 +228,7 @@ export function resolveDataGridColumns(
 
 export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
   input: ResolveDataGridFormulaRowModelOptionsInput<TRow>,
-): Omit<CreateClientRowModelOptions<TRow>, "rows"> | undefined {
+): Omit<CreateAdvancedClientRowModelOptions<TRow>, "rows"> | undefined {
   const baseOptions = cloneClientRowModelOptions(input.clientRowModelOptions)
   const enterpriseOptions = input.enterpriseClientRowModelOptions
   const embeddedFormulas = extractEmbeddedFormulas(input.columns)
@@ -269,12 +269,12 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
     if (baseOptions && enterpriseOptions) {
       let byEnterprise = MERGED_ROW_MODEL_OPTIONS_CACHE.get(baseOptions as object)
       if (!byEnterprise) {
-        byEnterprise = new WeakMap<object, Omit<CreateClientRowModelOptions<unknown>, "rows">>()
+        byEnterprise = new WeakMap<object, Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows">>()
         MERGED_ROW_MODEL_OPTIONS_CACHE.set(baseOptions as object, byEnterprise)
       }
       const cached = byEnterprise.get(enterpriseOptions as object)
       if (cached) {
-        return cached as Omit<CreateClientRowModelOptions<TRow>, "rows">
+        return cached as Omit<CreateAdvancedClientRowModelOptions<TRow>, "rows">
       }
       const merged = {
         ...baseOptions,
@@ -282,7 +282,7 @@ export function resolveDataGridFormulaRowModelOptions<TRow = unknown>(
       }
       byEnterprise.set(
         enterpriseOptions as object,
-        merged as Omit<CreateClientRowModelOptions<unknown>, "rows">,
+        merged as Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows">,
       )
       return merged
     }

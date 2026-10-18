@@ -9,7 +9,7 @@ Introduce a compute-backend layer that keeps current synchronous behavior stable
 
 ## Current architecture
 
-`createClientRowModel` now uses a dedicated compute runtime:
+`createAdvancedClientRowModel` now uses a dedicated compute runtime:
 
 - `clientRowProjectionOrchestrator` (stage orchestration logic)
 - `clientRowComputeRuntime` (execution backend adapter)
@@ -51,7 +51,7 @@ Worker transport package (`@affino/datagrid-worker`) now provides:
 
 ### Core
 
-`createClientRowModel` supports:
+`createAdvancedClientRowModel` supports:
 
 - `computeMode?: "sync" | "worker"`
 - `computeTransport?: DataGridClientComputeTransport | null`
@@ -60,7 +60,7 @@ Worker transport package (`@affino/datagrid-worker`) now provides:
 
 `createDataGridRuntime` supports:
 
-- `clientRowModelOptions?: Omit<CreateClientRowModelOptions, "rows">`
+- `clientRowModelOptions?: Omit<CreateAdvancedClientRowModelOptions, "rows">`
 
 ### Vue adapter
 
@@ -99,7 +99,7 @@ const runtime = useDataGridRuntime({
 `@affino/datagrid-worker` now includes a full worker-owned row-model protocol:
 
 - `createDataGridWorkerOwnedRowModelHost(...)`
-  - runs `createClientRowModel(...)` inside worker host
+  - runs `createAdvancedClientRowModel(...)` inside worker host
   - publishes canonical snapshot + visible slice updates
 - `createDataGridWorkerOwnedRowModel(...)`
   - thin-client row model on main thread

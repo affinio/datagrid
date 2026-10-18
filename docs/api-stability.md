@@ -31,11 +31,20 @@ Use package-root or documented subpath imports:
 
 ```ts
 import { DataGrid } from "@affino/datagrid-vue-app"
-import { createClientRowModel } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 import { useDataGridCellNavigation } from "@affino/datagrid-vue/advanced/selection"
 ```
 
 Do not import from `src/*`, private files, generated `dist` paths, or undocumented package internals. These paths can change without a migration window.
+
+The stable core root no longer exports `createClientRowModel`, `ClientRowModel`, or `CreateClientRowModelOptions`. Migrate those imports to the explicitly advanced names:
+
+```ts
+// Before: import { createClientRowModel } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
+```
+
+`AdvancedClientRowModel` and `CreateAdvancedClientRowModelOptions` are exported from the same subpath for type imports.
 
 ## What changes require migration notes
 

@@ -271,7 +271,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import {
-  createClientRowModel,
   createDataGridApi,
   createDataGridColumnModel,
   createDataGridCore,
@@ -284,6 +283,7 @@ import {
   type DataGridSortState,
   type DataGridViewportRange,
 } from "@affino/datagrid-core"
+import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-client-row-model"
 import {
   useDataGridAppAdvancedFilterBuilder,
   useDataGridAppColumnLayoutPanel,
@@ -437,7 +437,7 @@ const selectionService: DataGridCoreSelectionService = {
   },
 }
 
-const rowModel = createClientRowModel<CoreBaseRow>({ rows: toRowInputs(rows.value) })
+const rowModel = createAdvancedClientRowModel<CoreBaseRow>({ rows: toRowInputs(rows.value) })
 const columnModel = createDataGridColumnModel({ columns: columns.value })
 const core = createDataGridCore({
   services: {

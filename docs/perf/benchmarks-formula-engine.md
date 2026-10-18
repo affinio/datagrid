@@ -22,7 +22,7 @@ Default incremental patch sizes: `1`, `100`, `1000` rows.
 The benchmark writes both JSON and markdown reports and includes:
 
 - compile time (`compileDataGridFormulaFieldDefinition`)
-- model initialization time (`createClientRowModel` with formulas)
+- model initialization time (`createAdvancedClientRowModel` from `@affino/datagrid-core/advanced-client-row-model` with formulas)
 - full recompute latency (`recomputeComputedFields`)
 - incremental patch recompute latency (`patchRows`)
 - estimated formulas per second:

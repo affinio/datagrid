@@ -2,6 +2,10 @@
 
 ## 0.16.0
 
+### Removed
+
+- Removed deprecated `DataGridColumnMenuLabels.valuesWindowSummary`; the value filter no longer renders the visible-window scroll hint.
+
 ### Added
 
 - Added async state persistence adapters (`load`/`save`), persistence status events, and `resetPersistedState()` for local, session, or application-managed storage.

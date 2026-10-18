@@ -194,7 +194,6 @@ registerTokenCheck(
   [
     "createDataGridCore",
     "createDataGridApi",
-    "createClientRowModel",
     "createServerBackedRowModel",
     "createDataGridColumnModel",
     "getDataGridVersionedPublicProtocol",
@@ -203,6 +202,12 @@ registerTokenCheck(
     "DATAGRID_INTERNAL_ENTRYPOINTS",
   ],
   "Stable public API exports tier-1 core/model contracts",
+)
+registerTokenCheck(
+  "advanced-client-row-model-entrypoint",
+  "packages/datagrid-core/src/advanced-client-row-model.ts",
+  ["createAdvancedClientRowModel", "AdvancedClientRowModel", "CreateAdvancedClientRowModelOptions"],
+  "Advanced client row-model capabilities use an explicit package entrypoint",
 )
 registerTokenCheck(
   "typed-event-map-exports",
