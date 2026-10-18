@@ -91,6 +91,7 @@ import {
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
 import { createDataSourceCacheStoreRegistry } from "./server/dataSourceCacheStoreRegistry.js"
+import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
 import {
   createDataSourceRuntimeLifecycle,
@@ -779,10 +780,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }))
   }
 
-  function getViewportSize(range: DataGridViewportRange): number {
-    return Math.max(0, range.end - range.start + 1)
-  }
-
   function isRangeFullyCached(range: DataGridViewportRange, stateKey?: string): boolean {
     for (let index = range.start; index <= range.end; index += 1) {
       if (!isIndexCached(index, stateKey)) {
@@ -849,18 +846,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
       covered += 1
     }
     return covered
-  }
-
-  function resolvePrefetchBatchSize(viewportSize: number): number {
-    const scaledSize = Math.ceil(viewportSize * prefetchOptions.windowViewportFactor)
-    return Math.max(
-      prefetchOptions.minBatchSize,
-      Math.min(prefetchOptions.maxBatchSize, Math.max(1, scaledSize)),
-    )
-  }
-
-  function resolvePrefetchTriggerSize(viewportSize: number): number {
-    return Math.max(1, Math.ceil(viewportSize * prefetchOptions.triggerViewportFactor))
   }
 
   function updateCachedCoverageDiagnostics(sourceViewport: DataGridViewportRange): void {
@@ -1422,73 +1407,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState()
   }
 
-  function resolvePrefetchDirections(): readonly ("forward" | "backward")[] {
-    switch (prefetchOptions.directionalBias) {
-      case "forward":
-        return ["forward"]
-      case "backward":
-        return ["backward"]
-      case "symmetric":
-        return ["forward", "backward"]
-      case "scroll-direction":
-      default:
-        return lastViewportDirection < 0 ? ["backward", "forward"] : ["forward", "backward"]
-    }
-  }
-
-  function buildPrefetchCandidate(
-    sourceViewport: DataGridViewportRange,
-    direction: "forward" | "backward",
-  ): { range: DataGridViewportRange; cachedRows: number } | null {
-    if (!prefetchOptions.enabled || rowCount <= 0) {
-      return null
-    }
-    const viewportSize = getViewportSize(sourceViewport)
-    if (viewportSize <= 0) {
-      return null
-    }
-    const batchSize = resolvePrefetchBatchSize(viewportSize)
-    const triggerSize = resolvePrefetchTriggerSize(viewportSize)
-    if (direction === "forward") {
-      if (sourceViewport.end >= rowCount - 1) {
-        return null
-      }
-      const cachedRows = countCoveredRowsForward(sourceViewport.end + 1, rowCount - 1)
-      if (cachedRows > triggerSize) {
-        return null
-      }
-      const start = sourceViewport.end + 1 + cachedRows
-      if (start >= rowCount) {
-        return null
-      }
-      return {
-        range: {
-          start,
-          end: Math.min(rowCount - 1, start + batchSize - 1),
-        },
-        cachedRows,
-      }
-    }
-    if (sourceViewport.start <= 0) {
-      return null
-    }
-    const cachedRows = countCoveredRowsBackward(sourceViewport.start - 1, 0)
-    if (cachedRows > triggerSize) {
-      return null
-    }
-    const end = sourceViewport.start - 1 - cachedRows
-    if (end < 0) {
-      return null
-    }
-    return {
-      range: {
-        start: Math.max(0, end - batchSize + 1),
-        end,
-      },
-      cachedRows,
-    }
-  }
-
   function scheduleViewportPrefetch(): void {
     if (!prefetchOptions.enabled || disposed) {
       return
@@ -1501,19 +1419,14 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
     const sourceViewport = toSourceRange(viewportRange)
     updateCachedCoverageDiagnostics(sourceViewport)
-    let bestCandidate: { range: DataGridViewportRange; cachedRows: number } | null = null
-    for (const direction of resolvePrefetchDirections()) {
-      const candidate = buildPrefetchCandidate(sourceViewport, direction)
-      if (!candidate) {
-        continue
-      }
-      if (!bestCandidate || candidate.cachedRows < bestCandidate.cachedRows) {
-        bestCandidate = candidate
-      }
-      if (prefetchOptions.directionalBias !== "symmetric") {
-        break
-      }
-    }
+    const bestCandidate = resolveDataSourcePrefetchCandidate({
+      policy: prefetchOptions,
+      sourceViewport,
+      rowCount,
+      lastViewportDirection,
+      countCachedForward: countCoveredRowsForward,
+      countCachedBackward: countCoveredRowsBackward,
+    })
     if (!bestCandidate) {
       diagnostics.prefetchSkippedCached += 1
       return
