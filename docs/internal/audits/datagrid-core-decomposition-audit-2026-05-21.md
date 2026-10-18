@@ -227,6 +227,8 @@ Recommended decomposition:
 - Extract shared expansion delta and projection segment helpers.
 - Keep `createTreeProjectionRuntime()` as the facade.
 
+Progress (`2026-10-18`): extracted shared expansion snapshot caching/delta detection, projection segment replacement, and group index shift maintenance into `tree/treeProjectionExpansion.ts`. `treeProjectionRuntime.ts` now consumes those helpers while retaining path/parent projection orchestration. Core type-check, build, focused projection tests (10), and the tree workload assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`
