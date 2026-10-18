@@ -21,6 +21,8 @@ Priority order:
 
 Progress (`2026-10-18`): moved directional range selection and cached-ahead/back policy to `models/server/dataSourcePrefetchPolicy.ts`; the row-model facade retains cache inspection, diagnostics, and scheduling side effects. Focused datasource tests and core type-check/build pass. The datasource churn benchmark currently fails filter-burst abort/drop counters; the same failure reproduces against the committed baseline (seeds 1337/7331/2026: aborts 1482/1494/1451 and dropped 755 on seed 7331), so this slice did not introduce it.
 
+Progress (`2026-10-18`): moved datasource row-entry identity resolution, row-state/group metadata normalization, and row-node construction to `models/server/dataSourceRowEntry.ts`. Both normal pull application and full cache replacement use the same pure normalizer. Core type-check/build and the full core test suite pass (108 files, 851 tests).
+
 Current responsibilities:
 
 - `DataGridRowModel` facade.

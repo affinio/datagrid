@@ -6,7 +6,6 @@ import {
   isSameGroupBySpec,
   normalizePaginationInput,
   normalizeGroupBySpec,
-  normalizeRowNode,
   normalizeViewportRange,
   setGroupExpansionKey,
   toggleGroupExpansionKey,
@@ -19,9 +18,7 @@ import {
   type DataGridColumnHistogramResult,
   type DataGridRowId,
   type DataGridRowNode,
-  type DataGridRowGroupMeta,
   type DataGridRowIdResolver,
-  type DataGridRowNodeState,
   type DataGridRowModel,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
@@ -92,6 +89,7 @@ import {
 import { createDataSourceCacheManager } from "./server/dataSourceCacheManager.js"
 import { createDataSourceCacheStoreRegistry } from "./server/dataSourceCacheStoreRegistry.js"
 import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
+import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
 import {
   createDataSourceRuntimeLifecycle,
@@ -1036,87 +1034,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function normalizeEntryRowState(
-    kind: DataGridRowNode["kind"],
-    state: DataGridDataSourceRowEntry<T>["state"],
-  ): DataGridRowNodeState {
-    return {
-      selected: Boolean(state?.selected),
-      group: kind === "group",
-      pinned: state?.pinned === "top" || state?.pinned === "bottom" ? state.pinned : "none",
-      expanded: Boolean(state?.expanded),
-    }
-  }
-
-  function normalizeEntryGroupMeta(
-    value: DataGridDataSourceRowEntry<T>["groupMeta"],
-    fallbackRowKey: DataGridRowId,
-  ): DataGridRowGroupMeta {
-    const normalizedKey = String(value?.groupKey ?? fallbackRowKey)
-    const normalizedField = typeof value?.groupField === "string" ? value.groupField : ""
-    const normalizedValue = typeof value?.groupValue === "string" ? value.groupValue : normalizedKey
-    const level = Number.isFinite(value?.level) ? Math.max(0, Math.trunc(value?.level as number)) : 0
-    const childrenCount = Number.isFinite(value?.childrenCount)
-      ? Math.max(0, Math.trunc(value?.childrenCount as number))
-      : 0
-    const aggregates = value?.aggregates && typeof value.aggregates === "object" && !Array.isArray(value.aggregates)
-      ? { ...value.aggregates }
-      : undefined
-    return {
-      groupKey: normalizedKey,
-      groupField: normalizedField,
-      groupValue: normalizedValue,
-      level,
-      childrenCount,
-      ...(aggregates ? { aggregates } : {}),
-    }
-  }
-
-  function normalizeRowEntry(entry: DataGridDataSourceRowEntry<T>) {
-    const index = Number.isFinite(entry.index) ? Math.max(0, Math.trunc(entry.index)) : 0
-    const rowId = (() => {
-      if (typeof entry.rowId === "string" || typeof entry.rowId === "number") {
-        return entry.rowId as DataGridRowId
-      }
-      if (entry.kind === "group") {
-        throw new Error(
-          `[DataGrid] Missing row identity for data-source group row at index ${index}. ` +
-          "Server must provide deterministic rowId for group rows.",
-        )
-      }
-      if (typeof resolveRowId === "function") {
-        return resolveRowId(entry.row, index)
-      }
-      const fallback = (entry.row as { id?: unknown })?.id
-      if (typeof fallback === "string" || typeof fallback === "number") {
-        return fallback
-      }
-      throw new Error(
-        `[DataGrid] Missing row identity for data-source row at index ${index}. Provide rowId or resolveRowId.`,
-      )
-    })()
-
-    const kind = entry.kind === "group" ? "group" : "leaf"
-    return {
-      index,
-      node: normalizeRowNode<T>(
-        {
-          kind,
-          data: entry.row,
-          row: entry.row,
-          rowKey: rowId,
-          rowId,
-          sourceIndex: index,
-          originalIndex: index,
-          displayIndex: index,
-          state: normalizeEntryRowState(kind, entry.state),
-          ...(kind === "group" ? { groupMeta: normalizeEntryGroupMeta(entry.groupMeta, rowId) } : {}),
-        },
-        index,
-      ),
-    }
-  }
-
   function createLoadingRowNode(
     visibleIndex: number,
     sourceIndex: number,
@@ -1152,7 +1069,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return false
     }
     for (const entry of rows) {
-      const normalized = normalizeRowEntry(entry)
+      const normalized = normalizeDataSourceRowEntry(entry, resolveRowId)
       writeRowCacheWithOptimisticOverlay(normalized.index, normalized.node, stateKey)
     }
     updateTotalFromRows(rows)
@@ -1170,7 +1087,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function replaceCacheWithRows(rows: readonly DataGridDataSourceRowEntry<T>[], stateKey: string = buildRequestStateKey()): boolean {
-    const normalizedRows = rows.map(entry => normalizeRowEntry(entry))
+    const normalizedRows = rows.map(entry => normalizeDataSourceRowEntry(entry, resolveRowId))
     const freshIndexes = new Set(normalizedRows.map(entry => entry.index))
     const preserveRange = toSourceRange(viewportRange)
     const preservedRows: { index: number; node: DataGridRowNode<T> }[] = []
