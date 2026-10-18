@@ -8,6 +8,17 @@ import {
   type TreeGroupIndexShift,
 } from "./treeProjectionExpansion.js"
 import {
+  appendTreeParentRowChildren,
+  createTreeParentGroupKey,
+  materializeTreeParentProjection,
+} from "./treeProjectionParentMaterializer.js"
+import type {
+  TreeParentProjectionCache,
+  TreeProjectionDiagnostics,
+  TreeProjectionResult,
+} from "./treeProjectionTypes.js"
+export type { TreeProjectionResult } from "./treeProjectionTypes.js"
+import {
   isGroupExpanded,
   type DataGridGroupExpansionSnapshot,
   type DataGridRowId,
@@ -35,16 +46,6 @@ interface TreePathBranch<T> {
   leaves: DataGridRowNode<T>[]
   matchedLeaves: number
 }
-interface TreeProjectionDiagnostics {
-  orphans: number
-  cycles: number
-}
-
-export interface TreeProjectionResult<T> {
-  rows: DataGridRowNode<T>[]
-  diagnostics: TreeProjectionDiagnostics
-}
-
 export interface TreePathProjectionCache<T> {
   diagnostics: TreeProjectionDiagnostics
   rootGroups: Map<string, TreePathBranch<T>>
@@ -67,24 +68,6 @@ export interface TreePathProjectionCache<T> {
   aggregateStateByGroupKey?: Map<string, DataGridIncrementalAggregationGroupState>
   leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
   dirtyBranchKeys: Set<string>
-}
-
-export interface TreeParentProjectionCache<T> {
-  diagnostics: TreeProjectionDiagnostics
-  rowById: Map<DataGridRowId, DataGridRowNode<T>>
-  parentById: Map<DataGridRowId, DataGridRowId | null>
-  includedChildrenById: Map<DataGridRowId, DataGridRowId[]>
-  groupRowIdByGroupKey: Map<string, DataGridRowId>
-  groupIndexByRowId: Map<DataGridRowId, number>
-  groupIndexShiftHistory: TreeGroupIndexShift[]
-  groupIndexBornAt: Map<DataGridRowId, number>
-  togglePreviousDescendantsBuffer: DataGridRowNode<T>[]
-  toggleNextDescendantsBuffer: DataGridRowNode<T>[]
-  rootIncluded: DataGridRowId[]
-  aggregatesByGroupRowId: Map<DataGridRowId, Record<string, unknown>>
-  aggregateStateByGroupRowId?: Map<DataGridRowId, DataGridIncrementalAggregationGroupState>
-  leafContributionById?: Map<DataGridRowId, DataGridIncrementalAggregationLeafContribution>
-  dirtyBranchRootIds: Set<DataGridRowId>
 }
 
 export interface TreePathProjectionCacheState<T> {
@@ -229,10 +212,6 @@ function createTreePathGroupKey(segments: readonly string[]): string {
     encoded += `${segment.length}:${segment}`
   }
   return encoded
-}
-
-function createTreeParentGroupKey(rowId: DataGridRowId): string {
-  return `tree:parent:${String(rowId)}`
 }
 
 function patchTreePathProjectionCacheRowsByIdentity<T>(
@@ -1047,111 +1026,6 @@ function buildTreeParentProjectionCache<T>(
     aggregateStateByGroupRowId,
     leafContributionById,
     dirtyBranchRootIds: new Set<DataGridRowId>(),
-  }
-}
-
-function createTreeParentGroupNode<T>(
-  row: DataGridRowNode<T>,
-  rowId: DataGridRowId,
-  level: number,
-  childrenCount: number,
-  expanded: boolean,
-  aggregates?: Record<string, unknown>,
-): DataGridRowNode<T> {
-  return {
-    ...row,
-    kind: "group",
-    state: {
-      ...row.state,
-      group: true,
-      expanded,
-    },
-    groupMeta: {
-      groupKey: createTreeParentGroupKey(rowId),
-      groupField: "parent",
-      groupValue: String(rowId),
-      level,
-      childrenCount,
-      ...(aggregates ? { aggregates } : {}),
-    },
-  }
-}
-
-function appendTreeParentRow<T>(
-  cache: TreeParentProjectionCache<T>,
-  rowId: DataGridRowId,
-  level: number,
-  expansionSnapshot: DataGridGroupExpansionSnapshot,
-  expansionToggledKeys: ReadonlySet<string>,
-  output: DataGridRowNode<T>[],
-): void {
-  const row = cache.rowById.get(rowId)
-  if (!row) {
-    return
-  }
-  const children = cache.includedChildrenById.get(rowId) ?? []
-  if (children.length === 0) {
-    output.push(row)
-    return
-  }
-  const groupKey = createTreeParentGroupKey(rowId)
-  const expanded = isGroupExpanded(expansionSnapshot, groupKey, expansionToggledKeys)
-  cache.groupIndexByRowId.set(rowId, output.length)
-  output.push(
-    createTreeParentGroupNode(
-      row,
-      rowId,
-      level,
-      children.length,
-      expanded,
-      cache.aggregatesByGroupRowId.get(rowId),
-    ),
-  )
-  if (!expanded) {
-    return
-  }
-  appendTreeParentRowChildren(cache, rowId, level, expansionSnapshot, expansionToggledKeys, output)
-}
-
-function appendTreeParentRowChildren<T>(
-  cache: TreeParentProjectionCache<T>,
-  rowId: DataGridRowId,
-  level: number,
-  expansionSnapshot: DataGridGroupExpansionSnapshot,
-  expansionToggledKeys: ReadonlySet<string>,
-  output: DataGridRowNode<T>[],
-): void {
-  const children = cache.includedChildrenById.get(rowId) ?? []
-  for (const childId of children) {
-    appendTreeParentRow(cache, childId, level + 1, expansionSnapshot, expansionToggledKeys, output)
-  }
-}
-
-function materializeTreeParentProjection<T>(
-  cache: TreeParentProjectionCache<T>,
-  expansionSnapshot: DataGridGroupExpansionSnapshot,
-  precomputedExpansionToggledKeys?: ReadonlySet<string>,
-): TreeProjectionResult<T> {
-  if (cache.rootIncluded.length === 0) {
-    return {
-      rows: [],
-      diagnostics: cache.diagnostics,
-    }
-  }
-  const projected: DataGridRowNode<T>[] = []
-  cache.groupIndexByRowId.clear()
-  cache.groupIndexShiftHistory.length = 0
-  cache.groupIndexBornAt.clear()
-  const expansionToggledKeys = resolveExpansionToggledKeys(
-    expansionSnapshot,
-    precomputedExpansionToggledKeys,
-  )
-  for (const rootId of cache.rootIncluded) {
-    appendTreeParentRow(cache, rootId, 0, expansionSnapshot, expansionToggledKeys, projected)
-  }
-  return {
-    rows: projected,
-    diagnostics: cache.diagnostics,
   }
 }
 

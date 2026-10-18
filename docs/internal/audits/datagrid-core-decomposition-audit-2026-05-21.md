@@ -229,6 +229,8 @@ Recommended decomposition:
 
 Progress (`2026-10-18`): extracted shared expansion snapshot caching/delta detection, projection segment replacement, and group index shift maintenance into `tree/treeProjectionExpansion.ts`. `treeProjectionRuntime.ts` now consumes those helpers while retaining path/parent projection orchestration. Core type-check, build, focused projection tests (10), and the tree workload assertion passed.
 
+Progress (`2026-10-18`): moved parent-mode tree row materialization and its shared cache/result types into `tree/treeProjectionParentMaterializer.ts` and `tree/treeProjectionTypes.ts`. The projection facade retains cache construction and incremental subtree-toggle orchestration. Core type-check/build, focused projection tests, and the tree workload assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/clientRowProjectionEngine.spec.ts`
