@@ -13,16 +13,19 @@ import type {
   CreateDataGridSpreadsheetSheetModelOptions,
   DataGridSpreadsheetColumnSnapshot,
   DataGridSpreadsheetSheetState,
-  DataGridSpreadsheetStyle,
   DataGridSpreadsheetViewSourceSheet,
 } from "./sheet.js"
 import type { DataGridFormulaTableRowsSource, DataGridFormulaTableSource } from "../models/formula/formulaContracts.js"
+import { applySpreadsheetViewFilterStep, applySpreadsheetViewSortStep } from "./viewPipelineBasicStages.js"
+import type {
+  SpreadsheetViewColumnState,
+  SpreadsheetViewDataset,
+  SpreadsheetViewRowState,
+} from "./viewPipelineDataset.js"
 import {
-  areSpreadsheetViewValuesEquivalent as valuesAreEquivalent,
   coerceSpreadsheetViewNumber as coerceNumericValue,
   compareSpreadsheetViewValues as compareOrderedValues,
   isSpreadsheetViewValueEmpty as isEmptyValue,
-  normalizeSpreadsheetViewText as normalizeTextComparisonValue,
 } from "./viewPipelineValueUtils.js"
 import {
   createDataGridSpreadsheetDerivedSheetRuntime,
@@ -198,23 +201,6 @@ export interface DataGridSpreadsheetViewPivotStageState {
   leafRowsById: ReadonlyMap<DataGridRowId, DataGridRowNode<Record<string, unknown>>>
 }
 
-interface SpreadsheetViewColumnState {
-  key: string
-  title: string
-  formulaAlias: string
-  style: DataGridSpreadsheetStyle | null
-}
-
-interface SpreadsheetViewRowState {
-  id: DataGridRowId
-  values: Record<string, unknown>
-}
-
-interface SpreadsheetViewDataset {
-  columns: readonly SpreadsheetViewColumnState[]
-  rows: readonly SpreadsheetViewRowState[]
-}
-
 interface SpreadsheetPivotColumnState {
   key: string
   title: string
@@ -364,52 +350,6 @@ function createJoinExplodedRowId(
   return `join:${encodedLeft.length}:${encodedLeft}|${encodedRight.length}:${encodedRight}|${matchIndex}`
 }
 
-function matchesFilterClause(
-  row: SpreadsheetViewRowState,
-  clause: DataGridSpreadsheetViewFilterClause,
-): boolean {
-  const value = row.values[clause.key]
-  switch (clause.operator) {
-    case "contains":
-      return normalizeTextComparisonValue(value, clause.caseSensitive).includes(
-        normalizeTextComparisonValue(clause.value, clause.caseSensitive),
-      )
-    case "startsWith":
-      return normalizeTextComparisonValue(value, clause.caseSensitive).startsWith(
-        normalizeTextComparisonValue(clause.value, clause.caseSensitive),
-      )
-    case "endsWith":
-      return normalizeTextComparisonValue(value, clause.caseSensitive).endsWith(
-        normalizeTextComparisonValue(clause.value, clause.caseSensitive),
-      )
-    case "equals":
-      return valuesAreEquivalent(value, clause.value, clause.caseSensitive)
-    case "notEquals":
-      return !valuesAreEquivalent(value, clause.value, clause.caseSensitive)
-    case "gt":
-      return compareOrderedValues(value, clause.value) > 0
-    case "gte":
-      return compareOrderedValues(value, clause.value) >= 0
-    case "lt":
-      return compareOrderedValues(value, clause.value) < 0
-    case "lte":
-      return compareOrderedValues(value, clause.value) <= 0
-    case "between":
-      return compareOrderedValues(value, clause.value) >= 0
-        && compareOrderedValues(value, clause.value2) <= 0
-    case "isEmpty":
-      return isEmptyValue(value)
-    case "notEmpty":
-      return !isEmptyValue(value)
-    case "isNull":
-      return value == null
-    case "notNull":
-      return value != null
-    default:
-      return false
-  }
-}
-
 function isSpreadsheetViewTableRowsSource(
   value: DataGridFormulaTableSource,
 ): value is DataGridFormulaTableRowsSource {
@@ -440,60 +380,6 @@ function createDatasetFromSheetModel(sheetModel: DataGridSpreadsheetViewSourceSh
   })
   return {
     columns,
-    rows,
-  }
-}
-
-function applyFilterStep(
-  dataset: SpreadsheetViewDataset,
-  step: DataGridSpreadsheetViewFilterStep,
-): SpreadsheetViewDataset {
-  if (step.clauses.length === 0) {
-    return dataset
-  }
-  const mode = step.mode ?? "all"
-  return {
-    columns: dataset.columns,
-    rows: dataset.rows.filter(row => {
-      const matches = step.clauses.map(clause => matchesFilterClause(row, clause))
-      return mode === "any" ? matches.some(Boolean) : matches.every(Boolean)
-    }),
-  }
-}
-
-function normalizeSortFields(
-  fields: readonly (string | DataGridSpreadsheetViewSortField)[],
-): readonly DataGridSpreadsheetViewSortField[] {
-  return fields.map(field => (
-    typeof field === "string"
-      ? { key: normalizeColumnKey(field, "sort field"), direction: "asc" }
-      : {
-        key: normalizeColumnKey(field.key, "sort field"),
-        direction: field.direction ?? "asc",
-      }
-  ))
-}
-
-function applySortStep(
-  dataset: SpreadsheetViewDataset,
-  step: DataGridSpreadsheetViewSortStep,
-): SpreadsheetViewDataset {
-  const fields = normalizeSortFields(step.fields)
-  if (fields.length === 0) {
-    return dataset
-  }
-  const rows = [...dataset.rows]
-  rows.sort((left, right) => {
-    for (const field of fields) {
-      const comparison = compareOrderedValues(left.values[field.key], right.values[field.key])
-      if (comparison !== 0) {
-        return field.direction === "desc" ? -comparison : comparison
-      }
-    }
-    return String(left.id).localeCompare(String(right.id))
-  })
-  return {
-    columns: dataset.columns,
     rows,
   }
 }
@@ -1398,10 +1284,10 @@ export function materializeDataGridSpreadsheetViewRuntimeResult(
     for (const step of options.pipeline) {
       switch (step.type) {
         case "filter":
-          dataset = applyFilterStep(dataset, step)
+          dataset = applySpreadsheetViewFilterStep(dataset, step)
           break
         case "sort":
-          dataset = applySortStep(dataset, step)
+          dataset = applySpreadsheetViewSortStep(dataset, step)
           break
         case "project":
           dataset = applyProjectStep(dataset, step)
