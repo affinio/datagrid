@@ -8,7 +8,7 @@ const rowCount = Math.max(1, Number.parseInt(process.env.BENCH_RUNTIME_ROWS ?? "
 const iterations = Math.max(3, Number.parseInt(process.env.BENCH_RUNTIME_ITERATIONS ?? "7", 10))
 const outputPath = resolve(process.env.BENCH_OUTPUT_JSON ?? "artifacts/performance/bench-datagrid-runtime-lifecycle.json")
 
-const { createClientRowModel } = await import("../packages/datagrid-core/dist/src/models/index.js")
+const { createAdvancedClientRowModel } = await import("../packages/datagrid-core/dist/src/models/index.js")
 
 function createRows(count) {
   return Array.from({ length: count }, (_, id) => ({
@@ -53,7 +53,7 @@ function measure(name, options) {
     if (typeof global.gc === "function") global.gc()
     heapBefore = process.memoryUsage().heapUsed
     const createStarted = performance.now()
-    const model = createClientRowModel({ rows, ...options })
+    const model = createAdvancedClientRowModel({ rows, ...options })
     createSamples.push(performance.now() - createStarted)
     heapAfter = process.memoryUsage().heapUsed
     const disposeStarted = performance.now()

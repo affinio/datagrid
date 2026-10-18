@@ -270,8 +270,8 @@ async function loadFactory() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return module.createClientRowModel
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return module.createAdvancedClientRowModel
       }
     } catch (error) {
       lastError = error
@@ -290,14 +290,14 @@ async function maybeRefresh(model, reason = "reapply") {
   }
 }
 
-async function runColdStartScenario(createClientRowModel, seed) {
+async function runColdStartScenario(createAdvancedClientRowModel, seed) {
   const byRows = {}
   for (const rowCount of COLD_START_ROW_COUNTS) {
     const durations = []
     for (let iteration = 0; iteration < COLD_START_ITERATIONS; iteration += 1) {
       const rows = createRows(rowCount, seed + iteration * 13)
       const startedAt = performance.now()
-      const model = createClientRowModel({ rows })
+      const model = createAdvancedClientRowModel({ rows })
       model.getSnapshot()
       model.getRowsInRange({ start: 0, end: Math.min(159, Math.max(0, model.getRowCount() - 1)) })
       durations.push(performance.now() - startedAt)
@@ -319,9 +319,9 @@ function buildSortDescriptors(direction) {
   ]
 }
 
-async function runSortStressScenario(createClientRowModel, seed) {
+async function runSortStressScenario(createAdvancedClientRowModel, seed) {
   const rows = createRows(SORT_STRESS_ROW_COUNT, seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   const durations = []
   const diagnosticsBefore = typeof model.getDerivedCacheDiagnostics === "function"
     ? model.getDerivedCacheDiagnostics()
@@ -371,9 +371,9 @@ function buildFilterModel(tokens) {
   }
 }
 
-async function runFilterStressScenario(createClientRowModel, seed) {
+async function runFilterStressScenario(createAdvancedClientRowModel, seed) {
   const rows = createRows(FILTER_STRESS_ROW_COUNT, seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   const profiles = {
     match30: buildFilterModel(Array.from({ length: 30 }, (_, index) => String(index))),
     match1: buildFilterModel(["0"]),
@@ -416,10 +416,10 @@ function createPatchUpdates(rng, rowCount, rowsPerPatch) {
   return updates
 }
 
-async function runPatchStormScenario(createClientRowModel, seed) {
+async function runPatchStormScenario(createAdvancedClientRowModel, seed) {
   const rng = createRng(seed)
   const rows = createRows(PATCH_STORM_ROW_COUNT, seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   if (typeof model.patchRows !== "function") {
     model.dispose()
     throw new Error("Patch storm scenario requires ClientRowModel.patchRows support.")
@@ -451,9 +451,9 @@ async function runPatchStormScenario(createClientRowModel, seed) {
   }
 }
 
-async function computeModelDeterminismHash(createClientRowModel, seed) {
+async function computeModelDeterminismHash(createAdvancedClientRowModel, seed) {
   const rng = createRng(seed)
-  const model = createClientRowModel({ rows: createRows(DETERMINISM_ROW_COUNT, seed) })
+  const model = createAdvancedClientRowModel({ rows: createRows(DETERMINISM_ROW_COUNT, seed) })
 
   model.setSortModel([
     { key: "revenue", direction: "desc" },
@@ -497,9 +497,9 @@ async function computeModelDeterminismHash(createClientRowModel, seed) {
   return hash.digest("hex")
 }
 
-async function runDeterminismScenario(createClientRowModel, seed) {
-  const hashA = await computeModelDeterminismHash(createClientRowModel, seed)
-  const hashB = await computeModelDeterminismHash(createClientRowModel, seed)
+async function runDeterminismScenario(createAdvancedClientRowModel, seed) {
+  const hashA = await computeModelDeterminismHash(createAdvancedClientRowModel, seed)
+  const hashB = await computeModelDeterminismHash(createAdvancedClientRowModel, seed)
   return {
     hashA,
     hashB,
@@ -507,7 +507,7 @@ async function runDeterminismScenario(createClientRowModel, seed) {
   }
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const runResults = []
 const budgetErrors = []
 const varianceSkippedChecks = []
@@ -520,25 +520,25 @@ console.log(
 for (const seed of BENCH_SEEDS) {
   console.log(`\n[hardcore] seed ${seed}: warmup...`)
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-    await runColdStartScenario(createClientRowModel, seed + warmup)
-    await runSortStressScenario(createClientRowModel, seed + warmup)
-    await runFilterStressScenario(createClientRowModel, seed + warmup)
-    await runPatchStormScenario(createClientRowModel, seed + warmup)
-    await runDeterminismScenario(createClientRowModel, seed + warmup)
+    await runColdStartScenario(createAdvancedClientRowModel, seed + warmup)
+    await runSortStressScenario(createAdvancedClientRowModel, seed + warmup)
+    await runFilterStressScenario(createAdvancedClientRowModel, seed + warmup)
+    await runPatchStormScenario(createAdvancedClientRowModel, seed + warmup)
+    await runDeterminismScenario(createAdvancedClientRowModel, seed + warmup)
   }
 
   const heapBefore = await sampleHeapUsed()
   const startedAt = performance.now()
   console.log(`[hardcore] seed ${seed}: cold-start...`)
-  const coldStart = await runColdStartScenario(createClientRowModel, seed)
+  const coldStart = await runColdStartScenario(createAdvancedClientRowModel, seed)
   console.log(`[hardcore] seed ${seed}: sort-stress...`)
-  const sortStress = await runSortStressScenario(createClientRowModel, seed)
+  const sortStress = await runSortStressScenario(createAdvancedClientRowModel, seed)
   console.log(`[hardcore] seed ${seed}: filter-stress...`)
-  const filterStress = await runFilterStressScenario(createClientRowModel, seed)
+  const filterStress = await runFilterStressScenario(createAdvancedClientRowModel, seed)
   console.log(`[hardcore] seed ${seed}: patch-storm...`)
-  const patchStorm = await runPatchStormScenario(createClientRowModel, seed)
+  const patchStorm = await runPatchStormScenario(createAdvancedClientRowModel, seed)
   console.log(`[hardcore] seed ${seed}: determinism...`)
-  const determinism = await runDeterminismScenario(createClientRowModel, seed)
+  const determinism = await runDeterminismScenario(createAdvancedClientRowModel, seed)
   const elapsedMs = performance.now() - startedAt
   const heapAfter = await sampleHeapUsed()
   const heapDeltaMb = toMb(heapAfter - heapBefore)

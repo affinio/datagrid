@@ -502,11 +502,11 @@ async function loadDatagridCore() {
     try {
       const module = await import(pathToFileURL(candidate).href)
       if (
-        typeof module.createClientRowModel === "function" &&
+        typeof module.createAdvancedClientRowModel === "function" &&
         typeof module.createDataSourceBackedRowModel === "function"
       ) {
         factories = {
-          createClientRowModel: module.createClientRowModel,
+          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
           createDataSourceBackedRowModel: module.createDataSourceBackedRowModel,
         }
         break
@@ -665,7 +665,7 @@ const CLIENT_VIEWPORT_MEMORY_PHASES = [
   ["postGcRetained", "beforeSetup", "afterGc"],
 ]
 
-async function runClientViewportScrollScenario(createClientRowModel) {
+async function runClientViewportScrollScenario(createAdvancedClientRowModel) {
   const rowCountResults = []
   const runs = []
 
@@ -673,11 +673,11 @@ async function runClientViewportScrollScenario(createClientRowModel) {
     const sizeRuns = []
     for (const seed of BENCH_SEEDS) {
       for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-        await measureClientViewportSeed(createClientRowModel, rowCount, seed + warmup + 1000, {
+        await measureClientViewportSeed(createAdvancedClientRowModel, rowCount, seed + warmup + 1000, {
           warmupOnly: true,
         })
       }
-      const result = await measureClientViewportSeed(createClientRowModel, rowCount, seed)
+      const result = await measureClientViewportSeed(createAdvancedClientRowModel, rowCount, seed)
       runs.push(result)
       sizeRuns.push(result)
     }
@@ -725,7 +725,7 @@ async function runClientViewportScrollScenario(createClientRowModel) {
   return report
 }
 
-async function measureClientViewportSeed(createClientRowModel, rowCount, seed, options = {}) {
+async function measureClientViewportSeed(createAdvancedClientRowModel, rowCount, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
   const phaseTimingsMs = {}
   const phaseMemoryMb = {
@@ -736,7 +736,7 @@ async function measureClientViewportSeed(createClientRowModel, rowCount, seed, o
   )
   recordMemory(phaseMemoryMb, "afterDatasetGeneration")
   const model = measurePhase(phaseTimingsMs, "rowModelCreation", () =>
-    createClientRowModel({
+    createAdvancedClientRowModel({
       rows,
       resolveRowId: row => row.id,
       isolateInputRows: false,
@@ -986,14 +986,14 @@ async function measureServerViewportSeed(createDataSourceBackedRowModel, seed, o
   }
 }
 
-async function runHighFrequencyUpdatesScenario(createClientRowModel) {
+async function runHighFrequencyUpdatesScenario(createAdvancedClientRowModel) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
     for (const rate of UPDATE_RATES) {
       for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-        await measureHighFrequencySeed(createClientRowModel, seed + warmup + 3000, rate, { warmupOnly: true })
+        await measureHighFrequencySeed(createAdvancedClientRowModel, seed + warmup + 3000, rate, { warmupOnly: true })
       }
-      runs.push(await measureHighFrequencySeed(createClientRowModel, seed, rate))
+      runs.push(await measureHighFrequencySeed(createAdvancedClientRowModel, seed, rate))
     }
   }
 
@@ -1046,9 +1046,9 @@ async function runHighFrequencyUpdatesScenario(createClientRowModel) {
   return report
 }
 
-async function measureHighFrequencySeed(createClientRowModel, seed, updatesPerSecond, options = {}) {
+async function measureHighFrequencySeed(createAdvancedClientRowModel, seed, updatesPerSecond, options = {}) {
   const rows = createEnterpriseRows(UPDATE_ROW_COUNT, seed, { physicalColumns: Math.min(10, UPDATE_COLUMN_COUNT) })
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows,
     resolveRowId: row => row.id,
     isolateInputRows: false,
@@ -1154,13 +1154,13 @@ function createCellUpdateBatch(rng, rowCount, columnCount, cellCount) {
   return Array.from(byRow, ([rowId, data]) => ({ rowId, data }))
 }
 
-async function runSortFilterComboScenario(createClientRowModel) {
+async function runSortFilterComboScenario(createAdvancedClientRowModel) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
     for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-      await measureSortFilterSeed(createClientRowModel, seed + warmup + 4000, { warmupOnly: true })
+      await measureSortFilterSeed(createAdvancedClientRowModel, seed + warmup + 4000, { warmupOnly: true })
     }
-    runs.push(await measureSortFilterSeed(createClientRowModel, seed))
+    runs.push(await measureSortFilterSeed(createAdvancedClientRowModel, seed))
   }
 
   const aggregateCache = aggregateDerivedCache(runs.map(run => run.cacheDelta))
@@ -1191,12 +1191,12 @@ async function runSortFilterComboScenario(createClientRowModel) {
   return report
 }
 
-async function measureSortFilterSeed(createClientRowModel, seed, options = {}) {
+async function measureSortFilterSeed(createAdvancedClientRowModel, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
   const rows = createEnterpriseRows(SORT_FILTER_ROW_COUNT, seed, {
     physicalColumns: Math.min(10, SORT_FILTER_COLUMN_COUNT),
   })
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows,
     resolveRowId: row => row.id,
     isolateInputRows: false,
@@ -1578,13 +1578,13 @@ function aggregateCopyPatchDiagnostics(runs) {
   )
 }
 
-async function runCopyPasteFillScenario(createClientRowModel, parseClipboardTsv) {
+async function runCopyPasteFillScenario(createAdvancedClientRowModel, parseClipboardTsv) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
     for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-      await measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed + warmup + 5000, { warmupOnly: true })
+      await measureCopyPasteFillSeed(createAdvancedClientRowModel, parseClipboardTsv, seed + warmup + 5000, { warmupOnly: true })
     }
-    runs.push(await measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed))
+    runs.push(await measureCopyPasteFillSeed(createAdvancedClientRowModel, parseClipboardTsv, seed))
   }
   const aggregate = {
     copyLatencyMs: stats(runs.map(run => run.copyLatencyMs)),
@@ -1648,7 +1648,7 @@ async function runCopyPasteFillScenario(createClientRowModel, parseClipboardTsv)
   return report
 }
 
-async function measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv, seed, options = {}) {
+async function measureCopyPasteFillSeed(createAdvancedClientRowModel, parseClipboardTsv, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
   const phaseTimingsMs = {}
   const phaseMemoryMb = {
@@ -1659,7 +1659,7 @@ async function measureCopyPasteFillSeed(createClientRowModel, parseClipboardTsv,
   )
   recordMemory(phaseMemoryMb, "afterDatasetGeneration")
   const model = measurePhase(phaseTimingsMs, "rowModelCreation", () =>
-    createClientRowModel({
+    createAdvancedClientRowModel({
       rows,
       resolveRowId: row => row.id,
       isolateInputRows: false,
@@ -2056,13 +2056,13 @@ const PIVOT_TREE_MEMORY_PHASES = [
   ["postGcRetained", "beforeSetup", "afterGc"],
 ]
 
-async function runPivotTreeWorkloadScenario(createClientRowModel) {
+async function runPivotTreeWorkloadScenario(createAdvancedClientRowModel) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
     for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-      await measurePivotTreeSeed(createClientRowModel, seed + warmup + 6000, { warmupOnly: true })
+      await measurePivotTreeSeed(createAdvancedClientRowModel, seed + warmup + 6000, { warmupOnly: true })
     }
-    runs.push(await measurePivotTreeSeed(createClientRowModel, seed))
+    runs.push(await measurePivotTreeSeed(createAdvancedClientRowModel, seed))
   }
   const report = createScenarioReport(
     "pivot-tree-workload",
@@ -2090,7 +2090,7 @@ async function runPivotTreeWorkloadScenario(createClientRowModel) {
   return report
 }
 
-async function measurePivotTreeSeed(createClientRowModel, seed, options = {}) {
+async function measurePivotTreeSeed(createAdvancedClientRowModel, seed, options = {}) {
   const heapStart = await sampleHeapUsed()
   const phaseTimingsMs = {}
   const phaseMemoryMb = {
@@ -2111,7 +2111,7 @@ async function measurePivotTreeSeed(createClientRowModel, seed, options = {}) {
     values: [{ field: "latency", agg: "avg" }, { field: "score", agg: "max" }],
   }
   const pivotModel = measurePhase(phaseTimingsMs, "pivotRowModelCreation", () =>
-    createClientRowModel({
+    createAdvancedClientRowModel({
       rows,
       resolveRowId: row => row.id,
       isolateInputRows: false,
@@ -2121,7 +2121,7 @@ async function measurePivotTreeSeed(createClientRowModel, seed, options = {}) {
   )
   recordMemory(phaseMemoryMb, "afterPivotRowModelCreation")
   const treeModel = measurePhase(phaseTimingsMs, "treeRowModelCreation", () =>
-    createClientRowModel({
+    createAdvancedClientRowModel({
       rows,
       resolveRowId: row => row.id,
       isolateInputRows: false,
@@ -2290,10 +2290,10 @@ function sampleTreeGroupKeys(model, viewportRows) {
   return keys.slice(0, 64)
 }
 
-async function runMemoryLeakSoakScenario(createClientRowModel, createDataSourceBackedRowModel, selection) {
+async function runMemoryLeakSoakScenario(createAdvancedClientRowModel, createDataSourceBackedRowModel, selection) {
   const runs = []
   for (const seed of BENCH_SEEDS) {
-    runs.push(await measureSoakSeed(createClientRowModel, createDataSourceBackedRowModel, selection, seed))
+    runs.push(await measureSoakSeed(createAdvancedClientRowModel, createDataSourceBackedRowModel, selection, seed))
   }
   const heapTrends = runs.map(run => run.heapTrend)
   const budgetErrors = []
@@ -2346,9 +2346,9 @@ async function runMemoryLeakSoakScenario(createClientRowModel, createDataSourceB
   return report
 }
 
-async function measureSoakSeed(createClientRowModel, createDataSourceBackedRowModel, selection, seed) {
+async function measureSoakSeed(createAdvancedClientRowModel, createDataSourceBackedRowModel, selection, seed) {
   const rows = createEnterpriseRows(SOAK_ROW_COUNT, seed, { physicalColumns: Math.min(10, SOAK_COLUMN_COUNT) })
-  const clientModel = createClientRowModel({
+  const clientModel = createAdvancedClientRowModel({
     rows,
     resolveRowId: row => row.id,
     isolateInputRows: false,
@@ -2570,29 +2570,29 @@ console.log(`profile=${PROFILE} seeds=${BENCH_SEEDS.join(",")} observationMode=t
 const scenarioReports = []
 
 console.log("[enterprise] client-viewport-scroll...")
-scenarioReports.push(await runClientViewportScrollScenario(core.createClientRowModel))
+scenarioReports.push(await runClientViewportScrollScenario(core.createAdvancedClientRowModel))
 
 console.log("[enterprise] server-viewport-scroll...")
 scenarioReports.push(await runServerViewportScrollScenario(core.createDataSourceBackedRowModel))
 
 console.log("[enterprise] high-frequency-updates...")
-scenarioReports.push(await runHighFrequencyUpdatesScenario(core.createClientRowModel))
+scenarioReports.push(await runHighFrequencyUpdatesScenario(core.createAdvancedClientRowModel))
 
 console.log("[enterprise] sort-filter-combo...")
-scenarioReports.push(await runSortFilterComboScenario(core.createClientRowModel))
+scenarioReports.push(await runSortFilterComboScenario(core.createAdvancedClientRowModel))
 
 console.log("[enterprise] copy-paste-fill...")
-scenarioReports.push(await runCopyPasteFillScenario(core.createClientRowModel, parseClipboardTsv))
+scenarioReports.push(await runCopyPasteFillScenario(core.createAdvancedClientRowModel, parseClipboardTsv))
 
 console.log("[enterprise] selection-operations...")
 scenarioReports.push(await runSelectionEnterpriseScenario())
 
 console.log("[enterprise] pivot-tree-workload...")
-scenarioReports.push(await runPivotTreeWorkloadScenario(core.createClientRowModel))
+scenarioReports.push(await runPivotTreeWorkloadScenario(core.createAdvancedClientRowModel))
 
 console.log("[enterprise] memory-leak-soak...")
 scenarioReports.push(
-  await runMemoryLeakSoakScenario(core.createClientRowModel, core.createDataSourceBackedRowModel, core.selection),
+  await runMemoryLeakSoakScenario(core.createAdvancedClientRowModel, core.createDataSourceBackedRowModel, core.selection),
 )
 
 const summary = createCombinedSummary(scenarioReports, startedAt)

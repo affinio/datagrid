@@ -240,11 +240,11 @@ async function loadModelFactories() {
     try {
       const module = await import(pathToFileURL(candidate).href)
       if (
-        typeof module.createClientRowModel === "function" &&
+        typeof module.createAdvancedClientRowModel === "function" &&
         typeof module.createServerBackedRowModel === "function"
       ) {
         return {
-          createClientRowModel: module.createClientRowModel,
+          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
           createServerBackedRowModel: module.createServerBackedRowModel,
         }
       }
@@ -403,7 +403,7 @@ function createServerSource(totalRows, blockSize, maxBlocks) {
 
 async function runClientScenario(factories, seed, rowsInput) {
   const rng = createRng(seed)
-  const model = factories.createClientRowModel({
+  const model = factories.createAdvancedClientRowModel({
     rows: rowsInput,
   })
   const durations = []
@@ -479,7 +479,7 @@ async function runServerScenario(factories, seed) {
 async function runWindowShiftProxyScenario(factories, seed) {
   const rng = createRng(seed)
   const reusableRows = createReusableVisibleRows(WINDOW_SHIFT_WINDOW_SIZE, 0)
-  const model = factories.createClientRowModel({
+  const model = factories.createAdvancedClientRowModel({
     rows: reusableRows,
   })
   const durations = []

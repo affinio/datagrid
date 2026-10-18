@@ -1,4 +1,4 @@
-import { createClientRowModel } from "../packages/datagrid-core/dist/src/index.js"
+import { createAdvancedClientRowModel } from "../packages/datagrid-core/dist/src/index.js"
 
 const sizes = (process.env.BENCH_ROW_SIZES ?? "1000,10000,50000").split(",").map(Number)
 const samples = Number(process.env.BENCH_SAMPLES ?? 25)
@@ -22,7 +22,7 @@ function measure(count, operation) {
   let fullRebuilds = 0
   let notifications = 0
   for (let index = 0; index < warmups + samples; index += 1) {
-    const raw = createClientRowModel({ rows: rows(count) })
+    const raw = createAdvancedClientRowModel({ rows: rows(count) })
     let currentFullRebuilds = 0
     let currentNotifications = 0
     raw.subscribe(() => { currentNotifications += 1 })

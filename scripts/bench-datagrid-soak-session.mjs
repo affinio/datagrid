@@ -290,11 +290,11 @@ async function loadFactories() {
     try {
       const module = await import(pathToFileURL(candidate).href)
       if (
-        typeof module.createClientRowModel === "function" &&
+        typeof module.createAdvancedClientRowModel === "function" &&
         typeof module.createDataSourceBackedRowModel === "function"
       ) {
         return {
-          createClientRowModel: module.createClientRowModel,
+          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
           createDataSourceBackedRowModel: module.createDataSourceBackedRowModel,
         }
       }
@@ -492,7 +492,7 @@ function collectDiagnostics({ model, serverModel, rendererCache, rendererDiagnos
 async function runSoakScenario(factories, seed) {
   const rng = createRng(seed)
   const rows = createRows(BENCH_ROW_COUNT, seed)
-  const model = factories.createClientRowModel({ rows, resolveRowId: row => row.id })
+  const model = factories.createAdvancedClientRowModel({ rows, resolveRowId: row => row.id })
   const serverModel = factories.createDataSourceBackedRowModel({
     dataSource: createSyntheticServerDataSource(BENCH_ROW_COUNT, seed),
     resolveRowId: row => row.id,

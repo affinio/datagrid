@@ -224,14 +224,14 @@ async function loadFactories() {
     try {
       const module = await import(pathToFileURL(candidate).href)
       if (
-        typeof module.createClientRowModel === "function" &&
+        typeof module.createAdvancedClientRowModel === "function" &&
         typeof module.createDataSourceBackedRowModel === "function" &&
         typeof module.createDataGridColumnModel === "function" &&
         typeof module.createDataGridCore === "function" &&
         typeof module.createDataGridApi === "function"
       ) {
         return {
-          createClientRowModel: module.createClientRowModel,
+          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
           createDataSourceBackedRowModel: module.createDataSourceBackedRowModel,
           createDataGridColumnModel: module.createDataGridColumnModel,
           createDataGridCore: module.createDataGridCore,
@@ -265,7 +265,7 @@ async function waitForPivotMaterialized(model, timeoutMs = 3000) {
 
 async function runServerPivotInteropScenario(factories, seed) {
   const {
-    createClientRowModel,
+    createAdvancedClientRowModel,
     createDataSourceBackedRowModel,
     createDataGridColumnModel,
     createDataGridCore,
@@ -283,7 +283,7 @@ async function runServerPivotInteropScenario(factories, seed) {
   const interopRowCounts = []
   const pivotColumnCounts = []
 
-  const serverBuilder = createClientRowModel({
+  const serverBuilder = createAdvancedClientRowModel({
     rows: sourceRows,
     resolveRowId: row => row.id,
     isolateInputRows: false,

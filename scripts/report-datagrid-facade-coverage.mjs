@@ -31,7 +31,6 @@ const FACADES = [
     requiredSymbols: [
       "useDataGridRuntime",
       "createDataGridVueRuntime",
-      "createClientRowModel",
       "createDataGridColumnModel",
       "createDataGridSelectionSummary",
       "createInMemoryDataGridSettingsAdapter",

@@ -324,8 +324,8 @@ async function loadFactory() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return module.createClientRowModel
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return module.createAdvancedClientRowModel
       }
     } catch (error) {
       lastError = error
@@ -333,14 +333,14 @@ async function loadFactory() {
   }
 
   if (lastError) {
-    throw new Error(`Failed to load createClientRowModel: ${String(lastError)}`)
+    throw new Error(`Failed to load createAdvancedClientRowModel: ${String(lastError)}`)
   }
   throw new Error("Unable to locate datagrid-core build artifacts. Run `pnpm --filter @affino/datagrid-core build`.")
 }
 
-function runPivotRebuildScenario(createClientRowModel, seed, rows) {
+function runPivotRebuildScenario(createAdvancedClientRowModel, seed, rows) {
   const rng = createRng(seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   const rowCount = rows.length
   const maxStart = Math.max(0, rowCount - PIVOT_VIEWPORT_SIZE - 1)
   const durations = []
@@ -384,9 +384,9 @@ function runPivotRebuildScenario(createClientRowModel, seed, rows) {
   }
 }
 
-function runPivotPatchScenario(createClientRowModel, seed, rows, options) {
+function runPivotPatchScenario(createAdvancedClientRowModel, seed, rows, options) {
   const rng = createRng(seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   const rowCount = rows.length
   const maxStart = Math.max(0, rowCount - PIVOT_VIEWPORT_SIZE - 1)
   const durations = []
@@ -453,7 +453,7 @@ function runPivotPatchScenario(createClientRowModel, seed, rows, options) {
   }
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const sharedRows = createRows(PIVOT_ROW_COUNT)
 const runResults = []
 const budgetErrors = []
@@ -470,16 +470,16 @@ console.log(`pivotAlt rows=[${PIVOT_SPEC_ALT.rows.join(",")}] columns=[${PIVOT_S
 for (const seed of BENCH_SEEDS) {
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
     const warmupSeed = seed + (warmup + 1) * 1877
-    runPivotRebuildScenario(createClientRowModel, warmupSeed, sharedRows)
-    runPivotPatchScenario(createClientRowModel, warmupSeed, sharedRows, { recomputeGroup: false })
-    runPivotPatchScenario(createClientRowModel, warmupSeed, sharedRows, { recomputeGroup: true })
+    runPivotRebuildScenario(createAdvancedClientRowModel, warmupSeed, sharedRows)
+    runPivotPatchScenario(createAdvancedClientRowModel, warmupSeed, sharedRows, { recomputeGroup: false })
+    runPivotPatchScenario(createAdvancedClientRowModel, warmupSeed, sharedRows, { recomputeGroup: true })
   }
 
   const heapStart = await sampleHeapUsed()
   const startedAt = performance.now()
-  const pivotRebuild = runPivotRebuildScenario(createClientRowModel, seed, sharedRows)
-  const pivotPatchFrozen = runPivotPatchScenario(createClientRowModel, seed, sharedRows, { recomputeGroup: false })
-  const pivotPatchReapply = runPivotPatchScenario(createClientRowModel, seed, sharedRows, { recomputeGroup: true })
+  const pivotRebuild = runPivotRebuildScenario(createAdvancedClientRowModel, seed, sharedRows)
+  const pivotPatchFrozen = runPivotPatchScenario(createAdvancedClientRowModel, seed, sharedRows, { recomputeGroup: false })
+  const pivotPatchReapply = runPivotPatchScenario(createAdvancedClientRowModel, seed, sharedRows, { recomputeGroup: true })
   const elapsedMs = performance.now() - startedAt
   const heapEnd = await sampleHeapUsed()
   const heapDeltaMb = (heapEnd - heapStart) / (1024 * 1024)

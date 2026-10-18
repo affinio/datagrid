@@ -318,11 +318,11 @@ async function loadFormulaApi() {
     try {
       const module = await import(pathToFileURL(candidate).href)
       if (
-        typeof module.createClientRowModel === "function"
+        typeof module.createAdvancedClientRowModel === "function"
         && typeof module.compileDataGridFormulaFieldDefinition === "function"
       ) {
         return {
-          createClientRowModel: module.createClientRowModel,
+          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
           compileDataGridFormulaFieldDefinition: module.compileDataGridFormulaFieldDefinition,
         }
       }
@@ -703,7 +703,7 @@ async function runScenario({ scenarioName, dagShape, seed, api }) {
   }
 
   const initStart = performance.now()
-  const model = api.createClientRowModel({
+  const model = api.createAdvancedClientRowModel({
     rows: rowNodes,
     initialFormulaFields: definitions,
     captureFormulaRowRecomputeDiagnostics: false,

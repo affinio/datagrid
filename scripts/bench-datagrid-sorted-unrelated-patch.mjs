@@ -16,7 +16,7 @@ async function loadFactory() {
   for (const candidate of [resolve("packages/datagrid-core/dist/src/models/index.js"), resolve("packages/datagrid-core/dist/src/public.js")]) {
     if (!existsSync(candidate)) continue
     const module = await import(pathToFileURL(candidate).href)
-    if (typeof module.createClientRowModel === "function") return module.createClientRowModel
+    if (typeof module.createAdvancedClientRowModel === "function") return module.createAdvancedClientRowModel
   }
   throw new Error("Build @affino/datagrid-core before running this benchmark")
 }
@@ -24,13 +24,13 @@ function percentile(values, q) {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * q))] ?? 0
 }
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const rows = Array.from({ length: rowCount }, (_, id) => ({
   row: { id, score: rowCount - id, team: id % 2 === 0 ? "A" : "B", label: `row-${id}` }, rowId: id, originalIndex: id, displayIndex: id,
 }))
 console.log(`sorted-patch mode=${benchmarkMode} rows=${rowCount} iterations=${iterations}`)
 for (const changeCount of changeCounts) {
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows,
     ...(groupedMode
       ? { initialGroupBy: { fields: ["team"], expandedByDefault: true }, initialAggregationModel: { columns: [{ key: "score", op: "sum" }] } }

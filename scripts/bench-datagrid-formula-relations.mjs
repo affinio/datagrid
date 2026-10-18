@@ -98,8 +98,8 @@ async function loadCoreApi() {
       continue
     }
     const module = await import(pathToFileURL(candidate).href)
-    if (typeof module.createClientRowModel === "function") {
-      return { createClientRowModel: module.createClientRowModel }
+    if (typeof module.createAdvancedClientRowModel === "function") {
+      return { createAdvancedClientRowModel: module.createAdvancedClientRowModel }
     }
   }
 
@@ -140,7 +140,7 @@ function buildOrdersRows() {
 
 function createHarness(api) {
   const orders = buildOrdersRows()
-  const customers = api.createClientRowModel({
+  const customers = api.createAdvancedClientRowModel({
     rows: buildCustomersRows(),
     resolveRowId: row => row.id,
     initialFormulaFields: [

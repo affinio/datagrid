@@ -19,7 +19,7 @@ async function loadFactory() {
   for (const candidate of candidates) {
     if (!existsSync(candidate)) continue
     const module = await import(pathToFileURL(candidate).href)
-    if (typeof module.createClientRowModel === "function") return module.createClientRowModel
+    if (typeof module.createAdvancedClientRowModel === "function") return module.createAdvancedClientRowModel
   }
   throw new Error("Build @affino/datagrid-core before running this benchmark")
 }
@@ -47,10 +47,10 @@ function makeRows(mode) {
   }))
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 console.log(`wide-tree-branch rows=${leafCount} iterations=${iterations}`)
 for (const mode of ["path", "parent"]) {
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows: makeRows(mode),
     initialTreeData: mode === "path"
       ? { mode, getDataPath: row => row.path, expandedByDefault: true }

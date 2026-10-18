@@ -12,7 +12,7 @@ async function loadFactory() {
   for (const candidate of [resolve("packages/datagrid-core/dist/src/models/index.js"), resolve("packages/datagrid-core/dist/src/public.js")]) {
     if (!existsSync(candidate)) continue
     const module = await import(pathToFileURL(candidate).href)
-    if (typeof module.createClientRowModel === "function") return module.createClientRowModel
+    if (typeof module.createAdvancedClientRowModel === "function") return module.createAdvancedClientRowModel
   }
   throw new Error("Build @affino/datagrid-core before running this benchmark")
 }
@@ -40,7 +40,7 @@ function measure(label, createModel, update) {
   }
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const initialRows = createRows(rowCount)
 const patchRows = Array.from({ length: iterations }, (_, iteration) => ({
   rowId: (iteration * 997) % rowCount,
@@ -48,10 +48,10 @@ const patchRows = Array.from({ length: iterations }, (_, iteration) => ({
 }))
 console.log(`app-inputs rows=${rowCount} iterations=${iterations}`)
 console.table([
-  measure("stable model + patchRows", () => createClientRowModel({ rows: initialRows }), (model, iteration) => {
+  measure("stable model + patchRows", () => createAdvancedClientRowModel({ rows: initialRows }), (model, iteration) => {
     model.patchRows([patchRows[iteration]])
   }),
-  measure("immutable replacement + setRows", () => createClientRowModel({ rows: initialRows }), (model, iteration) => {
+  measure("immutable replacement + setRows", () => createAdvancedClientRowModel({ rows: initialRows }), (model, iteration) => {
     const nextRows = initialRows.slice()
     const update = patchRows[iteration]
     const rowIndex = update.rowId

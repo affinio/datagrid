@@ -212,15 +212,15 @@ async function loadFactory() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return module.createClientRowModel
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return module.createAdvancedClientRowModel
       }
     } catch (error) {
       lastError = error
     }
   }
   if (lastError) {
-    throw new Error(`Failed to load createClientRowModel: ${String(lastError)}`)
+    throw new Error(`Failed to load createAdvancedClientRowModel: ${String(lastError)}`)
   }
   throw new Error(
     "Unable to locate datagrid-core build artifacts. Run `pnpm --filter @affino/datagrid-core build`.",
@@ -245,9 +245,9 @@ function measureScenario(model, iterations, batchSize, runOne) {
   return durations
 }
 
-function runStableScenario(createClientRowModel, seed, rows) {
+function runStableScenario(createAdvancedClientRowModel, seed, rows) {
   const rng = createRng(seed)
-  const model = createClientRowModel({ rows })
+  const model = createAdvancedClientRowModel({ rows })
   const maxStart = Math.max(0, ROW_COUNT - RANGE_SIZE - 2)
   const pageSize = Math.max(32, Math.min(256, RANGE_SIZE))
 
@@ -300,8 +300,8 @@ function runStableScenario(createClientRowModel, seed, rows) {
   }
 }
 
-function runInvalidatedScenario(createClientRowModel, seed, rows) {
-  const model = createClientRowModel({ rows })
+function runInvalidatedScenario(createAdvancedClientRowModel, seed, rows) {
+  const model = createAdvancedClientRowModel({ rows })
   const maxStart = Math.max(0, ROW_COUNT - RANGE_SIZE - 2)
   const pageSize = Math.max(32, Math.min(256, RANGE_SIZE))
 
@@ -352,7 +352,7 @@ function runInvalidatedScenario(createClientRowModel, seed, rows) {
   }
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const sharedRows = createRows(ROW_COUNT)
 const runResults = []
 const budgetErrors = []
@@ -366,14 +366,14 @@ console.log(
 for (const seed of BENCH_SEEDS) {
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
     const warmupSeed = seed + (warmup + 1) * 1223
-    runStableScenario(createClientRowModel, warmupSeed, sharedRows)
-    runInvalidatedScenario(createClientRowModel, warmupSeed, sharedRows)
+    runStableScenario(createAdvancedClientRowModel, warmupSeed, sharedRows)
+    runInvalidatedScenario(createAdvancedClientRowModel, warmupSeed, sharedRows)
   }
 
   const heapStart = await sampleHeapUsed()
   const startedAt = performance.now()
-  const stable = runStableScenario(createClientRowModel, seed, sharedRows)
-  const invalidated = runInvalidatedScenario(createClientRowModel, seed, sharedRows)
+  const stable = runStableScenario(createAdvancedClientRowModel, seed, sharedRows)
+  const invalidated = runInvalidatedScenario(createAdvancedClientRowModel, seed, sharedRows)
   const elapsed = performance.now() - startedAt
   const heapEnd = await sampleHeapUsed()
   const heapDeltaMb = (heapEnd - heapStart) / (1024 * 1024)

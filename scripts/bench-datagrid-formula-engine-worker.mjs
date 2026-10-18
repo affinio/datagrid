@@ -403,11 +403,11 @@ async function loadCoreApi() {
       resolve("packages/datagrid-core/dist/src/models/index.js"),
       resolve("packages/datagrid-core/dist/src/public.js"),
     ],
-    ["createClientRowModel", "compileDataGridFormulaFieldDefinition"],
+    ["createAdvancedClientRowModel", "compileDataGridFormulaFieldDefinition"],
     "datagrid-core",
   )
   return {
-    createClientRowModel: loaded.module.createClientRowModel,
+    createAdvancedClientRowModel: loaded.module.createAdvancedClientRowModel,
     compileDataGridFormulaFieldDefinition: loaded.module.compileDataGridFormulaFieldDefinition,
   }
 }
@@ -425,7 +425,7 @@ async function loadWorkerApi() {
 }
 
 function createMainThreadRuntime(coreApi, rows, definitions) {
-  const model = coreApi.createClientRowModel({
+  const model = coreApi.createAdvancedClientRowModel({
     rows,
     initialFormulaFields: definitions,
   })

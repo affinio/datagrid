@@ -273,15 +273,15 @@ async function loadFactory() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return module.createClientRowModel
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return module.createAdvancedClientRowModel
       }
     } catch (error) {
       lastError = error
     }
   }
   if (lastError) {
-    throw new Error(`Failed to load createClientRowModel: ${String(lastError)}`)
+    throw new Error(`Failed to load createAdvancedClientRowModel: ${String(lastError)}`)
   }
   throw new Error("Unable to locate datagrid-core build artifacts. Run `pnpm --filter @affino/datagrid-core build`.")
 }
@@ -369,7 +369,7 @@ function collectGroupKeysFromExpansion(model, limit = TREE_GROUP_KEY_SAMPLE_LIMI
   return keys
 }
 
-function runExpandBurstScenario(createClientRowModel, rows, seed, options = {}) {
+function runExpandBurstScenario(createAdvancedClientRowModel, rows, seed, options = {}) {
   const scenarioIterations =
     Number.isFinite(options.iterations) && options.iterations > 0
       ? Math.trunc(options.iterations)
@@ -385,7 +385,7 @@ function runExpandBurstScenario(createClientRowModel, rows, seed, options = {}) 
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null
 
   const rng = createRng(seed)
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows,
     initialTreeData: {
       mode: "path",
@@ -457,7 +457,7 @@ function runExpandBurstScenario(createClientRowModel, rows, seed, options = {}) 
   }
 }
 
-function runFilterSortScenario(createClientRowModel, rows, seed, options = {}) {
+function runFilterSortScenario(createAdvancedClientRowModel, rows, seed, options = {}) {
   const scenarioIterations =
     Number.isFinite(options.iterations) && options.iterations > 0
       ? Math.trunc(options.iterations)
@@ -473,7 +473,7 @@ function runFilterSortScenario(createClientRowModel, rows, seed, options = {}) {
   const onProgress = typeof options.onProgress === "function" ? options.onProgress : null
 
   const rng = createRng(seed + 9127)
-  const model = createClientRowModel({
+  const model = createAdvancedClientRowModel({
     rows,
     initialTreeData: {
       mode: "path",
@@ -548,7 +548,7 @@ function runFilterSortScenario(createClientRowModel, rows, seed, options = {}) {
   }
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const sharedRows = createTreeRows(TREE_ROW_COUNT)
 const runResults = []
 const budgetErrors = []
@@ -564,11 +564,11 @@ for (const seed of BENCH_SEEDS) {
   console.log(`\n[tree-workload] seed ${seed}: warmup...`)
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
     const warmupSeed = seed + (warmup + 1) * 4099
-    runExpandBurstScenario(createClientRowModel, sharedRows, warmupSeed, {
+    runExpandBurstScenario(createAdvancedClientRowModel, sharedRows, warmupSeed, {
       iterations: TREE_WARMUP_EXPAND_ITERATIONS,
       warmupBatches: 0,
     })
-    runFilterSortScenario(createClientRowModel, sharedRows, warmupSeed, {
+    runFilterSortScenario(createAdvancedClientRowModel, sharedRows, warmupSeed, {
       iterations: TREE_WARMUP_FILTER_SORT_ITERATIONS,
       warmupBatches: 0,
     })
@@ -578,14 +578,14 @@ for (const seed of BENCH_SEEDS) {
   const heapStart = await sampleHeapUsed()
   const startedAt = performance.now()
   console.log(`[tree-workload] seed ${seed}: expand scenario...`)
-  const expandBurst = runExpandBurstScenario(createClientRowModel, sharedRows, seed, {
+  const expandBurst = runExpandBurstScenario(createAdvancedClientRowModel, sharedRows, seed, {
     onProgress: (done, total) => {
       console.log(`[tree-workload] seed ${seed}: expand ${done}/${total}`)
     },
   })
   const heapAfterExpand = await sampleHeapUsed()
   console.log(`[tree-workload] seed ${seed}: filter-sort scenario...`)
-  const filterSortBurst = runFilterSortScenario(createClientRowModel, sharedRows, seed, {
+  const filterSortBurst = runFilterSortScenario(createAdvancedClientRowModel, sharedRows, seed, {
     onProgress: (done, total) => {
       console.log(`[tree-workload] seed ${seed}: filter-sort ${done}/${total}`)
     },

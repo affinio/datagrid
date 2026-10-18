@@ -188,8 +188,8 @@ async function loadFactory() {
     }
     try {
       const module = await import(pathToFileURL(candidate).href)
-      if (typeof module.createClientRowModel === "function") {
-        return module.createClientRowModel
+      if (typeof module.createAdvancedClientRowModel === "function") {
+        return module.createAdvancedClientRowModel
       }
     } catch (error) {
       lastError = error
@@ -216,9 +216,9 @@ function readVisibleMaxDepth(model, viewportSize) {
   return maxDepth
 }
 
-async function runGroupDepthScenario(createClientRowModel, seed) {
+async function runGroupDepthScenario(createAdvancedClientRowModel, seed) {
   const rows = createRows(BENCH_ROW_COUNT, BENCH_DEPTH, BENCH_CARDINALITY, seed)
-  const model = createClientRowModel({ rows, resolveRowId: row => row.id })
+  const model = createAdvancedClientRowModel({ rows, resolveRowId: row => row.id })
   const groupFields = Array.from({ length: BENCH_DEPTH }, (_, index) => `g${index + 1}`)
 
   const rebuildDurations = []
@@ -275,7 +275,7 @@ async function runGroupDepthScenario(createClientRowModel, seed) {
   return result
 }
 
-const createClientRowModel = await loadFactory()
+const createAdvancedClientRowModel = await loadFactory()
 const runResults = []
 const budgetErrors = []
 const varianceSkippedChecks = []
@@ -288,11 +288,11 @@ console.log(
 for (const seed of BENCH_SEEDS) {
   console.log(`\n[group-depth] seed ${seed}: warmup...`)
   for (let warmup = 0; warmup < BENCH_WARMUP_RUNS; warmup += 1) {
-    await runGroupDepthScenario(createClientRowModel, seed + warmup)
+    await runGroupDepthScenario(createAdvancedClientRowModel, seed + warmup)
   }
 
   console.log(`[group-depth] seed ${seed}: measure...`)
-  const scenario = await runGroupDepthScenario(createClientRowModel, seed)
+  const scenario = await runGroupDepthScenario(createAdvancedClientRowModel, seed)
   runResults.push({ seed, scenario })
 
   if (scenario.elapsedMs > PERF_BUDGET_TOTAL_MS) {
