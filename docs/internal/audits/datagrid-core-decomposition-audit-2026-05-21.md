@@ -25,6 +25,8 @@ Progress (`2026-10-18`): moved datasource row-entry identity resolution, row-sta
 
 Progress (`2026-10-18`): moved loading placeholder row construction and its internal marker fields to `models/server/dataSourcePlaceholderRow.ts`. Placeholder identity, shape, and status remain unchanged; the row-model facade only decides when a placeholder is needed.
 
+Progress (`2026-10-18`): moved field-intersection policy for deciding whether optimistic commits and external row updates require a projection refresh to `models/server/dataSourceProjectionRefreshPolicy.ts`. The row model now supplies its current projection models and keeps refresh scheduling. Focused datasource tests (89), core type-check/build, and datasource churn assertion passed.
+
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:

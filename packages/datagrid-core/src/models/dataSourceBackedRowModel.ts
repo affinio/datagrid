@@ -45,14 +45,12 @@ import {
 import { isSameFilterModel, isSameSortModel } from "./projection/clientRowProjectionPrimitives.js"
 import { applyRowDataPatch, mergeRowPatch } from "./clientRowRuntimeUtils.js"
 import {
-  collectAggregationModelFields,
   collectChangedFieldsFromPatches,
-  collectFilterModelFields,
-  collectGroupByFields,
-  collectPivotModelFields,
-  collectSortModelFields,
-  doFieldPathsIntersect,
 } from "./mutation/rowPatchAnalyzer.js"
+import {
+  shouldRefreshAfterExternalUpdate as resolveExternalProjectionRefresh,
+  shouldRefreshAfterOptimisticCommit as resolveOptimisticProjectionRefresh,
+} from "./server/dataSourceProjectionRefreshPolicy.js"
 import {
   clonePullAggregationModel,
   clonePivotColumnsSnapshot,
@@ -542,62 +540,26 @@ export function createDataSourceBackedRowModel<T = unknown>(
   }
 
   function shouldRefreshAfterOptimisticCommit(transaction: OptimisticEditTransaction<T>): boolean {
-    const changedFields = collectChangedFieldsFromPatches(transaction.updatesByRowId)
-    if (changedFields.size === 0) {
-      return false
-    }
-    if (sortModel.length > 0 && doFieldPathsIntersect(changedFields, collectSortModelFields(sortModel))) {
-      return true
-    }
-    const filterFields = collectFilterModelFields(filterModel)
-    if (filterFields.size > 0 && doFieldPathsIntersect(changedFields, filterFields)) {
-      return true
-    }
-    const groupFields = collectGroupByFields(groupBy)
-    if (groupFields.size > 0 && doFieldPathsIntersect(changedFields, groupFields)) {
-      return true
-    }
-    const pivotFields = collectPivotModelFields(pivotModel)
-    if (pivotFields.size > 0 && doFieldPathsIntersect(changedFields, pivotFields)) {
-      return true
-    }
-    const aggregationFields = collectAggregationModelFields(aggregationModel)
-    if (aggregationFields.size > 0 && doFieldPathsIntersect(changedFields, aggregationFields)) {
-      return true
-    }
-    return false
+    return resolveOptimisticProjectionRefresh(transaction, {
+      sortModel,
+      filterModel,
+      groupBy,
+      pivotModel,
+      aggregationModel,
+    })
   }
 
   function shouldRefreshAfterExternalUpdate(
     changedFields: ReadonlySet<string>,
     recompute: DataGridExternalRowUpdateOptions["recompute"],
   ): boolean {
-    if (!recompute || changedFields.size === 0) {
-      return false
-    }
-    if (recompute === true) {
-      return true
-    }
-    if (recompute.sort && sortModel.length > 0 && doFieldPathsIntersect(changedFields, collectSortModelFields(sortModel))) {
-      return true
-    }
-    if (recompute.filter && collectFilterModelFields(filterModel).size > 0 && doFieldPathsIntersect(changedFields, collectFilterModelFields(filterModel))) {
-      return true
-    }
-    if (recompute.group && groupBy && doFieldPathsIntersect(changedFields, collectGroupByFields(groupBy))) {
-      return true
-    }
-    if (recompute.pivot && pivotModel && doFieldPathsIntersect(changedFields, collectPivotModelFields(pivotModel))) {
-      return true
-    }
-    if (
-      recompute.aggregation &&
-      aggregationModel &&
-      doFieldPathsIntersect(changedFields, collectAggregationModelFields(aggregationModel))
-    ) {
-      return true
-    }
-    return false
+    return resolveExternalProjectionRefresh(changedFields, recompute, {
+      sortModel,
+      filterModel,
+      groupBy,
+      pivotModel,
+      aggregationModel,
+    })
   }
 
   function rollbackOptimisticTransaction(
