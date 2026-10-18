@@ -107,4 +107,17 @@ export function createSpreadsheetViewExplodedRowId(
   const encodedRight = rightRowId == null ? "null" : String(rightRowId)
   return `join:${encodedLeft.length}:${encodedLeft}|${encodedRight.length}:${encodedRight}|${matchIndex}`
 }
-import type { DataGridRowId } from "../models/rowModel.js"
+import type { DataGridAggOp, DataGridRowId } from "../models/rowModel.js"
+
+const NUMERIC_AGGREGATIONS = new Set<Exclude<DataGridAggOp, "custom">>([
+  "sum",
+  "avg",
+  "count",
+  "countNonNull",
+  "min",
+  "max",
+])
+
+export function isNumericSpreadsheetViewAggregation(aggregation: DataGridAggOp): boolean {
+  return aggregation !== "custom" && NUMERIC_AGGREGATIONS.has(aggregation)
+}

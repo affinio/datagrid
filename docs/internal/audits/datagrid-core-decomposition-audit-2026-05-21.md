@@ -184,7 +184,7 @@ Recommended decomposition:
 - Extract per-stage runtimes: `viewFilterStage`, `viewSortStage`, `viewProjectStage`, `viewJoinStage`, `viewGroupStage`, `viewPivotStage`.
 - Extract shared value/ordering helpers and dataset conversion helpers.
 
-Progress (`2026-10-18`): moved shared ordering, equivalence, emptiness, text normalization, and numeric coercion helpers to `spreadsheet/viewPipelineValueUtils.ts`; extracted filter, sort, and project execution to `spreadsheet/viewPipelineBasicStages.ts`; extracted join lookup, row reuse, and fan-out materialization to `spreadsheet/viewPipelineJoinStage.ts`; shared dataset types/source conversion live in `spreadsheet/viewPipelineDataset.ts`. Public materializers and group/pivot stages remain in `viewPipeline.ts`. Focused view-pipeline and workbook tests passed.
+Progress (`2026-10-18`): moved shared ordering, equivalence, emptiness, text normalization, numeric coercion, and aggregation classification helpers to `spreadsheet/viewPipelineValueUtils.ts`; extracted filter, sort, and project execution to `spreadsheet/viewPipelineBasicStages.ts`; extracted join lookup, row reuse, and fan-out materialization to `spreadsheet/viewPipelineJoinStage.ts`; extracted incremental grouping and aggregation to `spreadsheet/viewPipelineGroupStage.ts`; shared dataset types/source conversion live in `spreadsheet/viewPipelineDataset.ts`. Public materializers and pivot stage remain in `viewPipeline.ts`. Focused view-pipeline and workbook tests passed.
 
 Validation target:
 
