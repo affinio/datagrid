@@ -49,6 +49,7 @@ import {
   normalizeSpreadsheetWorkbookAlias,
   resolveSpreadsheetWorkbookSheetFormulaDependencyState,
 } from "./workbookFormulaDependencies.js"
+import { resolveSpreadsheetWorkbookDependencies } from "./workbookDependencyResolver.js"
 import {
   createSpreadsheetWorkbookRestoreDescriptor,
   hydrateSpreadsheetWorkbookDataSheetModel,
@@ -726,43 +727,15 @@ export function createDataGridSpreadsheetWorkbookModel(
   const buildDependencyGraph = (
     aliasToSheet: ReadonlyMap<string, SpreadsheetWorkbookSheetState>,
   ): SpreadsheetWorkbookDependencyGraph => {
-    const dependenciesBySheetId = new Map<string, ReadonlySet<string>>()
-
-    for (const targetSheet of sheets) {
-      const dependencySheetIds = new Set<string>()
-      if (targetSheet.viewDefinition) {
-        for (const dependencySheetId of collectSpreadsheetWorkbookViewDependencySheetIds(targetSheet.viewDefinition)) {
-          const sourceSheet = sheetsById.get(dependencySheetId)
-          if (sourceSheet && sourceSheet.id !== targetSheet.id) {
-            dependencySheetIds.add(sourceSheet.id)
-          }
-        }
-      }
-      if (targetSheet.formulaUsesAllTables) {
-        for (const sourceSheet of sheets) {
-          if (sourceSheet.id !== targetSheet.id) {
-            dependencySheetIds.add(sourceSheet.id)
-          }
-        }
-      } else {
-        for (const alias of targetSheet.formulaTableDependencyAliases) {
-          const sourceSheet = aliasToSheet.get(alias)
-          if (!sourceSheet || sourceSheet.id === targetSheet.id) {
-            continue
-          }
-          dependencySheetIds.add(sourceSheet.id)
-        }
-        for (const alias of targetSheet.formulaReferenceDependencyAliases) {
-          const sourceSheet = aliasToSheet.get(alias)
-          if (!sourceSheet || sourceSheet.id === targetSheet.id) {
-            continue
-          }
-          dependencySheetIds.add(sourceSheet.id)
-        }
-      }
-
-      dependenciesBySheetId.set(targetSheet.id, dependencySheetIds)
-    }
+    const dependenciesBySheetId = resolveSpreadsheetWorkbookDependencies<
+      DataGridSpreadsheetWorkbookViewDefinition,
+      SpreadsheetWorkbookSheetState
+    >(
+      sheets,
+      aliasToSheet,
+      sheetId => sheetsById.has(sheetId),
+      definition => collectSpreadsheetWorkbookViewDependencySheetIds(definition),
+    )
 
     return createSpreadsheetWorkbookDependencyGraph(
       sheets.map(sheet => sheet.id),
