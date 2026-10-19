@@ -51,6 +51,7 @@ import {
 } from "./workbookFormulaDependencies.js"
 import { resolveSpreadsheetWorkbookDependencies } from "./workbookDependencyResolver.js"
 import {
+  createSpreadsheetWorkbookRestoreRuntime,
   createSpreadsheetWorkbookRestoreDescriptor,
   hydrateSpreadsheetWorkbookDataSheetModel,
   createSpreadsheetWorkbookSheetStateExport,
@@ -1736,6 +1737,68 @@ export function createDataGridSpreadsheetWorkbookModel(
     return true
   }
 
+  const restoreRuntime = createSpreadsheetWorkbookRestoreRuntime({
+    tryRestoreInPlace: tryRestoreWorkbookStateInPlace,
+    resetCurrentSheets() {
+      for (const sheet of sheets) {
+        sheet.unsubscribe?.()
+        sheet.unsubscribe = null
+        if (sheet.owned) {
+          sheet.sheetModel.dispose()
+        }
+      }
+      sheets.length = 0
+      sheetsById.clear()
+      invalidateWorkbookGraphState()
+      activeSheetId = null
+      lastSync = {
+        passCount: 0,
+        converged: true,
+        maxPasses: 0,
+      }
+    },
+    attachViewSheet(nextSheet) {
+      attachSheet(createSheetState({
+        id: nextSheet.id,
+        name: nextSheet.name,
+        kind: "view",
+        sourceSheetId: nextSheet.viewDefinition.sourceSheetId,
+        pipeline: nextSheet.viewDefinition.pipeline,
+        sheetModelOptions: nextSheet.viewSheetModelOptions ?? undefined,
+      }, {
+        deferInitialViewMaterialization: true,
+        initialDerivedRuntime: nextSheet.initialDerivedRuntime,
+      }))
+    },
+    restoreDataSheet(nextSheet, resolveSheetReference) {
+      const restoredSheetModel = hydrateSpreadsheetWorkbookDataSheetModel({
+        sheetState: nextSheet.sheetState,
+        sheetModelOptions: null,
+        sheetId: nextSheet.id,
+        sheetName: nextSheet.name,
+        resolveSheetReference,
+      })
+      attachSheet(createSheetState({
+        id: nextSheet.id,
+        name: nextSheet.name,
+        kind: "data",
+        sheetModel: restoredSheetModel,
+        ownSheetModel: true,
+      }))
+    },
+    resolveSheetReference(sheetReference) {
+      const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
+      if (normalizedAlias.length === 0) {
+        return null
+      }
+      return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
+    },
+    hasSheet: sheetId => sheetsById.has(sheetId),
+    getFirstSheetId: () => sheets[0]?.id ?? null,
+    setActiveSheetId: sheetId => { activeSheetId = sheetId },
+    syncStructuralChanges: () => runSync({ structural: true }),
+  })
+
   return {
     getSnapshot,
     exportState,
@@ -1753,72 +1816,7 @@ export function createDataGridSpreadsheetWorkbookModel(
         ? normalizeSpreadsheetWorkbookSheetId(state.activeSheetId)
         : null
 
-      if (tryRestoreWorkbookStateInPlace(restoreDescriptors, normalizedActiveSheetId)) {
-        return true
-      }
-
-      for (const sheet of sheets) {
-        sheet.unsubscribe?.()
-        sheet.unsubscribe = null
-        if (sheet.owned) {
-          sheet.sheetModel.dispose()
-        }
-      }
-      sheets.length = 0
-      sheetsById.clear()
-      invalidateWorkbookGraphState()
-      activeSheetId = null
-      lastSync = {
-        passCount: 0,
-        converged: true,
-        maxPasses: 0,
-      }
-
-      for (const nextSheet of restoreDescriptors) {
-        if (nextSheet.kind === "view") {
-          attachSheet(createSheetState({
-            id: nextSheet.id,
-            name: nextSheet.name,
-            kind: "view",
-            sourceSheetId: nextSheet.viewDefinition!.sourceSheetId,
-            pipeline: nextSheet.viewDefinition!.pipeline,
-            sheetModelOptions: nextSheet.viewSheetModelOptions!,
-          }, {
-            deferInitialViewMaterialization: true,
-            initialDerivedRuntime: nextSheet.initialDerivedRuntime!,
-          }))
-          continue
-        }
-        const restoredSheetModel = hydrateSpreadsheetWorkbookDataSheetModel({
-          sheetState: nextSheet.sheetState,
-          sheetModelOptions: null,
-          sheetId: nextSheet.id,
-          sheetName: nextSheet.name,
-          resolveSheetReference: (sheetReference) => {
-            const normalizedAlias = normalizeSpreadsheetWorkbookAlias(sheetReference)
-            if (normalizedAlias.length === 0) {
-              return null
-            }
-            return resolveWorkbookGraphState({}).aliasToSheet.get(normalizedAlias)?.sheetModel ?? null
-          },
-        })
-        attachSheet(createSheetState({
-          id: nextSheet.id,
-          name: nextSheet.name,
-          kind: "data",
-          sheetModel: restoredSheetModel,
-          ownSheetModel: true,
-        }))
-      }
-
-      if (normalizedActiveSheetId && sheetsById.has(normalizedActiveSheetId)) {
-        activeSheetId = normalizedActiveSheetId
-      } else {
-        activeSheetId = sheets[0]?.id ?? null
-      }
-
-      runSync({ structural: true })
-      return true
+      return restoreRuntime.restore(restoreDescriptors, normalizedActiveSheetId)
     },
     getSheets() {
       ensureActive()

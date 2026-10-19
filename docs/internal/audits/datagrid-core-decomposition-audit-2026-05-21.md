@@ -169,6 +169,8 @@ Progress (`2026-10-19`): moved dirty-sheet downstream closure and workbook-order
 
 Progress (`2026-10-19`): moved conversion of view references, formula table aliases, direct sheet references, and all-table dependencies into `spreadsheet/workbookDependencyResolver.ts`. The resolver consumes existing sheet/alias indexes without building temporary per-sheet descriptors. Resolver and workbook contracts (28), core type-check/build, and all spreadsheet-workbook benchmark seeds passed.
 
+Progress (`2026-10-19`): moved full workbook restore transition sequencing into `spreadsheet/workbookPersistence.ts`. The facade supplies registry lifecycle, view/data sheet construction, alias resolution, and structural sync capabilities; persistence owns in-place restore selection and fallback rehydration order. Focused workbook contracts (26), core type-check/build, and all workbook benchmark seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`

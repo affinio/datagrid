@@ -101,6 +101,54 @@ export type SpreadsheetWorkbookSheetStateExportPayload =
     sheetState: DataGridSpreadsheetSheetState
   }
 
+export interface SpreadsheetWorkbookRestoreRuntimeOptions {
+  tryRestoreInPlace(
+    descriptors: readonly SpreadsheetWorkbookRestoreDescriptor[],
+    activeSheetId: string | null,
+  ): boolean
+  resetCurrentSheets(): void
+  attachViewSheet(descriptor: Extract<SpreadsheetWorkbookRestoreDescriptor, { kind: "view" }>): void
+  restoreDataSheet(
+    descriptor: Extract<SpreadsheetWorkbookRestoreDescriptor, { kind: "data" }>,
+    resolveSheetReference: (sheetReference: string) => DataGridSpreadsheetReferenceSheet | null,
+  ): void
+  resolveSheetReference(sheetReference: string): DataGridSpreadsheetReferenceSheet | null
+  hasSheet(sheetId: string): boolean
+  getFirstSheetId(): string | null
+  setActiveSheetId(sheetId: string | null): void
+  syncStructuralChanges(): void
+}
+
+/** Owns the restore transition after descriptors have been normalized. */
+export function createSpreadsheetWorkbookRestoreRuntime(options: SpreadsheetWorkbookRestoreRuntimeOptions) {
+  return {
+    restore(
+      descriptors: readonly SpreadsheetWorkbookRestoreDescriptor[],
+      requestedActiveSheetId: string | null,
+    ): boolean {
+      if (options.tryRestoreInPlace(descriptors, requestedActiveSheetId)) {
+        return true
+      }
+
+      options.resetCurrentSheets()
+      for (const descriptor of descriptors) {
+        if (descriptor.kind === "view") {
+          options.attachViewSheet(descriptor)
+        } else {
+          options.restoreDataSheet(descriptor, options.resolveSheetReference)
+        }
+      }
+
+      const activeSheetId = requestedActiveSheetId && options.hasSheet(requestedActiveSheetId)
+        ? requestedActiveSheetId
+        : options.getFirstSheetId()
+      options.setActiveSheetId(activeSheetId)
+      options.syncStructuralChanges()
+      return true
+    },
+  }
+}
+
 export function normalizeSpreadsheetWorkbookViewSheetModelOptions(
   options: DataGridSpreadsheetWorkbookViewSheetModelOptions | null | undefined,
 ): DataGridSpreadsheetWorkbookViewSheetModelOptions | null {
