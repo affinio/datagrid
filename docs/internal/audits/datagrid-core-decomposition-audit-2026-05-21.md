@@ -86,6 +86,8 @@ Progress (`2026-10-19`): moved push invalidation dispatch into `models/server/da
 
 Progress (`2026-10-19`): moved push event dispatch and upsert/remove finalization into `models/server/dataSourcePushEventRuntime.ts`. The facade now supplies state transitions for row totals, cache operations, dataset version, cursor, and pivot columns. Push/datasource contracts (80), core type-check/build, and all datasource churn seeds passed.
 
+Progress (`2026-10-19`): moved group-key normalization and tree pull-context construction into `models/server/dataSourceTreePullContext.ts`. The datasource facade supplies current expansion state and toggled keys. Focused datasource tests (76), core type-check/build, and all tree workload seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`

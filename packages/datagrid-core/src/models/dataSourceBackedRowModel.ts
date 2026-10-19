@@ -104,6 +104,7 @@ import { createDataSourcePrefetchRuntime } from "./server/dataSourcePrefetchPoli
 import { createDataSourceCacheInvalidationRuntime } from "./server/dataSourceCacheInvalidationRuntime.js"
 import { createDataSourcePushInvalidationRuntime } from "./server/dataSourcePushInvalidationRuntime.js"
 import { createDataSourcePushEventRuntime } from "./server/dataSourcePushEventRuntime.js"
+import { createDataSourceTreePullContextRuntime } from "./server/dataSourceTreePullContext.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -1395,41 +1396,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return changed
   }
 
-  function createTreePullContext(
-    operation: DataGridDataSourceTreePullContext["operation"],
-    groupKeys: readonly string[],
-    scope: DataGridDataSourceTreePullContext["scope"] = "branch",
-  ): DataGridDataSourceTreePullContext {
-    return {
-      operation,
-      scope,
-      groupKeys: toUniqueGroupKeys(groupKeys),
-    }
-  }
-
-  function toUniqueGroupKeys(groupKeys: readonly string[]): readonly string[] {
-    const seen = new Set<string>()
-    const normalized: string[] = []
-    for (const rawGroupKey of groupKeys) {
-      if (typeof rawGroupKey !== "string") {
-        continue
-      }
-      const groupKey = rawGroupKey.trim()
-      if (groupKey.length === 0 || seen.has(groupKey)) {
-        continue
-      }
-      seen.add(groupKey)
-      normalized.push(groupKey)
-    }
-    return normalized
-  }
-
-  function createProjectionRefreshTreePullContext(): DataGridDataSourceTreePullContext | null {
-    if (!getExpansionSpec()) {
-      return null
-    }
-    return createTreePullContext("set-group-expansion", Array.from(toggledGroupKeys), "all")
-  }
+  const treePullContextRuntime = createDataSourceTreePullContextRuntime({
+    hasExpansion: () => Boolean(getExpansionSpec()),
+    getToggledGroupKeys: () => Array.from(toggledGroupKeys),
+  })
+  const createTreePullContext = treePullContextRuntime.create
+  const createProjectionRefreshTreePullContext = treePullContextRuntime.createProjectionRefresh
 
   function getPivotPullContext(): DataGridDataSourcePivotPullContext {
     return {
