@@ -65,7 +65,6 @@ import {
   normalizeTreePullContext,
   rangeContains,
   rangesOverlap,
-  resolvePriorityRank,
   type DataGridDataSourceInFlightPull as InFlightPull,
   type DataGridDataSourcePendingPull as PendingPull,
   type DataGridDataSourcePullRangeOptions as PullRangeOptions,
@@ -84,6 +83,7 @@ import {
 } from "./server/dataSourceExternalUpdateRuntime.js"
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
 import { createDataSourcePullSchedulingRuntime } from "./server/dataSourcePullSchedulingRuntime.js"
+import { resolveDataSourcePullRequestPolicy } from "./server/dataSourcePullRequestPolicy.js"
 import {
   countCoveredRowsBackward as countCoveredRowsBackwardPolicy,
   countCoveredRowsForward as countCoveredRowsForwardPolicy,
@@ -1268,75 +1268,35 @@ export function createDataSourceBackedRowModel<T = unknown>(
       return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
     }
 
-    if (laneInFlight && !laneInFlight.controller.signal.aborted && laneInFlight.key === requestKey) {
+    const pullRequestPolicy = resolveDataSourcePullRequestPolicy({
+      range: requestRange,
+      key: requestKey,
+      stateKey: requestStateKey,
+      reason,
+      priority,
+      laneInFlight,
+      backgroundInFlight,
+      criticalInFlight,
+      pendingBackgroundPull: readPendingPull("background"),
+    })
+    if (pullRequestPolicy.kind === "coalesce") {
       diagnostics.pullCoalesced += 1
-      if (priority === "background") {
+      if (pullRequestPolicy.countPrefetch) {
         diagnostics.prefetchCoalesced += 1
       }
-      return laneInFlight.promise
+      return pullRequestPolicy.promise
     }
-
-    if (
-      reason === "viewport-change"
-      && laneInFlight
-      && !laneInFlight.controller.signal.aborted
-      && laneInFlight.stateKey === requestStateKey
-      && resolvePriorityRank(laneInFlight.priority) >= resolvePriorityRank(priority)
-      && rangeContains(laneInFlight.range, requestRange)
-    ) {
-      diagnostics.pullCoalesced += 1
-      return laneInFlight.promise
+    if (pullRequestPolicy.kind === "queue") {
+      return queuePendingPull(requestRange, reason, pullRequestPolicy.priority, requestKey, requestStateKey, treePullContext)
     }
-
-    if (priority === "background") {
-      const activeCritical = criticalInFlight
-      if (activeCritical && !activeCritical.controller.signal.aborted) {
-        return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
-      }
-      if (
-        backgroundInFlight
-        && !backgroundInFlight.controller.signal.aborted
-        && backgroundInFlight.stateKey === requestStateKey
-        && rangeContains(backgroundInFlight.range, requestRange)
-      ) {
-        diagnostics.pullCoalesced += 1
-        diagnostics.prefetchCoalesced += 1
-        return backgroundInFlight.promise
-      }
-      if (
-        backgroundInFlight
-        && !backgroundInFlight.controller.signal.aborted
-        && backgroundInFlight.stateKey === requestStateKey
-      ) {
-        abortLaneInFlight("background", "preempted")
-      }
-    } else {
-      if (
-        backgroundInFlight
-        && !backgroundInFlight.controller.signal.aborted
-        && backgroundInFlight.stateKey === requestStateKey
-        && rangesOverlap(backgroundInFlight.range, requestRange)
-      ) {
-        abortLaneInFlight("background", "preempted")
-      }
-      if (backgroundInFlight && backgroundInFlight.stateKey !== requestStateKey) {
-        abortLaneInFlight("background", "stale")
-      }
-      const pendingBackgroundPull = readPendingPull("background")
-      if (pendingBackgroundPull && pendingBackgroundPull.stateKey !== requestStateKey) {
-        diagnostics.prefetchDroppedStale += 1
-        writePendingPull("background", null)
-      }
-      if (criticalInFlight && !criticalInFlight.controller.signal.aborted) {
-        const nextRank = resolvePriorityRank(priority)
-        const activeRank = resolvePriorityRank(criticalInFlight.priority)
-        if (nextRank < activeRank) {
-          return queuePendingPull(requestRange, reason, priority, requestKey, requestStateKey, treePullContext)
-        }
-      }
+    if (pullRequestPolicy.abortBackground) {
+      abortLaneInFlight("background", pullRequestPolicy.abortBackground)
     }
-
-    if (laneInFlight && !laneInFlight.controller.signal.aborted) {
+    if (pullRequestPolicy.dropPendingBackground) {
+      diagnostics.prefetchDroppedStale += 1
+      writePendingPull("background", null)
+    }
+    if (pullRequestPolicy.abortLane) {
       abortLaneInFlight(priority, "preempted")
     }
 
