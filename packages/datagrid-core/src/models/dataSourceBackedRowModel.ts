@@ -103,6 +103,7 @@ import { createDataSourcePendingPullRuntime } from "./server/dataSourcePendingPu
 import { createDataSourcePrefetchRuntime } from "./server/dataSourcePrefetchPolicy.js"
 import { createDataSourceCacheInvalidationRuntime } from "./server/dataSourceCacheInvalidationRuntime.js"
 import { createDataSourcePushInvalidationRuntime } from "./server/dataSourcePushInvalidationRuntime.js"
+import { createDataSourcePushEventRuntime } from "./server/dataSourcePushEventRuntime.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -120,7 +121,6 @@ import type {
   DataGridDataSourcePullPriority,
   DataGridDataSourcePullReason,
   DataGridDataSourceTreePullContext,
-  DataGridDataSourcePushEvent,
   DataGridDataSourceRowEntry,
 } from "./server/dataSourceProtocol.js"
 
@@ -1298,85 +1298,63 @@ export function createDataSourceBackedRowModel<T = unknown>(
   })
   const applyPushInvalidation = pushInvalidationRuntime.apply
 
-  function applyPushEvent(event: DataGridDataSourcePushEvent<T>) {
-    if (disposed) {
-      return
-    }
-    diagnostics.pushApplied += 1
-    let versionChanged = false
-    if (typeof event.datasetVersion !== "undefined" && event.datasetVersion !== datasetVersion) {
-      datasetVersion = event.datasetVersion ?? null
-      versionChanged = true
-    }
-
-    if (event.type === "upsert") {
-      let changed = applyRows(event.rows) || versionChanged
-      if (typeof event.cursor !== "undefined") {
-        const normalizedCursor = event.cursor == null ? null : String(event.cursor)
-        if (normalizedCursor !== paginationCursor) {
-          paginationCursor = normalizedCursor
-        }
-      }
+  const pushEventRuntime = createDataSourcePushEventRuntime<T>({
+    isDisposed: () => disposed,
+    recordPushApplied: () => { diagnostics.pushApplied += 1 },
+    updateDatasetVersion: version => {
+      if (typeof version === "undefined" || version === datasetVersion) return false
+      datasetVersion = version ?? null
+      return true
+    },
+    applyRows,
+    setCursor: cursor => {
+      if (typeof cursor === "undefined") return
+      const normalizedCursor = cursor == null ? null : String(cursor)
+      if (normalizedCursor !== paginationCursor) paginationCursor = normalizedCursor
+    },
+    applyTotal: total => {
       const previousRowCount = rowCount
-      const nextTotal = normalizeTotal(event.total)
-      if (nextTotal != null) {
-        rowCount = nextTotal
-        resolvedEmptyTotal = nextTotal === 0
-        pruneRowCacheByRowCount()
-        changed = changed || rowCount !== previousRowCount
-        viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
-      }
+      const nextTotal = normalizeTotal(total)
+      if (nextTotal == null) return false
+      rowCount = nextTotal
+      resolvedEmptyTotal = nextTotal === 0
+      pruneRowCacheByRowCount()
+      viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
+      return rowCount !== previousRowCount
+    },
+    applyPivotColumns: columns => {
       if (pivotModel) {
-        const normalizedPivotColumns = normalizePivotColumnsFromUnknown(event.pivotColumns)
+        const normalizedPivotColumns = normalizePivotColumnsFromUnknown(columns)
         if (normalizedPivotColumns && !isSamePivotColumnsSnapshot(pivotColumns, normalizedPivotColumns)) {
           pivotColumns = normalizedPivotColumns
-          changed = true
+          return true
         }
       } else if (pivotColumns.length > 0) {
         pivotColumns = []
-        changed = true
+        return true
       }
-      if (changed) {
-        bumpRevision()
-      }
-      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
-      emit()
-      return
-    }
-
-    if (event.type === "remove") {
-      let changed = versionChanged
-      for (const rawIndex of event.indexes) {
+      return false
+    },
+    removeIndexes: indexes => {
+      let changed = false
+      for (const rawIndex of indexes) {
         const index = Number.isFinite(rawIndex) ? Math.max(0, Math.trunc(rawIndex)) : -1
         if (index >= 0) {
           const deleted = rowCache.delete(index)
-          if (deleted) {
-            staleRetainedRowIndexes.delete(index)
-          }
+          if (deleted) staleRetainedRowIndexes.delete(index)
           changed = deleted || changed
           rangeCache.deleteRow(index)
         }
       }
       diagnostics.rowCacheSize = rowCache.size
-      const previousRowCount = rowCount
-      const nextTotal = normalizeTotal(event.total)
-      if (nextTotal != null) {
-        rowCount = nextTotal
-        resolvedEmptyTotal = nextTotal === 0
-        pruneRowCacheByRowCount()
-        changed = changed || rowCount !== previousRowCount
-        viewportRange = normalizeViewportRange(viewportRange, getVisibleRowCount())
-      }
-      if (changed) {
-        bumpRevision()
-      }
-      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
-      emit()
-      return
-    }
-
-    applyPushInvalidation(event.invalidation)
-  }
+      return changed
+    },
+    bumpRevision,
+    updateCoverage: () => updateCachedCoverageDiagnostics(toSourceRange(viewportRange)),
+    emit,
+    applyInvalidation: applyPushInvalidation,
+  })
+  const applyPushEvent = pushEventRuntime.apply
 
   function updateDatasetVersionFromMutation(version: string | number | null | undefined): boolean {
     if (typeof version === "undefined" || version === datasetVersion) {

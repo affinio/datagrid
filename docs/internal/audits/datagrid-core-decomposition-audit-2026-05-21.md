@@ -84,6 +84,8 @@ Progress (`2026-10-19`): moved row-id cache clearing into the same invalidation 
 
 Progress (`2026-10-19`): moved push invalidation dispatch into `models/server/dataSourcePushInvalidationRuntime.ts`. The runtime owns all/range/row invalidation routing and datasource notification; the facade supplies cache clearing, pull scheduling, viewport refresh context, and background cleanup. Push/datasource contracts (80), core type-check/build, and all datasource churn seeds passed.
 
+Progress (`2026-10-19`): moved push event dispatch and upsert/remove finalization into `models/server/dataSourcePushEventRuntime.ts`. The facade now supplies state transitions for row totals, cache operations, dataset version, cursor, and pivot columns. Push/datasource contracts (80), core type-check/build, and all datasource churn seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
