@@ -1406,10 +1406,11 @@ export function createDataSourceBackedRowModel<T = unknown>(
   const projectionRefreshRuntime = createDataSourceProjectionRefreshRuntime({
     resetPaginationCursor,
     clearBackgroundPrefetch: () => clearBackgroundPrefetchState("stale"),
+    clearCache: () => clearAll(),
     bumpRevision,
     getSourceViewport: () => toSourceRange(viewportRange),
-    pullRange: (range, reason, treeData) => {
-      void pullRange(range, reason, "critical", treeData, { replaceCacheOnSuccess: true })
+    pullRange: (range, reason, treeData, replaceCacheOnSuccess) => {
+      void pullRange(range, reason, "critical", treeData, { replaceCacheOnSuccess })
     },
     emit,
   })
@@ -1812,17 +1813,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       expansionExpandedByDefault = true
       toggledGroupKeys.clear()
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      clearAll()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("expand-all-groups", [], "all"),
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("expand-all-groups", [], "all"), {
+        clearCache: true,
+        replaceCacheOnSuccess: false,
+      })
     },
     collapseAllGroups() {
       ensureActive()
@@ -1834,17 +1828,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       expansionExpandedByDefault = false
       toggledGroupKeys.clear()
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      clearAll()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("collapse-all-groups", [], "all"),
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("collapse-all-groups", [], "all"), {
+        clearCache: true,
+        replaceCacheOnSuccess: false,
+      })
     },
     async refresh(reason?: DataGridRowModelRefreshReason) {
       ensureActive()
