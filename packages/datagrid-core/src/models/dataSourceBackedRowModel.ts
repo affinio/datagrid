@@ -101,6 +101,7 @@ import {
 import { createDataSourceCacheStoreRuntime } from "./server/dataSourceCacheStoreRuntime.js"
 import { createDataSourcePendingPullRuntime } from "./server/dataSourcePendingPullRuntime.js"
 import { createDataSourcePrefetchRuntime } from "./server/dataSourcePrefetchPolicy.js"
+import { createDataSourceCacheInvalidationRuntime } from "./server/dataSourceCacheInvalidationRuntime.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -818,43 +819,20 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return previousSize > 0 || normalizedRows.length > 0
   }
 
-  function clearRange(
-    range: DataGridViewportRange,
-    options: { preserveRange?: DataGridViewportRange | null } = {},
-  ) {
-    const normalized = normalizeRequestedRange(range)
-    const bounded = normalizeViewportRange(normalized, rowCount)
-    const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
-    if (rowCount <= 0) {
-      return
-    }
-    let changed = false
-    let removedRows = 0
-    for (let index = bounded.start; index <= bounded.end; index += 1) {
-      if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) {
-        continue
-      }
-      if (rowCache.delete(index)) {
-        staleRetainedRowIndexes.delete(index)
-        rangeCache.deleteRow(index)
-        diagnostics.invalidatedRows += 1
-        removedRows += 1
-        changed = true
-      }
-    }
-    if (changed) {
-      bumpRevision()
-      signals.emit("cacheInvalidated", {
-        kind: "range",
-        removedRows,
-        range: bounded,
-        preserveRange,
-        reason: "range-clear",
-      })
-    }
-    diagnostics.rowCacheSize = rowCache.size
-    updateLoadingState()
-  }
+  const cacheInvalidationRuntime = createDataSourceCacheInvalidationRuntime({
+    getRowCache: () => rowCache,
+    getStaleRetainedRowIndexes: () => staleRetainedRowIndexes,
+    getCacheStateKeyByIndex: () => cacheStateKeyByIndex,
+    getRangeCache: () => rangeCache,
+    diagnostics,
+    getRowCount: () => rowCount,
+    bumpRevision,
+    emitCacheInvalidated: payload => signals.emit("cacheInvalidated", payload),
+    updateLoadingState,
+    updateViewportCoverage: () => updateCachedCoverageDiagnostics(toSourceRange(viewportRange)),
+    resetViewportDataAvailability: () => telemetry.resetViewportDataAvailability(),
+  })
+  const clearRange = cacheInvalidationRuntime.clearRange
 
   function clearRowsById(
     rowIds: readonly DataGridRowId[],
@@ -953,59 +931,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     emit()
   }
 
-  function clearAll(options: { preserveRange?: DataGridViewportRange | null } = {}) {
-    const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
-    if (preserveRange) {
-      if (rowCache.size > 0) {
-        bumpRevision()
-      }
-      let removedRows = 0
-      for (const index of Array.from(rowCache.keys())) {
-        if (index >= preserveRange.start && index <= preserveRange.end) {
-          continue
-        }
-        if (rowCache.delete(index)) {
-          staleRetainedRowIndexes.delete(index)
-          rangeCache.deleteRow(index)
-          removedRows += 1
-        }
-      }
-      diagnostics.invalidatedRows += removedRows
-      if (removedRows > 0) {
-        signals.emit("cacheInvalidated", {
-          kind: "all",
-          removedRows,
-          preserveRange,
-          reason: "clear-all-preserve-range",
-        })
-      }
-      diagnostics.rowCacheSize = rowCache.size
-      updateLoadingState()
-      updateCachedCoverageDiagnostics(toSourceRange(viewportRange))
-      return
-    }
-
-    if (rowCache.size > 0) {
-      bumpRevision()
-    }
-    const removedRows = rowCache.size
-    diagnostics.invalidatedRows += removedRows
-    if (removedRows > 0) {
-      signals.emit("cacheInvalidated", {
-        kind: "all",
-        removedRows,
-        preserveRange: null,
-        reason: "clear-all",
-      })
-    }
-    rowCache.clear()
-    cacheStateKeyByIndex.clear()
-    staleRetainedRowIndexes.clear()
-    rangeCache.reset()
-    diagnostics.rowCacheSize = rowCache.size
-    telemetry.resetViewportDataAvailability()
-    updateLoadingState()
-  }
+  const clearAll = cacheInvalidationRuntime.clearAll
 
   const prefetchRuntime = createDataSourcePrefetchRuntime({
     policy: prefetchOptions,

@@ -78,6 +78,8 @@ Recommended decomposition:
 
 Completed internal owners include prefetch selection, row normalization, placeholders, request identities, pending pull policy, in-flight request decisions, viewport pull scheduling, pagination/source mapping, cache coverage policy, cache-store lifecycle, external updates, optimistic patch/commit lifecycles, and telemetry. Public datasource APIs remain unchanged.
 
+Progress (`2026-10-19`): extracted bounded range clearing and full cache clearing into `models/server/dataSourceCacheInvalidationRuntime.ts`. The runtime resolves active cache stores through getters so invalidation follows cache-store switches. Row id invalidation and application-level orchestration remain in the facade.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
