@@ -53,32 +53,28 @@ Performance investigation (`2026-10-18`): the benchmark intentionally changes th
 
 Current responsibilities:
 
-- `DataGridRowModel` facade.
-- datasource pull execution and source-range conversion.
-- pull scheduler coordination.
-- range/row cache reads and invalidation.
-- viewport loading rows and sparse diagnostics.
-- velocity-aware overscan and prefetch selection.
-- backpressure pause/resume/flush behavior.
-- push invalidation and external row updates.
-- optimistic patch transaction lifecycle.
-- telemetry and placeholder exposure diagnostics.
-- datasource column histogram normalization.
+- `DataGridRowModel` factory and public facade.
+- pull transport execution, result application, error settlement, and request state snapshots.
+- active cache aliases, row application, stale-row retention, and cache invalidation glue.
+- projection state setters and tree pull context creation.
+- push event/invalidation application and datasource capability wiring.
+- assembly of row snapshots, placeholder exposure, and histogram/selection operations.
 
 Why it is risky:
 
 - Server datasource behavior is production-facing and latency-sensitive.
-- Cache, transport, invalidation, optimistic mutation, and diagnostics now change in one file.
-- The file imports extracted server helpers, but still owns orchestration policy around all of them.
+- `pullRange()` still combines lane execution, network transport, response application, and settlement callbacks.
+- The facade still mixes cache/projection/push orchestration, though policy, scheduler, mutation, telemetry, and prefetch owners are now separate.
 
 Recommended decomposition:
 
 - Keep `createDataSourceBackedRowModel()` as the public facade.
-- Extract `dataSourceBackedRowModelCacheFacade` for row lookup, loading rows, interval diagnostics, and cache invalidation glue.
-- Extract `dataSourceBackedRowModelPullRuntime` for `pullRange`, pull coalescing, pending viewport pulls, and scheduler interaction.
-- Extract `dataSourceBackedRowModelPrefetchRuntime` for trigger/window/direction decisions.
-- Extract `dataSourceBackedRowModelMutationRuntime` for optimistic `patchRows()` and `applyExternalUpdates()`.
-- Extract `dataSourceBackedRowModelProjectionRuntime` for sort/filter/group/pivot/pagination state changes and tree pull context creation.
+- Extract pull transport/result lifecycle from `pullRange()` while keeping state mutation behind explicit capabilities.
+- Consolidate row lookup, loading-row selection, interval diagnostics, and invalidation glue into a cache-facing runtime.
+- Group projection setter transitions and tree pull context creation behind an internal projection runtime.
+- Move push event application into the existing invalidation/update owners where their state transitions overlap.
+
+Completed internal owners include prefetch selection, row normalization, placeholders, request identities, pending pull policy, in-flight request decisions, viewport pull scheduling, pagination/source mapping, cache coverage policy, cache-store lifecycle, external updates, optimistic patch/commit lifecycles, and telemetry. Public datasource APIs remain unchanged.
 
 Validation target:
 
@@ -139,11 +135,10 @@ Current responsibilities:
 
 - workbook sheet registry and active sheet lifecycle.
 - alias collision checks.
-- dependency graph construction.
-- strongly connected component scheduling.
-- formula table sync passes.
-- sheet subscription and sync invalidation.
-- snapshot/export state.
+- sheet subscription and row/column formula reference rewrite orchestration.
+- graph invalidation and dependency input assembly.
+- top-level component scheduling, view materialization, and formula sync sequencing.
+- snapshot/export adapters and restore capability wiring.
 
 Legacy removal:
 
@@ -154,8 +149,8 @@ Legacy removal:
 
 Risk:
 
-- `workbookModel.ts` remains the current spreadsheet workbook runtime and still owns graph/sync scheduling inline.
-- Future workbook decomposition should extract shared graph/scheduler helpers from this runtime instead of reintroducing a row-model workbook API.
+- `workbookModel.ts` still owns subscriber callbacks, target-sheet scans, and the top-level sync sequence across registry, formula, and view owners.
+- Future workbook decomposition should keep registry lifecycle here while extracting the remaining subscription and sync orchestration only when the ownership boundary is cohesive.
 
 Progress (`2026-10-18`): extracted deterministic strongly connected component grouping and dependency-first scheduling to `spreadsheet/workbookDependencyScheduler.ts`. The workbook facade now owns when to schedule and synchronize; the scheduler owns graph ordering. Focused workbook tests and package type-check/build passed. Remaining workbook orchestration still owns graph construction, invalidation, and sync passes.
 
@@ -176,6 +171,8 @@ Progress (`2026-10-19`): moved conversion of view references, formula table alia
 Progress (`2026-10-19`): moved full workbook restore transition sequencing into `spreadsheet/workbookPersistence.ts`. The facade supplies registry lifecycle, view/data sheet construction, alias resolution, and structural sync capabilities; persistence owns in-place restore selection and fallback rehydration order. Focused workbook contracts (26), core type-check/build, and all workbook benchmark seeds passed.
 
 Progress (`2026-10-19`): moved cross-sheet row/column rewrites, renamed-sheet alias rewrites, and removed-sheet `#REF!` invalidation into `spreadsheet/workbookReferenceMutation.ts`. Workbook orchestration still selects affected sheets and applies structural patches; the module owns reference transformation policy. Focused mutation/workbook contracts (32), core type-check/build, and the spreadsheet-workbook benchmark passed for row/column mutation policies.
+
+Completed internal owners include dependency edge resolution/closure, SCC scheduling, view materialization, managed formula-table sync, per-component formula convergence, restore transition selection, and row/column/alias reference transformation policies. Remaining workbook work should focus on the subscription/registry-to-sync adapter and keep persistence and graph policy in their extracted modules.
 
 Validation target:
 
