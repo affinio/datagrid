@@ -1,6 +1,5 @@
 import {
   buildGroupExpansionSnapshot,
-  buildPaginationSnapshot,
   cloneGroupBySpec,
   isSameGroupExpansionSnapshot,
   isSameGroupBySpec,
@@ -84,6 +83,7 @@ import {
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
 import { createDataSourcePullSchedulingRuntime } from "./server/dataSourcePullSchedulingRuntime.js"
 import { resolveDataSourcePullRequestPolicy } from "./server/dataSourcePullRequestPolicy.js"
+import { createDataSourceRangeMappingRuntime } from "./server/dataSourceRangeMappingRuntime.js"
 import {
   countCoveredRowsBackward as countCoveredRowsBackwardPolicy,
   countCoveredRowsForward as countCoveredRowsForwardPolicy,
@@ -527,50 +527,18 @@ export function createDataSourceBackedRowModel<T = unknown>(
     }
   }
 
-  function getPaginationSnapshot() {
-    return buildPaginationSnapshot(rowCount, paginationInput)
-  }
-
-  function getVisibleRowCount() {
-    const pagination = getPaginationSnapshot()
-    if (!pagination.enabled) {
-      return pagination.totalRowCount
-    }
-    if (pagination.startIndex < 0 || pagination.endIndex < pagination.startIndex) {
-      return 0
-    }
-    return pagination.endIndex - pagination.startIndex + 1
-  }
-
-  function toSourceIndex(index: number): number {
-    const pagination = getPaginationSnapshot()
-    if (!pagination.enabled || pagination.startIndex < 0) {
-      return index
-    }
-    return pagination.startIndex + index
-  }
-
-  function toSourceRange(range: DataGridViewportRange): DataGridViewportRange {
-    const visibleCount = getVisibleRowCount()
-    if (visibleCount <= 0) {
-      return { start: 0, end: 0 }
-    }
-    const normalized = normalizeViewportRange(range, visibleCount)
-    return {
-      start: toSourceIndex(normalized.start),
-      end: toSourceIndex(normalized.end),
-    }
-  }
-
-  function toVisibleLoadedIntervals(
-    visibleRange: DataGridViewportRange,
-    sourceRange: DataGridViewportRange,
-  ): DataGridViewportRange[] {
-    return rangeCache.getLoadedIntervals(sourceRange).map(interval => ({
-      start: interval.start - sourceRange.start + visibleRange.start,
-      end: interval.end - sourceRange.start + visibleRange.start,
-    }))
-  }
+  const rangeMappingRuntime = createDataSourceRangeMappingRuntime({
+    getRowCount: () => rowCount,
+    getPaginationInput: () => paginationInput,
+    getLoadedIntervals: range => rangeCache.getLoadedIntervals(range),
+  })
+  const {
+    getPaginationSnapshot,
+    getVisibleRowCount,
+    toSourceIndex,
+    toSourceRange,
+    toVisibleLoadedIntervals,
+  } = rangeMappingRuntime
 
   function isRangeFullyCached(range: DataGridViewportRange, stateKey?: string): boolean {
     for (let index = range.start; index <= range.end; index += 1) {

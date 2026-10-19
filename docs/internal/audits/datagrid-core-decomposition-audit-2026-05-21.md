@@ -45,6 +45,8 @@ Progress (`2026-10-19`): moved viewport pull microtask coalescing and critical b
 
 Progress (`2026-10-19`): moved in-flight pull reuse, priority queueing, background preemption, and stale pending-background decisions to `models/server/dataSourcePullRequestPolicy.ts`. The facade now applies the returned decision to lane state, diagnostics, and pending queues. Added direct policy contracts; 93 focused datasource tests, core build, and all datasource churn seeds passed.
 
+Progress (`2026-10-19`): moved pagination snapshot access, visible row count, visible-to-source range conversion, and loaded interval remapping to `models/server/dataSourceRangeMappingRuntime.ts`. The runtime reads current row count, pagination input, and cache intervals through explicit providers. Focused datasource tests (87), core type-check/build, and datasource churn assertion passed.
+
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 
 Current responsibilities:
