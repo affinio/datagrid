@@ -50,6 +50,7 @@ import {
   resolveSpreadsheetWorkbookSheetFormulaDependencyState,
 } from "./workbookFormulaDependencies.js"
 import { resolveSpreadsheetWorkbookDependencies } from "./workbookDependencyResolver.js"
+import { rewriteSpreadsheetWorkbookRowReference } from "./workbookReferenceMutation.js"
 import {
   createSpreadsheetWorkbookRestoreRuntime,
   createSpreadsheetWorkbookRestoreDescriptor,
@@ -1191,110 +1192,7 @@ export function createDataGridSpreadsheetWorkbookModel(
           continue
         }
         const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaCell.formulaRuntime, (binding) => {
-          if (binding.kind !== "reference") {
-            return null
-          }
-          const reference = binding
-          if (!sourceAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
-            return null
-          }
-          if (mutation.kind === "insert") {
-            if (reference.rowSelector.kind === "absolute") {
-              if (reference.rowSelector.rowIndex < mutation.index) {
-                return null
-              }
-              return {
-                sheetReference: reference.sheetReference,
-                referenceName: reference.referenceName,
-                rangeReferenceName: reference.rangeReferenceName,
-                rowSelector: {
-                  kind: "absolute",
-                  rowIndex: reference.rowSelector.rowIndex + mutation.count,
-                },
-              }
-            }
-            if (reference.rowSelector.kind !== "absolute-window") {
-              return null
-            }
-            if (reference.rowSelector.endRowIndex < mutation.index) {
-              return null
-            }
-            const shiftWholeRange = reference.rowSelector.startRowIndex >= mutation.index
-            return {
-              sheetReference: reference.sheetReference,
-              referenceName: reference.referenceName,
-              rangeReferenceName: reference.rangeReferenceName,
-              rowSelector: {
-                kind: "absolute-window",
-                startRowIndex: shiftWholeRange
-                  ? reference.rowSelector.startRowIndex + mutation.count
-                  : reference.rowSelector.startRowIndex,
-                endRowIndex: reference.rowSelector.endRowIndex + mutation.count,
-              },
-            }
-          }
-          if (reference.rowSelector.kind === "absolute") {
-            if (reference.rowSelector.rowIndex < mutation.index) {
-              return null
-            }
-            if (reference.rowSelector.rowIndex >= mutation.index + mutation.count) {
-              return {
-                sheetReference: reference.sheetReference,
-                referenceName: reference.referenceName,
-                rangeReferenceName: reference.rangeReferenceName,
-                rowSelector: {
-                  kind: "absolute",
-                  rowIndex: reference.rowSelector.rowIndex - mutation.count,
-                },
-              }
-            }
-            return {
-              kind: "invalid",
-            }
-          }
-          if (reference.rowSelector.kind !== "absolute-window") {
-            return null
-          }
-          const survivingIndexes: number[] = []
-          for (
-            let targetRowIndex = reference.rowSelector.startRowIndex;
-            targetRowIndex <= reference.rowSelector.endRowIndex;
-            targetRowIndex += 1
-          ) {
-            if (targetRowIndex < mutation.index) {
-              survivingIndexes.push(targetRowIndex)
-              continue
-            }
-            if (targetRowIndex >= mutation.index + mutation.count) {
-              survivingIndexes.push(targetRowIndex - mutation.count)
-            }
-          }
-          if (survivingIndexes.length === 0) {
-            return {
-              kind: "invalid",
-            }
-          }
-          if (survivingIndexes.length === 1) {
-            return {
-              sheetReference: reference.sheetReference,
-              referenceName: reference.referenceName,
-              rangeReferenceName: reference.rangeReferenceName,
-              rowSelector: {
-                kind: "absolute",
-                rowIndex: survivingIndexes[0]!,
-              },
-            }
-          }
-          return {
-            sheetReference: reference.sheetReference,
-            referenceName: reference.referenceName,
-            rangeReferenceName: reference.rangeReferenceName,
-            rowSelector: {
-              kind: "absolute-window",
-              startRowIndex: survivingIndexes[0]!,
-              endRowIndex: survivingIndexes[survivingIndexes.length - 1]!,
-            },
-          }
+          return rewriteSpreadsheetWorkbookRowReference(binding, sourceAliases, mutation)
         }, {
           currentRowIndex: formulaCell.address.rowIndex,
         })
