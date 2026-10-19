@@ -42,6 +42,7 @@ import { applySpreadsheetWorkbookManagedTablePatch } from "./workbookFormulaTabl
 import { syncSpreadsheetWorkbookSheetComponent } from "./workbookFormulaSyncRuntime.js"
 import {
   createSpreadsheetWorkbookDependencyGraph,
+  resolveSpreadsheetWorkbookAffectedSheetIds,
   type SpreadsheetWorkbookDependencyGraph,
 } from "./workbookDependencyGraph.js"
 import {
@@ -804,46 +805,6 @@ export function createDataGridSpreadsheetWorkbookModel(
     return graphState
   }
 
-  const resolveAffectedSheetIds = (
-    graph: SpreadsheetWorkbookDependencyGraph,
-    syncOptions: SpreadsheetWorkbookSyncOptions,
-  ): readonly string[] => {
-    if (syncOptions.structural === true || !syncOptions.dirtySheetIds || syncOptions.dirtySheetIds.size === 0) {
-      return Object.freeze(sheets.map(sheet => sheet.id))
-    }
-
-    const affectedSheetIds = new Set<string>()
-    const queue: string[] = []
-
-    for (const dirtySheetId of syncOptions.dirtySheetIds) {
-      if (!sheetsById.has(dirtySheetId) || affectedSheetIds.has(dirtySheetId)) {
-        continue
-      }
-      affectedSheetIds.add(dirtySheetId)
-      queue.push(dirtySheetId)
-    }
-
-    while (queue.length > 0) {
-      const producerSheetId = queue.shift()
-      if (typeof producerSheetId !== "string") {
-        break
-      }
-      for (const dependentSheetId of graph.dependentSheetIdsBySheetId.get(producerSheetId) ?? []) {
-        if (affectedSheetIds.has(dependentSheetId)) {
-          continue
-        }
-        affectedSheetIds.add(dependentSheetId)
-        queue.push(dependentSheetId)
-      }
-    }
-
-    return Object.freeze(
-      sheets
-        .map(sheet => sheet.id)
-        .filter(sheetId => affectedSheetIds.has(sheetId)),
-    )
-  }
-
   const applyWorkbookSync = (syncOptions: SpreadsheetWorkbookSyncOptions = {}): void => {
     if (sheets.length === 0) {
       lastSync = {
@@ -859,7 +820,12 @@ export function createDataGridSpreadsheetWorkbookModel(
       sheets.length,
     )
     const resolvedGraphState = resolveWorkbookGraphState(syncOptions)
-    const affectedSheetIds = resolveAffectedSheetIds(resolvedGraphState.graph, syncOptions)
+    const affectedSheetIds = resolveSpreadsheetWorkbookAffectedSheetIds(
+      sheets.map(sheet => sheet.id),
+      resolvedGraphState.graph.dependentSheetIdsBySheetId,
+      syncOptions.dirtySheetIds,
+      syncOptions.structural === true,
+    )
     if (affectedSheetIds.length === 0) {
       lastSync = {
         passCount: 0,

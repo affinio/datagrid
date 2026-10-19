@@ -40,3 +40,40 @@ export function createSpreadsheetWorkbookDependencyGraph(
     ),
   }
 }
+
+/** Returns dirty sheets and all of their downstream dependents in workbook order. */
+export function resolveSpreadsheetWorkbookAffectedSheetIds(
+  sheetIds: readonly string[],
+  dependentSheetIdsBySheetId: ReadonlyMap<string, readonly string[]>,
+  dirtySheetIds?: ReadonlySet<string>,
+  structural = false,
+): readonly string[] {
+  if (structural || !dirtySheetIds || dirtySheetIds.size === 0) {
+    return Object.freeze([...sheetIds])
+  }
+
+  const affectedSheetIds = new Set<string>()
+  const queue: string[] = []
+  for (const dirtySheetId of dirtySheetIds) {
+    if (dependentSheetIdsBySheetId.has(dirtySheetId) && !affectedSheetIds.has(dirtySheetId)) {
+      affectedSheetIds.add(dirtySheetId)
+      queue.push(dirtySheetId)
+    }
+  }
+
+  while (queue.length > 0) {
+    const producerSheetId = queue.shift()
+    if (typeof producerSheetId !== "string") {
+      break
+    }
+    for (const dependentSheetId of dependentSheetIdsBySheetId.get(producerSheetId) ?? []) {
+      if (affectedSheetIds.has(dependentSheetId)) {
+        continue
+      }
+      affectedSheetIds.add(dependentSheetId)
+      queue.push(dependentSheetId)
+    }
+  }
+
+  return Object.freeze(sheetIds.filter(sheetId => affectedSheetIds.has(sheetId)))
+}

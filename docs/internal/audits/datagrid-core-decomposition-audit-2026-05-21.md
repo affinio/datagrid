@@ -161,6 +161,8 @@ Progress (`2026-10-18`): moved managed formula-table patch reconciliation to `sp
 
 Progress (`2026-10-18`): moved per-component formula recompute and fixed-point convergence to `spreadsheet/workbookFormulaSyncRuntime.ts`. `workbookModel.ts` retains graph scheduling and aggregate sync diagnostics.
 
+Progress (`2026-10-19`): moved dirty-sheet downstream closure and workbook-order filtering to `spreadsheet/workbookDependencyGraph.ts`. The workbook facade now supplies graph edges and dirty/structural state; the dependency graph module owns affected-sheet selection. Focused workbook tests (26), core type-check/build, and all spreadsheet-workbook benchmark seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/spreadsheet/__tests__/workbookModel.spec.ts`
