@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 import type { DataGridSpreadsheetFormulaReferenceBinding } from "../formulaEditorModel"
-import { rewriteSpreadsheetWorkbookRowReference } from "../workbookReferenceMutation"
+import {
+  invalidateSpreadsheetWorkbookReferences,
+  rewriteSpreadsheetWorkbookColumnReferences,
+  rewriteSpreadsheetWorkbookRowReference,
+} from "../workbookReferenceMutation"
 
 function reference(
   rowSelector: Extract<DataGridSpreadsheetFormulaReferenceBinding, { kind: "reference" }>["rowSelector"],
@@ -67,5 +71,24 @@ describe("rewriteSpreadsheetWorkbookRowReference", () => {
       rangeReferenceName: null,
       rowSelector: { kind: "absolute", rowIndex: 3 },
     }, aliases, { revision: 6, kind: "insert", index: 2, count: 1 })).toBeNull()
+  })
+
+  it("rewrites renamed columns in direct and TABLE references", () => {
+    expect(rewriteSpreadsheetWorkbookColumnReferences(
+      "=SUM(TABLE('orders', 'total')) + orders![total]1",
+      0,
+      aliases,
+      { revision: 7, kind: "rename", previousKey: "total", nextKey: "amount" },
+      { syntax: "smartsheet", smartsheetAbsoluteRowBase: 1, allowSheetQualifiedReferences: true },
+    )).toBe("=SUM(TABLE('orders', 'amount')) + orders![amount]1")
+  })
+
+  it("replaces removed sheet references from right to left", () => {
+    const rawInput = "=orders![total]1 + customers![total]1"
+    const referenceText = "orders![total]1"
+    const start = rawInput.indexOf(referenceText)
+    expect(invalidateSpreadsheetWorkbookReferences(rawInput, [
+      { sheetReference: "Orders", span: { start, end: start + referenceText.length } },
+    ], aliases)).toBe("=#REF! + customers![total]1")
   })
 })

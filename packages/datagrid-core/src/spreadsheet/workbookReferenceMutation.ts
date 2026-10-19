@@ -1,5 +1,13 @@
 import type { DataGridSpreadsheetFormulaReferenceBinding } from "./formulaEditorModel.js"
-import type { DataGridSpreadsheetSheetRowMutation } from "./sheetModel.js"
+import {
+  rewriteDataGridSpreadsheetFormulaReferences,
+  rewriteDataGridSpreadsheetFormulaStringLiterals,
+} from "./formulaEditorModel.js"
+import type { DataGridFormulaReferenceParserOptions } from "../models/formula/formulaEngine.js"
+import type {
+  DataGridSpreadsheetSheetColumnMutation,
+  DataGridSpreadsheetSheetRowMutation,
+} from "./sheetModel.js"
 import { normalizeSpreadsheetWorkbookAlias } from "./workbookFormulaDependencies.js"
 
 /** Rewrites only absolute references into a source sheet after row structure changes. */
@@ -74,4 +82,74 @@ export function rewriteSpreadsheetWorkbookRowReference(
       endRowIndex: survivingIndexes[survivingIndexes.length - 1]!,
     },
   }
+}
+
+export function rewriteSpreadsheetWorkbookColumnReferences(
+  rawInput: string,
+  rowIndex: number,
+  sourceAliases: ReadonlySet<string>,
+  mutation: DataGridSpreadsheetSheetColumnMutation,
+  referenceParserOptions?: DataGridFormulaReferenceParserOptions,
+): string {
+  const rewrittenReferences = rewriteDataGridSpreadsheetFormulaReferences(rawInput, reference => {
+    const normalizedAlias = normalizeSpreadsheetWorkbookAlias(reference.sheetReference)
+    if (normalizedAlias.length === 0 || !sourceAliases.has(normalizedAlias)) {
+      return null
+    }
+    const nextReferenceName = reference.referenceName === mutation.previousKey
+      ? mutation.nextKey
+      : reference.referenceName
+    const nextRangeReferenceName = reference.rangeReferenceName === mutation.previousKey
+      ? mutation.nextKey
+      : reference.rangeReferenceName
+    if (
+      nextReferenceName === reference.referenceName
+      && nextRangeReferenceName === reference.rangeReferenceName
+    ) {
+      return null
+    }
+    return {
+      sheetReference: reference.sheetReference,
+      referenceName: nextReferenceName,
+      rangeReferenceName: nextRangeReferenceName,
+      rowSelector: reference.rowSelector,
+    }
+  }, { currentRowIndex: rowIndex, referenceParserOptions })
+
+  return rewriteDataGridSpreadsheetFormulaStringLiterals(rewrittenReferences, (literalText, context) => {
+    const functionName = context.callName?.trim().toUpperCase()
+    const argumentIndex = context.argumentIndex
+    if (!functionName || typeof argumentIndex !== "number") {
+      return null
+    }
+    const tableNameNode = context.callArgs?.[0]
+    if (!tableNameNode || tableNameNode.kind !== "literal" || typeof tableNameNode.value !== "string") {
+      return null
+    }
+    const normalizedTableAlias = normalizeSpreadsheetWorkbookAlias(tableNameNode.value)
+    if (normalizedTableAlias.length === 0 || !sourceAliases.has(normalizedTableAlias)) {
+      return null
+    }
+    const shouldRewrite = (
+      (functionName === "TABLE" && argumentIndex === 1)
+      || (functionName === "RELATED" && (argumentIndex === 2 || argumentIndex === 3))
+      || (functionName === "ROLLUP" && (argumentIndex === 1 || argumentIndex === 3))
+    )
+    return shouldRewrite && literalText === mutation.previousKey ? mutation.nextKey : null
+  }, { currentRowIndex: rowIndex, referenceParserOptions })
+}
+
+export function invalidateSpreadsheetWorkbookReferences(
+  rawInput: string,
+  references: readonly { sheetReference: string | null | undefined; span: { start: number; end: number } }[],
+  removedAliases: ReadonlySet<string>,
+): string {
+  let nextRawInput = rawInput
+  const matchingReferences = references
+    .filter(reference => removedAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference)))
+    .sort((left, right) => right.span.start - left.span.start)
+  for (const reference of matchingReferences) {
+    nextRawInput = `${nextRawInput.slice(0, reference.span.start)}#REF!${nextRawInput.slice(reference.span.end)}`
+  }
+  return nextRawInput
 }

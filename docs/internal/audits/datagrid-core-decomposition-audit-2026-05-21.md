@@ -171,7 +171,7 @@ Progress (`2026-10-19`): moved conversion of view references, formula table alia
 
 Progress (`2026-10-19`): moved full workbook restore transition sequencing into `spreadsheet/workbookPersistence.ts`. The facade supplies registry lifecycle, view/data sheet construction, alias resolution, and structural sync capabilities; persistence owns in-place restore selection and fallback rehydration order. Focused workbook contracts (26), core type-check/build, and all workbook benchmark seeds passed.
 
-Progress (`2026-10-19`): moved absolute cross-sheet row-reference transforms for insert/remove into `spreadsheet/workbookReferenceMutation.ts`. Workbook orchestration still selects dependent sheets and applies structural patches; the policy owns selector shifts, range trimming, and deleted-reference invalidation. Focused mutation/workbook contracts (29), core type-check/build, and all workbook benchmark seeds passed.
+Progress (`2026-10-19`): moved cross-sheet row and column reference rewrite policies plus removed-sheet `#REF!` invalidation into `spreadsheet/workbookReferenceMutation.ts`. Workbook orchestration still selects dependent sheets and applies structural patches; the module owns selector shifts, range trimming, column token rewrites, and reference invalidation. Focused mutation/workbook contracts (31), core type-check/build, and all workbook benchmark seeds passed.
 
 Validation target:
 

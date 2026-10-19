@@ -6,8 +6,6 @@ import type { DataGridRowId } from "../models/rowModel.js"
 import {
   createDataGridSpreadsheetSheetModel,
   mapDataGridSpreadsheetCellFormulaRuntimeModelBindings,
-  rewriteDataGridSpreadsheetFormulaReferences,
-  rewriteDataGridSpreadsheetFormulaStringLiterals,
   type DataGridSpreadsheetCellInputPatch,
   type CreateDataGridSpreadsheetSheetModelOptions,
   type DataGridSpreadsheetFormulaStructuralPatch,
@@ -50,7 +48,11 @@ import {
   resolveSpreadsheetWorkbookSheetFormulaDependencyState,
 } from "./workbookFormulaDependencies.js"
 import { resolveSpreadsheetWorkbookDependencies } from "./workbookDependencyResolver.js"
-import { rewriteSpreadsheetWorkbookRowReference } from "./workbookReferenceMutation.js"
+import {
+  invalidateSpreadsheetWorkbookReferences,
+  rewriteSpreadsheetWorkbookColumnReferences,
+  rewriteSpreadsheetWorkbookRowReference,
+} from "./workbookReferenceMutation.js"
 import {
   createSpreadsheetWorkbookRestoreRuntime,
   createSpreadsheetWorkbookRestoreDescriptor,
@@ -1216,44 +1218,6 @@ export function createDataGridSpreadsheetWorkbookModel(
     return changedSheetIds
   }
 
-  const rewriteWorkbookColumnRenameFormulaLiterals = (
-    rawInput: string,
-    rowIndex: number,
-    sourceAliases: ReadonlySet<string>,
-    previousColumnKey: string,
-    nextColumnKey: string,
-    targetSheet: SpreadsheetWorkbookSheetState,
-  ): string => rewriteDataGridSpreadsheetFormulaStringLiterals(rawInput, (literalText, context) => {
-    const functionName = context.callName?.trim().toUpperCase()
-    const argumentIndex = context.argumentIndex
-    if (!functionName || typeof argumentIndex !== "number") {
-      return null
-    }
-
-    const tableNameNode = context.callArgs?.[0]
-    if (!tableNameNode || tableNameNode.kind !== "literal" || typeof tableNameNode.value !== "string") {
-      return null
-    }
-
-    const normalizedTableAlias = normalizeSpreadsheetWorkbookAlias(tableNameNode.value)
-    if (normalizedTableAlias.length === 0 || !sourceAliases.has(normalizedTableAlias)) {
-      return null
-    }
-
-    const shouldRewrite = (
-      (functionName === "TABLE" && argumentIndex === 1)
-      || (functionName === "RELATED" && (argumentIndex === 2 || argumentIndex === 3))
-      || (functionName === "ROLLUP" && (argumentIndex === 1 || argumentIndex === 3))
-    )
-
-    return shouldRewrite && literalText === previousColumnKey
-      ? nextColumnKey
-      : null
-  }, {
-    currentRowIndex: rowIndex,
-    referenceParserOptions: targetSheet.sheetModel.exportState().referenceParserOptions,
-  })
-
   const rewriteWorkbookSheetColumnMutation = (
     sourceSheet: SpreadsheetWorkbookSheetState,
     mutation: DataGridSpreadsheetSheetColumnMutation,
@@ -1284,40 +1248,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!cellSnapshot) {
           continue
         }
-        const rewrittenReferences = rewriteDataGridSpreadsheetFormulaReferences(cellSnapshot.rawInput, reference => {
-          const normalizedAlias = normalizeSpreadsheetWorkbookAlias(reference.sheetReference)
-          if (normalizedAlias.length === 0 || !sourceAliases.has(normalizedAlias)) {
-            return null
-          }
-          const nextReferenceName = reference.referenceName === mutation.previousKey
-            ? mutation.nextKey
-            : reference.referenceName
-          const nextRangeReferenceName = reference.rangeReferenceName === mutation.previousKey
-            ? mutation.nextKey
-            : reference.rangeReferenceName
-          if (
-            nextReferenceName === reference.referenceName
-            && nextRangeReferenceName === reference.rangeReferenceName
-          ) {
-            return null
-          }
-          return {
-            sheetReference: reference.sheetReference,
-            referenceName: nextReferenceName,
-            rangeReferenceName: nextRangeReferenceName,
-            rowSelector: reference.rowSelector,
-          }
-        }, {
-          currentRowIndex: formulaCell.address.rowIndex,
-          referenceParserOptions: targetSheet.sheetModel.exportState().referenceParserOptions,
-        })
-        const rewrittenRawInput = rewriteWorkbookColumnRenameFormulaLiterals(
-          rewrittenReferences,
+        const rewrittenRawInput = rewriteSpreadsheetWorkbookColumnReferences(
+          cellSnapshot.rawInput,
           formulaCell.address.rowIndex,
           sourceAliases,
-          mutation.previousKey,
-          mutation.nextKey,
-          targetSheet,
+          mutation,
+          targetSheet.sheetModel.exportState().referenceParserOptions,
         )
         if (rewrittenRawInput === cellSnapshot.rawInput) {
           continue
@@ -1362,17 +1298,12 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (!cellSnapshot || cellSnapshot.analysis.references.length === 0) {
           continue
         }
-        let nextRawInput = cellSnapshot.rawInput
-        let cellChanged = false
-        const references = [...cellSnapshot.analysis.references].sort((left, right) => right.span.start - left.span.start)
-        for (const reference of references) {
-          if (!normalizedRemovedAliases.has(normalizeSpreadsheetWorkbookAlias(reference.sheetReference))) {
-            continue
-          }
-          nextRawInput = `${nextRawInput.slice(0, reference.span.start)}#REF!${nextRawInput.slice(reference.span.end)}`
-          cellChanged = true
-        }
-        if (!cellChanged || nextRawInput === cellSnapshot.rawInput) {
+        const nextRawInput = invalidateSpreadsheetWorkbookReferences(
+          cellSnapshot.rawInput,
+          cellSnapshot.analysis.references,
+          normalizedRemovedAliases,
+        )
+        if (nextRawInput === cellSnapshot.rawInput) {
           continue
         }
         patches.push({
