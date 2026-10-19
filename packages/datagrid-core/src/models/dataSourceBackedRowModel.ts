@@ -100,7 +100,7 @@ import {
 } from "./server/dataSourceInvalidationEngine.js"
 import { createDataSourceCacheStoreRuntime } from "./server/dataSourceCacheStoreRuntime.js"
 import { createDataSourcePendingPullRuntime } from "./server/dataSourcePendingPullRuntime.js"
-import { resolveDataSourcePrefetchCandidate } from "./server/dataSourcePrefetchPolicy.js"
+import { createDataSourcePrefetchRuntime } from "./server/dataSourcePrefetchPolicy.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -1007,37 +1007,21 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState()
   }
 
-  function scheduleViewportPrefetch(): void {
-    if (!prefetchOptions.enabled || disposed) {
-      return
-    }
-    const visibleCount = getVisibleRowCount()
-    if (visibleCount <= 0 || rowCount <= 0) {
-      diagnostics.cachedAheadRows = 0
-      diagnostics.cachedBehindRows = 0
-      return
-    }
-    const sourceViewport = toSourceRange(viewportRange)
-    updateCachedCoverageDiagnostics(sourceViewport)
-    const bestCandidate = resolveDataSourcePrefetchCandidate({
-      policy: prefetchOptions,
-      sourceViewport,
-      rowCount,
-      lastViewportDirection,
-      countCachedForward: countCoveredRowsForward,
-      countCachedBackward: countCoveredRowsBackward,
-    })
-    if (!bestCandidate) {
-      diagnostics.prefetchSkippedCached += 1
-      return
-    }
-    if (isRangeFullyCached(bestCandidate.range)) {
-      diagnostics.prefetchSkippedCached += 1
-      return
-    }
-    diagnostics.prefetchScheduled += 1
-    void pullRange(bestCandidate.range, "prefetch", "background")
-  }
+  const prefetchRuntime = createDataSourcePrefetchRuntime({
+    policy: prefetchOptions,
+    diagnostics,
+    isDisposed: () => disposed,
+    getVisibleRowCount,
+    getRowCount: () => rowCount,
+    getSourceViewport: () => toSourceRange(viewportRange),
+    getLastViewportDirection: () => lastViewportDirection,
+    updateCoverage: updateCachedCoverageDiagnostics,
+    countCachedForward: countCoveredRowsForward,
+    countCachedBackward: countCoveredRowsBackward,
+    isRangeFullyCached,
+    pullRange,
+  })
+  const scheduleViewportPrefetch = prefetchRuntime.schedule
 
   function resetPaginationCursor(): void {
     paginationCursor = null

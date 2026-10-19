@@ -19,7 +19,7 @@ Priority order:
 
 ## P0: `dataSourceBackedRowModel.ts`
 
-Progress (`2026-10-18`): moved directional range selection and cached-ahead/back policy to `models/server/dataSourcePrefetchPolicy.ts`; the row-model facade retains cache inspection, diagnostics, and scheduling side effects. Focused datasource tests and core type-check/build pass. The datasource churn gate now passes after its filter-burst abort/drop ceilings were calibrated against the committed baseline.
+Progress (`2026-10-18`): moved directional range selection and cached-ahead/back policy to `models/server/dataSourcePrefetchPolicy.ts`.
 
 Progress (`2026-10-18`): moved datasource row-entry identity resolution, row-state/group metadata normalization, and row-node construction to `models/server/dataSourceRowEntry.ts`. Both normal pull application and full cache replacement use the same pure normalizer. Core type-check/build and the full core test suite pass (108 files, 851 tests).
 
@@ -48,6 +48,8 @@ Progress (`2026-10-19`): moved in-flight pull reuse, priority queueing, backgrou
 Progress (`2026-10-19`): moved pagination snapshot access, visible row count, visible-to-source range conversion, and loaded interval remapping to `models/server/dataSourceRangeMappingRuntime.ts`. The runtime reads current row count, pagination input, and cache intervals through explicit providers. Focused datasource tests (87), core type-check/build, and datasource churn assertion passed.
 
 Progress (`2026-10-19`): added viewport loaded/loading row counts and loading ratio measurement to the existing `models/server/dataSourceCoveragePolicy.ts`; model diagnostics still decide when to sample and publish the values. Direct policy and datasource contracts (87), core type-check/build, and datasource churn assertion passed.
+
+Progress (`2026-10-19`): moved prefetch candidate scheduling side effects into the existing `models/server/dataSourcePrefetchPolicy.ts` runtime. The facade supplies live viewport/cache capabilities; prefetch owns empty-state counters, coverage sampling, scheduled/skipped counters, and background pull request. Direct prefetch and datasource contracts (87), core type-check/build, and datasource churn assertion passed.
 
 Performance investigation (`2026-10-18`): the benchmark intentionally changes the filter, moves from the prior viewport to range A, refreshes A, invalidates A, then moves to range B while those pulls settle. That workload creates expected stale aborts/drops; it reproduces on the committed baseline with filter-burst abort counts 1482/1494/1451 and drop counts 726/755/707 for seeds 1337/7331/2026. The previous hard ceilings (1450/750) were below that baseline. Raised them narrowly to 1500/800; latency and pull-duration gates remain unchanged.
 

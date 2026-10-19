@@ -1,4 +1,5 @@
 import type { DataGridViewportRange } from "../rowModel.js"
+import type { DataGridDataSourceBackpressureDiagnostics, DataGridDataSourcePullReason } from "./dataSourceProtocol.js"
 
 export interface DataSourcePrefetchPolicyOptions {
   enabled: boolean
@@ -71,4 +72,57 @@ export function resolveDataSourcePrefetchCandidate(options: {
     if (policy.directionalBias !== "symmetric") break
   }
   return bestCandidate
+}
+
+export function createDataSourcePrefetchRuntime(options: {
+  policy: DataSourcePrefetchPolicyOptions
+  diagnostics: Pick<
+    DataGridDataSourceBackpressureDiagnostics,
+    "cachedAheadRows" | "cachedBehindRows" | "prefetchSkippedCached" | "prefetchScheduled"
+  >
+  isDisposed: () => boolean
+  getVisibleRowCount: () => number
+  getRowCount: () => number
+  getSourceViewport: () => DataGridViewportRange
+  getLastViewportDirection: () => -1 | 0 | 1
+  updateCoverage: (range: DataGridViewportRange) => void
+  countCachedForward: (startIndex: number, upperBound: number) => number
+  countCachedBackward: (startIndex: number, lowerBound: number) => number
+  isRangeFullyCached: (range: DataGridViewportRange) => boolean
+  pullRange: (
+    range: DataGridViewportRange,
+    reason: DataGridDataSourcePullReason,
+    priority: "background",
+  ) => Promise<void>
+}) {
+  return {
+    schedule(): void {
+      if (!options.policy.enabled || options.isDisposed()) {
+        return
+      }
+      const visibleCount = options.getVisibleRowCount()
+      const rowCount = options.getRowCount()
+      if (visibleCount <= 0 || rowCount <= 0) {
+        options.diagnostics.cachedAheadRows = 0
+        options.diagnostics.cachedBehindRows = 0
+        return
+      }
+      const sourceViewport = options.getSourceViewport()
+      options.updateCoverage(sourceViewport)
+      const candidate = resolveDataSourcePrefetchCandidate({
+        policy: options.policy,
+        sourceViewport,
+        rowCount,
+        lastViewportDirection: options.getLastViewportDirection(),
+        countCachedForward: options.countCachedForward,
+        countCachedBackward: options.countCachedBackward,
+      })
+      if (!candidate || options.isRangeFullyCached(candidate.range)) {
+        options.diagnostics.prefetchSkippedCached += 1
+        return
+      }
+      options.diagnostics.prefetchScheduled += 1
+      void options.pullRange(candidate.range, "prefetch", "background")
+    },
+  }
 }
