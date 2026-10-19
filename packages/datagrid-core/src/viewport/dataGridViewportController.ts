@@ -121,6 +121,7 @@ import {
 	resolveViewportDimensions,
 	shouldNotifyNearBottom,
 	shouldUseFastPath,
+  resolveGatedHeavyUpdateThresholds as resolveGatedHeavyUpdateThresholdsPolicy,
 } from "./dataGridViewportMath"
 import {
 	createDataGridViewportModelBridgeService,
@@ -786,15 +787,14 @@ export function createDataGridViewportController<TRow = unknown>(
 
 		const heavyIdleMs = Math.max(48, frameBudget.frameDurationMs * 4)
 		function resolveGatedHeavyThresholds(): { vertical: number; horizontal: number } {
-			const rowHeightCandidate = effectiveRowHeight.value && effectiveRowHeight.value > 0
-				? effectiveRowHeight.value
-				: baseRowHeight
-			const vertical = Math.max(verticalScrollEpsilon, rowHeightCandidate * 0.5)
-			const fallbackWidth = columnSnapshot.metrics.widths[0] ?? 32
-			const widthReference = lastAverageColumnWidth > 0 ? lastAverageColumnWidth : fallbackWidth
-			const horizontalBase = Math.max(horizontalScrollEpsilon, widthReference * 0.5)
-			const horizontal = Math.min(Math.max(horizontalScrollEpsilon, horizontalBase), 96)
-			return { vertical, horizontal }
+			return resolveGatedHeavyUpdateThresholdsPolicy({
+				verticalScrollEpsilon,
+				horizontalScrollEpsilon,
+				effectiveRowHeight: effectiveRowHeight.value,
+				baseRowHeight,
+				averageColumnWidth: lastAverageColumnWidth,
+				firstColumnWidth: columnSnapshot.metrics.widths[0],
+			})
 		}
 		const scrollIo = createDataGridViewportScrollIo({
 			hostEnvironment,

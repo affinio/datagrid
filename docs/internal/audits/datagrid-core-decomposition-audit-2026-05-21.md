@@ -206,6 +206,8 @@ Recommended decomposition:
 
 Progress (`2026-10-18`): extracted CSS zoom normalization and smoothing/lower-bound policy for auto row-height estimates to `viewport/dataGridViewportRowHeightEstimate.ts`. DOM sampling, cache lifecycle, and estimate application remain controller-owned. Focused row-height/viewport contracts, core type-check/build, and enterprise virtualization assertion passed.
 
+Progress (`2026-10-19`): moved vertical/horizontal scroll thresholds for gated heavy viewport updates into `viewport/dataGridViewportMath.ts`. The controller still owns live metrics and supplies them to the pure policy. Four viewport contracts, core type-check/build, and enterprise virtualization assertion passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/viewport/__tests__/horizontalClamp.contract.spec.ts`

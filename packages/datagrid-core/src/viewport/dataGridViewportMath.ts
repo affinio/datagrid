@@ -53,6 +53,15 @@ export interface ShouldUseFastPathInput {
   horizontalScrollEpsilon: number
 }
 
+export interface GatedHeavyUpdateThresholdsInput {
+  verticalScrollEpsilon: number
+  horizontalScrollEpsilon: number
+  effectiveRowHeight: number
+  baseRowHeight: number
+  averageColumnWidth: number
+  firstColumnWidth: number | undefined
+}
+
 export interface HorizontalSizingInput {
   columnMeta: DataGridViewportHorizontalMeta
   viewportWidth: number
@@ -148,6 +157,20 @@ export function shouldUseFastPath(input: ShouldUseFastPathInput): boolean {
     input.scrollTopDelta <= input.verticalScrollEpsilon &&
     input.scrollLeftDelta <= input.horizontalScrollEpsilon
   )
+}
+
+export function resolveGatedHeavyUpdateThresholds(
+  input: GatedHeavyUpdateThresholdsInput,
+): { vertical: number; horizontal: number } {
+  const rowHeightCandidate = input.effectiveRowHeight > 0
+    ? input.effectiveRowHeight
+    : input.baseRowHeight
+  const vertical = Math.max(input.verticalScrollEpsilon, rowHeightCandidate * 0.5)
+  const fallbackWidth = input.firstColumnWidth ?? 32
+  const widthReference = input.averageColumnWidth > 0 ? input.averageColumnWidth : fallbackWidth
+  const horizontalBase = Math.max(input.horizontalScrollEpsilon, widthReference * 0.5)
+  const horizontal = Math.min(Math.max(input.horizontalScrollEpsilon, horizontalBase), 96)
+  return { vertical, horizontal }
 }
 
 export function resolveHorizontalSizing(input: HorizontalSizingInput): HorizontalSizingResolution {

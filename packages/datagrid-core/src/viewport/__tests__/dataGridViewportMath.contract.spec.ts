@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   computePinnedWidth,
   resolveHorizontalSizing,
+  resolveGatedHeavyUpdateThresholds,
   resolvePendingScroll,
   resolveViewportDimensions,
   shouldNotifyNearBottom,
@@ -9,6 +10,25 @@ import {
 } from "../dataGridViewportMath"
 
 describe("viewport math engine contracts", () => {
+  it("resolves scroll heavy-update thresholds with stable row/column fallbacks", () => {
+    expect(resolveGatedHeavyUpdateThresholds({
+      verticalScrollEpsilon: 1,
+      horizontalScrollEpsilon: 2,
+      effectiveRowHeight: 30,
+      baseRowHeight: 36,
+      averageColumnWidth: 0,
+      firstColumnWidth: 120,
+    })).toEqual({ vertical: 15, horizontal: 60 })
+    expect(resolveGatedHeavyUpdateThresholds({
+      verticalScrollEpsilon: 1,
+      horizontalScrollEpsilon: 2,
+      effectiveRowHeight: 0,
+      baseRowHeight: 36,
+      averageColumnWidth: 300,
+      firstColumnWidth: 120,
+    })).toEqual({ vertical: 18, horizontal: 96 })
+  })
+
   it("resolves viewport dimensions deterministically with fallback guards", () => {
     const input = {
       viewportMetrics: null,
