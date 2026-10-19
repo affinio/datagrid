@@ -83,6 +83,7 @@ import {
   type DataGridExternalRowUpdateOptions,
 } from "./server/dataSourceExternalUpdateRuntime.js"
 import { createDataSourceTelemetryRuntime } from "./server/dataSourceTelemetryRuntime.js"
+import { createDataSourcePullSchedulingRuntime } from "./server/dataSourcePullSchedulingRuntime.js"
 import {
   countCoveredRowsBackward as countCoveredRowsBackwardPolicy,
   countCoveredRowsForward as countCoveredRowsForwardPolicy,
@@ -208,7 +209,6 @@ export function createDataSourceBackedRowModel<T = unknown>(
   let requestCounter = 0
   let criticalInFlight: InFlightPull | null = null
   let backgroundInFlight: InFlightPull | null = null
-  let viewportPullSchedulePending = false
   const optimisticMutationEngine = createDataSourceOptimisticMutationEngine<T>()
   let backpressurePaused = false
   let viewportRange = normalizeViewportRange({ start: 0, end: 0 }, rowCount)
@@ -1224,56 +1224,19 @@ export function createDataSourceBackedRowModel<T = unknown>(
   })
 
   const queuePendingPull = pendingPullRuntime.queue
-
-  function scheduleViewportPull(
-    requestRange: DataGridViewportRange,
-    requestStateKey: string,
-    treePullContext: DataGridDataSourceTreePullContext | null = null,
-  ): void {
-    scheduler.setScheduledViewport({
-      range: requestRange,
-      reason: "viewport-change",
-      priority: "critical",
-      key: buildRequestKey(requestRange, "viewport-change", "critical", treePullContext, requestStateKey),
-      stateKey: requestStateKey,
-      treeData: treePullContext,
-    })
-    diagnostics.pullCoalesced += viewportPullSchedulePending ? 1 : 0
-    diagnostics.pullDeferred += 1
-    updatePendingPullDiagnostics()
-    if (viewportPullSchedulePending) {
-      emit()
-      return
-    }
-    viewportPullSchedulePending = true
-    queueMicrotask(() => {
-      viewportPullSchedulePending = false
-      const next = scheduler.readScheduledViewport()
-      scheduler.setScheduledViewport(null)
-      if (!next || disposed) {
-        return
-      }
-      void pullRange(next.range, next.reason, next.priority, next.treeData)
-    })
-    emit()
-  }
-
-  async function drainCriticalBackpressureQueue(): Promise<void> {
-    while (!disposed) {
-      const activeCritical = criticalInFlight?.promise ?? null
-      if (activeCritical) {
-        await activeCritical.catch(() => {})
-        continue
-      }
-      const nextCritical = readPendingPull("critical")
-      if (nextCritical) {
-        writePendingPull("critical", null)
-        await pullRange(nextCritical.range, nextCritical.reason, nextCritical.priority, nextCritical.treeData)
-        continue
-      }
-      return
-    }
-  }
+  const pullSchedulingRuntime = createDataSourcePullSchedulingRuntime({
+    scheduler,
+    diagnostics,
+    isDisposed: () => disposed,
+    buildRequestKey,
+    readLaneInFlight,
+    readPendingPull,
+    writePendingPull,
+    pullRange,
+    emit,
+  })
+  const scheduleViewportPull = pullSchedulingRuntime.scheduleViewportPull
+  const drainCriticalBackpressureQueue = pullSchedulingRuntime.drainCriticalBackpressureQueue
 
   async function pullRange(
     range: DataGridViewportRange,
@@ -2437,7 +2400,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       writePendingPull("critical", null)
       writePendingPull("background", null)
       scheduler.setScheduledViewport(null)
-      viewportPullSchedulePending = false
+      pullSchedulingRuntime.reset()
       diagnostics.inFlight = false
       diagnostics.criticalInFlight = false
       diagnostics.backgroundInFlight = false
