@@ -128,6 +128,26 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("resolves the linked header viewport once across repeated center scroll events", () => {
+    const stageRoot = document.createElement("div")
+    const headerViewport = document.createElement("div")
+    headerViewport.className = "grid-header-viewport"
+    stageRoot.appendChild(headerViewport)
+    const queryHeader = vi.spyOn(stageRoot, "querySelector")
+    const harness = createHarness({ stageRoot })
+    const bodyViewport = createViewportElement()
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+
+    bodyViewport.scrollLeft = 40
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+    bodyViewport.scrollLeft = 80
+    harness.runtime.handleCenterViewportScroll({ target: bodyViewport } as unknown as Event)
+
+    expect(headerViewport.scrollLeft).toBe(80)
+    expect(queryHeader).toHaveBeenCalledTimes(1)
+    harness.unmount()
+  })
+
   it("uses the shared vertical viewport as vertical owner as the app body viewport", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 32 })

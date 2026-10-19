@@ -56,7 +56,7 @@ import {
 } from "./dataGridStructuralRowActions"
 import type { DataGridBivariantCallback } from "./types/bivariance"
 import type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
-import DataGridDefaultRenderer from "./host/DataGridDefaultRenderer"
+import DataGridDefaultRenderer, { type DataGridDefaultRendererRuntime } from "./host/DataGridDefaultRenderer"
 import type {
   DataGridCaptureFocusAnchorOptions,
   DataGridFocusAnchor,
@@ -445,7 +445,7 @@ interface DataGridRuntimeHostSlotProps {
   }
   defaultRendererProps?: Record<string, unknown>
   emptyStateRenderer?: DataGridEmptyStateRenderer
-  emptyStateAlignment?: DataGridEmptyStateAlignment
+  emptyStateAlignment: DataGridEmptyStateAlignment
   [key: string]: unknown
 }
 
@@ -477,11 +477,6 @@ function resolveServerHistoryDataSource(
     ? candidate
     : null
 }
-
-type DataGridDefaultRendererRuntime = Pick<
-  DataGridBodyAwareRuntime,
-  "api" | "syncBodyRowsInRange" | "setViewportRange" | "setVirtualWindowRange" | "setRows" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowPartition" | "virtualWindow" | "columnSnapshot"
->
 
 function rowSelectionSnapshotsEqual(
   left: DataGridRowSelectionSnapshot | null | undefined,

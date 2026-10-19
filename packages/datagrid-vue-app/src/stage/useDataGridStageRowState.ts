@@ -230,6 +230,7 @@ export function useDataGridStageRowState(
       "grid-row--hoverable": options.rows.value.rowHover === true,
       "grid-row--hovered": options.isHoveredRow(row, rowOffset),
       "grid-row--striped": options.isStripedRow(row, rowOffset),
+      "grid-row--group-root": row.kind === "group" && (row.groupMeta?.level ?? 0) === 0,
       "grid-row--group-explicit-trigger": row.kind === "group" && options.hasExplicitGroupCellRenderer.value,
       "grid-row--clipboard-pending": isRowInPendingClipboard,
       "grid-row--clipboard-pending-top": isRowInPendingClipboard && !isPreviousRowInPendingClipboard,

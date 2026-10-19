@@ -57,6 +57,43 @@ describe("useDataGridStageCellRendering", () => {
     delete (window as unknown as Record<string, unknown>)[DATA_GRID_PERF_STORE_KEY]
   })
 
+  it("does not invoke badge renderers for empty group or placeholder cells", () => {
+    const mode = ref<DataGridTableMode>("base")
+    const column = createColumn({ key: "status" })
+    const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([column])
+    const rows = ref({
+      displayRows: [],
+      pinnedBottomRows: [],
+      rowClass: () => "",
+      rowStyle: () => ({}),
+      toggleGroupRow: vi.fn(),
+    } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>)
+    const editing = ref({} as DataGridTableStageEditingSection<Record<string, unknown>>)
+    const renderer = vi.fn(() => "empty-badge")
+    const renderApi = useDataGridStageCellRendering({
+      mode,
+      visibleColumns,
+      rows,
+      cells: ref({ readCell: () => null, readDisplayCell: () => "" }),
+      editing,
+      isCellEditableSafe: () => false,
+      isEditingCellSafe: () => false,
+      columnIndexByKey: () => 0,
+    })
+    const renderedColumn = { ...column, column: { ...column.column, cellRenderer: renderer } }
+    const groupRow = createRow({
+      kind: "group",
+      rowId: "group:status:open",
+      groupMeta: { groupKey: "group:status:open", groupField: "status", groupValue: "open", level: 0, childrenCount: 1 },
+    })
+    const placeholderRow = createRow({ rowId: "__datagrid_placeholder__:1" }) as DataGridTableRow<Record<string, unknown>> & { __placeholder: true }
+    placeholderRow.__placeholder = true
+
+    expect(renderApi.renderResolvedCellContent(groupRow, 0, renderedColumn, 0)).toBe("")
+    expect(renderApi.renderResolvedCellContent(placeholderRow, 1, renderedColumn, 0)).toBe("")
+    expect(renderer).not.toHaveBeenCalled()
+  })
+
   it("resolves editor modes, cached select options, and renderer output", async () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([

@@ -1958,7 +1958,7 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
     expect(queryColumnMenuRoot()).toBeFalsy()
 
-    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
     expect(queryColumnMenuRoot()).toBeTruthy()
     expect(queryColumnMenuAction("sort-asc")?.textContent).toContain("Sort A to Z")
@@ -4263,7 +4263,15 @@ describe("DataGrid app facade contract", () => {
     const wrapper = mount(DataGrid, {
       props: {
         rows: BASE_ROWS,
-        columns: COLUMNS,
+        columns: COLUMNS.map(column => column.key === "amount"
+          ? { ...column, dataType: "number" as const }
+          : column.key === "owner"
+            ? {
+                ...column,
+                initialState: { pin: "left" as const },
+                groupCellRenderer: () => "tree",
+              }
+            : column),
         columnMenu: true,
       },
       attachTo: document.body,
@@ -4271,7 +4279,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
-    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
     queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
@@ -4279,14 +4287,56 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
       groupBy: {
-        fields: ["owner"],
-        expandedByDefault: true,
+        fields: ["region"],
+        expandedByDefault: false,
       },
     })
     expect(wrapper.emitted("update:groupBy")).toEqual(expect.arrayContaining([
-      [{ fields: ["owner"], expandedByDefault: true }],
+      [{ fields: ["region"], expandedByDefault: false }],
     ]))
-    expect(wrapper.find('.grid-cell--header[data-column-key="owner"] .col-head__group-badge').text()).toBe("G1")
+    expect(resolveRowModel(wrapper)?.getAggregationModel()).toMatchObject({
+      columns: [{ key: "amount", op: "sum" }],
+    })
+    expect(wrapper.find('.grid-cell--header[data-column-key="region"]').exists()).toBe(false)
+    expect(wrapper.find('.grid-cell--header[data-column-key="owner"]').exists()).toBe(true)
+    expect(wrapper.find('.grid-cell--header[data-column-key="amount"]').exists()).toBe(true)
+    expect(resolveVm(wrapper).getColumnSnapshot?.()?.zoneOrder.center[0]).toBe("owner")
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Ungroup all")
+
+    await wrapper.find('.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Group by this column")
+    queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+
+    expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
+      groupBy: {
+        fields: ["region", "amount"],
+        expandedByDefault: false,
+      },
+      groupExpansion: {
+        expandedByDefault: false,
+        toggledGroupKeys: expect.any(Array),
+      },
+    })
+    expect(resolveRowModel(wrapper)?.getSnapshot().groupExpansion?.toggledGroupKeys.length).toBeGreaterThan(0)
+    expect(wrapper.find('.grid-cell--header[data-column-key="region"]').exists()).toBe(false)
+    expect(wrapper.find('.grid-cell--header[data-column-key="owner"]').exists()).toBe(true)
+    expect(wrapper.find('.grid-cell--header[data-column-key="amount"]').exists()).toBe(false)
+    expect(resolveVm(wrapper).getColumnSnapshot?.()?.order[0]).toBe("owner")
+    expect(resolveVm(wrapper).getColumnSnapshot?.()?.zoneOrder.center[0]).toBe("owner")
+
+    await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(queryColumnMenuAction("toggle-group")?.textContent).toContain("Ungroup all")
+    queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(resolveRowModel(wrapper)?.getSnapshot().groupBy).toBeNull()
+    expect(wrapper.find('.grid-cell--header[data-column-key="region"]').exists()).toBe(true)
+    expect(wrapper.find('.grid-cell--header[data-column-key="amount"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -8052,7 +8102,7 @@ describe("DataGrid app facade contract", () => {
     expect(rowModel?.getSnapshot()).toMatchObject({
       groupBy: {
         fields: ["owner"],
-        expandedByDefault: true,
+        expandedByDefault: false,
       },
     })
 
@@ -9221,6 +9271,7 @@ describe("DataGrid app facade contract", () => {
             key: "owner",
             label: "Owner",
             width: 180,
+            valueGetter: row => row.owner || "placeholder-value",
             capabilities: { editable: true },
             cellRenderer: ({ displayValue, surface }: DataGridAppCellRendererContext<Record<string, unknown>>) => h("span", {
               class: `test-surface-${surface.kind}`,

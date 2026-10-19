@@ -827,6 +827,23 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     expect(await renderedCenterCellsInFirstVisibleRow(page)).toBeLessThanOrEqual(80)
   })
 
+  test("vue base grid bounds stress presets and disables oversized row/column combinations", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/base-grid?rows=50000&cols=1000")
+
+    const viewport = page.locator(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport.table-wrap, .table-wrap").first()
+    await expect(viewport).toBeVisible({ timeout: 20_000 })
+    await expect.poll(async () => totalRows(page), { timeout: 30_000 }).toBe(50000)
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(128)
+    await expect(page.getByRole("status").filter({ hasText: "Large grid combinations are disabled" })).toBeVisible()
+
+    const columns = page.getByLabel("Cols")
+    expect(await columns.locator("option[value='1000']").evaluate(option => (option as HTMLOptionElement).disabled)).toBe(true)
+    await columns.selectOption("32")
+    await expect.poll(async () => totalColumns(page), { timeout: 20_000 }).toBe(32)
+    await columns.selectOption("128")
+    expect(await page.getByLabel("Rows").locator("option[value='100000']").evaluate(option => (option as HTMLOptionElement).disabled)).toBe(true)
+  })
+
   test("vue base grid keeps a bounded window after hiding 999 of 1000 columns", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid?rows=1000&cols=1000")
 
@@ -928,10 +945,18 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     const firstGroupRow = page.locator(".sandbox-server-data-source-grid .grid-body-viewport .grid-row.row--group").first()
     const firstGroupCell = firstGroupRow.locator(".grid-cell[data-column-key]:not(.grid-cell--row-selection)").first()
     await expect(firstGroupRow).toBeVisible({ timeout: 20_000 })
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "false")
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
+    await firstGroupCell.click()
     await expect(firstGroupRow).toHaveAttribute("aria-expanded", "true")
 
     const expandedRowCount = await gridAriaRowCount(viewport)
-    expect(expandedRowCount).toBeGreaterThan(100_000)
+    expect(expandedRowCount).toBeGreaterThan(20_000)
+    await expect.poll(async () => serverViewportLoadingRatio(page), {
+      timeout: 20_000,
+    }).toBeLessThanOrEqual(0.05)
     await assertNoBlankVerticalViewport(page)
 
     await firstGroupCell.click()
@@ -939,8 +964,8 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect.poll(async () => gridAriaRowCount(viewport), {
       timeout: 20_000,
     }).toBeLessThan(expandedRowCount)
+    // Four collapsed roots can be shorter than the viewport; coverage is checked after reopening one.
     const collapsedRowCount = await gridAriaRowCount(viewport)
-    await assertNoBlankVerticalViewport(page)
 
     await firstGroupCell.click()
     await expect(firstGroupRow).toHaveAttribute("aria-expanded", "true")
@@ -967,7 +992,12 @@ test.describe("sandbox grid baseline (adapted from affinio datagrid e2e)", () =>
     await expect(regionMenuButton).toBeVisible({ timeout: 20_000 })
     await regionMenuButton.click()
     await page.locator('[data-datagrid-column-menu-action="toggle-group"]').click()
-    await expect(page.locator(".sandbox-server-data-source-grid .grid-body-viewport .grid-row.row--group").first()).toBeVisible({ timeout: 20_000 })
+    const firstGroupRow = page.locator(".sandbox-server-data-source-grid .grid-body-viewport .grid-row.row--group").first()
+    await expect(firstGroupRow).toBeVisible({ timeout: 20_000 })
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "false")
+    const firstGroupCell = firstGroupRow.locator(".grid-cell[data-column-key]:not(.grid-cell--row-selection)").first()
+    await firstGroupCell.click()
+    await expect(firstGroupRow).toHaveAttribute("aria-expanded", "true")
     await expect.poll(async () => serverViewportLoadingRatio(page), {
       timeout: 20_000,
     }).toBeLessThanOrEqual(0.05)

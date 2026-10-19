@@ -32,7 +32,6 @@
       :focused-body-row-index="focusedBodyRowIndex"
       :copy-selected-cells="selection.copySelectedCells"
       :is-coarse-pointer="isCoarsePointer"
-      :center-scroll-left="groupHeaderScrollLeft"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
       <template #left-chrome>
@@ -598,7 +597,7 @@ function isColumnMenuFilterable(column: TableColumn): boolean {
 }
 
 function isColumnMenuGroupable(column: TableColumn): boolean {
-  return column.column.capabilities?.groupable !== false
+  return column.column.capabilities?.groupable !== false || isColumnGroupedSafe(column.key)
 }
 
 function resolveActiveColumnMenuKey(): string | null {
@@ -1427,7 +1426,6 @@ const gridFocusOwned = ref(false)
 const hoveredRowIndex = ref<number | null>(null)
 const isCoarsePointer = ref(false)
 const isBodyViewportScrolling = ref(false)
-const groupHeaderScrollLeft = ref(0)
 const interactionModeInput = computed(() => ({
   interactionMode: "auto" as const,
   isCoarsePointer: isCoarsePointer.value,
@@ -1727,10 +1725,6 @@ function closeColumnMenuForViewportScroll(
 }
 
 function handleCenterViewportScroll(event: Event): void {
-  const target = readScrollEventElement(event)
-  if (target && groupHeaderScrollLeft.value !== target.scrollLeft) {
-    groupHeaderScrollLeft.value = target.scrollLeft
-  }
   closeColumnMenuForViewportScroll(event, { horizontal: true })
   handleCenterViewportScrollRaw(event)
 }
@@ -2027,13 +2021,6 @@ gridChromeSyncers.value = {
   disconnectGridChromeResizeObserver,
 }
 
-const chromeColumnsRedrawSignature = computed(() => [
-  leftChromeColumnsSignature.value,
-  centerChromeColumnsSignature.value,
-  rightChromeColumnsSignature.value,
-  headerPivotGroupsSignature.value,
-].join("||"))
-
 const chromeBodyRowsRedrawSignature = computed(() => [
   rowMetricsSignature.value,
   rowBandsSignature.value,
@@ -2044,18 +2031,35 @@ const chromePinnedBottomRowsRedrawSignature = computed(() => [
   pinnedBottomRowBandsSignature.value,
 ].join("||"))
 
-let lastChromeColumnsRedrawSignature = chromeColumnsRedrawSignature.value
+let lastLeftChromeColumnsRedrawSignature = leftChromeColumnsSignature.value
+let lastCenterChromeColumnsRedrawSignature = centerChromeColumnsSignature.value
+let lastRightChromeColumnsRedrawSignature = rightChromeColumnsSignature.value
+let lastHeaderPivotGroupsRedrawSignature = headerPivotGroupsSignature.value
 let lastChromeBodyRowsRedrawSignature = chromeBodyRowsRedrawSignature.value
 let lastChromePinnedBottomRowsRedrawSignature = chromePinnedBottomRowsRedrawSignature.value
 
 watch(
   chromeColumnsRevision,
   () => {
-    const nextSignature = chromeColumnsRedrawSignature.value
-    if (nextSignature === lastChromeColumnsRedrawSignature) {
+    const nextLeftSignature = leftChromeColumnsSignature.value
+    const nextCenterSignature = centerChromeColumnsSignature.value
+    const nextRightSignature = rightChromeColumnsSignature.value
+    const nextHeaderPivotGroupsSignature = headerPivotGroupsSignature.value
+    const leftChanged = nextLeftSignature !== lastLeftChromeColumnsRedrawSignature
+    const centerChanged = nextCenterSignature !== lastCenterChromeColumnsRedrawSignature
+    const rightChanged = nextRightSignature !== lastRightChromeColumnsRedrawSignature
+    const pivotGroupsChanged = nextHeaderPivotGroupsSignature !== lastHeaderPivotGroupsRedrawSignature
+    if (!leftChanged && !centerChanged && !rightChanged && !pivotGroupsChanged) {
       return
     }
-    lastChromeColumnsRedrawSignature = nextSignature
+    lastLeftChromeColumnsRedrawSignature = nextLeftSignature
+    lastCenterChromeColumnsRedrawSignature = nextCenterSignature
+    lastRightChromeColumnsRedrawSignature = nextRightSignature
+    lastHeaderPivotGroupsRedrawSignature = nextHeaderPivotGroupsSignature
+    if (centerChanged && !leftChanged && !rightChanged && !pivotGroupsChanged) {
+      scheduleGridChromeRedraw("center-scroll", "chrome-center-columns-revision")
+      return
+    }
     syncBodyViewportMetrics()
     scheduleGridChromeRedraw("full", "chrome-columns-revision")
   },
@@ -2121,6 +2125,7 @@ function hasVisibleInlineEditor(): boolean {
 const focusRuntime = useDataGridStageFocusRuntime({
   bodyShellRef,
   bodyViewportEl,
+  keyboardFocusTarget: verticalBodyViewportEl,
   leftPaneContentRef,
   rightPaneContentRef,
   leftBottomPaneContentRef,
@@ -2144,6 +2149,8 @@ const remountFocusSignature = computed(() => {
   const lastRow = displayRows.value[displayRows.value.length - 1]
   const firstColumn = visibleColumns.value[0]
   const lastColumn = visibleColumns.value[visibleColumns.value.length - 1]
+  const firstRenderedColumn = renderedColumns.value[0]
+  const lastRenderedColumn = renderedColumns.value[renderedColumns.value.length - 1]
   return [
     "focused",
     viewport.value.viewportRowStart,
@@ -2153,6 +2160,9 @@ const remountFocusSignature = computed(() => {
     visibleColumns.value.length,
     firstColumn?.key ?? "",
     lastColumn?.key ?? "",
+    renderedColumns.value.length,
+    firstRenderedColumn?.key ?? "",
+    lastRenderedColumn?.key ?? "",
   ].join("|")
 })
 
@@ -2273,10 +2283,18 @@ function handleStageFocusIn(event: FocusEvent): void {
   const focusedElement = event.target instanceof HTMLElement ? event.target : null
   const bodyCell = focusedElement?.closest<HTMLElement>(".grid-body-shell .grid-cell[data-row-index]")
   const rowIndex = Number(bodyCell?.dataset.rowIndex)
-  focusedBodyRowIndex.value = bodyCell && Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : null
-  focusedBodyColumnKey.value = bodyCell?.classList.contains("datagrid-stage__cell")
-    ? bodyCell.dataset.columnKey ?? null
-    : null
+  if (bodyCell && Number.isInteger(rowIndex) && rowIndex >= 0) {
+    focusedBodyRowIndex.value = rowIndex
+    focusedBodyColumnKey.value = bodyCell.classList.contains("datagrid-stage__cell")
+      ? bodyCell.dataset.columnKey ?? null
+      : null
+  } else if (isBodyGridFocusTarget(event.target)) {
+    // Keep the last body row axis when virtualization moves focus to the grid viewport.
+    focusedBodyColumnKey.value = null
+  } else {
+    focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
+  }
   if (focusedElement?.closest("[data-datagrid-row-index-header='true']")) {
     clearPendingRowIndexFocus()
   }
@@ -2292,12 +2310,16 @@ function handleStageClickCapture(): void {
 function handleStageFocusOut(event: FocusEvent): void {
   const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
   if (!nextTarget) {
-    focusedBodyRowIndex.value = null
-    focusedBodyColumnKey.value = null
+    if (!gridFocusOwned.value) {
+      focusedBodyRowIndex.value = null
+      focusedBodyColumnKey.value = null
+    }
     return
   }
-  if (!(nextTarget instanceof Element) || !nextTarget.closest(".grid-body-shell .grid-cell[data-row-index]")) {
+  if (!isBodyGridFocusTarget(nextTarget)) {
     focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
+  } else if (!(nextTarget instanceof Element) || !nextTarget.closest(".grid-body-shell .grid-cell[data-row-index]")) {
     focusedBodyColumnKey.value = null
   }
   if (!isBodyGridFocusTarget(nextTarget)) {

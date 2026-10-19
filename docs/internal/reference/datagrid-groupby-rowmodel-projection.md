@@ -166,3 +166,15 @@ Canonical helper:
 - indent is derived from `level`
 - disclosure icon is derived from `isGroup` and `isExpanded`
 - virtualization remains tree-agnostic
+
+## Default App Grouping Presentation
+
+- Grouping from the built-in column menu hides grouped fields while grouping is active. The tree column is moved to the first position in the center zone and unpinned; it prefers the first visible column with an authored `groupCellRenderer`, then falls back to the first visible ungrouped column.
+- After grouping changes the visible column layout, the viewport scrolls the tree column into view.
+- Built-in grouping starts collapsed unless `expandedByDefault` is explicitly set.
+- When another grouping field is added from the column menu, existing parent levels are expanded and the newly added deepest level remains collapsed. The first grouping field therefore still starts fully collapsed.
+- All group levels render in the tree column; deeper levels are indented as a tree. Its column menu is the only one that offers `Ungroup all`.
+- With no explicit aggregation model, numeric, currency, and percent columns use `sum` in group rows. Other columns stay blank except for the group label column.
+- Authored cell renderers are skipped when their raw cell value is null, undefined, or an empty string, so empty grouped and placeholder cells do not render empty badges or controls.
+- An explicitly configured aggregation model takes precedence over these defaults.
+- The grouped shell showcase supplies a separate `Group` display column, keeps `Task` as a data column, and excludes `ID` from its aggregation model.

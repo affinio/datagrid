@@ -62,6 +62,8 @@ function createChromeCanvasApi(
     verticalBodyViewport?: HTMLElement
   } = {},
   headerRightEdgeLines = false,
+  canvasTargets = true,
+  onRenderModelRead: () => void = () => undefined,
 ) {
   const stageRoot = elements.stageRoot ?? document.createElement("div")
   document.body.append(stageRoot)
@@ -69,7 +71,9 @@ function createChromeCanvasApi(
   const bodyViewport = elements.bodyViewport ?? document.createElement("div")
   const verticalBodyViewport = elements.verticalBodyViewport ?? document.createElement("div")
 
-  const canvasRefs = Array.from({ length: 9 }, () => ref(document.createElement("canvas")))
+  const canvasRefs = Array.from({ length: 9 }, () => ref<HTMLCanvasElement | null>(
+    canvasTargets ? document.createElement("canvas") : null,
+  ))
 
   return useDataGridStageChromeCanvas({
     stageRootEl: ref(stageRoot),
@@ -95,9 +99,18 @@ function createChromeCanvasApi(
     bodyViewportTopOffset: ref(0),
     headerShellHeight: ref(24),
     headerViewportClientWidth: ref(160),
-    chromeRenderModel: computed(() => createRenderModel()),
-    headerChromeRenderModel: computed(() => createRenderModel(headerRightEdgeLines)),
-    pinnedBottomChromeRenderModel: computed(() => createRenderModel()),
+    chromeRenderModel: computed(() => {
+      onRenderModelRead()
+      return createRenderModel()
+    }),
+    headerChromeRenderModel: computed(() => {
+      onRenderModelRead()
+      return createRenderModel(headerRightEdgeLines)
+    }),
+    pinnedBottomChromeRenderModel: computed(() => {
+      onRenderModelRead()
+      return createRenderModel()
+    }),
     hasPivotHeaderGroups: computed(() => false),
     perfTraceEnabled,
   })
@@ -132,6 +145,20 @@ describe("useDataGridStageChromeCanvas", () => {
       pinnedBottomLineCount: 6,
       bodyBandCount: 3,
       pinnedBottomBandCount: 3,
+    })
+  })
+
+  it("skips render model reads when a redraw has no target canvases", () => {
+    const onRenderModelRead = vi.fn()
+    const api = createChromeCanvasApi(true, {}, false, false, onRenderModelRead)
+
+    api.flushGridChromeRedraw("center-scroll", "center-columns-revision")
+
+    expect(onRenderModelRead).not.toHaveBeenCalled()
+    expect(resolveDataGridPerfStore()?.latest("chromeDraw")).toMatchObject({
+      redrawMode: "center-scroll",
+      drawnPaneCount: 0,
+      skippedNoCanvasTarget: 1,
     })
   })
 

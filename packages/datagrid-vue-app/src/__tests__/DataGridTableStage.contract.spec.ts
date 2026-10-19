@@ -2477,6 +2477,87 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("keeps the focused row index highlighted when the anchor cell falls back to the viewport", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+        {
+          rowCount: 2,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        },
+      ),
+    })
+
+    const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="1"]')
+    const viewport = wrapper.find(".grid-body-shared-vertical-scroll-shell")
+    const rowIndexCell = wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r1"]')
+
+    anchorCell.element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    await nextTick()
+    expect(rowIndexCell.classes()).toContain("grid-cell--focus-axis")
+
+    anchorCell.element.dispatchEvent(new FocusEvent("focusout", {
+      bubbles: true,
+    }))
+    viewport.element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    await nextTick()
+
+    expect(rowIndexCell.classes()).toContain("grid-cell--focus-axis")
+
+    const outsideTarget = document.createElement("button")
+    document.body.append(outsideTarget)
+    viewport.element.dispatchEvent(new FocusEvent("focusout", {
+      bubbles: true,
+      relatedTarget: outsideTarget,
+    }))
+    await nextTick()
+
+    expect(rowIndexCell.classes()).not.toContain("grid-cell--focus-axis")
+
+    outsideTarget.remove()
+    wrapper.unmount()
+  })
+
+  it("restores keyboard ownership when horizontal virtualization removes the focused anchor", async () => {
+    const columns = createColumns()
+    const handleViewportKeydown = vi.fn()
+    const createProps = (renderedColumns: readonly DataGridColumnSnapshot[]) => createStageProps(
+      (rowOffset, columnIndex) => rowOffset === 0 && columnIndex === 1,
+      {
+        rowCount: 2,
+        visibleColumns: columns,
+        renderedColumns,
+        selectionRange: { startRow: 0, endRow: 0, startColumn: 1, endColumn: 1 },
+        selectionAnchorCell: { rowIndex: 0, columnIndex: 1 },
+        handleViewportKeydown,
+      },
+    )
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createProps([columns[1]!, columns[2]!]),
+    })
+
+    const anchorCell = wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="1"]')
+    const keyboardOwner = wrapper.find(".grid-body-shared-vertical-scroll-shell")
+    ;(anchorCell.element as HTMLElement).focus()
+    await nextTick()
+
+    await wrapper.setProps(createProps([columns[2]!]))
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.find('.datagrid-stage__cell[data-row-index="0"][data-column-index="1"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(keyboardOwner.element)
+
+    await keyboardOwner.trigger("keydown", { key: "ArrowRight" })
+    expect(handleViewportKeydown).toHaveBeenCalledTimes(1)
+    expect(handleViewportKeydown.mock.calls[0]?.[0]).toMatchObject({ key: "ArrowRight" })
+
+    wrapper.unmount()
+  })
+
   it("uses the body viewport as the fallback tab stop when the anchor is not mounted", () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,

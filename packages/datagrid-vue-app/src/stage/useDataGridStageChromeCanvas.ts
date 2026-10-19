@@ -465,6 +465,50 @@ export function useDataGridStageChromeCanvas(
     gridChromeAnimationFrame = 0
     pendingGridChromeRedrawMode = "full"
     pendingGridChromeRedrawSources = "none"
+    const hasTargetCanvas = mode === "full"
+      ? Boolean(
+          options.leftHeaderChromeCanvasEl.value
+          || options.centerHeaderChromeCanvasEl.value
+          || options.rightHeaderChromeCanvasEl.value
+          || options.leftChromeCanvasEl.value
+          || options.centerChromeCanvasEl.value
+          || options.rightChromeCanvasEl.value
+          || options.leftBottomChromeCanvasEl.value
+          || options.centerBottomChromeCanvasEl.value
+          || options.rightBottomChromeCanvasEl.value,
+        )
+      : mode === "center-scroll"
+        ? Boolean(
+            options.centerHeaderChromeCanvasEl.value
+            || options.centerChromeCanvasEl.value
+            || options.centerBottomChromeCanvasEl.value,
+          )
+        : Boolean(
+            options.leftChromeCanvasEl.value
+            || options.centerChromeCanvasEl.value
+            || options.rightChromeCanvasEl.value,
+          )
+    if (!hasTargetCanvas) {
+      if (options.perfTraceEnabled) {
+        const finishedAt = resolveDataGridPerfNow()
+        recordDataGridPerfSample({
+          scope: "chromeDraw",
+          ts: finishedAt,
+          totalMs: finishedAt - startedAt,
+          redrawMode: mode,
+          redrawSource: normalizeGridChromeRedrawSource(source),
+          redrawSources: sources,
+          drawnPaneCount: 0,
+          bodyLineCount: 0,
+          headerLineCount: 0,
+          pinnedBottomLineCount: 0,
+          bodyBandCount: 0,
+          pinnedBottomBandCount: 0,
+          skippedNoCanvasTarget: 1,
+        })
+      }
+      return
+    }
     const headerRenderModel = options.headerChromeRenderModel.value
     const renderModel = options.chromeRenderModel.value
     const bottomRenderModel = options.pinnedBottomChromeRenderModel.value

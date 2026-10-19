@@ -80,6 +80,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object"
 }
 
+function isEmptyCellRendererValue(value: unknown): boolean {
+  return value == null || (typeof value === "string" && value.trim().length === 0)
+}
+
 function normalizeSelectEditorOption(option: unknown): DataGridTableStageSelectEditorOption {
   if (option && typeof option === "object" && "label" in option) {
     const record = option as { label?: unknown; value?: unknown }
@@ -414,6 +418,10 @@ export function useDataGridStageCellRendering(
       const surface = resolveRowSurfaceContext(row)
       const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
       const groupRow = row as DataGridTableRow<Record<string, unknown>> & { kind: "group" }
+      const value = options.cells.value.readCell(row, column.key)
+      if (typeof groupRenderer !== "function" && isEmptyCellRendererValue(value)) {
+        return displayValue
+      }
       const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
         ? Math.max(0, Math.trunc(row.groupMeta?.childrenCount as number))
         : 0
@@ -425,7 +433,7 @@ export function useDataGridStageCellRendering(
         rowOffset,
         column,
         columnIndex,
-        value: options.cells.value.readCell(row, column.key),
+        value,
         displayValue,
         interactive,
       }
@@ -448,6 +456,11 @@ export function useDataGridStageCellRendering(
         })
       }
       if (shouldDeferRenderer("groupCellRenderer", row, column)) return displayValue
+      const treeColumnKey = options.mode.value === "tree"
+        ? "name"
+        : options.visibleColumns.value.find(candidate => typeof candidate.column.groupCellRenderer === "function")?.key
+          ?? options.visibleColumns.value[0]?.key
+          ?? "name"
       return invokeDataGridStageRendererWithFallback({
         scope: "groupCellRenderer",
         rowKind: "group",
@@ -461,7 +474,7 @@ export function useDataGridStageCellRendering(
             childrenCount,
             isLabelColumn: options.mode.value === "tree"
               ? column.key === "name"
-              : column.key === (options.visibleColumns.value[0]?.key ?? "name"),
+              : column.key === treeColumnKey,
             renderMeta: {
               ...renderMeta,
               isGroup: true,
@@ -484,6 +497,14 @@ export function useDataGridStageCellRendering(
     if (typeof renderer !== "function") {
       return displayValue
     }
+    const placeholderValue = isDataGridPlaceholderSurfaceRow(row)
+      ? readRowCellValue(row, column)
+      : undefined
+    const rawValue = placeholderValue ?? options.cells.value.readCell(row, column.key)
+    if (isEmptyCellRendererValue(rawValue)) {
+      return displayValue
+    }
+    const value = isDataGridPlaceholderSurfaceRow(row) ? String(rawValue) : rawValue as string
     const surface = resolveRowSurfaceContext(row)
     const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
     if (shouldDeferRenderer("cellRenderer", row, column)) return displayValue
@@ -499,7 +520,7 @@ export function useDataGridStageCellRendering(
         rowOffset,
         column,
         columnIndex,
-        value: options.cells.value.readCell(row, column.key),
+        value,
         displayValue,
         interactive,
       },

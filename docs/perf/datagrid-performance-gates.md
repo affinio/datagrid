@@ -152,6 +152,7 @@ Current app-stage pointer previews use direct mousemove application for drag sel
   - `bench:datagrid:enterprise:a11y:browser:assert` runs the `a11y-large-grid-scroll` Chromium scenario at `50k` rows and `64` columns with vertical and horizontal scroll.
   - The gate reuses virtualization and resource budgets, sets `BENCH_A11Y_FAIL_ON_WARNINGS=true`, and writes `artifacts/performance/bench-datagrid-enterprise-a11y-browser.assert.json`.
   - A11Y diagnostics assert the stage-native normal-mode tab-stop invariant, absence of app-stage `aria-activedescendant`, resolvable ARIA id references, no duplicate mounted ids, stable header/body ids, matching rendered row/column indexes, and bounded rendered ARIA node/attribute counts.
+  - The interactive sandbox limits row/column presets to `6.4M` logical cells, matching its supported `50k × 128` stress route. Larger combinations are disabled in the controls, and oversized query presets are reduced to the nearest allowed column count; this is a sandbox resource guard, not a DataGrid package limit.
 - Benchmark gates remain `PERF_BUDGET_MAX_SELECTION_DRAG_P95_MS=5` and `PERF_BUDGET_MAX_SELECTION_DRAG_P99_MS=8`; broaden these only with benchmark evidence.
 - Rendering contracts and future gates:
   - Public `cellRenderer` and `groupCellRenderer` callbacks run synchronously inside the Vue render pass for rendered center and pinned cells.

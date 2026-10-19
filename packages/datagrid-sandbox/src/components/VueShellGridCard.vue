@@ -909,6 +909,8 @@ function renderShellGroupLabel(field: string): string {
   return field;
 }
 
+const SHELL_GROUP_COLUMN_KEY = "__shell_group__";
+
 function buildShellGroupCellRenderer(columnKey: string) {
   return ({ group, displayValue }: {
     group: {
@@ -922,8 +924,11 @@ function buildShellGroupCellRenderer(columnKey: string) {
     displayValue: string;
   }) => {
     const disclosure = group.renderMeta.isExpanded ? "▾" : "▸";
-    if (columnKey === "name") {
-      return h("div", { class: "shell-group-line" }, [
+    if (columnKey === SHELL_GROUP_COLUMN_KEY && group.isLabelColumn) {
+      return h("div", {
+        class: "shell-group-line",
+        style: { marginInlineStart: `${Math.max(0, group.renderMeta.level) * 16}px` },
+      }, [
         h("button", {
           type: "button",
           class: "shell-group-trigger",
@@ -942,15 +947,7 @@ function buildShellGroupCellRenderer(columnKey: string) {
       ]);
     }
 
-    if (columnKey === "id") {
-      return h("span", { class: "shell-group-secondary shell-group-secondary--count" }, `${group.childrenCount} rows`);
-    }
-
-    if (!group.isLabelColumn) {
-      return displayValue;
-    }
-
-    return h("span", { class: "shell-group-secondary" }, `${renderShellGroupLabel(group.field)}: ${group.value}`);
+    return displayValue;
   };
 }
 
@@ -1295,6 +1292,7 @@ function createGroupedShowcaseColumnState(
 ): DataGridUnifiedColumnState {
   const normalized = normalizeColumnState(existingState, columns);
   const ordered = applySandboxColumnOrder(normalized, [
+    SHELL_GROUP_COLUMN_KEY,
     "name",
     "region",
     "status",
@@ -1314,6 +1312,7 @@ function createGroupedShowcaseColumnState(
     order: [...ordered.order],
     visibility: {
       ...ordered.visibility,
+      [SHELL_GROUP_COLUMN_KEY]: true,
       name: true,
       region: true,
       status: true,
@@ -1325,7 +1324,8 @@ function createGroupedShowcaseColumnState(
     widths: { ...ordered.widths },
     pins: {
       ...ordered.pins,
-      name: "left",
+      [SHELL_GROUP_COLUMN_KEY]: "none",
+      name: "none",
       region: "none",
       id: "none",
       amount: "none",
@@ -1337,38 +1337,11 @@ function createGroupedShowcaseColumnState(
 function createGroupedShowcaseAggregationModel(
   columns: readonly DataGridColumnInput[],
 ): DataGridAggregationModel<Record<string, unknown>> {
-  const aggregationColumns: Array<DataGridAggregationModel<Record<string, unknown>>["columns"][number]> = [];
-
-  for (const column of columns) {
-    switch (column.key) {
-      case "id":
-        aggregationColumns.push({ key: column.key, op: "count" });
-        break;
-      case "amount":
-        aggregationColumns.push({ key: column.key, op: "sum" });
-        break;
-      case "start":
-      case "baselineStart":
-        aggregationColumns.push({ key: column.key, op: "min" });
-        break;
-      case "end":
-      case "baselineEnd":
-      case "updatedAt":
-        aggregationColumns.push({ key: column.key, op: "max" });
-        break;
-      case "progress":
-        aggregationColumns.push({ key: column.key, op: "avg" });
-        break;
-      case "critical":
-        aggregationColumns.push({ key: column.key, op: "max" });
-        break;
-      case "name":
-        break;
-      default:
-        aggregationColumns.push({ key: column.key, op: "first" });
-        break;
-    }
-  }
+  const aggregationColumns: Array<DataGridAggregationModel<Record<string, unknown>>["columns"][number]> = columns
+    .filter(column => column.key !== "id" && (
+      column.dataType === "number" || column.dataType === "currency" || column.dataType === "percent"
+    ))
+    .map(column => ({ key: column.key, op: "sum" }));
 
   return {
     columns: aggregationColumns,
@@ -1634,7 +1607,7 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
     return applySandboxColumnLabelOverrides(builtColumns);
   }
 
-  return applySandboxColumnLabelOverrides(builtColumns.map((column) => {
+  const decoratedColumns = builtColumns.map((column) => {
     const benchmarkCellRenderer = shouldUseShellBenchmarkRenderer(column)
       ? buildShellBenchmarkCellRenderer(column.key)
       : null;
@@ -1650,11 +1623,10 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
           }, displayValue)),
       };
     }
-    if (column.key === "name" || column.key === "id") {
+    if (column.key === "name") {
       return {
         ...column,
         ...(benchmarkCellRenderer ? { cellRenderer: benchmarkCellRenderer } : {}),
-        groupCellRenderer: buildShellGroupCellRenderer(column.key),
       };
     }
     if (benchmarkCellRenderer) {
@@ -1664,7 +1636,25 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
       };
     }
     return column;
-  }));
+  });
+  if (!groupByModel.value?.fields.length) {
+    return applySandboxColumnLabelOverrides(decoratedColumns);
+  }
+  const groupColumn: DataGridAppColumnInput = {
+    key: SHELL_GROUP_COLUMN_KEY,
+    label: "Group",
+    initialState: { width: 220 },
+    valueGetter: () => "",
+    capabilities: {
+      groupable: false,
+      sortable: false,
+      filterable: false,
+      searchable: false,
+      editable: false,
+    },
+    groupCellRenderer: buildShellGroupCellRenderer(SHELL_GROUP_COLUMN_KEY),
+  };
+  return applySandboxColumnLabelOverrides([groupColumn, ...decoratedColumns]);
 });
 const groupBy = computed(() => {
   if (props.mode !== "base") {
@@ -2179,7 +2169,7 @@ watch(
     themePreset.value = "sugar";
     rowCount.value = 1000;
     columnCount.value = Math.max(columnCount.value, 16);
-    groupByModel.value = { fields: ["region"], expandedByDefault: true };
+    groupByModel.value = { fields: ["region"], expandedByDefault: false };
     ganttZoomLevel.value = "week";
     rowRenderMode.value = "virtualization";
     rowHeightMode.value = "fixed";
@@ -2353,9 +2343,13 @@ watch(
       const nextFields = groupByModel.value.fields.filter((field) => (
         nextColumns.some((column) => column.key === field)
       ));
-      groupByModel.value = nextFields.length > 0
-        ? { ...groupByModel.value, fields: nextFields }
-        : null;
+      const fieldsUnchanged = nextFields.length === groupByModel.value.fields.length
+        && nextFields.every((field, index) => field === groupByModel.value?.fields[index]);
+      if (!fieldsUnchanged) {
+        groupByModel.value = nextFields.length > 0
+          ? { ...groupByModel.value, fields: nextFields }
+          : null;
+      }
     }
     selectionAggregatesLabel.value = "";
   },

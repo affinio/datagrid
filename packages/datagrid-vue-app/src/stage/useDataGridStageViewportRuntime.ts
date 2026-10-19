@@ -132,6 +132,8 @@ export function useDataGridStageViewportRuntime(
   const bodyViewportTopOffset = ref(0)
   const isBodyViewportScrolling = ref(false)
   const isBodyViewportScrollIdle = ref(true)
+  let cachedHeaderViewportRoot: HTMLElement | null = null
+  let cachedHeaderViewportElement: HTMLElement | null = null
   let bodyViewportScrollIdleCallbackQueued = false
   let bodyViewportScrollFrame: number | null = null
   let bodyViewportMetricsFrame: number | null = null
@@ -160,6 +162,18 @@ export function useDataGridStageViewportRuntime(
   const resolveVerticalBodyViewport = (): HTMLElement | null => verticalBodyViewportEl.value
   const resolveCenterHorizontalViewport = (): HTMLElement | null => centerHorizontalViewportEl.value
 
+  function resolveHeaderViewport(): HTMLElement | null {
+    const root = options.stageRootEl.value
+    if (root !== cachedHeaderViewportRoot) {
+      cachedHeaderViewportRoot = root
+      cachedHeaderViewportElement = null
+    }
+    if (root && (!cachedHeaderViewportElement || !root.contains(cachedHeaderViewportElement))) {
+      cachedHeaderViewportElement = root.querySelector<HTMLElement>(".grid-header-viewport")
+    }
+    return cachedHeaderViewportElement
+  }
+
   function syncSharedVerticalScrollOffset(scrollTop: number): void {
     const element = resolveVerticalBodyViewport()
     if (!element) {
@@ -172,7 +186,7 @@ export function useDataGridStageViewportRuntime(
   }
 
   function syncSharedHorizontalPeers(scrollLeft: number, source?: HTMLElement | null): void {
-    const headerViewport = options.stageRootEl.value?.querySelector<HTMLElement>(".grid-header-viewport") ?? null
+    const headerViewport = resolveHeaderViewport()
     if (headerViewport && headerViewport !== source && headerViewport.scrollLeft !== scrollLeft) {
       headerViewport.scrollLeft = scrollLeft
     }

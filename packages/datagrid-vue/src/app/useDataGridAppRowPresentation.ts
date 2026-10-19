@@ -24,10 +24,7 @@ export interface UseDataGridAppRowPresentationResult<TRow extends Record<string,
 export function useDataGridAppRowPresentation<TRow extends Record<string, unknown>>(
   options: UseDataGridAppRowPresentationOptions<TRow>,
 ): UseDataGridAppRowPresentationResult<TRow> {
-  const rowIndexLabel = (row: DataGridRowNode<TRow>, rowOffset: number): string => {
-    if (row.kind === "group") {
-      return ""
-    }
+  const rowIndexLabel = (_row: DataGridRowNode<TRow>, rowOffset: number): string => {
     return String(options.viewportRowStart.value + rowOffset + 1)
   }
 
@@ -38,7 +35,7 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
   const readCell = (row: DataGridRowNode<TRow>, key: string): string => {
     if (row.kind === "group") {
       const level = Math.max(0, row.groupMeta?.level ?? 0)
-      const indent = "· ".repeat(level)
+      const indent = level > 0 ? `${"　".repeat(level - 1)}└─ ` : ""
       const caret = row.state.expanded ? "▾" : "▸"
       const isGroupLabelColumn = options.mode.value === "tree"
         ? key === "name"
@@ -49,8 +46,7 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
       if (options.mode.value === "tree") {
         return ""
       }
-      const groupValue = (row.data as Record<string, unknown>)[key]
-        ?? row.groupMeta?.aggregates?.[key]
+      const groupValue = row.groupMeta?.aggregates?.[key]
       return groupValue == null ? "" : String(groupValue)
     }
     const value = (row.data as Record<string, unknown>)[key]
@@ -60,7 +56,7 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
   const readDisplayCell = (row: DataGridRowNode<TRow>, key: string): string => {
     if (row.kind === "group") {
       const level = Math.max(0, row.groupMeta?.level ?? 0)
-      const indent = "· ".repeat(level)
+      const indent = level > 0 ? `${"　".repeat(level - 1)}└─ ` : ""
       const caret = row.state.expanded ? "▾" : "▸"
       const isGroupLabelColumn = options.mode.value === "tree"
         ? key === "name"
@@ -71,11 +67,13 @@ export function useDataGridAppRowPresentation<TRow extends Record<string, unknow
       if (options.mode.value === "tree") {
         return ""
       }
-      const groupValue = (row.data as Record<string, unknown>)[key]
-        ?? row.groupMeta?.aggregates?.[key]
+      const groupValue = row.groupMeta?.aggregates?.[key]
+      if (groupValue == null) {
+        return ""
+      }
         const column = resolveColumnDef(key)
         if (!column) {
-          return groupValue == null ? "" : String(groupValue)
+        return String(groupValue)
         }
         return buildDataGridCellRenderModel({
           column,

@@ -94,6 +94,60 @@ describe("useDataGridAppRowPresentation contract", () => {
     expect(expandedLabel).toBe("▾ team: Platform (3)")
   })
 
+  it("numbers visible group rows in the current projected row order", () => {
+    const presentation = useDataGridAppRowPresentation({
+      mode: ref("base"),
+      runtime: {
+        api: { rows: { expandGroup: vi.fn(), collapseGroup: vi.fn() } },
+        columnSnapshot: createRuntimeColumnSnapshot([]),
+      } as never,
+      viewportRowStart: ref(4),
+      firstColumnKey: ref("name"),
+    })
+    const group = {
+      kind: "group",
+      rowId: "group:team=platform",
+      data: {},
+      groupMeta: { level: 0, groupField: "team", groupValue: "Platform", childrenCount: 3, groupKey: "team:platform" },
+    } as never
+
+    expect(presentation.rowIndexLabel(group, 0)).toBe("5")
+    expect(presentation.rowIndexLabel(group, 1)).toBe("6")
+  })
+
+  it("keeps non-aggregated group fields blank instead of reusing a source value", () => {
+    const presentation = useDataGridAppRowPresentation({
+      mode: ref("base"),
+      runtime: {
+        api: { rows: { expandGroup: vi.fn(), collapseGroup: vi.fn() } },
+        columnSnapshot: createRuntimeColumnSnapshot([
+          { key: "critical", dataType: "boolean" },
+          { key: "amount", dataType: "number" },
+        ]),
+      } as never,
+      viewportRowStart: ref(0),
+      firstColumnKey: ref("name"),
+    })
+    const group = {
+      kind: "group",
+      rowId: "group:team=platform",
+      data: { critical: true, amount: 999 },
+      state: { expanded: false },
+      groupMeta: {
+        level: 0,
+        groupField: "team",
+        groupValue: "Platform",
+        childrenCount: 3,
+        groupKey: "team:platform",
+        aggregates: { amount: 42 },
+      },
+    } as never
+
+    expect(presentation.readCell(group, "critical")).toBe("")
+    expect(presentation.readDisplayCell(group, "critical")).toBe("")
+    expect(presentation.readCell(group, "amount")).toBe("42")
+  })
+
   it("formats display values using the canonical column presentation format without changing raw cell reads", () => {
     const presentation = useDataGridAppRowPresentation({
       mode: ref("base"),

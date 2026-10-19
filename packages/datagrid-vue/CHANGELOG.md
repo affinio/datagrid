@@ -1,5 +1,11 @@
 # @affino/datagrid-vue
 
+## 0.10.4
+
+### Fixed
+
+- Preserved grouped row presentation and viewport updates through the Vue adapter.
+
 ## 0.10.3
 
 ### Fixed

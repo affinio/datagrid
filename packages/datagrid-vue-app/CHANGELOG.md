@@ -1,5 +1,11 @@
 # @affino/datagrid-vue-app
 
+## 0.16.1
+
+### Changed
+
+- Improved grouped-row rendering, placeholder surfaces, and viewport handling in the grid stage.
+
 ## 0.16.0
 
 ### Removed

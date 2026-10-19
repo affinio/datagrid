@@ -36,13 +36,13 @@ export function resolveDataGridGroupBy(
   }
   if (typeof input === "string") {
     const field = input.trim()
-    return field ? { fields: [field], expandedByDefault: true } : null
+    return field ? { fields: [field], expandedByDefault: false } : null
   }
   if (Array.isArray(input)) {
     const fields = input
       .map(field => field.trim())
       .filter(field => field.length > 0)
-    return fields.length > 0 ? { fields: [...fields], expandedByDefault: true } : null
+    return fields.length > 0 ? { fields: [...fields], expandedByDefault: false } : null
   }
   return input as DataGridGroupBySpec
 }

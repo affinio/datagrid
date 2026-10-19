@@ -168,7 +168,7 @@ const DATA_GRID_SLOW_SORT_THRESHOLD_MS = 50
 
 type DataGridColumnFilterEntry = DataGridFilterSnapshot["columnFilters"][string]
 type DataGridAdvancedExpressionEntry = NonNullable<DataGridFilterSnapshot["advancedExpression"]>
-type DataGridDefaultRendererRuntime = {
+export type DataGridDefaultRendererRuntime = {
   api: UseDataGridRuntimeResult<Record<string, unknown>>["api"]
   syncBodyRowsInRange: UseDataGridRuntimeResult<Record<string, unknown>>["syncBodyRowsInRange"]
   setViewportRange: UseDataGridRuntimeResult<Record<string, unknown>>["setViewportRange"]
@@ -179,6 +179,7 @@ type DataGridDefaultRendererRuntime = {
   setVirtualWindowRange?: (range: { start: number; end: number }) => void
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
+  scrollToColumn: UseDataGridRuntimeResult<Record<string, unknown>>["scrollToColumn"]
 }
 
 type DataGridProjectedColumnZone = "pinnedLeft" | "center" | "pinnedRight"
@@ -1345,7 +1346,6 @@ export default defineComponent({
     })
     const rowHeightMode = ref(props.rowHeightMode)
     const normalizedBaseRowHeight = computed(() => normalizeBaseRowHeight(props.baseRowHeight))
-    const firstColumnKey = computed<string>(() => visibleColumns.value[0]?.key ?? "name")
     const columnLabelByKey = computed(() => {
       const map = new Map<string, string>()
       for (const column of allColumns.value) {
@@ -1460,6 +1460,110 @@ export default defineComponent({
       void rowVersion.value
       return cloneGroupBySpec(props.runtime.api.rows.getSnapshot().groupBy)
     })
+    const groupedColumnVisibilityBeforeHide = new Map<string, boolean>()
+    const resolveGroupTreeColumnKey = (groupBy: DataGridGroupBySpec | null): string | null => {
+      if (!groupBy?.fields.length) {
+        return null
+      }
+      const groupedFields = new Set(groupBy.fields)
+      const snapshot = props.runtime.api.columns.getSnapshot()
+      const initiallyVisibleColumns = snapshot.columns.filter(column => (
+        groupedColumnVisibilityBeforeHide.get(column.key) ?? column.visible
+      ))
+      const ungroupedColumns = initiallyVisibleColumns.filter(column => !groupedFields.has(column.key))
+      return initiallyVisibleColumns.find(column => typeof (
+        column.column as typeof column.column & { groupCellRenderer?: unknown }
+      ).groupCellRenderer === "function")?.key
+        ?? ungroupedColumns[0]?.key
+        ?? initiallyVisibleColumns[0]?.key
+        ?? null
+    }
+    const syncGroupedColumnVisibility = (groupBy: DataGridGroupBySpec | null): void => {
+      const groupedFields = new Set(groupBy?.fields ?? [])
+      const treeColumnKey = resolveGroupTreeColumnKey(groupBy)
+      for (const [columnKey, wasVisible] of groupedColumnVisibilityBeforeHide) {
+        if (groupedFields.has(columnKey)) {
+          continue
+        }
+        props.runtime.api.columns.setVisibility(columnKey, wasVisible)
+        groupedColumnVisibilityBeforeHide.delete(columnKey)
+      }
+      for (const columnKey of groupedFields) {
+        if (!groupedColumnVisibilityBeforeHide.has(columnKey)) {
+          const column = props.runtime.api.columns.get(columnKey)
+          if (!column) {
+            continue
+          }
+          groupedColumnVisibilityBeforeHide.set(columnKey, column.visible)
+        }
+        const shouldBeVisible = columnKey === treeColumnKey
+          ? groupedColumnVisibilityBeforeHide.get(columnKey) === true
+          : false
+        if (props.runtime.api.columns.get(columnKey)?.visible !== shouldBeVisible) {
+          props.runtime.api.columns.setVisibility(columnKey, shouldBeVisible)
+        }
+      }
+      if (treeColumnKey) {
+        const columnsApi = props.runtime.api.columns as typeof props.runtime.api.columns & DataGridProjectedColumnsApi
+        const snapshot = props.runtime.api.columns.getSnapshot()
+        const centerOrder = snapshot.zoneOrder.center ?? snapshot.centerColumns.map(column => column.key)
+        const treeColumn = snapshot.byKey[treeColumnKey]
+        if (treeColumn?.pin !== "none") {
+          columnsApi.setPin(treeColumnKey, "none")
+        }
+        if (centerOrder[0] !== treeColumnKey) {
+          props.runtime.api.columns.setOrder([treeColumnKey, ...snapshot.order.filter(key => key !== treeColumnKey)])
+          columnsApi.setZoneOrder?.("center", [treeColumnKey, ...centerOrder.filter(key => key !== treeColumnKey)])
+        }
+      }
+    }
+    watch([currentGroupBy, allColumns], ([groupBy]) => syncGroupedColumnVisibility(groupBy), {
+      immediate: true,
+      flush: "post",
+    })
+    const firstColumnKey = computed<string>(() => (
+      resolveGroupTreeColumnKey(currentGroupBy.value)
+      ?? visibleColumns.value[0]?.key
+      ?? "name"
+    ))
+    const defaultGroupingAggregationModelKey = ref<string | null>(null)
+    watch(
+      [currentGroupBy, currentAggregationModel],
+      ([groupBy, aggregationModel]) => {
+        const currentModelKey = aggregationModel ? JSON.stringify(aggregationModel) : null
+        if (!groupBy) {
+          if (defaultGroupingAggregationModelKey.value && currentModelKey === defaultGroupingAggregationModelKey.value) {
+            props.runtime.api.rows.setAggregationModel(null)
+          }
+          defaultGroupingAggregationModelKey.value = null
+          return
+        }
+        if (aggregationModel && currentModelKey !== defaultGroupingAggregationModelKey.value) {
+          return
+        }
+        const numericColumns = allColumns.value.filter(column => (
+          column.column.dataType === "number"
+          || column.column.dataType === "currency"
+          || column.column.dataType === "percent"
+        ))
+        if (numericColumns.length === 0) {
+          return
+        }
+        const nextModel: DataGridAggregationModel<Record<string, unknown>> = {
+          columns: numericColumns.map(column => ({
+            key: column.key,
+            field: column.column.field ?? column.key,
+            op: "sum",
+          })),
+        }
+        const nextModelKey = JSON.stringify(nextModel)
+        defaultGroupingAggregationModelKey.value = nextModelKey
+        if (currentModelKey !== nextModelKey) {
+          props.runtime.api.rows.setAggregationModel(nextModel)
+        }
+      },
+      { immediate: true },
+    )
     const aggregationPanelItems = computed<readonly DataGridAggregationPanelItem[]>(() => {
       const enabledByKey = new Map<string, DataGridAggOp>(
         (aggregationDraftModel.value?.columns ?? []).map(column => [column.key, column.op]),
@@ -1574,7 +1678,14 @@ export default defineComponent({
     }
 
     const isColumnGrouped = (columnKey: string): boolean => {
-      return resolveColumnGroupOrder(columnKey) !== null
+      if (resolveColumnGroupOrder(columnKey) !== null) {
+        return true
+      }
+      const groupedFields = currentGroupBy.value?.fields
+      if (!groupedFields?.length) {
+        return false
+      }
+      return resolveGroupTreeColumnKey(currentGroupBy.value) === columnKey
     }
 
     const applySortAndFilter = (
@@ -2100,13 +2211,47 @@ export default defineComponent({
       const current = currentGroupBy.value
       const nextFields = grouped
         ? Array.from(new Set([...(current?.fields ?? []), columnKey]))
-        : (current?.fields ?? []).filter(field => field !== columnKey)
-      props.runtime.api.rows.setGroupBy(nextFields.length > 0
-        ? {
-            fields: nextFields,
-            expandedByDefault: current?.expandedByDefault ?? true,
+        : []
+      if (grouped && !current?.fields.includes(columnKey)) {
+        const columnsApi = props.runtime.api.columns as typeof props.runtime.api.columns & DataGridProjectedColumnsApi
+        const snapshot = props.runtime.api.columns.getSnapshot()
+        columnsApi.setPin(columnKey, "none")
+        const centerOrder = snapshot.zoneOrder.center ?? snapshot.centerColumns.map(column => column.key)
+        props.runtime.api.columns.setOrder([columnKey, ...snapshot.order.filter(key => key !== columnKey)])
+        columnsApi.setZoneOrder?.("center", [columnKey, ...centerOrder.filter(key => key !== columnKey)])
+      }
+      if (nextFields.length === 0) {
+        props.runtime.api.rows.setGroupBy(null)
+        return
+      }
+
+      props.runtime.api.rows.setGroupBy({
+        fields: nextFields,
+        expandedByDefault: false,
+      })
+
+      requestDataGridAnimationFrame(() => {
+        const treeColumnKey = firstColumnKey.value
+        if (treeColumnKey) {
+          props.runtime.scrollToColumn({ columnKey: treeColumnKey, align: "nearest" })
+        }
+      })
+
+      // Keep the newly added grouping level collapsed while opening the
+      // already-existing levels so the user can see the new hierarchy.
+      for (let level = 0; level < nextFields.length - 1; level += 1) {
+        const rowCount = props.runtime.api.rows.getSnapshot().rowCount
+        const groupKeys = new Set<string>()
+        for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+          const row = props.runtime.getBodyRowAtIndex(rowIndex)
+          if (row?.kind === "group" && row.groupMeta?.level === level && row.groupMeta.groupKey) {
+            groupKeys.add(row.groupMeta.groupKey)
           }
-        : null)
+        }
+        for (const groupKey of groupKeys) {
+          props.runtime.api.rows.expandGroup(groupKey)
+        }
+      }
     }
 
     const applyColumnMenuFilter = (columnKey: string, tokens: readonly string[]): void => {

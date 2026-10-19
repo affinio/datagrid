@@ -1,6 +1,10 @@
 # @affino/datagrid-orchestration
 
-## Unreleased
+## 0.7.2
+
+### Changed
+
+- Aligned the orchestration package revision with the grouped-grid rendering release; no orchestration API changes.
 
 ## 0.7.1
 

@@ -255,6 +255,7 @@
       :ref="headerViewportRef"
       class="grid-header-viewport"
       @wheel="onLinkedViewportWheel"
+      @scroll="handleHeaderViewportScroll"
     >
       <div
         v-for="(headerGroups, rowIndex) in centerHeaderGroupRows"
@@ -707,10 +708,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  centerScrollLeft: {
-    type: Number,
-    required: true,
-  },
   onLinkedViewportWheel: {
     type: Function as PropType<(event: WheelEvent) => void>,
     required: true,
@@ -725,6 +722,7 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 
 const visibleColumns = computed(() => columns.value.visibleColumns)
+const centerHeaderScrollLeft = ref(0)
 const isIndexHeaderSelected = computed(() => {
   const range = selection.value.selectionRange
   const lastColumn = visibleColumns.value.length - 1
@@ -1109,7 +1107,7 @@ function headerGroupStyle(group: DataGridHeaderGroup): CSSProperties {
 
 function groupLabelStyle(group: DataGridHeaderGroup, pane: "left" | "center" | "right", depth: number): CSSProperties {
   const viewportWidth = paneWidths.value[pane]
-  const scrollLeft = pane === "center" ? props.centerScrollLeft : 0
+  const scrollLeft = pane === "center" ? centerHeaderScrollLeft.value : 0
   const measureKey = groupLabelMeasureKey(group, pane, depth)
   const measuredLabelWidth = groupLabelWidths.value[measureKey]
   const geometry = resolveDataGridGroupHeaderGeometry({
@@ -1126,6 +1124,15 @@ function groupLabelStyle(group: DataGridHeaderGroup, pane: "left" | "center" | "
     width: `${geometry.width}px`,
     maxWidth: `${geometry.width}px`,
     textAlign: geometry.alignment,
+  }
+}
+
+function handleHeaderViewportScroll(event: Event): void {
+  if (!hasHeaderGroups.value) return
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
+  if (centerHeaderScrollLeft.value !== target.scrollLeft) {
+    centerHeaderScrollLeft.value = target.scrollLeft
   }
 }
 
@@ -1262,6 +1269,7 @@ function headerViewportRef(value: Element | { $el?: unknown } | null): void {
   }
   centerHeaderViewportElement = element
   if (element) {
+    centerHeaderScrollLeft.value = element.scrollLeft
     if (groupHeaderResizeObserver) groupHeaderResizeObserver.observe(element)
     scheduleGroupHeaderGeometry()
   }

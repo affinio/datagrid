@@ -385,6 +385,7 @@ describe("DataGridSpreadsheetWorkbookApp", () => {
     await flushUiAndTimers()
 
     await wrapper.find('.spreadsheet-grid-host .grid-cell--header[data-column-key="price"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await vi.dynamicImportSettled()
     await flushUiAndTimers()
 
     queryColumnMenuActionInPanel("Price", "custom:rename-column/rename-column-title")?.dispatchEvent(new Event("select", { bubbles: true }))

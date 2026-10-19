@@ -103,6 +103,8 @@ const OWNERS = ["team-red", "team-blue", "team-green"]
 
 export const ROW_MODE_OPTIONS = [1000, 10000, 50000, 100000, 200000] as const
 export const COLUMN_MODE_OPTIONS = [8, 16, 32, 128, 1000] as const
+// Keep interactive sandbox presets within the known 50k × 128 stress shape.
+export const MAX_SANDBOX_GRID_CELLS = 6_400_000
 
 function formatSandboxUtcDate(dayOffset: number): string {
   return new Date(Date.UTC(2026, 2, 1 + dayOffset)).toISOString()

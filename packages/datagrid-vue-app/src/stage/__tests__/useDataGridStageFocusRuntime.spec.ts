@@ -95,13 +95,16 @@ describe("useDataGridStageFocusRuntime", () => {
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true })
   })
 
-  it("falls back to viewport focus with preventScroll when the anchor cell is virtualized out", () => {
+  it("falls back to the keyboard scroll owner when the anchor cell is virtualized out", () => {
     const bodyViewport = document.createElement("div")
     bodyViewport.focus = vi.fn()
+    const keyboardFocusTarget = document.createElement("div")
+    keyboardFocusTarget.focus = vi.fn()
 
     const runtime = useDataGridStageFocusRuntime({
       bodyShellRef: ref(document.createElement("div")),
       bodyViewportEl: ref(bodyViewport),
+      keyboardFocusTarget: ref(keyboardFocusTarget),
       leftPaneContentRef: ref(null),
       rightPaneContentRef: ref(null),
       leftBottomPaneContentRef: ref(null),
@@ -116,7 +119,8 @@ describe("useDataGridStageFocusRuntime", () => {
 
     runtime.restoreAnchorCellFocus()
 
-    expect(bodyViewport.focus).toHaveBeenCalledWith({ preventScroll: true })
+    expect(keyboardFocusTarget.focus).toHaveBeenCalledWith({ preventScroll: true })
+    expect(bodyViewport.focus).not.toHaveBeenCalled()
   })
 
   it("records focus fallback diagnostics only when perf tracing is enabled", () => {

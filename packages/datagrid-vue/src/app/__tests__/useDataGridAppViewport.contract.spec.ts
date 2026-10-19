@@ -1418,8 +1418,8 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(el))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(viewport.viewportColumnStart.value).toBe(12)
-    expect(viewport.viewportColumnEnd.value).toBe(31)
+    expect(viewport.viewportColumnStart.value).toBe(10)
+    expect(viewport.viewportColumnEnd.value).toBe(33)
     expect(viewport.renderedColumns.value).not.toBe(firstRenderedColumns)
   })
 
@@ -1445,8 +1445,8 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(el))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(viewport.viewportColumnStart.value).toBe(12)
-    expect(viewport.viewportColumnEnd.value).toBe(31)
+    expect(viewport.viewportColumnStart.value).toBe(10)
+    expect(viewport.viewportColumnEnd.value).toBe(33)
 
     vi.advanceTimersByTime(120)
 
@@ -1475,8 +1475,8 @@ describe("useDataGridAppViewport contract", () => {
     viewport.handleViewportScroll(createScrollEvent(el))
     raf.run(getScheduledFrameHandle(raf))
 
-    expect(viewport.viewportColumnStart.value).toBe(12)
-    expect(viewport.viewportColumnEnd.value).toBe(31)
+    expect(viewport.viewportColumnStart.value).toBe(10)
+    expect(viewport.viewportColumnEnd.value).toBe(33)
 
     viewport.syncViewportFromDom()
 
@@ -1516,8 +1516,8 @@ describe("useDataGridAppViewport contract", () => {
 
     columnWidths.value = Object.fromEntries(cols.map(column => [column.key, 80]))
 
-    expect(viewport.viewportColumnStart.value).toBe(14)
-    expect(viewport.viewportColumnEnd.value).toBe(35)
+    expect(viewport.viewportColumnStart.value).toBe(12)
+    expect(viewport.viewportColumnEnd.value).toBe(37)
     expect(viewport.renderedColumns.value).not.toBe(retainedRenderedColumns)
   })
 

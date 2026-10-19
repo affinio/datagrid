@@ -647,7 +647,7 @@ const showPinSection = computed(() => (
 ))
 const groupActionLabel = computed(() => resolveActionLabel(
   "toggleGroup",
-  props.labels.group ?? (props.grouped ? "Ungroup column" : "Group by this column"),
+  props.labels.group ?? (props.grouped ? "Ungroup all" : "Group by this column"),
 ))
 const pinMenuLabel = computed(() => resolveActionLabel("pinMenu", props.labels.pin ?? "Pin column"))
 const filterSectionLabel = computed(() => props.labels.filter ?? (effectiveValueFilterEnabled.value ? "Filter by value" : "Filter by text"))

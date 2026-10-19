@@ -357,19 +357,34 @@ describe("VueShellGridCard", () => {
     expect(resolvedAggregationModel).toMatchObject({
       basis: "filtered",
       columns: expect.arrayContaining([
-        expect.objectContaining({ key: "id", op: "count" }),
-        expect.objectContaining({ key: "region", op: "first" }),
         expect.objectContaining({ key: "amount", op: "sum" }),
-        expect.objectContaining({ key: "updatedAt", op: "max" }),
+        expect.objectContaining({ key: "progress", op: "sum" }),
       ]),
     })
+    expect((resolvedAggregationModel as { columns?: Array<{ key: string }> }).columns?.some(column => column.key === "id")).toBe(false)
 
-    const columns = (gridVm.$attrs?.columns ?? []) as Array<Record<string, unknown>>
+    const columns = (grid.props("columns") ?? gridVm.$props?.columns ?? gridVm.$attrs?.columns ?? []) as Array<Record<string, unknown>>
+    const groupColumn = columns.find(column => column.key === "__shell_group__")
     const nameColumn = columns.find(column => column.key === "name")
     const idColumn = columns.find(column => column.key === "id")
 
-    expect(typeof nameColumn?.groupCellRenderer).toBe("function")
-    expect(typeof idColumn?.groupCellRenderer).toBe("function")
+    expect(groupColumn?.label).toBe("Group")
+    expect(typeof groupColumn?.groupCellRenderer).toBe("function")
+    expect(nameColumn?.label).toBe("Task")
+    expect(nameColumn?.groupCellRenderer).toBeUndefined()
+    expect(idColumn?.groupCellRenderer).toBeUndefined()
+
+    const groupTrigger = wrapper.find(".shell-group-trigger")
+    expect(groupTrigger.exists()).toBe(true)
+    const groupRow = groupTrigger.element.closest(".grid-row")
+    expect(groupRow?.querySelectorAll(".shell-group-trigger")).toHaveLength(1)
+    expect(groupTrigger.element.closest('.grid-cell[data-column-key="__shell_group__"]')).not.toBeNull()
+    expect(groupRow?.querySelector('.grid-cell[data-column-key="id"]')?.textContent).not.toContain("region:")
+    expect(groupTrigger.attributes("aria-expanded")).toBe("true")
+
+    await groupTrigger.trigger("click")
+    await flushUi()
+    expect(wrapper.find(".shell-group-trigger").attributes("aria-expanded")).toBe("false")
 
     wrapper.unmount()
   })

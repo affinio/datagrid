@@ -412,6 +412,39 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => activeElementSignature(page)).toBe(targetSignature)
   })
 
+  test("horizontal virtualization keeps arrow navigation and reveals adjacent cells", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid")
+    await page.locator("select").nth(1).selectOption("128")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    const horizontalOwner = stage.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
+    const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
+    const sourceCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="start"]').first()
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await sourceCell.click()
+    const sourceSignature = await cellSignature(sourceCell)
+
+    await horizontalOwner.evaluate(element => { element.scrollLeft = 4000 })
+    await expect(sourceCell).toHaveCount(0)
+    await expect(verticalOwner).toBeFocused()
+
+    await page.keyboard.press("ArrowLeft")
+    const leftCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="amount"]').first()
+    await expect(leftCell).toBeFocused()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(leftCell))
+    await expect.poll(() => horizontalOwner.evaluate(element => element.scrollLeft)).toBeLessThan(1000)
+
+    await horizontalOwner.evaluate(element => { element.scrollLeft = 4000 })
+    await expect(leftCell).toHaveCount(0)
+    await expect(verticalOwner).toBeFocused()
+
+    await page.keyboard.press("ArrowRight")
+    const rightCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="start"]').first()
+    await expect(rightCell).toBeFocused()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
+    await expect.poll(() => horizontalOwner.evaluate(element => element.scrollLeft)).toBeLessThan(1000)
+  })
+
   test("keyboard navigation enters, traverses, and leaves leaf column headers", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 

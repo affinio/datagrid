@@ -212,6 +212,9 @@ describe("DataGridSpreadsheetWorkbookApp column filters", () => {
     await wrapper.find('.grid-cell--header[data-column-key="total"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushUiAndTimers()
 
+    await vi.dynamicImportSettled()
+    await flushUiAndTimers()
+
     const valueRows = Array.from(queryColumnMenuRoot()?.querySelectorAll<HTMLElement>(".datagrid-column-menu__value") ?? [])
     expect(valueRows.map(row => row.textContent?.replace(/\s+/g, " ").trim())).toEqual([
       expect.stringContaining("1560"),

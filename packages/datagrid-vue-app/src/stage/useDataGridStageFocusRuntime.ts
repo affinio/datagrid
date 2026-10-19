@@ -5,6 +5,7 @@ import { recordDataGridPerfSampleIfEnabled } from "../perf/dataGridPerfTrace"
 export interface UseDataGridStageFocusRuntimeOptions {
   bodyShellRef: Readonly<Ref<HTMLElement | null>>
   bodyViewportEl: Readonly<Ref<HTMLElement | null>>
+  keyboardFocusTarget?: Readonly<Ref<HTMLElement | null>>
   leftPaneContentRef: Readonly<Ref<HTMLElement | null>>
   rightPaneContentRef: Readonly<Ref<HTMLElement | null>>
   leftBottomPaneContentRef: Readonly<Ref<HTMLElement | null>>
@@ -101,6 +102,11 @@ export function useDataGridStageFocusRuntime(
     return null
   }
 
+  function focusViewportFallback(): void {
+    const target = options.keyboardFocusTarget?.value ?? options.bodyViewportEl.value
+    target?.focus({ preventScroll: true })
+  }
+
   function resolveRelativeCellRect(cell: { rowIndex: number; columnIndex: number } | null): {
     left: number
     right: number
@@ -146,7 +152,7 @@ export function useDataGridStageFocusRuntime(
       options.isSelectionAnchorCellSafe,
     )
     if (!anchorCell) {
-      options.bodyViewportEl.value?.focus({ preventScroll: true })
+      focusViewportFallback()
       recordFocusRestore("viewport-fallback-no-anchor")
       return
     }
@@ -156,7 +162,7 @@ export function useDataGridStageFocusRuntime(
       recordFocusRestore("cell")
       return
     }
-    options.bodyViewportEl.value?.focus({ preventScroll: true })
+    focusViewportFallback()
     recordFocusRestore("viewport-fallback-unmounted-anchor")
   }
 

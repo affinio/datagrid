@@ -15,13 +15,27 @@
         <label>
           Rows
           <select v-model.number="rowCount">
-            <option v-for="option in ROW_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option
+              v-for="option in ROW_MODE_OPTIONS"
+              :key="option"
+              :value="option"
+              :disabled="!isSandboxGridShapeAllowed(option, columnCount)"
+            >
+              {{ option }}
+            </option>
           </select>
         </label>
         <label>
           Cols
           <select v-model.number="columnCount">
-            <option v-for="option in COLUMN_MODE_OPTIONS" :key="option" :value="option">{{ option }}</option>
+            <option
+              v-for="option in COLUMN_MODE_OPTIONS"
+              :key="option"
+              :value="option"
+              :disabled="!isSandboxGridShapeAllowed(rowCount, option)"
+            >
+              {{ option }}
+            </option>
           </select>
         </label>
         <label>
@@ -98,6 +112,9 @@
           <button type="button" @click="runtime.api.rows.collapseAllGroups()">Collapse all</button>
         </div>
       </div>
+      <p v-if="hasUnavailableGridShapes" class="grid-size-limit" role="status">
+        Large grid combinations are disabled to keep the sandbox responsive. Choose fewer rows or columns to explore wider shapes.
+      </p>
       <ColumnLayoutPanel
         :is-open="isColumnLayoutPanelOpen"
         :items="columnLayoutPanelItems"
@@ -221,6 +238,7 @@ import {
   buildVueRows,
   buildWorkerRowInputs,
   COLUMN_MODE_OPTIONS,
+  MAX_SANDBOX_GRID_CELLS,
   ROW_MODE_OPTIONS,
   type VueSandboxRow,
   type VueTreeRow,
@@ -562,11 +580,26 @@ function resolveInitialColumnCount(): number {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return 16
   }
-  return resolveNearestOption(parsed, COLUMN_MODE_OPTIONS)
+  const initialRows = resolveInitialRowCount()
+  const availableOptions = COLUMN_MODE_OPTIONS.filter(option => isSandboxGridShapeAllowed(initialRows, option))
+  return resolveNearestOption(parsed, availableOptions)
+}
+
+function isSandboxGridShapeAllowed(rows: number, columns: number): boolean {
+  return rows * columns <= MAX_SANDBOX_GRID_CELLS
 }
 
 const rowCount = ref<number>(resolveInitialRowCount())
 const columnCount = ref<number>(resolveInitialColumnCount())
+const hasUnavailableGridShapes = computed(() =>
+  ROW_MODE_OPTIONS.some(rows => !isSandboxGridShapeAllowed(rows, columnCount.value))
+  || COLUMN_MODE_OPTIONS.some(columns => !isSandboxGridShapeAllowed(rowCount.value, columns)),
+)
+watch(rowCount, rows => {
+  if (!isSandboxGridShapeAllowed(rows, columnCount.value)) {
+    columnCount.value = [...COLUMN_MODE_OPTIONS].reverse().find(columns => isSandboxGridShapeAllowed(rows, columns)) ?? COLUMN_MODE_OPTIONS[0]
+  }
+})
 const VALUE_FILTER_LIMIT_OPTIONS = [
   { value: 0, label: "Off" },
   { value: 10_000, label: "Up to 10k" },

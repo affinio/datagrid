@@ -86,4 +86,13 @@ describe("useDataGridStageRowState", () => {
       backgroundRepeat: "no-repeat",
     })
   })
+
+  it("marks only root group rows for sticky context headers", () => {
+    const { service } = createService({ useCanvasChrome: true })
+    const root = createRow({ kind: "group", groupMeta: { level: 0 } } as never)
+    const nested = createRow({ kind: "group", groupMeta: { level: 1 } } as never)
+
+    expect(service.rowStateClasses(root, 0)["grid-row--group-root"]).toBe(true)
+    expect(service.rowStateClasses(nested, 0)["grid-row--group-root"]).toBe(false)
+  })
 })
