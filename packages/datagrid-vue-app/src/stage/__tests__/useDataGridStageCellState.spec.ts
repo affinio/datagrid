@@ -99,9 +99,11 @@ describe("useDataGridStageCellState", () => {
     })
     expect(service.checkboxIndicatorClass(row, checkboxColumn)).toEqual({
       "grid-checkbox-indicator--checked": true,
+      "grid-checkbox-indicator--mixed": false,
     })
     expect(service.checkboxIndicatorMarkClass(row, checkboxColumn)).toEqual({
       "grid-checkbox-indicator__mark--checked": true,
+      "grid-checkbox-indicator__mark--mixed": false,
     })
     expect(service.cellAriaRole(row, 0, checkboxColumn, 0)).toBe("checkbox")
     expect(service.cellAriaChecked(row, 0, checkboxColumn, 0)).toBe("true")

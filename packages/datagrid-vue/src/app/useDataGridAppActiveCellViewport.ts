@@ -59,7 +59,9 @@ export function useDataGridAppActiveCellViewport(
     const selector = `.grid-cell[data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`
     const stageRoot = viewport.closest(".grid-stage")
     const scopedRoot = stageRoot instanceof HTMLElement ? stageRoot : viewport.parentElement
-    return scopedRoot?.querySelector<HTMLElement>(selector) ?? null
+    return scopedRoot?.querySelector<HTMLElement>(`.grid-cell[data-datagrid-row-layer="sticky-top"][data-row-index="${rowIndex}"][data-column-index="${columnIndex}"]`)
+      ?? scopedRoot?.querySelector<HTMLElement>(selector)
+      ?? null
   }
 
   const resolveColumnWidth = (column: DataGridColumnSnapshot): number => {
@@ -83,11 +85,14 @@ export function useDataGridAppActiveCellViewport(
         ? options.resolveRowHeight(rowIndex)
         : options.normalizedBaseRowHeight.value
     )
-    const visibleTop = viewport.scrollTop
+    const stickyRow = viewport.closest(".grid-stage")?.querySelector<HTMLElement>(".grid-row--sticky-top[data-row-index]")
+    const stickyIndex = stickyRow ? Number(stickyRow.dataset.rowIndex) : -1
+    const stickyInset = stickyIndex !== rowIndex ? stickyRow?.getBoundingClientRect().height ?? 0 : 0
+    const visibleTop = viewport.scrollTop + Math.max(0, stickyInset)
     const visibleBottom = visibleTop + viewport.clientHeight
 
     if (estimatedTop < visibleTop + comfortMarginPx) {
-      viewport.scrollTop = Math.max(0, estimatedTop - comfortMarginPx)
+      viewport.scrollTop = Math.max(0, estimatedTop - stickyInset - comfortMarginPx)
       syncViewportAfterProgrammaticScroll(viewport)
     } else if (estimatedBottom > visibleBottom - comfortMarginPx) {
       viewport.scrollTop = Math.max(0, estimatedBottom - viewport.clientHeight + comfortMarginPx)

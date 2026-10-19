@@ -2,6 +2,10 @@ import { computed, defineComponent, h, type Component, type PropType, type VNode
 import { resolveDataGridChrome, type DataGridChromeProp } from "../config/dataGridChrome"
 import { resolveDataGridThemeStyleVars, type DataGridThemeProp } from "../theme/dataGridTheme"
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
+import {
+  resolveDataGridToolbarItemPlacement,
+  type DataGridToolbarLayoutProp,
+} from "../config/dataGridToolbarLayout"
 
 function resolveToolbarChromeStyle(chrome: DataGridChromeProp): Record<string, string> {
   const compact = resolveDataGridChrome(chrome).density === "compact"
@@ -47,6 +51,10 @@ export default defineComponent({
       type: [String, Object] as PropType<DataGridChromeProp>,
       default: "comfortable",
     },
+    toolbarLayout: {
+      type: Object as PropType<DataGridToolbarLayoutProp>,
+      default: undefined,
+    },
   },
   setup(props) {
     ensureDataGridAppStyles()
@@ -56,20 +64,29 @@ export default defineComponent({
       if (props.modules.length === 0) {
         return null
       }
+      const rows: Array<Record<"start" | "center" | "end", VNode[]>> = []
+      for (const module of props.modules) {
+        const placement = resolveDataGridToolbarItemPlacement(module.key, props.toolbarLayout)
+        for (let index = rows.length; index <= placement.row; index += 1) {
+          rows[index] = { start: [], center: [], end: [] }
+        }
+        const row = rows[placement.row] ??= { start: [], center: [], end: [] }
+        row[placement.align].push(h(module.component, {
+          key: module.key,
+          ...(module.props ?? {}),
+        }))
+      }
       return h("div", {
         class: [
           "datagrid-app-toolbar",
           props.variant === "integrated" ? "datagrid-app-toolbar--integrated" : null,
         ],
         style: { ...themeStyle.value, ...chromeStyle.value },
-      }, [
-        h("div", { class: "datagrid-app-toolbar__group" }, props.modules.map(module => (
-          h(module.component, {
-            key: module.key,
-            ...(module.props ?? {}),
-          })
-        ))),
-      ])
+      }, rows.map(row => h("div", { class: "datagrid-app-toolbar__row" }, [
+        h("div", { class: "datagrid-app-toolbar__group datagrid-app-toolbar__group--start" }, row.start),
+        h("div", { class: "datagrid-app-toolbar__group datagrid-app-toolbar__group--center" }, row.center),
+        h("div", { class: "datagrid-app-toolbar__group datagrid-app-toolbar__group--end" }, row.end),
+      ])))
     }
   },
 })

@@ -301,6 +301,9 @@
         aggregations
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
+        :sticky-group-rows="props.groupedShowcase
+          ? { enabled: true, mode: 'root-only', transition: 'push-off' }
+          : undefined"
         :aggregation-model="aggregationModel"
         :pivot-model="pivotModel"
         :pagination="pagination"

@@ -16,15 +16,22 @@
       :move-preview-segments="pane.movePreviewSeamOverlaySegments"
       :lanes="pane.seamOverlayLanes"
     />
+    <DataGridTableStageOverlayLayer
+      layer-class="grid-selection-overlay--pane-seam grid-selection-overlay--sticky"
+      :selection-segments="stickyRow?.selectionSeamOverlaySegments?.[pane.side] ?? []"
+      :fill-preview-segments="[]"
+      :move-preview-segments="[]"
+    />
     <div :ref="pane.contentRef ?? undefined" class="grid-pane-content" :style="pane.contentStyle" @contextmenu="handleContextMenu">
       <div v-if="(pane.topSpacerHeight ?? viewport.topSpacerHeight) > 0" class="grid-spacer" :style="{ height: `${pane.topSpacerHeight ?? viewport.topSpacerHeight}px` }" />
       <div
-        v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex } in paneRowSlots"
-        :key="resolvePaneRowKey(row, rowOffset)"
+        v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex, isSticky, isStickySource } in paneRowSlots"
+        :key="resolvePaneRowKey(row, rowOffset, isSticky)"
         class="grid-row"
         role="row"
-        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, viewportRowOffset) }]"
-        :style="renderApi.paneRowStyle(row, rowOffset, pane.width)"
+        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, viewportRowOffset), 'grid-row--sticky-top': isSticky, 'grid-row--sticky-source-hidden': isStickySource }]"
+        :style="[renderApi.paneRowStyle(row, rowOffset, pane.width), isSticky ? stickyRow?.style : undefined]"
+        :data-datagrid-row-layer="isSticky ? 'sticky-top' : 'body'"
         :data-row-index="absoluteRowIndex"
         :aria-rowindex="absoluteRowIndex + 1"
         :aria-expanded="renderApi.rowAriaExpanded(row)"
@@ -48,7 +55,7 @@
           :aria-rowindex="absoluteRowIndex + 1"
           aria-colindex="1"
           role="rowheader"
-          :tabindex="renderApi.rowIndexTabIndex(row)"
+          :tabindex="isStickySource ? -1 : renderApi.rowIndexTabIndex(row)"
           :draggable="renderApi.isRowIndexDraggable(row)"
           @click.stop="renderApi.handleRowIndexClickSafe(row, viewportRowOffset, $event)"
           @keydown.stop="renderApi.handleRowIndexKeydown($event, row, viewportRowOffset)"
@@ -91,14 +98,15 @@
             renderApi.bodyCellSelectionStyle(row, column, viewportRowOffset, columnIndex),
             renderApi.resolveCellCustomStyle(row, viewportRowOffset, column, columnIndex),
           ]"
-          :id="renderApi.cellDomId(row, column)"
+          :id="isStickySource ? undefined : renderApi.cellDomId(row, column)"
           :data-row-id="String(row.rowId)"
           :data-column-key="column.key"
           :data-row-index="absoluteRowIndex"
           :data-column-index="columnIndex"
+          :data-datagrid-row-layer="isSticky ? 'sticky-top' : 'body'"
           :aria-rowindex="absoluteRowIndex + 1"
           :aria-colindex="columnIndex + 1"
-          :tabindex="renderApi.cellTabIndex(viewportRowOffset, columnIndex)"
+          :tabindex="isStickySource ? -1 : renderApi.cellTabIndex(viewportRowOffset, columnIndex)"
           :aria-selected="renderApi.cellAriaSelected(viewportRowOffset, columnIndex)"
           :role="renderApi.cellAriaRole(row, viewportRowOffset, column, columnIndex) ?? 'gridcell'"
           :aria-checked="renderApi.cellAriaChecked(row, viewportRowOffset, column, columnIndex)"
@@ -222,6 +230,12 @@
         :move-preview-segments="pane.movePreviewOverlaySegments"
         :lanes="pane.overlayLanes"
       />
+      <DataGridTableStageOverlayLayer
+        layer-class="grid-selection-overlay--sticky"
+        :selection-segments="stickyRow?.selectionOverlaySegments?.[pane.side] ?? []"
+        :fill-preview-segments="[]"
+        :move-preview-segments="[]"
+      />
     </div>
   </div>
 </template>
@@ -247,12 +261,17 @@ import type {
   DataGridTableStageBodyRow,
   DataGridTableStagePinnedPaneProps,
   DataGridTableStagePinnedPaneRenderApi,
+  DataGridTableStageStickyRow,
 } from "./dataGridTableStageBody.types"
 
 const props = defineProps({
   pane: {
     type: Object as PropType<DataGridTableStagePinnedPaneProps>,
     required: true,
+  },
+  stickyRow: {
+    type: Object as PropType<DataGridTableStageStickyRow | null>,
+    default: null,
   },
   renderApi: {
     type: Object as PropType<DataGridTableStagePinnedPaneRenderApi>,
@@ -275,19 +294,41 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const editing = useDataGridTableStageEditingSection<Record<string, unknown>>()
 const handleContextMenu = props.handleContextMenu
 
-const paneRowSlots = computed(() => props.pane.displayRows.map((row, rowOffset) => ({
-  row,
-  rowOffset,
-  viewportRowOffset: props.renderApi.viewportRowOffset(row, rowOffset),
-  absoluteRowIndex: props.renderApi.absoluteRowIndex(row, rowOffset),
-})))
+const paneRowSlots = computed(() => {
+  const stickyIndex = props.stickyRow?.placement.sourceIndex
+  const slots = props.pane.displayRows.map((row, rowOffset) => {
+    const absoluteRowIndex = props.renderApi.absoluteRowIndex(row, rowOffset)
+    return {
+      row,
+      rowOffset,
+      viewportRowOffset: props.renderApi.viewportRowOffset(row, rowOffset),
+      absoluteRowIndex,
+      isSticky: false,
+      isStickySource: absoluteRowIndex === stickyIndex,
+    }
+  })
+  const sticky = props.stickyRow
+  if (sticky) {
+    const rowOffset = sticky.placement.sourceIndex - viewport.value.viewportRowStart
+    slots.push({
+      row: sticky.row,
+      rowOffset,
+      viewportRowOffset: props.renderApi.viewportRowOffset(sticky.row, rowOffset),
+      absoluteRowIndex: sticky.placement.sourceIndex,
+      isSticky: true,
+      isStickySource: false,
+    })
+  }
+  return slots
+})
 const paneColumnSlots = computed(() => props.pane.columns.map((column, columnOffset) => ({
   column,
   columnOffset,
   columnIndex: props.renderApi.columnIndexByKey(column.key),
 })))
 
-function resolvePaneRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
+function resolvePaneRowKey(row: DataGridTableStageBodyRow, rowOffset: number, isSticky = false): string {
+  if (isSticky) return `sticky-${String(row.rowId)}-${props.pane.side}`
   if (props.pane.rowKeyMode !== "recycled") {
     return `${String(row.rowId)}-${props.pane.side}-row`
   }

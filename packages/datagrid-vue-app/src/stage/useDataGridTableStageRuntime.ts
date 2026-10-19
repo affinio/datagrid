@@ -47,6 +47,7 @@ import type {
   DataGridColumnMenuTriggerMode,
 } from "../overlays/dataGridColumnMenu"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
@@ -165,6 +166,8 @@ type DataGridLoadedRowIntervalProvider = {
 }
 
 export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string, unknown>> {
+  stickyGroupRows?: Ref<StickyGroupRowsOptions>
+  hasGrouping?: Ref<boolean>
   mode: Ref<"base" | "tree" | "pivot" | "worker">
   layoutMode: Ref<DataGridLayoutMode>
   minRows: Ref<number | null>
@@ -174,6 +177,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   enableRangeMove: Ref<boolean>
   rows: Ref<readonly TRow[]>
   sourceRows?: Ref<readonly TRow[]>
+  resolveSourceRowId?: (row: TRow, index: number) => string | number | null | undefined
+  onGroupToggle?: (row: DataGridRowNode<TRow>, wasExpanded: boolean) => void
   runtime: DataGridTableStageBodyRuntime<TRow>
   runtimeRowModel?: {
     subscribe: UseDataGridRuntimeResult<TRow>["rowModel"]["subscribe"]
@@ -594,6 +599,12 @@ export function useDataGridTableStageRuntime<
     void options.runtime.rowPartition.value
     return options.runtimeRowModel?.getSnapshot?.().revision ?? options.runtime.api.rows.getSnapshot().revision ?? null
   })
+  const runtimeProjectionRevision = computed(() => {
+    void runtimeRowModelRevision.value
+    return options.runtimeRowModel?.getSnapshot?.().projection?.version
+      ?? options.runtime.api.rows.getSnapshot().projection?.version
+      ?? runtimeRowModelRevision.value
+  })
 
   const handleCenterPaneDiagnostics = (payload: DataGridTableStageCenterPaneDiagnostics): void => {
     if ("renderedViewport" in payload && payload.renderedViewport) {
@@ -977,6 +988,8 @@ export function useDataGridTableStageRuntime<
     rowSelectionColumn,
     orderedVisibleColumns,
     displayRows,
+    sourceRows: options.sourceRows ?? options.rows,
+    resolveSourceRowId: options.resolveSourceRowId,
     rowSelectionSnapshot: rowSelectionSnapshotRef,
     applyRowSelectionMutation: mutator => {
       if (!options.runtime.api.rowSelection.hasSupport()) {
@@ -1057,6 +1070,11 @@ export function useDataGridTableStageRuntime<
     viewportRowStart,
     firstColumnKey: options.firstColumnKey,
   })
+  const toggleGroupRowWithNotification = (row: DataGridRowNode<TRow>): void => {
+    const wasExpanded = row.kind === "group" && row.state.expanded
+    toggleGroupRow(row)
+    options.onGroupToggle?.(row, wasExpanded)
+  }
 
   const cellIoService = useDataGridTableStageCellIo<TRow>({
     runtime: options.runtime,
@@ -2085,6 +2103,12 @@ export function useDataGridTableStageRuntime<
   } = useDataGridTableStageBindings<TRow>({
     mode: options.mode,
     rowHeightMode: options.rowHeightMode,
+    stickyGroupRows: options.stickyGroupRows ?? computed(() => ({
+      enabled: false,
+      mode: "root-only",
+      transition: "push-off",
+    })),
+    hasGrouping: options.hasGrouping ?? computed(() => false),
     layoutMode: options.layoutMode,
     chromeSignature: options.chromeSignature,
     rendererPolicy: options.rendererPolicy,
@@ -2093,6 +2117,8 @@ export function useDataGridTableStageRuntime<
     displayRows,
     displayRowsRevision,
     runtimeRevision: runtimeRowModelRevision,
+    projectionRevision: runtimeProjectionRevision,
+    getBodyRowAtIndex: selectableRuntime.getBodyRowAtIndex,
     pinnedTopRows,
     pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
@@ -2211,7 +2237,7 @@ export function useDataGridTableStageRuntime<
     handleRowIndexKeydown,
     reorderRowsByIndex: options.reorderRowsByIndex,
     handleToggleAllVisibleRows: stageServices.rowSelection.toggleVisibleRowsSelected,
-    toggleGroupRow,
+    toggleGroupRow: toggleGroupRowWithNotification,
     rowIndexLabel,
     startResize,
     handleResizeDoubleClick,

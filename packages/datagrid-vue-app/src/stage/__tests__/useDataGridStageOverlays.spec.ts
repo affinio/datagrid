@@ -49,14 +49,25 @@ describe("useDataGridStageOverlays", () => {
     const range: DataGridOverlayRange = {
       startRow: 0,
       endRow: 0,
-      startColumn: 1,
+      startColumn: 0,
       endColumn: 2,
     }
 
     const result = useDataGridStageOverlays({
       overlayGeometryContext: geometryContext,
       bodyViewportClientHeight: ref(120),
-      bodyViewportScrollTop: ref(0),
+      bodyViewportScrollTop: ref(60),
+      bodyOverlayRowOrigin: ref(20),
+      stickyRowPlacement: computed(() => ({
+        nodeId: "group-0",
+        sourceIndex: 0,
+        depth: 0 as const,
+        layer: "sticky-top" as const,
+        naturalViewportY: -60,
+        viewportY: 12,
+        height: 31,
+        visibleRect: { x: 0, y: 12, width: 252, height: 31 },
+      })),
       bottomViewportClientHeight: ref(120),
       visibleColumns: computed(() => createGeometryContext().renderedColumns),
       displayRows: computed(() => [{}, {}]),
@@ -103,6 +114,13 @@ describe("useDataGridStageOverlays", () => {
     })
 
     expect(result.centerSelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.leftStickySelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.leftStickySelectionSeamOverlaySegments.value).toHaveLength(1)
+    expect(result.leftStickySelectionSeamOverlaySegments.value[0]?.style.top).toBe("11px")
+    expect(result.centerStickySelectionOverlaySegments.value).toHaveLength(1)
+    expect(result.centerStickySelectionOverlaySegments.value[0]?.style.top).toBe("51px")
+    expect(result.rightStickySelectionOverlaySegments.value).toHaveLength(0)
+    expect(result.rightStickySelectionSeamOverlaySegments.value).toHaveLength(0)
     expect(result.rightSelectionSeamOverlaySegments.value).toHaveLength(0)
     expect(result.centerCustomOverlayLanes.value).toHaveLength(1)
     expect(result.centerCustomOverlayLanes.value[0]?.segments).toHaveLength(1)

@@ -91,7 +91,9 @@ function resolveVisibleRowMetricsFromDom(
   }
   const viewportRect = viewport.getBoundingClientRect()
   const rowElements = Array.from(
-    viewport.querySelectorAll<HTMLElement>(".grid-body-content > .grid-row"),
+    viewport.querySelectorAll<HTMLElement>(
+      ".grid-body-content > .grid-row:not(.grid-row--sticky-top)",
+    ),
   )
   if (rowElements.length !== displayRows.value.length) {
     return fallbackMetrics

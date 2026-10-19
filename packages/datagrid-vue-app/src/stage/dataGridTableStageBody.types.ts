@@ -6,6 +6,7 @@ import type {
 } from "../config/dataGridFormulaOptions"
 import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
 import type { DataGridTableRow } from "./dataGridTableStage.types"
+import type { StickyGroupPlacement } from "./dataGridStickyGroupLayout"
 
 export type DataGridTableStageBodyRow = DataGridTableRow<Record<string, unknown>>
 export type DataGridTableStageBodyRowKeyMode = "row" | "recycled"
@@ -24,6 +25,14 @@ export type DataGridTableStageBodyColumn = DataGridColumnSnapshot & {
       filterable?: boolean
     }
   }
+}
+
+export interface DataGridTableStageStickyRow {
+  row: DataGridTableStageBodyRow
+  placement: StickyGroupPlacement
+  style: CSSProperties
+  selectionOverlaySegments?: Partial<Record<"left" | "center" | "right", readonly DataGridTableStageOverlaySegment[]>>
+  selectionSeamOverlaySegments?: Partial<Record<"left" | "right", readonly DataGridTableStageOverlaySegment[]>>
 }
 
 export type DataGridTableStageOverlaySegment = {

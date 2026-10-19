@@ -386,6 +386,74 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
 }
 
+.datagrid-grouping-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--datagrid-app-toolbar-group-gap, 8px);
+  min-width: 0;
+  color: var(--datagrid-text-secondary);
+  font-size: var(--datagrid-app-toolbar-button-font-size, 12px);
+}
+
+.datagrid-grouping-toolbar__level {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--datagrid-filter-trigger-border);
+  border-radius: 999px;
+  background: var(--datagrid-editor-bg);
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-grouping-toolbar__order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--datagrid-accent-strong) 14%, transparent);
+  color: var(--datagrid-accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.datagrid-grouping-toolbar__name {
+  overflow: hidden;
+  max-width: 180px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datagrid-grouping-toolbar__remove {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--datagrid-text-secondary);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.datagrid-grouping-toolbar__remove:hover {
+  background: var(--datagrid-column-menu-item-hover-bg);
+  color: var(--datagrid-text-primary);
+}
+
+.datagrid-grouping-toolbar__remove:focus-visible {
+  outline: 2px solid var(--datagrid-column-menu-focus-ring);
+  outline-offset: 1px;
+}
+
 .datagrid-app-toolbar__button {
   display: inline-flex;
   align-items: center;
@@ -1201,6 +1269,20 @@ const DATA_GRID_APP_STYLES = `
   z-index: 4;
 }
 
+.grid-row--sticky-top {
+  background: var(--datagrid-group-row-background-color, var(--datagrid-row-background-color, #fff));
+  box-shadow: 0 2px 4px var(--datagrid-sticky-shadow, transparent);
+  contain: none !important;
+  content-visibility: visible !important;
+  pointer-events: auto;
+  z-index: 8 !important;
+}
+
+.grid-row--sticky-source-hidden {
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 .grid-stage--canvas-chrome .grid-row--hovered::before,
 .grid-stage--canvas-chrome .grid-row--striped::before {
   content: "";
@@ -1224,6 +1306,10 @@ const DATA_GRID_APP_STYLES = `
 
 .grid-stage--canvas-chrome .grid-row--striped {
   background: transparent;
+}
+
+.grid-stage--canvas-chrome .grid-row--sticky-top {
+  background-color: var(--datagrid-group-row-background-color, var(--datagrid-row-background-color, #fff)) !important;
 }
 
 .grid-stage--canvas-chrome .grid-row > .grid-cell,
@@ -1525,6 +1611,10 @@ const DATA_GRID_APP_STYLES = `
   inset: 0;
   pointer-events: none;
   z-index: 6;
+}
+
+.grid-selection-overlay--sticky {
+  z-index: 9;
 }
 
 .affino-datagrid-app-root .grid-selection-overlay__segment {
@@ -1883,6 +1973,19 @@ body.datagrid-fill-drag-cursor * {
   box-shadow: none;
 }
 
+/* Sticky rows cover the body canvas; anchor dividers to the next cell's leading edge. */
+.grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell:not(:first-child) {
+  box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
+}
+
+.grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index {
+  box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
+}
+
+.grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index + .grid-cell {
+  box-shadow: none;
+}
+
 @media (hover: none) and (pointer: coarse) {
   .grid-stage--canvas-chrome .grid-cell--pinned-divider-right {
     box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
@@ -1890,6 +1993,14 @@ body.datagrid-fill-drag-cursor * {
 
   .grid-stage--canvas-chrome .grid-cell--pinned-divider-left {
     box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
+  }
+
+  .grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell:not(:first-child) {
+    box-shadow: none;
+  }
+
+  .grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index {
+    box-shadow: none;
   }
 }
 

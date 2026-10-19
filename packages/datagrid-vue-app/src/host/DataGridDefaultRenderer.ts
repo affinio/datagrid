@@ -53,6 +53,7 @@ import DataGridModuleHost, {
   type DataGridAppToolbarModule,
 } from "./DataGridModuleHost"
 import DataGridHistoryToolbarButton from "./DataGridHistoryToolbarButton"
+import DataGridGroupByToolbar from "./DataGridGroupByToolbar"
 import DataGridQuickFilterInput from "./DataGridQuickFilterInput"
 import DataGridTableStage from "../stage/DataGridTableStage.vue"
 import DataGridColumnLayoutPopover from "../overlays/DataGridColumnLayoutPopover.vue"
@@ -109,6 +110,7 @@ import type {
 import type { DataGridResolvedChromeOptions, DataGridToolbarPlacement } from "../config/dataGridChrome"
 import type { DataGridRowReorderOptions } from "../config/dataGridRowReorder"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
 import { useDataGridTableStageRuntime } from "../stage/useDataGridTableStageRuntime"
@@ -179,6 +181,7 @@ export type DataGridDefaultRendererRuntime = {
   setVirtualWindowRange?: (range: { start: number; end: number }) => void
   getBodyRowAtIndex: (rowIndex: number) => import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>> | null
   resolveBodyRowIndexById: (rowId: string | number) => number
+  scrollToRow: UseDataGridRuntimeResult<Record<string, unknown>>["scrollToRow"]
   scrollToColumn: UseDataGridRuntimeResult<Record<string, unknown>>["scrollToColumn"]
 }
 
@@ -1028,6 +1031,10 @@ export default defineComponent({
       type: String as PropType<"fixed" | "auto">,
       default: "fixed",
     },
+    stickyGroupRows: {
+      type: Object as PropType<StickyGroupRowsOptions>,
+      default: () => ({ enabled: false, mode: "root-only", transition: "push-off" }),
+    },
     baseRowHeight: {
       type: Number,
       default: 31,
@@ -1097,6 +1104,10 @@ export default defineComponent({
     rowSelectionColumnWidth: {
       type: Number,
       default: 108,
+    },
+    resolveSourceRowId: {
+      type: Function as PropType<((row: Record<string, unknown>, index: number) => string | number) | undefined>,
+      default: undefined,
     },
     rowReorder: {
       type: Object as PropType<DataGridRowReorderOptions>,
@@ -1526,6 +1537,18 @@ export default defineComponent({
       ?? visibleColumns.value[0]?.key
       ?? "name"
     ))
+    const groupByToolbarLevels = computed(() => (currentGroupBy.value?.fields ?? []).map(key => {
+      const column = allColumns.value.find(candidate => candidate.key === key)
+      return { key, label: String(column?.column.label ?? key) }
+    }))
+    const removeGroupByField = (columnKey: string): void => {
+      const current = currentGroupBy.value
+      if (!current) return
+      const fields = current.fields.filter(field => field !== columnKey)
+      props.runtime.api.rows.setGroupBy(fields.length > 0
+        ? { fields, expandedByDefault: current.expandedByDefault }
+        : null)
+    }
     const defaultGroupingAggregationModelKey = ref<string | null>(null)
     watch(
       [currentGroupBy, currentAggregationModel],
@@ -2230,11 +2253,20 @@ export default defineComponent({
         expandedByDefault: false,
       })
 
-      requestDataGridAnimationFrame(() => {
-        const treeColumnKey = firstColumnKey.value
-        if (treeColumnKey) {
-          props.runtime.scrollToColumn({ columnKey: treeColumnKey, align: "nearest" })
-        }
+      // The tree column is normalized to the first center column by the
+      // grouped-column watcher. Scroll the actual center scroll owner after
+      // that layout has committed; the runtime API's column target is not
+      // region-aware and can include pinned widths in its offset.
+      void nextTick(() => {
+        requestDataGridAnimationFrame(() => {
+          const stage = stageHostRef.value
+          const horizontalViewport = stage?.querySelector<HTMLElement>(
+            ".grid-body-center-horizontal-scrollport--scroll-owner",
+          ) ?? stage?.querySelector<HTMLElement>(".grid-body-viewport")
+          if (horizontalViewport) {
+            horizontalViewport.scrollLeft = 0
+          }
+        })
       })
 
       // Keep the newly added grouping level collapsed while opening the
@@ -3776,6 +3808,8 @@ export default defineComponent({
       revealCellInComfortZone,
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
+      stickyGroupRows: computed(() => props.stickyGroupRows),
+      hasGrouping: computed(() => Boolean(currentGroupBy.value?.fields.length)),
       layoutMode: computed(() => props.layoutMode),
       minRows: computed(() => props.minRows),
       maxRows: computed(() => props.maxRows),
@@ -3784,6 +3818,34 @@ export default defineComponent({
       enableRangeMove: computed(() => props.rangeMove),
       rows: rowsRef,
       sourceRows: rowsRef,
+      resolveSourceRowId: props.resolveSourceRowId,
+      onGroupToggle: (row, wasExpanded) => {
+        if (!wasExpanded || row.kind !== "group" || row.rowId == null) return
+        void nextTick(async () => {
+          // Collapse changes the flattened projection and can trigger native
+          // scroll anchoring. Resolve and scroll to the group's new position
+          // only after that projection has committed.
+          const groupRowIndex = props.runtime.resolveBodyRowIndexById(row.rowId as string | number)
+          const resolvedGroupRowIndex = groupRowIndex >= 0
+            ? groupRowIndex
+            : Number.isInteger(row.displayIndex) ? row.displayIndex : -1
+          if (resolvedGroupRowIndex >= 0) {
+            await revealCellInComfortZone(resolvedGroupRowIndex, 0)
+          }
+          requestDataGridAnimationFrame(() => {
+            const rowElements = Array.from(stageHostRef.value?.querySelectorAll<HTMLElement>(
+              '.grid-row[data-row-index]:not([aria-hidden="true"]):not([data-datagrid-row-layer="sticky-top"])',
+            ) ?? []).filter(element => Number(element.dataset.rowIndex) === resolvedGroupRowIndex)
+            const rowElement = rowElements.find(element => element.querySelector('.grid-cell[data-column-key] button:not([disabled])'))
+              ?? rowElements.find(element => element.querySelector(".grid-cell[data-column-key]"))
+              ?? rowElements[0]
+            const focusTarget = rowElement?.querySelector<HTMLElement>(
+              '.grid-cell[data-column-key] button:not([disabled])',
+            ) ?? rowElement?.querySelector<HTMLElement>(".grid-cell[data-column-key]")
+            focusTarget?.focus({ preventScroll: true })
+          })
+        })
+      },
       runtime: props.runtime,
       runtimeRowModel: props.runtimeRowModel ?? null,
       rowVersion,
@@ -4865,6 +4927,16 @@ export default defineComponent({
     }))
     const toolbarModules = computed<readonly DataGridAppToolbarModule[]>(() => {
       const modules: DataGridAppToolbarModule[] = []
+      if (groupByToolbarLevels.value.length > 0) {
+        modules.push({
+          key: "group-by-levels",
+          component: DataGridGroupByToolbar as Component,
+          props: {
+            levels: groupByToolbarLevels.value,
+            onRemove: removeGroupByField,
+          },
+        })
+      }
       if (props.history.enabled && props.history.controls === "toolbar") {
         modules.push({
           key: "history-undo",

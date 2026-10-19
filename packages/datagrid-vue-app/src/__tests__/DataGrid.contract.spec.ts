@@ -4282,7 +4282,11 @@ describe("DataGrid app facade contract", () => {
     await wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
 
+    const centerViewport = queryCenterHorizontalViewport(wrapper).element as HTMLElement
+    centerViewport.scrollLeft = 180
     queryColumnMenuAction("toggle-group")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
     await flushRuntimeTasks()
 
     expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
@@ -4301,6 +4305,7 @@ describe("DataGrid app facade contract", () => {
     expect(wrapper.find('.grid-cell--header[data-column-key="owner"]').exists()).toBe(true)
     expect(wrapper.find('.grid-cell--header[data-column-key="amount"]').exists()).toBe(true)
     expect(resolveVm(wrapper).getColumnSnapshot?.()?.zoneOrder.center[0]).toBe("owner")
+    expect(centerViewport.scrollLeft).toBe(0)
 
     await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
@@ -4328,6 +4333,12 @@ describe("DataGrid app facade contract", () => {
     expect(wrapper.find('.grid-cell--header[data-column-key="amount"]').exists()).toBe(false)
     expect(resolveVm(wrapper).getColumnSnapshot?.()?.order[0]).toBe("owner")
     expect(resolveVm(wrapper).getColumnSnapshot?.()?.zoneOrder.center[0]).toBe("owner")
+    expect(wrapper.findAll(".datagrid-grouping-toolbar__level")).toHaveLength(2)
+    expect(wrapper.findAll(".datagrid-grouping-toolbar__name").map(node => node.text())).toEqual(["Region", "Amount"])
+    await wrapper.get('button[aria-label="Remove grouping by Region"]').trigger("click")
+    await flushRuntimeTasks()
+    expect(resolveRowModel(wrapper)?.getSnapshot().groupBy?.fields).toEqual(["amount"])
+    expect(wrapper.findAll(".datagrid-grouping-toolbar__name").map(node => node.text())).toEqual(["Amount"])
 
     await wrapper.find('.grid-cell--header[data-column-key="owner"] [data-datagrid-column-menu-button="true"]').trigger("click")
     await flushRuntimeTasks()
@@ -7106,6 +7117,47 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("selects and clears only the data rows belonging to a collapsed group", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        rowSelection: true,
+        groupBy: {
+          fields: ["owner"],
+          expandedByDefault: false,
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(resolveVm(wrapper).getApi?.()?.rows.getSnapshot?.().groupBy?.fields).toEqual(["owner"])
+    expect(resolveVm(wrapper).getApi?.()?.rows.get(0)?.groupMeta?.groupKey).toBe("group:5:owner3:NOC")
+    const nocCheckbox = wrapper.get('.grid-body-pane--left .grid-row[data-row-index="0"] .grid-cell--row-selection[role="checkbox"]')
+    const paymentsCheckbox = wrapper.get('.grid-body-pane--left .grid-row[data-row-index="1"] .grid-cell--row-selection[role="checkbox"]')
+    expect(nocCheckbox.attributes("aria-checked")).toBe("false")
+
+    resolveVm(wrapper).getApi?.()?.rowSelection.setSelected("r1", true)
+    await flushRuntimeTasks()
+    expect(nocCheckbox.attributes("aria-checked")).toBe("mixed")
+
+    await nocCheckbox.trigger("click")
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()?.selectedRows).toEqual(["r1", "r2"])
+    expect(nocCheckbox.attributes("aria-checked")).toBe("true")
+
+    await paymentsCheckbox.trigger("click")
+    await flushRuntimeTasks()
+    await nocCheckbox.trigger("click")
+    await flushRuntimeTasks()
+    expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()?.selectedRows).toEqual(["r3"])
+    expect(nocCheckbox.attributes("aria-checked")).toBe("false")
+
+    wrapper.unmount()
+  })
+
   it("applies declarative aggregationModel to the internal client row model", async () => {
     const wrapper = mount(DataGrid, {
       props: {
@@ -9401,6 +9453,13 @@ describe("DataGrid app facade contract", () => {
     const refreshedToggle = wrapper.find(".renderer-group-toggle")
     expect(refreshedToggle.text()).toContain("expanded")
     expect(queryBodyCell(wrapper, 1, 0).text()).toBe("NOC")
+
+    await refreshedToggle.trigger("click")
+    await flushRuntimeTasks()
+    await flushAnimationFrame()
+    const collapsedToggle = wrapper.find(".renderer-group-toggle")
+    expect(collapsedToggle.text()).toContain("collapsed")
+    expect(collapsedToggle.attributes("aria-label")).toBe("Expand group")
 
     wrapper.unmount()
   })

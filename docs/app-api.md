@@ -19,6 +19,8 @@ This page documents the public surface of DataGrid from @affino/datagrid-vue-app
 | sort-model / filter-model | Controlled projection state. |
 | group-by / pivot-model | Grouping and pivot projection state. |
 
+Active group-by levels appear in the toolbar in hierarchy order. Adding a level scrolls the grouping tree column to the start of the center viewport. Removing a level from its chip rebuilds the hierarchy with the remaining levels; collapsing a group returns focus to its visible disclosure control.
+
 Use rows for ordinary local tables. Use row-model when data ownership or lifecycle belongs to another runtime; do not provide both for the same grid.
 
 ## View and interaction props
@@ -26,11 +28,12 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | Prop | Purpose |
 | --- | --- |
 | virtualization | Enable/configure virtual row and column rendering. |
+| sticky-group-rows | Opt-in root group headers that stick below the table header and are pushed off at the end of their group. |
 | pagination / page-size / current-page | Pagination mode and page state. |
 | render-mode | "virtualization" or "pagination" mode selection. |
 | layout-mode / min-rows / max-rows | Grid height contract: fill or bounded auto-height. |
 | row-height-mode / base-row-height | Fixed or measured row height. |
-| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. |
+| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. With client-side grouping, a group-row checkbox selects or clears only that group's data rows; a partially selected group is shown as mixed. |
 | fill-handle / range-move | Spreadsheet range workflows. Both are opt-in. |
 | row-reorder | Row drag/reorder behavior. |
 | show-row-index | Show the row-index surface. |
@@ -45,6 +48,11 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | empty-state-alignment | `"content"` (default) centers across the virtual content; `"viewport"` centers within the visible center table viewport and remains anchored during horizontal scrolling. |
 | chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. `DataGridModuleHost` accepts the same `theme` and `chrome` props when modules are rendered outside the grid. |
 | theme | Theme preset or theme configuration. |
+
+`sticky-group-rows` accepts `{ enabled, mode: "root-only", transition: "push-off" }`.
+Only expanded root groups with visible descendants stick. The same row identity
+is rendered in the sticky layer; pinned columns remain fixed while center
+columns follow horizontal scrolling. It defaults to disabled.
 
 ### Column-menu filter conditions
 

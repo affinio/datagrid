@@ -1,5 +1,6 @@
 import { watch, type ComputedRef, type Ref } from "vue"
 import type { DataGridChromePaneModel, DataGridChromeRenderModel } from "@affino/datagrid-chrome"
+import type { StickyGroupPlacement } from "./dataGridStickyGroupLayout"
 import {
   resolveDeviceAlignedCanvasLineWidth,
   resolveDeviceAlignedCanvasStrokeCenter,
@@ -41,6 +42,7 @@ export interface UseDataGridStageChromeCanvasOptions {
   pinnedBottomChromeRenderModel: ComputedRef<DataGridChromeRenderModel>
   hasPivotHeaderGroups: ComputedRef<boolean>
   hideBodyVerticalLines?: ComputedRef<boolean>
+  stickyRowPlacement?: ComputedRef<StickyGroupPlacement | null>
   perfTraceEnabled?: boolean
 }
 
@@ -281,6 +283,7 @@ function drawGridChromeBodyPane(
   context: CanvasRenderingContext2D | null,
   pane: DataGridChromePaneModel,
   hideVerticalLines = false,
+  stickyPlacement: StickyGroupPlacement | null = null,
 ): void {
   if (!context) {
     return
@@ -290,6 +293,60 @@ function drawGridChromeBodyPane(
   if (!hideVerticalLines) {
     drawGridChromeVerticalLines(context, pane, style.columnDividerColor, style.columnDividerWidth)
   }
+  if (stickyPlacement && stickyPlacement.visibleRect.height > 0) {
+    drawStickyGroupGridlines(style, context, pane, stickyPlacement, hideVerticalLines)
+  }
+}
+
+function drawStickyGroupGridlines(
+  style: GridChromeResolvedStyle,
+  context: CanvasRenderingContext2D,
+  pane: DataGridChromePaneModel,
+  placement: StickyGroupPlacement,
+  hideVerticalLines: boolean,
+): void {
+  const top = placement.viewportY
+  const height = placement.height
+  const bottom = top + height
+  const visibleTop = Math.max(0, placement.visibleRect.y)
+  const visibleBottom = Math.min(pane.height, placement.visibleRect.y + placement.visibleRect.height)
+  if (pane.width <= 0 || visibleBottom <= visibleTop) return
+
+  context.save()
+  context.beginPath()
+  context.rect(0, visibleTop, pane.width, visibleBottom - visibleTop)
+  context.clip()
+  context.clearRect(0, top, pane.width, height)
+  if (style.rowBandGroupColor) {
+    context.fillStyle = style.rowBandGroupColor
+    context.fillRect(0, top, pane.width, height)
+  }
+
+  const dpr = resolveGridChromeDevicePixelRatio()
+  if (style.rowDividerWidth > 0) {
+    const lineWidth = resolveDeviceAlignedCanvasLineWidth(style.rowDividerWidth, dpr)
+    const y = resolveDeviceAlignedCanvasStrokeCenter(bottom, lineWidth, dpr)
+    context.strokeStyle = style.rowDividerColor
+    context.lineWidth = lineWidth
+    context.beginPath()
+    context.moveTo(0, y)
+    context.lineTo(pane.width, y)
+    context.stroke()
+  }
+  if (!hideVerticalLines && style.columnDividerWidth > 0 && pane.verticalLines.length > 0) {
+    const lineWidth = resolveDeviceAlignedCanvasLineWidth(style.columnDividerWidth, dpr)
+    context.strokeStyle = style.columnDividerColor
+    context.lineWidth = lineWidth
+    context.beginPath()
+    for (const line of pane.verticalLines) {
+      if (line.position <= 0.5 || line.position >= pane.width - 0.5) continue
+      const x = resolveDeviceAlignedCanvasStrokeCenter(line.position, lineWidth, dpr)
+      context.moveTo(x, top)
+      context.lineTo(x, bottom)
+    }
+    context.stroke()
+  }
+  context.restore()
 }
 
 function drawGridChromeHeaderPane(
@@ -336,6 +393,14 @@ export function useDataGridStageChromeCanvas(
   watch(
     () => options.hideBodyVerticalLines?.value ?? false,
     () => scheduleGridChromeRedraw("full", "empty-state"),
+  )
+  watch(
+    () => options.stickyRowPlacement?.value ?? null,
+    placement => {
+      if (placement || options.stickyRowPlacement) {
+        scheduleGridChromeRedraw("body-scroll", "sticky-group-placement")
+      }
+    },
   )
 
   function recordGridChromeRedrawRequest(
@@ -546,19 +611,19 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
       : null
     if (leftContext) {
-      drawGridChromeBodyPane(style, leftContext, renderModel.left, options.hideBodyVerticalLines?.value)
+      drawGridChromeBodyPane(style, leftContext, renderModel.left, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
     }
 
     const centerContext = shouldDrawBodyCenter
       ? prepareGridChromeCanvas(options.centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
       : null
-    drawGridChromeBodyPane(style, centerContext, renderModel.center, options.hideBodyVerticalLines?.value)
+    drawGridChromeBodyPane(style, centerContext, renderModel.center, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
 
     const rightContext = shouldDrawBodyPinned
       ? prepareGridChromeCanvas(options.rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
       : null
     if (rightContext) {
-      drawGridChromeBodyPane(style, rightContext, renderModel.right, options.hideBodyVerticalLines?.value)
+      drawGridChromeBodyPane(style, rightContext, renderModel.right, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
     }
 
     const leftBottomContext = mode === "full"

@@ -240,6 +240,23 @@ describe("ensureDataGridAppStyles", () => {
     expect(headerFallbackRule).not.toContain("border-bottom:")
   })
 
+  it("styles sticky group rows with group and sticky theme tokens", () => {
+    ensureDataGridAppStyles()
+
+    const styleText = document.getElementById(STYLE_ID)?.textContent ?? ""
+    const start = styleText.indexOf(".grid-row--sticky-top {")
+    const end = styleText.indexOf("}", start)
+    const rule = start >= 0 && end > start ? styleText.slice(start, end) : ""
+
+    expect(rule).toContain("background: var(--datagrid-group-row-background-color")
+    expect(rule).toContain("box-shadow: 0 2px 4px var(--datagrid-sticky-shadow")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--sticky-top {")
+    expect(styleText).toContain("background: var(--datagrid-group-row-background-color, var(--datagrid-row-background-color, #fff))")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell:not(:first-child)")
+    expect(styleText).toContain("box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color)")
+    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index + .grid-cell")
+  })
+
   it("keeps center header native-scrolled with native dividers and contained horizontal overscroll", () => {
     ensureDataGridAppStyles()
 

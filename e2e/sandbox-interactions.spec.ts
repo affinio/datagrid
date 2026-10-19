@@ -231,7 +231,10 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await expect(targetCell).toBeVisible({ timeout: 20_000 })
 
-    await sourceCell.click()
+    await sourceCell.evaluate(element => {
+      element.setAttribute("tabindex", "0")
+      element.focus()
+    })
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
 
     await dragCellBodyStartAndMove(page, sourceCell, targetCell)
@@ -410,6 +413,130 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => viewportRangeStart(page), { timeout: 10_000 }).toBeGreaterThan(2)
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(targetSignature)
     await expect.poll(async () => activeElementSignature(page)).toBe(targetSignature)
+  })
+
+  test("root group rows stick under the header across pinned and center panes", async ({ page }) => {
+    const ariaHiddenFocusWarnings: string[] = []
+    page.on("console", message => {
+      if (message.type() === "warning" && message.text().includes("Blocked aria-hidden")) {
+        ariaHiddenFocusWarnings.push(message.text())
+      }
+    })
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid?pinnedProfile=wide-pinned")
+    const stage = page.locator(".grid-stage:visible").first()
+    const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
+    const horizontalOwner = stage.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
+    await expect(verticalOwner).toBeVisible({ timeout: 20_000 })
+
+    const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
+    await sourceCell.click()
+    await expect.poll(() => page.evaluate(() => document.activeElement?.closest<HTMLElement>(".grid-cell")?.dataset.rowIndex ?? null)).toBe("0")
+    await verticalOwner.evaluate(element => { element.scrollTop = 40 })
+    const initialSticky = stage.locator('.grid-row--sticky-top[data-row-index="0"]')
+    await expect(initialSticky.first()).toBeVisible({ timeout: 10_000 })
+
+    await verticalOwner.evaluate(element => { element.scrollTop = 180 })
+    const stickyRows = stage.locator('.grid-row--sticky-top[data-row-index="0"]')
+    await expect(stickyRows.first()).toBeVisible({ timeout: 10_000 })
+    await expect.poll(() => stickyRows.count()).toBeGreaterThanOrEqual(2)
+
+    const geometry = await Promise.all([
+      stickyRows.nth(0).boundingBox(),
+      stickyRows.nth(1).boundingBox(),
+      verticalOwner.boundingBox(),
+    ])
+    expect(geometry[0]).not.toBeNull()
+    expect(geometry[1]).not.toBeNull()
+    expect(geometry[2]).not.toBeNull()
+    expect(Math.abs(geometry[0]!.y - geometry[1]!.y)).toBeLessThanOrEqual(1)
+    expect(Math.abs(geometry[0]!.height - geometry[1]!.height)).toBeLessThanOrEqual(1)
+    expect(Math.abs(geometry[0]!.y - geometry[2]!.y)).toBeLessThanOrEqual(1)
+
+    const leftCell = stage.locator('.grid-row--sticky-top[data-row-index="0"] .grid-cell[data-column-key="id"]').first()
+    const leftDividerCell = stage.locator('.grid-row--sticky-top[data-row-index="0"] .grid-cell--index').first()
+    const centerCell = stage.locator('.grid-row--sticky-top[data-row-index="0"] .grid-cell[data-column-key="amount"]').first()
+    const leftBefore = await leftCell.boundingBox()
+    const centerBefore = await centerCell.boundingBox()
+    expect(leftBefore).not.toBeNull()
+    expect(centerBefore).not.toBeNull()
+    await expect.poll(() => leftDividerCell.evaluate(cell => getComputedStyle(cell).boxShadow)).not.toBe("none")
+    await expect.poll(() => centerCell.evaluate(cell => getComputedStyle(cell).boxShadow)).not.toBe("none")
+    await horizontalOwner.evaluate(element => { element.scrollLeft = Math.min(120, element.scrollWidth - element.clientWidth) })
+    await expect.poll(() => centerCell.boundingBox().then(rect => rect?.x ?? 0)).not.toBe(centerBefore!.x)
+    expect(await leftCell.boundingBox().then(rect => rect?.x)).toBe(leftBefore!.x)
+
+    const stickyHit = await stickyRows.first().evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      const hit = document.elementFromPoint(rect.left + Math.min(8, rect.width / 2), rect.top + rect.height / 2)
+      return hit?.closest(".grid-row")?.getAttribute("data-datagrid-row-layer")
+    })
+    expect(stickyHit).toBe("sticky-top")
+    await centerCell.click()
+    await expect(centerCell).toHaveClass(/grid-cell--selection-anchor/)
+    const stickySelection = stage.locator(".grid-selection-overlay--sticky .grid-selection-overlay__segment").first()
+    await expect(stickySelection).toBeVisible()
+    const [stickyRowRect, stickySelectionRect] = await Promise.all([
+      stickyRows.nth(1).boundingBox(),
+      stickySelection.boundingBox(),
+    ])
+    expect(stickySelectionRect).not.toBeNull()
+    expect(Math.abs(stickySelectionRect!.y - stickyRowRect!.y)).toBeLessThanOrEqual(1)
+    const rowId = await stickyRows.first().locator(".grid-cell").first().getAttribute("id")
+    if (rowId) {
+      expect(await stage.locator(`[id="${rowId}"]`).count()).toBe(1)
+    }
+
+    await verticalOwner.evaluate(element => { element.scrollTop = 16_000 })
+    await expect.poll(async () => stage.locator(".grid-row--sticky-top").first().getAttribute("data-row-index")).not.toBe("0")
+    const nextSticky = stage.locator(".grid-row--sticky-top").first()
+    await expect.poll(async () => {
+      const colors = await stage.locator(".grid-row--sticky-top").evaluateAll(rows => rows.map(row => getComputedStyle(row).backgroundColor))
+      return colors.length > 0 && colors.every(color => color !== "rgba(0, 0, 0, 0)")
+    }).toBe(true)
+    expect(ariaHiddenFocusWarnings).toHaveLength(0)
+  })
+
+  test("collapsing a scrolled root group returns the viewport to its beginning", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid?pinnedProfile=wide-pinned")
+    const stage = page.locator(".grid-stage:visible").first()
+    const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
+    await expect(verticalOwner).toBeVisible({ timeout: 20_000 })
+
+    const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
+    await expect(sourceCell).toBeVisible({ timeout: 20_000 })
+    await sourceCell.click()
+    await verticalOwner.evaluate(element => { element.scrollTop = 40 })
+    await expect(stage.locator('.grid-row--sticky-top[data-row-index="0"]').first()).toBeVisible({ timeout: 10_000 })
+    await verticalOwner.evaluate(element => { element.scrollTop = 180 })
+    const collapseButton = stage.locator(".grid-row--sticky-top .shell-group-trigger").first()
+    await expect(collapseButton).toBeVisible({ timeout: 10_000 })
+    await expect(collapseButton).toHaveAttribute("aria-expanded", "true")
+    expect(await verticalOwner.evaluate(element => element.scrollTop)).toBeGreaterThan(100)
+
+    await collapseButton.click()
+    await expect.poll(() => verticalOwner.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeLessThanOrEqual(1)
+    await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"]').first()).toHaveAttribute("aria-expanded", "false")
+    await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="1"]').first()).toBeVisible()
+
+    await verticalOwner.evaluate(element => { element.scrollTop = 300 })
+    const secondRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="1"] .shell-group-trigger').first()
+    await expect(secondRootToggle).toBeVisible({ timeout: 10_000 })
+    await secondRootToggle.click()
+    await expect.poll(() => verticalOwner.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeLessThanOrEqual(1)
+    await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="1"]').first()).toHaveAttribute("aria-expanded", "false")
+
+    await verticalOwner.evaluate(element => { element.scrollTop = 500 })
+    const thirdRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="2"] .shell-group-trigger').first()
+    await expect(thirdRootToggle).toBeVisible({ timeout: 10_000 })
+    await thirdRootToggle.click()
+    await expect.poll(() => verticalOwner.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeLessThanOrEqual(100)
+    const thirdRoot = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="2"]').first()
+    await expect(thirdRoot).toHaveAttribute("aria-expanded", "false")
+    const [thirdRootRect, viewportRect] = await Promise.all([thirdRoot.boundingBox(), verticalOwner.boundingBox()])
+    expect(thirdRootRect).not.toBeNull()
+    expect(viewportRect).not.toBeNull()
+    expect(thirdRootRect!.y - viewportRect!.y).toBeGreaterThanOrEqual(-1)
+    expect(thirdRootRect!.y - viewportRect!.y).toBeLessThan(100)
   })
 
   test("horizontal virtualization keeps arrow navigation and reveals adjacent cells", async ({ page }) => {

@@ -1,5 +1,11 @@
 # @affino/datagrid-vue-app
 
+## Unreleased
+
+### Added
+
+- Added opt-in root-only sticky group rows with push-off behavior across pinned and center panes.
+
 ## 0.16.1
 
 ### Changed

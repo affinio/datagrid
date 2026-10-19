@@ -80,6 +80,7 @@ import {
   type DataGridResolvedChromeOptions,
 } from "./config/dataGridChrome"
 import { type DataGridThemeProp } from "./theme/dataGridTheme"
+import { DEFAULT_STICKY_GROUP_ROWS, type StickyGroupRowsOptions } from "./config/dataGridStickyGroupRows"
 import {
   resolveDataGridGroupBy,
   resolveDataGridPagination,
@@ -750,6 +751,10 @@ const dataGridProps = {
   rowHeightMode: {
     type: String as PropType<"fixed" | "auto">,
     default: "fixed",
+  },
+  stickyGroupRows: {
+    type: Object as PropType<StickyGroupRowsOptions>,
+    default: () => ({ ...DEFAULT_STICKY_GROUP_ROWS }),
   },
   baseRowHeight: {
     type: Number,
@@ -1696,6 +1701,7 @@ const DataGridRuntimeComponent = defineComponent({
         findReplace: resolvedFindReplace.value,
         gridLines: resolvedGridLines.value,
         rowHeightMode: props.rowHeightMode,
+        stickyGroupRows: props.stickyGroupRows,
         rendererPolicy: props.rendererPolicy,
         baseRowHeight: props.baseRowHeight,
         layoutMode: resolvedLayout.value.layoutMode,
@@ -1713,6 +1719,7 @@ const DataGridRuntimeComponent = defineComponent({
         showRowIndex: props.showRowIndex,
         rowSelection: showRowSelection.value,
         rowSelectionColumnWidth: rowSelectionColumnWidth.value,
+        resolveSourceRowId: resolvedClientRowModelOptions.value?.resolveRowId,
         rowReorder: resolvedRowReorder.value,
         viewMode: currentViewMode.value,
         gantt: props.gantt,

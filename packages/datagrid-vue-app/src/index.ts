@@ -58,6 +58,7 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
+export type { StickyGroupRowsOptions } from "./config/dataGridStickyGroupRows"
 export type {
   DataGridAppColumnFilterOptions,
   DataGridAppFilterValueNormalizationContext,

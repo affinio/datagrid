@@ -6,6 +6,7 @@ import type {
   DataGridTableStageOverlaySegment,
 } from "./dataGridTableStageBody.types"
 import type { DataGridTableStageCustomOverlay } from "./dataGridTableStage.types"
+import type { StickyGroupPlacement } from "./dataGridStickyGroupLayout"
 import {
   recordDataGridPerfSample,
   resolveDataGridPerfNow,
@@ -30,6 +31,7 @@ export interface UseDataGridStageOverlaysOptions {
   bodyViewportClientHeight: Ref<number>
   bodyViewportScrollTop: Ref<number>
   bodyOverlayRowOrigin?: Ref<number>
+  stickyRowPlacement?: ComputedRef<StickyGroupPlacement | null>
   bottomViewportClientHeight: Ref<number>
   visibleColumns: ComputedRef<readonly DataGridTableStageBodyColumn[]>
   displayRows: ComputedRef<readonly unknown[]>
@@ -55,6 +57,11 @@ export interface UseDataGridStageOverlaysResult {
   leftSelectionSeamOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
   centerSelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
   rightSelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
+  leftStickySelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
+  centerStickySelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
+  rightStickySelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
+  leftStickySelectionSeamOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
+  rightStickySelectionSeamOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
   rightSelectionSeamOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
   leftPinnedBottomSelectionOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
   leftPinnedBottomSelectionSeamOverlaySegments: ComputedRef<readonly DataGridTableStageOverlaySegment[]>
@@ -364,6 +371,52 @@ export function useDataGridStageOverlays(
   const bodyViewportHeight = computed(() => Math.max(0, options.bodyViewportClientHeight.value))
   const bottomViewportHeight = computed(() => Math.max(0, options.bottomViewportClientHeight.value))
   const bodyOverlayRowOrigin = computed(() => Math.max(0, options.bodyOverlayRowOrigin?.value ?? 0))
+  const stickySelectionOverlayMetricsList = computed(() => {
+    const placement = options.stickyRowPlacement?.value
+    if (!placement) return []
+
+    const ranges = options.isAdditiveSelection.value
+      ? (options.selectionRange.value ? [options.selectionRange.value] : [])
+      : options.selectionRanges.value
+    return ranges.flatMap(range => {
+      const startRow = Math.min(range.startRow, range.endRow)
+      const endRow = Math.max(range.startRow, range.endRow)
+      const startColumn = Math.max(0, Math.min(range.startColumn, range.endColumn))
+      const endColumn = Math.min(options.visibleColumns.value.length - 1, Math.max(range.startColumn, range.endColumn))
+      if (placement.sourceIndex < startRow || placement.sourceIndex > endRow || startColumn > endColumn) return []
+      return [{
+        startRowOffset: placement.sourceIndex,
+        endRowOffset: placement.sourceIndex,
+        startColumnIndex: startColumn,
+        endColumnIndex: endColumn,
+        top: options.bodyViewportScrollTop.value + placement.viewportY - bodyOverlayRowOrigin.value,
+        height: placement.height,
+      }]
+    })
+  })
+  const stickySelectionSeamOverlayMetricsList = computed(() => {
+    const placement = options.stickyRowPlacement?.value
+    if (!placement) return []
+
+    const ranges = options.isAdditiveSelection.value
+      ? (options.selectionRange.value ? [options.selectionRange.value] : [])
+      : options.selectionRanges.value
+    return ranges.flatMap(range => {
+      const startRow = Math.min(range.startRow, range.endRow)
+      const endRow = Math.max(range.startRow, range.endRow)
+      const startColumn = Math.max(0, Math.min(range.startColumn, range.endColumn))
+      const endColumn = Math.min(options.visibleColumns.value.length - 1, Math.max(range.startColumn, range.endColumn))
+      if (placement.sourceIndex < startRow || placement.sourceIndex > endRow || startColumn > endColumn) return []
+      return [{
+        startRowOffset: placement.sourceIndex,
+        endRowOffset: placement.sourceIndex,
+        startColumnIndex: startColumn,
+        endColumnIndex: endColumn,
+        top: placement.viewportY,
+        height: placement.height,
+      }]
+    })
+  })
   const bodySelectionOverlayMetricsList = computed(() => (
     normalizeBodyOverlayMetricsList(visibleSelectionOverlayMetricsList.value, bodyOverlayRowOrigin.value)
   ))
@@ -413,6 +466,47 @@ export function useDataGridStageOverlays(
     "right",
     "selection",
     selectionOverlayOptions,
+  ))
+
+  const leftStickySelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+    options.overlayGeometryContext.value,
+    stickySelectionOverlayMetricsList.value,
+    "left",
+    "sticky-selection",
+    selectionOverlayOptions,
+    bodyViewportHeight.value,
+  ))
+  const centerStickySelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+    options.overlayGeometryContext.value,
+    stickySelectionOverlayMetricsList.value,
+    "center",
+    "sticky-selection",
+    selectionOverlayOptions,
+    bodyViewportHeight.value,
+  ))
+  const rightStickySelectionOverlaySegments = computed(() => buildPaneOverlaySegmentsForMetricsList(
+    options.overlayGeometryContext.value,
+    stickySelectionOverlayMetricsList.value,
+    "right",
+    "sticky-selection",
+    selectionOverlayOptions,
+    bodyViewportHeight.value,
+  ))
+  const leftStickySelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+    options.overlayGeometryContext.value,
+    stickySelectionSeamOverlayMetricsList.value,
+    "left",
+    "sticky-selection-seam",
+    selectionOverlayOptions,
+    bodyViewportHeight.value,
+  ))
+  const rightStickySelectionSeamOverlaySegments = computed(() => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
+    options.overlayGeometryContext.value,
+    stickySelectionSeamOverlayMetricsList.value,
+    "right",
+    "sticky-selection-seam",
+    selectionOverlayOptions,
+    bodyViewportHeight.value,
   ))
 
   const rightSelectionSeamOverlaySegments = computedOverlaySegments(options, "selection", "body-seam", "right", () => buildPinnedPaneSeamOverlaySegmentsForMetricsList(
@@ -704,9 +798,14 @@ export function useDataGridStageOverlays(
 
   return {
     leftSelectionOverlaySegments,
+    leftStickySelectionOverlaySegments,
+    leftStickySelectionSeamOverlaySegments,
     leftSelectionSeamOverlaySegments,
     centerSelectionOverlaySegments,
+    centerStickySelectionOverlaySegments,
     rightSelectionOverlaySegments,
+    rightStickySelectionOverlaySegments,
+    rightStickySelectionSeamOverlaySegments,
     rightSelectionSeamOverlaySegments,
     leftPinnedBottomSelectionOverlaySegments,
     leftPinnedBottomSelectionSeamOverlaySegments,

@@ -116,6 +116,7 @@
         />
         <DataGridTableStagePinnedPane
           :pane="bodyLeftPinnedPane"
+          :sticky-row="stickyBodyRowWithOverlay"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -127,6 +128,7 @@
 
         <DataGridTableStageCenterPane
           :display-rows="rows.displayRows"
+          :sticky-row="stickyBodyRowWithOverlay"
           viewport-class="grid-body-viewport grid-body-viewport--shared-vertical"
           :runtime-revision="rows.runtimeRevision"
           :body-rows-revision="rows.displayRowsRevision"
@@ -165,6 +167,7 @@
 
         <DataGridTableStagePinnedPane
           :pane="bodyRightPinnedPane"
+          :sticky-row="stickyBodyRow"
           :render-api="pinnedPaneRenderApi"
           :handle-context-menu="onViewportContextMenu"
           :perf-trace-enabled="perfTraceEnabled"
@@ -328,6 +331,10 @@ import {
 import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
 import { dataGridAppThemeRevisionKey } from "../dataGridAppContext"
 import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
+import {
+  buildStickyRootGroupIntervals,
+  resolveStickyRootGroupPlacement,
+} from "./dataGridStickyGroupLayout"
 import { resolveDataGridPerfTraceEnabled } from "../perf/dataGridPerfTrace"
 import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
 import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
@@ -377,6 +384,10 @@ const props = defineProps({
   rowHeightMode: {
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["rowHeightMode"]>,
     required: true,
+  },
+  stickyGroupRows: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["stickyGroupRows"]>,
+    default: () => ({ enabled: false, mode: "root-only", transition: "push-off" }),
   },
   layoutMode: {
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["layoutMode"]>,
@@ -1696,6 +1707,56 @@ const {
   gridChromeSyncers,
 })
 
+const stickyRootGroupIntervals = computed(() => {
+  const rowCount = Math.max(0, Math.trunc(viewport.value.virtualRowTotal ?? displayRows.value.length))
+  const getRow = rows.value.getBodyRowAtIndex
+  if (
+    !props.stickyGroupRows?.enabled
+    || !rows.value.hasGrouping
+    || mode.value !== "base"
+    || typeof getRow !== "function"
+  ) {
+    return []
+  }
+  // Rebuild only when the row-model revision changes. Scroll frames use the
+  // interval index below and never scan the projection.
+  void rows.value.projectionRevision
+  return buildStickyRootGroupIntervals(rowCount, index => getRow(index))
+})
+
+const stickyRootGroupPlacement = computed(() => resolveStickyRootGroupPlacement(
+  stickyRootGroupIntervals.value,
+  {
+    enabled: props.stickyGroupRows?.enabled === true,
+    scrollTop: bodyViewportScrollTop.value,
+    viewportWidth: bodyViewportShellClientWidth.value,
+    viewportHeight: bodyViewportClientHeight.value,
+    topInset: 0,
+    resolveRowOffset: rowIndex => viewport.value.resolveRowOffset?.(rowIndex)
+      ?? rowIndex * Math.max(1, viewport.value.baseRowHeight ?? 31),
+    resolveRowHeight: rowIndex => viewport.value.resolveRowHeight?.(rowIndex)
+      ?? viewport.value.baseRowHeight
+      ?? 31,
+  },
+))
+
+const stickyBodyRow = computed(() => {
+  const placement = stickyRootGroupPlacement.value
+  const row = placement ? rows.value.getBodyRowAtIndex?.(placement.sourceIndex) : null
+  if (!placement || !row || String(row.rowId) !== placement.nodeId) return null
+  return {
+    row,
+    placement,
+    style: {
+      position: "absolute",
+      top: `${bodyViewportScrollTop.value + placement.viewportY - bodyOverlayRowOrigin.value}px`,
+      left: "0px",
+      height: `${placement.height}px`,
+      zIndex: 8,
+    } as CSSProperties,
+  }
+})
+
 function readScrollEventElement(event: Event): HTMLElement | null {
   return event.currentTarget instanceof HTMLElement
     ? event.currentTarget
@@ -2007,6 +2068,7 @@ const {
   headerChromeRenderModel,
   pinnedBottomChromeRenderModel,
   hasPivotHeaderGroups,
+  stickyRowPlacement: stickyRootGroupPlacement,
   hideBodyVerticalLines: computed(() => Boolean(props.emptyState)),
   perfTraceEnabled,
 })
@@ -2635,9 +2697,14 @@ function resolvePinnedBottomVisibleRangeBounds(range: OverlayRange | null) {
 const customOverlays = computed(() => props.customOverlays ?? [])
 const {
   leftSelectionOverlaySegments,
+  leftStickySelectionOverlaySegments,
+  leftStickySelectionSeamOverlaySegments,
   leftSelectionSeamOverlaySegments,
   centerSelectionOverlaySegments,
+  centerStickySelectionOverlaySegments,
   rightSelectionOverlaySegments,
+  rightStickySelectionOverlaySegments,
+  rightStickySelectionSeamOverlaySegments,
   rightSelectionSeamOverlaySegments,
   leftPinnedBottomSelectionOverlaySegments,
   leftPinnedBottomSelectionSeamOverlaySegments,
@@ -2679,6 +2746,7 @@ const {
   bodyViewportClientHeight,
   bodyViewportScrollTop,
   bodyOverlayRowOrigin,
+  stickyRowPlacement: stickyRootGroupPlacement,
   bottomViewportClientHeight: pinnedBottomViewportClientHeight,
   visibleColumns,
   displayRows,
@@ -2697,6 +2765,23 @@ const {
   resolvePinnedBottomVisibleRangeBounds,
   customOverlays,
   perfTraceEnabled,
+})
+
+const stickyBodyRowWithOverlay = computed(() => {
+  const sticky = stickyBodyRow.value
+  if (!sticky) return null
+  return {
+    ...sticky,
+    selectionOverlaySegments: {
+      left: leftStickySelectionOverlaySegments.value,
+      center: centerStickySelectionOverlaySegments.value,
+      right: rightStickySelectionOverlaySegments.value,
+    },
+    selectionSeamOverlaySegments: {
+      left: leftStickySelectionSeamOverlaySegments.value,
+      right: rightStickySelectionSeamOverlaySegments.value,
+    },
+  }
 })
 
 const layoutRuntime = computed(() => ({

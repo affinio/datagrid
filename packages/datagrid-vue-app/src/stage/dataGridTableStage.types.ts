@@ -11,6 +11,7 @@ import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps } from "../config/dataGridEmptyState"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type {
   DataGridColumnMenuActionOptions,
   DataGridColumnMenuCustomItem,
@@ -147,9 +148,13 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   displayRows: readonly DataGridTableRow<TRow>[]
   displayRowsRevision?: number
   runtimeRevision?: string | number | null
+  projectionRevision?: string | number | null
+  hasGrouping: boolean
+  getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
   pinnedTopRows: readonly DataGridTableRow<TRow>[]
   pinnedBottomRows: readonly DataGridTableRow<TRow>[]
   sourceRows?: readonly TRow[]
+  resolveSourceRowId?: (row: TRow, index: number) => string | number | null | undefined
   showRowIndex?: boolean
   rowHover?: boolean
   stripedRows?: boolean
@@ -278,6 +283,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   extends DataGridTableStageSectionedProps<TRow> {
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
+  stickyGroupRows?: StickyGroupRowsOptions
   layoutMode: DataGridLayoutMode
   chromeSignature?: string
   customOverlays?: readonly DataGridTableStageCustomOverlay[]
@@ -300,6 +306,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
     DataGridTableStageInteractionSection<TRow> {
   mode: DataGridTableMode
   rowHeightMode: "fixed" | "auto"
+  stickyGroupRows: StickyGroupRowsOptions
   layoutMode: DataGridLayoutMode
   chromeSignature?: string
 }

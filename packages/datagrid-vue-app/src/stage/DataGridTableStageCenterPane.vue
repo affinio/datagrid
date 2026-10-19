@@ -42,12 +42,13 @@
         </div>
       <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
       <div
-        v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex } in renderedBodyRowSlots"
-        :key="resolveBodyRowKey(row, rowOffset)"
+        v-for="{ row, rowOffset, viewportRowOffset, absoluteRowIndex, isSticky, isStickySource } in renderedBodyRowSlots"
+        :key="resolveBodyRowKey(row, rowOffset, isSticky)"
         class="grid-row"
         role="row"
-        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, viewportRowOffset) }]"
-        :style="[rows.rowStyle(row, viewportRowOffset), layout.mainTrackStyle]"
+        :class="[rows.rowClass(row), renderApi.rowStateClasses(row, rowOffset), { 'grid-row--autosize-probe': rows.isRowAutosizeProbe(row, viewportRowOffset), 'grid-row--sticky-top': isSticky, 'grid-row--sticky-source-hidden': isStickySource }]"
+        :style="[rows.rowStyle(row, viewportRowOffset), layout.mainTrackStyle, isSticky ? stickyRow?.style : undefined]"
+        :data-datagrid-row-layer="isSticky ? 'sticky-top' : 'body'"
         :data-row-index="absoluteRowIndex"
         :aria-rowindex="absoluteRowIndex + 1"
         :aria-expanded="renderApi.rowAriaExpanded(row)"
@@ -77,14 +78,15 @@
             renderApi.bodyCellSelectionStyle(row, column, viewportRowOffset, columnIndex),
             renderApi.resolveCellCustomStyle(row, viewportRowOffset, column, columnIndex),
           ]"
-          :id="renderApi.cellDomId(row, column)"
+          :id="isStickySource ? undefined : renderApi.cellDomId(row, column)"
           :data-row-id="String(row.rowId)"
           :data-column-key="column.key"
           :data-row-index="absoluteRowIndex"
           :data-column-index="columnIndex"
+          :data-datagrid-row-layer="isSticky ? 'sticky-top' : 'body'"
           :aria-rowindex="absoluteRowIndex + 1"
           :aria-colindex="columnIndex + 1"
-          :tabindex="renderApi.cellTabIndex(viewportRowOffset, columnIndex)"
+          :tabindex="isStickySource ? -1 : renderApi.cellTabIndex(viewportRowOffset, columnIndex)"
           :aria-selected="renderApi.cellAriaSelected(viewportRowOffset, columnIndex)"
           :role="renderApi.cellAriaRole(row, viewportRowOffset, column, columnIndex) ?? 'gridcell'"
           :aria-checked="renderApi.cellAriaChecked(row, viewportRowOffset, column, columnIndex)"
@@ -213,6 +215,12 @@
         :move-preview-segments="movePreviewOverlaySegments"
         :lanes="overlayLanes"
       />
+      <DataGridTableStageOverlayLayer
+        layer-class="grid-selection-overlay--sticky"
+        :selection-segments="stickyRow?.selectionOverlaySegments?.center ?? []"
+        :fill-preview-segments="[]"
+        :move-preview-segments="[]"
+      />
       </div>
       <div
         v-if="emptyState && emptyStateAlignment === 'viewport'"
@@ -276,6 +284,10 @@ const props = defineProps({
   displayRows: {
     type: Array as PropType<readonly DataGridTableStageBodyRow[]>,
     required: true,
+  },
+  stickyRow: {
+    type: Object as PropType<import("./dataGridTableStageBody.types").DataGridTableStageStickyRow | null>,
+    default: null,
   },
   runtimeRevision: {
     type: [String, Number] as PropType<string | number | null>,
@@ -389,6 +401,7 @@ const {
   overlayLanes,
   renderApi,
 } = toRefs(props)
+
 
 const topSpacerHeight = computed(() => props.topSpacerHeight ?? viewport.value.topSpacerHeight)
 const bottomSpacerHeight = computed(() => props.bottomSpacerHeight ?? viewport.value.bottomSpacerHeight)
@@ -505,17 +518,39 @@ const renderedColumnSlots = computed(() => renderedCenterColumns.value.map(colum
   column,
   columnIndex: renderApi.value.columnIndexByKey(column.key),
 })))
-const renderedBodyRowSlots = computed(() => displayRows.value.map((row, rowOffset) => ({
-  row,
-  rowOffset,
-  viewportRowOffset: renderApi.value.viewportRowOffset(row, rowOffset),
-  absoluteRowIndex: renderApi.value.absoluteRowIndex(row, rowOffset),
-})))
+const renderedBodyRowSlots = computed(() => {
+  const stickyIndex = props.stickyRow?.placement.sourceIndex
+  const slots = displayRows.value.map((row, rowOffset) => {
+    const absoluteRowIndex = renderApi.value.absoluteRowIndex(row, rowOffset)
+    return {
+      row,
+      rowOffset,
+      viewportRowOffset: renderApi.value.viewportRowOffset(row, rowOffset),
+      absoluteRowIndex,
+      isSticky: false,
+      isStickySource: absoluteRowIndex === stickyIndex,
+    }
+  })
+  const sticky = props.stickyRow
+  if (sticky) {
+    const rowOffset = sticky.placement.sourceIndex - viewport.value.viewportRowStart
+    slots.push({
+      row: sticky.row,
+      rowOffset,
+      viewportRowOffset: renderApi.value.viewportRowOffset(sticky.row, rowOffset),
+      absoluteRowIndex: sticky.placement.sourceIndex,
+      isSticky: true,
+      isStickySource: false,
+    })
+  }
+  return slots
+})
 const renderedColumnWindowSignature = computed(() => (
   renderedCenterColumns.value.map(column => String(column.key)).join("|")
 ))
 
-function resolveBodyRowKey(row: DataGridTableStageBodyRow, rowOffset: number): string {
+function resolveBodyRowKey(row: DataGridTableStageBodyRow, rowOffset: number, isSticky = false): string {
+  if (isSticky) return `sticky-${String(row.rowId)}`
   if (props.rowKeyMode !== "recycled") {
     return String(row.rowId)
   }

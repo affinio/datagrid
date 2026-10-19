@@ -54,6 +54,10 @@ function checkboxValueIsChecked(options: UseDataGridStageCellStateOptions, row: 
   return value === "true" || value === "1" || value === "yes" || value === "on"
 }
 
+function checkboxValueIsMixed(options: UseDataGridStageCellStateOptions, row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): boolean {
+  return options.cells.value.readCell(row, column.key).trim().toLowerCase() === "mixed"
+}
+
 function resolveCellInteraction(
   options: UseDataGridStageCellStateOptions,
   row: DataGridTableStageBodyRow,
@@ -76,7 +80,7 @@ export function useDataGridStageCellState(
   options: UseDataGridStageCellStateOptions,
 ): UseDataGridStageCellStateResult {
   function shouldRenderCheckboxCell(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): boolean {
-    return row.kind !== "group" && isCheckboxColumn(column)
+    return isCheckboxColumn(column) && (row.kind !== "group" || isRowSelectionColumn(column))
   }
 
   function builtInCellClasses(
@@ -138,6 +142,10 @@ export function useDataGridStageCellState(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): "true" | "false" | "mixed" | undefined {
+    if (isRowSelectionColumn(column) && shouldRenderCheckboxCell(row, column)) {
+      const value = options.cells.value.readCell(row, column.key).trim().toLowerCase()
+      return value === "mixed" ? "mixed" : checkboxValueIsChecked(options, row, column) ? "true" : "false"
+    }
     return resolveCellInteraction(options, row, rowOffset, column, columnIndex)?.checked
       ?? (shouldRenderCheckboxCell(row, column)
         ? (checkboxValueIsChecked(options, row, column) ? "true" : "false")
@@ -177,12 +185,14 @@ export function useDataGridStageCellState(
   function checkboxIndicatorClass(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): Record<string, boolean> {
     return {
       "grid-checkbox-indicator--checked": checkboxValueIsChecked(options, row, column),
+      "grid-checkbox-indicator--mixed": checkboxValueIsMixed(options, row, column),
     }
   }
 
   function checkboxIndicatorMarkClass(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): Record<string, boolean> {
     return {
       "grid-checkbox-indicator__mark--checked": checkboxValueIsChecked(options, row, column),
+      "grid-checkbox-indicator__mark--mixed": checkboxValueIsMixed(options, row, column),
     }
   }
 

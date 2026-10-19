@@ -15,12 +15,50 @@ import type {
 type DataGridTableStageRowSelectionApi<TRow extends Record<string, unknown>> =
   UseDataGridRuntimeResult<TRow>["api"]["rowSelection"]
 
+function resolveSourceRowData(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object") return {}
+  const candidate = value as Record<string, unknown>
+  const isNodeInput = candidate.kind === "leaf" || candidate.kind === "group"
+  if (isNodeInput && candidate.data && typeof candidate.data === "object") {
+    return candidate.data as Record<string, unknown>
+  }
+  if (isNodeInput && candidate.row && typeof candidate.row === "object") {
+    return candidate.row as Record<string, unknown>
+  }
+  return candidate
+}
+
+function resolveDefaultSourceRowId<TRow extends Record<string, unknown>>(row: TRow, index: number): DataGridRowId {
+  const candidate = row as Record<string, unknown>
+  if ((candidate.kind === "leaf" || candidate.kind === "group") && candidate.rowId != null) {
+    return candidate.rowId as DataGridRowId
+  }
+  const id = candidate.rowId ?? candidate.id
+  return (typeof id === "string" || typeof id === "number") ? id : index
+}
+
+function readGroupField(data: Record<string, unknown>, field: string): unknown {
+  if (data[field] !== undefined) return data[field]
+  let current: unknown = data
+  for (const segment of field.split(".")) {
+    if (!current || typeof current !== "object") return undefined
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+function normalizeGroupValue(value: unknown): string {
+  return value == null ? "" : String(value)
+}
+
 export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<string, unknown>> {
   runtime: Pick<import("@affino/datagrid-vue").UseDataGridRuntimeResult<TRow>, "api">
   isPlaceholderRow?: (row: DataGridTableRow<TRow>) => boolean
   rowSelectionColumn: ComputedRef<DataGridColumnSnapshot | null>
   orderedVisibleColumns: ComputedRef<readonly DataGridColumnSnapshot[]>
   displayRows: Ref<readonly DataGridTableRow<TRow>[]>
+  sourceRows?: Ref<readonly TRow[]>
+  resolveSourceRowId?: (row: TRow, index: number) => DataGridRowId | null | undefined
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
   applyRowSelectionMutation?: (mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => void
   viewportRowStart: Ref<number>
@@ -33,6 +71,7 @@ export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<str
   rowSelectionSet: ComputedRef<Set<DataGridRowId>>
   isRowFocused: (row: DataGridTableRow<TRow>) => boolean
   isRowCheckboxSelected: (row: DataGridTableRow<TRow>) => boolean
+  isRowCheckboxMixed: (row: DataGridTableRow<TRow>) => boolean
   readRowSelectionCell: (row: DataGridTableRow<TRow>) => string
   readRowSelectionDisplayCell: (row: DataGridTableRow<TRow>) => string
   areAllVisibleRowsSelected: ComputedRef<boolean>
@@ -57,6 +96,34 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
   const rowSelectionExcludedSet = computed(() => new Set(options.rowSelectionSnapshot.value?.excludedRows ?? []))
   const isAllRowsSelectionMode = computed(() => options.rowSelectionSnapshot.value?.mode === "all")
+  const groupMemberIdsByKey = computed(() => {
+    // Tie this cache to projection refreshes so groupBy changes invalidate it
+    // without adding work to scroll or render loops.
+    void options.displayRows.value
+    const snapshot = options.runtime.api.rows.getSnapshot()
+    const fields = snapshot.groupBy?.fields ?? []
+    if (snapshot.kind !== "client" || fields.length === 0 || !options.sourceRows) {
+      return new Map<string, DataGridRowId[]>()
+    }
+
+    const members = new Map<string, DataGridRowId[]>()
+    options.sourceRows.value.forEach((sourceRow, sourceIndex) => {
+      const rowId = options.resolveSourceRowId
+        ? options.resolveSourceRowId(sourceRow, sourceIndex)
+        : resolveDefaultSourceRowId(sourceRow, sourceIndex)
+      if (rowId == null) return
+      const data = resolveSourceRowData(sourceRow)
+      let groupKey = "group:"
+      for (const field of fields) {
+        const value = normalizeGroupValue(readGroupField(data, field))
+        groupKey += `${field.length}:${field}${value.length}:${value}`
+        const groupMembers = members.get(groupKey)
+        if (groupMembers) groupMembers.push(rowId)
+        else members.set(groupKey, [rowId])
+      }
+    })
+    return members
+  })
   let rowIndexRangeAnchor: number | null = null
   let lastRowIndexRange: DataGridCopyRange | null = null
   const shouldUseVisibleRowsForAllSelectionState = computed(() => {
@@ -71,31 +138,48 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     return !isPlaceholderRow(row) && row.rowId != null && options.rowSelectionSnapshot.value?.focusedRow === row.rowId
   }
 
-  const isRowCheckboxSelected = (row: DataGridTableRow<TRow>): boolean => {
-    if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null) {
-      return false
+  const resolveCheckboxState = (row: DataGridTableRow<TRow>): "true" | "false" | "mixed" => {
+    if (isPlaceholderRow(row) || row.rowId == null) {
+      return "false"
     }
-    return isAllRowsSelectionMode.value
-      ? !rowSelectionExcludedSet.value.has(row.rowId)
-      : rowSelectionSet.value.has(row.rowId)
+    if (row.kind === "group") {
+      const ids = groupMemberIdsByKey.value.get(row.groupMeta?.groupKey ?? "") ?? []
+      if (ids.length === 0) return "false"
+      let selectedCount = 0
+      for (const rowId of ids) {
+        if (isRowIdSelected(rowId)) selectedCount += 1
+      }
+      return selectedCount === 0 ? "false" : selectedCount === ids.length ? "true" : "mixed"
+    }
+    return isRowIdSelected(row.rowId) ? "true" : "false"
   }
 
-  const readRowSelectionValue = (row: DataGridTableRow<TRow>): boolean => {
-    return isRowCheckboxSelected(row)
+  const isRowIdSelected = (rowId: DataGridRowId): boolean => {
+    return isAllRowsSelectionMode.value
+      ? !rowSelectionExcludedSet.value.has(rowId)
+      : rowSelectionSet.value.has(rowId)
+  }
+
+  const isRowCheckboxSelected = (row: DataGridTableRow<TRow>): boolean => {
+    return resolveCheckboxState(row) === "true"
+  }
+
+  const isRowCheckboxMixed = (row: DataGridTableRow<TRow>): boolean => {
+    return resolveCheckboxState(row) === "mixed"
   }
 
   const readRowSelectionCell = (row: DataGridTableRow<TRow>): string => {
-    return readRowSelectionValue(row) ? "true" : "false"
+    return resolveCheckboxState(row)
   }
 
   const readRowSelectionDisplayCell = (row: DataGridTableRow<TRow>): string => {
     const column = options.rowSelectionColumn.value?.column
-    if (!column || row.kind === "group" || isPlaceholderRow(row)) {
+    if (!column || isPlaceholderRow(row) || row.kind === "group") {
       return ""
     }
     return buildDataGridCellRenderModel({
       column,
-      value: readRowSelectionValue(row),
+      value: isRowCheckboxSelected(row),
     }).displayValue
   }
 
@@ -152,7 +236,17 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   }
 
   const toggleRowCheckboxSelected = (row: DataGridTableRow<TRow>): void => {
-    if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+    if (isPlaceholderRow(row) || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+      return
+    }
+    if (row.kind === "group") {
+      const rowIds = groupMemberIdsByKey.value.get(row.groupMeta?.groupKey ?? "") ?? []
+      if (rowIds.length === 0) return
+      const shouldSelect = !isRowCheckboxSelected(row)
+      applyRowSelectionMutation(rowSelectionApi => {
+        if (shouldSelect) rowSelectionApi.selectRows(rowIds)
+        else rowSelectionApi.deselectRows(rowIds)
+      })
       return
     }
     applyRowSelectionMutation(rowSelectionApi => {
@@ -232,6 +326,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     rowSelectionSet,
     isRowFocused,
     isRowCheckboxSelected,
+    isRowCheckboxMixed,
     readRowSelectionCell,
     readRowSelectionDisplayCell,
     areAllVisibleRowsSelected,

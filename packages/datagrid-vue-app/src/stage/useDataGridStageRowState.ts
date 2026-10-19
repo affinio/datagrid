@@ -309,9 +309,6 @@ export function useDataGridStageRowState(
     columnIndex: number,
   ): void {
     if (isRowSelectionColumn(column)) {
-      if (row.kind === "group") {
-        return
-      }
       options.handleCellClick(row, rowOffset, column, columnIndex)
       return
     }

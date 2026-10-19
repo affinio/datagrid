@@ -112,6 +112,9 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
     displayRows: unref(options.displayRows),
     displayRowsRevision: unref(options.displayRowsRevision),
     runtimeRevision: unref(options.runtimeRevision),
+    projectionRevision: unref(options.projectionRevision),
+    hasGrouping: unref(options.hasGrouping),
+    getBodyRowAtIndex: unref(options.getBodyRowAtIndex),
     pinnedTopRows: unref(options.pinnedTopRows),
     pinnedBottomRows: unref(options.pinnedBottomRows),
     sourceRows: unref(options.sourceRows),
@@ -202,6 +205,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
   const tableStageProps = computed<DataGridTableStageProps<TRow>>(() => ({
     mode: unref(options.mode),
     rowHeightMode: unref(options.rowHeightMode),
+    stickyGroupRows: unref(options.stickyGroupRows),
     layoutMode: unref(options.layoutMode),
     chromeSignature: unref(options.chromeSignature),
     rendererPolicy: unref(options.rendererPolicy),
