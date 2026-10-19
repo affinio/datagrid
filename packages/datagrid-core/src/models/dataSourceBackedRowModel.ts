@@ -102,6 +102,7 @@ import { createDataSourceCacheStoreRuntime } from "./server/dataSourceCacheStore
 import { createDataSourcePendingPullRuntime } from "./server/dataSourcePendingPullRuntime.js"
 import { createDataSourcePrefetchRuntime } from "./server/dataSourcePrefetchPolicy.js"
 import { createDataSourceCacheInvalidationRuntime } from "./server/dataSourceCacheInvalidationRuntime.js"
+import { createDataSourcePushInvalidationRuntime } from "./server/dataSourcePushInvalidationRuntime.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -1273,42 +1274,29 @@ export function createDataSourceBackedRowModel<T = unknown>(
     return requestPromise
   }
 
-  function applyPushInvalidation(invalidation: DataGridDataSourceInvalidation) {
-    if (invalidation.kind === "all") {
-      clearAll({ preserveRange: toSourceRange(viewportRange) })
-      clearBackgroundPrefetchState("stale")
+  const pushInvalidationRuntime = createDataSourcePushInvalidationRuntime({
+    invalidateDataSource: invalidation => {
       if (typeof dataSource.invalidate === "function") {
         void Promise.resolve(dataSource.invalidate(invalidation))
       }
-      void pullRange(toSourceRange(viewportRange), "push-invalidation", "normal")
-      return
-    }
-
-    if (invalidation.kind === "rows") {
-      invalidateRows(invalidation.rowIds)
-      if (typeof dataSource.invalidate === "function") {
-        void Promise.resolve(dataSource.invalidate(invalidation))
+    },
+    getSourceViewport: () => toSourceRange(viewportRange),
+    clearAll,
+    clearRange,
+    invalidateRows,
+    resolveVisibleRange: (range, viewport) => resolveVisibleRangeInvalidation(normalizeRequestedRange(range), viewport),
+    isBackgroundRangeOverlapping: range => Boolean(backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizeRequestedRange(range))),
+    clearBackgroundPrefetch: () => clearBackgroundPrefetchState("stale"),
+    pullRange: (range, projectionRefresh) => {
+      if (projectionRefresh) {
+        void pullRange(range, "push-invalidation", "normal", createProjectionRefreshTreePullContext(), { affectsLoading: false })
+      } else {
+        void pullRange(range, "push-invalidation", "normal")
       }
-      return
-    }
-
-    const normalizedInvalidationRange = normalizeRequestedRange(invalidation.range)
-    const sourceViewport = toSourceRange(viewportRange)
-    const visibleRefreshRange = resolveVisibleRangeInvalidation(normalizedInvalidationRange, sourceViewport)
-    const touchesViewport = visibleRefreshRange !== null
-    clearRange(invalidation.range, touchesViewport ? { preserveRange: sourceViewport } : {})
-    if (backgroundInFlight && rangesOverlap(backgroundInFlight.range, normalizedInvalidationRange)) {
-      clearBackgroundPrefetchState("stale")
-    }
-    if (typeof dataSource.invalidate === "function") {
-      void Promise.resolve(dataSource.invalidate(invalidation))
-    }
-    if (visibleRefreshRange) {
-      void pullRange(visibleRefreshRange, "push-invalidation", "normal", createProjectionRefreshTreePullContext(), { affectsLoading: false })
-    } else {
-      emit()
-    }
-  }
+    },
+    emit,
+  })
+  const applyPushInvalidation = pushInvalidationRuntime.apply
 
   function applyPushEvent(event: DataGridDataSourcePushEvent<T>) {
     if (disposed) {

@@ -82,6 +82,8 @@ Progress (`2026-10-19`): extracted bounded range clearing and full cache clearin
 
 Progress (`2026-10-19`): moved row-id cache clearing into the same invalidation runtime. The facade now supplies the active source viewport and a callback for stale background-pull cleanup, then retains responsibility for refreshing an affected viewport. Focused datasource contracts (89), core type-check/build, and all datasource churn benchmark seeds passed.
 
+Progress (`2026-10-19`): moved push invalidation dispatch into `models/server/dataSourcePushInvalidationRuntime.ts`. The runtime owns all/range/row invalidation routing and datasource notification; the facade supplies cache clearing, pull scheduling, viewport refresh context, and background cleanup. Push/datasource contracts (80), core type-check/build, and all datasource churn seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
