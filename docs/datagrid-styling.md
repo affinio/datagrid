@@ -67,6 +67,40 @@ When using `DataGridModuleHost` outside the grid, pass it the same `theme` and
 Prefer `integrated` when the toolbar should share the grid's surface without
 duplicating these props.
 
+Use `toolbar-layout` to place built-in items on separate rows and align them
+without rebuilding their behavior. When group-by breadcrumbs are active, they
+occupy the first row and the remaining toolbar actions start on the second row.
+Explicit placements override those defaults. Without group-by, items not
+specified keep the default order on the first row, aligned to the start:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :group-by="['region', 'owner']"
+  :history="{ controls: true }"
+  :toolbar-layout="{
+    items: {
+      groupByLevels: { row: 0, align: 'start' },
+      quickFilter: { row: 1, align: 'start' },
+      undo: { row: 1, align: 'end' },
+      redo: { row: 1, align: 'end' },
+    },
+    undo: { presentation: 'icon', label: 'Undo' },
+    redo: { presentation: 'icon', label: 'Redo' },
+  }"
+/>
+```
+
+Built-in item keys are `groupByLevels`, `undo`, `redo`, `columnLayout`,
+`quickFilter`, `advancedFilter`, `findReplace`, and `aggregations`. Custom
+modules can be positioned through `toolbar-layout.custom`, keyed by their
+`DataGridAppToolbarModule.key`. `theme.tokens` includes `gridToolbar*` and
+`gridToolbarButton*` colors for the toolbar surface and button states. For a
+fully application-owned composition, keep `toolbarPlacement: 'hidden'` and
+render the published modules through `DataGridModuleHost` with the same
+`toolbar-layout`, `theme`, and `chrome` props.
+
 ## Surface shape
 
 The built-in table stage defaults to an 8px radius. Set `surfaceRadius` in

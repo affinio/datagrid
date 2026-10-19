@@ -63,6 +63,11 @@ import type {
   DataGridRestoreFocusAnchorOptions,
 } from "./host/DataGridRuntimeHost"
 import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
+import type { DataGridToolbarLayoutProp } from "./config/dataGridToolbarLayout"
+import {
+  DATA_GRID_HIERARCHY_COLUMN_ID,
+  type GroupingPresentationOptions,
+} from "./config/dataGridGroupingPresentation"
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateRenderer } from "./config/dataGridEmptyState"
 import {
   resolveDataGridColumns,
@@ -712,6 +717,10 @@ const dataGridProps = {
     type: [String, Array, Object] as PropType<DataGridGroupByProp | undefined>,
     default: undefined,
   },
+  groupingPresentation: {
+    type: Object as PropType<GroupingPresentationOptions | undefined>,
+    default: undefined,
+  },
   pivotModel: {
     type: Object as PropType<DataGridPivotSpec | null | undefined>,
     default: undefined,
@@ -839,6 +848,10 @@ const dataGridProps = {
   toolbarModules: {
     type: Array as PropType<readonly DataGridAppToolbarModule[]>,
     default: () => [],
+  },
+  toolbarLayout: {
+    type: Object as PropType<DataGridToolbarLayoutProp>,
+    default: undefined,
   },
   customOverlays: {
     type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
@@ -1109,7 +1122,86 @@ const DataGridRuntimeComponent = defineComponent({
         formulaFunctions: props.formulaFunctions,
       })
     })
-    const resolvedColumns = computed(() => resolveDataGridColumns(props.columns))
+    const resolvedColumns = computed(() => {
+      const presentation = props.groupingPresentation
+      if (!presentation || !effectiveGroupBy.value?.fields.length) {
+        return resolveDataGridColumns(props.columns)
+      }
+      if (presentation.display !== "hierarchy-column") {
+        throw new Error(`Unsupported grouping presentation: ${String(presentation.display)}`)
+      }
+      const hierarchy = presentation.hierarchyColumn ?? {}
+      const leafColumnId = hierarchy.leafColumnId
+      if (hierarchy.hideLeafSourceColumn === true && !leafColumnId) {
+        throw new Error("groupingPresentation.hierarchyColumn.leafColumnId is required when hideLeafSourceColumn is true")
+      }
+      if (leafColumnId === DATA_GRID_HIERARCHY_COLUMN_ID) {
+        throw new Error("The hierarchy column cannot be used as its own leaf source")
+      }
+      const authoredHierarchyColumn = props.columns.find(column => column.key === DATA_GRID_HIERARCHY_COLUMN_ID)
+      const sourceColumn = leafColumnId
+        ? props.columns.find(column => column.key === leafColumnId)
+        : undefined
+      if (leafColumnId && !sourceColumn) {
+        throw new Error(`Unknown hierarchy leafColumnId '${leafColumnId}'`)
+      }
+      if (sourceColumn?.meta?.rowSelection === true || leafColumnId === "select" || leafColumnId === "__row_number__") {
+        throw new Error(`Column '${leafColumnId}' cannot be used as a hierarchy leaf source`)
+      }
+      if (!leafColumnId) {
+        return resolveDataGridColumns(props.columns)
+      }
+      const groupByFields = effectiveGroupBy.value.fields
+      const showFieldLabel = hierarchy.showGroupFieldLabel === "always"
+        || (hierarchy.showGroupFieldLabel !== "never" && groupByFields.length > 1)
+      const groupCellRenderer = ({ group }: {
+        group: { field: string; value: string; childrenCount: number; renderMeta: { level: number; isExpanded?: boolean }; toggle: () => void }
+      }) => {
+        return h("div", {
+          class: "datagrid-hierarchy-group",
+          style: { "--datagrid-hierarchy-depth": group.renderMeta.level },
+        }, [
+          h("button", {
+            type: "button",
+            class: "datagrid-hierarchy-group__toggle",
+            "aria-label": group.renderMeta.isExpanded ? `Collapse ${group.value}` : `Expand ${group.value}`,
+            "aria-expanded": group.renderMeta.isExpanded ? "true" : "false",
+            onClick: (event: MouseEvent) => { event.stopPropagation(); group.toggle() },
+          }, group.renderMeta.isExpanded ? "▾" : "▸"),
+          showFieldLabel ? h("span", { class: "datagrid-hierarchy-group__field" },
+            String(props.columns.find(column => column.key === group.field)?.label ?? group.field)) : null,
+          h("strong", { class: "datagrid-hierarchy-group__value" }, group.value),
+          hierarchy.showCount === false ? null : h("span", { class: "datagrid-hierarchy-group__count" }, String(group.childrenCount)),
+        ])
+      }
+      const hierarchyColumn: DataGridAppColumnInput = {
+        ...authoredHierarchyColumn,
+        key: DATA_GRID_HIERARCHY_COLUMN_ID,
+        label: hierarchy.headerName ?? authoredHierarchyColumn?.label ?? "Group",
+        field: sourceColumn?.field ?? sourceColumn?.key,
+        accessor: sourceColumn?.accessor,
+        valueGetter: sourceColumn?.valueGetter,
+        dataType: sourceColumn?.dataType,
+        presentation: sourceColumn?.presentation,
+        cellType: sourceColumn?.cellType,
+        placeholder: sourceColumn?.placeholder,
+        constraints: sourceColumn?.constraints,
+        valueSetter: sourceColumn?.valueSetter,
+        initialState: authoredHierarchyColumn?.initialState ?? { width: 240 },
+        capabilities: { ...authoredHierarchyColumn?.capabilities, ...sourceColumn?.capabilities, groupable: false },
+        meta: {
+          ...authoredHierarchyColumn?.meta,
+          hierarchyLeafSourceColumnKey: leafColumnId,
+          hierarchySourceColumn: sourceColumn,
+          hierarchyDepth: groupByFields.length,
+        },
+        groupCellRenderer,
+      }
+      const inputs = props.columns.filter(column => column.key !== DATA_GRID_HIERARCHY_COLUMN_ID)
+      const hierarchyIndex = inputs.findIndex(column => column.initialState?.pin !== "left")
+      inputs.splice(hierarchyIndex < 0 ? inputs.length : hierarchyIndex, 0, hierarchyColumn)
+      return resolveDataGridColumns(inputs)
+    })
     const controlledProps: UseDataGridAppControlledStateOptions["props"] = {
       get state() {
         return normalizedControlledState.value
@@ -1687,6 +1779,7 @@ const DataGridRuntimeComponent = defineComponent({
         filterModelNormalized: true,
         appColumns: props.columns,
         groupBy: effectiveGroupBy.value,
+        groupingPresentation: props.groupingPresentation,
         pivotModel: effectivePivotModel.value,
         renderMode: resolvedRenderMode.value,
         virtualization: resolvedVirtualization.value,
@@ -1731,6 +1824,7 @@ const DataGridRuntimeComponent = defineComponent({
         registerStructuralRowActionRunner,
         reportToolbarModules,
         toolbarModules: props.toolbarModules,
+        toolbarLayout: props.toolbarLayout,
         customOverlays: props.customOverlays,
         emptyStateRenderer: props.emptyState,
         emptyStateAlignment: props.emptyStateAlignment,

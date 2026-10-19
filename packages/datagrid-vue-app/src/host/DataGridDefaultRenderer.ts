@@ -73,6 +73,8 @@ import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererP
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
+import type { DataGridToolbarLayoutProp } from "../config/dataGridToolbarLayout"
+import type { GroupingPresentationOptions } from "../config/dataGridGroupingPresentation"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
 import {
   resolveDataGridColumnMenuActionOptions,
@@ -975,6 +977,10 @@ export default defineComponent({
       type: Object as PropType<DataGridGroupBySpec | null | undefined>,
       default: undefined,
     },
+    groupingPresentation: {
+      type: Object as PropType<GroupingPresentationOptions | undefined>,
+      default: undefined,
+    },
     pivotModel: {
       type: Object as PropType<DataGridPivotSpec | null | undefined>,
       default: undefined,
@@ -1128,6 +1134,10 @@ export default defineComponent({
     toolbarModules: {
       type: Array as PropType<readonly DataGridAppToolbarModule[]>,
       default: () => [],
+    },
+    toolbarLayout: {
+      type: Object as PropType<DataGridToolbarLayoutProp>,
+      default: undefined,
     },
     customOverlays: {
       type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
@@ -1492,14 +1502,25 @@ export default defineComponent({
     const syncGroupedColumnVisibility = (groupBy: DataGridGroupBySpec | null): void => {
       const groupedFields = new Set(groupBy?.fields ?? [])
       const treeColumnKey = resolveGroupTreeColumnKey(groupBy)
+      const suppressedColumns = new Set([...groupedFields].filter(columnKey => columnKey !== treeColumnKey))
+      const hierarchy = props.groupingPresentation?.hierarchyColumn
+      if (
+        groupBy?.fields.length
+        && props.groupingPresentation?.display === "hierarchy-column"
+        && hierarchy?.hideLeafSourceColumn === true
+        && hierarchy.leafColumnId
+        && hierarchy.leafColumnId !== treeColumnKey
+      ) {
+        suppressedColumns.add(hierarchy.leafColumnId)
+      }
       for (const [columnKey, wasVisible] of groupedColumnVisibilityBeforeHide) {
-        if (groupedFields.has(columnKey)) {
+        if (suppressedColumns.has(columnKey)) {
           continue
         }
         props.runtime.api.columns.setVisibility(columnKey, wasVisible)
         groupedColumnVisibilityBeforeHide.delete(columnKey)
       }
-      for (const columnKey of groupedFields) {
+      for (const columnKey of suppressedColumns) {
         if (!groupedColumnVisibilityBeforeHide.has(columnKey)) {
           const column = props.runtime.api.columns.get(columnKey)
           if (!column) {
@@ -1507,9 +1528,7 @@ export default defineComponent({
           }
           groupedColumnVisibilityBeforeHide.set(columnKey, column.visible)
         }
-        const shouldBeVisible = columnKey === treeColumnKey
-          ? groupedColumnVisibilityBeforeHide.get(columnKey) === true
-          : false
+        const shouldBeVisible = false
         if (props.runtime.api.columns.get(columnKey)?.visible !== shouldBeVisible) {
           props.runtime.api.columns.setVisibility(columnKey, shouldBeVisible)
         }
@@ -1528,7 +1547,7 @@ export default defineComponent({
         }
       }
     }
-    watch([currentGroupBy, allColumns], ([groupBy]) => syncGroupedColumnVisibility(groupBy), {
+    watch([currentGroupBy, allColumns, () => props.groupingPresentation], ([groupBy]) => syncGroupedColumnVisibility(groupBy), {
       immediate: true,
       flush: "post",
     })
@@ -4943,7 +4962,8 @@ export default defineComponent({
           component: DataGridHistoryToolbarButton as Component,
           props: {
             action: "undo",
-            label: "Undo",
+            label: props.toolbarLayout?.undo?.label ?? "Undo",
+            presentation: props.toolbarLayout?.undo?.presentation ?? "label",
             disabled: !historyController.canUndo(),
             onTrigger: () => historyController.runHistoryAction("undo"),
           },
@@ -4953,7 +4973,8 @@ export default defineComponent({
           component: DataGridHistoryToolbarButton as Component,
           props: {
             action: "redo",
-            label: "Redo",
+            label: props.toolbarLayout?.redo?.label ?? "Redo",
+            presentation: props.toolbarLayout?.redo?.presentation ?? "label",
             disabled: !historyController.canRedo(),
             onTrigger: () => historyController.runHistoryAction("redo"),
           },
@@ -5121,6 +5142,7 @@ export default defineComponent({
           variant: "standalone",
           theme: props.theme,
           chrome: props.chrome,
+          toolbarLayout: props.toolbarLayout,
         })
         : null,
       h("div", {
@@ -5146,6 +5168,7 @@ export default defineComponent({
               variant: "integrated",
               theme: props.theme,
               chrome: props.chrome,
+              toolbarLayout: props.toolbarLayout,
             }),
             h("div", {
               class: [

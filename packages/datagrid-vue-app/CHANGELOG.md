@@ -1,10 +1,16 @@
 # @affino/datagrid-vue-app
 
-## Unreleased
+## 0.17.0
 
 ### Added
 
 - Added opt-in root-only sticky group rows with push-off behavior across pinned and center panes.
+- Added an opt-in hierarchy column that renders group labels and counts with leaf values from a configured source column.
+- Added theme-backed toolbar styling and hierarchy indentation.
+
+### Validation
+
+- Vue app type-check, focused unit/contract tests, and sandbox E2E checks passed.
 
 ## 0.16.1
 

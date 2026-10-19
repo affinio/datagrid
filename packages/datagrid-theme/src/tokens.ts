@@ -143,4 +143,12 @@ export const THEME_TOKEN_VARIABLE_MAP: Record<keyof DataGridThemeTokens, string>
   gridColumnMenuFocusRingColor: "--datagrid-column-menu-focus-ring",
   gridColumnMenuSearchBorderColor: "--datagrid-column-menu-search-border",
   gridColumnMenuSearchBackgroundColor: "--datagrid-column-menu-search-bg",
+  gridToolbarBackgroundColor: "--datagrid-toolbar-background-color",
+  gridToolbarBorderColor: "--datagrid-toolbar-border-color",
+  gridToolbarButtonBackgroundColor: "--datagrid-toolbar-button-background-color",
+  gridToolbarButtonTextColor: "--datagrid-toolbar-button-text-color",
+  gridToolbarButtonBorderColor: "--datagrid-toolbar-button-border-color",
+  gridToolbarButtonHoverBackgroundColor: "--datagrid-toolbar-button-hover-background-color",
+  gridToolbarButtonActiveBackgroundColor: "--datagrid-toolbar-button-active-background-color",
+  groupIndentSize: "--datagrid-hierarchy-indent",
 }

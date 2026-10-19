@@ -301,6 +301,7 @@
         aggregations
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
+        :grouping-presentation="props.groupedShowcase ? groupedPresentation : undefined"
         :sticky-group-rows="props.groupedShowcase
           ? { enabled: true, mode: 'root-only', transition: 'push-off' }
           : undefined"
@@ -902,58 +903,6 @@ function resolveShellStatusTone(status: unknown): ShellStatusTone {
   }
 }
 
-function renderShellGroupLabel(field: string): string {
-  if (field === "region") {
-    return "Region";
-  }
-  if (field === "category") {
-    return "Category";
-  }
-  return field;
-}
-
-const SHELL_GROUP_COLUMN_KEY = "__shell_group__";
-
-function buildShellGroupCellRenderer(columnKey: string) {
-  return ({ group, displayValue }: {
-    group: {
-      field: string;
-      value: string;
-      childrenCount: number;
-      isLabelColumn: boolean;
-      renderMeta: { isExpanded?: boolean; level: number };
-      toggle: () => void;
-    };
-    displayValue: string;
-  }) => {
-    const disclosure = group.renderMeta.isExpanded ? "▾" : "▸";
-    if (columnKey === SHELL_GROUP_COLUMN_KEY && group.isLabelColumn) {
-      return h("div", {
-        class: "shell-group-line",
-        style: { marginInlineStart: `${Math.max(0, group.renderMeta.level) * 16}px` },
-      }, [
-        h("button", {
-          type: "button",
-          class: "shell-group-trigger",
-          "aria-label": group.renderMeta.isExpanded ? "Collapse group" : "Expand group",
-          "aria-expanded": group.renderMeta.isExpanded ? "true" : "false",
-          onClick: (event: MouseEvent) => {
-            event.stopPropagation();
-            group.toggle();
-          },
-        }, disclosure),
-        h("div", { class: "shell-group-pill" }, [
-          h("span", { class: "shell-group-pill__field" }, renderShellGroupLabel(group.field)),
-          h("span", { class: "shell-group-pill__value" }, group.value),
-          h("span", { class: "shell-group-pill__count" }, `${group.childrenCount}`),
-        ]),
-      ]);
-    }
-
-    return displayValue;
-  };
-}
-
 function buildShellBenchmarkCellRenderer(columnKey: string) {
   return ({ row, displayValue }: {
     row: unknown;
@@ -1288,6 +1237,8 @@ function createBaseShowcaseColumnState(
     },
   };
 }
+
+const SHELL_GROUP_COLUMN_KEY = "__affino_hierarchy__";
 
 function createGroupedShowcaseColumnState(
   columns: readonly DataGridColumnInput[],
@@ -1640,25 +1591,30 @@ const columns = computed<readonly DataGridAppColumnInput[]>(() => {
     }
     return column;
   });
+  const resolvedColumns = applySandboxColumnLabelOverrides(decoratedColumns);
   if (!groupByModel.value?.fields.length) {
-    return applySandboxColumnLabelOverrides(decoratedColumns);
+    return resolvedColumns;
   }
-  const groupColumn: DataGridAppColumnInput = {
-    key: SHELL_GROUP_COLUMN_KEY,
-    label: "Group",
-    initialState: { width: 220 },
-    valueGetter: () => "",
-    capabilities: {
-      groupable: false,
-      sortable: false,
-      filterable: false,
-      searchable: false,
-      editable: false,
+  return [
+    ...resolvedColumns,
+    {
+      key: SHELL_GROUP_COLUMN_KEY,
+      label: "Group / task",
+      initialState: { width: 220 },
+      capabilities: { groupable: false, editable: false, sortable: false, filterable: false },
     },
-    groupCellRenderer: buildShellGroupCellRenderer(SHELL_GROUP_COLUMN_KEY),
-  };
-  return applySandboxColumnLabelOverrides([groupColumn, ...decoratedColumns]);
+  ];
 });
+const groupedPresentation = {
+  display: "hierarchy-column" as const,
+  hierarchyColumn: {
+      headerName: "Group / task",
+    leafColumnId: "name",
+    hideLeafSourceColumn: true,
+    showCount: true,
+    showGroupFieldLabel: "auto" as const,
+  },
+};
 const groupBy = computed(() => {
   if (props.mode !== "base") {
     return null;
@@ -2695,81 +2651,6 @@ const collapseAllGroups = (): void => {
 :deep(.shell-benchmark-renderer__meta) {
   color: rgba(71, 85, 105, 0.72);
   font-size: 0.66rem;
-}
-
-:deep(.shell-group-line) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-  cursor: default;
-}
-
-:deep(.shell-group-trigger) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 0.45rem;
-  background: rgba(255, 255, 255, 0.94);
-  color: rgba(51, 65, 85, 0.92);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-:deep(.shell-group-trigger:hover) {
-  background: rgba(241, 245, 249, 0.98);
-}
-
-:deep(.shell-group-trigger:focus-visible) {
-  outline: 2px solid rgba(37, 99, 235, 0.34);
-  outline-offset: 2px;
-}
-
-:deep(.shell-group-pill) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.42rem;
-  min-height: 1.7rem;
-  padding: 0.2rem 0.58rem;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: rgba(15, 23, 42, 0.88);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
-  min-width: 0;
-  cursor: default;
-}
-
-:deep(.shell-group-pill__field) {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: rgba(71, 85, 105, 0.88);
-}
-
-:deep(.shell-group-pill__value) {
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-:deep(.shell-group-pill__count) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.35rem;
-  min-height: 1.35rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  background: rgba(226, 232, 240, 0.94);
-  color: rgba(30, 41, 59, 0.9);
-  font-size: 0.7rem;
-  font-weight: 700;
 }
 
 :deep(.shell-group-secondary) {

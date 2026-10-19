@@ -188,5 +188,13 @@ export function createThemePresetTokens(spec: DataGridThemePresetSpec): DataGrid
     gridColumnMenuFocusRingColor: alpha(spec.accent, 0.18),
     gridColumnMenuSearchBorderColor: rgb(spec.borderStrong),
     gridColumnMenuSearchBackgroundColor: rgb(spec.surface),
+    gridToolbarBackgroundColor: rgb(spec.header),
+    gridToolbarBorderColor: rgb(spec.borderStrong),
+    gridToolbarButtonBackgroundColor: rgb(spec.surface),
+    gridToolbarButtonTextColor: rgb(spec.text),
+    gridToolbarButtonBorderColor: rgb(spec.borderStrong),
+    gridToolbarButtonHoverBackgroundColor: rgb(spec.surfaceSubtle),
+    gridToolbarButtonActiveBackgroundColor: rgb(spec.accentSoft),
+    groupIndentSize: "16px",
   }
 }

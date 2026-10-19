@@ -25,7 +25,7 @@ export interface DataGridToolbarActionOptions {
 }
 
 export interface DataGridToolbarLayoutOptions {
-  /** Placement overrides for built-in toolbar items; unspecified items keep the default order at row 0/start. */
+  /** Placement overrides for built-in toolbar items. With active group-by levels, they default to row 0 and other items to row 1. */
   items?: Partial<Record<DataGridBuiltInToolbarItem, DataGridToolbarItemPlacement>>
   /** Placement overrides for custom modules, keyed by DataGridAppToolbarModule.key. */
   custom?: Readonly<Record<string, DataGridToolbarItemPlacement>>
@@ -49,14 +49,21 @@ const BUILT_IN_ITEM_KEYS: Readonly<Record<string, DataGridBuiltInToolbarItem>> =
 export function resolveDataGridToolbarItemPlacement(
   key: string,
   layout: DataGridToolbarLayoutProp | undefined,
+  fallback: DataGridToolbarItemPlacement = {},
 ): Required<DataGridToolbarItemPlacement> {
   const builtInKey = BUILT_IN_ITEM_KEYS[key]
   const requested = builtInKey
     ? layout?.items?.[builtInKey]
     : layout?.custom?.[key]
-  const row = Number.isFinite(requested?.row) ? Math.max(0, Math.trunc(requested?.row ?? 0)) : 0
-  const align = requested?.align === "center" || requested?.align === "end"
+  const row = Number.isFinite(requested?.row)
+    ? Math.max(0, Math.trunc(requested?.row ?? 0))
+    : Number.isFinite(fallback.row)
+      ? Math.max(0, Math.trunc(fallback.row ?? 0))
+      : 0
+  const align = requested?.align === "center" || requested?.align === "end" || requested?.align === "start"
     ? requested.align
-    : "start"
+    : fallback.align === "center" || fallback.align === "end" || fallback.align === "start"
+      ? fallback.align
+      : "start"
   return { row, align }
 }

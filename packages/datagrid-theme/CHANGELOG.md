@@ -1,5 +1,11 @@
 # @affino/datagrid-theme
 
+## 0.4.0
+
+### Added
+
+- Added toolbar surface and button color tokens, plus the hierarchy indentation token.
+
 ## 0.3.0
 
 ### Added

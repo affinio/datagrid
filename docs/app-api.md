@@ -47,9 +47,29 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | empty-state | Optional typed renderer for content shown inside the row body when no rows are available. |
 | empty-state-alignment | `"content"` (default) centers across the virtual content; `"viewport"` centers within the visible center table viewport and remains anchored during horizontal scrolling. |
 | chrome / toolbar-modules | Toolbar placement, density, and host-provided modules. `DataGridModuleHost` accepts the same `theme` and `chrome` props when modules are rendered outside the grid. |
+| toolbar-layout | Declarative rows and start/center/end placement for built-in toolbar items and custom modules, plus text or icon presentation for undo/redo. |
 | theme | Theme preset or theme configuration. |
 
 `sticky-group-rows` accepts `{ enabled, mode: "root-only", transition: "push-off" }`.
+
+`grouping-presentation` opts into a generated hierarchy column while grouping is active:
+
+```ts
+{
+  display: "hierarchy-column",
+  hierarchyColumn: {
+    headerName: "Group / task",
+    leafColumnId: "task",
+    hideLeafSourceColumn: true,
+    showCount: true,
+    showGroupFieldLabel: "auto",
+  },
+}
+```
+
+The generated column uses the stable id `DATA_GRID_HIERARCHY_COLUMN_ID` (`__affino_hierarchy__`). Include a regular column config with this key when you need to set its width, pinning, or initial order; the grouping presentation supplies the group and leaf contents. Normal state props can also refer to this id. `leafColumnId` must name an existing data column; it cannot name the hierarchy column or a service column. Hiding the source column requires `leafColumnId`. Its visibility is suppressed only while grouping presentation is active and restored afterward, preserving its prior visibility state. The source column remains in the data schema and is used for leaf value access and edits. `showGroupFieldLabel: "auto"` omits the field label for one grouping level and includes it for nested grouping.
+
+When a source column renderer is reused for a hierarchy leaf, renderer `column`/`displayColumn` identify the visible hierarchy column and `sourceColumn` identifies the original data-column definition. Indentation is visual only; clipboard text comes from the source cell value, without the disclosure or count decoration. The grouping menu retains grouping-key actions; use the original column's filter controls before enabling source suppression when no separate filter panel is configured.
 Only expanded root groups with visible descendants stick. The same row identity
 is rendered in the sticky layer; pinned columns remain fixed while center
 columns follow horizontal scrolling. It defaults to disabled.

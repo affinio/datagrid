@@ -59,6 +59,12 @@ export type {
 } from "./config/dataGridFormulaOptions"
 export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
 export type { StickyGroupRowsOptions } from "./config/dataGridStickyGroupRows"
+export {
+  DATA_GRID_HIERARCHY_COLUMN_ID,
+  type DataGridColumnId,
+  type GroupingPresentationOptions,
+  type HierarchyColumnOptions,
+} from "./config/dataGridGroupingPresentation"
 export type {
   DataGridAppColumnFilterOptions,
   DataGridAppFilterValueNormalizationContext,
@@ -70,6 +76,14 @@ export {
 export type {
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
+export type {
+  DataGridBuiltInToolbarItem,
+  DataGridToolbarActionOptions,
+  DataGridToolbarAlignment,
+  DataGridToolbarItemPlacement,
+  DataGridToolbarLayoutOptions,
+  DataGridToolbarLayoutProp,
+} from "./config/dataGridToolbarLayout"
 export type {
   DataGridChromeDensity,
   DataGridChromeOptions,

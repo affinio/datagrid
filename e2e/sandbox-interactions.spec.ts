@@ -231,10 +231,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await expect(targetCell).toBeVisible({ timeout: 20_000 })
 
-    await sourceCell.evaluate(element => {
-      element.setAttribute("tabindex", "0")
-      element.focus()
-    })
+    await sourceCell.click()
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(sourceCell))
 
     await dragCellBodyStartAndMove(page, sourceCell, targetCell)
@@ -508,7 +505,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await verticalOwner.evaluate(element => { element.scrollTop = 40 })
     await expect(stage.locator('.grid-row--sticky-top[data-row-index="0"]').first()).toBeVisible({ timeout: 10_000 })
     await verticalOwner.evaluate(element => { element.scrollTop = 180 })
-    const collapseButton = stage.locator(".grid-row--sticky-top .shell-group-trigger").first()
+    const collapseButton = stage.locator(".grid-row--sticky-top .datagrid-hierarchy-group__toggle").first()
     await expect(collapseButton).toBeVisible({ timeout: 10_000 })
     await expect(collapseButton).toHaveAttribute("aria-expanded", "true")
     expect(await verticalOwner.evaluate(element => element.scrollTop)).toBeGreaterThan(100)
@@ -519,14 +516,14 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="1"]').first()).toBeVisible()
 
     await verticalOwner.evaluate(element => { element.scrollTop = 300 })
-    const secondRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="1"] .shell-group-trigger').first()
+    const secondRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="1"] .datagrid-hierarchy-group__toggle').first()
     await expect(secondRootToggle).toBeVisible({ timeout: 10_000 })
     await secondRootToggle.click()
     await expect.poll(() => verticalOwner.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeLessThanOrEqual(1)
     await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="1"]').first()).toHaveAttribute("aria-expanded", "false")
 
     await verticalOwner.evaluate(element => { element.scrollTop = 500 })
-    const thirdRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="2"] .shell-group-trigger').first()
+    const thirdRootToggle = stage.locator('.grid-row--sticky-top[data-row-index="2"] .datagrid-hierarchy-group__toggle').first()
     await expect(thirdRootToggle).toBeVisible({ timeout: 10_000 })
     await thirdRootToggle.click()
     await expect.poll(() => verticalOwner.evaluate(element => element.scrollTop), { timeout: 10_000 }).toBeLessThanOrEqual(100)
@@ -537,6 +534,57 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     expect(viewportRect).not.toBeNull()
     expect(thirdRootRect!.y - viewportRect!.y).toBeGreaterThanOrEqual(-1)
     expect(thirdRootRect!.y - viewportRect!.y).toBeLessThan(100)
+  })
+
+  test("group-by breadcrumbs do not overlap the column layout action", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid")
+
+    const toolbar = page.locator(".datagrid-app-toolbar:visible").first()
+    const groupBy = toolbar.locator(".datagrid-grouping-toolbar")
+    const columnLayout = toolbar.locator('[data-datagrid-toolbar-action="column-layout"]')
+    await expect(groupBy).toHaveCount(1, { timeout: 20_000 })
+    await expect(columnLayout).toHaveCount(1, { timeout: 20_000 })
+
+    const geometry = await page.evaluate(() => {
+      const toolbar = document.querySelector<HTMLElement>(".datagrid-app-toolbar")
+      const group = toolbar?.querySelector<HTMLElement>(".datagrid-grouping-toolbar") ?? null
+      const columns = toolbar?.querySelector<HTMLElement>('[data-datagrid-toolbar-action="column-layout"]') ?? null
+      const rect = (element: HTMLElement | null) => {
+        if (!element) return null
+        const box = element.getBoundingClientRect()
+        return { x: box.x, y: box.y, width: box.width, height: box.height }
+      }
+      return {
+        group: rect(group),
+        columns: rect(columns),
+        sameRow: group?.closest(".datagrid-app-toolbar__row") === columns?.closest(".datagrid-app-toolbar__row"),
+      }
+    })
+    expect(geometry.group, JSON.stringify(geometry)).not.toBeNull()
+    expect(geometry.columns, JSON.stringify(geometry)).not.toBeNull()
+    expect(geometry.group!.width, JSON.stringify(geometry)).toBeGreaterThan(0)
+    expect(geometry.group!.height, JSON.stringify(geometry)).toBeGreaterThan(0)
+    expect(geometry.sameRow, JSON.stringify(geometry)).toBe(false)
+  })
+
+  test("grouped showcase renders group keys and leaf tasks in the hierarchy column", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid")
+    const stage = page.locator(".grid-stage:visible").first()
+    const hierarchyHeader = stage.locator('.grid-header-shell .grid-cell--header[data-column-key="__affino_hierarchy__"]')
+    await expect(hierarchyHeader).toContainText("Group / task")
+    await expect(stage.locator('.grid-header-shell .grid-cell--header[data-column-key="name"]')).toHaveCount(0)
+
+    const groupCell = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"] .grid-cell[data-column-key="__affino_hierarchy__"]').first()
+    await expect(groupCell).toContainText("North")
+    await expect(groupCell.locator(".datagrid-hierarchy-group__count")).toContainText(/\d+/)
+    await expect(stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"] .grid-cell[data-column-key="amount"]').first()).toContainText("£187,998.00")
+    const taskCell = stage.locator('.grid-body-viewport .grid-row[data-row-index="1"] .grid-cell[data-column-key="__affino_hierarchy__"]').first()
+    await expect(taskCell).toContainText("Task 1")
+    await expect(taskCell.locator(".datagrid-hierarchy-group__toggle")).toHaveCount(0)
+    await expect(stage.locator('.grid-body-viewport .grid-row[data-row-index="2"] .grid-cell[data-column-key="__affino_hierarchy__"]').first()).toContainText("Task 5")
+    await page.getByRole("button", { name: "Remove grouping by Region" }).click()
+    await expect(stage.locator('.grid-header-shell .grid-cell--header[data-column-key="name"]')).toBeVisible()
+    await expect(stage.locator('.grid-header-shell .grid-cell--header[data-column-key="__affino_hierarchy__"]')).toHaveCount(0)
   })
 
   test("horizontal virtualization keeps arrow navigation and reveals adjacent cells", async ({ page }) => {

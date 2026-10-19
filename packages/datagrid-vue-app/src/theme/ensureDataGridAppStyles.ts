@@ -366,17 +366,24 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-app-toolbar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: var(--datagrid-app-toolbar-gap, 12px);
+  min-width: 0;
+}
+
+.datagrid-app-toolbar__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--datagrid-app-toolbar-group-gap, 8px);
   min-width: 0;
 }
 
 .datagrid-app-toolbar--integrated {
   padding: var(--datagrid-app-toolbar-surface-padding-block, 10px)
     var(--datagrid-app-toolbar-surface-padding-inline, 12px);
-  border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
-  background: var(--datagrid-header-row-bg);
+  border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-toolbar-border-color, var(--datagrid-header-divider-color));
+  background: var(--datagrid-toolbar-background-color, var(--datagrid-header-row-bg));
 }
 
 .datagrid-app-toolbar__group {
@@ -384,6 +391,14 @@ const DATA_GRID_APP_STYLES = `
   align-items: center;
   gap: var(--datagrid-app-toolbar-group-gap, 8px);
   min-width: 0;
+}
+
+.datagrid-app-toolbar__group--center {
+  justify-content: center;
+}
+
+.datagrid-app-toolbar__group--end {
+  justify-content: flex-end;
 }
 
 .datagrid-grouping-toolbar {
@@ -460,10 +475,10 @@ const DATA_GRID_APP_STYLES = `
   gap: var(--datagrid-app-toolbar-button-gap, 8px);
   height: var(--datagrid-app-toolbar-button-height, 32px);
   padding: 0 var(--datagrid-app-toolbar-button-padding-inline, 12px);
-  border: 1px solid var(--datagrid-filter-trigger-border);
+  border: 1px solid var(--datagrid-toolbar-button-border-color, var(--datagrid-filter-trigger-border));
   border-radius: 8px;
-  background: var(--datagrid-editor-bg);
-  color: var(--datagrid-text-primary);
+  background: var(--datagrid-toolbar-button-background-color, var(--datagrid-editor-bg));
+  color: var(--datagrid-toolbar-button-text-color, var(--datagrid-text-primary));
   font: inherit;
   font-size: var(--datagrid-app-toolbar-button-font-size, 12px);
   font-weight: 600;
@@ -472,7 +487,13 @@ const DATA_GRID_APP_STYLES = `
 }
 
 .datagrid-app-toolbar__button:hover {
-  background: color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 72%, var(--datagrid-editor-bg));
+  background: var(--datagrid-toolbar-button-hover-background-color, color-mix(in srgb, var(--datagrid-column-menu-item-hover-bg) 72%, var(--datagrid-editor-bg)));
+}
+
+.datagrid-app-toolbar__button--icon-only {
+  width: var(--datagrid-app-toolbar-button-height, 32px);
+  justify-content: center;
+  padding: 0;
 }
 
 .datagrid-app-toolbar__button:disabled {
@@ -493,7 +514,7 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-app-toolbar__button--active {
   border-color: color-mix(in srgb, var(--datagrid-accent-strong) 46%, var(--datagrid-filter-trigger-border));
-  background: color-mix(in srgb, var(--datagrid-accent-strong) 14%, var(--datagrid-editor-bg));
+  background: var(--datagrid-toolbar-button-active-background-color, color-mix(in srgb, var(--datagrid-accent-strong) 14%, var(--datagrid-editor-bg)));
 }
 
 .datagrid-app-toolbar__button-icon {
@@ -2125,6 +2146,58 @@ body.datagrid-fill-drag-cursor * {
   font-weight: 600;
   cursor: pointer;
   color: var(--datagrid-group-row-text-color);
+}
+
+.datagrid-hierarchy-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-inline-start: calc(var(--datagrid-hierarchy-indent, 16px) * var(--datagrid-hierarchy-depth, 0));
+}
+
+.datagrid-hierarchy-group__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 24px;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.datagrid-hierarchy-group__toggle:focus-visible {
+  outline: 2px solid var(--datagrid-accent-strong);
+  outline-offset: -2px;
+}
+
+.datagrid-hierarchy-group__field {
+  color: var(--datagrid-text-muted);
+  font-size: 0.72em;
+  font-weight: 500;
+}
+
+.datagrid-hierarchy-group__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.datagrid-hierarchy-group__count {
+  color: var(--datagrid-text-muted);
+  font-size: 0.82em;
+  font-weight: 500;
+}
+
+.datagrid-hierarchy-leaf {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline-start: calc(var(--datagrid-hierarchy-indent, 16px) * var(--datagrid-hierarchy-depth, 1));
 }
 
 .grid-row.row--group.grid-row--group-explicit-trigger .grid-cell,

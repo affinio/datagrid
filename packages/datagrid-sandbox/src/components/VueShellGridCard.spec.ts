@@ -309,7 +309,7 @@ describe("VueShellGridCard", () => {
     wrapper.unmount()
   })
 
-  it("preconfigures the grouped shell showcase with region grouping, a groupCellRenderer, and aggregation-backed parent rows", async () => {
+  it("preconfigures the grouped shell showcase with a hierarchy column and aggregation-backed parent rows", async () => {
     const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
 
     const wrapper = mount(VueShellGridCard, {
@@ -364,27 +364,42 @@ describe("VueShellGridCard", () => {
     expect((resolvedAggregationModel as { columns?: Array<{ key: string }> }).columns?.some(column => column.key === "id")).toBe(false)
 
     const columns = (grid.props("columns") ?? gridVm.$props?.columns ?? gridVm.$attrs?.columns ?? []) as Array<Record<string, unknown>>
-    const groupColumn = columns.find(column => column.key === "__shell_group__")
+    const groupColumn = columns.find(column => column.key === "__affino_hierarchy__")
     const nameColumn = columns.find(column => column.key === "name")
     const idColumn = columns.find(column => column.key === "id")
 
-    expect(groupColumn?.label).toBe("Group")
-    expect(typeof groupColumn?.groupCellRenderer).toBe("function")
+    expect(groupColumn?.label).toBe("Group / task")
+    expect(groupColumn?.initialState).toMatchObject({ width: 220 })
     expect(nameColumn?.label).toBe("Task")
-    expect(nameColumn?.groupCellRenderer).toBeUndefined()
-    expect(idColumn?.groupCellRenderer).toBeUndefined()
+    expect(idColumn?.key).toBe("id")
+    expect(readGridInput("groupingPresentation", "grouping-presentation")).toEqual({
+      display: "hierarchy-column",
+      hierarchyColumn: {
+        headerName: "Group / task",
+        leafColumnId: "name",
+        hideLeafSourceColumn: true,
+        showCount: true,
+        showGroupFieldLabel: "auto",
+      },
+    })
 
-    const groupTrigger = wrapper.find(".shell-group-trigger")
+    const groupTrigger = wrapper.find(".datagrid-hierarchy-group__toggle")
     expect(groupTrigger.exists()).toBe(true)
     const groupRow = groupTrigger.element.closest(".grid-row")
-    expect(groupRow?.querySelectorAll(".shell-group-trigger")).toHaveLength(1)
-    expect(groupTrigger.element.closest('.grid-cell[data-column-key="__shell_group__"]')).not.toBeNull()
+    expect(groupRow?.querySelectorAll(".datagrid-hierarchy-group__toggle")).toHaveLength(1)
+    expect(groupTrigger.element.closest('.grid-cell[data-column-key="__affino_hierarchy__"]')).not.toBeNull()
     expect(groupRow?.querySelector('.grid-cell[data-column-key="id"]')?.textContent).not.toContain("region:")
     expect(groupTrigger.attributes("aria-expanded")).toBe("true")
+    expect(groupRow?.textContent).toContain("North")
+    expect(groupRow?.querySelector(".datagrid-hierarchy-group__count")?.textContent).toMatch(/\d+/)
+    const leafHierarchyCell = wrapper.find('.grid-row[data-row-index="1"] .grid-cell[data-column-key="__affino_hierarchy__"]')
+    expect(leafHierarchyCell.exists()).toBe(true)
+    expect(leafHierarchyCell.text()).toContain("Task 1")
+    expect(leafHierarchyCell.find(".datagrid-hierarchy-group__toggle").exists()).toBe(false)
 
     await groupTrigger.trigger("click")
     await flushUi()
-    expect(wrapper.find(".shell-group-trigger").attributes("aria-expanded")).toBe("false")
+    expect(wrapper.find(".datagrid-hierarchy-group__toggle").attributes("aria-expanded")).toBe("false")
 
     wrapper.unmount()
   })

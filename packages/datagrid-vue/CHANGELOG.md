@@ -1,5 +1,11 @@
 # @affino/datagrid-vue
 
+## 0.10.5
+
+### Changed
+
+- Updated the optional theme dependency compatibility for `@affino/datagrid-theme@0.4.0`.
+
 ## 0.10.4
 
 ### Fixed

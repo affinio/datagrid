@@ -1,4 +1,4 @@
-import { getCurrentInstance, onBeforeUnmount, ref, watch, type Ref, type VNodeChild } from "vue"
+import { getCurrentInstance, h, onBeforeUnmount, ref, watch, type Ref, type VNodeChild } from "vue"
 import {
   getDataGridRowRenderMeta,
   invokeDataGridCellInteraction,
@@ -407,7 +407,7 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): VNodeChild {
-    const displayValue = readResolvedDisplayCell(row, column)
+    let displayValue = readResolvedDisplayCell(row, column)
 
     if (row.kind === "group") {
       const groupRenderer = column.column.groupCellRenderer
@@ -493,14 +493,28 @@ export function useDataGridStageCellRendering(
       })
     }
 
-    const renderer = column.column.cellRenderer
+    const hierarchySourceKey = typeof column.column.meta?.hierarchyLeafSourceColumnKey === "string"
+      ? column.column.meta.hierarchyLeafSourceColumnKey
+      : null
+    const hierarchySourceColumn = hierarchySourceKey
+      ? column.column.meta?.hierarchySourceColumn as DataGridTableStageBodyColumn["column"] | undefined
+      : undefined
+    if (hierarchySourceKey) {
+      displayValue = options.cells.value.readDisplayCell(row, hierarchySourceKey)
+    }
+    const renderer = hierarchySourceColumn?.cellRenderer ?? column.column.cellRenderer
     if (typeof renderer !== "function") {
-      return displayValue
+      return hierarchySourceKey
+        ? h("span", {
+          class: "datagrid-hierarchy-leaf",
+          style: { "--datagrid-hierarchy-depth": Number(column.column.meta?.hierarchyDepth ?? 1) },
+        }, displayValue)
+        : displayValue
     }
     const placeholderValue = isDataGridPlaceholderSurfaceRow(row)
       ? readRowCellValue(row, column)
       : undefined
-    const rawValue = placeholderValue ?? options.cells.value.readCell(row, column.key)
+    const rawValue = placeholderValue ?? options.cells.value.readCell(row, hierarchySourceKey ?? column.key)
     if (isEmptyCellRendererValue(rawValue)) {
       return displayValue
     }
@@ -509,7 +523,7 @@ export function useDataGridStageCellRendering(
     const interactive = resolveRendererInteractiveContext(row, rowOffset, column, columnIndex)
     if (shouldDeferRenderer("cellRenderer", row, column)) return displayValue
 
-    return invokeDataGridStageRendererWithFallback({
+    const rendered = invokeDataGridStageRendererWithFallback({
       scope: "cellRenderer",
       rowKind: "leaf",
       renderer,
@@ -519,6 +533,8 @@ export function useDataGridStageCellRendering(
         surface,
         rowOffset,
         column,
+        displayColumn: column,
+        ...(hierarchySourceColumn ? { sourceColumn: hierarchySourceColumn } : {}),
         columnIndex,
         value,
         displayValue,
@@ -531,6 +547,12 @@ export function useDataGridStageCellRendering(
       surfaceKind: surface.kind,
       columnKey: column.key,
     })
+    return hierarchySourceKey
+      ? h("span", {
+        class: "datagrid-hierarchy-leaf",
+        style: { "--datagrid-hierarchy-depth": Number(column.column.meta?.hierarchyDepth ?? 1) },
+      }, [rendered])
+      : rendered
   }
 
   function resolveSelectEditorValue(row: DataGridTableRow<Record<string, unknown>>, column: DataGridTableStageBodyColumn): string {

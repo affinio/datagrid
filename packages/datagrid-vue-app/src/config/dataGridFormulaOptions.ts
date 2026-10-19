@@ -4,6 +4,7 @@ import type {
   DataGridCellInteractionKeyboardTrigger,
   DataGridCellInteractionRole,
   DataGridColumnInput,
+  DataGridColumnDef,
   DataGridColumnSnapshot,
   DataGridComputedFieldDefinition,
   DataGridFormulaFieldDefinition,
@@ -42,6 +43,10 @@ export interface DataGridAppCellRendererContext<TRow = unknown> {
   surface: DataGridAppRowSurfaceContext
   rowOffset: number
   column: DataGridColumnSnapshot
+  /** Physical column used for layout and selection. */
+  displayColumn?: DataGridColumnSnapshot
+  /** Original data column for generated presentation columns. */
+  sourceColumn?: DataGridColumnDef<unknown>
   columnIndex: number
   value: string
   displayValue: string

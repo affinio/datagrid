@@ -51,6 +51,20 @@ export type {
   DataGridAppToolbarModule,
 } from "./host/DataGridModuleHost"
 export type {
+  DataGridBuiltInToolbarItem,
+  DataGridToolbarActionOptions,
+  DataGridToolbarAlignment,
+  DataGridToolbarItemPlacement,
+  DataGridToolbarLayoutOptions,
+  DataGridToolbarLayoutProp,
+} from "./config/dataGridToolbarLayout"
+export {
+  DATA_GRID_HIERARCHY_COLUMN_ID,
+  type DataGridColumnId,
+  type GroupingPresentationOptions,
+  type HierarchyColumnOptions,
+} from "./config/dataGridGroupingPresentation"
+export type {
   DataGridColumnReorderOptions,
   DataGridColumnReorderProp,
 } from "./config/dataGridColumnReorder"

@@ -883,6 +883,7 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).not.toContain("performance")
     expect(publicProps).toContain("isCellEditable")
     expect(publicProps).toContain("toolbarModules")
+    expect(publicProps).toContain("toolbarLayout")
     expect(publicProps).toContain("findReplace")
     expect(publicProps).toContain("gridLines")
     expect(publicProps).toContain("history")
@@ -1255,6 +1256,9 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS,
         columns: COLUMNS,
         toolbarModules,
+        toolbarLayout: {
+          custom: { "custom-summary": { row: 1, align: "end" } },
+        },
       },
     })
 
@@ -1263,9 +1267,54 @@ describe("DataGrid app facade contract", () => {
     const trigger = findToolbarAction(wrapper, "custom-summary")
     expect(trigger.exists()).toBe(true)
     expect(trigger.text()).toBe("Summary")
+    expect(wrapper.findAll(".datagrid-app-toolbar__row")).toHaveLength(2)
+    expect(wrapper.find(".datagrid-app-toolbar__group--end [data-datagrid-toolbar-action='custom-summary']").exists()).toBe(true)
 
     await trigger.trigger("click")
     expect(onTrigger).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it("lays out built-in toolbar items by row and alignment and supports accessible icon actions", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        history: { controls: true, shortcuts: false },
+        toolbarLayout: {
+          items: {
+            undo: { row: 1, align: "end" },
+            redo: { row: 1, align: "end" },
+          },
+          undo: { presentation: "icon", label: "Revert" },
+        },
+        theme: {
+          inheritThemeFromDocument: false,
+          tokens: {
+            gridToolbarBackgroundColor: "#f0f0f0",
+            gridToolbarButtonBackgroundColor: "#ffffff",
+          },
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const rows = wrapper.findAll(".datagrid-app-toolbar__row")
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.findAll(".datagrid-app-toolbar__group > *")).toHaveLength(0)
+    expect(rows[1]?.findAll('[data-datagrid-toolbar-action="undo"], [data-datagrid-toolbar-action="redo"]'))
+      .toHaveLength(2)
+    expect(rows[1]?.find(".datagrid-app-toolbar__group--end [data-datagrid-toolbar-action=\"undo\"]").exists()).toBe(true)
+
+    const undo = wrapper.find('[data-datagrid-toolbar-action="undo"]')
+    expect(undo.text()).toBe("")
+    expect(undo.attributes("aria-label")).toBe("Revert")
+    expect(undo.find("svg[aria-hidden='true']").exists()).toBe(true)
+    const toolbarStyle = wrapper.get(".datagrid-app-toolbar").element.getAttribute("style") ?? ""
+    expect(toolbarStyle).toContain("--datagrid-toolbar-background-color: #f0f0f0")
+    expect(toolbarStyle).toContain("--datagrid-toolbar-button-background-color: #ffffff")
 
     wrapper.unmount()
   })

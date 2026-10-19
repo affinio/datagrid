@@ -1,5 +1,11 @@
 # @affino/datagrid-spreadsheet-vue-app
 
+## 0.1.2
+
+### Changed
+
+- Updated the workbook shell dependency compatibility for `@affino/datagrid-theme@0.4.0`.
+
 ## 0.1.1
 
 ### Fixed

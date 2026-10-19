@@ -1,5 +1,11 @@
 # @affino/datagrid-vue-app-enterprise
 
+## 0.1.2
+
+### Changed
+
+- Updated the enterprise facade dependency set for the DataGrid theme and Vue app releases.
+
 ## 0.1.1
 
 ### Fixed

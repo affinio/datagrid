@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-spreadsheet-vue-app",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Spreadsheet workbook app shell for Affino DataGrid",
   "type": "module",
   "main": "src/index.ts",

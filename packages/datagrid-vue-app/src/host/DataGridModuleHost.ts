@@ -8,9 +8,10 @@ import {
 } from "../config/dataGridToolbarLayout"
 
 function resolveToolbarChromeStyle(chrome: DataGridChromeProp): Record<string, string> {
-  const compact = resolveDataGridChrome(chrome).density === "compact"
+  const resolved = resolveDataGridChrome(chrome)
+  const compact = resolved.density === "compact"
   return {
-    "--datagrid-app-toolbar-gap": compact ? "10px" : "12px",
+    "--datagrid-app-toolbar-gap": `${resolved.toolbarGap}px`,
     "--datagrid-app-toolbar-group-gap": compact ? "6px" : "8px",
     "--datagrid-app-toolbar-button-gap": compact ? "6px" : "8px",
     "--datagrid-app-toolbar-button-height": compact ? "28px" : "32px",
@@ -65,8 +66,10 @@ export default defineComponent({
         return null
       }
       const rows: Array<Record<"start" | "center" | "end", VNode[]>> = []
+      const hasGroupByLevels = props.modules.some(module => module.key === "group-by-levels")
       for (const module of props.modules) {
-        const placement = resolveDataGridToolbarItemPlacement(module.key, props.toolbarLayout)
+        const defaultRow = hasGroupByLevels && module.key !== "group-by-levels" ? 1 : 0
+        const placement = resolveDataGridToolbarItemPlacement(module.key, props.toolbarLayout, { row: defaultRow })
         for (let index = rows.length; index <= placement.row; index += 1) {
           rows[index] = { start: [], center: [], end: [] }
         }

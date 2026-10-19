@@ -141,6 +141,14 @@ export interface DataGridThemeTokens {
   gridColumnMenuFocusRingColor: string
   gridColumnMenuSearchBorderColor: string
   gridColumnMenuSearchBackgroundColor: string
+  gridToolbarBackgroundColor: string
+  gridToolbarBorderColor: string
+  gridToolbarButtonBackgroundColor: string
+  gridToolbarButtonTextColor: string
+  gridToolbarButtonBorderColor: string
+  gridToolbarButtonHoverBackgroundColor: string
+  gridToolbarButtonActiveBackgroundColor: string
+  groupIndentSize: string
 }
 
 export interface DataGridResolvedStyleConfig {
