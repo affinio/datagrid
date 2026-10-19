@@ -1,4 +1,4 @@
-import type { DataGridRowNode, DataGridViewportRange } from "../rowModel.js"
+import type { DataGridRowId, DataGridRowNode, DataGridViewportRange } from "../rowModel.js"
 import type { DataGridDataSourceBackpressureDiagnostics } from "./dataSourceProtocol.js"
 import type { DataSourceRuntimeSignalPayloads } from "./dataSourceRuntimeSignals.js"
 import { normalizeRequestedRange } from "./dataSourceTransportCoordinator.js"
@@ -16,6 +16,7 @@ export function createDataSourceCacheInvalidationRuntime<T>(options: {
   updateLoadingState: () => void
   updateViewportCoverage: () => void
   resetViewportDataAvailability: () => void
+  onRowRemoved: (index: number) => void
 }) {
   function clearRange(
     range: DataGridViewportRange,
@@ -121,5 +122,57 @@ export function createDataSourceCacheInvalidationRuntime<T>(options: {
     options.updateLoadingState()
   }
 
-  return { clearRange, clearAll }
+  function clearRowsById(
+    rowIds: readonly DataGridRowId[],
+    clearOptions: { preserveRange?: DataGridViewportRange | null; sourceViewport: DataGridViewportRange },
+  ): { changed: boolean; touchedViewport: boolean; touchedViewportIndexes: number[] } {
+    const rowCache = options.getRowCache()
+    const staleRetainedRowIndexes = options.getStaleRetainedRowIndexes()
+    const rangeCache = options.getRangeCache()
+    if (!Array.isArray(rowIds) || rowIds.length === 0 || rowCache.size === 0) {
+      return { changed: false, touchedViewport: false, touchedViewportIndexes: [] }
+    }
+    const uniqueRowIds = new Set<DataGridRowId>()
+    for (const rowId of rowIds) {
+      if (typeof rowId === "string" || typeof rowId === "number") uniqueRowIds.add(rowId)
+    }
+    if (uniqueRowIds.size === 0) {
+      return { changed: false, touchedViewport: false, touchedViewportIndexes: [] }
+    }
+    const preserveRange = clearOptions.preserveRange ? normalizeRequestedRange(clearOptions.preserveRange) : null
+    let changed = false
+    let touchedViewport = false
+    let removedRows = 0
+    const touchedViewportIndexes: number[] = []
+    for (const [index, node] of rowCache.entries()) {
+      if (!uniqueRowIds.has(node.rowId)) continue
+      const touchesSourceViewport = index >= clearOptions.sourceViewport.start && index <= clearOptions.sourceViewport.end
+      touchedViewport = touchedViewport || touchesSourceViewport
+      if (touchesSourceViewport) touchedViewportIndexes.push(index)
+      if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) continue
+      if (rowCache.delete(index)) {
+        staleRetainedRowIndexes.delete(index)
+        rangeCache.deleteRow(index)
+        options.diagnostics.invalidatedRows += 1
+        removedRows += 1
+        changed = true
+        options.onRowRemoved(index)
+      }
+    }
+    if (changed) {
+      options.bumpRevision()
+      options.emitCacheInvalidated({
+        kind: "rows",
+        removedRows,
+        rowIds: Array.from(uniqueRowIds),
+        preserveRange,
+        reason: "rows-clear",
+      })
+    }
+    options.diagnostics.rowCacheSize = rowCache.size
+    options.updateLoadingState()
+    return { changed, touchedViewport, touchedViewportIndexes }
+  }
+
+  return { clearRange, clearAll, clearRowsById }
 }

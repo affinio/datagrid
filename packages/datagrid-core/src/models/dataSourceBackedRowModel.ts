@@ -831,90 +831,28 @@ export function createDataSourceBackedRowModel<T = unknown>(
     updateLoadingState,
     updateViewportCoverage: () => updateCachedCoverageDiagnostics(toSourceRange(viewportRange)),
     resetViewportDataAvailability: () => telemetry.resetViewportDataAvailability(),
+    onRowRemoved: index => {
+      if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
+        clearBackgroundPrefetchState("stale")
+      }
+      const pendingBackgroundPull = readPendingPull("background")
+      if (pendingBackgroundPull && index >= pendingBackgroundPull.range.start && index <= pendingBackgroundPull.range.end) {
+        diagnostics.prefetchDroppedStale += 1
+        writePendingPull("background", null)
+      }
+    },
   })
   const clearRange = cacheInvalidationRuntime.clearRange
-
-  function clearRowsById(
-    rowIds: readonly DataGridRowId[],
-    options: { preserveRange?: DataGridViewportRange | null } = {},
-  ): { changed: boolean; touchedViewport: boolean; touchedViewportIndexes: number[] } {
-    if (!Array.isArray(rowIds) || rowIds.length === 0 || rowCache.size === 0) {
-      return {
-        changed: false,
-        touchedViewport: false,
-        touchedViewportIndexes: [],
-      }
-    }
-    const uniqueRowIds = new Set<DataGridRowId>()
-    for (const rowId of rowIds) {
-      if (typeof rowId === "string" || typeof rowId === "number") {
-        uniqueRowIds.add(rowId)
-      }
-    }
-    if (uniqueRowIds.size === 0) {
-      return {
-        changed: false,
-        touchedViewport: false,
-        touchedViewportIndexes: [],
-      }
-    }
-    const sourceViewport = toSourceRange(viewportRange)
-    const preserveRange = options.preserveRange ? normalizeRequestedRange(options.preserveRange) : null
-    let changed = false
-    let touchedViewport = false
-    let removedRows = 0
-    const touchedViewportIndexes: number[] = []
-    for (const [index, node] of rowCache.entries()) {
-      if (!uniqueRowIds.has(node.rowId)) {
-        continue
-      }
-      const touchesSourceViewport = index >= sourceViewport.start && index <= sourceViewport.end
-      touchedViewport = touchedViewport || touchesSourceViewport
-      if (touchesSourceViewport) {
-        touchedViewportIndexes.push(index)
-      }
-      if (preserveRange && index >= preserveRange.start && index <= preserveRange.end) {
-        continue
-      }
-      if (rowCache.delete(index)) {
-        staleRetainedRowIndexes.delete(index)
-        rangeCache.deleteRow(index)
-        diagnostics.invalidatedRows += 1
-        removedRows += 1
-        changed = true
-        if (backgroundInFlight && index >= backgroundInFlight.range.start && index <= backgroundInFlight.range.end) {
-          clearBackgroundPrefetchState("stale")
-        }
-        const pendingBackgroundPull = readPendingPull("background")
-        if (pendingBackgroundPull && index >= pendingBackgroundPull.range.start && index <= pendingBackgroundPull.range.end) {
-          diagnostics.prefetchDroppedStale += 1
-          writePendingPull("background", null)
-        }
-      }
-    }
-    if (changed) {
-      bumpRevision()
-      signals.emit("cacheInvalidated", {
-        kind: "rows",
-        removedRows,
-        rowIds: Array.from(uniqueRowIds),
-        preserveRange,
-        reason: "rows-clear",
-      })
-    }
-    diagnostics.rowCacheSize = rowCache.size
-    updateLoadingState()
-    return {
-      changed,
-      touchedViewport,
-      touchedViewportIndexes,
-    }
-  }
+  const clearRowsById = (rowIds: readonly DataGridRowId[], preserveRange?: DataGridViewportRange | null) =>
+    cacheInvalidationRuntime.clearRowsById(rowIds, {
+      preserveRange,
+      sourceViewport: toSourceRange(viewportRange),
+    })
 
   function invalidateRows(rowIds: readonly DataGridRowId[]) {
     ensureActive()
     const sourceViewport = toSourceRange(viewportRange)
-    const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, { preserveRange: sourceViewport })
+    const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, sourceViewport)
     if (!changed && !touchedViewport) {
       return
     }
@@ -2100,7 +2038,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
     invalidateRows(rowIds) {
       ensureActive()
       const sourceViewport = toSourceRange(viewportRange)
-      const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, { preserveRange: sourceViewport })
+      const { changed, touchedViewport, touchedViewportIndexes } = clearRowsById(rowIds, sourceViewport)
       if (!changed && !touchedViewport) {
         return
       }

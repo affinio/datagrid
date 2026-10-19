@@ -80,6 +80,8 @@ Completed internal owners include prefetch selection, row normalization, placeho
 
 Progress (`2026-10-19`): extracted bounded range clearing and full cache clearing into `models/server/dataSourceCacheInvalidationRuntime.ts`. The runtime resolves active cache stores through getters so invalidation follows cache-store switches. Row id invalidation and application-level orchestration remain in the facade.
 
+Progress (`2026-10-19`): moved row-id cache clearing into the same invalidation runtime. The facade now supplies the active source viewport and a callback for stale background-pull cleanup, then retains responsibility for refreshing an affected viewport. Focused datasource contracts (89), core type-check/build, and all datasource churn benchmark seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
