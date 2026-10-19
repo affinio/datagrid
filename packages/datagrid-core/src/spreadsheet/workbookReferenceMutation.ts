@@ -84,6 +84,20 @@ export function rewriteSpreadsheetWorkbookRowReference(
   }
 }
 
+export function rewriteSpreadsheetWorkbookSheetAliasBinding(
+  binding: DataGridSpreadsheetFormulaReferenceBinding,
+  previousAlias: string,
+  nextAlias: string,
+): DataGridSpreadsheetFormulaReferenceBinding | null {
+  if (
+    binding.kind !== "reference"
+    || normalizeSpreadsheetWorkbookAlias(binding.sheetReference) !== previousAlias
+  ) {
+    return null
+  }
+  return { ...binding, sheetReference: nextAlias }
+}
+
 export function rewriteSpreadsheetWorkbookColumnReferences(
   rawInput: string,
   rowIndex: number,

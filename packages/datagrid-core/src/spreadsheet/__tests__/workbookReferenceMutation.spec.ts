@@ -4,6 +4,7 @@ import {
   invalidateSpreadsheetWorkbookReferences,
   rewriteSpreadsheetWorkbookColumnReferences,
   rewriteSpreadsheetWorkbookRowReference,
+  rewriteSpreadsheetWorkbookSheetAliasBinding,
 } from "../workbookReferenceMutation"
 
 function reference(
@@ -81,6 +82,13 @@ describe("rewriteSpreadsheetWorkbookRowReference", () => {
       { revision: 7, kind: "rename", previousKey: "total", nextKey: "amount" },
       { syntax: "smartsheet", smartsheetAbsoluteRowBase: 1, allowSheetQualifiedReferences: true },
     )).toBe("=SUM(TABLE('orders', 'amount')) + orders![amount]1")
+  })
+
+  it("rewrites matching sheet aliases while preserving the remaining binding", () => {
+    expect(rewriteSpreadsheetWorkbookSheetAliasBinding(reference({ kind: "absolute", rowIndex: 4 }), "orders", "sales"))
+      .toMatchObject({ sheetReference: "sales", referenceName: "amount", rowSelector: { rowIndex: 4 } })
+    expect(rewriteSpreadsheetWorkbookSheetAliasBinding(reference({ kind: "absolute", rowIndex: 4 }), "customers", "sales"))
+      .toBeNull()
   })
 
   it("replaces removed sheet references from right to left", () => {

@@ -52,6 +52,7 @@ import {
   invalidateSpreadsheetWorkbookReferences,
   rewriteSpreadsheetWorkbookColumnReferences,
   rewriteSpreadsheetWorkbookRowReference,
+  rewriteSpreadsheetWorkbookSheetAliasBinding,
 } from "./workbookReferenceMutation.js"
 import {
   createSpreadsheetWorkbookRestoreRuntime,
@@ -1137,23 +1138,13 @@ export function createDataGridSpreadsheetWorkbookModel(
         if (formulaCell.formulaRuntime.bindings.length === 0) {
           continue
         }
-        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(formulaCell.formulaRuntime, (binding) => {
-          if (binding.kind !== "reference") {
-            return null
-          }
-          const reference = binding
-          if (normalizeSpreadsheetWorkbookAlias(reference.sheetReference) !== previousAlias) {
-            return null
-          }
-          return {
-            sheetReference: nextAlias,
-            referenceName: reference.referenceName,
-            rangeReferenceName: reference.rangeReferenceName,
-            rowSelector: reference.rowSelector,
-          }
-        }, {
-          currentRowIndex: formulaCell.address.rowIndex,
-        })
+        const nextRuntimeModel = mapDataGridSpreadsheetCellFormulaRuntimeModelBindings(
+          formulaCell.formulaRuntime,
+          binding => rewriteSpreadsheetWorkbookSheetAliasBinding(binding, previousAlias, nextAlias),
+          {
+            currentRowIndex: formulaCell.address.rowIndex,
+          },
+        )
         if (nextRuntimeModel === formulaCell.formulaRuntime) {
           continue
         }
