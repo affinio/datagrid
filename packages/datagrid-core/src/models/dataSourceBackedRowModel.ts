@@ -105,6 +105,7 @@ import { createDataSourceCacheInvalidationRuntime } from "./server/dataSourceCac
 import { createDataSourcePushInvalidationRuntime } from "./server/dataSourcePushInvalidationRuntime.js"
 import { createDataSourcePushEventRuntime } from "./server/dataSourcePushEventRuntime.js"
 import { createDataSourceTreePullContextRuntime } from "./server/dataSourceTreePullContext.js"
+import { createDataSourceProjectionRefreshRuntime } from "./server/dataSourceProjectionRefreshRuntime.js"
 import { normalizeDataSourceRowEntry } from "./server/dataSourceRowEntry.js"
 import { createDataSourcePlaceholderRow } from "./server/dataSourcePlaceholderRow.js"
 import { createDataSourcePullScheduler } from "./server/dataSourceScheduler.js"
@@ -1402,6 +1403,17 @@ export function createDataSourceBackedRowModel<T = unknown>(
   })
   const createTreePullContext = treePullContextRuntime.create
   const createProjectionRefreshTreePullContext = treePullContextRuntime.createProjectionRefresh
+  const projectionRefreshRuntime = createDataSourceProjectionRefreshRuntime({
+    resetPaginationCursor,
+    clearBackgroundPrefetch: () => clearBackgroundPrefetchState("stale"),
+    bumpRevision,
+    getSourceViewport: () => toSourceRange(viewportRange),
+    pullRange: (range, reason, treeData) => {
+      void pullRange(range, reason, "critical", treeData, { replaceCacheOnSuccess: true })
+    },
+    emit,
+  })
+  const refreshProjection = projectionRefreshRuntime.refresh
 
   function getPivotPullContext(): DataGridDataSourcePivotPullContext {
     return {
@@ -1694,24 +1706,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
     setSortModel(nextSortModel) {
       ensureActive()
       sortModel = Array.isArray(nextSortModel) ? [...nextSortModel] : []
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(toSourceRange(viewportRange), "sort-change", "critical", null, {
-        replaceCacheOnSuccess: true,
-      })
-      emit()
+      refreshProjection("sort-change")
     },
     setFilterModel(nextFilterModel) {
       ensureActive()
       filterModel = cloneDataGridFilterSnapshot(nextFilterModel ?? null)
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(toSourceRange(viewportRange), "filter-change", "critical", null, {
-        replaceCacheOnSuccess: true,
-      })
-      emit()
+      refreshProjection("filter-change")
     },
     setSortAndFilterModel(input) {
       ensureActive()
@@ -1724,19 +1724,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       sortModel = nextSortModel
       filterModel = nextFilterModel
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
-        sortChanged ? "sort-change" : "filter-change",
-        "critical",
-        null,
-        {
-          replaceCacheOnSuccess: true,
-        },
-      )
-      emit()
+      refreshProjection(sortChanged ? "sort-change" : "filter-change")
     },
     setGroupBy(nextGroupBy) {
       ensureActive()
@@ -1747,19 +1735,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       groupBy = normalized
       expansionExpandedByDefault = Boolean(normalized?.expandedByDefault)
       toggledGroupKeys.clear()
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("set-group-by", [], "all"),
-        {
-          replaceCacheOnSuccess: true,
-        },
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("set-group-by", [], "all"))
     },
     setPivotModel(nextPivotModel) {
       ensureActive()
@@ -1769,13 +1745,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       }
       pivotModel = normalized
       pivotColumns = []
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical", null, {
-        replaceCacheOnSuccess: true,
-      })
-      emit()
+      refreshProjection("group-change")
     },
     getPivotModel() {
       return clonePivotSpec(pivotModel)
@@ -1787,13 +1757,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         return
       }
       aggregationModel = normalized
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(toSourceRange(viewportRange), "group-change", "critical", null, {
-        replaceCacheOnSuccess: true,
-      })
-      emit()
+      refreshProjection("group-change")
     },
     getAggregationModel() {
       return clonePullAggregationModel(aggregationModel)
@@ -1803,19 +1767,10 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!applyGroupExpansion(expansion)) {
         return
       }
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
+      refreshProjection(
         "group-change",
-        "critical",
         createTreePullContext("set-group-expansion", expansion?.toggledGroupKeys ?? [], "all"),
-        {
-          replaceCacheOnSuccess: true,
-        },
       )
-      emit()
     },
     toggleGroup(groupKey: string) {
       ensureActive()
@@ -1825,19 +1780,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!toggleGroupExpansionKey(toggledGroupKeys, groupKey)) {
         return
       }
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("toggle-group", [groupKey]),
-        {
-          replaceCacheOnSuccess: true,
-        },
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("toggle-group", [groupKey]))
     },
     expandGroup(groupKey: string) {
       ensureActive()
@@ -1847,19 +1790,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, true)) {
         return
       }
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("expand-group", [groupKey]),
-        {
-          replaceCacheOnSuccess: true,
-        },
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("expand-group", [groupKey]))
     },
     collapseGroup(groupKey: string) {
       ensureActive()
@@ -1869,19 +1800,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!setGroupExpansionKey(toggledGroupKeys, groupKey, expansionExpandedByDefault, false)) {
         return
       }
-      resetPaginationCursor()
-      clearBackgroundPrefetchState("stale")
-      bumpRevision()
-      void pullRange(
-        toSourceRange(viewportRange),
-        "group-change",
-        "critical",
-        createTreePullContext("collapse-group", [groupKey]),
-        {
-          replaceCacheOnSuccess: true,
-        },
-      )
-      emit()
+      refreshProjection("group-change", createTreePullContext("collapse-group", [groupKey]))
     },
     expandAllGroups() {
       ensureActive()

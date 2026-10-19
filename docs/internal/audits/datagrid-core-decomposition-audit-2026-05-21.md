@@ -88,6 +88,8 @@ Progress (`2026-10-19`): moved push event dispatch and upsert/remove finalizatio
 
 Progress (`2026-10-19`): moved group-key normalization and tree pull-context construction into `models/server/dataSourceTreePullContext.ts`. The datasource facade supplies current expansion state and toggled keys. Focused datasource tests (76), core type-check/build, and all tree workload seeds passed.
 
+Progress (`2026-10-19`): consolidated sort, filter, grouping, pivot, aggregation, and group-expansion refresh transitions in `models/server/dataSourceProjectionRefreshRuntime.ts`. Setter-specific state changes and no-op checks remain in the facade. Focused datasource tests (76), core type-check/build, and all tree workload seeds passed.
+
 Validation target:
 
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
