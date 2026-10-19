@@ -88,6 +88,7 @@ import {
   countCoveredRowsBackward as countCoveredRowsBackwardPolicy,
   countCoveredRowsForward as countCoveredRowsForwardPolicy,
   measureDataSourceViewportCoverage,
+  measureDataSourceViewportLoading,
 } from "./server/dataSourceCoveragePolicy.js"
 import {
   createDataSourceOptimisticMutationEngine,
@@ -653,32 +654,12 @@ export function createDataSourceBackedRowModel<T = unknown>(
     DataGridSparseRowModelDiagnostics,
     "viewportRowCount" | "viewportLoadedRowCount" | "viewportLoadingRowCount" | "viewportLoadingRowRatio"
   > {
-    const visibleCount = getVisibleRowCount()
-    if (visibleCount <= 0) {
-      return {
-        viewportRowCount: 0,
-        viewportLoadedRowCount: 0,
-        viewportLoadingRowCount: 0,
-        viewportLoadingRowRatio: 0,
-      }
-    }
-    const normalized = normalizeViewportRange(viewportRange, visibleCount)
-    let loadedRows = 0
-    let loadingRows = 0
-    for (let index = normalized.start; index <= normalized.end; index += 1) {
-      if (rowCache.has(toSourceIndex(index))) {
-        loadedRows += 1
-      } else {
-        loadingRows += 1
-      }
-    }
-    const viewportRows = loadedRows + loadingRows
-    return {
-      viewportRowCount: viewportRows,
-      viewportLoadedRowCount: loadedRows,
-      viewportLoadingRowCount: loadingRows,
-      viewportLoadingRowRatio: viewportRows > 0 ? loadingRows / viewportRows : 0,
-    }
+    return measureDataSourceViewportLoading(
+      viewportRange,
+      getVisibleRowCount(),
+      toSourceIndex,
+      index => rowCache.has(index),
+    )
   }
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
