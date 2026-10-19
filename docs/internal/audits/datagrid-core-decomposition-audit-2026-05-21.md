@@ -115,7 +115,9 @@ Status as of `2026-05-21`:
 
 - Closed the safe facade-preserving decomposition slice for `sheetModel.ts`.
 - Extracted cell helpers, sparse cell storage, sheet row/column state, formula table storage/patching, formula runtime helpers, mutation snapshot cloning, lifecycle/revision counters, column/reference lookup, style normalization/equality/merge, and structural formula rewrite policy into focused spreadsheet runtime modules.
-- Left formula evaluation context and restore orchestration inside the facade because they still coordinate multiple runtime owners and should move only with a behavior-touching slice.
+- Left formula reference-context construction and restore orchestration inside the facade because they still coordinate multiple runtime owners. Formula evaluation traversal and value application are now extracted below.
+
+Progress (`2026-10-19`): moved formula evaluation memoization, cycle detection, invalid-formula handling, dirty-cell iteration, and resolved-value application into the existing `spreadsheetFormulaRuntime.ts`. `sheetModel.ts` still builds the reference/context resolver because it reads current sheet state, referenced sheet models, formula tables, and formula options. Focused spreadsheet contracts (49), core type-check/build, and a clean spreadsheet-workbook benchmark rerun passed after two noisy rewrite-p95 runs.
 
 Validation target:
 

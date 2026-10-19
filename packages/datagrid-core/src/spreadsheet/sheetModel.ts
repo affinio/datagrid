@@ -50,6 +50,7 @@ import {
   canPreserveMovedSpreadsheetFormulaValueOnInsert,
   canPreserveMovedSpreadsheetFormulaValueOnRemove,
   collectSpreadsheetFormulaDependentClosure,
+  createSpreadsheetFormulaEvaluator,
   createCompiledSpreadsheetFormulaTemplate,
   createSpreadsheetFormulaDiagnosticError,
   createSpreadsheetFormulaStructuralCellSnapshot,
@@ -58,6 +59,7 @@ import {
   shiftSpreadsheetFormulaAnalysisByRowOffset,
   type SpreadsheetFormulaCellState,
   type SpreadsheetFormulaStateMaps,
+  type SpreadsheetFormulaCellEvaluator,
 } from "./spreadsheetFormulaRuntime.js"
 import {
   buildSpreadsheetColumnReferenceLookup,
@@ -1259,6 +1261,7 @@ export function createDataGridSpreadsheetSheetModel(
     dirtyFormulaKeys: ReadonlySet<string> | null,
     cache: Map<string, DataGridFormulaValue>,
     visiting: Set<string>,
+    evaluateFormulaCell: SpreadsheetFormulaCellEvaluator,
   ): DataGridComputedFieldComputeContext<Record<string, unknown>> {
     const row = rows[formulaCell.address.rowIndex]
     const formulaRuntimeBindingByIndex = new Map(formulaCell.formulaRuntime.bindings.map(binding => [binding.index, binding]))
@@ -1448,58 +1451,12 @@ export function createDataGridSpreadsheetSheetModel(
     }
   }
 
-  function evaluateFormulaCell(
-    formulaCell: SpreadsheetFormulaCellState,
-    dirtyFormulaKeys: ReadonlySet<string> | null,
-    cache: Map<string, DataGridFormulaValue>,
-    visiting: Set<string>,
-  ): DataGridFormulaValue {
-    const cached = cache.get(formulaCell.key)
-    if (typeof cached !== "undefined") {
-      return cached
-    }
-    if (!formulaCell.analysis.isFormulaValid || !formulaCell.compiled) {
-      const errorValue = createSpreadsheetFormulaDiagnosticError(formulaCell.analysis)
-      cache.set(formulaCell.key, errorValue)
-      return errorValue
-    }
-    if (visiting.has(formulaCell.key)) {
-      const errorValue = createFormulaErrorValue({
-        code: "EVAL_ERROR",
-        message: `Circular spreadsheet formula dependency at row ${formulaCell.address.rowIndex + 1}, column '${formulaCell.address.columnKey}'.`,
-      })
-      cache.set(formulaCell.key, errorValue)
-      return errorValue
-    }
-    visiting.add(formulaCell.key)
-    const nextValue = formulaCell.compiled.compute(
-      createFormulaContext(formulaCell, dirtyFormulaKeys, cache, visiting),
-    )
-    visiting.delete(formulaCell.key)
-    cache.set(formulaCell.key, nextValue)
-    return nextValue
-  }
-
-  function applyFormulaEvaluation(
-    dirtyFormulaKeys: ReadonlySet<string> | null,
-  ): boolean {
-    if (formulaCellByKey.size === 0) {
-      return false
-    }
-    const cache = new Map<string, DataGridFormulaValue>()
-    const visiting = new Set<string>()
-    let changed = false
-    for (const formulaCell of formulaCellByKey.values()) {
-      if (dirtyFormulaKeys && !dirtyFormulaKeys.has(formulaCell.key)) {
-        continue
-      }
-      const nextValue = evaluateFormulaCell(formulaCell, dirtyFormulaKeys, cache, visiting)
-      if (setResolvedCellValue(formulaCell.key, nextValue)) {
-        changed = true
-      }
-    }
-    return changed
-  }
+  const formulaEvaluator = createSpreadsheetFormulaEvaluator({
+    formulaCells: formulaCellByKey,
+    createContext: (formulaCell, dirtyFormulaKeys, cache, visiting, evaluate) =>
+      createFormulaContext(formulaCell, dirtyFormulaKeys, cache, visiting, evaluate),
+    setResolvedValue: setResolvedCellValue,
+  })
 
   function recomputeAfterInputChange(
     seedCellKeys: ReadonlySet<string>,
@@ -1508,7 +1465,7 @@ export function createDataGridSpreadsheetSheetModel(
     if (formulaStructureDirty) {
       const baseValuesChanged = rebuildFormulaState()
       return {
-        changed: applyFormulaEvaluation(null),
+        changed: formulaEvaluator.applyFormulaEvaluation(null),
         baseValuesChanged,
       }
     }
@@ -1519,7 +1476,7 @@ export function createDataGridSpreadsheetSheetModel(
       }
     }
     return {
-      changed: applyFormulaEvaluation(collectSpreadsheetFormulaDependentClosure(
+      changed: formulaEvaluator.applyFormulaEvaluation(collectSpreadsheetFormulaDependentClosure(
         seedCellKeys,
         dependentsByCellKey,
         formulaCellByKey,
@@ -1694,7 +1651,7 @@ export function createDataGridSpreadsheetSheetModel(
       dependentsByCellKey,
       formulaCellByKey,
     )
-    if (applyFormulaEvaluation(dirtyFormulaKeys)) {
+    if (formulaEvaluator.applyFormulaEvaluation(dirtyFormulaKeys)) {
       lifecycle.incrementValueRevision()
     }
     lifecycle.incrementRevision()
@@ -1763,7 +1720,7 @@ export function createDataGridSpreadsheetSheetModel(
       dependentsByCellKey,
       formulaCellByKey,
     )
-    if (applyFormulaEvaluation(dirtyFormulaKeys)) {
+    if (formulaEvaluator.applyFormulaEvaluation(dirtyFormulaKeys)) {
       lifecycle.incrementValueRevision()
     }
     lifecycle.incrementRevision()
@@ -1875,7 +1832,7 @@ export function createDataGridSpreadsheetSheetModel(
         formulaCellByKey,
       )
       : null
-    const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
+    const formulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(dirtyFormulaKeys)
     if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
       lifecycle.incrementValueRevision()
     }
@@ -1965,7 +1922,7 @@ export function createDataGridSpreadsheetSheetModel(
         formulaCellByKey,
       )
       : null
-    const formulaValuesChanged = applyFormulaEvaluation(dirtyFormulaKeys)
+    const formulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(dirtyFormulaKeys)
     if (rebuildResult.baseValuesChanged || formulaValuesChanged) {
       lifecycle.incrementValueRevision()
     }
@@ -2063,7 +2020,7 @@ export function createDataGridSpreadsheetSheetModel(
     lifecycle.recordColumnRenameMutation(normalizedColumnKey, normalizedNextColumnKey)
     lifecycle.incrementRevision()
     const baseValuesChanged = rebuildFormulaState()
-    const formulaValuesChanged = applyFormulaEvaluation(null)
+    const formulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(null)
     if (baseValuesChanged || formulaValuesChanged) {
       lifecycle.incrementValueRevision()
     }
@@ -2151,7 +2108,7 @@ export function createDataGridSpreadsheetSheetModel(
     lifecycle.recordColumnRenameMutation(previousFormulaAlias, nextFormulaAlias)
     lifecycle.incrementRevision()
     const baseValuesChanged = rebuildFormulaState()
-    const formulaValuesChanged = applyFormulaEvaluation(null)
+    const formulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(null)
     if (baseValuesChanged || formulaValuesChanged) {
       lifecycle.incrementValueRevision()
     }
@@ -2160,7 +2117,7 @@ export function createDataGridSpreadsheetSheetModel(
   }
 
   const initialBaseValuesChanged = rebuildFormulaState()
-  const initialFormulaValuesChanged = applyFormulaEvaluation(null)
+  const initialFormulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(null)
   if (initialBaseValuesChanged || initialFormulaValuesChanged) {
     lifecycle.incrementValueRevision()
     lifecycle.incrementRevision()
@@ -2483,7 +2440,7 @@ export function createDataGridSpreadsheetSheetModel(
       lifecycle.incrementStyleRevision()
       lifecycle.incrementRevision()
       const baseValuesChanged = rebuildFormulaState()
-      const formulaValuesChanged = applyFormulaEvaluation(null)
+      const formulaValuesChanged = formulaEvaluator.applyFormulaEvaluation(null)
       if (baseValuesChanged || formulaValuesChanged) {
         lifecycle.incrementValueRevision()
       }
@@ -2571,7 +2528,7 @@ export function createDataGridSpreadsheetSheetModel(
     },
     recompute() {
       ensureActive()
-      if (!applyFormulaEvaluation(null)) {
+      if (!formulaEvaluator.applyFormulaEvaluation(null)) {
         return false
       }
       lifecycle.incrementValueRevision()

@@ -2,7 +2,11 @@ import {
   createFormulaErrorValue,
   type DataGridCompiledFormulaField,
 } from "../models/formula/formulaEngine.js"
-import type { DataGridFormulaErrorValue } from "../models/formula/formulaContracts.js"
+import type {
+  DataGridComputedFieldComputeContext,
+  DataGridFormulaErrorValue,
+  DataGridFormulaValue,
+} from "../models/formula/formulaContracts.js"
 import type {
   DataGridSpreadsheetCellAddress,
   DataGridSpreadsheetCellFormulaModel,
@@ -29,6 +33,81 @@ export interface SpreadsheetFormulaStateMaps {
   analysisByCellKey: Map<string, DataGridSpreadsheetCellInputAnalysis>
   formulaCellByKey: Map<string, SpreadsheetFormulaCellState>
   dependentsByCellKey: Map<string, Set<string>>
+}
+
+export type SpreadsheetFormulaCellEvaluator = (
+  formulaCell: SpreadsheetFormulaCellState,
+  dirtyFormulaKeys: ReadonlySet<string> | null,
+  cache: Map<string, DataGridFormulaValue>,
+  visiting: Set<string>,
+) => DataGridFormulaValue
+
+export function createSpreadsheetFormulaEvaluator(options: {
+  formulaCells: ReadonlyMap<string, SpreadsheetFormulaCellState>
+  createContext: (
+    formulaCell: SpreadsheetFormulaCellState,
+    dirtyFormulaKeys: ReadonlySet<string> | null,
+    cache: Map<string, DataGridFormulaValue>,
+    visiting: Set<string>,
+    evaluateFormulaCell: SpreadsheetFormulaCellEvaluator,
+  ) => DataGridComputedFieldComputeContext<Record<string, unknown>>
+  setResolvedValue: (cellKey: string, value: unknown) => boolean
+}): {
+  evaluateFormulaCell: SpreadsheetFormulaCellEvaluator
+  applyFormulaEvaluation(dirtyFormulaKeys: ReadonlySet<string> | null): boolean
+} {
+  function evaluateFormulaCell(
+    formulaCell: SpreadsheetFormulaCellState,
+    dirtyFormulaKeys: ReadonlySet<string> | null,
+    cache: Map<string, DataGridFormulaValue>,
+    visiting: Set<string>,
+  ): DataGridFormulaValue {
+    const cached = cache.get(formulaCell.key)
+    if (typeof cached !== "undefined") {
+      return cached
+    }
+    if (!formulaCell.analysis.isFormulaValid || !formulaCell.compiled) {
+      const errorValue = createSpreadsheetFormulaDiagnosticError(formulaCell.analysis)
+      cache.set(formulaCell.key, errorValue)
+      return errorValue
+    }
+    if (visiting.has(formulaCell.key)) {
+      const errorValue = createFormulaErrorValue({
+        code: "EVAL_ERROR",
+        message: `Circular spreadsheet formula dependency at row ${formulaCell.address.rowIndex + 1}, column '${formulaCell.address.columnKey}'.`,
+      })
+      cache.set(formulaCell.key, errorValue)
+      return errorValue
+    }
+    visiting.add(formulaCell.key)
+    const nextValue = formulaCell.compiled.compute(
+      options.createContext(formulaCell, dirtyFormulaKeys, cache, visiting, evaluateFormulaCell),
+    )
+    visiting.delete(formulaCell.key)
+    cache.set(formulaCell.key, nextValue)
+    return nextValue
+  }
+
+  function applyFormulaEvaluation(dirtyFormulaKeys: ReadonlySet<string> | null): boolean {
+    if (options.formulaCells.size === 0) {
+      return false
+    }
+    const cache = new Map<string, DataGridFormulaValue>()
+    const visiting = new Set<string>()
+    let changed = false
+    for (const formulaCell of options.formulaCells.values()) {
+      if (dirtyFormulaKeys && !dirtyFormulaKeys.has(formulaCell.key)) {
+        continue
+      }
+      const nextValue = evaluateFormulaCell(formulaCell, dirtyFormulaKeys, cache, visiting)
+      if (options.setResolvedValue(formulaCell.key, nextValue)) {
+        changed = true
+      }
+    }
+    return changed
+  }
+
+  return { evaluateFormulaCell, applyFormulaEvaluation }
 }
 
 export function createSpreadsheetFormulaStructuralCellSnapshot(
