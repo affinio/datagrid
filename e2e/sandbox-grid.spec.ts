@@ -268,10 +268,12 @@ test("column flex resize does not move the pinned pane boundary or overflow the 
   await page.getByRole("button", { name: "Pin flex column left" }).click()
   const pinned = page.locator(".grid-header-pane--left .grid-cell--header[data-column-key='workstream']")
   const centerOwner = page.locator(".grid-header-viewport .grid-cell--header[data-column-key='owner']")
+  await expect(pinned).toBeVisible()
   const before = await page.evaluate(() => ({
     pinnedWidth: document.querySelector<HTMLElement>(".grid-header-pane--left .grid-cell--header[data-column-key='workstream']")!.getBoundingClientRect().width,
     centerLeft: document.querySelector<HTMLElement>(".grid-header-viewport .grid-cell--header[data-column-key='owner']")!.getBoundingClientRect().left,
   }))
+  expect(before.pinnedWidth).toBeGreaterThan(0)
   const handle = await centerOwner.locator(".col-resize").boundingBox()
   if (!handle) throw new Error("Owner resize handle is missing")
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
@@ -284,8 +286,8 @@ test("column flex resize does not move the pinned pane boundary or overflow the 
     centerLeft: document.querySelector<HTMLElement>(".grid-header-viewport .grid-cell--header[data-column-key='owner']")!.getBoundingClientRect().left,
   }))
   expect(after.pinnedWidth).toBe(before.pinnedWidth)
+  expect(after.pinnedWidth).toBeGreaterThan(0)
   expect(after.centerLeft).toBe(before.centerLeft)
-  expect(pinned).toBeVisible()
 })
 
 test("document and reactive theme changes repaint canvas chrome for every mounted grid", async ({ page }) => {
@@ -1370,6 +1372,7 @@ test.describe("sandbox touch scroll contracts", () => {
   })
 
   test("touch double tap opens editing only when the viewport is idle", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1000 })
     await forceCoarsePointer(page)
     await gotoSandboxRoute(page, "/vue/base-grid")
 
@@ -1378,8 +1381,11 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect(stage).toHaveClass(/grid-stage--interaction-touch/)
     await expect(viewport).toBeVisible({ timeout: 20_000 })
 
-    await dispatchTouchGeneratedDoubleClick(firstEditableAmountCell(page))
-    await expect(firstEditableAmountCell(page).locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })
+    const editableCell = firstEditableAmountCell(page)
+    await expect(editableCell).toBeInViewport({ ratio: 1 })
+    await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
+    await dispatchTouchGeneratedDoubleClick(editableCell)
+    await expect(editableCell.locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })
     await page.keyboard.press("Escape")
     await expect(page.locator(".grid-body-viewport input.cell-editor-input")).toHaveCount(0)
 

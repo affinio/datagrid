@@ -424,6 +424,9 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
     const horizontalOwner = stage.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
     await expect(verticalOwner).toBeVisible({ timeout: 20_000 })
+    const firstRootGroup = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"]')
+    await expect(firstRootGroup).toBeVisible({ timeout: 20_000 })
+    await expect(firstRootGroup).toHaveAttribute("aria-expanded", "true")
 
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await sourceCell.click()
@@ -498,6 +501,9 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const stage = page.locator(".grid-stage:visible").first()
     const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
     await expect(verticalOwner).toBeVisible({ timeout: 20_000 })
+    const firstRootGroup = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"]')
+    await expect(firstRootGroup).toBeVisible({ timeout: 20_000 })
+    await expect(firstRootGroup).toHaveAttribute("aria-expanded", "true")
 
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })

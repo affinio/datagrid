@@ -2634,6 +2634,13 @@ async function runScenario(page, sessionIndex, scenario) {
         cellSurfaceCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.cellSurfaceCount)),
         centerColumnCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.centerColumnCount)),
         pinnedColumnCount: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.pinnedColumnCount)),
+        pinnedColumnDomCount: stageRoot instanceof HTMLElement
+          ? new Set(Array.from(stageRoot.querySelectorAll(
+            ".grid-header-pane--left .grid-cell--header[data-column-key], .grid-header-pane--right .grid-cell--header[data-column-key]",
+          ))
+            .map(cell => cell.getAttribute("data-column-key"))
+            .filter(key => key && key !== "__datagrid_row_selection__" )).size
+          : 0,
         placeholderRows: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.placeholderRowCount)),
         selectionSegments: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.selectionSegmentCount)),
         overlayLanes: summarizeNumbers(renderWindowPerfSamples.map(sample => sample.overlayLaneCount)),
@@ -3017,7 +3024,10 @@ function aggregateRuns(runs) {
       cellNodeCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellNodeCount?.p95)),
       cellSurfaceCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.cellSurfaceCount?.p95)),
       centerColumnCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.centerColumnCount?.p95)),
-      pinnedColumnCount: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.pinnedColumnCount?.p95)),
+      pinnedColumnCount: stats(verticalDiagnosticsRuns.map(diagnostics => Math.max(
+        diagnostics.renderTelemetry?.pinnedColumnCount?.p95 ?? 0,
+        diagnostics.renderTelemetry?.pinnedColumnDomCount ?? 0,
+      ))),
       placeholderRows: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.placeholderRows?.max)),
       selectionSegments: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.selectionSegments?.p95)),
       overlayLanes: stats(verticalDiagnosticsRuns.map(diagnostics => diagnostics.renderTelemetry?.overlayLanes?.p95)),

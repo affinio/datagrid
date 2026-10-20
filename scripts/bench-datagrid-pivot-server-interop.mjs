@@ -206,6 +206,7 @@ async function loadFactories() {
   const enforceFreshDist = process.env.BENCH_ENFORCE_FRESH_DIST === "1"
 
   let lastError = null
+  const modules = []
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue
@@ -222,24 +223,26 @@ async function loadFactories() {
       }
     }
     try {
-      const module = await import(pathToFileURL(candidate).href)
-      if (
-        typeof module.createAdvancedClientRowModel === "function" &&
-        typeof module.createDataSourceBackedRowModel === "function" &&
-        typeof module.createDataGridColumnModel === "function" &&
-        typeof module.createDataGridCore === "function" &&
-        typeof module.createDataGridApi === "function"
-      ) {
-        return {
-          createAdvancedClientRowModel: module.createAdvancedClientRowModel,
-          createDataSourceBackedRowModel: module.createDataSourceBackedRowModel,
-          createDataGridColumnModel: module.createDataGridColumnModel,
-          createDataGridCore: module.createDataGridCore,
-          createDataGridApi: module.createDataGridApi,
-        }
-      }
+      modules.push(await import(pathToFileURL(candidate).href))
     } catch (error) {
       lastError = error
+    }
+  }
+
+  const module = Object.assign({}, ...modules)
+  if (
+    typeof module.createAdvancedClientRowModel === "function" &&
+    typeof module.createDataSourceBackedRowModel === "function" &&
+    typeof module.createDataGridColumnModel === "function" &&
+    typeof module.createDataGridCore === "function" &&
+    typeof module.createDataGridApi === "function"
+  ) {
+    return {
+      createAdvancedClientRowModel: module.createAdvancedClientRowModel,
+      createDataSourceBackedRowModel: module.createDataSourceBackedRowModel,
+      createDataGridColumnModel: module.createDataGridColumnModel,
+      createDataGridCore: module.createDataGridCore,
+      createDataGridApi: module.createDataGridApi,
     }
   }
 
