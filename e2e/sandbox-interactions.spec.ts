@@ -431,7 +431,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await sourceCell.click()
     await expect.poll(() => page.evaluate(() => document.activeElement?.closest<HTMLElement>(".grid-cell")?.dataset.rowIndex ?? null)).toBe("0")
-    await verticalOwner.evaluate(element => { element.scrollTop = 40 })
+    await scrollRowPastViewportTop(firstRootGroup, verticalOwner)
     const initialSticky = stage.locator('.grid-row--sticky-top[data-row-index="0"]')
     await expect(initialSticky.first()).toBeVisible({ timeout: 10_000 })
 
@@ -508,7 +508,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await sourceCell.click()
-    await verticalOwner.evaluate(element => { element.scrollTop = 40 })
+    await scrollRowPastViewportTop(firstRootGroup, verticalOwner)
     await expect(stage.locator('.grid-row--sticky-top[data-row-index="0"]').first()).toBeVisible({ timeout: 10_000 })
     await verticalOwner.evaluate(element => { element.scrollTop = 180 })
     const collapseButton = stage.locator(".grid-row--sticky-top .datagrid-hierarchy-group__toggle").first()
@@ -1347,6 +1347,23 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
     // then let the individual contract target its own visible surface.
     await expect(page.locator(".grid-stage:visible").first()).toBeVisible({ timeout: 20_000 })
   }
+}
+
+async function scrollRowPastViewportTop(row: Locator, viewport: Locator): Promise<void> {
+  const [rowBox, viewportBox, scrollTop] = await Promise.all([
+    row.boundingBox(),
+    viewport.boundingBox(),
+    viewport.evaluate(element => element.scrollTop),
+  ])
+  if (!rowBox || !viewportBox) {
+    throw new Error("Cannot measure the group row and vertical viewport before scrolling")
+  }
+
+  const targetScrollTop = scrollTop + rowBox.y - viewportBox.y + 24
+  await viewport.evaluate((element, target) => { element.scrollTop = target }, targetScrollTop)
+  await expect.poll(() => viewport.evaluate(element => Number.parseFloat(
+    element.style.getPropertyValue("--datagrid-body-scroll-top") || "0",
+  ))).toBeGreaterThan(targetScrollTop - 1)
 }
 
 async function rowsInModel(page: Page): Promise<number> {
