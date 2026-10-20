@@ -1169,7 +1169,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     expect(loadingSnapshot.ariaDisabled).toBe("true")
     expect(loadingSnapshot.ariaRowIndex).toBe(String(Number(rowIndex) + 1))
     expect(loadingSnapshot.ariaColIndex).toBe(String(Number(loadingSnapshot.columnIndex) + 1))
-    const sourceIndex = Number(loadingRowId?.split(":").at(-1))
+    const sourceIndex = Number(loadingRowId?.slice(loadingRowId.lastIndexOf(":") + 1))
     expect(Number.isFinite(sourceIndex)).toBe(true)
     const realRowId = `srv-${sourceIndex.toString().padStart(6, "0")}`
 
