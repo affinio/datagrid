@@ -427,6 +427,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const firstRootGroup = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"]')
     await expect(firstRootGroup).toBeVisible({ timeout: 20_000 })
     await expect(firstRootGroup).toHaveAttribute("aria-expanded", "true")
+    await expect(stage.locator('.grid-body-viewport .grid-row[data-row-index="1"]')).toBeVisible({ timeout: 20_000 })
 
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await sourceCell.click()
@@ -504,6 +505,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const firstRootGroup = stage.locator('.grid-body-viewport .grid-row.row--group[data-row-index="0"]')
     await expect(firstRootGroup).toBeVisible({ timeout: 20_000 })
     await expect(firstRootGroup).toHaveAttribute("aria-expanded", "true")
+    await expect(stage.locator('.grid-body-viewport .grid-row[data-row-index="1"]')).toBeVisible({ timeout: 20_000 })
 
     const sourceCell = stage.locator('.grid-row[data-row-index="0"]:not(.grid-row--sticky-top) .grid-cell[data-column-key="amount"]').first()
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
