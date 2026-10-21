@@ -45,7 +45,8 @@ Useful background roles are `gridBackgroundColor` for the stage surface,
 `gridViewportBackground` for the body viewport, `bodyRowBackgroundColor` for
 rows, and the header and pinned background tokens for those panes. These roles
 may intentionally differ. The full token list is exported by
-`@affino/datagrid-theme`.
+`@affino/datagrid-theme`; see the [complete token reference](./reference/datagrid-theme-tokens.md)
+for token names and their CSS custom properties.
 
 `gridFocusAxisBackgroundColor` (`--datagrid-focus-axis-bg`) tints the column
 header and row index for the body cell that owns DOM focus. Built-in light and

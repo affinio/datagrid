@@ -7,9 +7,11 @@ This is the public documentation for the DataGrid repository. Choose one entry p
 - [Getting started](./getting-started.md) - install the grid and render a useful table in a Vue application.
 - [App layer guide](./app-layer.md) - the recommended, self-contained path for product teams using `DataGrid`.
 - [Styling](./datagrid-styling.md) - themes, surfaces, and toolbar placement.
+- [Theme token reference](./reference/datagrid-theme-tokens.md) - complete token-to-CSS-variable catalog.
 - [Vue adapter guide](./vue-adapter.md) - headless Vue runtime, custom renderers, row models, and adapter ownership.
 - [Core API guide](./core-api.md) - framework-independent row models, `DataGridApi`, lifecycle, state, events, and projection semantics.
 - [Core factories reference](./reference/datagrid-core-factories-reference.md) - core runtime assembly and constructor options.
+- [Core row-selection model](./reference/datagrid-row-selection-model.md) - committed selection, intent, and session primitives.
 - [Package map](./datagrid-package-map.md) - package roles and when to move between layers.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability matrix and runtime modes.
 - [Support status](./support-status.md) - implemented, partial, planned, advanced, and internal labels.
