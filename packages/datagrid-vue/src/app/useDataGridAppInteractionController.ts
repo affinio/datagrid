@@ -3589,6 +3589,23 @@ export function useDataGridAppInteractionController<
       return
     }
 
+    if (
+      options.rowHeaderAction?.value === "select-cells"
+      && isPrimaryModifier
+      && !event.shiftKey
+      && (normalizedKey === "c" || normalizedKey === "x" || normalizedKey === "v")
+    ) {
+      event.preventDefault()
+      event.stopPropagation()
+      const operation = normalizedKey === "c"
+        ? options.copySelectedCells("keyboard")
+        : normalizedKey === "x"
+          ? options.cutSelectedCells("keyboard")
+          : options.pasteSelectedCells("keyboard")
+      void operation
+      return
+    }
+
     let action: DataGridRowIndexKeyboardAction | null = null
 
     if (isPrimaryModifier && !event.shiftKey && normalizedKey === "c") {

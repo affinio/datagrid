@@ -3682,6 +3682,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS,
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
       },
       attachTo: document.body,
     })
@@ -3754,7 +3755,7 @@ describe("DataGrid app facade contract", () => {
     }
   })
 
-  it("copies a shift-clicked row-index selection range when row selection is enabled", async () => {
+  it("copies a shift-clicked row-index cell range without creating a row clipboard operation", async () => {
     const wrapper = mount(DataGrid, {
       props: {
         rows: BASE_ROWS,
@@ -3782,18 +3783,9 @@ describe("DataGrid app facade contract", () => {
 
     const leftRows = wrapper.findAll('.grid-body-pane--left .grid-row')
     const centerRows = wrapper.findAll('.grid-body-viewport .grid-row')
-    expect(leftRows.at(0)?.classes()).toContain("grid-row--clipboard-pending")
-    expect(leftRows.at(0)?.classes()).toContain("grid-row--clipboard-pending-top")
-    expect(leftRows.at(0)?.classes()).not.toContain("grid-row--clipboard-pending-bottom")
-    expect(leftRows.at(1)?.classes()).toContain("grid-row--clipboard-pending")
-    expect(leftRows.at(1)?.classes()).not.toContain("grid-row--clipboard-pending-top")
-    expect(leftRows.at(1)?.classes()).toContain("grid-row--clipboard-pending-bottom")
-    expect(centerRows.at(0)?.classes()).toContain("grid-row--clipboard-pending")
-    expect(centerRows.at(0)?.classes()).toContain("grid-row--clipboard-pending-top")
-    expect(centerRows.at(0)?.classes()).not.toContain("grid-row--clipboard-pending-bottom")
-    expect(centerRows.at(1)?.classes()).toContain("grid-row--clipboard-pending")
-    expect(centerRows.at(1)?.classes()).not.toContain("grid-row--clipboard-pending-top")
-    expect(centerRows.at(1)?.classes()).toContain("grid-row--clipboard-pending-bottom")
+    for (const row of [...leftRows, ...centerRows]) {
+      expect(row.classes()).not.toContain("grid-row--clipboard-pending")
+    }
 
     wrapper.unmount()
   })
@@ -3804,6 +3796,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS,
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
       },
       attachTo: document.body,
     })
@@ -9459,7 +9452,7 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("exposes placeholder surface metadata to authored cell renderers", async () => {
+  it("keeps placeholder cells blank without invoking authored cell renderers", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -9495,9 +9488,9 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(queryBodyCell(wrapper, 0, 0).text()).toBe("NOC")
-    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("placeholder-row")
+    expect(queryBodyCell(wrapper, 1, 0).text()).toBe("")
     expect(wrapper.findAll(".test-surface-real")).toHaveLength(1)
-    expect(wrapper.findAll(".test-surface-placeholder")).toHaveLength(1)
+    expect(wrapper.findAll(".test-surface-placeholder")).toHaveLength(0)
 
     wrapper.unmount()
   })
@@ -10018,7 +10011,7 @@ describe("DataGrid app facade contract", () => {
       clientX: 270,
       clientY: 16,
     }, {
-      clientX: 270,
+      clientX: 150,
       clientY: 48,
     })
 
@@ -10037,7 +10030,7 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
-  it("materializes a placeholder row on checkbox toggle even when the grid starts empty", async () => {
+  it("does not render a checkbox in a placeholder row", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
       props: {
@@ -10059,17 +10052,8 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveApiRowCount(wrapper)).toBe(0)
 
-    const cell = wrapper.find('.grid-body-viewport .grid-cell--checkbox[role="checkbox"]')
-    expect(cell.exists()).toBe(true)
-
-    await cell.trigger("click")
-    await flushRuntimeTasks()
-
-    expect(resolveApiRowCount(wrapper)).toBe(1)
-    expect(resolveRowAt<{ rowId: string; approved: boolean }>(wrapper, 0)).toMatchObject({
-      rowId: "ph-0",
-      approved: true,
-    })
+    expect(wrapper.find('.grid-body-viewport .grid-row[data-row-index="0"] .grid-cell--checkbox').exists()).toBe(false)
+    expect(resolveApiRowCount(wrapper)).toBe(0)
 
     wrapper.unmount()
   })
@@ -10488,6 +10472,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS.slice(0, 1),
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
@@ -10541,6 +10526,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS.slice(0, 1),
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
@@ -10591,6 +10577,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS.slice(0, 2),
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
@@ -10665,6 +10652,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS.slice(0, 2),
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
@@ -10731,6 +10719,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS.slice(0, 2),
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
@@ -10780,6 +10769,7 @@ describe("DataGrid app facade contract", () => {
         rows: BASE_ROWS,
         columns: COLUMNS,
         rowIndexMenu: true,
+        rowHeader: { action: "select-records" },
         renderMode: "pagination",
         layoutMode: "auto-height",
         placeholderRows: {
