@@ -4,13 +4,29 @@ import type {
   DataGridRowSelectionSnapshot,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue"
-import { buildDataGridCellRenderModel } from "@affino/datagrid-vue"
-import { computed, type ComputedRef, type Ref } from "vue"
+import {
+  applyDataGridRowSelectionIntent,
+  advanceDataGridRowSelectionModelRevision,
+  createDataGridRowSelectionInteractionSnapshot,
+  createDataGridRowSelectionModelSnapshot,
+  normalizeDataGridRowSelectionSnapshot,
+  resolveDataGridSelectableRowRange,
+} from "@affino/datagrid-core"
+import {
+  createDataGridRowSelectionSessionController,
+  type DataGridRowSelectionSessionController,
+  type DataGridRowSelectionSessionPreview,
+} from "@affino/datagrid-orchestration"
+import {
+  buildDataGridCellRenderModel,
+} from "@affino/datagrid-vue"
+import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from "vue"
 import type { DataGridCopyRange } from "@affino/datagrid-vue/advanced"
 import type {
   DataGridTableRow,
   DataGridTableStageAnchorCell,
 } from "./dataGridTableStage.types"
+import type { DataGridRowHeaderAction } from "../config/dataGridRowSelection"
 
 type DataGridTableStageRowSelectionApi<TRow extends Record<string, unknown>> =
   UseDataGridRuntimeResult<TRow>["api"]["rowSelection"]
@@ -65,6 +81,12 @@ export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<st
   selectionAnchorCell: ComputedRef<DataGridTableStageAnchorCell | null>
   resolveSelectionRange?: () => DataGridCopyRange | null
   applySelectionRange: (range: DataGridCopyRange) => void
+  rowHeaderAction?: Ref<DataGridRowHeaderAction>
+  isRowSelectable?: (row: DataGridTableRow<TRow>) => boolean
+  resolveProjectionIndexByRowId?: (rowId: DataGridRowId) => number | null
+  resolveProjectionRowAtIndex?: (rowIndex: number) => DataGridTableRow<TRow> | null
+  getProjectionRevision?: () => number
+  acquireInteractionOwner?: (owner: "row-selection") => (() => void) | null
 }
 
 export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<string, unknown>> {
@@ -79,13 +101,20 @@ export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<str
   focusRow: (row: DataGridTableRow<TRow>) => void
   toggleRowCheckboxSelected: (row: DataGridTableRow<TRow>) => void
   toggleVisibleRowsSelected: () => void
-  selectRowRange: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
+  selectRowRange: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean, additive?: boolean) => void
+  beginRowSelectionSession: (rowId: DataGridRowId, operation: "replace" | "add") => boolean
+  updateRowSelectionSession: (rowId: DataGridRowId) => boolean
+  commitRowSelectionSession: () => void
+  cancelRowSelectionSession: () => void
+  consumeRowSelectionClick: () => boolean
+  dispose: () => void
 }
 
 export function useDataGridTableStageRowSelection<TRow extends Record<string, unknown>>(
   options: UseDataGridTableStageRowSelectionOptions<TRow>,
 ): UseDataGridTableStageRowSelectionResult<TRow> {
   const isPlaceholderRow = options.isPlaceholderRow ?? (() => false)
+  const rowSelectionInteraction = ref(createDataGridRowSelectionInteractionSnapshot())
   const applyRowSelectionMutation = options.applyRowSelectionMutation
     ?? ((mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => {
       if (!options.runtime.api.rowSelection.hasSupport()) {
@@ -93,6 +122,92 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
       }
       mutator(options.runtime.api.rowSelection)
     })
+  const readLegacySelection = (): DataGridRowSelectionSnapshot => normalizeDataGridRowSelectionSnapshot(
+    options.runtime.api.rowSelection.getSnapshot(),
+  )
+  const sameCommittedRows = (left: DataGridRowSelectionSnapshot, right: DataGridRowSelectionSnapshot): boolean => {
+    const leftMode = left.mode === "all" ? "all" : "explicit"
+    const rightMode = right.mode === "all" ? "all" : "explicit"
+    const leftRows = leftMode === "all" ? left.excludedRows ?? [] : left.selectedRows
+    const rightRows = rightMode === "all" ? right.excludedRows ?? [] : right.selectedRows
+    return leftMode === rightMode
+      && leftRows.length === rightRows.length
+      && leftRows.every((rowId, index) => rowId === rightRows[index])
+  }
+  let observedLegacySelection = readLegacySelection()
+  let applyingSessionCommit = false
+  let suppressNextClick = false
+  const committedSelectionModel = shallowRef(createDataGridRowSelectionModelSnapshot(
+    observedLegacySelection.mode === "all" ? [] : observedLegacySelection.selectedRows,
+  ))
+  const rowSelectionSessionPreview = shallowRef<DataGridRowSelectionSessionPreview | null>(null)
+  let rowSelectionSessionController!: DataGridRowSelectionSessionController
+  watch(() => options.rowSelectionSnapshot.value, snapshot => {
+    const next = normalizeDataGridRowSelectionSnapshot(snapshot)
+    if (!sameCommittedRows(observedLegacySelection, next) && !applyingSessionCommit) {
+      committedSelectionModel.value = advanceDataGridRowSelectionModelRevision(
+        committedSelectionModel.value,
+        next.mode === "all" ? [] : next.selectedRows,
+      )
+    }
+    observedLegacySelection = next
+  }, { flush: "sync" })
+
+  const resolveSessionRange = (
+    anchorRowId: DataGridRowId,
+    targetRowId: DataGridRowId,
+    projectionRevision: number,
+  ) => options.resolveProjectionIndexByRowId && options.resolveProjectionRowAtIndex
+    ? resolveDataGridSelectableRowRange({
+        anchorRowId,
+        targetRowId,
+        projectionRevision,
+        currentProjectionRevision: options.getProjectionRevision?.() ?? projectionRevision,
+        resolveRowIndexById: options.resolveProjectionIndexByRowId,
+        resolveRowAtIndex: (rowIndex: number) => {
+          const row = options.resolveProjectionRowAtIndex?.(rowIndex) ?? null
+          if (!row) return null
+          if (isPlaceholderRow(row)) return { rowId: row.rowId ?? null, kind: "unloaded" as const }
+          return {
+            rowId: row.rowId ?? null,
+            kind: row.kind === "group" ? "group" as const : "data" as const,
+            selectable: !options.isRowSelectable || options.isRowSelectable(row),
+          }
+        },
+      })
+    : { status: "incomplete" as const, projectionRevision, rowIds: [] }
+
+  rowSelectionSessionController = createDataGridRowSelectionSessionController({
+    getSelection: () => committedSelectionModel.value,
+    getInteraction: () => rowSelectionInteraction.value,
+    getProjectionRevision: () => options.getProjectionRevision?.() ?? 0,
+    resolveRange: resolveSessionRange,
+    acquireInteractionOwner: owner => options.acquireInteractionOwner?.(owner) ?? null,
+    publishPreview: preview => { rowSelectionSessionPreview.value = preview },
+    commit: (selection, interaction) => {
+      const operation = rowSelectionSessionController.getSession()?.operation ?? "replace"
+      committedSelectionModel.value = selection
+      rowSelectionInteraction.value = interaction
+      applyingSessionCommit = true
+      try {
+        applyRowSelectionMutation(api => {
+          if (operation === "add") {
+            api.selectRows(selection.selectedRowIds)
+            api.setFocusedRow(interaction.extentRowId)
+          } else {
+            api.setSnapshot({
+              focusedRow: interaction.extentRowId,
+              selectedRows: [...selection.selectedRowIds],
+            })
+          }
+        })
+      } finally {
+        observedLegacySelection = readLegacySelection()
+        applyingSessionCommit = false
+      }
+    },
+  })
+
   const rowSelectionSet = computed(() => new Set(options.rowSelectionSnapshot.value?.selectedRows ?? []))
   const rowSelectionExcludedSet = computed(() => new Set(options.rowSelectionSnapshot.value?.excludedRows ?? []))
   const isAllRowsSelectionMode = computed(() => options.rowSelectionSnapshot.value?.mode === "all")
@@ -113,6 +228,13 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
         : resolveDefaultSourceRowId(sourceRow, sourceIndex)
       if (rowId == null) return
       const data = resolveSourceRowData(sourceRow)
+      if (options.isRowSelectable) {
+        const candidate = sourceRow as Record<string, unknown>
+        const rowNode = candidate.kind === "leaf"
+          ? candidate
+          : { kind: "leaf", rowId, data }
+        if (!options.isRowSelectable(rowNode as unknown as DataGridTableRow<TRow>)) return
+      }
       let groupKey = "group:"
       for (const field of fields) {
         const value = normalizeGroupValue(readGroupField(data, field))
@@ -155,6 +277,12 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   }
 
   const isRowIdSelected = (rowId: DataGridRowId): boolean => {
+    const preview = rowSelectionSessionPreview.value
+    if (preview) {
+      return rowSelectionSessionController.getSession()?.operation === "add"
+        ? options.runtime.api.rowSelection.isSelected(rowId) || preview.selection.selectedRowIds.has(rowId)
+        : preview.selection.selectedRowIds.has(rowId)
+    }
     return isAllRowsSelectionMode.value
       ? !rowSelectionExcludedSet.value.has(rowId)
       : rowSelectionSet.value.has(rowId)
@@ -191,7 +319,8 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     const rowIds: DataGridRowId[] = []
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
       const row = options.runtime.api.rows.get(rowIndex)
-      if (!row || row.kind === "group" || row.rowId == null) {
+      if (!row || row.kind === "group" || row.rowId == null
+        || (options.isRowSelectable && !options.isRowSelectable(row as DataGridTableRow<TRow>))) {
         continue
       }
       rowIds.push(row.rowId)
@@ -205,6 +334,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
       if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null) {
         continue
       }
+      if (options.isRowSelectable && !options.isRowSelectable(row)) continue
       rowIds.push(row.rowId)
     }
     return rowIds
@@ -236,7 +366,8 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   }
 
   const toggleRowCheckboxSelected = (row: DataGridTableRow<TRow>): void => {
-    if (isPlaceholderRow(row) || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()) {
+    if (isPlaceholderRow(row) || row.rowId == null || !options.runtime.api.rowSelection.hasSupport()
+      || (row.kind !== "group" && options.isRowSelectable && !options.isRowSelectable(row))) {
       return
     }
     if (row.kind === "group") {
@@ -262,6 +393,16 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     if (!hasSelectableVisibleRows) {
       return
     }
+    if (options.isRowSelectable) {
+      const rowIds = selectableRowIds.value
+      if (rowIds.length === 0) return
+      const shouldClearSelection = rowIds.every(rowId => options.runtime.api.rowSelection.isSelected(rowId))
+      applyRowSelectionMutation(rowSelectionApi => {
+        if (shouldClearSelection) rowSelectionApi.deselectRows(rowIds)
+        else rowSelectionApi.selectRows(rowIds)
+      })
+      return
+    }
     applyRowSelectionMutation(rowSelectionApi => {
       const shouldClearSelection = isAllRowsSelectionMode.value
         ? areAllVisibleRowsSelected.value
@@ -283,8 +424,63 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     row: DataGridTableRow<TRow>,
     rowOffset: number,
     extend: boolean,
+    additive = false,
   ): void => {
     focusRow(row)
+    if (options.rowHeaderAction?.value === "none") {
+      return
+    }
+    if (options.rowHeaderAction?.value === "select-records") {
+      if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null
+        || !options.runtime.api.rowSelection.hasSupport()
+        || (options.isRowSelectable && !options.isRowSelectable(row))) {
+        return
+      }
+
+      const currentSnapshot = normalizeDataGridRowSelectionSnapshot(options.runtime.api.rowSelection.getSnapshot())
+      const currentIds = currentSnapshot.mode === "all" ? [] : currentSnapshot.selectedRows
+      const selection = createDataGridRowSelectionModelSnapshot(currentIds)
+      const targetRowId = row.rowId
+      const intent = extend
+        ? (() => {
+            const anchorRowId = rowSelectionInteraction.value.anchorRowId ?? targetRowId
+            const projectionRevision = options.getProjectionRevision?.() ?? 0
+            const range = resolveSessionRange(anchorRowId, targetRowId, projectionRevision)
+            return {
+              type: additive ? "add-range" as const : "extend" as const,
+              targetRowId,
+              projectionRevision,
+              expectedSelectionRevision: selection.revision,
+              range,
+              baseSelection: selection,
+            }
+          })()
+        : additive
+          ? { type: "toggle" as const, targetRowId }
+          : { type: "replace" as const, targetRowId }
+      const transition = applyDataGridRowSelectionIntent(selection, rowSelectionInteraction.value, intent)
+      if (!transition.accepted) {
+        return
+      }
+
+      applyRowSelectionMutation(api => {
+        if (intent.type === "add-range" && currentSnapshot.mode === "all") {
+          api.selectRows(intent.range.rowIds)
+          api.setFocusedRow(targetRowId)
+        } else if (intent.type === "toggle" && currentSnapshot.mode === "all") {
+          api.setSelected(targetRowId, !api.isSelected(targetRowId))
+          api.setFocusedRow(targetRowId)
+        } else {
+          api.setSnapshot({
+            focusedRow: targetRowId,
+            selectedRows: [...transition.selection.selectedRowIds],
+          })
+        }
+      })
+      rowSelectionInteraction.value = transition.interaction
+      return
+    }
+
     const lastColumnIndex = options.orderedVisibleColumns.value.length - 1
     if (lastColumnIndex < 0) {
       return
@@ -335,5 +531,32 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     toggleRowCheckboxSelected,
     toggleVisibleRowsSelected,
     selectRowRange,
+    beginRowSelectionSession: (rowId, operation) => {
+      const index = options.resolveProjectionIndexByRowId?.(rowId) ?? null
+      const row = index == null ? null : options.resolveProjectionRowAtIndex?.(index) ?? null
+      if (!row || isPlaceholderRow(row) || row.kind === "group" || row.rowId !== rowId
+        || (options.isRowSelectable && !options.isRowSelectable(row))) {
+        return false
+      }
+      return rowSelectionSessionController.begin(rowId, operation)
+    },
+    updateRowSelectionSession: rowId => {
+      rowSelectionSessionController.update(rowId)
+      return rowSelectionSessionController.getSession() != null
+    },
+    commitRowSelectionSession: () => {
+      rowSelectionSessionController.commit()
+    },
+    cancelRowSelectionSession: () => {
+      rowSelectionSessionController.cancel()
+    },
+    consumeRowSelectionClick: () => {
+      if (!suppressNextClick) return false
+      suppressNextClick = false
+      return true
+    },
+    dispose: () => {
+      rowSelectionSessionController.dispose()
+    },
   }
 }

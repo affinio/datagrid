@@ -156,6 +156,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   sourceRows?: readonly TRow[]
   resolveSourceRowId?: (row: TRow, index: number) => string | number | null | undefined
   showRowIndex?: boolean
+  rowHeaderAction?: "select-cells" | "select-records" | "none"
   rowHover?: boolean
   stripedRows?: boolean
   rowClass: (row: DataGridTableRow<TRow>) => string
@@ -167,7 +168,9 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   allVisibleRowsSelected?: boolean
   someVisibleRowsSelected?: boolean
   handleRowClick?: (row: DataGridTableRow<TRow>) => void
-  handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean) => void
+  handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean, additive?: boolean) => void
+  handleRowIndexPointerDown?: (row: DataGridTableRow<TRow>, rowOffset: number, event: PointerEvent) => void
+  consumeRowSelectionClick?: () => boolean
   handleRowIndexKeydown?: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
   reorderRowsByIndex?: (payload: {
     sourceRowId: string | number

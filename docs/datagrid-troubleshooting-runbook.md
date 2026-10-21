@@ -79,6 +79,16 @@ Checks:
 Relevant test:
 - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
 
+## Symptom: The grid frame disappears at rounded corners or outside content shows through
+
+Checks:
+- `.grid-stage` is the single owner of the surface background, border, radius, and clipping. Keep the border on the stage itself so child panes cannot paint over it.
+- Keep the app layout host transparent; avoid adding a second rounded clipping shell around the grid.
+- Integrated stages intentionally remove their border and radius when they join another surface. Gantt table stages keep only the outer left frame at the table/timeline seam.
+
+Relevant test:
+- `packages/datagrid-vue-app/src/__tests__/ensureDataGridAppStyles.contract.spec.ts`
+
 ## Symptom: Pinned canvas chrome keeps the previous theme
 
 Checks:

@@ -88,17 +88,42 @@ Boundary rules:
 
 ## Selection Ownership
 
-Selection has one logical state machine with package-specific ownership. Core owns pure range geometry and snapshot contracts; Vue app composables own transition policy and operation eligibility; the mounted stage owns DOM focus, rendered state, overlays, handles, and editor surfaces.
+Selection has separate logical state machines for committed row selection, cell ranges, row-selection interaction state, and grid focus. Core owns framework-independent state and transition rules; orchestration owns active gesture lifecycle; Vue packages translate host events and materialize presentation.
 
 | Selection area | Owner |
 | --- | --- |
 | Normalized cell ranges, active range index, active cell shape | `@affino/datagrid-core` selection helpers and snapshot contracts |
 | App selection snapshot, anchor, virtual-selection metadata, aggregate labels | `@affino/datagrid-vue` app selection composables |
-| Row-selection mode, selected/excluded row ids, focused row | `@affino/datagrid-core` row-selection helpers with `@affino/datagrid-vue` app row-selection wiring |
-| Keyboard selection and navigation transitions | `@affino/datagrid-orchestration` command/navigation utilities wired by `@affino/datagrid-vue` |
-| Drag selection, fill preview, range-move preview, edit handoff | `@affino/datagrid-vue` app interaction controller with orchestration lifecycle helpers |
+| Committed selected row ids and versioned immutable snapshots | `@affino/datagrid-core` row-selection model |
+| Row-selection anchor, extent, modifier rules, and preview/commit transitions | `@affino/datagrid-core` row-selection interaction model |
+| Active pointer drag-session lifecycle and exclusive gesture lease | `@affino/datagrid-orchestration` |
+| DOM event normalization and lifecycle subscriptions | `@affino/datagrid-vue` adapters |
+| Row-header policy, checkbox controls, focus surfaces, and selection materialization | `@affino/datagrid-vue-app` table stage |
+| Business policy and actions over selected records | Consumer application |
+| Pointer gesture arbitration, row-selection preview routing, fill, range-move, edit handoff | `@affino/datagrid-vue` app interaction controller with orchestration lifecycle helpers |
 | DOM focus restore, selected cell classes, overlays, handles, editor mount points | `@affino/datagrid-vue-app` table stage |
 | Clipboard source ranges and local mutation planning | `@affino/datagrid-vue` app clipboard wiring with orchestration clipboard helpers |
+
+The app integration keeps existing cell-range row-header behavior as the
+default. Consumers opt into record selection with `rowHeader.action:
+"select-records"`; `"none"` disables row-header selection. The adapter resolves
+drag targets and ranges against the logical projection, publishes preview to
+the existing row selection visuals, and writes one committed result through
+`api.rowSelection`. See the [row-selection model reference](reference/datagrid-row-selection-model.md)
+for the supported gestures and configuration.
+
+The row-header record-selection path is integrated across these layers. Core
+provides versioned committed snapshots, immutable set transitions, separate
+anchor/extent state, modifier-aware click/range transitions, and
+preview/commit/cancel session primitives. Its projection resolver skips
+synthetic group rows and blocks incomplete unloaded segments. Orchestration
+owns the framework-independent drag-session controller and exclusive pointer
+lease. The Vue adapter arbitrates pointer gestures and coordinates autoscroll;
+the app stage resolves logical projection rows, publishes selection previews,
+and commits the resulting row IDs. Projection or selection revision conflicts
+cancel an active session. `rowHeader.action` keeps cell-range row-header
+behavior as its default, with opt-in record selection and an explicit disabled
+mode.
 
 Selection transition rules:
 

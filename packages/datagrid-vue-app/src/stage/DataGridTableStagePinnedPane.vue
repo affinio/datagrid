@@ -57,6 +57,7 @@
           role="rowheader"
           :tabindex="isStickySource ? -1 : renderApi.rowIndexTabIndex(row)"
           :draggable="renderApi.isRowIndexDraggable(row)"
+          @pointerdown.stop="renderApi.handleRowIndexPointerDownSafe($event, row, viewportRowOffset)"
           @click.stop="renderApi.handleRowIndexClickSafe(row, viewportRowOffset, $event)"
           @keydown.stop="renderApi.handleRowIndexKeydown($event, row, viewportRowOffset)"
           @dragstart.stop="renderApi.handleRowIndexDragStart($event, row, viewportRowOffset)"

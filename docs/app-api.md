@@ -33,7 +33,8 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | render-mode | "virtualization" or "pagination" mode selection. |
 | layout-mode / min-rows / max-rows | Grid height contract: fill or bounded auto-height. |
 | row-height-mode / base-row-height | Fixed or measured row height. |
-| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. With client-side grouping, a group-row checkbox selects or clears only that group's data rows; a partially selected group is shown as mixed. |
+| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. Accepts `enabled`, `columnWidth`, and `isSelectable`; group-row checkboxes affect selectable data descendants. |
+| row-header | Chooses what the row-index header does: `select-cells` (default), `select-records`, or `none`. Record selection supports click modifiers, Shift keyboard range, and pointer drag. |
 | fill-handle / range-move | Spreadsheet range workflows. Both are opt-in. |
 | row-reorder | Row drag/reorder behavior. |
 | show-row-index | Show the row-index surface. |

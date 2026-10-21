@@ -1053,7 +1053,8 @@ const DATA_GRID_APP_STYLES = `
   width: 100%;
   min-height: 0;
   min-width: 0;
-  border: 0;
+  border: 1px solid var(--datagrid-glass-border);
+  box-sizing: border-box;
   border-radius: var(--datagrid-surface-radius, 8px);
   overflow: hidden;
   overscroll-behavior-x: none;
@@ -1072,21 +1073,7 @@ const DATA_GRID_APP_STYLES = `
 
 .datagrid-app-stage--integrated .grid-stage {
   border-radius: 0;
-}
-
-.datagrid-app-stage--integrated .grid-stage::before {
   border-width: 0;
-}
-
-.grid-stage::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border: 1px solid var(--datagrid-glass-border);
-  border-radius: inherit;
-  box-sizing: border-box;
-  z-index: 8;
 }
 
 .grid-header-shell,

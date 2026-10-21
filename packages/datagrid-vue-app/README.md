@@ -1663,6 +1663,30 @@ const rowSelectionState = ref({
 
 `rowSelectionState` is the controlled API when the page wants to bind selected row ids without diffing unified-state updates.
 
+### Row-header record selection
+
+The row-index header selects cell ranges by default. Opt into selecting records
+from that header with `rowHeader.action: "select-records"`; use `"none"` when
+the row index should not start a selection interaction. The separate checkbox
+column remains available when `rowSelection` is enabled.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :row-selection="{ enabled: true, isSelectable: row => row.rowId !== 'locked' }"
+  :row-header="{ action: 'select-records' }"
+/>
+```
+
+Click replaces the record selection, Ctrl/Meta-click toggles a row, Shift-click
+extends the anchor range, and Ctrl/Meta+Shift-click adds a range. Dragging the
+row index previews a range and commits once on release; Escape or a canceled
+gesture discards the preview. Shift+Up/Down extends the range while focus is on
+a row index. Group and unloaded placeholder rows are not included in ranges.
+The full framework-independent model and projection rules are documented in
+the [row-selection reference](../../docs/reference/datagrid-row-selection-model.md).
+
 For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
 
 ```ts

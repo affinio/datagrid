@@ -51,6 +51,7 @@ import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
 import type { DataGridVirtualizationOptions } from "../config/dataGridVirtualization"
+import type { DataGridRowHeaderAction } from "../config/dataGridRowSelection"
 import type { DataGridTableStageContext } from "./dataGridTableStageContext"
 import { useDataGridTableStageBindings } from "./useDataGridTableStageBindings"
 import { useDataGridTableStageCellIo } from "./useDataGridTableStageCellIo"
@@ -271,6 +272,8 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   showRowIndex?: Ref<boolean>
   showRowSelection?: Ref<boolean>
   rowSelectionColumnWidth?: Ref<number>
+  rowHeaderAction?: Ref<DataGridRowHeaderAction>
+  isRowSelectable?: (row: DataGridRowNode<TRow>) => boolean
   isRowInPendingClipboardCut?: (row: import("@affino/datagrid-vue").DataGridRowNode<TRow>) => boolean
   syncRowSelectionSnapshotFromRuntime?: () => void
   flushRowSelectionSnapshotUpdates?: () => void
@@ -657,6 +660,27 @@ export function useDataGridTableStageRuntime<
     return options.runtime.rowPartition.value.pinnedBottomRows[pinnedBottomIndex] ?? null
   }
 
+  const resolveSelectionProjectionIndexByRowId = (rowId: string | number): number | null => {
+    const partition = options.runtime.rowPartition.value
+    const pinnedTopIndex = partition.pinnedTopRows.findIndex(row => row.rowId === rowId)
+    if (pinnedTopIndex >= 0) {
+      return pinnedTopIndex
+    }
+    const bodyIndex = resolveSelectableRowIndexById(rowId)
+    if (bodyIndex >= 0) {
+      return partition.pinnedTopRows.length + bodyIndex
+    }
+    const pinnedBottomIndex = partition.pinnedBottomRows.findIndex(row => row.rowId === rowId)
+    return pinnedBottomIndex >= 0
+      ? partition.pinnedTopRows.length + partition.bodyRowCount + pinnedBottomIndex
+      : null
+  }
+  const resolveRowSelectionProjectionRevision = (): number => {
+    const snapshot = options.runtimeRowModel?.getSnapshot?.() ?? options.runtime.api.rows.getSnapshot()
+    const revision = snapshot.projection?.version ?? snapshot.revision ?? 0
+    return Number.isFinite(revision) ? Math.trunc(revision) : 0
+  }
+
   function resolveLoadedRowIntervals(range: DataGridCopyRange): readonly { start: number; end: number }[] {
     const rowModel = (options.runtimeRowModel ?? options.runtime.rowModel) as DataGridLoadedRowIntervalProvider | null | undefined
     return rowModel?.getLoadedRowIntervals?.({
@@ -982,6 +1006,8 @@ export function useDataGridTableStageRuntime<
     }
   })
 
+  let acquireRowSelectionInteractionOwner: (owner: "row-selection") => (() => void) | null = () => null
+
   const rowSelectionService = useDataGridTableStageRowSelection<TRow>({
     runtime: options.runtime,
     isPlaceholderRow: placeholderRows.isPlaceholderRow,
@@ -1003,6 +1029,12 @@ export function useDataGridTableStageRuntime<
     selectionAnchorCell,
     resolveSelectionRange: resolveSelectionRangeForClipboard,
     applySelectionRange: applyClipboardSelectionRange,
+    rowHeaderAction: options.rowHeaderAction,
+    isRowSelectable: options.isRowSelectable as ((row: DataGridTableRow<TRow>) => boolean) | undefined,
+    resolveProjectionIndexByRowId: resolveSelectionProjectionIndexByRowId,
+    resolveProjectionRowAtIndex: resolveSelectableRowAtIndex,
+    getProjectionRevision: resolveRowSelectionProjectionRevision,
+    acquireInteractionOwner: owner => acquireRowSelectionInteractionOwner(owner),
   })
   const {
     readRowSelectionCell,
@@ -1946,11 +1978,24 @@ export function useDataGridTableStageRuntime<
     closeContextMenu: options.closeContextMenu,
     openContextMenuFromCurrentCell: options.openContextMenuFromCurrentCell,
     runRowIndexKeyboardAction: options.runRowIndexKeyboardAction,
+    beginRowSelectionSession: rowSelectionService.beginRowSelectionSession,
+    updateRowSelectionSession: rowSelectionService.updateRowSelectionSession,
+    commitRowSelectionSession: rowSelectionService.commitRowSelectionSession,
+    cancelRowSelectionSession: rowSelectionService.cancelRowSelectionSession,
+    resolveRowSelectionTargetAtPoint: (pointer: { clientX: number; clientY: number }) => {
+      if (typeof document === "undefined") return null
+      const cell = document.elementFromPoint(pointer.clientX, pointer.clientY)
+        ?.closest<HTMLElement>(".grid-cell[data-row-index]")
+      const rowIndex = Number.parseInt(cell?.dataset.rowIndex ?? "", 10)
+      if (!Number.isInteger(rowIndex)) return null
+      return resolveSelectableRowAtIndex(rowIndex)?.rowId ?? null
+    },
   } as Parameters<typeof useDataGridAppInteractionController<TRow, unknown>>[0]
 
   const interactionController = (
     useDataGridAppInteractionController<TRow, unknown>(interactionControllerOptions)
   ) as StageInteractionControllerResult<TRow>
+  acquireRowSelectionInteractionOwner = interactionController.acquireInteractionOwner
 
   const {
     isPointerSelectingCells,
@@ -1969,6 +2014,8 @@ export function useDataGridTableStageRuntime<
     handleCellMouseDown,
     handleCellKeydown,
     handleRowIndexKeydown,
+    handleRowIndexPointerDown,
+    consumeRowSelectionClick,
     handleWindowMouseMove: handleInteractionWindowMouseMove,
     handleWindowMouseUp: handleInteractionWindowMouseUp,
     handleWindowPointerUp: handleInteractionWindowPointerUp,
@@ -2123,6 +2170,7 @@ export function useDataGridTableStageRuntime<
     pinnedBottomRows,
     sourceRows: options.sourceRows ?? options.rows,
     showRowIndex,
+    rowHeaderAction: options.rowHeaderAction,
     rowHover: computed(() => options.rowHover?.value === true),
     stripedRows: computed(() => options.stripedRows?.value === true),
     columnFilterTextByKey: options.columnFilterTextByKey,
@@ -2234,6 +2282,10 @@ export function useDataGridTableStageRuntime<
     someVisibleRowsSelected: stageServices.rowSelection.areSomeVisibleRowsSelected,
     handleRowClick: stageServices.rowSelection.focusRow,
     handleRowIndexClick: stageServices.rowSelection.selectRowRange,
+    handleRowIndexPointerDown: (row: DataGridTableRow<TRow>, _rowOffset: number, event: PointerEvent) => {
+      handleRowIndexPointerDown(event, row)
+    },
+    consumeRowSelectionClick,
     handleRowIndexKeydown,
     reorderRowsByIndex: options.reorderRowsByIndex,
     handleToggleAllVisibleRows: stageServices.rowSelection.toggleVisibleRowsSelected,
@@ -2333,6 +2385,7 @@ export function useDataGridTableStageRuntime<
       disposeRowSizing,
       disposeHeaderResize,
       disposeInteractionController,
+      rowSelectionService.dispose,
       stageServices.history.disposeIntentHistory,
     ],
   })

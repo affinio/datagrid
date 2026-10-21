@@ -20,9 +20,12 @@ function createRow(rowId: string, kind: "leaf" | "group" = "leaf") {
 function createRuntime(rows: readonly ReturnType<typeof createRow>[], kind: "client" | "server" = "client") {
   const selectRows = vi.fn()
   const deselectRows = vi.fn()
-  const setFocusedRow = vi.fn()
+  let rowSelectionSnapshot: DataGridRowSelectionSnapshot | null = { focusedRow: null, selectedRows: [] }
+  const setFocusedRow = vi.fn((rowId: string | number | null) => {
+    rowSelectionSnapshot = { ...rowSelectionSnapshot!, focusedRow: rowId }
+  })
   const setSelected = vi.fn()
-  const setSnapshot = vi.fn()
+  const setSnapshot = vi.fn((snapshot: DataGridRowSelectionSnapshot) => { rowSelectionSnapshot = snapshot })
   const getCount = vi.fn(() => rows.length)
   const get = vi.fn((rowIndex: number) => rows[rowIndex] ?? null)
 
@@ -40,6 +43,8 @@ function createRuntime(rows: readonly ReturnType<typeof createRow>[], kind: "cli
       },
       rowSelection: {
         hasSupport: () => true,
+        getSnapshot: () => rowSelectionSnapshot,
+        isSelected: (rowId: string | number) => rowSelectionSnapshot?.selectedRows.includes(rowId) ?? false,
         setSnapshot,
         selectRows,
         deselectRows,
@@ -75,6 +80,129 @@ function createRowSelectionColumn(): DataGridColumnSnapshot {
 }
 
 describe("useDataGridTableStageRowSelection", () => {
+  it("selects records from row headers with replace, toggle, and projection-aware Shift range", () => {
+    const rows = [createRow("r1"), createRow("group:g", "group"), createRow("r2"), createRow("r3")]
+    const { runtime, setSnapshot } = createRuntime(rows)
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => null),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+      rowHeaderAction: ref("select-records"),
+      resolveProjectionIndexByRowId: rowId => rows.findIndex(row => row.rowId === rowId),
+      resolveProjectionRowAtIndex: rowIndex => rows[rowIndex] as never ?? null,
+      getProjectionRevision: () => 2,
+    })
+
+    selection.selectRowRange(rows[0] as never, 0, false)
+    expect(setSnapshot).toHaveBeenLastCalledWith({ focusedRow: "r1", selectedRows: ["r1"] })
+
+    selection.selectRowRange(rows[2] as never, 2, true)
+    expect(setSnapshot).toHaveBeenLastCalledWith({ focusedRow: "r2", selectedRows: ["r1", "r2"] })
+
+    selection.selectRowRange(rows[3] as never, 3, false, true)
+    expect(setSnapshot).toHaveBeenLastCalledWith({ focusedRow: "r3", selectedRows: ["r1", "r2", "r3"] })
+  })
+
+  it("previews a row drag against the logical projection and commits once", () => {
+    const rows = [createRow("r1"), createRow("group:g", "group"), createRow("r2"), createRow("r3")]
+    const { runtime, setSnapshot } = createRuntime(rows)
+    const releaseOwner = vi.fn()
+    const acquireInteractionOwner = vi.fn(() => releaseOwner)
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => null),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+      rowHeaderAction: ref("select-records"),
+      resolveProjectionIndexByRowId: rowId => rows.findIndex(row => row.rowId === rowId),
+      resolveProjectionRowAtIndex: rowIndex => rows[rowIndex] as never ?? null,
+      getProjectionRevision: () => 2,
+      acquireInteractionOwner,
+    })
+
+    expect(selection.beginRowSelectionSession("r1", "replace")).toBe(true)
+    expect(selection.updateRowSelectionSession("r3")).toBe(true)
+    expect(selection.isRowCheckboxSelected(rows[0] as never)).toBe(true)
+    expect(selection.isRowCheckboxSelected(rows[2] as never)).toBe(true)
+    expect(selection.isRowCheckboxSelected(rows[3] as never)).toBe(true)
+    expect(setSnapshot).not.toHaveBeenCalled()
+
+    selection.commitRowSelectionSession()
+
+    expect(setSnapshot).toHaveBeenCalledTimes(1)
+    expect(setSnapshot).toHaveBeenCalledWith({ focusedRow: "r3", selectedRows: ["r1", "r2", "r3"] })
+    expect(releaseOwner).toHaveBeenCalledTimes(1)
+  })
+
+  it("cancels a row drag without mutating committed selection", () => {
+    const rows = [createRow("r1"), createRow("r2")]
+    const { runtime, setSnapshot } = createRuntime(rows)
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => null),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+      rowHeaderAction: ref("select-records"),
+      resolveProjectionIndexByRowId: rowId => rows.findIndex(row => row.rowId === rowId),
+      resolveProjectionRowAtIndex: rowIndex => rows[rowIndex] as never ?? null,
+      getProjectionRevision: () => 2,
+      acquireInteractionOwner: () => () => undefined,
+    })
+
+    selection.beginRowSelectionSession("r1", "replace")
+    selection.updateRowSelectionSession("r2")
+    selection.cancelRowSelectionSession()
+
+    expect(setSnapshot).not.toHaveBeenCalled()
+    expect(selection.isRowCheckboxSelected(rows[0] as never)).toBe(false)
+    expect(selection.isRowCheckboxSelected(rows[1] as never)).toBe(false)
+  })
+
+  it("applies the selectable-row policy to checkbox, range, and bulk selection", () => {
+    const rows = [createRow("r1"), createRow("locked"), createRow("r3")]
+    const { runtime, deselectRows, setSelected } = createRuntime(rows)
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => null),
+      orderedVisibleColumns: computed(() => []),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange: () => undefined,
+      rowHeaderAction: ref("select-records"),
+      isRowSelectable: row => row.rowId !== "locked",
+      resolveProjectionIndexByRowId: rowId => rows.findIndex(row => row.rowId === rowId),
+      resolveProjectionRowAtIndex: rowIndex => rows[rowIndex] as never ?? null,
+      getProjectionRevision: () => 2,
+    })
+
+    selection.toggleRowCheckboxSelected(rows[1] as never)
+    selection.selectRowRange(rows[0] as never, 0, false)
+    selection.selectRowRange(rows[2] as never, 2, true)
+    expect(setSelected).not.toHaveBeenCalled()
+    expect(runtime.api.rowSelection.setSnapshot).toHaveBeenLastCalledWith({
+      focusedRow: "r3",
+      selectedRows: ["r1", "r3"],
+    })
+
+    selection.toggleVisibleRowsSelected()
+    expect(deselectRows).toHaveBeenCalledWith(["r1", "r3"])
+  })
+
   it("keeps the original row-index anchor while Shift crosses back over it", () => {
     const rows = [createRow("r1"), createRow("r2"), createRow("r3"), createRow("r4")]
     const { runtime } = createRuntime(rows)

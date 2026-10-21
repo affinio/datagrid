@@ -14,6 +14,7 @@ These documents are public and supported, but they are intended for integrators 
 - [Theme ownership](./datagrid-theme-ownership.md) — ownership of tokens, CSS, and adapter styling.
 
 - [Core factories](./datagrid-core-factories-reference.md)
+- [Core row-selection model](./datagrid-row-selection-model.md) — framework-independent committed selection, range intent, and session primitives.
 - [Core advanced API](./datagrid-core-advanced-reference.md)
 - [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)

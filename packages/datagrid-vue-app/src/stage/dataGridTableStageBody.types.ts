@@ -176,6 +176,7 @@ export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStag
   rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
   isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexPointerDownSafe: (event: PointerEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void

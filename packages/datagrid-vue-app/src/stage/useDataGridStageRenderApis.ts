@@ -74,6 +74,7 @@ export interface UseDataGridStageRenderApisOptions {
   rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
   isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexPointerDownSafe: (event: PointerEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexKeydownSafe: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
@@ -179,6 +180,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     rowIndexTabIndex: options.rowIndexTabIndex,
     isRowIndexDraggable: options.isRowIndexDraggable,
     handleRowIndexClickSafe: options.handleRowIndexClickSafe,
+    handleRowIndexPointerDownSafe: options.handleRowIndexPointerDownSafe,
     handleRowIndexKeydown: options.handleRowIndexKeydownSafe,
     handleRowIndexDragStart: options.handleRowIndexDragStart,
     handleRowIndexDragOver: options.handleRowIndexDragOver,

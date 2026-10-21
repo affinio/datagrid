@@ -173,7 +173,11 @@ export type {
   DataGridRowReorderProp,
 } from "./config/dataGridRowReorder"
 export type {
+  DataGridResolvedRowHeaderOptions,
   DataGridResolvedRowSelectionOptions,
+  DataGridRowHeaderAction,
+  DataGridRowHeaderOptions,
+  DataGridRowHeaderProp,
   DataGridRowSelectionOptions,
   DataGridRowSelectionProp,
 } from "./config/dataGridRowSelection"

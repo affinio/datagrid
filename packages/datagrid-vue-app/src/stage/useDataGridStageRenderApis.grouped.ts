@@ -23,6 +23,7 @@ type RowRuntime = Readonly<Ref<{
   rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
   isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexPointerDownSafe: (event: PointerEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexKeydownSafe: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
@@ -191,6 +192,7 @@ export function useDataGridStageRenderApis(options: UseDataGridStageRenderApisOp
     rowIndexTabIndex: options.rowRuntime.value.rowIndexTabIndex,
     isRowIndexDraggable: options.rowRuntime.value.isRowIndexDraggable,
     handleRowIndexClickSafe: options.rowRuntime.value.handleRowIndexClickSafe,
+    handleRowIndexPointerDownSafe: options.rowRuntime.value.handleRowIndexPointerDownSafe,
     handleRowIndexKeydown: options.rowRuntime.value.handleRowIndexKeydownSafe,
     handleRowIndexDragStart: options.rowRuntime.value.handleRowIndexDragStart,
     handleRowIndexDragOver: options.rowRuntime.value.handleRowIndexDragOver,

@@ -1,5 +1,15 @@
 # @affino/datagrid-vue-app
 
+## 0.18.0
+
+### Added
+
+- Added configurable row-header actions, selectable-row policy, modifier-aware record selection, Shift+keyboard ranges, and drag range selection in the table stage.
+
+### Fixed
+
+- Made the table stage own its border directly so panes cannot paint over the rounded frame; removed the duplicate rounded clipping shell from the row-selection example.
+
 ## 0.17.0
 
 ### Added

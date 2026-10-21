@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue-app",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Declarative Vue DataGrid component for Affino",
   "type": "module",
   "main": "dist/index.js",
@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-orchestration": "workspace:*",
     "@affino/datagrid-chrome": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",

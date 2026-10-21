@@ -74,6 +74,7 @@ import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmpt
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
 import type { DataGridToolbarLayoutProp } from "../config/dataGridToolbarLayout"
+import type { DataGridRowHeaderAction } from "../config/dataGridRowSelection"
 import type { GroupingPresentationOptions } from "../config/dataGridGroupingPresentation"
 import type { DataGridColumnReorderOptions } from "../config/dataGridColumnReorder"
 import {
@@ -1106,6 +1107,14 @@ export default defineComponent({
     rowSelection: {
       type: Boolean,
       default: true,
+    },
+    rowHeaderAction: {
+      type: String as PropType<DataGridRowHeaderAction>,
+      default: "select-cells",
+    },
+    isRowSelectable: {
+      type: Function as PropType<((row: DataGridRowNode<Record<string, unknown>>) => boolean) | undefined>,
+      default: undefined,
     },
     rowSelectionColumnWidth: {
       type: Number,
@@ -3883,6 +3892,8 @@ export default defineComponent({
       onCellEdit: props.onCellEdit,
       showRowIndex: computed(() => props.showRowIndex),
       showRowSelection: computed(() => props.rowSelection),
+      rowHeaderAction: computed(() => props.rowHeaderAction),
+      isRowSelectable: props.isRowSelectable,
       rowSelectionColumnWidth: computed(() => props.rowSelectionColumnWidth),
       isRowInPendingClipboardCut,
       syncSelectionSnapshotFromRuntime: props.syncSelectionSnapshotFromRuntime,

@@ -29,7 +29,7 @@ export interface UseDataGridStageRowIndexOptions {
   ) => CSSProperties | null
   isDataGridPlaceholderSurfaceRow: (row: DataGridTableStageBodyRow) => boolean
   navigateFromRowIndex?: (row: DataGridTableStageBodyRow, rowOffset: number) => boolean
-  navigateRowIndex?: (row: DataGridTableStageBodyRow, rowOffset: number, direction: -1 | 1, extend: boolean) => boolean
+  navigateRowIndex?: (row: DataGridTableStageBodyRow, rowOffset: number, direction: -1 | 1, extend: boolean, additive: boolean) => boolean
 }
 
 export interface UseDataGridStageRowIndexResult {
@@ -43,6 +43,7 @@ export interface UseDataGridStageRowIndexResult {
   isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
   handleRowClickSafe: (row: DataGridTableStageBodyRow) => void
   handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexPointerDownSafe: (event: PointerEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexKeydownSafe: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
   handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
@@ -91,23 +92,63 @@ export function useDataGridStageRowIndex(
   }
 
   function handleRowIndexClickSafe(row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent): void {
+    if (options.rows.value.consumeRowSelectionClick?.() === true) {
+      event.preventDefault()
+      return
+    }
     if (options.rows.value.consumeRecentRowResizeInteraction?.() === true) {
       return
     }
     const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
     target?.focus({ preventScroll: true })
-    options.rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+    if (event.ctrlKey || event.metaKey) {
+      options.rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey, true)
+    } else {
+      options.rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+    }
+  }
+
+  function handleRowIndexPointerDownSafe(
+    event: PointerEvent,
+    row: DataGridTableStageBodyRow,
+    rowOffset: number,
+  ): void {
+    if (
+      options.rows.value.rowHeaderAction !== "select-records"
+      || event.pointerType === "touch"
+      || event.button !== 0
+      || row.kind === "group"
+      || options.isDataGridPlaceholderSurfaceRow(row)
+      || isRowIndexDraggable(row)
+      || (event.target instanceof HTMLElement && event.target.closest(".row-resize-handle"))
+    ) {
+      return
+    }
+    options.rows.value.handleRowIndexPointerDown?.(row, rowOffset, event)
   }
 
   function handleRowIndexKeydownSafe(event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number): void {
     if (
+      (event.key === " " || event.key === "Spacebar")
+      && event.target === event.currentTarget
+      && options.rows.value.rowHeaderAction === "select-records"
+    ) {
+      event.preventDefault()
+      if (event.ctrlKey || event.metaKey) {
+        options.rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey, true)
+      } else {
+        options.rows.value.handleRowIndexClick?.(row, rowOffset, event.shiftKey)
+      }
+      return
+    }
+    if (
       (event.key === "ArrowUp" || event.key === "ArrowDown")
-      && !event.ctrlKey
-      && !event.metaKey
       && !event.altKey
+      && (!event.ctrlKey && !event.metaKey
+        || (event.shiftKey && options.rows.value.rowHeaderAction === "select-records"))
       && event.target === event.currentTarget
     ) {
-      if (options.navigateRowIndex?.(row, rowOffset, event.key === "ArrowUp" ? -1 : 1, event.shiftKey) === true) {
+      if (options.navigateRowIndex?.(row, rowOffset, event.key === "ArrowUp" ? -1 : 1, event.shiftKey, event.ctrlKey || event.metaKey) === true) {
         event.preventDefault()
         return
       }
@@ -295,6 +336,7 @@ export function useDataGridStageRowIndex(
     isRowIndexDraggable,
     handleRowClickSafe,
     handleRowIndexClickSafe,
+    handleRowIndexPointerDownSafe,
     handleRowIndexKeydownSafe,
     handleRowIndexDragStart,
     handleRowIndexDragOver,

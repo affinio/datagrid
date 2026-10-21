@@ -1,6 +1,6 @@
 # Core API: `@affino/datagrid-core`
 
-Status: public API guide.
+Status: onboarding guide and high-level integration overview; it is not an exhaustive API reference.
 
 The core package is framework-agnostic. It is the communication boundary for row models, projection, lifecycle, state, events, and the namespaced `DataGridApi`. It does not render DOM and does not depend on Vue.
 
@@ -55,7 +55,17 @@ Create the API only through public factories and interact through namespaces:
 | `diagnostics` / `meta` | Read-only diagnostics and compatibility metadata. |
 | `policy` / `plugins` | Runtime policy and public plugin lifecycle. |
 
-The complete method-level reference is [Unified Grid API](./datagrid-grid-api.md). `@affino/datagrid-core/advanced` and `/internal` are not interchangeable with the stable root entrypoint.
+This guide covers the runtime model, common row-model operations, API assembly,
+and the main behavioral boundaries. It intentionally summarizes namespaces
+rather than listing every method or export. See [Unified Grid API](./datagrid-grid-api.md)
+for namespace semantics, the [method reference](./reference/datagrid-grid-api-methods.md)
+for `DataGridApi` signatures, the [core factories reference](./reference/datagrid-core-factories-reference.md)
+for constructors, and the [generated declarations index](./reference/generated/datagrid-public-api-declarations.md)
+for the complete declaration-derived export inventory. Framework-independent
+row-selection primitives have their own [row-selection model reference](./reference/datagrid-row-selection-model.md).
+
+`@affino/datagrid-core/advanced` and `/internal` are not interchangeable with
+the stable root entrypoint.
 
 ## Mutation rules
 

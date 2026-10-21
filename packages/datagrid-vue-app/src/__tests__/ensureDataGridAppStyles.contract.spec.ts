@@ -193,6 +193,12 @@ describe("ensureDataGridAppStyles", () => {
     expect(rootRule).toContain("background: transparent")
     expect(rootRule).not.toContain("background: var(--datagrid-background-color)")
     expect(stageRule).toContain("background: var(--datagrid-background-color)")
+    expect(stageRule).toContain("border: 1px solid var(--datagrid-glass-border)")
+    expect(stageRule).toContain("border-radius: var(--datagrid-surface-radius, 8px)")
+    expect(stageRule).toContain("box-sizing: border-box")
+    expect(stageRule).toContain("overflow: hidden")
+    expect(styleText).not.toContain(".grid-stage::before")
+    expect(styleText).not.toContain(".datagrid-app-stage--integrated .grid-stage::before")
   })
 
   it("uses the host height once and lets internal fill layers share the remaining space", () => {

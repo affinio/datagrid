@@ -152,6 +152,9 @@ import {
   resolveDataGridRowSelection,
   type DataGridResolvedRowSelectionOptions,
   type DataGridRowSelectionProp,
+  resolveDataGridRowHeader,
+  type DataGridResolvedRowHeaderOptions,
+  type DataGridRowHeaderProp,
 } from "./config/dataGridRowSelection"
 import {
   resolveDataGridAggregations,
@@ -672,6 +675,10 @@ const dataGridProps = {
   rowSelection: {
     type: [Boolean, Object] as PropType<DataGridRowSelectionProp>,
     default: true,
+  },
+  rowHeader: {
+    type: Object as PropType<DataGridRowHeaderProp>,
+    default: undefined,
   },
   rowReorder: {
     type: [Boolean, Object] as PropType<DataGridRowReorderProp | undefined>,
@@ -1286,6 +1293,7 @@ const DataGridRuntimeComponent = defineComponent({
       return rowPartition.pinnedBottomRows[pinnedBottomIndex] ?? null
     }
     const resolvedRowSelection = computed<DataGridResolvedRowSelectionOptions>(() => resolveDataGridRowSelection(props.rowSelection))
+    const resolvedRowHeader = computed<DataGridResolvedRowHeaderOptions>(() => resolveDataGridRowHeader(props.rowHeader))
     const showRowSelection = computed(() => resolvedRowSelection.value.enabled)
     const rowSelectionColumnWidth = computed(() => resolvedRowSelection.value.columnWidth)
     const selectionOptions = {
@@ -1811,6 +1819,8 @@ const DataGridRuntimeComponent = defineComponent({
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
         rowSelection: showRowSelection.value,
+        rowHeaderAction: resolvedRowHeader.value.action,
+        isRowSelectable: resolvedRowSelection.value.isSelectable,
         rowSelectionColumnWidth: rowSelectionColumnWidth.value,
         resolveSourceRowId: resolvedClientRowModelOptions.value?.resolveRowId,
         rowReorder: resolvedRowReorder.value,

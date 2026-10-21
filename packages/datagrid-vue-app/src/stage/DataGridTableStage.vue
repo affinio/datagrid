@@ -818,7 +818,7 @@ function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: numbe
     if (rowIndexCell) {
       event.preventDefault()
       rows.value.handleRowIndexClick?.(row, rowOffset, false)
-      retainRowIndexFocus(rowIndex, false, true)
+      retainRowIndexFocus(rowIndex, false, false, true)
       rowIndexCell.focus({ preventScroll: true })
       return
     }
@@ -1500,7 +1500,7 @@ function navigateFromRowIndexToFirstColumn(row: TableRow, rowOffset: number): bo
   return true
 }
 
-const pendingRowIndexFocus = ref<{ rowIndex: number; extend: boolean; selectionApplied: boolean } | null>(null)
+const pendingRowIndexFocus = ref<{ rowIndex: number; extend: boolean; additive: boolean; selectionApplied: boolean } | null>(null)
 let pendingRowIndexFocusFrame: number | null = null
 let pendingRowIndexFocusIdleTimer: number | null = null
 
@@ -1512,8 +1512,8 @@ function clearPendingRowIndexFocus(): void {
   }
 }
 
-function retainRowIndexFocus(rowIndex: number, extend: boolean, selectionApplied: boolean): void {
-  pendingRowIndexFocus.value = { rowIndex, extend, selectionApplied }
+function retainRowIndexFocus(rowIndex: number, extend: boolean, additive: boolean, selectionApplied: boolean): void {
+  pendingRowIndexFocus.value = { rowIndex, extend, additive, selectionApplied }
   if (pendingRowIndexFocusIdleTimer != null) window.clearTimeout(pendingRowIndexFocusIdleTimer)
   pendingRowIndexFocusIdleTimer = window.setTimeout(() => {
     pendingRowIndexFocus.value = null
@@ -1536,7 +1536,11 @@ function focusRowIndexCell(rowIndex: number): boolean {
   const rowOffset = rowIndex - viewport.value.viewportRowStart
   const targetRow = displayRows.value[rowOffset]
   if (targetRow && pendingRowIndexFocus.value?.selectionApplied !== true) {
-    rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true)
+    if (pendingRowIndexFocus.value?.additive === true) {
+      rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true, true)
+    } else {
+      rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true)
+    }
     if (pendingRowIndexFocus.value?.rowIndex === rowIndex) {
       pendingRowIndexFocus.value.selectionApplied = true
     }
@@ -1545,11 +1549,11 @@ function focusRowIndexCell(rowIndex: number): boolean {
   return true
 }
 
-function navigateToRowIndex(targetIndex: number, extend: boolean): boolean {
+function navigateToRowIndex(targetIndex: number, extend: boolean, additive = false): boolean {
   const rowTotal = selection.value.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length
   if (targetIndex < 0 || targetIndex >= rowTotal) return false
 
-  retainRowIndexFocus(targetIndex, extend, false)
+  retainRowIndexFocus(targetIndex, extend, additive, false)
   const scrollOwner = stageRootEl.value?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")
   if (scrollOwner && scrollOwner.clientHeight > 0) {
     const rowTop = viewport.value.resolveRowOffset?.(targetIndex)
@@ -1570,9 +1574,9 @@ function navigateToRowIndex(targetIndex: number, extend: boolean): boolean {
   return true
 }
 
-function navigateRowIndex(row: TableRow, rowOffset: number, direction: -1 | 1, extend: boolean): boolean {
+function navigateRowIndex(row: TableRow, rowOffset: number, direction: -1 | 1, extend: boolean, additive = false): boolean {
   const currentIndex = pendingRowIndexFocus.value?.rowIndex ?? resolveAbsoluteRowIndex(row, rowOffset)
-  return navigateToRowIndex(currentIndex + direction, extend)
+  return navigateToRowIndex(currentIndex + direction, extend, additive)
 }
 
 watch(
@@ -1893,6 +1897,7 @@ const {
   isRowIndexDraggable,
   handleRowClickSafe,
   handleRowIndexClickSafe,
+  handleRowIndexPointerDownSafe,
   handleRowIndexKeydownSafe,
   handleRowIndexDragStart,
   handleRowIndexDragOver,
@@ -2463,6 +2468,7 @@ const rowRuntime = computed(() => ({
   rowIndexTabIndex,
   isRowIndexDraggable: (row: TableRow) => !isCoarsePointer.value && isRowIndexDraggable(row),
   handleRowIndexClickSafe,
+  handleRowIndexPointerDownSafe,
   handleRowIndexKeydownSafe,
   handleRowIndexDragStart,
   handleRowIndexDragOver,

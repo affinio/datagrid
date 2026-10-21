@@ -5,8 +5,8 @@
         <div>
           <h2>Vue: Row Selection Interaction</h2>
           <p class="selection-card__subtitle">
-            System row checkboxes and the header select-all control now ride the same <code>cellInteraction</code>
-            contract used by authored interactive cells.
+            Choose records from the row headers with click, Ctrl/Meta, Shift, keyboard, or drag. The checkbox column
+            remains available for direct toggles and bulk selection.
           </p>
         </div>
         <div class="mode-badge">Built-in checkbox semantics</div>
@@ -29,7 +29,7 @@
         <span>Visible rows: {{ visibleRows.length }} / {{ rows.length }}</span>
         <span>Selected visible: {{ selectedVisibleRowCount }}</span>
         <span>Total selected: {{ selectedRowIds.length }}</span>
-        <span>Use the header checkbox after switching filters</span>
+        <span>Shift+click or drag the row index to select a range</span>
       </div>
     </header>
 
@@ -42,7 +42,8 @@
         :max-rows="9"
         :client-row-model-options="clientRowModelOptions"
         :theme="theme"
-        :show-row-index="false"
+        :show-row-index="true"
+        :row-header="{ action: 'select-records' }"
         row-selection
         :aggregations="false"
         :base-row-height="35"
@@ -230,8 +231,6 @@ watchEffect(() => {
 
 .selection-card__surface {
   min-height: 0;
-  border-radius: 1rem;
-  overflow: hidden;
 }
 
 .selection-card__surface :deep(.affino-datagrid-app-root),
