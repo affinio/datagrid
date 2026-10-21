@@ -185,6 +185,41 @@ export {
 } from "./selection/rowSelection.js"
 
 export {
+  addDataGridRowSelectionModelRows,
+  createDataGridRowSelectionModelSnapshot,
+  advanceDataGridRowSelectionModelRevision,
+  removeDataGridRowSelectionModelRows,
+  replaceDataGridRowSelectionModel,
+  toggleDataGridRowSelectionModelRow,
+  type DataGridRowSelectionModelSnapshot,
+} from "./selection/rowSelectionModel.js"
+
+export {
+  applyDataGridRowSelectionIntent,
+  createDataGridRowSelectionInteractionSnapshot,
+  type DataGridRowSelectionIntent,
+  type DataGridRowSelectionInteractionSnapshot,
+  type DataGridRowSelectionTransition,
+  type DataGridSelectableRowRangeResolution,
+} from "./selection/rowSelectionInteraction.js"
+
+export {
+  beginDataGridRowSelectionSession,
+  cancelDataGridRowSelectionSession,
+  commitDataGridRowSelectionSession,
+  updateDataGridRowSelectionSession,
+  type BeginDataGridRowSelectionSessionOptions,
+  type DataGridRowSelectionSession,
+  type DataGridRowSelectionSessionResult,
+} from "./selection/rowSelectionSession.js"
+export {
+  resolveDataGridSelectableRowRange,
+  type DataGridRowSelectionRangeNode,
+  type DataGridRowSelectionRangeNodeKind,
+  type ResolveDataGridSelectableRowRangeOptions,
+} from "./selection/rowSelectionRange.js"
+
+export {
   createDataGridSelectionSummary,
   resolveDataGridSelectionCellValue,
   type CreateDataGridSelectionSummaryOptions,

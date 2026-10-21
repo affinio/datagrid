@@ -1,5 +1,11 @@
 # @affino/datagrid-core
 
+## 0.11.0
+
+### Added
+
+- Added framework-independent row-selection snapshots, modifier-aware intent transitions, projection range resolution, and preview/commit/cancel session primitives.
+
 ## 0.10.0
 
 ### Breaking Changes
