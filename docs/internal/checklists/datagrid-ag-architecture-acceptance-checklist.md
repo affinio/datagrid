@@ -21,17 +21,18 @@ Goal: keep the grid architecture at an enterprise-grade bar and prevent silent r
 
 ## Current gaps to close toward top-tier
 
-- [ ] Column groups runtime is first-class, not only typed.
+- [x] Column groups runtime is first-class, not only typed.
 - [ ] Server-side row model has hierarchical stores and partial refresh semantics.
 - [x] Editing is a first-class subsystem with validation and commit lifecycle.
 - [x] Layout/state snapshots are versioned, migratable, and separated from row data snapshots.
-- [ ] Row pinning has runtime/API semantics, not only row-state typing.
+- [x] Row pinning has runtime/API semantics, not only row-state typing.
 - [~] Aggregation registry, comparator policy, and quick/global filter are first-class core services.
 
-Notes as of `2026-05-20`:
+Notes as of `2026-10-21`:
 - Quick filter is implemented through `filterModel.quickFilter`, server query codec, worker parity, app shell control, docs, and tests.
 - State migration is implemented through `api.state.migrate(...)` and app saved-view migration helpers.
 - Editing has inline/editor validation, commit lifecycle, optimistic datasource edits, and contract docs.
+- Column-group headers and top/body/bottom row pinning have public model/runtime behavior and focused contract coverage; visual polish across wide tables and saved-view restore remains a browser validation concern.
 - Aggregation engine exists, but a public aggregation registry and comparator policy remain open.
 
 ## Quality gate references

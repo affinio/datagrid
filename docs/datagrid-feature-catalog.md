@@ -10,9 +10,9 @@ For the meaning of capability labels and the current product boundary, see [Supp
 ## How to read this catalog
 
 - Scope:
-  - `Core` means implemented in `@affino@affino/datagrid-core`.
-  - `Adapter` means surfaced through framework adapters (`@affino@affino/datagrid-vue`, `@affino/datagrid-laravel`).
-  - `App` means surfaced through app-facing framework facades (`@affino@affino/datagrid-vue-app`, `@affino/datagrid-laravel-app`).
+  - `Core` means implemented in `@affino/datagrid-core`.
+  - `Adapter` means surfaced through framework adapters (`@affino/datagrid-vue`, `@affino/datagrid-laravel`).
+  - `App` means surfaced through app-facing framework facades (`@affino/datagrid-vue-app`, `@affino/datagrid-laravel-app`).
   - `Backend` means contract exists client-side, but behavior is implemented by your server/data source.
 - Runtime mode:
   - `main-thread` for simpler/smaller workloads.
@@ -65,12 +65,15 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | Virtualization | Vertical virtualization (rows) | Core + Adapter | all | Viewport-driven visible row windows for large datasets; see the [virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md) for enterprise limits. |
 | Virtualization | Horizontal virtualization (columns) | Core + Adapter | all | Deterministic horizontal windowing with pinned column support; enabled explicitly for wide app grids. |
 | Columns | Visibility, order, sizing, pinning | Core + Adapter | all | Canonical column model (`pin` contract, snapshots, state updates). |
+| Columns | Nested column-group headers | Core + App | main-thread, worker-owned | `columnGroup` paths normalize into group snapshots; group headers span visible leaves across pinned and center panes and support resize, reorder, visibility, and pin changes. See the [app package guide](../packages/datagrid-vue-app/README.md#column-state). |
+| Row models | Top/body/bottom row pinning | Core + App | all | `state.pinned` partitions rows outside the virtualized body; Vue app renders dedicated top and bottom surfaces. |
 | App UX | Built-in column menu with declarative trigger, section/action config, disabled reasons, custom items, and async value filters | App | main-thread, worker-owned, server-side* | `columnMenu` supports boolean enablement plus object-form `trigger`, `items`, `disabled`, `disabledReasons`, `labels`, `actions`, `customItems`, and per-column overrides for the standard `sort/group/pin/filter` menu. Value-filter lists can resolve from async row-model histograms and forward server-side search. |
 | App UX | Localizable built-in toolbar panels | App | main-thread, worker-owned | `advancedFilter.labels` and `columnLayout.labels` cover trigger text, panel chrome, actions, field labels, join labels, and advanced-filter operator labels for app-level localization. |
 | App UX | Declarative history facade (`history` prop + stable controller) | App | main-thread, worker-owned | `history` supports built-in or injected adapters, transaction-level undo depth, `grid`/`window` shortcut routing, optional built-in toolbar controls, and stable `canUndo/canRedo/runHistoryAction` access from the component ref. |
 | App UX | Visual placeholder row tail with lazy materialization (`placeholderRows`) | App | main-thread, worker-owned | `rows` stay real-only while `placeholderRows.count` adds an Excel-like visual tail; `createRowAt(...)` materializes real rows on first edit/paste/toggle, built-in history can undo that materialization back to placeholder state, and the Vue sandbox base-table card exposes a live placeholder-tail demo. |
 | App UX | Saved-view facade helpers + persistence adapters | App | main-thread, worker-owned | Imperative `getSavedView()` / `migrateSavedView()` / `applySavedView()` persist unified runtime state together with app `viewMode`, while `serialize/parse/read/write/clear` helpers support storage-backed presets. |
-| Selection | Row and cell/range selection | Core + Adapter | all | Anchor/focus/range model and overlay transform contracts. |
+| Selection | Cell/range selection | Core + Adapter + App | main-thread, worker-owned | Anchor/focus/range model, keyboard and pointer transitions, and overlay materialization. |
+| Selection | Record selection by row ID | Core + Adapter + App | main-thread, worker-owned | Opt-in row-header action supports click modifiers, Shift keyboard extension, projection-aware drag preview/commit/cancel, and selectable-row policy. The row-header default remains cell-range selection. See the [row-selection reference](./reference/datagrid-row-selection-model.md). |
 | Selection | Fill handle + drag-fill | Core + Adapter + App | main-thread, worker-owned | Spreadsheet-like fill interaction primitives, including drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply in app facades. |
 | Selection | Range move / drag-move | Core + Adapter | main-thread, worker-owned | Move selected ranges with deterministic lifecycle hooks. |
 | Clipboard | Copy/cut/paste orchestration | Core + Adapter | main-thread, worker-owned | Clipboard bridge/mutation policy and selection-aware operations. |
@@ -83,7 +86,8 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | Editing | Stage invalidation guarantees | Core + Adapter | all | Field-aware invalidation keeps recompute scope explicit and observable. |
 | Interaction | Keyboard command routing | Core + Adapter | main-thread, worker-owned | Advanced keyboard orchestration for editing/selection/navigation. |
 | Interaction | Pointer/context-menu orchestration | Core + Adapter | main-thread, worker-owned | Advanced pointer routing and context menu action contracts. |
-| Accessibility | A11y attributes + state machine | Core advanced + Adapter | all | Deterministic ARIA mapping and keyboard/a11y state support. |
+| Accessibility | A11y attributes + state machine | Core advanced + Adapter + App | all | Deterministic ARIA mapping and browser-tested keyboard/state support; real assistive-technology validation remains a follow-up. |
+| Interaction | Touch scrolling and explicit touch handles | Adapter + App | touch/coarse pointer | Native body scrolling, scroll-first cell behavior, long-press selection, and explicit fill/range handles have browser coverage. Real-device and hardware-threshold validation remains open. |
 | Compute | Mode switch (`api.compute.getMode/switchMode`) | Core + Adapter | main-thread, worker-owned | Synchronous mode switch control for sync/worker paths; does not implicitly recompute projection. |
 | Lifecycle | Concurrency helpers (`api.lifecycle.isBusy/whenIdle/runExclusive`) | Core + Adapter | all | Public lifecycle guard layer for serializing high-impact operations. |
 | Diagnostics | Aggregated diagnostics snapshot (`api.diagnostics.getAll`) | Core + Adapter | all | Read-only diagnostics payload (`rowModel/compute/cache/backpressure`) without triggering recompute. |
@@ -118,9 +122,9 @@ For install paths, tiering, and community/enterprise status, see the [DataGrid P
 
 | Package | Intended consumer | Typical use |
 | --- | --- | --- |
-| `@affino@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
-| `@affino@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
-| `@affino@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
+| `@affino/datagrid-core` | Headless/platform engineers | Stable community-safe core contracts and client row-model primitives. |
+| `@affino/datagrid-vue` | Vue teams | Community-safe Vue adapter surface. |
+| `@affino/datagrid-vue-app` | Vue app teams | App-facing Vue facade with opinionated install path. |
 | `@affino/datagrid-laravel` | Laravel/Livewire teams | Community-safe Laravel facade. |
 | `@affino/datagrid-laravel-app` | Laravel app teams | App-facing Laravel facade with future opinionated DX boundary. |
 | `@affino/datagrid-vue/advanced` | Power users | Low-level interaction/layout primitives for custom renderer wiring. |
