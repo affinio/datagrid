@@ -1,5 +1,6 @@
 export type DataGridAdvancedFilterOperatorLabelKey =
   | "contains"
+  | "does-not-contain"
   | "in"
   | "equals"
   | "not-equals"
@@ -100,6 +101,7 @@ const DEFAULT_BUTTON_LABEL = "Filter"
 
 const DEFAULT_OPERATOR_LABELS: Readonly<Record<DataGridAdvancedFilterOperatorLabelKey, string>> = Object.freeze({
   contains: "Contains",
+  "does-not-contain": "Does not contain",
   in: "In",
   equals: "Equals",
   "not-equals": "Not equals",

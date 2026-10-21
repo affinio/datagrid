@@ -7,6 +7,19 @@ import {
 } from "../index"
 
 describe("advanced filter expression", () => {
+  it("evaluates the does not contain operator", () => {
+    const expression = normalizeDataGridAdvancedFilterExpression({
+      kind: "condition",
+      key: "owner",
+      type: "text",
+      operator: "does-not-contain",
+      value: "noc",
+    })
+
+    expect(evaluateDataGridAdvancedFilterExpression(expression, () => "Operations")).toBe(true)
+    expect(evaluateDataGridAdvancedFilterExpression(expression, () => "NOC Team")).toBe(false)
+  })
+
   it("evaluates nested group + not expression deterministically", () => {
     const expression = normalizeDataGridAdvancedFilterExpression({
       kind: "group",

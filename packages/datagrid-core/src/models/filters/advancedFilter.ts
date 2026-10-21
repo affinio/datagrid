@@ -261,6 +261,9 @@ function evaluateCondition(condition: DataGridAdvancedFilterCondition, candidate
   if (operator === "contains") {
     return left.includes(right)
   }
+  if (operator === "does-not-contain" || operator === "does not contain" || operator === "notcontains" || operator === "not-contains") {
+    return !left.includes(right)
+  }
   if (operator === "startswith" || operator === "starts-with") {
     return left.startsWith(right)
   }

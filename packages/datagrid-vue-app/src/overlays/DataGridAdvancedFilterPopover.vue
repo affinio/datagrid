@@ -280,6 +280,7 @@ const joinOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => 
 ]))
 const operatorOptions = computed<readonly DataGridFilterableComboboxOption[]>(() => Object.freeze([
   { value: "contains", label: resolvedLabels.value.operators.contains },
+  { value: "does-not-contain", label: resolvedLabels.value.operators["does-not-contain"] },
   { value: "in", label: resolvedLabels.value.operators.in },
   { value: "equals", label: resolvedLabels.value.operators.equals },
   { value: "not-equals", label: resolvedLabels.value.operators["not-equals"] },
