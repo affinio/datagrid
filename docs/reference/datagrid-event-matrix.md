@@ -61,8 +61,8 @@ If an event listener mutates the grid and causes another event, the nested event
 | --- | --- | --- |
 | `rows:changed` | `cell-change` | Emitted by `DataGridRuntimeHost`; app facade then emits controlled state snapshots when relevant. |
 | Stage edit commit | `cell-edit` | Emitted after the edit patch has been applied. A `cell-change` from the row mutation may already have fired. |
-| `selection:changed` | `selection-change` | Selection-only changes do not emit `update:state`. |
-| `row-selection:changed` | `row-selection-change` | Carries `{ snapshot }`. |
+| `selection:changed` | `selection-change` | Carries `{ snapshot, origin?, operationId }`; selection-only changes do not emit `update:state`. |
+| `row-selection:changed` | `row-selection-change` | Carries `{ snapshot, origin?, operationId }`. |
 | Row-selection watcher | `update:rowSelectionState` | Controlled row-selection snapshots are emitted through `update:rowSelectionState`; typed changes use `row-selection-change`. |
 | Controlled state snapshots | `update:state`, `update:columnState`, `update:columnOrder`, `update:hiddenColumnKeys`, `update:columnWidths`, `update:columnPins`, `update:groupBy`, `update:viewMode` | Use these for Vue controlled-prop synchronization. |
 | Runtime ready | `ready` | Provides `{ api, rowModel }` after the runtime is available. |

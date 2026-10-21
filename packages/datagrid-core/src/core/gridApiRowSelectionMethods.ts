@@ -1,4 +1,5 @@
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import { dataGridRowSelectionSnapshotsEqual } from "../selection/rowSelection"
 import type {
   DataGridRowId,
   DataGridRowModel,
@@ -7,27 +8,28 @@ import {
   assertRowSelectionCapability,
   type DataGridRowSelectionCapability,
 } from "./gridApiCapabilities"
+import type { DataGridChangeContext } from "./gridApiContracts"
 
 export interface DataGridApiRowSelectionMethods<TRow = unknown> {
   hasRowSelectionSupport: () => boolean
   getRowSelectionSnapshot: () => DataGridRowSelectionSnapshot | null
-  setRowSelectionSnapshot: (snapshot: DataGridRowSelectionSnapshot) => void
-  clearRowSelection: () => void
+  setRowSelectionSnapshot: (snapshot: DataGridRowSelectionSnapshot, context?: DataGridChangeContext) => void
+  clearRowSelection: (context?: DataGridChangeContext) => void
   getFocusedRow: () => string | number | null
-  setFocusedRow: (rowId: string | number | null) => void
+  setFocusedRow: (rowId: string | number | null, context?: DataGridChangeContext) => void
   getSelectedRows: () => readonly (string | number)[]
   isRowSelected: (rowId: string | number) => boolean
-  setRowSelected: (rowId: string | number, selected: boolean) => void
-  selectRows: (rowIds: Iterable<string | number>) => void
-  deselectRows: (rowIds: Iterable<string | number>) => void
-  clearSelectedRows: () => void
+  setRowSelected: (rowId: string | number, selected: boolean, context?: DataGridChangeContext) => void
+  selectRows: (rowIds: Iterable<string | number>, context?: DataGridChangeContext) => void
+  deselectRows: (rowIds: Iterable<string | number>, context?: DataGridChangeContext) => void
+  clearSelectedRows: (context?: DataGridChangeContext) => void
   getSelectedRowData: () => TRow[]
 }
 
 export interface CreateDataGridApiRowSelectionMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   getRowSelectionCapability: () => DataGridRowSelectionCapability | null
-  onChanged?: (snapshot: DataGridRowSelectionSnapshot | null) => void
+  onChanged?: (snapshot: DataGridRowSelectionSnapshot | null, context?: DataGridChangeContext) => void
 }
 
 export function createDataGridApiRowSelectionMethods<TRow = unknown>(
@@ -36,6 +38,13 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
   const { rowModel, getRowSelectionCapability, onChanged } = input
 
   const rowIdSignature = (rowId: DataGridRowId): string => `${typeof rowId}:${String(rowId)}`
+  const mutate = (operation: (capability: DataGridRowSelectionCapability) => void, context?: DataGridChangeContext): void => {
+    const capability = assertRowSelectionCapability(getRowSelectionCapability())
+    const previous = capability.getRowSelectionSnapshot()
+    operation(capability)
+    const next = capability.getRowSelectionSnapshot()
+    if (!dataGridRowSelectionSnapshotsEqual(previous, next)) onChanged?.(next, context)
+  }
 
   return {
     hasRowSelectionSupport() {
@@ -44,23 +53,17 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
     getRowSelectionSnapshot() {
       return getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null
     },
-    setRowSelectionSnapshot(snapshot) {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.setRowSelectionSnapshot(snapshot)
-      onChanged?.(capability.getRowSelectionSnapshot())
+    setRowSelectionSnapshot(snapshot, context) {
+      mutate(capability => capability.setRowSelectionSnapshot(snapshot), context)
     },
-    clearRowSelection() {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.clearRowSelection()
-      onChanged?.(capability.getRowSelectionSnapshot())
+    clearRowSelection(context) {
+      mutate(capability => capability.clearRowSelection(), context)
     },
     getFocusedRow() {
       return getRowSelectionCapability()?.getFocusedRow() ?? null
     },
-    setFocusedRow(rowId) {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.setFocusedRow(rowId)
-      onChanged?.(capability.getRowSelectionSnapshot())
+    setFocusedRow(rowId, context) {
+      mutate(capability => capability.setFocusedRow(rowId), context)
     },
     getSelectedRows() {
       return getRowSelectionCapability()?.getSelectedRows() ?? []
@@ -68,25 +71,19 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
     isRowSelected(rowId) {
       return getRowSelectionCapability()?.isRowSelected(rowId) ?? false
     },
-    setRowSelected(rowId, selected) {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.setRowSelected(rowId, selected)
-      onChanged?.(capability.getRowSelectionSnapshot())
+    setRowSelected(rowId, selected, context) {
+      mutate(capability => capability.setRowSelected(rowId, selected), context)
     },
-    selectRows(rowIds) {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.selectRows(rowIds)
-      onChanged?.(capability.getRowSelectionSnapshot())
+    selectRows(rowIds, context) {
+      const rowIdsSnapshot = [...rowIds]
+      mutate(capability => capability.selectRows(rowIdsSnapshot), context)
     },
-    deselectRows(rowIds) {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.deselectRows(rowIds)
-      onChanged?.(capability.getRowSelectionSnapshot())
+    deselectRows(rowIds, context) {
+      const rowIdsSnapshot = [...rowIds]
+      mutate(capability => capability.deselectRows(rowIdsSnapshot), context)
     },
-    clearSelectedRows() {
-      const capability = assertRowSelectionCapability(getRowSelectionCapability())
-      capability.clearSelectedRows()
-      onChanged?.(capability.getRowSelectionSnapshot())
+    clearSelectedRows(context) {
+      mutate(capability => capability.clearSelectedRows(), context)
     },
     getSelectedRowData() {
       const snapshot = getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null

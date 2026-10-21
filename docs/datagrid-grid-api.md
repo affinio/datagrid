@@ -80,6 +80,7 @@ Use it as guard before capability-dependent mutating calls.
 - `state.migrate(...)` is the explicit payload migration/validation hook before restore.
 - `events.on` is the typed public event surface with documented in-process ordering. See [Event matrix](./reference/datagrid-event-matrix.md) for cross-layer mapping.
 - `events.on("row-selection:changed", ...)` is the typed row-selection event surface for `selectedRows` / `focusedRow` snapshots.
+- `selection.setSnapshot(snapshot, context?)` and `rowSelection.setSnapshot(snapshot, context?)` accept optional `{ origin, operationId }`. Their change events carry the same context; when omitted, the runtime creates an operation id. This is provenance only, not automatic cycle suppression. Semantically unchanged snapshots do not emit another change event.
 - `events` includes explicit state import boundaries (`state:import:begin/end`).
 - `compute.switchMode(...)` is synchronous and does not implicitly trigger recompute.
 - `diagnostics.getAll()` is read-only and does not trigger recompute.

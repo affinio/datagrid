@@ -13,6 +13,7 @@ import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
 import type { DataGridTransactionSnapshot } from "./transactionService"
 import type {
   DataGridApiErrorEvent,
+  DataGridChangeContext,
   DataGridApiEventMap,
   DataGridApiEventsNamespace,
   DataGridUnifiedState,
@@ -21,6 +22,8 @@ import type {
 type DataGridApiEventListenerMap<TRow = unknown> = {
   [K in keyof DataGridApiEventMap<TRow>]: Set<(payload: DataGridApiEventMap<TRow>[K]) => void>
 }
+
+let generatedOperationSequence = 0
 
 function serializeStable(value: unknown): string {
   try {
@@ -57,8 +60,8 @@ function normalizeViewportRange(range: DataGridViewportRange): DataGridViewportR
 export interface DataGridApiEventsRuntime<TRow = unknown> {
   namespace: DataGridApiEventsNamespace<TRow>
   runBatched<TResult>(fn: () => TResult): TResult
-  emitSelectionChanged(snapshot: DataGridSelectionSnapshot | null): void
-  emitRowSelectionChanged(snapshot: DataGridRowSelectionSnapshot | null): void
+  emitSelectionChanged(snapshot: DataGridSelectionSnapshot | null, context?: DataGridChangeContext): void
+  emitRowSelectionChanged(snapshot: DataGridRowSelectionSnapshot | null, context?: DataGridChangeContext): void
   emitRowsEdited(event: DataGridApiEventMap<TRow>["rows:edited"]): void
   emitTransactionChanged(snapshot: DataGridTransactionSnapshot | null): void
   emitStateImportBegin(state: DataGridUnifiedState<TRow>): void
@@ -76,6 +79,11 @@ export interface CreateDataGridApiEventsRuntimeInput<TRow = unknown> {
 export function createDataGridApiEventsRuntime<TRow = unknown>(
   input: CreateDataGridApiEventsRuntimeInput<TRow>,
 ): DataGridApiEventsRuntime<TRow> {
+  const operationPrefix = `dg-${Date.now().toString(36)}`
+  const resolveChangeContext = (context?: DataGridChangeContext) => ({
+    ...(typeof context?.origin === "string" ? { origin: context.origin } : {}),
+    operationId: context?.operationId ?? `${operationPrefix}-${++generatedOperationSequence}`,
+  })
   const listeners: DataGridApiEventListenerMap<TRow> = {
     "rows:changed": new Set(),
     "rows:edited": new Set(),
@@ -285,11 +293,11 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
         }
       }
     },
-    emitSelectionChanged(snapshot) {
-      emit("selection:changed", { snapshot })
+    emitSelectionChanged(snapshot, context) {
+      emit("selection:changed", { snapshot, ...resolveChangeContext(context) })
     },
-    emitRowSelectionChanged(snapshot) {
-      emit("row-selection:changed", { snapshot })
+    emitRowSelectionChanged(snapshot, context) {
+      emit("row-selection:changed", { snapshot, ...resolveChangeContext(context) })
     },
     emitRowsEdited(event) {
       emit("rows:edited", event)

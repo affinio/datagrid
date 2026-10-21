@@ -78,6 +78,7 @@ export {
   type DataGridApiPivotNamespace,
   type DataGridApiRowSelectionNamespace,
   type DataGridApiSelectionNamespace,
+  type DataGridChangeContext,
   type DataGridApiTransactionNamespace,
   type DataGridApiRowsNamespace,
   type DataGridApiDataNamespace,

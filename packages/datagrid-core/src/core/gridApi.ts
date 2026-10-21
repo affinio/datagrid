@@ -83,6 +83,7 @@ export type {
   DataGridApiRowsEditedEvent,
   DataGridApiRowSelectionChangedEvent,
   DataGridApiSelectionChangedEvent,
+  DataGridChangeContext,
   DataGridGetStateOptions,
   DataGridMigrateStateOptions,
   DataGridSetStateDataSourceOptions,
@@ -299,7 +300,7 @@ export function createDataGridApi<TRow = unknown>(
   const selectionMethods = createDataGridApiSelectionMethods<TRow>({
     rowModel,
     getSelectionCapability,
-    onChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
+    onChanged: (snapshot, context) => eventsRuntime.emitSelectionChanged(snapshot, context),
     summarize: (selectionSnapshot, options) =>
       buildDataGridSelectionSummary<TRow>({
         selectionSnapshot,
@@ -311,7 +312,7 @@ export function createDataGridApi<TRow = unknown>(
   const rowSelectionMethods = createDataGridApiRowSelectionMethods<TRow>({
     rowModel,
     getRowSelectionCapability,
-    onChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
+    onChanged: (snapshot, context) => eventsRuntime.emitRowSelectionChanged(snapshot, context),
   })
   const stateMethods = createDataGridApiStateMethods<TRow>({
     rowModel,

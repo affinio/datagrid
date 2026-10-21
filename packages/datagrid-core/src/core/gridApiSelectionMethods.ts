@@ -7,13 +7,13 @@ import {
   assertSelectionCapability,
   type DataGridSelectionCapability,
 } from "./gridApiCapabilities"
-import type { DataGridSelectionSummaryApiOptions } from "./gridApiContracts"
+import type { DataGridChangeContext, DataGridSelectionSummaryApiOptions } from "./gridApiContracts"
 
 export interface DataGridApiSelectionMethods<TRow = unknown> {
   hasSelectionSupport: () => boolean
   getSelectionSnapshot: () => DataGridSelectionSnapshot | null
-  setSelectionSnapshot: (snapshot: DataGridSelectionSnapshot) => void
-  clearSelection: () => void
+  setSelectionSnapshot: (snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext) => void
+  clearSelection: (context?: DataGridChangeContext) => void
   summarizeSelection: (options?: DataGridSelectionSummaryApiOptions<TRow>) => DataGridSelectionSummarySnapshot | null
   getRangeRowData: () => TRow[]
 }
@@ -21,7 +21,7 @@ export interface DataGridApiSelectionMethods<TRow = unknown> {
 export interface CreateDataGridApiSelectionMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
   getSelectionCapability: () => DataGridSelectionCapability | null
-  onChanged?: (snapshot: DataGridSelectionSnapshot | null) => void
+  onChanged?: (snapshot: DataGridSelectionSnapshot | null, context?: DataGridChangeContext) => void
   summarize: (
     selectionSnapshot: DataGridSelectionSnapshot,
     options?: DataGridSelectionSummaryApiOptions<TRow>,
@@ -44,15 +44,19 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
       }
       return selectionCapability.getSelectionSnapshot()
     },
-    setSelectionSnapshot(snapshot: DataGridSelectionSnapshot) {
+    setSelectionSnapshot(snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext) {
       const selection = assertSelectionCapability(getSelectionCapability())
+      const previous = selection.getSelectionSnapshot()
+      if (previous && JSON.stringify(previous) === JSON.stringify(snapshot)) return
       selection.setSelectionSnapshot(snapshot)
-      onChanged?.(selection.getSelectionSnapshot())
+      onChanged?.(selection.getSelectionSnapshot(), context)
     },
-    clearSelection() {
+    clearSelection(context?: DataGridChangeContext) {
       const selection = assertSelectionCapability(getSelectionCapability())
+      const previous = selection.getSelectionSnapshot()
       selection.clearSelection()
-      onChanged?.(selection.getSelectionSnapshot())
+      const next = selection.getSelectionSnapshot()
+      if (JSON.stringify(previous) !== JSON.stringify(next)) onChanged?.(next, context)
     },
     summarizeSelection(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
       const selectionCapability = getSelectionCapability()

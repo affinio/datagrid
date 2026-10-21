@@ -2108,6 +2108,44 @@ describe("data grid api facade contracts", () => {
     expect(api.selection.getSnapshot()).toBeNull()
   })
 
+  it("propagates selection change context and suppresses semantically unchanged snapshots", () => {
+    const rowModel = createAdvancedClientRowModel()
+    const columnModel = createDataGridColumnModel()
+    let selected: DataGridRowSelectionSnapshot | null = null
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+        selection: {
+          name: "selection",
+          getRowSelectionSnapshot: () => selected,
+          setRowSelectionSnapshot: snapshot => { selected = snapshot },
+          clearRowSelection: () => { selected = null },
+          getFocusedRow: () => selected?.focusedRow ?? null,
+          setFocusedRow: () => {},
+          getSelectedRows: () => selected?.selectedRows ?? [],
+          isRowSelected: rowId => selected?.selectedRows.includes(rowId) ?? false,
+          setRowSelected: () => {},
+          selectRows: () => {},
+          deselectRows: () => {},
+          clearSelectedRows: () => {},
+        },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const events: Array<{ origin?: string; operationId: string }> = []
+    api.events.on("row-selection:changed", event => events.push(event))
+
+    api.rowSelection.setSnapshot({ focusedRow: null, selectedRows: ["a", "b"] }, {
+      origin: "signal-list-sync",
+      operationId: "sync-1",
+    })
+    api.rowSelection.setSnapshot({ focusedRow: null, selectedRows: ["b", "a"] })
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ origin: "signal-list-sync", operationId: "sync-1" })
+  })
+
   it("resolves selected row data through the current projected row order", () => {
     const rowA = { id: "a", score: 1 }
     const rowB = { id: "b", score: 2 }

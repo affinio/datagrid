@@ -123,9 +123,9 @@ export interface DataGridApiSelectionNamespace<TRow = unknown> {
   /** Returns the current cell/range selection snapshot, or null when empty/unsupported. */
   getSnapshot(): DataGridSelectionSnapshot | null
   /** Replaces the current cell/range selection snapshot. */
-  setSnapshot(snapshot: DataGridSelectionSnapshot): void
+  setSnapshot(snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext): void
   /** Clears the current cell/range selection. */
-  clear(): void
+  clear(context?: DataGridChangeContext): void
   /** Summarizes selected cells using the current projected row model. */
   summarize(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
   /**
@@ -144,25 +144,25 @@ export interface DataGridApiRowSelectionNamespace<TRow = unknown> {
   /** Returns the current row-selection snapshot, or null when empty/unsupported. */
   getSnapshot(): DataGridRowSelectionSnapshot | null
   /** Replaces the current row-selection snapshot. */
-  setSnapshot(snapshot: DataGridRowSelectionSnapshot): void
+  setSnapshot(snapshot: DataGridRowSelectionSnapshot, context?: DataGridChangeContext): void
   /** Clears focused and selected row state. */
-  clear(): void
+  clear(context?: DataGridChangeContext): void
   /** Returns the focused row id, or null when no row is focused. */
   getFocusedRow(): DataGridRowId | null
   /** Sets the focused row id without changing selected rows. */
-  setFocusedRow(rowId: DataGridRowId | null): void
+  setFocusedRow(rowId: DataGridRowId | null, context?: DataGridChangeContext): void
   /** Returns selected row ids from the row-selection snapshot. */
   getSelectedRows(): readonly DataGridRowId[]
   /** Returns true when the row id is selected in the current row-selection state. */
   isSelected(rowId: DataGridRowId): boolean
   /** Selects or deselects one row id. */
-  setSelected(rowId: DataGridRowId, selected: boolean): void
+  setSelected(rowId: DataGridRowId, selected: boolean, context?: DataGridChangeContext): void
   /** Adds row ids to the current row selection. */
-  selectRows(rowIds: Iterable<DataGridRowId>): void
+  selectRows(rowIds: Iterable<DataGridRowId>, context?: DataGridChangeContext): void
   /** Removes row ids from the current row selection. */
-  deselectRows(rowIds: Iterable<DataGridRowId>): void
+  deselectRows(rowIds: Iterable<DataGridRowId>, context?: DataGridChangeContext): void
   /** Clears selected row ids while preserving other row-selection state when supported. */
-  clearSelectedRows(): void
+  clearSelectedRows(context?: DataGridChangeContext): void
   /**
    * Returns row data for the current row-selection snapshot.
    *
@@ -641,10 +641,20 @@ export interface DataGridApiProjectionRecomputedEvent<TRow = unknown> {
 
 export interface DataGridApiSelectionChangedEvent {
   snapshot: DataGridSelectionSnapshot | null
+  origin?: string
+  operationId: string
 }
 
 export interface DataGridApiRowSelectionChangedEvent {
   snapshot: DataGridRowSelectionSnapshot | null
+  origin?: string
+  operationId: string
+}
+
+/** Describes where a host initiated a public selection change. */
+export interface DataGridChangeContext {
+  origin?: string
+  operationId?: string
 }
 
 export interface DataGridApiPivotChangedEvent {

@@ -69,21 +69,17 @@ export function dataGridRowSelectionSnapshotsEqual(
   if (normalizedLeft.selectedRows.length !== normalizedRight.selectedRows.length) {
     return false
   }
-  for (let index = 0; index < normalizedLeft.selectedRows.length; index += 1) {
-    if (normalizedLeft.selectedRows[index] !== normalizedRight.selectedRows[index]) {
-      return false
-    }
-  }
+  const leftSelected = normalizedLeft.selectedRows.map(getDataGridRowIdSignature).sort()
+  const rightSelected = normalizedRight.selectedRows.map(getDataGridRowIdSignature).sort()
+  if (leftSelected.some((rowId, index) => rowId !== rightSelected[index])) return false
   const leftExcludedRows = normalizedLeft.excludedRows ?? []
   const rightExcludedRows = normalizedRight.excludedRows ?? []
   if (leftExcludedRows.length !== rightExcludedRows.length) {
     return false
   }
-  for (let index = 0; index < leftExcludedRows.length; index += 1) {
-    if (leftExcludedRows[index] !== rightExcludedRows[index]) {
-      return false
-    }
-  }
+  const leftExcluded = leftExcludedRows.map(getDataGridRowIdSignature).sort()
+  const rightExcluded = rightExcludedRows.map(getDataGridRowIdSignature).sort()
+  if (leftExcluded.some((rowId, index) => rowId !== rightExcluded[index])) return false
   return true
 }
 
