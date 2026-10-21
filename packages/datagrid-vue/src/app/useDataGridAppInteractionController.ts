@@ -378,6 +378,11 @@ export interface UseDataGridAppInteractionControllerOptions<
     action: DataGridRowIndexKeyboardAction,
     rowId: string | number,
   ) => Promise<boolean> | boolean
+  beginRowSelectionSession?: (rowId: string | number, operation: "replace" | "add") => boolean
+  updateRowSelectionSession?: (rowId: string | number) => boolean
+  commitRowSelectionSession?: () => void
+  cancelRowSelectionSession?: () => void
+  resolveRowSelectionTargetAtPoint?: (pointer: DataGridAppPointer) => string | number | null
   reportFillPlumbingDetail?: (layer: string, value: string) => void
 }
 
@@ -389,6 +394,7 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   fillPreviewRange: Ref<DataGridCopyRange | null>
   lastAppliedFill: Ref<DataGridAppAppliedFillSession | null>
   isRangeMoving: Ref<boolean>
+  isRowSelectionDragging: Ref<boolean>
   selectionRange: ComputedRef<DataGridCopyRange | null>
   rangeMovePreviewRange: Ref<DataGridCopyRange | null>
   stopPointerSelection: () => void
@@ -399,6 +405,9 @@ export interface UseDataGridAppInteractionControllerResult<TRow> {
   handleCellMouseDown: (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleCellKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number, columnIndex: number) => void
   handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridRowNode<TRow>, rowOffset: number) => void
+  handleRowIndexPointerDown: (event: PointerEvent, row: DataGridRowNode<TRow>) => void
+  consumeRowSelectionClick: () => boolean
+  acquireInteractionOwner: (owner: "row-selection") => (() => void) | null
   handleWindowMouseMove: (event: MouseEvent) => void
   handleWindowMouseUp: () => void
   handleWindowPointerUp: () => void
@@ -597,6 +606,15 @@ export function useDataGridAppInteractionController<
   const isRangeMoveEnabled = computed(() => options.enableRangeMove?.value !== false)
 
   const isPointerSelectingCells = ref(false)
+  const isRowSelectionDragging = ref(false)
+  const rowSelectionPointer = ref<DataGridAppPointer | null>(null)
+  const pendingRowSelectionDrag = ref<{
+    rowId: string | number
+    operation: "replace" | "add"
+    start: DataGridAppPointer
+  } | null>(null)
+  let suppressNextRowSelectionClick = false
+  let rowSelectionLeaseActive = false
   const keyboardNavigationExtendsSelection = ref(false)
   const dragPointer = ref<DataGridAppPointer | null>(null)
   const lastDragCoord = ref<DataGridAppCellCoord | null>(null)
@@ -626,6 +644,7 @@ export function useDataGridAppInteractionController<
   let lastServerFillMaterializationWarning: string | null = null
   const interactionOwnerSnapshot = computed(() => resolveDataGridAppInteractionOwnerSnapshot({
     dragSelection: isPointerSelectingCells.value,
+    rowSelection: isRowSelectionDragging.value,
     fill: isFillDragging.value,
     rangeMove: isRangeMoving.value,
   }))
@@ -663,7 +682,7 @@ export function useDataGridAppInteractionController<
     recordDataGridInteractionPreviewTiming(owner, Math.max(0, resolveDataGridInteractionDiagnosticsNow() - startedAt))
   }
 
-  const mapAutoScrollOwner = (activeKind: "drag" | "fill" | "range" | null): DataGridInteractionPreviewOwner | "none" => {
+  const mapAutoScrollOwner = (activeKind: "drag" | "fill" | "range" | "row-selection" | null): DataGridInteractionPreviewOwner | "none" => {
     switch (activeKind) {
       case "drag":
         return "drag-selection"
@@ -671,6 +690,8 @@ export function useDataGridAppInteractionController<
         return "fill"
       case "range":
         return "range-move"
+      case "row-selection":
+        return "row-selection"
       default:
         return "none"
     }
@@ -716,12 +737,23 @@ export function useDataGridAppInteractionController<
 
   const hasActivePointerInteractionState = (includePending = true): boolean => {
     return (
-      (includePending && (pendingRangeMove.value || pendingDragSelection.value))
+      (includePending && (pendingRangeMove.value || pendingDragSelection.value || pendingRowSelectionDrag.value != null))
       || isRangeMoving.value
       || isFillDragging.value
       || isPointerSelectingCells.value
+      || isRowSelectionDragging.value
       || hasActiveFillPreviewState()
     )
+  }
+
+  const acquireInteractionOwner = (_owner: "row-selection"): (() => void) | null => {
+    if (hasActivePointerInteractionState() || rowSelectionLeaseActive) {
+      return null
+    }
+    rowSelectionLeaseActive = true
+    return () => {
+      rowSelectionLeaseActive = false
+    }
   }
 
   const globalPointerListenersActive = computed(() => hasActivePointerInteractionState())
@@ -2216,11 +2248,16 @@ export function useDataGridAppInteractionController<
       isDragSelecting: supportsCellSelectionMode() && isPointerSelectingCells.value,
       isFillDragging: options.mode.value === "base" && isFillDragging.value,
       isRangeMoving: options.mode.value === "base" && isRangeMoving.value,
+      isRowSelectionDragging: isRowSelectionDragging.value,
     }),
     resolveRangeMovePointer: () => rangeMovePointer.value,
     resolveFillPointer: () => fillPointer.value,
     resolveDragPointer: () => dragPointer.value,
+    resolveRowSelectionPointer: () => rowSelectionPointer.value,
     resolveAllowHorizontalAutoScroll: () => {
+      if (isRowSelectionDragging.value) {
+        return false
+      }
       if (!isPointerSelectingCells.value) {
         return true
       }
@@ -2247,6 +2284,7 @@ export function useDataGridAppInteractionController<
         dragPointerSelection.applyDragSelectionFromPointer()
       })
     },
+    applyRowSelectionPreviewFromPointer,
     onFrameSample: sample => {
       recordDataGridInteractionAutoScrollTiming({
         owner: mapAutoScrollOwner(sample.activeKind),
@@ -3512,6 +3550,12 @@ export function useDataGridAppInteractionController<
   ): void => {
     void rowOffset
     if (event.key === "Escape") {
+      if (isRowSelectionDragging.value) {
+        event.preventDefault()
+        event.stopPropagation()
+        cancelPointerInteractions(false, "escape")
+        return
+      }
       const clearedCellClipboard = options.clearPendingClipboardOperation(true, true)
       const clearedExternalClipboard = options.clearExternalPendingClipboardOperation?.() === true
       if (clearedCellClipboard || clearedExternalClipboard) {
@@ -3571,8 +3615,76 @@ export function useDataGridAppInteractionController<
     })
   }
 
+  const handleRowIndexPointerDown = (event: PointerEvent, row: DataGridRowNode<TRow>): void => {
+    if (
+      event.button !== 0
+      || event.pointerType === "touch"
+      || row.kind === "group"
+      || row.rowId == null
+      || hasActivePointerInteractionState()
+    ) {
+      return
+    }
+    pendingRowSelectionDrag.value = {
+      rowId: row.rowId,
+      operation: event.ctrlKey || event.metaKey ? "add" : "replace",
+      start: { clientX: event.clientX, clientY: event.clientY },
+    }
+    const target = event.currentTarget
+    if (target instanceof HTMLElement && target.hasPointerCapture?.(event.pointerId) !== true) {
+      try {
+        target.setPointerCapture(event.pointerId)
+      } catch {
+        // Global window listeners remain the fallback when capture is unavailable.
+      }
+    }
+  }
+
+  function applyRowSelectionPreviewFromPointer(): void {
+    const pointer = rowSelectionPointer.value
+    const targetRowId = pointer ? options.resolveRowSelectionTargetAtPoint?.(pointer) ?? null : null
+    if (targetRowId == null || !options.updateRowSelectionSession) {
+      return
+    }
+    if (!options.updateRowSelectionSession(targetRowId)) {
+      isRowSelectionDragging.value = false
+      rowSelectionPointer.value = null
+      suppressNextRowSelectionClick = true
+      pointerAutoScroll.stopAutoScrollFrameIfIdle()
+    }
+  }
+
   const handleWindowMouseMove = (event: MouseEvent): void => {
     const pointer = { clientX: event.clientX, clientY: event.clientY }
+    if (isRowSelectionDragging.value) {
+      rowSelectionPointer.value = pointer
+      event.preventDefault()
+      pointerAutoScroll.startInteractionAutoScroll()
+      applyRowSelectionPreviewFromPointer()
+      return
+    }
+    const pendingRowDrag = pendingRowSelectionDrag.value
+    if (pendingRowDrag) {
+      if (event.buttons === 0) {
+        pendingRowSelectionDrag.value = null
+        return
+      }
+      const deltaX = Math.abs(pointer.clientX - pendingRowDrag.start.clientX)
+      const deltaY = Math.abs(pointer.clientY - pendingRowDrag.start.clientY)
+      if (Math.max(deltaX, deltaY) < DRAG_SELECTION_POINTER_THRESHOLD_PX) {
+        return
+      }
+      pendingRowSelectionDrag.value = null
+      if (!options.beginRowSelectionSession?.(pendingRowDrag.rowId, pendingRowDrag.operation)) {
+        return
+      }
+      isRowSelectionDragging.value = true
+      rowSelectionPointer.value = pointer
+      event.preventDefault()
+      pointerAutoScroll.startInteractionAutoScroll()
+      applyRowSelectionPreviewFromPointer()
+      return
+    }
     if (pendingRangeMove.value && !isRangeMoving.value) {
       if (!isRangeMoveEnabled.value) {
         clearPendingRangeMove()
@@ -3620,6 +3732,13 @@ export function useDataGridAppInteractionController<
   }
 
   const handleWindowMouseUp = (): void => {
+    pendingRowSelectionDrag.value = null
+    if (isRowSelectionDragging.value) {
+      options.commitRowSelectionSession?.()
+      isRowSelectionDragging.value = false
+      rowSelectionPointer.value = null
+      suppressNextRowSelectionClick = true
+    }
     if (pendingRangeMove.value && !isRangeMoving.value) {
       const coord = pendingRangeMoveCoord.value
       clearPendingRangeMove()
@@ -3646,6 +3765,17 @@ export function useDataGridAppInteractionController<
     const hadActiveState = hasActivePointerInteractionState()
     clearPendingRangeMove()
     clearPendingDragSelection()
+    pendingRowSelectionDrag.value = null
+    if (isRowSelectionDragging.value) {
+      if (commit) {
+        options.commitRowSelectionSession?.()
+      } else {
+        options.cancelRowSelectionSession?.()
+      }
+      isRowSelectionDragging.value = false
+      rowSelectionPointer.value = null
+      suppressNextRowSelectionClick = true
+    }
     if (isRangeMoving.value) {
       rangeMoveLifecycle.stopRangeMove(commit)
     }
@@ -3720,6 +3850,7 @@ export function useDataGridAppInteractionController<
     fillPreviewRange,
     lastAppliedFill,
     isRangeMoving,
+    isRowSelectionDragging,
     selectionRange,
     rangeMovePreviewRange,
     stopPointerSelection: () => {
@@ -3733,6 +3864,15 @@ export function useDataGridAppInteractionController<
     handleCellMouseDown,
     handleCellKeydown,
     handleRowIndexKeydown,
+    handleRowIndexPointerDown,
+    consumeRowSelectionClick: () => {
+      if (!suppressNextRowSelectionClick) {
+        return false
+      }
+      suppressNextRowSelectionClick = false
+      return true
+    },
+    acquireInteractionOwner,
     handleWindowMouseMove,
     handleWindowMouseUp,
     handleWindowPointerUp: handleWindowMouseUp,

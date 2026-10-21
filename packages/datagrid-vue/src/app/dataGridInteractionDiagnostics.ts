@@ -37,7 +37,7 @@ export type DataGridInteractionCancelReason =
   | "pointercancel"
   | "projection-change"
 
-export type DataGridInteractionPreviewOwner = "drag-selection" | "fill" | "range-move"
+export type DataGridInteractionPreviewOwner = "drag-selection" | "row-selection" | "fill" | "range-move"
 
 function parseDataGridBooleanToken(value: string | null): boolean | null {
   if (!value) {

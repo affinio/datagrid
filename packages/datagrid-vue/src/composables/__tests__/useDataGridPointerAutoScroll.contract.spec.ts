@@ -40,6 +40,51 @@ function createRafHarness(): RafHarness {
 }
 
 describe("useDataGridPointerAutoScroll contract", () => {
+  it("reapplies row-selection preview after vertical auto-scroll", () => {
+    const raf = createRafHarness()
+    const applyRowSelectionPreviewFromPointer = vi.fn()
+    const viewport = {
+      scrollTop: 100,
+      scrollLeft: 120,
+      scrollHeight: 2000,
+      clientHeight: 400,
+      scrollWidth: 1800,
+      clientWidth: 500,
+      getBoundingClientRect: () => ({ top: 100, bottom: 500, left: 50, right: 550 }),
+    } as unknown as HTMLElement
+    const composable = useDataGridPointerAutoScroll({
+      resolveInteractionState: () => ({
+        isDragSelecting: false,
+        isFillDragging: false,
+        isRangeMoving: false,
+        isRowSelectionDragging: true,
+      }),
+      resolveRangeMovePointer: () => null,
+      resolveFillPointer: () => null,
+      resolveDragPointer: () => null,
+      resolveRowSelectionPointer: () => ({ clientX: 100, clientY: 496 }),
+      resolveAllowHorizontalAutoScroll: () => false,
+      resolveViewportElement: () => viewport,
+      resolveHeaderHeight: () => 32,
+      resolveAxisAutoScrollDelta: (pointer, min, max) => pointer > max - 20 ? 10 : pointer < min + 20 ? -10 : 0,
+      setScrollPosition: () => undefined,
+      applyRangeMovePreviewFromPointer: vi.fn(),
+      applyFillPreviewFromPointer: vi.fn(),
+      applyDragSelectionFromPointer: vi.fn(),
+      applyRowSelectionPreviewFromPointer,
+      requestAnimationFrame: raf.request,
+      cancelAnimationFrame: raf.cancel,
+    })
+
+    composable.startInteractionAutoScroll()
+    const [frame] = raf.handles()
+    raf.run(frame ?? -1)
+
+    expect(viewport.scrollTop).toBe(110)
+    expect(viewport.scrollLeft).toBe(120)
+    expect(applyRowSelectionPreviewFromPointer).toHaveBeenCalledTimes(1)
+  })
+
   it("schedules only one frame while active", () => {
     const raf = createRafHarness()
     const composable = useDataGridPointerAutoScroll({

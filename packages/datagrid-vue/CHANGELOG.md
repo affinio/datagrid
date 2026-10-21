@@ -1,5 +1,11 @@
 # @affino/datagrid-vue
 
+## 0.11.0
+
+### Added
+
+- Integrated row-selection drag sessions with pointer arbitration, preview updates, autoscroll, cancellation, and commit lifecycle callbacks for the app stage.
+
 ## 0.10.5
 
 ### Changed

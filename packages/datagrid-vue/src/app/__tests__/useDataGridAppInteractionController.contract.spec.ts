@@ -163,6 +163,11 @@ function createControllerHarness(options: {
     }
   } | null) => void | Promise<void>
   reportFillPlumbingState?: (layer: string, present: boolean) => void
+  beginRowSelectionSession?: (rowId: string | number, operation: "replace" | "add") => boolean
+  updateRowSelectionSession?: (rowId: string | number) => boolean
+  commitRowSelectionSession?: () => void
+  cancelRowSelectionSession?: () => void
+  resolveRowSelectionTargetAtPoint?: (pointer: { clientX: number; clientY: number }) => string | number | null
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
@@ -517,6 +522,11 @@ function createControllerHarness(options: {
     isCellEditable: (_row, rowIndex, _columnKey, columnIndex) => options.isCellEditable?.(rowIndex, columnIndex) ?? true,
     cloneRowData: rowData => ({ ...rowData }),
     resolveRowIndexById: rowId => rows.findIndex(nextRow => nextRow.rowId === rowId),
+    beginRowSelectionSession: options.beginRowSelectionSession,
+    updateRowSelectionSession: options.updateRowSelectionSession,
+    commitRowSelectionSession: options.commitRowSelectionSession,
+    cancelRowSelectionSession: options.cancelRowSelectionSession,
+    resolveRowSelectionTargetAtPoint: options.resolveRowSelectionTargetAtPoint,
     resolveFillBoundary: options.resolveFillBoundary,
     reportFillWarning,
     reportFillPlumbingState: options.reportFillPlumbingState,
@@ -592,6 +602,103 @@ afterEach(() => {
 })
 
 describe("useDataGridAppInteractionController contract", () => {
+  it("owns row-header dragging and commits its latest preview on release", () => {
+    let acquireOwner: () => (() => void) | null = () => null
+    let releaseOwner: (() => void) | null = null
+    const begin = vi.fn(() => {
+      releaseOwner = acquireOwner()
+      return releaseOwner != null
+    })
+    const update = vi.fn(() => true)
+    const commit = vi.fn(() => releaseOwner?.())
+    const cancel = vi.fn()
+    const { controller, row } = createControllerHarness({
+      beginRowSelectionSession: begin,
+      updateRowSelectionSession: update,
+      commitRowSelectionSession: commit,
+      cancelRowSelectionSession: cancel,
+      resolveRowSelectionTargetAtPoint: () => "row-2",
+    })
+    acquireOwner = () => controller.acquireInteractionOwner("row-selection")
+    const indexCell = document.createElement("div")
+    const pointerDown = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, clientX: 2, clientY: 4 })
+    Object.defineProperties(pointerDown, {
+      currentTarget: { configurable: true, value: indexCell },
+      pointerId: { configurable: true, value: 1 },
+      pointerType: { configurable: true, value: "mouse" },
+    })
+
+    controller.handleRowIndexPointerDown(pointerDown as PointerEvent, row)
+    expect(begin).not.toHaveBeenCalled()
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", { buttons: 1, clientX: 12, clientY: 4 }))
+
+    expect(begin).toHaveBeenCalledWith(row.rowId, "replace")
+    expect(update).toHaveBeenCalledWith("row-2")
+    expect(controller.isRowSelectionDragging.value).toBe(true)
+    expect(controller.interactionOwnerSnapshot.value.owner).toBe("row-selection")
+
+    controller.handleWindowPointerUp()
+
+    expect(commit).toHaveBeenCalledTimes(1)
+    expect(cancel).not.toHaveBeenCalled()
+    expect(controller.isRowSelectionDragging.value).toBe(false)
+    expect(controller.consumeRowSelectionClick()).toBe(true)
+  })
+
+  it("cancels an active row-selection session on pointer cancel", () => {
+    const begin = vi.fn(() => true)
+    const update = vi.fn(() => true)
+    const commit = vi.fn()
+    const cancel = vi.fn()
+    const { controller, row } = createControllerHarness({
+      beginRowSelectionSession: begin,
+      updateRowSelectionSession: update,
+      commitRowSelectionSession: commit,
+      cancelRowSelectionSession: cancel,
+      resolveRowSelectionTargetAtPoint: () => "row-2",
+    })
+    const pointerDown = new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 2, clientY: 4 })
+    Object.defineProperties(pointerDown, {
+      currentTarget: { configurable: true, value: document.createElement("div") },
+      pointerId: { configurable: true, value: 1 },
+      pointerType: { configurable: true, value: "mouse" },
+    })
+    controller.handleRowIndexPointerDown(pointerDown as PointerEvent, row)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", { buttons: 1, clientX: 12, clientY: 4 }))
+
+    controller.handleWindowPointerCancel()
+
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(commit).not.toHaveBeenCalled()
+    expect(controller.isRowSelectionDragging.value).toBe(false)
+  })
+
+  it("cancels an active row-selection session on Escape", () => {
+    const begin = vi.fn(() => true)
+    const cancel = vi.fn()
+    const { controller, row } = createControllerHarness({
+      beginRowSelectionSession: begin,
+      updateRowSelectionSession: () => true,
+      cancelRowSelectionSession: cancel,
+      resolveRowSelectionTargetAtPoint: () => "row-2",
+    })
+    const pointerDown = new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 2, clientY: 4 })
+    Object.defineProperties(pointerDown, {
+      currentTarget: { configurable: true, value: document.createElement("div") },
+      pointerId: { configurable: true, value: 1 },
+      pointerType: { configurable: true, value: "mouse" },
+    })
+    controller.handleRowIndexPointerDown(pointerDown as PointerEvent, row)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", { buttons: 1, clientX: 12, clientY: 4 }))
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+
+    controller.handleRowIndexKeydown(escape, row, 0)
+
+    expect(escape.defaultPrevented).toBe(true)
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(controller.isRowSelectionDragging.value).toBe(false)
+  })
+
   it("does not promote a simple click into drag selection below the pointer threshold", () => {
     const { controller, row, applyCellSelectionByCoord } = createControllerHarness()
     const cell = createCell(0, 0)

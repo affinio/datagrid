@@ -1,5 +1,6 @@
 export type DataGridAppInteractionOwner =
   | "drag-selection"
+  | "row-selection"
   | "fill"
   | "range-move"
   | "column-resize"
@@ -8,6 +9,7 @@ export type DataGridAppInteractionOwner =
 
 export interface DataGridAppInteractionOwnerInputs {
   dragSelection?: boolean
+  rowSelection?: boolean
   fill?: boolean
   rangeMove?: boolean
   columnResize?: boolean
@@ -23,6 +25,7 @@ export interface DataGridAppInteractionOwnerSnapshot {
 
 const INTERACTION_OWNER_ORDER: readonly DataGridAppInteractionOwner[] = [
   "drag-selection",
+  "row-selection",
   "fill",
   "range-move",
   "column-resize",
@@ -37,6 +40,8 @@ export function resolveDataGridAppInteractionOwnerSnapshot(
     switch (owner) {
       case "drag-selection":
         return inputs.dragSelection === true
+      case "row-selection":
+        return inputs.rowSelection === true
       case "fill":
         return inputs.fill === true
       case "range-move":
