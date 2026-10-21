@@ -41,3 +41,27 @@ export interface DataGridViewportColumnTarget {
 }
 
 export interface DataGridViewportCellTarget extends DataGridViewportRowTarget, DataGridViewportColumnTarget {}
+
+export interface DataGridActivateCellTarget {
+  rowId: DataGridRowId
+  columnKey: string
+}
+
+export interface DataGridActivateCellOptions {
+  selection?: "preserve" | "replace"
+  focus?: boolean
+  align?: DataGridViewportAlignment
+  expandAncestors?: boolean
+  signal?: AbortSignal
+  origin?: string
+  operationId?: string
+}
+
+export type DataGridActivateCellResult =
+  | { status: "activated" }
+  | {
+      status: "unavailable"
+      reason: "row-not-found" | "row-not-loaded" | "row-filtered-out" | "ancestor-collapsed" | "column-not-found" | "column-hidden"
+    }
+  | { status: "cancelled"; reason: "aborted" | "superseded" | "interaction-active" | "disposed" }
+  | { status: "failed"; error: Error }

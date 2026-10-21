@@ -72,6 +72,9 @@ import type {
 } from "./gridApiCellRefresh"
 import type { DataGridCore } from "./gridCore"
 import type {
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
   DataGridSetViewportPositionOptions,
   DataGridViewportCellTarget,
   DataGridViewportColumnTarget,
@@ -389,6 +392,8 @@ export interface DataGridApiViewNamespace {
   scrollToColumn(target: DataGridViewportColumnTarget): void
   /** Scrolls the view to a cell target. */
   scrollToCell(target: DataGridViewportCellTarget): void
+  /** Reveals a logical cell and optionally replaces selection or moves focus. */
+  activateCell(target: DataGridActivateCellTarget, options?: DataGridActivateCellOptions): Promise<DataGridActivateCellResult>
   /** Sets row height behavior for rendered rows. */
   setRowHeightMode(mode: "fixed" | "auto"): void
   /** Sets the base row height used by fixed/estimated layouts. */

@@ -127,6 +127,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   scrollToRow: DataGridApi<TRow>["view"]["scrollToRow"]
   scrollToColumn: DataGridApi<TRow>["view"]["scrollToColumn"]
   scrollToCell: DataGridApi<TRow>["view"]["scrollToCell"]
+  activateCell: DataGridApi<TRow>["view"]["activateCell"]
   setRowHeightMode: DataGridApi<TRow>["view"]["setRowHeightMode"]
   setBaseRowHeight: DataGridApi<TRow>["view"]["setBaseRowHeight"]
   measureRowHeight: DataGridApi<TRow>["view"]["measureRowHeight"]
@@ -312,6 +313,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       scrollToRow: methodSet.scrollToRow,
       scrollToColumn: methodSet.scrollToColumn,
       scrollToCell: methodSet.scrollToCell,
+      activateCell: methodSet.activateCell,
       setRowHeightMode: methodSet.setRowHeightMode,
       setBaseRowHeight: methodSet.setBaseRowHeight,
       measureRowHeight: methodSet.measureRowHeight,

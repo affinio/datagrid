@@ -10,6 +10,9 @@ import type {
 } from "./gridApiCellRefresh"
 import type { DataGridCoreViewportService } from "./gridCore"
 import type {
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
   DataGridSetViewportPositionOptions,
   DataGridViewportCellTarget,
   DataGridViewportColumnTarget,
@@ -40,6 +43,7 @@ export interface DataGridApiViewMethods {
   scrollToRow: (target: DataGridViewportRowTarget) => void
   scrollToColumn: (target: DataGridViewportColumnTarget) => void
   scrollToCell: (target: DataGridViewportCellTarget) => void
+  activateCell: (target: DataGridActivateCellTarget, options?: DataGridActivateCellOptions) => Promise<DataGridActivateCellResult>
   setRowHeightMode: (mode: "fixed" | "auto") => void
   setBaseRowHeight: (height: number) => void
   measureRowHeight: () => void
@@ -138,6 +142,22 @@ export function createDataGridApiViewMethods<TRow = unknown>(
     },
     scrollToCell(target: DataGridViewportCellTarget) {
       getViewportService()?.scrollToCell?.(target)
+    },
+    async activateCell(target: DataGridActivateCellTarget, options: DataGridActivateCellOptions = {}) {
+      if (options.signal?.aborted) return { status: "cancelled", reason: "aborted" }
+      const activate = getViewportService()?.activateCell
+      if (!activate) {
+        return {
+          status: "failed",
+          error: new Error("The viewport adapter does not support logical cell activation."),
+        }
+      }
+      try {
+        return await activate(target, options)
+      } catch (error) {
+        if (options.signal?.aborted) return { status: "cancelled", reason: "aborted" }
+        return { status: "failed", error: error instanceof Error ? error : new Error(String(error)) }
+      }
     },
     setRowHeightMode(mode: "fixed" | "auto") {
       getViewportService()?.setRowHeightMode?.(mode)

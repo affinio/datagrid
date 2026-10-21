@@ -4,6 +4,9 @@ import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type {
   DataGridSetViewportPositionOptions,
   DataGridViewportCellTarget,
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
   DataGridViewportColumnTarget,
   DataGridViewportPositionSnapshot,
   DataGridViewportRowTarget,
@@ -99,6 +102,10 @@ export interface DataGridCoreViewportService extends DataGridCoreService {
   scrollToRow?(target: DataGridViewportRowTarget): void
   scrollToColumn?(target: DataGridViewportColumnTarget): void
   scrollToCell?(target: DataGridViewportCellTarget): void
+  activateCell?(
+    target: DataGridActivateCellTarget,
+    options?: DataGridActivateCellOptions,
+  ): Promise<DataGridActivateCellResult>
   setRowHeightMode?(mode: "fixed" | "auto"): void
   setBaseRowHeight?(height: number): void
   measureRowHeight?(): void

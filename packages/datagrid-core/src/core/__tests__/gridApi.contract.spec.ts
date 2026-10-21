@@ -71,7 +71,7 @@ describe("data grid api facade contracts", () => {
     expect("refreshCellsByRowKeys" in api).toBe(false)
   })
 
-  it("routes row/column/filter/sort/refresh through core services", () => {
+  it("routes row/column/filter/sort/refresh through core services", async () => {
     const rowModel = createAdvancedClientRowModel({
       rows: [
         { row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 },
@@ -95,6 +95,7 @@ describe("data grid api facade contracts", () => {
     let scrolledRow: unknown = null
     let scrolledColumn: unknown = null
     let scrolledCell: unknown = null
+    let activationRequest: unknown = null
 
     const core = createDataGridCore({
       services: {
@@ -120,6 +121,10 @@ describe("data grid api facade contracts", () => {
           scrollToCell(target) {
             scrolledCell = target
           },
+          async activateCell(target, options) {
+            activationRequest = { target, options }
+            return { status: "activated" }
+          },
         },
       },
     })
@@ -143,6 +148,12 @@ describe("data grid api facade contracts", () => {
     api.view.scrollToRow({ rowId: 1, align: "start" })
     api.view.scrollToColumn({ columnKey: "name", align: "nearest" })
     api.view.scrollToCell({ rowId: 1, columnKey: "name", align: "center" })
+    await expect(api.view.activateCell({ rowId: 1, columnKey: "name" }, {
+      selection: "replace",
+      focus: false,
+      origin: "signal-list-sync",
+      operationId: "sync-1",
+    })).resolves.toEqual({ status: "activated" })
     api.columns.setVisibility("id", false)
     api.columns.setWidth("name", 280)
     api.columns.setPin("name", "left")
@@ -186,6 +197,10 @@ describe("data grid api facade contracts", () => {
     expect(scrolledRow).toEqual({ rowId: 1, align: "start" })
     expect(scrolledColumn).toEqual({ columnKey: "name", align: "nearest" })
     expect(scrolledCell).toEqual({ rowId: 1, columnKey: "name", align: "center" })
+    expect(activationRequest).toEqual({
+      target: { rowId: 1, columnKey: "name" },
+      options: { selection: "replace", focus: false, origin: "signal-list-sync", operationId: "sync-1" },
+    })
     expect(api.capabilities.viewportPosition).toBe(true)
     expect(api.rows.getCount()).toBe(1)
     expect(api.rows.getPagination().currentPage).toBe(1)
@@ -236,7 +251,7 @@ describe("data grid api facade contracts", () => {
     expect(nextProjectedRows).not.toBe(projectedRows)
   })
 
-  it("treats viewport position as an optional view capability", () => {
+  it("treats viewport position as an optional view capability", async () => {
     const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: 1, name: "alpha" }, rowId: 1, originalIndex: 0 }],
     })
@@ -264,6 +279,15 @@ describe("data grid api facade contracts", () => {
     expect(() => api.view.scrollToRow({ rowId: 1 })).not.toThrow()
     expect(() => api.view.scrollToColumn({ columnKey: "name" })).not.toThrow()
     expect(() => api.view.scrollToCell({ rowId: 1, columnKey: "name" })).not.toThrow()
+    await expect(api.view.activateCell({ rowId: 1, columnKey: "name" })).resolves.toMatchObject({
+      status: "failed",
+      error: expect.any(Error),
+    })
+    const abortController = new AbortController()
+    abortController.abort()
+    await expect(api.view.activateCell({ rowId: 1, columnKey: "name" }, {
+      signal: abortController.signal,
+    })).resolves.toEqual({ status: "cancelled", reason: "aborted" })
     expect(() => api.view.setViewportPosition(position, { strict: true })).toThrow(/setViewportPosition/)
   })
 

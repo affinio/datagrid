@@ -74,6 +74,7 @@ Use it as guard before capability-dependent mutating calls.
 - `rows.batchMutations(...)` is the opt-in client row-model mutation boundary; synchronous row mutations inside it publish one recomputation after the callback.
 - `view.reapply()` recomputes projection only.
 - `view.getViewportPosition()/setViewportPosition(...)` expose semantic viewport state when the adapter provides the viewport capability.
+- `view.activateCell({ rowId, columnKey }, options?)` is the identity-based async activation contract. The viewport adapter owns projection resolution, reveal, virtualization readiness, focus, and interaction conflicts; callers receive a structured result instead of resolving cells through DOM selectors. Adapters without activation support return `failed`.
 - `pivot` remains a separate analytical subsystem (intentionally not nested under `rows`).
 - `data.pause()/resume()/flush()` is the public backpressure control surface for supported server/data-source row models.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).

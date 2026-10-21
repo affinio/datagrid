@@ -112,6 +112,9 @@ export type {
 } from "./gridApiPivotLayout"
 
 export type {
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
   DataGridSetViewportPositionOptions,
   DataGridViewportAlignment,
   DataGridViewportAnchorSnapshot,
