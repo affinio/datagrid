@@ -1,6 +1,6 @@
 import type { DataGridRowNode } from "@affino/datagrid-core"
 
-export const DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH = 108
+export const DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH = 48
 export const DATA_GRID_ROW_SELECTION_MIN_COLUMN_WIDTH = 40
 
 export interface DataGridRowSelectionOptions {

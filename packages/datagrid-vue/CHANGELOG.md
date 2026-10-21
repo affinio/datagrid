@@ -1,5 +1,11 @@
 # @affino/datagrid-vue
 
+## 0.12.0
+
+### Added
+
+- Exposed cell activation through the runtime adapter, including projection-aware resolution, viewport reveal, cancellation, and optional focus or selection behavior.
+
 ## 0.11.0
 
 ### Added

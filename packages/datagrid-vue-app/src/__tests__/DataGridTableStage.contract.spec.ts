@@ -491,6 +491,29 @@ function mockCoarsePointer(matches: boolean): void {
 }
 
 describe("DataGridTableStage contract", () => {
+  it("selects all data columns without including the row selection checkbox column", async () => {
+    const selectColumnRange = vi.fn()
+    const selectionColumn = {
+      key: "__datagrid_row_selection__",
+      pin: "left",
+      width: 48,
+      column: { key: "__datagrid_row_selection__", label: "", meta: { rowSelection: true } },
+    } as unknown as DataGridColumnSnapshot
+    const visibleColumns = [selectionColumn, ...createColumns()]
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => false, {
+        visibleColumns,
+        selectColumnRange,
+      }),
+    })
+
+    await wrapper.get('[data-datagrid-row-index-header="true"]').trigger("click")
+
+    expect(selectColumnRange).toHaveBeenCalledWith(1, visibleColumns.length - 1)
+    wrapper.unmount()
+  })
+
   it("marks the final center header for its CSS-owned outer divider when there is no right pinned pane", async () => {
     const visibleColumns = [
       { key: "name", pin: "center", width: 180, column: { key: "name", label: "Name" } },

@@ -56,6 +56,7 @@ import {
 } from "./dataGridStructuralRowActions"
 import type { DataGridBivariantCallback } from "./types/bivariance"
 import type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
+import type { DataGridExternalFilterIndicator } from "./config/dataGridExternalFilterIndicators"
 import DataGridDefaultRenderer, { type DataGridDefaultRendererRuntime } from "./host/DataGridDefaultRenderer"
 import type {
   DataGridCaptureFocusAnchorOptions,
@@ -131,6 +132,10 @@ import {
 import {
   migrateDataGridSavedView,
   sanitizeDataGridSavedView,
+  type DataGridApplySavedViewOptions,
+  type DataGridCaptureSavedViewOptions,
+  type DataGridSavedViewInteractionController,
+  type DataGridSavedViewPart,
   type DataGridSavedViewSnapshot,
 } from "./config/dataGridSavedView"
 import {
@@ -283,6 +288,7 @@ export type DataGridExposedRuntime<TRow = unknown> = Pick<
   | "scrollToRow"
   | "scrollToColumn"
   | "scrollToCell"
+  | "registerCellActivationAdapter"
 >
 
 type DataGridBodyAwareRuntime = DataGridExposedRuntime<Record<string, unknown>>
@@ -600,6 +606,10 @@ const dataGridProps = {
     type: Array as PropType<readonly DataGridAppColumnInput[]>,
     default: () => [],
   },
+  externalFilterIndicators: {
+    type: Array as PropType<readonly DataGridExternalFilterIndicator[]>,
+    default: () => [],
+  },
   rendererPolicy: {
     type: Object as PropType<DataGridAuthoredRendererPolicy | undefined>,
     default: undefined,
@@ -671,6 +681,10 @@ const dataGridProps = {
   showRowIndex: {
     type: Boolean,
     default: true,
+  },
+  indexColumnStyle: {
+    type: Object as PropType<CSSProperties | undefined>,
+    default: undefined,
   },
   rowSelection: {
     type: [Boolean, Object] as PropType<DataGridRowSelectionProp>,
@@ -947,18 +961,19 @@ export interface DataGridExposed<TRow = unknown> {
   runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
   resetPersistedState: () => Promise<boolean>
   getState: () => DataGridUnifiedState<TRow> | null
-  getSavedView: () => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
+  getSavedView: (options?: DataGridCaptureSavedViewOptions) => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
   migrateSavedView: (
     savedView: unknown,
     options?: DataGridMigrateStateOptions,
   ) => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
   applySavedView: (
     savedView: DataGridSavedViewSnapshot<TRow & Record<string, unknown>>,
-    options?: DataGridSetStateOptions,
+    options?: DataGridApplySavedViewOptions,
   ) => boolean
   migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
   applyState: (state: DataGridUnifiedState<TRow> | null, options?: DataGridSetStateOptions) => boolean
 }
+
 
 export interface DataGridCellEditEvent<TRow = unknown> {
   rowId: DataGridRowId
@@ -1005,6 +1020,7 @@ const DataGridRuntimeComponent = defineComponent({
     const dataGridRef = ref<LowLevelGridExpose | null>(null)
     const disabledHistoryController = createDisabledDataGridHistoryController()
     const registeredHistoryController = ref<DataGridHistoryController | null>(null)
+    const savedViewInteractionController = ref<DataGridSavedViewInteractionController | null>(null)
     const registeredStructuralRowActionRunner = ref<((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null>(null)
     const resolvedToolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
     let queuedToolbarModules: readonly DataGridAppToolbarModule[] | null = null
@@ -1471,6 +1487,12 @@ const DataGridRuntimeComponent = defineComponent({
       registeredHistoryController.value = controller
     }
 
+    const registerSavedViewInteractionController = (
+      controller: DataGridSavedViewInteractionController | null,
+    ): void => {
+      savedViewInteractionController.value = controller
+    }
+
     const registerStructuralRowActionRunner = (
       runner: ((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null,
     ): void => {
@@ -1599,14 +1621,22 @@ const DataGridRuntimeComponent = defineComponent({
       ),
     }
 
-    const getSavedView = (): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
-      const state = controlledState.getState()
+    const getSavedView = (
+      captureOptions: DataGridCaptureSavedViewOptions = {},
+    ): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
+      const include = new Set<DataGridSavedViewPart>(captureOptions.include ?? [
+        "columns", "sorting", "filters", "grouping", "pagination", "pivot", "aggregation", "viewMode",
+      ])
+      const state = dataGridRef.value?.api.state.get({
+        includeViewportPosition: include.has("viewportPosition"),
+      }) ?? controlledState.getState()
       if (!state) {
         return null
       }
       return sanitizeDataGridSavedView({
         state,
         viewMode: currentViewMode.value,
+        included: [...include],
       })
     }
 
@@ -1619,17 +1649,76 @@ const DataGridRuntimeComponent = defineComponent({
 
     const applySavedView = (
       savedView: DataGridSavedViewSnapshot<Record<string, unknown>>,
-      options?: DataGridSetStateOptions,
+      options?: DataGridApplySavedViewOptions,
     ): boolean => {
-      const sanitized = sanitizeDataGridSavedView(savedView)
+      const migratedView = migrateDataGridSavedView(
+        savedView,
+        controlledState.migrateState,
+        { strict: options?.strict },
+      )
+      if (!migratedView) {
+        return false
+      }
+      const sanitized = sanitizeDataGridSavedView(migratedView)
+      const migrated = sanitized.state
+      const interactionController = savedViewInteractionController.value
+      if (interactionController?.isActive()) {
+        if (options?.interaction !== "cancel" || !interactionController.cancel()) {
+          return false
+        }
+      }
+      const legacyView = sanitized.included === undefined
+      const included = new Set(sanitized.included ?? [])
+      let stateToApply = migrated
+      if (!legacyView) {
+        const current = dataGridRef.value?.api.state.get({ includeViewportPosition: true }) ?? controlledState.getState()
+        if (!current) return false
+        const snapshot = migrated.rows.snapshot
+        const currentSnapshot = current.rows.snapshot
+        stateToApply = {
+          ...migrated,
+          rows: {
+            ...current.rows,
+            snapshot: {
+              ...currentSnapshot,
+              ...(included.has("sorting") ? { sortModel: snapshot.sortModel } : {}),
+              ...(included.has("filters") ? { filterModel: snapshot.filterModel } : {}),
+              ...(included.has("grouping") ? {
+                groupBy: snapshot.groupBy,
+                groupExpansion: snapshot.groupExpansion,
+              } : {}),
+              ...(included.has("pagination") ? { pagination: snapshot.pagination } : {}),
+              ...(included.has("pivot") ? {
+                pivotModel: snapshot.pivotModel,
+                pivotColumns: snapshot.pivotColumns,
+              } : {}),
+            },
+            aggregationModel: included.has("aggregation") ? migrated.rows.aggregationModel : current.rows.aggregationModel,
+          },
+          columns: included.has("columns") ? migrated.columns : current.columns,
+          selection: included.has("selection") ? migrated.selection : current.selection,
+          rowSelection: included.has("selection") ? migrated.rowSelection : current.rowSelection,
+          view: included.has("viewportPosition") ? migrated.view : current.view,
+          transaction: null,
+        }
+      }
+      const { interaction: _interaction, ...stateOptions } = options ?? {}
+      const applyOptions: DataGridSetStateOptions = {
+        ...stateOptions,
+        atomic: true,
+        applyRows: stateOptions.applyRows ?? true,
+        applyColumns: stateOptions.applyColumns ?? (legacyView || included.has("columns")),
+        applySelection: stateOptions.applySelection ?? (legacyView || included.has("selection")),
+        applyViewportPosition: stateOptions.applyViewportPosition ?? (legacyView || included.has("viewportPosition")),
+      }
       const applied = controlledState.applyState(
-        normalizeDataGridAppUnifiedStateFilters(sanitized.state, props.columns),
-        options,
+        normalizeDataGridAppUnifiedStateFilters(stateToApply, props.columns),
+        applyOptions,
       )
       if (!applied) {
         return false
       }
-      if (sanitized.viewMode) {
+      if (sanitized.viewMode && (legacyView || included.has("viewMode"))) {
         setView(sanitized.viewMode)
       }
       return true
@@ -1786,6 +1875,7 @@ const DataGridRuntimeComponent = defineComponent({
         filterModel: effectiveFilterModel.value,
         filterModelNormalized: true,
         appColumns: props.columns,
+        externalFilterIndicators: props.externalFilterIndicators,
         groupBy: effectiveGroupBy.value,
         groupingPresentation: props.groupingPresentation,
         pivotModel: effectivePivotModel.value,
@@ -1818,6 +1908,7 @@ const DataGridRuntimeComponent = defineComponent({
         cellStyle: props.cellStyle,
         isCellEditable: props.isCellEditable,
         showRowIndex: props.showRowIndex,
+        indexColumnStyle: props.indexColumnStyle,
         rowSelection: showRowSelection.value,
         rowHeaderAction: resolvedRowHeader.value.action,
         isRowSelectable: resolvedRowSelection.value.isSelectable,
@@ -1831,6 +1922,7 @@ const DataGridRuntimeComponent = defineComponent({
         chrome: resolvedChrome.value,
         theme: props.theme ?? "default",
         registerHistoryController,
+        registerSavedViewInteractionController,
         registerStructuralRowActionRunner,
         reportToolbarModules,
         toolbarModules: props.toolbarModules,
@@ -1881,7 +1973,7 @@ const DataGridRuntimeComponent = defineComponent({
                 defaultRendererProps: {
                   ...defaultRendererProps,
                   runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot" | "resolveRowProjection"> & {
                     dataSource?: {
                       resolveFillBoundary?: (request: any) => any
                       commitFillOperation?: (request: any) => any
@@ -1903,7 +1995,7 @@ const DataGridRuntimeComponent = defineComponent({
                 emptyStateRenderer: slotProps.emptyStateRenderer,
                 emptyStateAlignment: slotProps.emptyStateAlignment,
                 runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
-                runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+                runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot" | "resolveRowProjection"> & {
                   dataSource?: {
                     resolveFillBoundary?: (request: any) => any
                     commitFillOperation?: (request: any) => any

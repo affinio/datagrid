@@ -35,23 +35,26 @@ function createRow(partial: Partial<DataGridTableStageBodyRow> = {}): DataGridTa
   }
 }
 
-function createService(options: { useCanvasChrome: boolean }) {
+function createService(options: { useCanvasChrome: boolean; checkboxSelected?: boolean }) {
   const row = createRow()
   const column = createColumn()
+  const displayRows = ref<readonly DataGridTableStageBodyRow[]>([row])
 
   return {
     row,
     column,
+    displayRows,
     service: useDataGridStageRowState({
       rows: ref({
         rowHover: true,
         stripedRows: true,
+        isRowCheckboxSelected: () => options.checkboxSelected === true,
         toggleGroupRow: () => undefined,
       }),
       selection: ref({}),
       selectionRange: ref(null),
       selectionRanges: ref([]),
-      displayRows: ref([row]),
+      displayRows,
       visibleColumns: ref([column]),
       viewportRowStart: ref(0),
       isHoveredRow: () => true,
@@ -84,6 +87,38 @@ describe("useDataGridStageRowState", () => {
       backgroundImage: "linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg))",
       backgroundPosition: "top left",
       backgroundRepeat: "no-repeat",
+    })
+  })
+
+  it("leaves selected row backgrounds to the selected-row theme rule", () => {
+    const { row, column, service } = createService({ useCanvasChrome: false, checkboxSelected: true })
+
+    expect(service.bodyCellSelectionStyle(row, column, 0, 0)).toEqual({})
+  })
+
+  it("marks the outer edges of contiguous selected rows for one shared frame", () => {
+    const { row, displayRows, service } = createService({ useCanvasChrome: false, checkboxSelected: true })
+    const first = createRow({ rowId: "r0" })
+    const last = createRow({ rowId: "r2" })
+    displayRows.value = [first, row, last]
+
+    expect(service.rowStateClasses(first, 0)).toMatchObject({
+      "grid-row--checkbox-selected-top": true,
+      "grid-row--checkbox-selected-middle": false,
+      "grid-row--checkbox-selected-bottom": false,
+      "grid-row--checkbox-selected-single": false,
+    })
+    expect(service.rowStateClasses(row, 1)).toMatchObject({
+      "grid-row--checkbox-selected-top": false,
+      "grid-row--checkbox-selected-middle": true,
+      "grid-row--checkbox-selected-bottom": false,
+      "grid-row--checkbox-selected-single": false,
+    })
+    expect(service.rowStateClasses(last, 2)).toMatchObject({
+      "grid-row--checkbox-selected-top": false,
+      "grid-row--checkbox-selected-middle": false,
+      "grid-row--checkbox-selected-bottom": true,
+      "grid-row--checkbox-selected-single": false,
     })
   })
 

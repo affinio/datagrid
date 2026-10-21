@@ -66,6 +66,7 @@ import { useDataGridTableStageViewportKeyboard } from "./useDataGridTableStageVi
 import { useDataGridTableStageVisualSelection } from "./useDataGridTableStageVisualSelection"
 import { resolveDataGridTableStageAutoSizeRows } from "./dataGridTableStageAutoSizeRows"
 import { resolveKeyboardColumnWidth } from "./dataGridKeyboardColumnResize"
+import { resolveDataGridIndexColumnWidth } from "../config/dataGridIndexColumn"
 import type {
   DataGridActiveColumnMenuState,
   DataGridColumnMenuOpenReason,
@@ -78,7 +79,6 @@ import type {
 } from "./dataGridTableStage.types"
 
 const DEFAULT_COLUMN_WIDTH = 140
-const INDEX_COLUMN_WIDTH = 72
 const MIN_COLUMN_WIDTH = 80
 const MIN_ROW_HEIGHT = 24
 const AUTO_RESIZE_SAMPLE_LIMIT = 400
@@ -270,6 +270,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   stripedRows?: Ref<boolean>
   chromeSignature?: Ref<string | undefined>
   showRowIndex?: Ref<boolean>
+  indexColumnStyle?: Ref<CSSProperties | undefined>
   showRowSelection?: Ref<boolean>
   rowSelectionColumnWidth?: Ref<number>
   rowHeaderAction?: Ref<DataGridRowHeaderAction>
@@ -396,7 +397,9 @@ export interface UseDataGridTableStageRuntimeResult<TRow extends Record<string, 
     descriptor: { intent: string; label: string; affectedRange?: DataGridCopyRange | null },
     beforeSnapshot: unknown,
   ) => void
-  revealCellInComfortZone: (rowIndex: number, columnIndex: number) => Promise<void>
+  revealCellInComfortZone: (rowIndex: number, columnIndex: number, options?: { focus?: boolean }) => Promise<void>
+  isInteractionActive: ComputedRef<boolean>
+  cancelTransientInteractions: () => boolean
 }
 
 type StageInteractionControllerResult<TRow extends Record<string, unknown>> =
@@ -463,7 +466,9 @@ export function useDataGridTableStageRuntime<
     )
   })
   const pinnedTopRows = computed(() => options.runtime.rowPartition.value.pinnedTopRows)
-  const effectiveIndexColumnWidth = computed(() => (showRowIndex.value ? INDEX_COLUMN_WIDTH : 0))
+  const effectiveIndexColumnWidth = computed(() => showRowIndex.value
+    ? resolveDataGridIndexColumnWidth(options.indexColumnStyle?.value, totalSelectableRows.value)
+    : 0)
   const columnService = useDataGridTableStageColumns<TRow>({
     runtime: options.runtime,
     visibleColumns: options.visibleColumns,
@@ -1046,6 +1051,7 @@ export function useDataGridTableStageRuntime<
     const width = `${effectiveIndexColumnWidth.value}px`
     return {
       ...indexColumnStyle.value,
+      ...options.indexColumnStyle?.value,
       width,
       minWidth: width,
       maxWidth: width,
@@ -1982,6 +1988,8 @@ export function useDataGridTableStageRuntime<
     updateRowSelectionSession: rowSelectionService.updateRowSelectionSession,
     commitRowSelectionSession: rowSelectionService.commitRowSelectionSession,
     cancelRowSelectionSession: rowSelectionService.cancelRowSelectionSession,
+    rowHeaderAction: options.rowHeaderAction,
+    selectCellRangeByRowId: rowSelectionService.selectCellRangeByRowId,
     resolveRowSelectionTargetAtPoint: (pointer: { clientX: number; clientY: number }) => {
       if (typeof document === "undefined") return null
       const cell = document.elementFromPoint(pointer.clientX, pointer.clientY)
@@ -2282,6 +2290,7 @@ export function useDataGridTableStageRuntime<
     someVisibleRowsSelected: stageServices.rowSelection.areSomeVisibleRowsSelected,
     handleRowClick: stageServices.rowSelection.focusRow,
     handleRowIndexClick: stageServices.rowSelection.selectRowRange,
+    handleRowCheckboxRange: stageServices.rowSelection.selectCheckboxRowRange,
     handleRowIndexPointerDown: (row: DataGridTableRow<TRow>, _rowOffset: number, event: PointerEvent) => {
       handleRowIndexPointerDown(event, row)
     },
@@ -2407,5 +2416,12 @@ export function useDataGridTableStageRuntime<
     captureHistorySnapshotForRowIds,
     recordHistoryIntentTransaction,
     revealCellInComfortZone,
+    isInteractionActive: globalPointerListenersActive,
+    cancelTransientInteractions: () => {
+      if (editingCellPending.value) return false
+      stageServices.scrollSync.handleWindowPointerCancel({} as PointerEvent)
+      cancelInlineEdit()
+      return true
+    },
   }
 }

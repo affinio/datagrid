@@ -7,6 +7,9 @@ import type {
   DataGridApiPluginDefinition,
   DataGridApiProjectionMode,
   DataGridApiRuntimeInfo,
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
   DataGridApiSchemaSnapshot,
   DataGridMigrateStateOptions,
   CreateDataGridCoreOptions,
@@ -89,6 +92,9 @@ export interface UseDataGridRuntimeOptions<TRow = unknown> {
 }
 
 export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRuntime<TRow> {
+  registerCellActivationAdapter: (
+    adapter: (target: DataGridActivateCellTarget, options?: DataGridActivateCellOptions) => Promise<DataGridActivateCellResult>,
+  ) => () => void
   columnSnapshot: Ref<DataGridColumnModelSnapshot>
   /**
    * Scroll-window snapshot in body-row coordinates only.
@@ -417,6 +423,27 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   const { rowModel, columnModel, core, api } = runtime
+  const viewportService = core.getService("viewport")
+  const baseActivateCell = viewportService.activateCell
+  let cellActivationAdapter: ((
+    target: DataGridActivateCellTarget,
+    options?: DataGridActivateCellOptions,
+  ) => Promise<DataGridActivateCellResult>) | null = null
+  viewportService.activateCell = (target, activationOptions) => cellActivationAdapter
+    ? cellActivationAdapter(target, activationOptions)
+    : baseActivateCell
+      ? baseActivateCell(target, activationOptions)
+      : Promise.resolve({ status: "failed", error: new Error("Cell activation adapter is not registered.") })
+  const registerCellActivationAdapter: UseDataGridRuntimeResult<TRow>["registerCellActivationAdapter"] = adapter => {
+    cellActivationAdapter = adapter
+    return () => {
+      if (cellActivationAdapter === adapter) cellActivationAdapter = null
+    }
+  }
+  onBeforeUnmount(() => {
+    cellActivationAdapter = null
+    viewportService.activateCell = baseActivateCell
+  })
   const sparseRowModel = isDataGridSparseRowModel(rowModel)
   const initialRowModelSnapshot = rowModel.getSnapshot()
   const columnSnapshot = ref<DataGridColumnModelSnapshot>(runtime.getColumnSnapshot())
@@ -736,6 +763,7 @@ export function useDataGridRuntime<TRow = unknown>(
   }
 
   return {
+    registerCellActivationAdapter,
     rowModel,
     columnModel,
     core,

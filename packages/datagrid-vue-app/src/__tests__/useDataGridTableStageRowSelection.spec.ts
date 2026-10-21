@@ -210,7 +210,11 @@ describe("useDataGridTableStageRowSelection", () => {
     const selection = useDataGridTableStageRowSelection<DemoRow>({
       runtime,
       rowSelectionColumn: computed(() => null),
-      orderedVisibleColumns: computed(() => [createRowSelectionColumn(), createRowSelectionColumn()]),
+      orderedVisibleColumns: computed(() => [
+        createRowSelectionColumn(),
+        { key: "left", column: { key: "left", label: "Left" } } as unknown as DataGridColumnSnapshot,
+        { key: "pinned", pin: "right", column: { key: "pinned", label: "Pinned" } } as unknown as DataGridColumnSnapshot,
+      ]),
       displayRows: ref(rows as never),
       rowSelectionSnapshot: ref(null),
       viewportRowStart: ref(0),
@@ -221,11 +225,12 @@ describe("useDataGridTableStageRowSelection", () => {
 
     selection.selectRowRange(rows[2] as never, 2, false)
     selection.selectRowRange(rows[1] as never, 1, true)
-    expect(currentRange.value).toMatchObject({ startRow: 1, endRow: 2 })
+    expect(currentRange.value).toMatchObject({ startRow: 1, endRow: 2, startColumn: 1, endColumn: 2 })
     selection.selectRowRange(rows[2] as never, 2, true)
-    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 2 })
+    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 2, startColumn: 1, endColumn: 2 })
     selection.selectRowRange(rows[3] as never, 3, true)
-    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 3 })
+    expect(currentRange.value).toMatchObject({ startRow: 2, endRow: 3, startColumn: 1, endColumn: 2 })
+    expect(runtime.api.rowSelection.getSnapshot()).toEqual({ focusedRow: null, selectedRows: [] })
 
     currentRange.value = { startRow: 0, endRow: 0, startColumn: 0, endColumn: 0 }
     selection.selectRowRange(rows[1] as never, 1, true)
@@ -450,5 +455,34 @@ describe("useDataGridTableStageRowSelection", () => {
     selection.toggleRowCheckboxSelected(cachedRows[1] as never)
 
     expect(setSelected).toHaveBeenCalledWith("r2", true)
+  })
+
+  it("extends checkbox record selection independently of cell ranges", () => {
+    const rows = [createRow("r1"), createRow("r2"), createRow("r3")]
+    const { runtime, setSnapshot } = createRuntime(rows)
+    const applySelectionRange = vi.fn()
+    const selection = useDataGridTableStageRowSelection<DemoRow>({
+      runtime,
+      rowSelectionColumn: computed(() => createRowSelectionColumn()),
+      orderedVisibleColumns: computed(() => [
+        createRowSelectionColumn(),
+        { key: "name", column: { key: "name", label: "Name" } } as unknown as DataGridColumnSnapshot,
+      ]),
+      displayRows: ref(rows as never),
+      rowSelectionSnapshot: ref(null),
+      viewportRowStart: ref(0),
+      selectionAnchorCell: computed(() => null),
+      applySelectionRange,
+      rowHeaderAction: ref("select-cells"),
+      resolveProjectionIndexByRowId: rowId => rows.findIndex(row => row.rowId === rowId),
+      resolveProjectionRowAtIndex: rowIndex => rows[rowIndex] as never ?? null,
+      getProjectionRevision: () => 3,
+    })
+
+    selection.toggleRowCheckboxSelected(rows[0] as never)
+    selection.selectCheckboxRowRange(rows[2] as never, 2)
+
+    expect(setSnapshot).toHaveBeenCalledWith({ focusedRow: "r3", selectedRows: ["r1", "r2", "r3"] })
+    expect(applySelectionRange).not.toHaveBeenCalled()
   })
 })

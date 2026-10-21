@@ -9,6 +9,7 @@ export interface UseDataGridStageRowStateOptions {
     isRowFocused?: (row: DataGridTableStageBodyRow) => boolean
     isRowCheckboxSelected?: (row: DataGridTableStageBodyRow) => boolean
     isRowInPendingClipboardCut?: (row: DataGridTableStageBodyRow) => boolean
+    handleRowCheckboxRange?: (row: DataGridTableStageBodyRow, rowOffset: number, additive?: boolean) => void
     toggleGroupRow: (row: DataGridTableStageBodyRow) => void
   }>>
   selection: Readonly<Ref<{
@@ -188,6 +189,9 @@ export function useDataGridStageRowState(
     rowOffset: number,
     fillOptions: { fullBleed?: boolean } = {},
   ): CSSProperties | null {
+    if (options.rows.value.isRowCheckboxSelected?.(row) === true) {
+      return null
+    }
     if (options.useCanvasChrome?.value === true) {
       return null
     }
@@ -226,6 +230,13 @@ export function useDataGridStageRowState(
     const isNextRowInPendingClipboard = nextRow
       ? options.rows.value.isRowInPendingClipboardCut?.(nextRow) === true
       : false
+    const isCheckboxSelected = options.rows.value.isRowCheckboxSelected?.(row) === true
+    const isPreviousCheckboxSelected = previousRow
+      ? options.rows.value.isRowCheckboxSelected?.(previousRow) === true
+      : false
+    const isNextCheckboxSelected = nextRow
+      ? options.rows.value.isRowCheckboxSelected?.(nextRow) === true
+      : false
     return {
       "grid-row--hoverable": options.rows.value.rowHover === true,
       "grid-row--hovered": options.isHoveredRow(row, rowOffset),
@@ -237,7 +248,11 @@ export function useDataGridStageRowState(
       "grid-row--clipboard-pending-middle": isRowInPendingClipboard && isPreviousRowInPendingClipboard && isNextRowInPendingClipboard,
       "grid-row--clipboard-pending-bottom": isRowInPendingClipboard && !isNextRowInPendingClipboard,
       "grid-row--focused": typeof options.rows.value.isRowFocused === "function" ? options.rows.value.isRowFocused(row) : false,
-      "grid-row--checkbox-selected": typeof options.rows.value.isRowCheckboxSelected === "function" ? options.rows.value.isRowCheckboxSelected(row) : false,
+      "grid-row--checkbox-selected": isCheckboxSelected,
+      "grid-row--checkbox-selected-top": isCheckboxSelected && !isPreviousCheckboxSelected,
+      "grid-row--checkbox-selected-middle": isCheckboxSelected && isPreviousCheckboxSelected && isNextCheckboxSelected,
+      "grid-row--checkbox-selected-bottom": isCheckboxSelected && !isNextCheckboxSelected,
+      "grid-row--checkbox-selected-single": isCheckboxSelected && !isPreviousCheckboxSelected && !isNextCheckboxSelected,
     }
   }
 
@@ -309,6 +324,10 @@ export function useDataGridStageRowState(
     columnIndex: number,
   ): void {
     if (isRowSelectionColumn(column)) {
+      if (event.shiftKey) {
+        options.rows.value.handleRowCheckboxRange?.(row, rowOffset, event.ctrlKey || event.metaKey)
+        return
+      }
       options.handleCellClick(row, rowOffset, column, columnIndex)
       return
     }

@@ -22,6 +22,7 @@ import {
   type DataGridGroupBySpec,
   type DataGridRowId,
   type DataGridRowNode,
+  type DataGridRowProjectionResolution,
   type DataGridRowNodeInput,
   type DataGridRowModelListener,
   type DataGridRowModelRefreshReason,
@@ -857,6 +858,41 @@ export function createAdvancedClientRowModel<T>(
         return undefined
       }
       return getBaseSourceRows()[sourceIndex]
+    },
+    resolveRowProjection(rowId: DataGridRowId): DataGridRowProjectionResolution {
+      ensureActive()
+      const sourceIndex = getSourceRowIndexById().get(rowId)
+      if (typeof sourceIndex !== "number") {
+        return { status: "not-found", collapsedGroupKeys: [] }
+      }
+      const row = getBaseSourceRows()[sourceIndex]
+      if (!row || !runtimeState.filteredRowsProjection.some(candidate => candidate.rowId === rowId)) {
+        return { status: "filtered-out", collapsedGroupKeys: [] }
+      }
+      if (runtimeState.rows.some(candidate => candidate.rowId === rowId)) {
+        return { status: "visible", collapsedGroupKeys: [] }
+      }
+      const groupBy = getGroupBy()
+      if (groupBy?.fields.length) {
+        const expansion = getSnapshot().groupExpansion
+        const toggled = new Set(expansion.toggledGroupKeys)
+        let prefix = "group:"
+        const collapsedGroupKeys: string[] = []
+        for (const field of groupBy.fields) {
+          prefix += `${field.length}:${field}`
+          const rawValue = readProjectionRowField(row, field)
+          const value = rawValue == null ? "" : String(rawValue)
+          prefix += `${value.length}:${value}`
+          const expanded = expansion.expandedByDefault
+            ? !toggled.has(prefix)
+            : toggled.has(prefix)
+          if (!expanded) collapsedGroupKeys.push(prefix)
+        }
+        if (collapsedGroupKeys.length > 0) {
+          return { status: "ancestor-collapsed", collapsedGroupKeys }
+        }
+      }
+      return { status: "filtered-out", collapsedGroupKeys: [] }
     },
     getRow(index: number) {
       return rowAccessHostRuntime.getRow(index)

@@ -1994,6 +1994,31 @@ describe("createAdvancedClientRowModel", () => {
     model.dispose()
   })
 
+  it("resolves source rows through filter and group projection stages", () => {
+    const model = createAdvancedClientRowModel({
+      rows: [
+        { row: { id: 1, team: "A" }, rowId: "r1", originalIndex: 0, displayIndex: 0 },
+        { row: { id: 2, team: "B" }, rowId: "r2", originalIndex: 1, displayIndex: 1 },
+      ],
+    })
+    model.setGroupBy({ fields: ["team"], expandedByDefault: false })
+
+    const collapsed = model.resolveRowProjection?.("r1")
+    expect(collapsed).toEqual({
+      status: "ancestor-collapsed",
+      collapsedGroupKeys: ["group:4:team1:A"],
+    })
+    model.expandGroup("group:4:team1:A")
+    expect(model.resolveRowProjection?.("r1")).toEqual({ status: "visible", collapsedGroupKeys: [] })
+
+    model.setFilterModel({
+      columnFilters: { team: { kind: "valueSet", tokens: ["string:B"] } },
+    })
+    expect(model.resolveRowProjection?.("r1")).toEqual({ status: "filtered-out", collapsedGroupKeys: [] })
+    expect(model.resolveRowProjection?.("missing")).toEqual({ status: "not-found", collapsedGroupKeys: [] })
+    model.dispose()
+  })
+
   it("applies deterministic projection order: filter -> sort -> group -> flatten", () => {
     const model = createAdvancedClientRowModel({
       rows: [

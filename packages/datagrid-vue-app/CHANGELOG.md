@@ -1,5 +1,12 @@
 # @affino/datagrid-vue-app
 
+## 0.19.0
+
+### Added
+
+- Added external filter indicators and explicit saved-view capture and restore options with validation and interaction conflict handling.
+- Added separate record selection and row-header cell-selection behaviors, including whole-row fill feedback for selected records.
+
 ## 0.18.0
 
 ### Added

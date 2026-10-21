@@ -383,6 +383,8 @@ export interface UseDataGridAppInteractionControllerOptions<
   commitRowSelectionSession?: () => void
   cancelRowSelectionSession?: () => void
   resolveRowSelectionTargetAtPoint?: (pointer: DataGridAppPointer) => string | number | null
+  rowHeaderAction?: Ref<"select-cells" | "select-records" | "none">
+  selectCellRangeByRowId?: (rowId: string | number, extend: boolean) => void
   reportFillPlumbingDetail?: (layer: string, value: string) => void
 }
 
@@ -611,8 +613,10 @@ export function useDataGridAppInteractionController<
   const pendingRowSelectionDrag = ref<{
     rowId: string | number
     operation: "replace" | "add"
+    kind: "cells" | "records"
     start: DataGridAppPointer
   } | null>(null)
+  let activeRowSelectionDragKind: "cells" | "records" | null = null
   let suppressNextRowSelectionClick = false
   let rowSelectionLeaseActive = false
   const keyboardNavigationExtendsSelection = ref(false)
@@ -3625,9 +3629,12 @@ export function useDataGridAppInteractionController<
     ) {
       return
     }
+    const rowHeaderAction = options.rowHeaderAction?.value ?? "select-cells"
+    if (rowHeaderAction === "none") return
     pendingRowSelectionDrag.value = {
       rowId: row.rowId,
       operation: event.ctrlKey || event.metaKey ? "add" : "replace",
+      kind: rowHeaderAction === "select-cells" ? "cells" : "records",
       start: { clientX: event.clientX, clientY: event.clientY },
     }
     const target = event.currentTarget
@@ -3643,12 +3650,18 @@ export function useDataGridAppInteractionController<
   function applyRowSelectionPreviewFromPointer(): void {
     const pointer = rowSelectionPointer.value
     const targetRowId = pointer ? options.resolveRowSelectionTargetAtPoint?.(pointer) ?? null : null
-    if (targetRowId == null || !options.updateRowSelectionSession) {
+    if (targetRowId == null) {
       return
     }
+    if (activeRowSelectionDragKind === "cells") {
+      options.selectCellRangeByRowId?.(targetRowId, true)
+      return
+    }
+    if (!options.updateRowSelectionSession) return
     if (!options.updateRowSelectionSession(targetRowId)) {
       isRowSelectionDragging.value = false
       rowSelectionPointer.value = null
+      activeRowSelectionDragKind = null
       suppressNextRowSelectionClick = true
       pointerAutoScroll.stopAutoScrollFrameIfIdle()
     }
@@ -3675,9 +3688,13 @@ export function useDataGridAppInteractionController<
         return
       }
       pendingRowSelectionDrag.value = null
-      if (!options.beginRowSelectionSession?.(pendingRowDrag.rowId, pendingRowDrag.operation)) {
+      if (pendingRowDrag.kind === "cells") {
+        if (!options.selectCellRangeByRowId) return
+        options.selectCellRangeByRowId(pendingRowDrag.rowId, false)
+      } else if (!options.beginRowSelectionSession?.(pendingRowDrag.rowId, pendingRowDrag.operation)) {
         return
       }
+      activeRowSelectionDragKind = pendingRowDrag.kind
       isRowSelectionDragging.value = true
       rowSelectionPointer.value = pointer
       event.preventDefault()
@@ -3734,9 +3751,10 @@ export function useDataGridAppInteractionController<
   const handleWindowMouseUp = (): void => {
     pendingRowSelectionDrag.value = null
     if (isRowSelectionDragging.value) {
-      options.commitRowSelectionSession?.()
+      if (activeRowSelectionDragKind === "records") options.commitRowSelectionSession?.()
       isRowSelectionDragging.value = false
       rowSelectionPointer.value = null
+      activeRowSelectionDragKind = null
       suppressNextRowSelectionClick = true
     }
     if (pendingRangeMove.value && !isRangeMoving.value) {
@@ -3767,13 +3785,13 @@ export function useDataGridAppInteractionController<
     clearPendingDragSelection()
     pendingRowSelectionDrag.value = null
     if (isRowSelectionDragging.value) {
-      if (commit) {
-        options.commitRowSelectionSession?.()
-      } else {
-        options.cancelRowSelectionSession?.()
+      if (activeRowSelectionDragKind === "records") {
+        if (commit) options.commitRowSelectionSession?.()
+        else options.cancelRowSelectionSession?.()
       }
       isRowSelectionDragging.value = false
       rowSelectionPointer.value = null
+      activeRowSelectionDragKind = null
       suppressNextRowSelectionClick = true
     }
     if (isRangeMoving.value) {

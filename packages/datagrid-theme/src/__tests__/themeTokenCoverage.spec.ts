@@ -50,6 +50,23 @@ describe("theme token coverage", () => {
       .not.toBe(resolveGridThemeTokens(industrialNeutralTheme).gridAccentStrong)
   })
 
+  it("defines selected-row colors for both light and dark variants", () => {
+    for (const [label, preset] of [
+      ["default", defaultStyleConfig],
+      ["industrial-neutral", industrialNeutralTheme],
+      ["sugar", sugarTheme],
+    ] as const) {
+      const light = preset.tokenVariants?.light?.bodyRowSelectedBackgroundColor
+      const dark = preset.tokenVariants?.dark?.bodyRowSelectedBackgroundColor
+
+      expect(light, `${label}.light selected-row color`).toBeTruthy()
+      expect(dark, `${label}.dark selected-row color`).toBeTruthy()
+      expect(light).not.toBe("transparent")
+      expect(dark).not.toBe("transparent")
+      expect(light).not.toBe(dark)
+    }
+  })
+
   it("resolves document dark mode for presets without forcing active variants", () => {
     document.documentElement.dataset.theme = "dark"
     try {

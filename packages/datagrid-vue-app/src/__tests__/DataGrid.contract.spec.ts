@@ -894,6 +894,36 @@ describe("DataGrid app facade contract", () => {
     expect(publicProps).toContain("placeholderRows")
     expect(publicProps).toContain("cellClass")
     expect(publicProps).toContain("cellStyle")
+    expect(publicProps).toContain("externalFilterIndicators")
+  })
+
+  it("renders external filter indicators without replacing header accessibility state", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+        sortModel: [{ key: "owner", direction: "asc" }],
+        externalFilterIndicators: [
+          { id: "saved-query", columnKey: "owner", active: true, description: "Saved query is active" },
+          { id: "security", columnKey: "owner", active: true, description: "Restricted records are hidden" },
+          { id: "inactive", columnKey: "owner", active: false, description: "Inactive condition" },
+          { id: "saved-query", columnKey: "region", active: true, description: "Duplicate ID is ignored" },
+        ],
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    const header = wrapper.find('.grid-cell--header[data-column-key="owner"]')
+    expect(header.attributes("aria-label")).toContain("sorted ascending")
+    expect(header.attributes("aria-label")).toContain("filtered externally: Saved query is active; Restricted records are hidden")
+    const indicator = header.find("[data-datagrid-external-filter-indicator]")
+    expect(indicator.exists()).toBe(true)
+    expect(indicator.attributes("title")).toBe("Saved query is active; Restricted records are hidden")
+    expect(wrapper.find('.grid-cell--header[data-column-key="region"] [data-datagrid-external-filter-indicator]').exists()).toBe(false)
+
+    wrapper.unmount()
   })
 
   it("applies public cellClass and cellStyle resolvers through the facade", async () => {
@@ -7331,6 +7361,11 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
 
     expect(headerCheckbox.attributes("aria-checked")).toBe("true")
+    const selectedRows = wrapper.findAll(".grid-body-viewport .grid-row--checkbox-selected")
+    expect(selectedRows).toHaveLength(BASE_ROWS.length)
+    expect(selectedRows[0]!.classes()).toContain("grid-row--checkbox-selected-top")
+    expect(selectedRows[1]!.classes()).toContain("grid-row--checkbox-selected-middle")
+    expect(selectedRows.at(-1)!.classes()).toContain("grid-row--checkbox-selected-bottom")
     expect(resolveVm(wrapper).getApi?.()?.rowSelection.getSnapshot?.()).toEqual({
       focusedRow: null,
       selectedRows: [],
@@ -7371,13 +7406,14 @@ describe("DataGrid app facade contract", () => {
 
 
     const rowSelectionChangeEvents = wrapper.emitted("row-selection-change") ?? []
-    expect(rowSelectionChangeEvents.at(-1)?.[0]).toEqual({
+    expect(rowSelectionChangeEvents.at(-1)?.[0]).toMatchObject({
       snapshot: {
         focusedRow: null,
         selectedRows: [],
         mode: "all",
         excludedRows: [],
       },
+      operationId: expect.any(String),
     })
 
     const stateUpdates = wrapper.emitted("update:state") ?? []
@@ -8821,6 +8857,67 @@ describe("DataGrid app facade contract", () => {
 
     source.unmount()
     target.unmount()
+  })
+
+  it("omits transient selection from new saved views unless explicitly included", async () => {
+    const source = mount(DataGrid, {
+      props: { rows: BASE_ROWS, columns: COLUMNS, rowSelection: true },
+    })
+    await flushRuntimeTasks()
+    const sourceApi = resolveVm(source).getApi?.()
+    sourceApi?.rowSelection?.setSnapshot({ focusedRow: "r1", selectedRows: ["r1"] })
+
+    const defaultView = resolveVm(source).getSavedView?.()
+    const selectionView = resolveVm(source).getSavedView?.({ include: ["selection"] })
+    expect(defaultView?.included).toEqual([
+      "columns", "sorting", "filters", "grouping", "pagination", "pivot", "aggregation", "viewMode",
+    ])
+    expect(defaultView?.state.rowSelection).toBeNull()
+    expect(defaultView?.state.selection).toBeNull()
+    expect(selectionView?.included).toContain("selection")
+    expect(selectionView?.state.rowSelection?.selectedRows).toEqual(["r1"])
+
+    const target = mount(DataGrid, {
+      props: { rows: BASE_ROWS, columns: COLUMNS, rowSelection: true },
+    })
+    await flushRuntimeTasks()
+    const targetApi = resolveVm(target).getApi?.()
+    targetApi?.rowSelection?.setSnapshot({ focusedRow: "r2", selectedRows: ["r2"] })
+
+    expect(resolveVm(target).applySavedView?.(defaultView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
+    expect(targetApi?.rowSelection?.getSnapshot()?.selectedRows).toEqual(["r2"])
+    expect(resolveVm(target).applySavedView?.(selectionView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
+    expect(targetApi?.rowSelection?.getSnapshot()?.selectedRows).toEqual(["r1"])
+
+    source.unmount()
+    target.unmount()
+  })
+
+  it("blocks saved-view restore during editing unless cancellation is explicitly requested", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: EDITABLE_COLUMNS,
+        isCellEditable: () => true,
+      },
+    })
+    await flushRuntimeTasks()
+    const savedView = resolveVm(wrapper).getSavedView?.()
+    await queryBodyCell(wrapper, 0, 0).trigger("dblclick")
+    await flushRuntimeTasks()
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
+
+    expect(resolveVm(wrapper).applySavedView?.(savedView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(false)
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(true)
+    expect(resolveVm(wrapper).applySavedView?.(
+      savedView as DataGridSavedViewSnapshot<Record<string, unknown>>,
+      { interaction: "cancel" },
+    )).toBe(true)
+    await flushRuntimeTasks()
+    expect(wrapper.find(".cell-editor-input").exists()).toBe(false)
+
+    wrapper.unmount()
   })
 
   it("serializes and restores saved views through storage helpers", async () => {

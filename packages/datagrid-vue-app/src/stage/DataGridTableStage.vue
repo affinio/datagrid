@@ -31,6 +31,7 @@
       :focused-body-column-key="focusedBodyColumnKey"
       :focused-body-row-index="focusedBodyRowIndex"
       :copy-selected-cells="selection.copySelectedCells"
+      :external-filter-indicators="props.externalFilterIndicators"
       :is-coarse-pointer="isCoarsePointer"
       :on-linked-viewport-wheel="handleLinkedViewportWheel"
     >
@@ -400,6 +401,10 @@ const props = defineProps({
   rendererPolicy: {
     type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["rendererPolicy"]>,
     default: undefined,
+  },
+  externalFilterIndicators: {
+    type: Array as PropType<DataGridTableStageProps<Record<string, unknown>>["externalFilterIndicators"]>,
+    default: () => [],
   },
   reportFillPlumbingState: {
     type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingState"]>,
@@ -1658,6 +1663,7 @@ function isStripedRow(row: TableRow, rowOffset: number): boolean {
 const rowIndexState = useDataGridStageRowIndex({
   rows,
   layout,
+  totalRowCount: computed(() => selection.value?.totalRowCount ?? rows.value.displayRows.length),
   viewportRowStart: computed(() => viewport.value.viewportRowStart),
   selectionRange,
   selectionRanges,

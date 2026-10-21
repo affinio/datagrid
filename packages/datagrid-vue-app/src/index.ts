@@ -58,6 +58,7 @@ export type {
   DataGridDeclarativeFormulaOptions,
 } from "./config/dataGridFormulaOptions"
 export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
+export type { DataGridExternalFilterIndicator } from "./config/dataGridExternalFilterIndicators"
 export type { StickyGroupRowsOptions } from "./config/dataGridStickyGroupRows"
 export {
   DATA_GRID_HIERARCHY_COLUMN_ID,
@@ -151,6 +152,9 @@ export type {
 export type {
   DataGridSavedViewSnapshot,
   DataGridSavedViewStorageLike,
+  DataGridSavedViewPart,
+  DataGridCaptureSavedViewOptions,
+  DataGridApplySavedViewOptions,
 } from "./config/dataGridSavedView"
 export type {
   DataGridPersistenceChangeEvent,

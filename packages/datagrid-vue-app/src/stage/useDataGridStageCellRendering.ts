@@ -407,6 +407,9 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): VNodeChild {
+    if (isDataGridPlaceholderSurfaceRow(row)) {
+      return ""
+    }
     let displayValue = readResolvedDisplayCell(row, column)
 
     if (row.kind === "group") {
@@ -566,7 +569,8 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
-    return options.isEditingCellSafe(row, column.key)
+    return !isDataGridPlaceholderSurfaceRow(row)
+      && options.isEditingCellSafe(row, column.key)
       && options.isCellEditableSafe(row, rowOffset, column, columnIndex)
       && resolveCellEditorMode(row, column) === "select"
   }
@@ -577,7 +581,7 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
-    if (!options.isEditingCellSafe(row, column.key) || !options.isCellEditableSafe(row, rowOffset, column, columnIndex)) {
+    if (isDataGridPlaceholderSurfaceRow(row) || !options.isEditingCellSafe(row, column.key) || !options.isCellEditableSafe(row, rowOffset, column, columnIndex)) {
       return false
     }
     const editorMode = resolveCellEditorMode(row, column)
@@ -594,7 +598,8 @@ export function useDataGridStageCellRendering(
     column: DataGridTableStageBodyColumn,
     columnIndex: number,
   ): boolean {
-    return options.isEditingCellSafe(row, column.key)
+    return !isDataGridPlaceholderSurfaceRow(row)
+      && options.isEditingCellSafe(row, column.key)
       && options.isCellEditableSafe(row, rowOffset, column, columnIndex)
       && resolveCellEditorMode(row, column) === "text"
   }

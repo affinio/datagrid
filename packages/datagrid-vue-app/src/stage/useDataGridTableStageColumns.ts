@@ -2,10 +2,9 @@ import { computed, type ComputedRef, type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-vue"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridTableRow } from "./dataGridTableStage.types"
+import { DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH, DATA_GRID_ROW_SELECTION_MIN_COLUMN_WIDTH } from "../config/dataGridRowSelection"
 
 const DEFAULT_COLUMN_WIDTH = 140
-const ROW_SELECTION_COLUMN_WIDTH = 108
-const ROW_SELECTION_COLUMN_MIN_WIDTH = 40
 const ROW_SELECTION_COLUMN_KEY = "__datagrid_row_selection__"
 
 export interface UseDataGridTableStageColumnsOptions<TRow extends Record<string, unknown>> {
@@ -37,9 +36,9 @@ export function useDataGridTableStageColumns<TRow extends Record<string, unknown
   const resolvedRowSelectionColumnWidth = computed(() => {
     const width = options.rowSelectionColumnWidth?.value
     if (typeof width !== "number" || !Number.isFinite(width)) {
-      return ROW_SELECTION_COLUMN_WIDTH
+      return DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH
     }
-    return Math.max(ROW_SELECTION_COLUMN_MIN_WIDTH, Math.trunc(width))
+    return Math.max(DATA_GRID_ROW_SELECTION_MIN_COLUMN_WIDTH, Math.trunc(width))
   })
 
   const rowSelectionColumn = computed<DataGridColumnSnapshot | null>(() => {

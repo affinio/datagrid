@@ -36,6 +36,7 @@ const props = defineProps<{
 
 const bandClassByKind: Record<string, string> = {
   base: "grid-chrome-layer__band--base",
+  selected: "grid-chrome-layer__band--selected",
   hover: "grid-chrome-layer__band--hover",
   striped: "grid-chrome-layer__band--striped",
   group: "grid-chrome-layer__band--group",

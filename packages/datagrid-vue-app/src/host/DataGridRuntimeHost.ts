@@ -246,6 +246,7 @@ export default defineComponent({
       scrollToRow: runtime.scrollToRow,
       scrollToColumn: runtime.scrollToColumn,
       scrollToCell: runtime.scrollToCell,
+      registerCellActivationAdapter: runtime.registerCellActivationAdapter,
     }
 
     const syncPaginationState = (): void => {

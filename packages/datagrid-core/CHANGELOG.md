@@ -1,5 +1,11 @@
 # @affino/datagrid-core
 
+## 0.12.0
+
+### Added
+
+- Added row projection resolution for locating rows in the current client projection and distinguishing hidden, collapsed, and unloaded rows.
+
 ## 0.11.0
 
 ### Added

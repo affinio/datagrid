@@ -107,6 +107,7 @@
             >
               <div class="col-head">
                 <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+                <span v-if="externalFilterTooltip(column.key)" class="datagrid-external-filter-indicator" aria-hidden="true" :title="externalFilterTooltip(column.key)" data-datagrid-external-filter-indicator="true">●</span>
                 <button
                   v-if="shouldShowColumnMenuButton()"
                   type="button"
@@ -320,6 +321,7 @@
           >
             <div class="col-head">
               <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+              <span v-if="externalFilterTooltip(column.key)" class="datagrid-external-filter-indicator" aria-hidden="true" :title="externalFilterTooltip(column.key)" data-datagrid-external-filter-indicator="true">●</span>
               <span
                 v-if="resolveColumnGroupBadgeLabel(column.key)"
                 class="col-head__group-badge"
@@ -495,6 +497,7 @@
           >
             <div class="col-head">
               <span class="col-head__label">{{ resolveHeaderDisplayLabel(column) }}</span>
+              <span v-if="externalFilterTooltip(column.key)" class="datagrid-external-filter-indicator" aria-hidden="true" :title="externalFilterTooltip(column.key)" data-datagrid-external-filter-indicator="true">●</span>
               <span
                 v-if="resolveColumnGroupBadgeLabel(column.key)"
                 class="col-head__group-badge"
@@ -612,6 +615,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSProperties, type PropType } from "vue"
+import type { DataGridExternalFilterIndicator } from "../config/dataGridExternalFilterIndicators"
 import { useDataGridResizeClickGuard } from "@affino/datagrid-vue/advanced"
 import type { DataGridColumnMenuTriggerMode } from "../overlays/dataGridColumnMenu"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
@@ -660,6 +664,10 @@ interface DataGridHeaderCellA11yAttributes {
 }
 
 const props = defineProps({
+  externalFilterIndicators: {
+    type: Array as PropType<readonly DataGridExternalFilterIndicator[]>,
+    default: () => [],
+  },
   paneLayoutStyle: {
     type: Object as PropType<CSSProperties>,
     required: true,
@@ -722,19 +730,25 @@ const rows = useDataGridTableStageRowsSection<Record<string, unknown>>()
 const selection = useDataGridTableStageSelectionSection<Record<string, unknown>>()
 
 const visibleColumns = computed(() => columns.value.visibleColumns)
+const indexedDataColumnIndexes = computed(() => visibleColumns.value
+  .map((column, index) => isRowSelectionColumn(column) ? -1 : index)
+  .filter(index => index >= 0))
 const centerHeaderScrollLeft = ref(0)
 const isIndexHeaderSelected = computed(() => {
   const range = selection.value.selectionRange
-  const lastColumn = visibleColumns.value.length - 1
+  const firstColumn = indexedDataColumnIndexes.value[0]
+  const lastColumn = indexedDataColumnIndexes.value[indexedDataColumnIndexes.value.length - 1]
   const lastRow = (selection.value.totalRowCount ?? 0) - 1
-  return range != null && lastColumn >= 0 && lastRow >= 0
+  return range != null && firstColumn != null && lastColumn != null && lastRow >= 0
     && range.startRow === 0 && range.endRow >= lastRow
-    && range.startColumn === 0 && range.endColumn >= lastColumn
+    && range.startColumn === firstColumn && range.endColumn >= lastColumn
 })
 
 function selectAllIndexedRows(): void {
-  if (visibleColumns.value.length > 0) {
-    selection.value.selectColumnRange?.(0, visibleColumns.value.length - 1)
+  const firstColumn = indexedDataColumnIndexes.value[0]
+  const lastColumn = indexedDataColumnIndexes.value[indexedDataColumnIndexes.value.length - 1]
+  if (firstColumn != null && lastColumn != null) {
+    selection.value.selectColumnRange?.(firstColumn, lastColumn)
   }
 }
 
@@ -1340,11 +1354,35 @@ function resolveColumnHeaderLabel(column: TableColumn): string {
   if (isColumnMenuFilterActive(column.key)) {
     states.push("filtered")
   }
+  const externalFilterDescription = externalFilterTooltip(column.key)
+  if (externalFilterDescription) {
+    states.push(`filtered externally: ${externalFilterDescription}`)
+  }
   if (isColumnGroupedSafe(column.key)) {
     const order = resolveColumnGroupOrderSafe(column.key)
     states.push(Number.isFinite(order) ? `grouped level ${Number(order) + 1}` : "grouped")
   }
   return states.length > 0 ? `${label}, ${states.join(", ")}` : label
+}
+
+const externalFilterIndicatorsByColumn = computed(() => {
+  const ids = new Set<string>()
+  const byColumn = new Map<string, string[]>()
+  for (const indicator of props.externalFilterIndicators) {
+    const id = indicator.id.trim()
+    const columnKey = indicator.columnKey.trim()
+    const description = indicator.description.trim()
+    if (!id || !columnKey || !description || !indicator.active || ids.has(id)) continue
+    ids.add(id)
+    const descriptions = byColumn.get(columnKey) ?? []
+    descriptions.push(description)
+    byColumn.set(columnKey, descriptions)
+  }
+  return byColumn
+})
+
+function externalFilterTooltip(columnKey: string): string {
+  return externalFilterIndicatorsByColumn.value.get(columnKey)?.join("; ") ?? ""
 }
 
 function headerCellA11y(column: TableColumn): DataGridHeaderCellA11yAttributes {

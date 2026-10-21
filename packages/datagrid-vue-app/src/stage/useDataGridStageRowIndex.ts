@@ -10,10 +10,12 @@ import type {
 } from "./dataGridTableStage.types"
 import { shouldPrioritizeNativeScrollForMouseDown } from "./dataGridMouseEventGuards"
 import { DATA_GRID_STAGE_ROW_INDEX_HEADER_ID } from "./dataGridTableStageA11y"
+import { resolveDataGridIndexColumnWidth } from "../config/dataGridIndexColumn"
 
 export interface UseDataGridStageRowIndexOptions {
   rows: Readonly<Ref<DataGridTableStageRowsSection<Record<string, unknown>>>>
   layout: Readonly<Ref<DataGridTableStageLayoutSection>>
+  totalRowCount?: Readonly<Ref<number>>
   viewportRowStart: Readonly<Ref<number>>
   selectionRange: Readonly<Ref<DataGridOverlayRange | null>>
   selectionRanges?: Readonly<Ref<readonly DataGridOverlayRange[]>>
@@ -51,13 +53,6 @@ export interface UseDataGridStageRowIndexResult {
   clearRowIndexDragState: () => void
 }
 
-const DEFAULT_INDEX_COLUMN_WIDTH = 72
-
-function parsePixelValue(value: unknown, fallback: number): number {
-  const parsed = Number.parseFloat(String(value ?? ""))
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
 export function useDataGridStageRowIndex(
   options: UseDataGridStageRowIndexOptions,
 ): UseDataGridStageRowIndexResult {
@@ -70,11 +65,10 @@ export function useDataGridStageRowIndex(
     if (!showRowIndex.value) {
       return 0
     }
-    const width = parsePixelValue(
-      options.layout.value.indexColumnStyle.width ?? options.layout.value.indexColumnStyle.minWidth,
-      DEFAULT_INDEX_COLUMN_WIDTH,
+    return resolveDataGridIndexColumnWidth(
+      options.layout.value.indexColumnStyle,
+      options.totalRowCount?.value ?? options.rows.value.displayRows?.length ?? 0,
     )
-    return width > 0 ? width : DEFAULT_INDEX_COLUMN_WIDTH
   })
 
   const resolvedRowIndexColumnStyle = computed<CSSProperties>(() => {
@@ -114,7 +108,7 @@ export function useDataGridStageRowIndex(
     rowOffset: number,
   ): void {
     if (
-      options.rows.value.rowHeaderAction !== "select-records"
+      options.rows.value.rowHeaderAction === "none"
       || event.pointerType === "touch"
       || event.button !== 0
       || row.kind === "group"
@@ -194,16 +188,20 @@ export function useDataGridStageRowIndex(
   }
 
   function isFullRowSelectionIndex(rowIndex: number): boolean {
-    const lastColumnIndex = options.visibleColumns.value.length - 1
-    if (lastColumnIndex < 0) {
+    const dataColumnIndexes = options.visibleColumns.value
+      .map((column, index) => column.column.meta?.rowSelection === true ? -1 : index)
+      .filter(index => index >= 0)
+    if (dataColumnIndexes.length === 0) {
       return false
     }
+    const firstColumnIndex = dataColumnIndexes[0]!
+    const lastColumnIndex = dataColumnIndexes[dataColumnIndexes.length - 1]!
     const ranges = options.selectionRanges?.value
       ?? (options.selectionRange.value ? [options.selectionRange.value] : [])
     return ranges.some(range => (
       rowIndex >= Math.min(range.startRow, range.endRow)
       && rowIndex <= Math.max(range.startRow, range.endRow)
-      && Math.min(range.startColumn, range.endColumn) === 0
+      && Math.min(range.startColumn, range.endColumn) <= firstColumnIndex
       && Math.max(range.startColumn, range.endColumn) >= lastColumnIndex
     ))
   }

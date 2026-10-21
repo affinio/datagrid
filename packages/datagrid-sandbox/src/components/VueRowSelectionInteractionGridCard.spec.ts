@@ -52,7 +52,7 @@ describe("VueRowSelectionInteractionGridCard", () => {
     const grid = wrapper.findComponent({ name: "DataGrid" })
     expect(grid.props("rowSelection")).toBe(true)
     expect(grid.props("showRowIndex")).toBe(true)
-    expect(grid.props("rowHeader")).toEqual({ action: "select-records" })
+    expect(grid.props("rowHeader")).toEqual({ action: "select-cells" })
     expect(wrapper.text()).toContain("Shift+click or drag the row index")
 
     const initialRows = (grid.props("rows") ?? []) as Array<Record<string, unknown>>

@@ -31,6 +31,37 @@ function createRow(rowId: string, pinned: "none" | "top" | "bottom" = "none"): D
 }
 
 describe("useDataGridStageRowIndex", () => {
+  it("styles row indexes when the selected row range excludes the checkbox column", () => {
+    const checkboxColumn = {
+      key: "__datagrid_row_selection__",
+      width: 48,
+      pin: "left",
+      column: { key: "__datagrid_row_selection__", meta: { rowSelection: true } },
+    } as unknown as DataGridTableStageBodyColumn
+    const service = useDataGridStageRowIndex({
+      rows: ref({ showRowIndex: true } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>),
+      layout: ref({ indexColumnStyle: {} } as unknown as DataGridTableStageLayoutSection),
+      viewportRowStart: ref(0),
+      selectionRange: ref({ startRow: 0, endRow: 1, startColumn: 1, endColumn: 2 }),
+      visibleColumns: ref([checkboxColumn, createColumn("left"), createColumn("right")]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+
+    expect(service.rowIndexCellClasses(createRow("r1"), 0)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-top": true,
+      "grid-cell--index-selected-bottom": false,
+    })
+    expect(service.rowIndexCellClasses(createRow("r2"), 1)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-bottom": true,
+    })
+  })
+
   it("resolves row index styling, selection, and drag interactions", () => {
     const rows = ref({
       showRowIndex: true,
@@ -159,6 +190,49 @@ describe("useDataGridStageRowIndex", () => {
       "grid-cell--index-drop-before": false,
       "grid-cell--index-drop-after": false,
     })
+  })
+
+  it("auto-sizes the row index from the rendered row count", () => {
+    const service = useDataGridStageRowIndex({
+      rows: ref({
+        showRowIndex: true,
+        displayRows: new Array(1_000_000),
+      } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>),
+      layout: ref({ indexColumnStyle: { width: "auto" } } as unknown as DataGridTableStageLayoutSection),
+      viewportRowStart: ref(0),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+
+    expect(service.indexColumnWidthPx.value).toBe(80)
+    expect(service.resolvedRowIndexColumnStyle.value).toMatchObject({
+      width: "80px",
+      minWidth: "80px",
+      maxWidth: "80px",
+    })
+  })
+
+  it("lets auto width shrink below the fixed default for short index labels", () => {
+    const service = useDataGridStageRowIndex({
+      rows: ref({ showRowIndex: true, displayRows: [] } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>),
+      layout: ref({ indexColumnStyle: { width: "auto" } } as unknown as DataGridTableStageLayoutSection),
+      totalRowCount: ref(1_000),
+      viewportRowStart: ref(0),
+      selectionRange: ref(null),
+      visibleColumns: ref([]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+
+    expect(service.indexColumnWidthPx.value).toBe(56)
   })
 
   it("marks row index cells from additive full-row selection ranges", () => {

@@ -12,8 +12,10 @@ describe("DataGrid row selection configuration", () => {
     const isSelectable = vi.fn(() => true)
     expect(resolveDataGridRowSelection({ isSelectable })).toMatchObject({
       enabled: true,
+      columnWidth: 48,
       isSelectable,
     })
+    expect(resolveDataGridRowSelection({ columnWidth: 64 }).columnWidth).toBe(64)
     expect(resolveDataGridRowSelection(false).enabled).toBe(false)
   })
 })

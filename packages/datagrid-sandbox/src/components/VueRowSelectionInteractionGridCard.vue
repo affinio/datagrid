@@ -5,8 +5,8 @@
         <div>
           <h2>Vue: Row Selection Interaction</h2>
           <p class="selection-card__subtitle">
-            Choose records from the row headers with click, Ctrl/Meta, Shift, keyboard, or drag. The checkbox column
-            remains available for direct toggles and bulk selection.
+            Select cell ranges from row indexes with click, Shift, or drag. Use the checkbox column to choose records
+            for bulk actions.
           </p>
         </div>
         <div class="mode-badge">Built-in checkbox semantics</div>
@@ -43,7 +43,7 @@
         :client-row-model-options="clientRowModelOptions"
         :theme="theme"
         :show-row-index="true"
-        :row-header="{ action: 'select-records' }"
+        :row-header="{ action: 'select-cells' }"
         row-selection
         :aggregations="false"
         :base-row-height="35"

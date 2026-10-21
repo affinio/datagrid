@@ -127,8 +127,30 @@ describe("ensureDataGridAppStyles", () => {
 
     expect(rootRule).toContain("--datagrid-pinned-pane-separator-size: 1px")
     expect(rootRule).toContain("var(--datagrid-accent-strong) 24%")
-    expect(selectedIndexRule).toContain("linear-gradient(to right, var(--datagrid-accent-strong) 3px")
+    expect(selectedIndexRule).toContain("background: var(--datagrid-selection-range-bg)")
+    expect(selectedIndexRule).toContain("box-shadow: inset 3px 0 0 var(--datagrid-accent-strong)")
     expect(selectedIndexRule).not.toContain("border-radius")
+  })
+
+  it("gives selected rows precedence over striped and hover cell fills", () => {
+    ensureDataGridAppStyles()
+
+    const styleText = document.getElementById(STYLE_ID)?.textContent ?? ""
+    const selectedRuleStart = styleText.lastIndexOf(".affino-datagrid-app-root .grid-stage:not(.grid-stage--canvas-chrome) .grid-row--checkbox-selected > .grid-cell,")
+    const selectedRuleEnd = styleText.indexOf("}", selectedRuleStart)
+    const selectedRule = selectedRuleStart >= 0 && selectedRuleEnd > selectedRuleStart
+      ? styleText.slice(selectedRuleStart, selectedRuleEnd)
+      : ""
+    const stripedRuleStart = styleText.indexOf(".grid-row--striped .grid-cell,")
+
+    expect(styleText).toContain("--datagrid-row-selected-background-color: color-mix(")
+    expect(selectedRule).toContain("background: var(--datagrid-row-selected-background-color) !important")
+    expect(selectedRuleStart).toBeGreaterThan(stripedRuleStart)
+    expect(styleText).toContain(".grid-chrome-layer__band--selected")
+    expect(styleText).not.toContain(".grid-row--checkbox-selected::after")
+    expect(styleText).not.toContain(".grid-row--checkbox-selected-top::after")
+    expect(styleText).not.toContain(".grid-row--checkbox-selected-bottom::after")
+    expect(styleText).not.toContain(".grid-stage--canvas-chrome .grid-body-shell .grid-row--checkbox-selected > .grid-cell")
   })
 
   it("uses the selected background and accent strip for keyboard focus on leaf headers", () => {

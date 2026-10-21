@@ -387,6 +387,7 @@ export {
   type DataGridRowId,
   type DataGridRowIdResolver,
   type DataGridRowModel,
+  type DataGridRowProjectionResolution,
   type DataGridRowModelKind,
   type DataGridSparseRowModelDiagnostics,
   type DataGridSparseRowModelKind,

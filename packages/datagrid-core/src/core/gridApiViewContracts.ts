@@ -50,7 +50,7 @@ export interface DataGridActivateCellTarget {
 export interface DataGridActivateCellOptions {
   selection?: "preserve" | "replace"
   focus?: boolean
-  align?: DataGridViewportAlignment
+  align?: "nearest"
   expandAncestors?: boolean
   signal?: AbortSignal
   origin?: string

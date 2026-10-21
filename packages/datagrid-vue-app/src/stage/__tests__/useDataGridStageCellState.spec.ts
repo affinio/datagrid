@@ -138,6 +138,7 @@ describe("useDataGridStageCellState", () => {
     })
 
     const placeholderRow = createRow({ __placeholder: true } as Partial<DataGridTableStageBodyRow>)
+    expect(service.shouldRenderCheckboxCell(placeholderRow, checkboxColumn)).toBe(false)
     expect(service.cellAriaDisabled(placeholderRow, 0, plainColumn, 2)).toBe("true")
   })
 

@@ -168,6 +168,8 @@ function createControllerHarness(options: {
   commitRowSelectionSession?: () => void
   cancelRowSelectionSession?: () => void
   resolveRowSelectionTargetAtPoint?: (pointer: { clientX: number; clientY: number }) => string | number | null
+  rowHeaderAction?: "select-cells" | "select-records" | "none"
+  selectCellRangeByRowId?: (rowId: string | number, extend: boolean) => void
   resolveFillBoundary?: (
     request: DataGridAppResolveFillBoundaryRequest,
   ) => Promise<DataGridAppResolveFillBoundaryResult> | DataGridAppResolveFillBoundaryResult
@@ -527,6 +529,8 @@ function createControllerHarness(options: {
     commitRowSelectionSession: options.commitRowSelectionSession,
     cancelRowSelectionSession: options.cancelRowSelectionSession,
     resolveRowSelectionTargetAtPoint: options.resolveRowSelectionTargetAtPoint,
+    rowHeaderAction: ref(options.rowHeaderAction ?? "select-cells"),
+    selectCellRangeByRowId: options.selectCellRangeByRowId,
     resolveFillBoundary: options.resolveFillBoundary,
     reportFillWarning,
     reportFillPlumbingState: options.reportFillPlumbingState,
@@ -613,6 +617,7 @@ describe("useDataGridAppInteractionController contract", () => {
     const commit = vi.fn(() => releaseOwner?.())
     const cancel = vi.fn()
     const { controller, row } = createControllerHarness({
+      rowHeaderAction: "select-records",
       beginRowSelectionSession: begin,
       updateRowSelectionSession: update,
       commitRowSelectionSession: commit,
@@ -645,12 +650,39 @@ describe("useDataGridAppInteractionController contract", () => {
     expect(controller.consumeRowSelectionClick()).toBe(true)
   })
 
+  it("drags a row header to extend cell ranges without opening a record-selection session", () => {
+    const selectCellRangeByRowId = vi.fn()
+    const beginRowSelectionSession = vi.fn()
+    const { controller, row } = createControllerHarness({
+      rowHeaderAction: "select-cells",
+      beginRowSelectionSession,
+      selectCellRangeByRowId,
+      resolveRowSelectionTargetAtPoint: () => "row-2",
+    })
+    const pointerDown = new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 2, clientY: 4 })
+    Object.defineProperties(pointerDown, {
+      currentTarget: { configurable: true, value: document.createElement("div") },
+      pointerId: { configurable: true, value: 1 },
+      pointerType: { configurable: true, value: "mouse" },
+    })
+
+    controller.handleRowIndexPointerDown(pointerDown as PointerEvent, row)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", { buttons: 1, clientX: 12, clientY: 4 }))
+
+    expect(selectCellRangeByRowId).toHaveBeenNthCalledWith(1, row.rowId, false)
+    expect(selectCellRangeByRowId).toHaveBeenNthCalledWith(2, "row-2", true)
+    expect(beginRowSelectionSession).not.toHaveBeenCalled()
+    controller.handleWindowPointerUp()
+    expect(controller.consumeRowSelectionClick()).toBe(true)
+  })
+
   it("cancels an active row-selection session on pointer cancel", () => {
     const begin = vi.fn(() => true)
     const update = vi.fn(() => true)
     const commit = vi.fn()
     const cancel = vi.fn()
     const { controller, row } = createControllerHarness({
+      rowHeaderAction: "select-records",
       beginRowSelectionSession: begin,
       updateRowSelectionSession: update,
       commitRowSelectionSession: commit,
@@ -677,6 +709,7 @@ describe("useDataGridAppInteractionController contract", () => {
     const begin = vi.fn(() => true)
     const cancel = vi.fn()
     const { controller, row } = createControllerHarness({
+      rowHeaderAction: "select-records",
       beginRowSelectionSession: begin,
       updateRowSelectionSession: () => true,
       cancelRowSelectionSession: cancel,

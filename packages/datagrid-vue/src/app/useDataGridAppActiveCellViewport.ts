@@ -17,7 +17,7 @@ export interface UseDataGridAppActiveCellViewportOptions {
 
 export interface UseDataGridAppActiveCellViewportResult {
   ensureKeyboardActiveCellVisible: (rowIndex: number, columnIndex: number) => void
-  revealCellInComfortZone: (rowIndex: number, columnIndex: number) => Promise<void>
+  revealCellInComfortZone: (rowIndex: number, columnIndex: number, options?: { focus?: boolean }) => Promise<void>
 }
 
 export function useDataGridAppActiveCellViewport(
@@ -263,7 +263,11 @@ export function useDataGridAppActiveCellViewport(
     })
   }
 
-  const revealCellInComfortZone = async (rowIndex: number, columnIndex: number): Promise<void> => {
+  const revealCellInComfortZone = async (
+    rowIndex: number,
+    columnIndex: number,
+    revealOptions: { focus?: boolean } = {},
+  ): Promise<void> => {
     const viewport = options.bodyViewportRef.value
     if (!viewport) {
       return
@@ -274,7 +278,7 @@ export function useDataGridAppActiveCellViewport(
     ensureEstimatedRowVisible(viewport, rowIndex, verticalComfortMarginPx)
 
     if (targetColumn?.pin === "left" || targetColumn?.pin === "right") {
-      await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
+      if (revealOptions.focus !== false) await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
       return
     }
 
@@ -289,7 +293,7 @@ export function useDataGridAppActiveCellViewport(
       ensureEstimatedCenterColumnVisible(horizontalViewport, columnIndex, horizontalComfortMarginPx)
     }
 
-    await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
+    if (revealOptions.focus !== false) await focusResolvedCellWithRetry(viewport, rowIndex, columnIndex)
   }
 
   return {

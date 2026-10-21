@@ -931,6 +931,7 @@ const {
   rowRenderMode,
   rowHeightMode,
   normalizedBaseRowHeight,
+  indexColumnStyle: computed(() => ({ width: "auto" })),
   selectionSnapshot,
   selectionAnchor,
   syncSelectionSnapshotFromRuntime,

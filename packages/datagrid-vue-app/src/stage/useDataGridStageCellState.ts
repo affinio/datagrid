@@ -4,6 +4,7 @@ import type {
   DataGridTableStageBodyColumn,
   DataGridTableStageBodyRow,
 } from "./dataGridTableStageBody.types"
+import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
 
 export interface UseDataGridStageCellStateOptions {
   visibleColumns: Readonly<Ref<readonly DataGridTableStageBodyColumn[]>>
@@ -80,7 +81,9 @@ export function useDataGridStageCellState(
   options: UseDataGridStageCellStateOptions,
 ): UseDataGridStageCellStateResult {
   function shouldRenderCheckboxCell(row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn): boolean {
-    return isCheckboxColumn(column) && (row.kind !== "group" || isRowSelectionColumn(column))
+    return !isDataGridPlaceholderSurfaceRow(row)
+      && isCheckboxColumn(column)
+      && (row.kind !== "group" || isRowSelectionColumn(column))
   }
 
   function builtInCellClasses(

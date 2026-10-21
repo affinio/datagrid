@@ -127,6 +127,7 @@ describe("useDataGridStageChromeModel", () => {
         }
         return ""
       },
+      isRowCheckboxSelected: (row: DataGridTableStageBodyRow) => row.rowId === "row-1",
       stripedRows: true,
       rowHover: false,
     } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>))
@@ -199,7 +200,7 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.rowMetricsSignature.value).toBe("108:31|139:31")
     expect(result.pinnedBottomRowMetricsSignature.value).toBe("0:42")
     expect(result.rowBandsSignature.value).toContain("pivot-group:108:31")
-    expect(result.rowBandsSignature.value).toContain("striped:139:31")
+    expect(result.rowBandsSignature.value).toContain("selected:139:31")
     expect(result.pinnedBottomRowBandsSignature.value).toBe("tree:0:42")
     expect(result.headerPivotGroupsSignature.value).toBe("none")
 

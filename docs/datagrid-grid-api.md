@@ -75,6 +75,7 @@ Use it as guard before capability-dependent mutating calls.
 - `view.reapply()` recomputes projection only.
 - `view.getViewportPosition()/setViewportPosition(...)` expose semantic viewport state when the adapter provides the viewport capability.
 - `view.activateCell({ rowId, columnKey }, options?)` is the identity-based async activation contract. The viewport adapter owns projection resolution, reveal, virtualization readiness, focus, and interaction conflicts; callers receive a structured result instead of resolving cells through DOM selectors. Adapters without activation support return `failed`.
+- The Vue app adapter reveals body cells through the stage viewport and can replace selection or move focus on request. With `expandAncestors: true`, it expands the target row's group path before revealing it. Client row models distinguish filtering from collapsed ancestry using the core projection stages. Sparse models return `row-not-loaded` when the row is outside the loaded body window; they cannot distinguish an unknown ID without a datasource ID lookup.
 - `pivot` remains a separate analytical subsystem (intentionally not nested under `rows`).
 - `data.pause()/resume()/flush()` is the public backpressure control surface for supported server/data-source row models.
 - `state.get/set` is the unified state boundary for export/import (V1 model-centric payload).

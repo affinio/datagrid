@@ -18,7 +18,7 @@ const DATA_GRID_APP_STYLES = `
   --datagrid-selection-overlay-bg: transparent;
   --datagrid-selection-fill-preview-bg: transparent;
   --datagrid-selection-move-preview-bg: transparent;
-  --datagrid-row-selected-background-color: transparent;
+  --datagrid-row-selected-background-color: color-mix(in srgb, var(--datagrid-row-background-color) 88%, var(--datagrid-accent-strong) 12%);
   --datagrid-row-selected-range-bg: transparent;
   --datagrid-row-selected-sticky-bg: transparent;
   --datagrid-row-band-base-bg: var(--datagrid-row-background-color);
@@ -1416,6 +1416,10 @@ const DATA_GRID_APP_STYLES = `
   background: var(--datagrid-row-band-base-bg);
 }
 
+.grid-chrome-layer__band--selected {
+  background: var(--datagrid-row-selected-background-color);
+}
+
 .grid-chrome-layer__band--hover {
   background: var(--datagrid-row-band-hover-bg);
 }
@@ -2061,7 +2065,8 @@ body.datagrid-fill-drag-cursor * {
   position: absolute;
   left: 0;
   right: calc(6px + var(--datagrid-column-divider-size));
-  background: linear-gradient(to right, var(--datagrid-accent-strong) 3px, var(--datagrid-selection-range-bg) 3px);
+  background: var(--datagrid-selection-range-bg);
+  box-shadow: inset 3px 0 0 var(--datagrid-accent-strong);
   pointer-events: none;
   z-index: 0;
 }
@@ -2267,16 +2272,6 @@ body.datagrid-fill-drag-cursor * {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--datagrid-accent-strong) 28%, transparent);
 }
 
-.grid-row--checkbox-selected .grid-cell,
-.grid-row--checkbox-selected .grid-cell--index {
-  background: var(--datagrid-row-selected-background-color);
-}
-
-.grid-row--focused .grid-cell,
-.grid-row--focused .grid-cell--index {
-  background: var(--datagrid-row-selected-background-color);
-}
-
 .grid-row--hoverable.grid-row--hovered .grid-cell,
 .grid-row--hoverable.grid-row--hovered .grid-cell--index {
   background-image: linear-gradient(var(--datagrid-row-band-hover-bg), var(--datagrid-row-band-hover-bg));
@@ -2291,6 +2286,12 @@ body.datagrid-fill-drag-cursor * {
   background-size: calc(100% - var(--datagrid-column-divider-size)) calc(100% - var(--datagrid-row-divider-size));
   background-position: top left;
   background-repeat: no-repeat;
+}
+
+/* Selected rows take precedence over hover and stripe fills, including inline renderer styles. */
+.affino-datagrid-app-root .grid-stage:not(.grid-stage--canvas-chrome) .grid-row--checkbox-selected > .grid-cell,
+.affino-datagrid-app-root .grid-stage:not(.grid-stage--canvas-chrome) .grid-row--focused > .grid-cell {
+  background: var(--datagrid-row-selected-background-color) !important;
 }
 
 .grid-stage--canvas-chrome .grid-row--hoverable.grid-row--hovered .grid-cell,
@@ -2386,6 +2387,15 @@ body.datagrid-fill-drag-cursor * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.datagrid-external-filter-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--datagrid-accent-strong);
+  font-size: 0.7em;
+  line-height: 1;
 }
 
 .col-head__group-badge {

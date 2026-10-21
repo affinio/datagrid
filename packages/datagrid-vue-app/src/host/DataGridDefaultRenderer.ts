@@ -28,6 +28,9 @@ import type {
   DataGridRowModel,
   DataGridSortState,
   UseDataGridRuntimeResult,
+  DataGridActivateCellOptions,
+  DataGridActivateCellResult,
+  DataGridActivateCellTarget,
 } from "@affino/datagrid-vue"
 import {
   cloneDataGridFilterSnapshot,
@@ -70,6 +73,8 @@ import type { DataGridGridLinesOptions } from "../config/dataGridGridLines"
 import { normalizeDataGridAppFilterModel } from "../config/dataGridFilterNormalization"
 import type { DataGridAppColumnInput } from "../config/dataGridFormulaOptions"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import type { DataGridExternalFilterIndicator } from "../config/dataGridExternalFilterIndicators"
+import type { DataGridSavedViewInteractionController } from "../config/dataGridSavedView"
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmptyStateRenderer } from "../config/dataGridEmptyState"
 import type { DataGridCellEditablePredicate } from "../dataGridEditability"
 import type { DataGridColumnLayoutOptions } from "../config/dataGridColumnLayout"
@@ -112,6 +117,7 @@ import type {
 } from "../config/dataGridAppView"
 import type { DataGridResolvedChromeOptions, DataGridToolbarPlacement } from "../config/dataGridChrome"
 import type { DataGridRowReorderOptions } from "../config/dataGridRowReorder"
+import { DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH } from "../config/dataGridRowSelection"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type { DataGridPlaceholderRowsOptions } from "../config/dataGridPlaceholderRows"
@@ -186,6 +192,9 @@ export type DataGridDefaultRendererRuntime = {
   resolveBodyRowIndexById: (rowId: string | number) => number
   scrollToRow: UseDataGridRuntimeResult<Record<string, unknown>>["scrollToRow"]
   scrollToColumn: UseDataGridRuntimeResult<Record<string, unknown>>["scrollToColumn"]
+  registerCellActivationAdapter: (
+    handler: (target: DataGridActivateCellTarget, options?: DataGridActivateCellOptions) => Promise<DataGridActivateCellResult>,
+  ) => () => void
 }
 
 type DataGridProjectedColumnZone = "pinnedLeft" | "center" | "pinnedRight"
@@ -880,6 +889,10 @@ export default defineComponent({
       type: Object as PropType<DataGridAuthoredRendererPolicy | undefined>,
       default: undefined,
     },
+    externalFilterIndicators: {
+      type: Array as PropType<readonly DataGridExternalFilterIndicator[]>,
+      default: () => [],
+    },
     rows: {
       type: Array as PropType<readonly Record<string, unknown>[]>,
       default: () => [],
@@ -890,7 +903,7 @@ export default defineComponent({
     },
     runtimeRowModel: {
       type: Object as PropType<
-        Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot"> & {
+        Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot" | "resolveRowProjection"> & {
           dataSource?: {
             resolveFillBoundary?: (request: any) => any
             commitFillOperation?: (request: any) => any
@@ -1104,6 +1117,10 @@ export default defineComponent({
       type: Boolean,
       default: true,
     },
+    indexColumnStyle: {
+      type: Object as PropType<CSSProperties | undefined>,
+      default: undefined,
+    },
     rowSelection: {
       type: Boolean,
       default: true,
@@ -1118,7 +1135,7 @@ export default defineComponent({
     },
     rowSelectionColumnWidth: {
       type: Number,
-      default: 108,
+      default: DATA_GRID_ROW_SELECTION_DEFAULT_COLUMN_WIDTH,
     },
     resolveSourceRowId: {
       type: Function as PropType<((row: Record<string, unknown>, index: number) => string | number) | undefined>,
@@ -1174,6 +1191,10 @@ export default defineComponent({
     },
     registerHistoryController: {
       type: Function as PropType<(controller: DataGridHistoryController | null) => void>,
+      default: () => undefined,
+    },
+    registerSavedViewInteractionController: {
+      type: Function as PropType<(controller: DataGridSavedViewInteractionController | null) => void>,
       default: () => undefined,
     },
     reportToolbarModules: {
@@ -3834,6 +3855,8 @@ export default defineComponent({
       captureHistorySnapshotForRowIds,
       recordHistoryIntentTransaction,
       revealCellInComfortZone,
+      isInteractionActive,
+      cancelTransientInteractions,
     } = useDataGridTableStageRuntime<Record<string, unknown>>({
       mode: modeRef as Ref<DataGridMode>,
       stickyGroupRows: computed(() => props.stickyGroupRows),
@@ -3891,6 +3914,7 @@ export default defineComponent({
       chromeSignature: gridLinesChromeSignature,
       onCellEdit: props.onCellEdit,
       showRowIndex: computed(() => props.showRowIndex),
+      indexColumnStyle: computed(() => props.indexColumnStyle),
       showRowSelection: computed(() => props.rowSelection),
       rowHeaderAction: computed(() => props.rowHeaderAction),
       isRowSelectable: props.isRowSelectable,
@@ -3980,6 +4004,17 @@ export default defineComponent({
     )
 
     watch(
+      () => props.registerSavedViewInteractionController,
+      registerController => {
+        registerController?.({
+          isActive: () => Boolean(isInteractionActive.value || stageHostRef.value?.querySelector(".cell-editor-input")),
+          cancel: cancelTransientInteractions,
+        })
+      },
+      { immediate: true },
+    )
+
+    watch(
       () => props.registerStructuralRowActionRunner,
       registerStructuralRowActionRunner => {
         registerStructuralRowActionRunner?.(runResolvedStructuralRowAction)
@@ -4018,6 +4053,7 @@ export default defineComponent({
     onBeforeUnmount(() => {
       closeColumnMenu()
       props.registerHistoryController?.(null)
+      props.registerSavedViewInteractionController?.(null)
       props.registerStructuralRowActionRunner?.(null)
     })
 
@@ -4026,6 +4062,95 @@ export default defineComponent({
       props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot(coord))
       props.syncSelectionSnapshotFromRuntime()
     }
+    let activationSequence = 0
+    let activationDisposed = false
+    const unregisterCellActivation = props.runtime.registerCellActivationAdapter(async (target, options = {}) => {
+      const requestId = ++activationSequence
+      const isCancelled = (): DataGridActivateCellResult | null => {
+        if (activationDisposed) return { status: "cancelled", reason: "disposed" }
+        if (options.signal?.aborted) return { status: "cancelled", reason: "aborted" }
+        if (requestId !== activationSequence) return { status: "cancelled", reason: "superseded" }
+        return null
+      }
+      const cancelled = isCancelled()
+      if (cancelled) return cancelled
+      if (isInteractionActive.value || stageHostRef.value?.querySelector(".cell-editor-input")) {
+        return { status: "cancelled", reason: "interaction-active" }
+      }
+      const visibleColumnIndex = stageVisibleColumns.value.findIndex(column => column.key === target.columnKey)
+      if (visibleColumnIndex < 0) {
+        const columnExists = props.runtime.api.columns.get(target.columnKey) != null
+        return { status: "unavailable", reason: columnExists ? "column-hidden" : "column-not-found" }
+      }
+      let rowIndex = props.runtime.resolveBodyRowIndexById(target.rowId)
+      const sourceRow = props.runtime.api.rows.getById(target.rowId)
+      const rowModelCapabilities = props.runtimeRowModel as {
+        kind?: string
+        getSparseRowModelDiagnostics?: () => unknown
+      } | null
+      const sparseRowModel = Boolean(rowModelCapabilities && (
+        rowModelCapabilities.kind === "server"
+        || typeof rowModelCapabilities.getSparseRowModelDiagnostics === "function"
+      ))
+      if (rowIndex < 0 && !sourceRow) {
+        return { status: "unavailable", reason: sparseRowModel ? "row-not-loaded" : "row-not-found" }
+      }
+      if (rowIndex < 0 && sourceRow && sparseRowModel) {
+        return { status: "unavailable", reason: "row-not-loaded" }
+      }
+      if (rowIndex < 0 && sourceRow) {
+        const projection = props.runtimeRowModel?.resolveRowProjection?.(target.rowId)
+        if (projection?.status === "ancestor-collapsed" && options.expandAncestors !== true) {
+          return { status: "unavailable", reason: "ancestor-collapsed" }
+        }
+        if (projection?.status === "ancestor-collapsed") {
+          for (const key of projection.collapsedGroupKeys) props.runtime.api.rows.expandGroup(key)
+          await nextTick()
+          const expansionCancelled = isCancelled()
+          if (expansionCancelled) return expansionCancelled
+          rowIndex = props.runtime.resolveBodyRowIndexById(target.rowId)
+        }
+        if (rowIndex < 0) {
+          const nextProjection = props.runtimeRowModel?.resolveRowProjection?.(target.rowId)
+          return { status: "unavailable", reason: nextProjection?.status === "ancestor-collapsed"
+            ? "ancestor-collapsed"
+            : "row-filtered-out" }
+        }
+      }
+      const row = props.runtime.getBodyRowAtIndex(rowIndex)
+      if (!row || row.kind === "group") return { status: "unavailable", reason: "row-not-found" }
+      await revealCellInComfortZone(rowIndex, visibleColumnIndex, { focus: false })
+      await nextTick()
+      const afterRevealCancelled = isCancelled()
+      if (afterRevealCancelled) return afterRevealCancelled
+      if (isInteractionActive.value || stageHostRef.value?.querySelector(".cell-editor-input")) {
+        return { status: "cancelled", reason: "interaction-active" }
+      }
+      const cell = Array.from(stageHostRef.value?.querySelectorAll<HTMLElement>(
+        '.grid-cell[data-row-id][data-column-key]:not([aria-hidden="true"])',
+      ) ?? []).find(element => element.dataset.rowId === String(target.rowId)
+        && element.dataset.columnKey === target.columnKey)
+      if (!cell) return { status: "unavailable", reason: "row-not-loaded" }
+      const beforeCommitCancelled = isCancelled()
+      if (beforeCommitCancelled) return beforeCommitCancelled
+      if (options.focus === true) cell.focus({ preventScroll: true })
+      if (options.selection === "replace") {
+        props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot({
+          rowIndex,
+          columnIndex: visibleColumnIndex,
+        }), {
+          ...(options.origin ? { origin: options.origin } : {}),
+          ...(options.operationId ? { operationId: options.operationId } : {}),
+        })
+        props.syncSelectionSnapshotFromRuntime()
+      }
+      return { status: "activated" }
+    })
+    onBeforeUnmount(() => {
+      activationDisposed = true
+      activationSequence += 1
+      unregisterCellActivation()
+    })
     const isFindReplaceCellEditable = (
       row: import("@affino/datagrid-vue").DataGridRowNode<Record<string, unknown>>,
       rowIndex: number,
@@ -4917,6 +5042,7 @@ export default defineComponent({
     )
     const stageProps = computed(() => ({
       ...tableStageProps.value,
+      externalFilterIndicators: props.externalFilterIndicators,
       customOverlays: props.customOverlays,
       emptyState: emptyState.value,
       emptyStateAlignment: props.emptyStateAlignment,

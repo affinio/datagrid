@@ -13,6 +13,7 @@ This page documents the public surface of DataGrid from @affino/datagrid-vue-app
 | rows-update-mode | "replace" or "patch" handling for reactive row updates. |
 | client-row-model-options | Client row-model options such as resolveRowId. |
 | columns | Column definitions. Each column normally has key and label. |
+| external-filter-indicators | Active filter conditions owned by the host app; shown in the matching header with a plain-text tooltip and included in its accessible label. |
 | computed-fields / formulas | Computed and formula-backed field definitions. |
 | formula-functions | Named formula function registry. |
 | aggregation-model | Core aggregation configuration. |
@@ -22,6 +23,22 @@ This page documents the public surface of DataGrid from @affino/datagrid-vue-app
 Active group-by levels appear in the toolbar in hierarchy order. Adding a level scrolls the grouping tree column to the start of the center viewport. Removing a level from its chip rebuilds the hierarchy with the remaining levels; collapsing a group returns focus to its visible disclosure control.
 
 Use rows for ordinary local tables. Use row-model when data ownership or lifecycle belongs to another runtime; do not provide both for the same grid.
+
+External conditions can be surfaced without registering them in the grid's filter model:
+
+```ts
+const externalFilterIndicators = [{
+  id: "saved-query-status",
+  columnKey: "status",
+  active: true,
+  description: "Only records in the saved query are shown",
+}]
+```
+
+Pass this list to `DataGrid`. Inactive indicators are omitted; multiple active
+descriptions on the same column are combined. IDs are unique across the list.
+The descriptor only reports filtering owned elsewhere and does not change rows
+or the grid's built-in filter state.
 
 ## View and interaction props
 
@@ -33,11 +50,12 @@ Use rows for ordinary local tables. Use row-model when data ownership or lifecyc
 | render-mode | "virtualization" or "pagination" mode selection. |
 | layout-mode / min-rows / max-rows | Grid height contract: fill or bounded auto-height. |
 | row-height-mode / base-row-height | Fixed or measured row height. |
-| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. Accepts `enabled`, `columnWidth`, and `isSelectable`; group-row checkboxes affect selectable data descendants. |
-| row-header | Chooses what the row-index header does: `select-cells` (default), `select-records`, or `none`. Record selection supports click modifiers, Shift keyboard range, and pointer drag. |
+| row-selection / row-selection-state | Full-row checkbox selection and controlled selection state. The checkbox column defaults to 48px; `rowSelection` accepts `enabled`, `columnWidth`, and `isSelectable`. Group-row checkboxes affect selectable data descendants. |
+| row-header | Chooses what the row-index header does: `select-cells` (default, selects visible data cells across a row and supports Shift/drag ranges), `select-records`, or `none`. The checkbox column independently controls record selection. |
 | fill-handle / range-move | Spreadsheet range workflows. Both are opt-in. |
 | row-reorder | Row drag/reorder behavior. |
 | show-row-index | Show the row-index surface. |
+| index-column-style | CSS styles for the row-index column. Set `width: "auto"` to size it to the built-in decimal row labels; numeric pixel widths remain fixed. |
 | row-hover / striped-rows | Visual row presentation. |
 | column-menu / cell-menu / row-index-menu | Built-in contextual menus. |
 | column-layout / column-reorder | Column visibility, order, sizing, and pinning controls. |
@@ -183,6 +201,25 @@ state is the unified controlled state boundary. It can include model projection,
 - view-mode
 
 For automatic preferences, use [`state-persistence`](./datagrid-state-persistence.md). It owns restore timing and saving after resize; do not restore again from `ready`. Use `state` for parent-controlled state and saved-view helpers for explicit named views.
+
+`getSavedView({ include })` captures a separate view snapshot. The default
+includes columns, sorting, filters, grouping, pagination, pivot, aggregation,
+and view mode. Selection and viewport position are opt-in; callers can choose
+any subset:
+
+```ts
+const view = grid.getSavedView({ include: ["columns", "sorting", "filters", "grouping"] })
+grid.applySavedView(view, { interaction: "reject" })
+```
+
+New snapshots record their included parts; omitted state is not restored.
+Transaction history, runtime diagnostics, and virtualized window state are
+always omitted. Snapshots created before the inclusion manifest was added keep
+their legacy restore behavior. Restore migrates and validates the snapshot
+before applying it atomically. An active editor or pointer interaction blocks
+restore by default; pass `{ interaction: "cancel" }` to cancel it through the
+grid's normal interaction lifecycle before restoring. A pending edit commit
+cannot be canceled and therefore still blocks restore.
 
 ## Events
 

@@ -102,6 +102,8 @@ export interface UseDataGridTableStageRowSelectionResult<TRow extends Record<str
   toggleRowCheckboxSelected: (row: DataGridTableRow<TRow>) => void
   toggleVisibleRowsSelected: () => void
   selectRowRange: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean, additive?: boolean) => void
+  selectCellRangeByRowId: (rowId: DataGridRowId, extend: boolean) => void
+  selectCheckboxRowRange: (row: DataGridTableRow<TRow>, rowOffset: number, additive?: boolean) => void
   beginRowSelectionSession: (rowId: DataGridRowId, operation: "replace" | "add") => boolean
   updateRowSelectionSession: (rowId: DataGridRowId) => boolean
   commitRowSelectionSession: () => void
@@ -383,6 +385,7 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     applyRowSelectionMutation(rowSelectionApi => {
       rowSelectionApi.setSelected(row.rowId, !isRowCheckboxSelected(row))
     })
+    rowSelectionInteraction.value = { anchorRowId: row.rowId, extentRowId: row.rowId }
   }
 
   const toggleVisibleRowsSelected = (): void => {
@@ -425,12 +428,14 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     rowOffset: number,
     extend: boolean,
     additive = false,
+    forceRecordSelection = false,
   ): void => {
-    focusRow(row)
-    if (options.rowHeaderAction?.value === "none") {
+    const rowHeaderAction = options.rowHeaderAction?.value ?? "select-cells"
+    if (rowHeaderAction === "none" && !forceRecordSelection) {
       return
     }
-    if (options.rowHeaderAction?.value === "select-records") {
+    if (rowHeaderAction === "select-records" || forceRecordSelection) {
+      focusRow(row)
       if (isPlaceholderRow(row) || row.kind === "group" || row.rowId == null
         || !options.runtime.api.rowSelection.hasSupport()
         || (options.isRowSelectable && !options.isRowSelectable(row))) {
@@ -481,17 +486,21 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
       return
     }
 
-    const lastColumnIndex = options.orderedVisibleColumns.value.length - 1
-    if (lastColumnIndex < 0) {
+    const selectableColumnIndexes = options.orderedVisibleColumns.value
+      .map((column, index) => column.column.meta?.rowSelection === true ? -1 : index)
+      .filter(index => index >= 0)
+    if (selectableColumnIndexes.length === 0) {
       return
     }
+    const firstColumnIndex = selectableColumnIndexes[0]!
+    const lastColumnIndex = selectableColumnIndexes[selectableColumnIndexes.length - 1]!
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (!extend) {
       rowIndexRangeAnchor = rowIndex
       const range = {
         startRow: rowIndex,
         endRow: rowIndex,
-        startColumn: 0,
+        startColumn: firstColumnIndex,
         endColumn: lastColumnIndex,
       }
       options.applySelectionRange(range)
@@ -511,12 +520,26 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     const range = {
       startRow: Math.min(anchorRowIndex, rowIndex),
       endRow: Math.max(anchorRowIndex, rowIndex),
-      startColumn: 0,
+      startColumn: firstColumnIndex,
       endColumn: lastColumnIndex,
     }
     options.applySelectionRange(range)
     lastRowIndexRange = range
   }
+
+  const selectCellRangeByRowId = (rowId: DataGridRowId, extend: boolean): void => {
+    if ((options.rowHeaderAction?.value ?? "select-cells") !== "select-cells") return
+    const rowIndex = options.resolveProjectionIndexByRowId?.(rowId)
+    const row = rowIndex == null ? null : options.resolveProjectionRowAtIndex?.(rowIndex) ?? null
+    if (rowIndex == null || !row || isPlaceholderRow(row) || row.kind === "group") return
+    selectRowRange(row, rowIndex - options.viewportRowStart.value, extend)
+  }
+
+  const selectCheckboxRowRange = (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    additive = false,
+  ): void => selectRowRange(row, rowOffset, true, additive, true)
 
   return {
     rowSelectionSet,
@@ -531,6 +554,8 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
     toggleRowCheckboxSelected,
     toggleVisibleRowsSelected,
     selectRowRange,
+    selectCellRangeByRowId,
+    selectCheckboxRowRange,
     beginRowSelectionSession: (rowId, operation) => {
       const index = options.resolveProjectionIndexByRowId?.(rowId) ?? null
       const row = index == null ? null : options.resolveProjectionRowAtIndex?.(index) ?? null

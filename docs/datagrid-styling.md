@@ -20,6 +20,20 @@ spacing. The DataGrid root is transparent; the table stage paints its own
 surface. With an integrated toolbar, controls and table share one bordered
 surface. A surrounding card adds another application surface. Keep that wrapper for page context such as controls or summaries; for a grid-only wrapper, leave the surface to DataGrid.
 
+## Row-index width
+
+Set `index-column-style` to customize the row-index column. Its `width` may be
+`"auto"`; the built-in renderer sizes it for the number of digits in the
+projected row count with a 32px minimum. The default fixed width remains 72px:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :index-column-style="{ width: 'auto' }"
+/>
+```
+
 ## Override theme colors
 
 Pass a partial token object for a few color changes:
@@ -43,7 +57,28 @@ for that variant. Flat token objects override the resolved variant directly.
 
 Useful background roles are `gridBackgroundColor` for the stage surface,
 `gridViewportBackground` for the body viewport, `bodyRowBackgroundColor` for
-rows, and the header and pinned background tokens for those panes. These roles
+rows, and `bodyRowSelectedBackgroundColor` for checkbox-selected and focused
+rows. The built-in presets define selected-row colors for both light and dark
+variants. For an application-owned palette, set this token per variant through
+the public `theme` prop:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :theme="{
+    tokenVariants: {
+      light: { bodyRowSelectedBackgroundColor: 'var(--color-surface-selection)' },
+      dark: { bodyRowSelectedBackgroundColor: 'var(--color-surface-selection-dark)' },
+    },
+  }"
+/>
+```
+
+Checkbox-selected contiguous row runs also use the cell-selection outline
+color and stroke width, with one shared top and bottom edge per run.
+
+The header and pinned background tokens configure their own panes. These roles
 may intentionally differ. The full token list is exported by
 `@affino/datagrid-theme`; see the [complete token reference](./reference/datagrid-theme-tokens.md)
 for token names and their CSS custom properties.

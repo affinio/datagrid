@@ -62,6 +62,7 @@ interface GridChromeResolvedStyle {
   columnDividerColor: string
   headerColumnDividerColor: string
   rowBandBaseColor: string
+  rowBandSelectedColor: string
   rowBandHoverColor: string
   rowBandStripedColor: string
   rowBandGroupColor: string
@@ -202,6 +203,8 @@ function resolveGridChromeBandColor(style: GridChromeResolvedStyle, kind: string
       return style.rowBandHoverColor
     case "base":
       return style.rowBandBaseColor
+    case "selected":
+      return style.rowBandSelectedColor
     case "striped":
       return style.rowBandStripedColor
     case "group":
@@ -437,6 +440,7 @@ export function useDataGridStageChromeCanvas(
     const columnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
     const headerColumnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-header-column-divider-color", columnDividerColor)
     const rowBandBaseColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-base-bg", "rgba(255, 255, 255, 1)")
+    const rowBandSelectedColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-selected-background-color", "rgba(59, 130, 246, 0.12)")
     const rowBandHoverColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-hover-bg", "rgba(251, 146, 60, 0.18)")
     const rowBandStripedColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-striped-bg", "rgba(59, 130, 246, 0.06)")
     const rowBandGroupColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-group-bg", "rgba(59, 130, 246, 0.08)")
@@ -451,6 +455,7 @@ export function useDataGridStageChromeCanvas(
       columnDividerColor,
       headerColumnDividerColor,
       rowBandBaseColor,
+      rowBandSelectedColor,
       rowBandHoverColor,
       rowBandStripedColor,
       rowBandGroupColor,

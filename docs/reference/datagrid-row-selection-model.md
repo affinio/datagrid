@@ -70,9 +70,14 @@ stale projection or a selection conflict rejects and clears it.
 ## Integration boundary
 
 The Vue app connects the session controller to `api.rowSelection` and the
-logical row projection. Row-header behavior stays backward-compatible by
-default: it selects cell ranges. Set `rowHeader.action` to `"select-records"`
-to enable record selection, or `"none"` to disable row-header selection.
+logical row projection. By default, row-header clicks select a cell range that
+covers visible data columns (including pinned columns) and excludes the row
+index and the synthetic checkbox column. Shift-click extends the cell range;
+dragging row indexes extends it across rows. These gestures update `api.selection`
+without changing checked records. Set `rowHeader.action` to `"select-records"`
+to make row-header gestures select records, or `"none"` to disable row-header
+selection. The checkbox column always selects records through `api.rowSelection`;
+Shift-click there extends the record selection, independently of cell ranges.
 
 ```vue
 <DataGrid

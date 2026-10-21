@@ -63,6 +63,7 @@ export type {
   DataGridRowId,
   DataGridRowIdResolver,
   DataGridRowModel,
+  DataGridRowProjectionResolution,
   DataGridRowModelKind,
   DataGridSparseRowModelDiagnostics,
   DataGridSparseRowModelKind,

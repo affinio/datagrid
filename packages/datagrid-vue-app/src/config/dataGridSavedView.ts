@@ -1,9 +1,38 @@
-import type { DataGridMigrateStateOptions, DataGridUnifiedState } from "@affino/datagrid-vue"
+import type { DataGridMigrateStateOptions, DataGridSetStateOptions, DataGridUnifiedState } from "@affino/datagrid-vue"
 import type { DataGridAppViewMode } from "./dataGridAppView"
 
 export interface DataGridSavedViewSnapshot<TRow extends Record<string, unknown> = Record<string, unknown>> {
   state: DataGridUnifiedState<TRow>
   viewMode?: DataGridAppViewMode
+  /** Present on newly captured views. Missing means a legacy view that restores all state. */
+  included?: readonly DataGridSavedViewPart[]
+}
+
+export type DataGridSavedViewPart =
+  | "columns"
+  | "sorting"
+  | "filters"
+  | "grouping"
+  | "pagination"
+  | "pivot"
+  | "aggregation"
+  | "selection"
+  | "viewportPosition"
+  | "viewMode"
+
+export interface DataGridCaptureSavedViewOptions {
+  /** Defaults to the standard presentation parts; selection and viewport are opt-in. */
+  include?: readonly DataGridSavedViewPart[]
+}
+
+export interface DataGridApplySavedViewOptions extends DataGridSetStateOptions {
+  /** Active editor or pointer interaction blocks restore by default. */
+  interaction?: "reject" | "cancel"
+}
+
+export interface DataGridSavedViewInteractionController {
+  isActive: () => boolean
+  cancel: () => boolean
 }
 
 export interface DataGridSavedViewStorageLike {
@@ -11,6 +40,19 @@ export interface DataGridSavedViewStorageLike {
   setItem: (key: string, value: string) => void
   removeItem: (key: string) => void
 }
+
+const SAVED_VIEW_PARTS = new Set<DataGridSavedViewPart>([
+  "columns",
+  "sorting",
+  "filters",
+  "grouping",
+  "pagination",
+  "pivot",
+  "aggregation",
+  "selection",
+  "viewportPosition",
+  "viewMode",
+])
 
 export function sanitizeDataGridSavedViewState<TRow extends Record<string, unknown> = Record<string, unknown>>(
   state: DataGridUnifiedState<TRow>,
@@ -24,9 +66,60 @@ export function sanitizeDataGridSavedViewState<TRow extends Record<string, unkno
 export function sanitizeDataGridSavedView<TRow extends Record<string, unknown> = Record<string, unknown>>(
   savedView: DataGridSavedViewSnapshot<TRow>,
 ): DataGridSavedViewSnapshot<TRow> {
+  const included = savedView.included ? new Set(savedView.included) : null
+  const state = sanitizeDataGridSavedViewState(savedView.state)
+  const sanitizedState = included
+    ? {
+        ...state,
+        rows: {
+          ...state.rows,
+          snapshot: {
+            ...state.rows.snapshot,
+            revision: undefined,
+            datasetVersion: null,
+            rowCount: 0,
+            loading: false,
+            initialLoading: false,
+            refreshing: false,
+            warming: false,
+            error: null,
+            treeDataDiagnostics: null,
+            projection: null,
+            viewportRange: { start: 0, end: 0 },
+            sortModel: included.has("sorting") ? state.rows.snapshot.sortModel : [],
+            filterModel: included.has("filters") ? state.rows.snapshot.filterModel : null,
+            groupBy: included.has("grouping") ? state.rows.snapshot.groupBy : null,
+            groupExpansion: included.has("grouping")
+              ? state.rows.snapshot.groupExpansion
+              : { expandedByDefault: true, toggledGroupKeys: [] },
+            pagination: included.has("pagination")
+              ? state.rows.snapshot.pagination
+              : {
+                  enabled: false,
+                  pageSize: 25,
+                  currentPage: 0,
+                  pageCount: 0,
+                  totalRowCount: 0,
+                  startIndex: 0,
+                  endIndex: 0,
+                },
+            pivotModel: included.has("pivot") ? state.rows.snapshot.pivotModel : null,
+            pivotColumns: included.has("pivot") ? state.rows.snapshot.pivotColumns : [],
+          },
+          aggregationModel: included.has("aggregation") ? state.rows.aggregationModel : null,
+        },
+        columns: included.has("columns")
+          ? state.columns
+          : { order: [], zoneOrder: {}, visibility: {}, widths: {}, pins: {} },
+        selection: included.has("selection") ? state.selection : null,
+        rowSelection: included.has("selection") ? state.rowSelection : null,
+        view: included.has("viewportPosition") ? state.view : { viewportPosition: null },
+      }
+    : state
   return {
     ...savedView,
-    state: sanitizeDataGridSavedViewState(savedView.state),
+    state: sanitizedState,
+    ...(savedView.included ? { included: [...new Set(savedView.included)] } : {}),
   }
 }
 
@@ -52,9 +145,19 @@ export function migrateDataGridSavedView<TRow extends Record<string, unknown> = 
       ? "table"
       : undefined
 
+  let included: readonly DataGridSavedViewPart[] | undefined
+  if (record && "included" in record) {
+    if (!Array.isArray(record.included)
+      || record.included.some((part): boolean => typeof part !== "string" || !SAVED_VIEW_PARTS.has(part as DataGridSavedViewPart))) {
+      return null
+    }
+    included = [...new Set(record.included as DataGridSavedViewPart[])]
+  }
+
   return sanitizeDataGridSavedView({
     state: migratedState,
     ...(viewMode ? { viewMode } : {}),
+    ...(included ? { included } : {}),
   })
 }
 

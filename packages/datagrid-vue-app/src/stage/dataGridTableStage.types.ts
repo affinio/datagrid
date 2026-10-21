@@ -11,6 +11,7 @@ import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
 import type { DataGridLayoutMode } from "../config/dataGridLayout"
 import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps } from "../config/dataGridEmptyState"
 import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import type { DataGridExternalFilterIndicator } from "../config/dataGridExternalFilterIndicators"
 import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
 import type {
   DataGridColumnMenuActionOptions,
@@ -169,6 +170,7 @@ export interface DataGridTableStageRowsSection<TRow extends Record<string, unkno
   someVisibleRowsSelected?: boolean
   handleRowClick?: (row: DataGridTableRow<TRow>) => void
   handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean, additive?: boolean) => void
+  handleRowCheckboxRange?: (row: DataGridTableRow<TRow>, rowOffset: number, additive?: boolean) => void
   handleRowIndexPointerDown?: (row: DataGridTableRow<TRow>, rowOffset: number, event: PointerEvent) => void
   consumeRowSelectionClick?: () => boolean
   handleRowIndexKeydown?: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
@@ -296,6 +298,7 @@ export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   reportFillPlumbingState?: (layer: string, present: boolean) => void
   reportFillPlumbingDetail?: (layer: string, value: string) => void
   rendererPolicy?: DataGridAuthoredRendererPolicy
+  externalFilterIndicators?: readonly DataGridExternalFilterIndicator[]
 }
 
 interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>

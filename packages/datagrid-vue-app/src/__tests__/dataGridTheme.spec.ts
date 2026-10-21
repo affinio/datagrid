@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { resolveDataGridThemeTokens } from "../theme/dataGridTheme"
+import { resolveDataGridThemeStyleVars, resolveDataGridThemeTokens } from "../theme/dataGridTheme"
 
 afterEach(() => {
   delete document.documentElement.dataset.theme
@@ -35,5 +35,23 @@ describe("DataGrid theme overrides", () => {
 
     expect(resolveDataGridThemeTokens({ gridBackgroundColor: "#c2410c" }).gridBackgroundColor)
       .toBe("#c2410c")
+  })
+
+  it("maps light and dark selected-row overrides to the public CSS token", () => {
+    const theme = {
+      inheritThemeFromDocument: false,
+      tokenVariants: {
+        light: { bodyRowSelectedBackgroundColor: "var(--color-surface-selection-light)" },
+        dark: { bodyRowSelectedBackgroundColor: "var(--color-surface-selection-dark)" },
+      },
+      activeTokenVariant: "light" as const,
+    }
+
+    expect(resolveDataGridThemeStyleVars(theme)["--datagrid-row-selected-background-color"])
+      .toBe("var(--color-surface-selection-light)")
+    expect(resolveDataGridThemeStyleVars({ ...theme, activeTokenVariant: "dark" })["--datagrid-row-selected-background-color"])
+      .toBe("var(--color-surface-selection-dark)")
+    expect(resolveDataGridThemeTokens({ ...theme, activeTokenVariant: "dark" }).bodyRowSelectedBackgroundColor)
+      .toBe("var(--color-surface-selection-dark)")
   })
 })

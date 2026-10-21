@@ -372,7 +372,7 @@ describe("useDataGridStageCellRendering", () => {
     })
   })
 
-  it("keeps custom renderers active without disabling editor or placeholder contracts", () => {
+  it("keeps custom renderers active while leaving placeholder cells empty", () => {
     const mode = ref<DataGridTableMode>("base")
     const visibleColumns = ref<readonly DataGridTableStageBodyColumn[]>([
       createColumn({
@@ -443,9 +443,10 @@ describe("useDataGridStageCellRendering", () => {
     expect(renderApi.isSelectEditorCell(dataRow, 0, column, 0)).toBe(true)
     expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("cell:Planned")
     expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("group:Planned")
-    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("cell:Planned")
-    expect(cellRenderer).toHaveBeenCalledTimes(2)
+    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("")
+    expect(cellRenderer).toHaveBeenCalledTimes(1)
     expect(groupRenderer).toHaveBeenCalledTimes(1)
+    expect(renderApi.isSelectEditorCell(placeholderRow, 2, column, 0)).toBe(false)
   })
 
   it("resolves editor mode without reading row values", () => {
@@ -622,8 +623,8 @@ describe("useDataGridStageCellRendering", () => {
 
     expect(String(renderApi.renderResolvedCellContent(dataRow, 0, column, 0))).toBe("Planned")
     expect(String(renderApi.renderResolvedCellContent(groupRow, 1, column, 0))).toBe("Planned")
-    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("Planned")
-    expect(surfaceKinds).toEqual(["real", "real", "placeholder"])
+    expect(String(renderApi.renderResolvedCellContent(placeholderRow, 2, column, 0))).toBe("")
+    expect(surfaceKinds).toEqual(["real", "real"])
 
     const tracedRenderApi = useDataGridStageCellRendering({
       mode,
