@@ -322,7 +322,7 @@ Fail-fast behavior:
   - no `Infinity` literals in CI budget payloads (shared + per-suite),
   - aggregate variance/heap envelopes against declared budgets,
   - baseline drift lock for per-task runtime/elapsed/heap envelopes (`docs/perf/datagrid-benchmark-baseline.json`).
-- CI `quality-gates` parity lock run is blocking for merge readiness.
+- CI `quality-gates` package lock is blocking for merge readiness. Sandbox Playwright E2E is an explicit manual check and is not part of package CI.
 
 ## CI Integration
 
@@ -330,7 +330,8 @@ Workflow:
 - `.github/workflows/ci.yml`
 
 Jobs:
-- `quality-gates`: `quality:lock:datagrid:parity` (architecture acceptance + contracts + coverage + critical interaction checks + benchmark regression + parity e2e).
+- `quality-gates`: `quality:lock:datagrid` (architecture acceptance + package contracts + coverage + package performance gates).
+- `sandbox-e2e-manual`: `workflow_dispatch` runs the browser parity suite on demand; it checks Vue sandbox integration and is not a package gate.
 
 ## Latest Result Status
 

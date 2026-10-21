@@ -50,3 +50,4 @@ Adapter suites:
 
 - `quality:lock:datagrid` includes strict contracts as fail-fast prerequisite.
 - CI `quality-gates` job is blocking when strict contract suite fails.
+- Sandbox browser E2E runs manually through `.github/workflows/sandbox-e2e.yml` and does not gate package changes.

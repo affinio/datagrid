@@ -111,9 +111,9 @@
 | `quality:architecture:datagrid` | Набор architecture/docs/API boundary проверок. | Bundle of architecture/docs/API boundary checks. |
 | `quality:facade:datagrid` | Проверка покрытия facade API (fail при нарушении). | Facade API coverage check (fails on violations). |
 | `quality:facade:datagrid:report` | Отчет по покрытию facade без жесткого fail-gate. | Facade coverage report without strict fail gate. |
-| `quality:gates:datagrid:tree` | Композитный tree-gate: contracts + e2e + tree benches. | Composite tree gate: contracts + e2e + tree benches. |
+| `quality:gates:datagrid:tree` | Пакетный tree-gate: contracts + tree benches. | Package tree gate: contracts + tree benches. |
 | `quality:lock:datagrid` | Главный lock-гейт качества (architecture+perf+contracts+gates). | Main quality lock gate (architecture+perf+contracts+gates). |
-| `quality:lock:datagrid:parity` | Lock-гейт + bench regression + e2e parity. | Lock gate + bench regression + e2e parity. |
+| `quality:lock:datagrid:parity` | Пакетный lock + sandbox e2e parity; запуск вручную для интеграционных изменений. | Package lock + sandbox e2e parity; run manually for integration changes. |
 
 ## 7) Standalone scripts in `/scripts` (not always wired in `package.json`)
 

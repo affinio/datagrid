@@ -362,19 +362,19 @@ registerTokenCheck(
 registerFileCheck(
   "ci-workflow-file",
   ".github/workflows/ci.yml",
-  "CI workflow exists for parity/quality lock enforcement",
+  "CI workflow exists for package quality lock enforcement",
 )
 registerTokenCheck(
   "ci-workflow-quality-gates-job",
   ".github/workflows/ci.yml",
   [
     "quality-gates:",
-    "pnpm run quality:lock:datagrid:parity",
+    "pnpm run quality:lock:datagrid",
     "name: datagrid-quality-gates",
     "artifacts/quality",
     "artifacts/performance",
   ],
-  "CI workflow runs parity lock in blocking quality-gates job and uploads quality/perf artifacts",
+  "CI workflow runs package lock in blocking quality-gates job and uploads quality/perf artifacts",
 )
 registerForbiddenTokenCheck(
   "ci-no-legacy-benchmark-regression-job",
@@ -463,59 +463,52 @@ registerForbiddenTokenCheck(
             docsStart > qualityGatesStart ? docsStart : undefined,
           )
         : ""
-    const hasDirectParityCommand = qualityGatesBlock.includes("run: pnpm run quality:lock:datagrid:parity")
+    const hasDirectParityCommand = qualityGatesBlock.includes("run: pnpm run quality:lock:datagrid") &&
+      !qualityGatesBlock.includes("quality:lock:datagrid:parity") &&
+      !qualityGatesBlock.includes("test:e2e")
     registerConditionCheck(
       parityJobId,
       hasDirectParityCommand,
-      "CI quality-gates job executes parity lock command directly",
-      "quality-gates block does not include direct parity lock run command",
+      "CI quality-gates job executes package lock directly without sandbox E2E",
+      "quality-gates block must run package lock directly and exclude sandbox E2E",
     )
   }
 }
 
 {
   const workflowPath = resolve(".github/workflows/ci.yml")
-  const parityPlaywrightId = "ci-quality-gates-installs-playwright"
+  const parityPlaywrightId = "ci-sandbox-e2e-is-manual"
   if (!existsSync(workflowPath)) {
     registerConditionCheck(
       parityPlaywrightId,
       false,
-      "CI quality-gates job installs Playwright browsers before parity lock",
+      "Sandbox E2E has a manual workflow_dispatch entry point",
       "ci workflow missing",
     )
   } else {
-    const workflow = readFileSync(workflowPath, "utf8")
-    const qualityGatesStart = workflow.indexOf("quality-gates:")
-    const docsStart = workflow.indexOf("\n  docs:")
-    const qualityGatesBlock =
-      qualityGatesStart >= 0
-        ? workflow.slice(
-            qualityGatesStart,
-            docsStart > qualityGatesStart ? docsStart : undefined,
-          )
-        : ""
-    const installIndex = qualityGatesBlock.indexOf("pnpm exec playwright install --with-deps chromium")
-    const parityRunIndex = qualityGatesBlock.indexOf("pnpm run quality:lock:datagrid:parity")
-    const ordered = installIndex >= 0 && parityRunIndex > installIndex
+    const workflow = readFileSync(resolve(".github/workflows/sandbox-e2e.yml"), "utf8")
+    const manualDispatch = workflow.includes("workflow_dispatch:")
+    const e2eCommand = workflow.includes("pnpm run test:e2e:datagrid:parity")
+    const ordered = manualDispatch && e2eCommand
     registerConditionCheck(
       parityPlaywrightId,
       ordered,
-      "CI quality-gates job installs Playwright browsers before parity lock",
+      "Sandbox E2E has a manual workflow_dispatch entry point",
       ordered
         ? "ok"
-        : "quality-gates block must include playwright install before parity lock run",
+        : "sandbox-e2e.yml must expose workflow_dispatch and run the parity E2E suite",
     )
   }
 }
 
 {
   const workflowPath = resolve(".github/workflows/ci.yml")
-  const parityBeforeUploadId = "ci-quality-gates-parity-before-artifacts-upload"
+  const parityBeforeUploadId = "ci-quality-gates-package-lock-before-artifacts-upload"
   if (!existsSync(workflowPath)) {
     registerConditionCheck(
       parityBeforeUploadId,
       false,
-      "CI quality-gates runs parity lock before artifact upload",
+      "CI quality-gates runs package lock before artifact upload",
       "ci workflow missing",
     )
   } else {
@@ -529,16 +522,16 @@ registerForbiddenTokenCheck(
             docsStart > qualityGatesStart ? docsStart : undefined,
           )
         : ""
-    const parityRunIndex = qualityGatesBlock.indexOf("run: pnpm run quality:lock:datagrid:parity")
+    const parityRunIndex = qualityGatesBlock.indexOf("run: pnpm run quality:lock:datagrid")
     const uploadStepIndex = qualityGatesBlock.indexOf("name: Upload quality gate artifacts")
     const ordered = parityRunIndex >= 0 && uploadStepIndex > parityRunIndex
     registerConditionCheck(
       parityBeforeUploadId,
       ordered,
-      "CI quality-gates runs parity lock before artifact upload",
+      "CI quality-gates runs package lock before artifact upload",
       ordered
         ? "ok"
-        : "quality-gates block must run parity lock before upload step",
+        : "quality-gates block must run package lock before upload step",
     )
   }
 }

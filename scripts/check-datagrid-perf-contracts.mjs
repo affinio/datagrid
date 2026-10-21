@@ -688,14 +688,13 @@ registerTokenCheck(
   "package.json",
   [
     "test:datagrid:tree:contracts",
-    "test:e2e:datagrid:tree",
     "quality:gates:datagrid:tree",
     "quality:lock:datagrid",
     "bench:datagrid:tree:assert",
     "bench:datagrid:tree:matrix:assert:ci",
     "bench:datagrid:pivot:server-interop:assert",
   ],
-  "Quality lock includes explicit tree contracts/e2e/perf gate and pivot server interop gate",
+  "Quality lock includes explicit tree package contracts/perf gate and pivot server interop gate",
 )
 
 registerTokenCheck(
@@ -1234,10 +1233,10 @@ registerTokenCheck(
   ".github/workflows/ci.yml",
   [
     "quality-gates:",
-    "pnpm run quality:lock:datagrid:parity",
+    "pnpm run quality:lock:datagrid",
     "name: datagrid-quality-gates",
   ],
-  "CI quality-gates job executes parity lock and publishes benchmark/quality artifacts",
+  "CI quality-gates job executes package lock and publishes benchmark/quality artifacts",
 )
 
 const totalChecks = checks.length

@@ -1,0 +1,27 @@
+name: sandbox-e2e
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sandbox-e2e:
+    name: sandbox-browser-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run test:e2e:datagrid:parity
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sandbox-e2e-report
+          path: |
+            playwright-report
+            test-results
