@@ -10,6 +10,7 @@ export interface DataGridPointerAutoScrollInteractionState {
   isDragSelecting: boolean
   isFillDragging: boolean
   isRangeMoving: boolean
+  isRowSelectionDragging?: boolean
 }
 
 export interface DataGridPointerAutoScrollPosition {
@@ -22,6 +23,7 @@ export interface UseDataGridPointerAutoScrollOptions {
   resolveRangeMovePointer: () => DataGridPointerCoordinates | null
   resolveFillPointer: () => DataGridPointerCoordinates | null
   resolveDragPointer: () => DataGridPointerCoordinates | null
+  resolveRowSelectionPointer?: () => DataGridPointerCoordinates | null
   resolveAllowHorizontalAutoScroll?: () => boolean
   resolveViewportElement: () => HTMLElement | null
   resolveHeaderHeight: () => number
@@ -30,8 +32,9 @@ export interface UseDataGridPointerAutoScrollOptions {
   applyRangeMovePreviewFromPointer: () => void
   applyFillPreviewFromPointer: () => void
   applyDragSelectionFromPointer: () => void
+  applyRowSelectionPreviewFromPointer?: () => void
   onFrameSample?: (sample: {
-    activeKind: "drag" | "fill" | "range" | null
+    activeKind: "drag" | "fill" | "range" | "row-selection" | null
     totalMs: number
     deltaX: number
     deltaY: number
@@ -74,7 +77,7 @@ export function useDataGridPointerAutoScroll(
 
     const viewport = options.resolveViewportElement()
     const pointer = resolveDataGridActiveInteractionPointer(options, interactionState)
-    let activeKind: "drag" | "fill" | "range" | null = null
+    let activeKind: "drag" | "fill" | "range" | "row-selection" | null = null
     let frameDeltaX = 0
     let frameDeltaY = 0
     let scrolled = false
@@ -118,6 +121,8 @@ export function useDataGridPointerAutoScroll(
         options.applyFillPreviewFromPointer()
       } else if (activeKind === "drag") {
         options.applyDragSelectionFromPointer()
+      } else if (activeKind === "row-selection") {
+        options.applyRowSelectionPreviewFromPointer?.()
       }
     }
     options.onFrameSample?.({

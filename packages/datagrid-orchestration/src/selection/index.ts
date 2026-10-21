@@ -1,4 +1,12 @@
 export {
+  type DataGridRowSelectionInteractionOwner,
+  type DataGridRowSelectionSessionController,
+  type DataGridRowSelectionSessionPreview,
+  type CreateDataGridRowSelectionSessionControllerOptions,
+  createDataGridRowSelectionSessionController,
+} from "./createDataGridRowSelectionSessionController"
+
+export {
   type UseDataGridClearSelectionLifecycleOptions,
   type UseDataGridClearSelectionLifecycleResult,
   useDataGridClearSelectionLifecycle,

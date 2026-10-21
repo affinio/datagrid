@@ -67,6 +67,7 @@ Single source of truth for platform capabilities:
 - `useDataGridResizeClickGuard`: resize interaction guard that blocks accidental header-sort click after resize.
 - `useDataGridInitialViewportRecovery`: post-mount/resize recovery loop for virtual viewport stabilization.
 - `useDataGridRowSelectionModel`: anchor + shift-range row selection model with reconcile helpers for filtering/virtualization flows.
+- `createDataGridRowSelectionSessionController`: framework-independent drag-session lifecycle over the core row-selection model. It acquires a host-provided exclusive interaction lease, resolves ranges against a projection revision, publishes previews, commits selection and anchor/extent together, and releases ownership on completion or cancellation.
 - `useDataGridScrollIdleGate`: lightweight scroll-activity gate for deferring non-critical sync work until scroll idle.
 - `useDataGridScrollPerfTelemetry`: runtime frame telemetry for active scroll sessions (`fps`, dropped frames, long-task frames) with a minimal quality classification (`good`/`degraded`).
 
@@ -122,6 +123,9 @@ const rowSelection = useDataGridRowSelectionModel({
 	resolveRowId: row => String(row.rowId),
 	resolveAllRows: () => allRows,
 })
+
+// The Vue app stage supplies its exclusive interaction lease, projection-aware
+// range resolver, state getters, preview publisher, and atomic commit callback.
 
 const scrollIdleGate = useDataGridScrollIdleGate({
 	resolveIdleDelayMs: () => 80,

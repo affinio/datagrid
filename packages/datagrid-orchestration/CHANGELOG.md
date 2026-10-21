@@ -1,5 +1,12 @@
 # @affino/datagrid-orchestration
 
+## 0.8.0
+
+### Added
+
+- Added a row-selection drag-session controller with exclusive interaction ownership, projection-aware previews, conflict cancellation, and one commit on completion.
+- Added row-selection support to pointer auto-scroll routing.
+
 ## 0.7.2
 
 ### Changed
