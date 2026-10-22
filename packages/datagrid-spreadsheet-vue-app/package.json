@@ -27,7 +27,6 @@
     "@affino/datagrid-formula-engine": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
-    "@affino/datagrid-vue-app": "workspace:*",
     "@affino/menu-vue": "^2.2.0"
   },
   "peerDependencies": {

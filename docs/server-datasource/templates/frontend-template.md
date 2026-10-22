@@ -194,7 +194,7 @@ Surface backend warnings in the UI instead of dropping them.
 ```vue
 <script setup lang="ts">
 import { computed } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 import { createAuctionsDatasourceHttpAdapter } from "@/features/auctions/adapter"
 
 const datasource = createAuctionsDatasourceHttpAdapter({

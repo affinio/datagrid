@@ -144,7 +144,7 @@ The adapter works best when the backend supports:
 - fill for `POST /api/{tableId}/fill-boundary` and `POST /api/{tableId}/fill/commit`
 - history for `POST /api/history/undo`, `POST /api/history/redo`, and `POST /api/history/status`
 
-If a backend omits history endpoints, set `:server-history="false"` on `@affino/datagrid-vue-app` to prevent the grid from requesting history status or invoking server undo/redo. This setting is independent from the local `history` prop.
+If a backend omits history endpoints, set `:server-history="false"` on `@affino/datagrid-vue` to prevent the grid from requesting history status or invoking server undo/redo. This setting is independent from the local `history` prop.
 
 ## Docs
 

@@ -17,7 +17,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup resources/js/index.ts --format esm,cjs --dts --clean"
+    "build": "tsup resources/js/index.ts --format esm,cjs --dts --clean",
+    "test:tarball-contract": "node scripts/test-tarball-contract.mjs"
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",

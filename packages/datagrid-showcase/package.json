@@ -10,9 +10,8 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@affino/datagrid-vue-app": "workspace:*",
-    "vue": "3.4.38",
-    "@affino/datagrid-vue": "workspace:*"
+    "@affino/datagrid-vue": "workspace:*",
+    "vue": "3.4.38"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",

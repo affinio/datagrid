@@ -32,15 +32,15 @@ If you are integrating against a local checkout instead of a published wheel, us
 Install the frontend packages that host the grid runtime, Vue bridge, Vue app shell, and the primary server datasource adapter.
 
 ```bash
-npm install @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue-app @affino/datagrid-server-adapters
+npm install @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 ```bash
-pnpm add @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue-app @affino/datagrid-server-adapters
+pnpm add @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 ```bash
-yarn add @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue-app @affino/datagrid-server-adapters
+yarn add @affino/datagrid-core @affino/datagrid-vue @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 If you need lower-level transport and change-feed helpers, add `@affino/datagrid-server-client` as an advanced dependency.

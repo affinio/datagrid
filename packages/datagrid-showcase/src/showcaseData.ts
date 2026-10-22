@@ -1,5 +1,5 @@
 import { h } from "vue"
-import type { DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+import type { DataGridAppColumnInput } from "@affino/datagrid-vue"
 import type { DataGridDataSource } from "@affino/datagrid-vue"
 
 export type ScenarioId = "scale" | "backend" | "spreadsheet" | "filters" | "aggregation" | "pivot" | "tree" | "gantt"

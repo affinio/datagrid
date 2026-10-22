@@ -6,7 +6,7 @@ import {
   type DataGridStyleConfig,
   type DataGridThemeTokens,
 } from "@affino/datagrid-theme"
-import type { DataGridThemeProp } from "@affino/datagrid-vue-app"
+import type { DataGridThemeProp } from "@affino/datagrid-vue"
 
 const SPREADSHEET_WORKBOOK_THEME_PRESETS: Record<
   NonNullable<Extract<DataGridThemeProp, string>>,

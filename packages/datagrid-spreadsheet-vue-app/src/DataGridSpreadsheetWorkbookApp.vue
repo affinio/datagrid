@@ -437,18 +437,18 @@ import {
 import type {
   DataGridColumnMenuCustomItem,
   DataGridThemeProp,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 import {
   DataGridAdvancedFilterPopover,
   DataGridTableStage,
   createDataGridTableStageContext,
   dataGridAppRootElementKey,
   useDataGridTableStageRuntime,
-} from "@affino/datagrid-vue-app/internal"
+} from "@affino/datagrid-vue/internal"
 import type {
   DataGridTableStageCustomOverlay,
   DataGridTableStageProps,
-} from "@affino/datagrid-vue-app/internal"
+} from "@affino/datagrid-vue/internal"
 import DataGridSpreadsheetFormulaEditor from "./DataGridSpreadsheetFormulaEditor.vue"
 import { resolveSpreadsheetWorkbookThemeTokens } from "./spreadsheetWorkbookTheme"
 import { useDataGridSpreadsheetWorkbookHistory } from "./useDataGridSpreadsheetWorkbookHistory"

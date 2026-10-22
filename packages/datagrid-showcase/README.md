@@ -8,7 +8,7 @@ This package is intentionally separate from `@affino/datagrid-sandbox`:
 - no debug diagnostics
 - no sandbox-only grid wrappers
 - no public API changes
-- uses stable app/runtime surfaces from `@affino/datagrid-vue-app` and `@affino/datagrid-vue`
+- uses stable app/runtime surfaces from `@affino/datagrid-vue` and `@affino/datagrid-vue`
 
 ## Showcase Scenarios
 

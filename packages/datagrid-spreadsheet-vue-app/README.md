@@ -16,13 +16,13 @@ Use this package when the product needs workbook semantics such as:
 - workbook-scoped undo/redo;
 - spreadsheet fill, paste, and style actions.
 
-For an ordinary table, use `@affino/datagrid-vue-app` instead.
+For an ordinary table, use `@affino/datagrid-vue` instead.
 
 ## Layer ownership
 
 - `@affino/datagrid-core` owns workbook, sheet, formula, reference-rewrite, and
   structural mutation semantics.
-- `@affino/datagrid-vue-app` owns the reusable grid stage, viewport, menus,
+- `@affino/datagrid-vue` owns the reusable grid stage, viewport, menus,
   filtering, and fill surface.
 - This package owns workbook tabs, formula bar, diagnostics, derived-view UX,
   and workbook-aware mutation/history wiring.

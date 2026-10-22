@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue"
-import { DataGrid, type DataGridExposed } from "@affino/datagrid-vue-app"
+import { DataGrid, type DataGridExposed } from "@affino/datagrid-vue"
 import { createDataSourceBackedRowModel, type DataGridAggregationModel, type DataGridPivotSpec } from "@affino/datagrid-vue"
 import {
   aggregationColumns,

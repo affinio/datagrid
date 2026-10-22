@@ -2,13 +2,10 @@
 
 Laravel/Livewire-oriented facade for Affino DataGrid.
 
-If you want the app-facing Laravel entrypoint, prefer:
-
-- [@affino/datagrid-laravel-app](https://github.com/affinio/datagrid/tree/main/packages/datagrid-laravel-app#readme)
-
-Use `@affino/datagrid-laravel` when you want the lower-level Laravel/Livewire
-adapter bridge instead of importing `@affino/datagrid-core` and
-`@affino/datagrid-orchestration` directly.
+Use `@affino/datagrid-laravel` as the Laravel/Livewire integration facade.
+It provides the supported Laravel-facing runtime, row-model, pivot, and
+orchestration exports without requiring consumers to import implementation
+packages directly.
 
 ## Canonical Feature Catalog
 

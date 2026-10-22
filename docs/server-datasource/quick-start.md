@@ -21,7 +21,7 @@ For sandbox-equivalent behavior, follow the [server datasource UX contract](./ux
 Frontend:
 
 ```bash
-pnpm add @affino/datagrid-vue-app @affino/datagrid-vue @affino/datagrid-server-adapters
+pnpm add @affino/datagrid-vue @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 Backend package, when using the Affino Python backend helpers:
@@ -83,7 +83,7 @@ Create the datasource with `createAffinoDatasource`, wrap it in a datasource-bac
 <script setup lang="ts">
 import { onBeforeUnmount } from "vue"
 import { createDataSourceBackedRowModel } from "@affino/datagrid-vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 import { createAffinoDatasource } from "@affino/datagrid-server-adapters"
 
 type AuctionRow = {
