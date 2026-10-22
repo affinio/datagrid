@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-laravel",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Laravel / Livewire adapter facade for Affino DataGrid",
   "type": "module",
   "main": "dist/index.cjs",

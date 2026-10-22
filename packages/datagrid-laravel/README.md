@@ -7,6 +7,14 @@ It provides the supported Laravel-facing runtime, row-model, pivot, and
 orchestration exports without requiring consumers to import implementation
 packages directly.
 
+The facade exposes the framework-independent state restore contract:
+`api.state.validate()` returns preflight issues and applicable sections, while
+`api.state.set()` returns applied/skipped sections. Restore failures throw
+`DataGridStateRestoreError` with the failed section and rollback status. Use
+`api.view.setRowHeightOverrideById()` for application-owned row heights that
+should follow a record through projection changes; index overrides are for
+virtualizer measurements.
+
 ## Canonical Feature Catalog
 
 Single source of truth for platform capabilities:
@@ -35,6 +43,19 @@ It re-exports a curated set of:
 - pivot helpers (`setPivotModel`, drilldown, layout export/import, interop export)
 - server/data-source row model contracts (including server-side pivot pull context)
 - orchestration runtime/layout/wheel primitives
+
+The `DataGridApi` type includes the Core `read.captureView()` contract. Laravel or
+Livewire adapters that receive a grid API can use it to take one synchronous
+read of the current projection, columns, computed-field metadata, and selection.
+Check `rows.value.coverage` before treating a server-backed projection as
+complete. This package exposes the API types and failure error types; API
+construction remains the responsibility of the adapter that owns the grid.
+The framework-independent `api.cells.resolveValue({ rowId, columnKey, purpose })`
+contract also separates source, accessor/computed, and display-formatted values.
+Use `source` for raw field reads, `computed` for column accessor/value-getter
+semantics, and `display` only for presentation; an accessor does not imply a
+write mapping. Laravel adapters that own a grid API should use its returned
+`writeTarget` hint before building an edit patch.
 
 ## Runtime mode decision (Main thread vs Worker vs Server-side)
 
