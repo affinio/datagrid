@@ -157,6 +157,17 @@ Relevant regressions:
 - `e2e/sandbox-tree-pivot.spec.ts` (`tree group anchor survives collapse and expand roundtrip`)
 - `e2e/sandbox-interactions.spec.ts` (`placeholder tail materialization keeps selection anchor and fill handle`)
 
+## Symptom: Inline edits on visual placeholder rows are rejected as conflicts
+
+Checks:
+- Edit conflict detection compares the source value resolved for the row patch target.
+- Materializing a visual placeholder changes its synthetic row ID to the newly created data row ID; this is part of the edit operation and must not be treated as an external update.
+- Ordinary edit sessions still reject a commit when the source value changed after the editor opened.
+
+Relevant regressions:
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts` (placeholder edit, materialization, and undo contracts).
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppInlineEditing.contract.spec.ts` (source-value conflict detection).
+
 ## Standard Validation Commands
 
 - `pnpm run test:matrix:unit`

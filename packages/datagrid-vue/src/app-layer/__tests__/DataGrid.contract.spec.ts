@@ -7382,6 +7382,11 @@ describe("DataGrid app facade contract", () => {
       selectedRows: [],
       mode: "all",
       excludedRows: [],
+      scope: {
+        kind: "current-projection",
+        queryRevision: 0,
+        datasetVersion: null,
+      },
     })
 
     await headerCheckbox.trigger("click")
@@ -7549,6 +7554,11 @@ describe("DataGrid app facade contract", () => {
       selectedRows: [],
       mode: "all",
       excludedRows: [],
+      scope: {
+        kind: "current-projection",
+        queryRevision: 0,
+        datasetVersion: null,
+      },
     })
 
     wrapper.unmount()

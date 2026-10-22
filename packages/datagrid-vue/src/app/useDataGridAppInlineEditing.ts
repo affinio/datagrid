@@ -123,6 +123,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
 
   const editingCell = ref<DataGridAppEditingCell | null>(null)
   const editingCellInitialSourceValue = ref<unknown>(undefined)
+  const editingCellStartedOnPlaceholder = ref(false)
   const editingCellValue = ref("")
   const editingCellInitialFilter = ref("")
   const editingCellOpenOnMount = ref(false)
@@ -146,9 +147,9 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     const resolved = options.runtime.api.cells?.resolveValue?.({
       rowId: row.rowId,
       columnKey: column.key,
-      purpose: "computed",
+      purpose: "source",
     })
-    if (resolved) return resolved.status === "available" ? resolved.computedValue : undefined
+    if (resolved?.status === "available") return resolved.sourceValue
     if (typeof column.column.accessor === "function") return column.column.accessor(row.data)
     if (typeof column.column.valueGetter === "function") return column.column.valueGetter(row.data)
     const field = typeof column.column.field === "string" && column.column.field.length > 0 ? column.column.field : column.key
@@ -268,6 +269,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
   const clearInlineEdit = (): void => {
     editingCell.value = null
     editingCellInitialSourceValue.value = undefined
+    editingCellStartedOnPlaceholder.value = false
     editingCellValue.value = ""
     editingCellInitialFilter.value = ""
     editingCellOpenOnMount.value = false
@@ -429,6 +431,8 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       ? normalizeTemporalEditorDraft(readEditorSourceValue(row, columnSnapshot), editorMode === "datetime")
       : (startOptions.draftValue ?? options.readCell(row, columnKey))
     editingCellInitialSourceValue.value = columnSnapshot ? readEditorSourceValue(row, columnSnapshot) : undefined
+    editingCellStartedOnPlaceholder.value = (row as DataGridRowNode<TRow> & { __placeholder?: boolean }).__placeholder === true
+      || (typeof row.rowId === "string" && row.rowId.startsWith("__datagrid_placeholder__:"))
     editingCell.value = {
       rowId: row.rowId,
       columnKey,
@@ -497,7 +501,7 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         ? readEditorSourceValue(rowNode, columnSnapshot)
         : (rowNode.data as Record<string, unknown>)[currentEditingCell.columnKey])
       : undefined
-    if (!Object.is(oldValue, editingCellInitialSourceValue.value)) {
+    if (!editingCellStartedOnPlaceholder.value && !Object.is(oldValue, editingCellInitialSourceValue.value)) {
       editingCellRejectedReason.value = "external-update-conflict"
       reportInlineEditStatus("Edit rejected: the cell changed while it was being edited")
       focusInlineEditor()

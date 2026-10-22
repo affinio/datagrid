@@ -456,7 +456,7 @@ export function useDataGridAppCellSelection<TRow>(
       return false
     }
     const rowIndex = resolveRowIndex(rowOffset)
-    const row = options.runtime.getBodyRowAtIndex(rowIndex)
+    const row = options.runtime.getBodyRowAtIndex?.(rowIndex)
     const currentRowId = normalizeRowId(row?.rowId)
     const stalePointAtCell = options.selectionSnapshot.value?.ranges.some(range => (
       range.startRow === rowIndex
@@ -494,7 +494,7 @@ export function useDataGridAppCellSelection<TRow>(
     if (anchorRowId == null) {
       return true
     }
-    const currentRowId = normalizeRowId(options.runtime.getBodyRowAtIndex(rowIndex)?.rowId)
+    const currentRowId = normalizeRowId(options.runtime.getBodyRowAtIndex?.(rowIndex)?.rowId)
     return currentRowId == null || currentRowId === anchorRowId
   }
 
