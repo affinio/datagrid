@@ -113,6 +113,7 @@ export function sanitizeDataGridSavedView<TRow extends Record<string, unknown> =
           : { order: [], zoneOrder: {}, visibility: {}, widths: {}, pins: {} },
         selection: included.has("selection") ? state.selection : null,
         rowSelection: included.has("selection") ? state.rowSelection : null,
+        columnSelection: included.has("selection") ? state.columnSelection : null,
         view: included.has("viewportPosition") ? state.view : { viewportPosition: null },
       }
     : state

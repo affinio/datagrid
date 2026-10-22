@@ -141,6 +141,12 @@ const groups: ShowcaseGroup[] = [
         meta: "Selection",
       },
       {
+        title: "Column Selection API",
+        to: "/vue/column-selection-grid",
+        description: "Use stable column keys to manage selection through the Vue grid API.",
+        meta: "Selection",
+      },
+      {
         title: "Legacy App Route",
         to: "/vue/base-grid-factory",
         description: "Keep the legacy app-grid route available.",

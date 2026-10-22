@@ -38,6 +38,10 @@ export type DataGridRowSelectionCapability = Required<
   >
 >
 
+export type DataGridColumnSelectionCapability = Required<
+  Pick<DataGridCoreSelectionService, "getColumnSelectionSnapshot" | "setColumnSelectionSnapshot" | "clearColumnSelection">
+>
+
 export type DataGridPatchCapability<TRow = unknown> = {
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
@@ -158,6 +162,24 @@ export function resolveRowSelectionCapability(
   }
 }
 
+export function resolveColumnSelectionCapability(
+  service: DataGridCoreSelectionService | null,
+): DataGridColumnSelectionCapability | null {
+  if (
+    !service ||
+    typeof service.getColumnSelectionSnapshot !== "function" ||
+    typeof service.setColumnSelectionSnapshot !== "function" ||
+    typeof service.clearColumnSelection !== "function"
+  ) {
+    return null
+  }
+  return {
+    getColumnSelectionSnapshot: service.getColumnSelectionSnapshot,
+    setColumnSelectionSnapshot: service.setColumnSelectionSnapshot,
+    clearColumnSelection: service.clearColumnSelection,
+  }
+}
+
 export function resolveTransactionCapability(
   service: DataGridCoreTransactionService | null,
 ): DataGridTransactionCapability | null {
@@ -223,6 +245,15 @@ export function assertRowSelectionCapability(
 ): DataGridRowSelectionCapability {
   if (!capability) {
     throw new Error('[DataGridApi] "selection" service is present but does not implement rowSelection capabilities.')
+  }
+  return capability
+}
+
+export function assertColumnSelectionCapability(
+  capability: DataGridColumnSelectionCapability | null,
+): DataGridColumnSelectionCapability {
+  if (!capability) {
+    throw new Error('[DataGridApi] "selection" service is present but does not implement columnSelection capabilities.')
   }
   return capability
 }

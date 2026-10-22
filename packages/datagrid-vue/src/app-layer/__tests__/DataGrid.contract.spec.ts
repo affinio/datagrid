@@ -8877,6 +8877,7 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
     const sourceApi = resolveVm(source).getApi?.()
     sourceApi?.rowSelection?.setSnapshot({ focusedRow: "r1", selectedRows: ["r1"] })
+    sourceApi?.columnSelection?.setSelected("status", true)
 
     const defaultView = resolveVm(source).getSavedView?.()
     const selectionView = resolveVm(source).getSavedView?.({ include: ["selection"] })
@@ -8884,9 +8885,11 @@ describe("DataGrid app facade contract", () => {
       "columns", "sorting", "filters", "grouping", "pagination", "pivot", "aggregation", "viewMode",
     ])
     expect(defaultView?.state.rowSelection).toBeNull()
+    expect(defaultView?.state.columnSelection).toBeNull()
     expect(defaultView?.state.selection).toBeNull()
     expect(selectionView?.included).toContain("selection")
     expect(selectionView?.state.rowSelection?.selectedRows).toEqual(["r1"])
+    expect(selectionView?.state.columnSelection?.selectedColumnKeys).toEqual(["status"])
 
     const target = mount(DataGrid, {
       props: { rows: BASE_ROWS, columns: COLUMNS, rowSelection: true },
@@ -8894,11 +8897,14 @@ describe("DataGrid app facade contract", () => {
     await flushRuntimeTasks()
     const targetApi = resolveVm(target).getApi?.()
     targetApi?.rowSelection?.setSnapshot({ focusedRow: "r2", selectedRows: ["r2"] })
+    targetApi?.columnSelection?.setSelected("owner", true)
 
     expect(resolveVm(target).applySavedView?.(defaultView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
     expect(targetApi?.rowSelection?.getSnapshot()?.selectedRows).toEqual(["r2"])
+    expect(targetApi?.columnSelection?.getSelectedColumns()).toEqual(["owner"])
     expect(resolveVm(target).applySavedView?.(selectionView as DataGridSavedViewSnapshot<Record<string, unknown>>)).toBe(true)
     expect(targetApi?.rowSelection?.getSnapshot()?.selectedRows).toEqual(["r1"])
+    expect(targetApi?.columnSelection?.getSelectedColumns()).toEqual(["status"])
 
     source.unmount()
     target.unmount()

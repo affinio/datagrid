@@ -1,5 +1,23 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("Vue sandbox manages whole-column selection through the public grid API", async ({ page }) => {
+  await page.goto("/vue/column-selection-grid")
+  const result = page.getByTestId("column-selection-result")
+
+  await expect(result).toContainText("Selected column keys: none")
+  await page.getByTestId("column-selection-status").check()
+  await expect(result).toContainText("Selected column keys: status")
+
+  await page.getByTestId("column-selection-preset").click()
+  await expect(result).toContainText("Selected column keys: status, owner")
+  await expect(page.getByTestId("column-selection-owner")).toBeChecked()
+
+  await page.getByTestId("column-selection-clear").click()
+  await expect(result).toContainText("Selected column keys: none")
+  await expect(page.getByTestId("column-selection-status")).not.toBeChecked()
+  await expect(page.getByTestId("column-selection-owner")).not.toBeChecked()
+})
+
 test("saved preferences commit resize on release and restore filters without a width flash", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto("/vue/state-persistence")

@@ -39,6 +39,7 @@ export function useDataGridStatePersistence(options: {
       transaction: null,
       selection: config.includeSelection ? state.selection : null,
       rowSelection: config.includeSelection ? state.rowSelection : null,
+      columnSelection: config.includeSelection ? state.columnSelection : null,
       view: config.includeViewportPosition ? state.view : undefined,
       rows: {
         ...state.rows,
@@ -59,7 +60,8 @@ export function useDataGridStatePersistence(options: {
       groupBy: row.groupBy, expansion: row.groupExpansion, pivot: row.pivotModel,
       aggregation: state.rows.aggregationModel,
       page: row.pagination && { pageSize: row.pagination.pageSize, currentPage: row.pagination.currentPage },
-      selection: state.selection, rowSelection: state.rowSelection, view: state.view,
+      selection: state.selection, rowSelection: state.rowSelection,
+      columnSelection: state.columnSelection, view: state.view,
     })
   }
 

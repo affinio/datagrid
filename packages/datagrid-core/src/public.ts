@@ -77,6 +77,7 @@ export {
   type DataGridApiMutationControlOptions,
   type DataGridApiPivotNamespace,
   type DataGridApiRowSelectionNamespace,
+  type DataGridApiColumnSelectionNamespace,
   type DataGridApiSelectionNamespace,
   type DataGridChangeContext,
   type DataGridApiTransactionNamespace,
@@ -109,6 +110,7 @@ export {
   type DataGridApiErrorEvent,
   type DataGridApiRowsEditedEvent,
   type DataGridApiRowSelectionChangedEvent,
+  type DataGridApiColumnSelectionChangedEvent,
   type DataGridApiSelectionChangedEvent,
   type DataGridGetStateOptions,
   type DataGridSetViewportPositionOptions,
@@ -187,6 +189,15 @@ export {
   setDataGridRowSelected,
   type DataGridRowSelectionSnapshot,
 } from "./selection/rowSelection.js"
+
+export {
+  dataGridColumnSelectionSnapshotsEqual,
+  deselectDataGridColumns,
+  normalizeDataGridColumnSelectionSnapshot,
+  selectDataGridColumns,
+  setDataGridColumnSelected,
+  type DataGridColumnSelectionSnapshot,
+} from "./selection/columnSelection.js"
 
 export {
   addDataGridRowSelectionModelRows,

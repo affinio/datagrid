@@ -59,6 +59,7 @@ import type {
 } from "@affino/datagrid-pivot"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import type { DataGridColumnSelectionSnapshot } from "../selection/columnSelection"
 import type {
   DataGridSelectionAggregationKind,
   DataGridSelectionSummaryColumnConfig,
@@ -174,6 +175,19 @@ export interface DataGridApiRowSelectionNamespace<TRow = unknown> {
    * excluded rows. Returns a new array and does not clone row objects.
    */
   getSelectedRowData(): TRow[]
+}
+
+export interface DataGridApiColumnSelectionNamespace {
+  hasSupport(): boolean
+  getSnapshot(): DataGridColumnSelectionSnapshot | null
+  setSnapshot(snapshot: DataGridColumnSelectionSnapshot, context?: DataGridChangeContext): void
+  clear(context?: DataGridChangeContext): void
+  getSelectedColumns(): readonly string[]
+  isSelected(columnKey: string): boolean
+  setSelected(columnKey: string, selected: boolean, context?: DataGridChangeContext): void
+  selectColumns(columnKeys: Iterable<string>, context?: DataGridChangeContext): void
+  deselectColumns(columnKeys: Iterable<string>, context?: DataGridChangeContext): void
+  clearSelectedColumns(context?: DataGridChangeContext): void
 }
 
 export interface DataGridApiTransactionNamespace {
@@ -581,6 +595,7 @@ export interface DataGridUnifiedState<TRow = unknown> {
   view?: DataGridUnifiedViewState
   selection: DataGridSelectionSnapshot | null
   rowSelection: DataGridRowSelectionSnapshot | null
+  columnSelection?: DataGridColumnSelectionSnapshot | null
   transaction: DataGridTransactionSnapshot | null
 }
 
@@ -656,6 +671,12 @@ export interface DataGridApiRowSelectionChangedEvent {
   operationId: string
 }
 
+export interface DataGridApiColumnSelectionChangedEvent {
+  snapshot: DataGridColumnSelectionSnapshot | null
+  origin?: string
+  operationId: string
+}
+
 /** Describes where a host initiated a public selection change. */
 export interface DataGridChangeContext {
   origin?: string
@@ -713,6 +734,7 @@ export interface DataGridApiEventMap<TRow = unknown> {
   "projection:recomputed": DataGridApiProjectionRecomputedEvent<TRow>
   "selection:changed": DataGridApiSelectionChangedEvent
   "row-selection:changed": DataGridApiRowSelectionChangedEvent
+  "column-selection:changed": DataGridApiColumnSelectionChangedEvent
   "pivot:changed": DataGridApiPivotChangedEvent
   "transaction:changed": DataGridApiTransactionChangedEvent
   "viewport:changed": DataGridApiViewportChangedEvent<TRow>
@@ -772,6 +794,7 @@ export interface DataGridApiCapabilities {
   readonly compute: boolean
   readonly selection: boolean
   readonly rowSelection: boolean
+  readonly columnSelection: boolean
   readonly transaction: boolean
   readonly histogram: boolean
   readonly sortFilterBatch: boolean
@@ -784,6 +807,7 @@ export interface DataGridApi<TRow = unknown> {
   readonly pivot: DataGridApiPivotNamespace<TRow>
   readonly selection: DataGridApiSelectionNamespace<TRow>
   readonly rowSelection: DataGridApiRowSelectionNamespace<TRow>
+  readonly columnSelection: DataGridApiColumnSelectionNamespace
   readonly transaction: DataGridApiTransactionNamespace
   readonly rows: DataGridApiRowsNamespace<TRow>
   readonly data: DataGridApiDataNamespace

@@ -40,6 +40,7 @@ function cloneCapabilities(capabilities: DataGridApiCapabilities): DataGridApiCa
     compute: capabilities.compute,
     selection: capabilities.selection,
     rowSelection: capabilities.rowSelection,
+    columnSelection: capabilities.columnSelection,
     transaction: capabilities.transaction,
     histogram: capabilities.histogram,
     sortFilterBatch: capabilities.sortFilterBatch,

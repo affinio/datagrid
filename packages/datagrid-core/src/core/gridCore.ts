@@ -1,5 +1,6 @@
 import type { DataGridColumnModel, DataGridEditModel, DataGridRowModel, DataGridViewportRange } from "../models/index.js"
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import type { DataGridColumnSelectionSnapshot } from "../selection/columnSelection"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type {
   DataGridSetViewportPositionOptions,
@@ -88,6 +89,9 @@ export interface DataGridCoreSelectionService extends DataGridCoreService {
   selectRows?(rowIds: Iterable<string | number>): void
   deselectRows?(rowIds: Iterable<string | number>): void
   clearSelectedRows?(): void
+  getColumnSelectionSnapshot?(): DataGridColumnSelectionSnapshot | null
+  setColumnSelectionSnapshot?(snapshot: DataGridColumnSelectionSnapshot): void
+  clearColumnSelection?(): void
 }
 
 export interface DataGridCoreViewportService extends DataGridCoreService {

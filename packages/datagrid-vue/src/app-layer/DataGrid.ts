@@ -49,6 +49,7 @@ import {
   useDataGridAppRowSelection,
   useDataGridAppSelection,
 } from "@affino/datagrid-vue/app"
+import { useDataGridAppColumnSelection } from "./useDataGridAppColumnSelection"
 import {
   defineDataGridStructuralRowActionHandler,
   type DataGridStructuralRowActionHandler,
@@ -406,24 +407,30 @@ function composeSelectionService(options: {
   userSelectionService?: DataGridSelectionService
   cellSelectionService: DataGridSelectionService
   rowSelectionService: DataGridSelectionService
+  columnSelectionService: DataGridSelectionService
 }): DataGridSelectionService {
   const {
     userSelectionService,
     cellSelectionService,
     rowSelectionService,
+    columnSelectionService,
   } = options
+  const services = [userSelectionService, cellSelectionService, rowSelectionService, columnSelectionService]
   return {
     name: "selection",
-    init: composeSelectionLifecycle("init", [userSelectionService, cellSelectionService, rowSelectionService]),
-    start: composeSelectionLifecycle("start", [userSelectionService, cellSelectionService, rowSelectionService]),
-    stop: composeSelectionLifecycle("stop", [userSelectionService, cellSelectionService, rowSelectionService]),
-    dispose: composeSelectionLifecycle("dispose", [userSelectionService, cellSelectionService, rowSelectionService]),
+    init: composeSelectionLifecycle("init", services),
+    start: composeSelectionLifecycle("start", services),
+    stop: composeSelectionLifecycle("stop", services),
+    dispose: composeSelectionLifecycle("dispose", services),
     getSelectionSnapshot: cellSelectionService.getSelectionSnapshot,
     setSelectionSnapshot: cellSelectionService.setSelectionSnapshot,
     clearSelection: cellSelectionService.clearSelection,
     getRowSelectionSnapshot: rowSelectionService.getRowSelectionSnapshot,
     setRowSelectionSnapshot: rowSelectionService.setRowSelectionSnapshot,
     clearRowSelection: rowSelectionService.clearRowSelection,
+    getColumnSelectionSnapshot: columnSelectionService.getColumnSelectionSnapshot,
+    setColumnSelectionSnapshot: columnSelectionService.setColumnSelectionSnapshot,
+    clearColumnSelection: columnSelectionService.clearColumnSelection,
     getFocusedRow: rowSelectionService.getFocusedRow,
     setFocusedRow: rowSelectionService.setFocusedRow,
     getSelectedRows: rowSelectionService.getSelectedRows,
@@ -1407,6 +1414,7 @@ const DataGridRuntimeComponent = defineComponent({
     } = useDataGridAppRowSelection<unknown>({
       resolveRuntime: () => dataGridRef.value,
     })
+    const { selectionService: columnSelectionService } = useDataGridAppColumnSelection()
     const resolvedRowSelectionService = computed<DataGridSelectionService>(() => {
       return showRowSelection.value ? rowSelectionService : createDisabledRowSelectionService()
     })
@@ -1416,6 +1424,7 @@ const DataGridRuntimeComponent = defineComponent({
         userSelectionService: props.services?.selection,
         cellSelectionService: selectionService,
         rowSelectionService: resolvedRowSelectionService.value,
+        columnSelectionService,
       }),
     }))
     const {
@@ -1768,6 +1777,7 @@ const DataGridRuntimeComponent = defineComponent({
           columns: included.has("columns") ? migrated.columns : current.columns,
           selection: included.has("selection") ? migrated.selection : current.selection,
           rowSelection: included.has("selection") ? migrated.rowSelection : current.rowSelection,
+          columnSelection: included.has("selection") ? migrated.columnSelection : current.columnSelection,
           view: included.has("viewportPosition") ? migrated.view : current.view,
           transaction: null,
         }

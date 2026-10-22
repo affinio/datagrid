@@ -51,6 +51,7 @@ describe("data grid api facade contracts", () => {
     expect(typeof api.view).toBe("object")
     expect(typeof api.pivot).toBe("object")
     expect(typeof api.selection).toBe("object")
+    expect(typeof api.columnSelection).toBe("object")
     expect(typeof api.transaction).toBe("object")
     expect(typeof api.data).toBe("object")
     expect(typeof api.compute).toBe("object")

@@ -40,6 +40,7 @@ const navGroups = [
       { to: "/vue/tree-grid", label: "Tree Validation" },
       { to: "/vue/pivot-grid", label: "Pivot Validation" },
       { to: "/vue/row-selection-grid", label: "Selection Contracts" },
+      { to: "/vue/column-selection-grid", label: "Column Selection API" },
       { to: "/vue/base-grid-factory", label: "Legacy App Route" },
     ],
   },

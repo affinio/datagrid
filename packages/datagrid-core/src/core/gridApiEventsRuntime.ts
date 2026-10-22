@@ -10,6 +10,7 @@ import type {
 } from "@affino/datagrid-pivot"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import type { DataGridColumnSelectionSnapshot } from "../selection/columnSelection.js"
 import type { DataGridTransactionSnapshot } from "./transactionService"
 import type {
   DataGridApiErrorEvent,
@@ -62,6 +63,7 @@ export interface DataGridApiEventsRuntime<TRow = unknown> {
   runBatched<TResult>(fn: () => TResult): TResult
   emitSelectionChanged(snapshot: DataGridSelectionSnapshot | null, context?: DataGridChangeContext): void
   emitRowSelectionChanged(snapshot: DataGridRowSelectionSnapshot | null, context?: DataGridChangeContext): void
+  emitColumnSelectionChanged(snapshot: DataGridColumnSelectionSnapshot | null, context?: DataGridChangeContext): void
   emitRowsEdited(event: DataGridApiEventMap<TRow>["rows:edited"]): void
   emitTransactionChanged(snapshot: DataGridTransactionSnapshot | null): void
   emitStateImportBegin(state: DataGridUnifiedState<TRow>): void
@@ -91,6 +93,7 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     "projection:recomputed": new Set(),
     "selection:changed": new Set(),
     "row-selection:changed": new Set(),
+    "column-selection:changed": new Set(),
     "pivot:changed": new Set(),
     "transaction:changed": new Set(),
     "viewport:changed": new Set(),
@@ -298,6 +301,9 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     },
     emitRowSelectionChanged(snapshot, context) {
       emit("row-selection:changed", { snapshot, ...resolveChangeContext(context) })
+    },
+    emitColumnSelectionChanged(snapshot, context) {
+      emit("column-selection:changed", { snapshot, ...resolveChangeContext(context) })
     },
     emitRowsEdited(event) {
       emit("rows:edited", event)

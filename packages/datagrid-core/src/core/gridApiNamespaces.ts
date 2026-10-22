@@ -36,6 +36,16 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   deselectRows: DataGridApi<TRow>["rowSelection"]["deselectRows"]
   clearSelectedRows: DataGridApi<TRow>["rowSelection"]["clearSelectedRows"]
   getSelectedRowData: DataGridApi<TRow>["rowSelection"]["getSelectedRowData"]
+  hasColumnSelectionSupport: DataGridApi<TRow>["columnSelection"]["hasSupport"]
+  getColumnSelectionSnapshot: DataGridApi<TRow>["columnSelection"]["getSnapshot"]
+  setColumnSelectionSnapshot: DataGridApi<TRow>["columnSelection"]["setSnapshot"]
+  clearColumnSelection: DataGridApi<TRow>["columnSelection"]["clear"]
+  getSelectedColumns: DataGridApi<TRow>["columnSelection"]["getSelectedColumns"]
+  isColumnSelected: DataGridApi<TRow>["columnSelection"]["isSelected"]
+  setColumnSelected: DataGridApi<TRow>["columnSelection"]["setSelected"]
+  selectColumns: DataGridApi<TRow>["columnSelection"]["selectColumns"]
+  deselectColumns: DataGridApi<TRow>["columnSelection"]["deselectColumns"]
+  clearSelectedColumns: DataGridApi<TRow>["columnSelection"]["clearSelectedColumns"]
   hasTransactionSupport: DataGridApi<TRow>["transaction"]["hasSupport"]
   getTransactionSnapshot: DataGridApi<TRow>["transaction"]["getSnapshot"]
   beginTransactionBatch: DataGridApi<TRow>["transaction"]["beginBatch"]
@@ -285,6 +295,18 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       deselectRows: methodSet.deselectRows,
       clearSelectedRows: methodSet.clearSelectedRows,
       getSelectedRowData: methodSet.getSelectedRowData,
+    },
+    columnSelection: {
+      hasSupport: methodSet.hasColumnSelectionSupport,
+      getSnapshot: methodSet.getColumnSelectionSnapshot,
+      setSnapshot: methodSet.setColumnSelectionSnapshot,
+      clear: methodSet.clearColumnSelection,
+      getSelectedColumns: methodSet.getSelectedColumns,
+      isSelected: methodSet.isColumnSelected,
+      setSelected: methodSet.setColumnSelected,
+      selectColumns: methodSet.selectColumns,
+      deselectColumns: methodSet.deselectColumns,
+      clearSelectedColumns: methodSet.clearSelectedColumns,
     },
     transaction: {
       hasSupport: methodSet.hasTransactionSupport,

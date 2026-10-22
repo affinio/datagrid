@@ -33,6 +33,7 @@ import {
 import { createDataGridApiPivotMethods } from "./gridApiPivotMethods"
 import { createDataGridApiRowsMethods } from "./gridApiRowsMethods"
 import { createDataGridApiRowSelectionMethods } from "./gridApiRowSelectionMethods"
+import { createDataGridApiColumnSelectionMethods } from "./gridApiColumnSelectionMethods"
 import { createDataGridApiSelectionMethods } from "./gridApiSelectionMethods"
 import { buildDataGridSelectionSummary } from "./gridApiSelectionSummary"
 import { createDataGridApiStateMethods } from "./gridApiStateMethods"
@@ -52,6 +53,7 @@ export type {
   DataGridApiPivotNamespace,
   DataGridApiSelectionNamespace,
   DataGridApiRowSelectionNamespace,
+  DataGridApiColumnSelectionNamespace,
   DataGridApiTransactionNamespace,
   DataGridApiRowsNamespace,
   DataGridApiDataNamespace,
@@ -82,6 +84,7 @@ export type {
   DataGridApiErrorEvent,
   DataGridApiRowsEditedEvent,
   DataGridApiRowSelectionChangedEvent,
+  DataGridApiColumnSelectionChangedEvent,
   DataGridApiSelectionChangedEvent,
   DataGridChangeContext,
   DataGridGetStateOptions,
@@ -157,6 +160,7 @@ export function createDataGridApi<TRow = unknown>(
     capabilities,
     getSelectionCapability,
     getRowSelectionCapability,
+    getColumnSelectionCapability,
     getTransactionCapability,
     getPatchCapability,
     getExternalUpdateCapability,
@@ -317,11 +321,16 @@ export function createDataGridApi<TRow = unknown>(
     getRowSelectionCapability,
     onChanged: (snapshot, context) => eventsRuntime.emitRowSelectionChanged(snapshot, context),
   })
+  const columnSelectionMethods = createDataGridApiColumnSelectionMethods({
+    getColumnSelectionCapability,
+    onChanged: (snapshot, context) => eventsRuntime.emitColumnSelectionChanged(snapshot, context),
+  })
   const stateMethods = createDataGridApiStateMethods<TRow>({
     rowModel,
     columnModel,
     getSelectionCapability,
     getRowSelectionCapability,
+    getColumnSelectionCapability,
     getTransactionCapability,
     getSortFilterBatchCapability,
     getBackpressureControlCapability,
@@ -330,6 +339,7 @@ export function createDataGridApi<TRow = unknown>(
     setViewportPosition: viewMethods.setViewportPosition,
     onSelectionChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
     onRowSelectionChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
+    onColumnSelectionChanged: snapshot => eventsRuntime.emitColumnSelectionChanged(snapshot),
     onStateImported: state => eventsRuntime.emitStateImported(state),
   })
   const policyMethods = createDataGridApiPolicyMethods({
@@ -382,6 +392,7 @@ export function createDataGridApi<TRow = unknown>(
     ...transactionMethods,
     ...selectionMethods,
     ...rowSelectionMethods,
+    ...columnSelectionMethods,
     ...stateMethods,
     beginTransactionBatch: (label?: string) =>
       runGuardedSync("transaction.beginBatch", () => transactionMethods.beginTransactionBatch(label)),
