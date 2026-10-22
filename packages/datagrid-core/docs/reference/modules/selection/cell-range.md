@@ -4,7 +4,7 @@ This reference describes Core's rectangular cell-selection state. It complements
 
 ## Model
 
-`DataGridSelectionSnapshot` stores zero or more rectangular ranges, the active range index, an optional active cell, and the `projectionRevision` and `columnRevision` used to interpret positional coordinates. Each range contains inclusive row/column index bounds, anchor and focus points, and endpoint row IDs when known. Indexes address the current logical row and visible column order; they are not persistent identity. Use row IDs and column keys at application boundaries, then resolve them against the current projection before creating or applying a snapshot.
+`DataGridSelectionSnapshot` stores zero or more rectangular ranges, the active range index, an optional active cell, and the `projectionRevision` and `columnRevision` used to interpret positional coordinates. The projection revision tracks materialized projection recomputes; viewport-window movement alone does not make a range stale. Each range contains inclusive row/column index bounds, anchor and focus points, and endpoint row IDs when known. Indexes address the current logical row and visible column order; they are not persistent identity. Use row IDs and column keys at application boundaries, then resolve them against the current projection before creating or applying a snapshot.
 
 ```ts
 import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"

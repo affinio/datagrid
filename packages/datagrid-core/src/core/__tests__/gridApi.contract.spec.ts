@@ -529,6 +529,30 @@ describe("data grid api facade contracts", () => {
     expect(api.view.getRowHeightOverrideById(1)).toBeNull()
   })
 
+  it("projects stable row height overrides into current virtual row geometry", () => {
+    const rowModel = createAdvancedClientRowModel({
+      rows: [
+        { row: { id: "r1", order: 1 }, rowId: "r1", originalIndex: 0 },
+        { row: { id: "r2", order: 2 }, rowId: "r2", originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "order", label: "Order" }] })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } }) })
+
+    expect(api.view.getRowHeightOverridesSnapshot()).toEqual(new Map())
+    api.view.setRowHeightOverrideById("r2", 52)
+    expect(api.view.getRowHeightOverride(1)).toBe(52)
+    expect(api.view.getRowHeightOverridesSnapshot()).toEqual(new Map([[1, 52]]))
+
+    api.rows.setSortModel([{ key: "order", direction: "desc" }])
+    expect(api.view.getRowHeightOverride(0)).toBe(52)
+    expect(api.view.getRowHeightOverride(1)).toBeNull()
+    expect(api.view.getRowHeightOverridesSnapshot()).toEqual(new Map([[0, 52]]))
+  })
+
   it("validates state imports and reports applied and skipped sections", () => {
     const rowModel = createAdvancedClientRowModel({ rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }] })
     const columnModel = createDataGridColumnModel({ columns: [{ key: "id", label: "ID" }] })
@@ -2339,9 +2363,14 @@ describe("data grid api facade contracts", () => {
     expect(api.selection.hasSupport()).toBe(true)
     expect(api.selection.getSnapshot()).toMatchObject({
       ...snapshot,
-      projectionRevision: rowModel.getSnapshot().revision,
+      projectionRevision: rowModel.getSnapshot().projection?.recomputeVersion
+        ?? rowModel.getSnapshot().projection?.version
+        ?? rowModel.getSnapshot().revision,
       columnRevision: columnModel.getSnapshot().orderRevision,
     })
+    expect(api.selection.getSnapshotStatus()).toBe("current")
+
+    rowModel.setViewportRange({ start: 0, end: 1 })
     expect(api.selection.getSnapshotStatus()).toBe("current")
 
     api.columns.setWidth("amount", 180)

@@ -21,6 +21,7 @@ import type {
   DataGridTransactionCapability,
 } from "./gridApiCapabilities"
 import type { DataGridRowSelectionSnapshot } from "../selection/rowSelection"
+import { buildDataGridSelectionProjectionIdentity } from "../selection/virtualSelection.js"
 import {
   dataGridColumnSelectionSnapshotsEqual,
   normalizeDataGridColumnSelectionSnapshot,
@@ -471,7 +472,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
             if (migratedState.selection) {
               selectionCapability.setSelectionSnapshot({
                 ...cloneSerializable(migratedState.selection),
-                projectionRevision: rowModel.getSnapshot().revision ?? null,
+                projectionRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
                 columnRevision: columnModel.getSnapshot().orderRevision,
               })
               onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
@@ -586,7 +587,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
                 if (rollbackState.selection) {
                   selectionCapability.setSelectionSnapshot({
                     ...cloneSerializable(rollbackState.selection),
-                    projectionRevision: rowModel.getSnapshot().revision ?? null,
+                    projectionRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
                     columnRevision: columnModel.getSnapshot().orderRevision,
                   })
                 } else {

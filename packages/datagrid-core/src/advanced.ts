@@ -91,6 +91,13 @@ export {
 } from "./viewport/dataGridViewportController.js"
 
 export {
+  DEFAULT_TABLE_VIRTUALIZATION_CONSTANTS,
+  type AxisVirtualizationConstants,
+  type TableVirtualizationConstants,
+  type ViewportFrameBudget,
+} from "./viewport/dataGridViewportConstants.js"
+
+export {
   createDataGridViewportCoreService,
   type CreateDataGridViewportCoreServiceOptions,
 } from "./viewport/dataGridViewportCoreService.js"

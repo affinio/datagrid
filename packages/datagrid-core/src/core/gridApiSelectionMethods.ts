@@ -1,4 +1,5 @@
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
+import { buildDataGridSelectionProjectionIdentity } from "../selection/virtualSelection"
 import type { DataGridSelectionSummarySnapshot } from "../selection/selectionSummary"
 import type {
   DataGridColumnModel,
@@ -37,7 +38,7 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
   const { rowModel, columnModel, getSelectionCapability, summarize, onChanged } = input
 
   const currentPositionRevisions = () => ({
-    projectionRevision: rowModel.getSnapshot().revision ?? null,
+    projectionRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
     columnRevision: columnModel.getSnapshot().orderRevision,
   })
   const getSnapshotStatus = (): "current" | "stale" | "untracked" | "empty" | "unsupported" => {

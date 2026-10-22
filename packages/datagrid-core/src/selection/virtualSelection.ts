@@ -51,7 +51,7 @@ export interface DataGridSelectionLoadedCoverage<TRowKey = DataGridRowId> {
 
 export interface DataGridSelectionProjectionIdentity {
   rowModelKind?: string
-  revision?: string | number | null
+  revision?: number | null
   datasetVersion?: string | number | null
   projectionKey?: string | null
 }
@@ -514,7 +514,11 @@ export function buildDataGridSelectionProjectionIdentity(
   }
   return {
     rowModelKind: snapshot.kind,
-    revision: snapshot.revision ?? null,
+    // Row-model revisions also advance for viewport-window changes. Selection
+    // coordinates only become stale when the materialized row projection does.
+    revision: snapshot.projection?.recomputeVersion
+      ?? snapshot.projection?.version
+      ?? (typeof snapshot.revision === "number" ? snapshot.revision : null),
     datasetVersion: snapshot.datasetVersion ?? null,
     projectionKey: serializeDataGridSelectionProjectionKey({
       rowModelKind: snapshot.kind,
