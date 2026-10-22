@@ -18,7 +18,7 @@ Single source of truth for platform capabilities:
 Base formula APIs now have a dedicated package boundary:
 
 - community: [@affino/datagrid-formula-engine](https://github.com/affinio/datagrid/tree/main/packages/datagrid-formula-engine#readme)
-- boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-formula-engine-community-vs-enterprise.md)
+- boundary doc: [datagrid-formula-engine-package-ownership.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-formula-engine-package-ownership.md)
 
 Keep row-model orchestration and formula integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-formula-engine` for formula parsing/compile/graph APIs.
@@ -54,7 +54,7 @@ For a ready flat client model, `@affino/datagrid-core/client-row-projection/mode
 Base pivot APIs now also have a dedicated package boundary:
 
 - community: [@affino/datagrid-pivot](https://github.com/affinio/datagrid/tree/main/packages/datagrid-pivot#readme)
-- boundary doc: [datagrid-pivot-community-vs-enterprise.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-pivot-community-vs-enterprise.md)
+- boundary doc: [datagrid-pivot-package-ownership.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-pivot-package-ownership.md)
 
 Keep row-model orchestration and pivot runtime integration inside `@affino/datagrid-core`.
 Use `@affino/datagrid-pivot` for pivot contracts and pure pivot helper APIs.
