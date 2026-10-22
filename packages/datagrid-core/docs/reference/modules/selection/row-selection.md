@@ -2,7 +2,7 @@
 
 Status: public Core reference for framework-independent record-selection state and transitions.
 
-This model selects records by stable row ID. It is separate from [cell and range selection](./cell-range-selection.md), which selects cells by rectangular coordinates.
+This model selects records by stable row ID. It is separate from [cell and range selection](cell-range.md), which selects cells by rectangular coordinates.
 
 These functions are exported from the root `@affino/datagrid-core` entrypoint.
 They model committed selected row IDs and interaction transitions without
@@ -75,4 +75,4 @@ Core provides row-ID selection transitions, projection-aware range resolution, a
 
 The UI adapter translates pointer and keyboard input into intents, resolves the target row, owns the gesture lifecycle, and displays previews. It can use `@affino/datagrid-orchestration` to coordinate competing gestures. The application supplies domain policy such as `isSelectable` and acts on the committed set of IDs.
 
-In the ready-made Vue component, row-header and checkbox behavior is configured in the app layer, not by this Core contract. See the [app-layer guide](../../../../docs/app-layer.md). General package boundaries are described in [DataGrid architecture](../../../../docs/datagrid-architecture.md#selection-ownership).
+In the ready-made Vue component, row-header and checkbox behavior is configured in the app layer, not by this Core contract. See the [app-layer guide](../../../../../../docs/app-layer.md). General package boundaries are described in [DataGrid architecture](../../../../../../docs/datagrid-architecture.md#selection-ownership).

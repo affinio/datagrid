@@ -48,7 +48,7 @@ The app guide is the primary user experience. Core documentation is maintained i
 
 - [Unified Grid API](../packages/datagrid-core/docs/grid-api.md)
 - [Event matrix](./reference/datagrid-event-matrix.md)
-- [Data source API](../packages/datagrid-core/docs/reference/data-source-api.md)
+- [Data source API](../packages/datagrid-core/docs/reference/modules/data-source.md)
 - [Architecture](./datagrid-architecture.md)
 - [Virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md)
 - [Vue stable entrypoint](./reference/datagrid-vue-stable-entrypoint.md)

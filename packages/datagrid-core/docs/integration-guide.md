@@ -1,6 +1,6 @@
 # Core and UI adapter boundaries
 
-This page answers one question: which parts of a grid are provided by `@affino/datagrid-core`, and which parts a UI adapter must implement. It complements the [first example](./examples/local-data/README.md), [API overview](./grid-api.md), and [method reference](./reference/grid-api-methods.md); it does not replace them.
+This page answers one question: which parts of a grid are provided by `@affino/datagrid-core`, and which parts a UI adapter must implement. It complements the [first example](./examples/local-data/README.md), [API overview](./grid-api.md), and [method reference](reference/api/grid-api-methods.md); it does not replace them.
 
 ## What Core provides
 
@@ -61,5 +61,5 @@ Not every Core configuration provides the same virtualization capabilities. Befo
 
 - Assemble and run the engine: [local data example](./examples/local-data/README.md).
 - Find the right namespace: [API overview](./grid-api.md).
-- Choose constructors: [factory reference](./reference/factories.md).
-- Check method signatures, results, and capability requirements: [method reference](./reference/grid-api-methods.md).
+- Choose constructors: [factory reference](reference/api/factories.md).
+- Check method signatures, results, and capability requirements: [method reference](reference/api/grid-api-methods.md).

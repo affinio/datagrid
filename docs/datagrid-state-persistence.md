@@ -33,7 +33,7 @@ identity; DataGrid does not infer authentication or clear another user's keys.
 - `columnWidths`, `columnPins` and other explicit props remain authoritative.
   Do not supply default widths as controlled props; put defaults in
   `columns[].initialState`.
-- Undo/redo history is never persisted. Scroll position, cell/row selection and
+- Undo/redo history is never persisted. Scroll position, cell/row/column selection and
   group expansion are excluded by default. Opt in with `includeViewportPosition`,
   `includeSelection` and `includeGroupExpansion` respectively.
 - A corrupt/unreadable saved value emits an error and is not overwritten by

@@ -36,6 +36,6 @@ Switch to `advanced` only for explicit runtime/transport/layout internals.
 
 ## Related references
 
-- [Core factories](./factories.md)
-- [Unified Grid API](../grid-api.md)
+- [Core factories](factories.md)
+- [Unified Grid API](../../grid-api.md)
 - `docs/datagrid-feature-catalog.md`

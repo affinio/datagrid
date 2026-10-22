@@ -12,7 +12,7 @@ render-table.ts    projection snapshot -> semantic HTML table
 main.ts            subscriptions, commands, teardown
 ```
 
-Core does not provide the HTML table or CSS. The renderer below is a small teaching adapter, not a production virtualization or accessibility implementation. For a production adapter, also follow the [architecture guide](../../../../../docs/datagrid-architecture.md), [accessibility contract](../../../../../docs/reference/datagrid-headless-a11y-contract.md), [virtualization matrix](../../../../../docs/reference/datagrid-virtualization-support-matrix.md), and the detailed [API method reference](../../reference/grid-api-methods.md).
+Core does not provide the HTML table or CSS. The renderer below is a small teaching adapter, not a production virtualization or accessibility implementation. For a production adapter, also follow the [architecture guide](../../../../../docs/datagrid-architecture.md), [accessibility contract](../../../../../docs/reference/datagrid-headless-a11y-contract.md), [virtualization matrix](../../../../../docs/reference/datagrid-virtualization-support-matrix.md), and the detailed [API method reference](../../reference/api/grid-api-methods.md).
 
 ## Files
 

@@ -1689,7 +1689,7 @@ function importState(raw: unknown) {
 
 `applyState()` and `applySavedView()` also queue the restore until the runtime and declared columns are ready. Host pages can restore presets before async column definitions finish loading instead of maintaining a separate pending-saved-view scheduler.
 
-Saved views sanitize transient transaction history before serialization and restore. The persisted envelope keeps layout, filters, grouping, pivoting, row selection, and `viewMode`, but drops undo/redo history.
+Saved views sanitize transient transaction history before serialization and restore. The persisted envelope keeps layout, filters, grouping, pivoting, cell/row/column selection when the `selection` part is included, and `viewMode`, but drops undo/redo history.
 
 ### Controlled Row Selection
 
@@ -1741,7 +1741,7 @@ row index previews a range and commits once on release; Escape or a canceled
 gesture discards the preview. Shift+Up/Down extends the range while focus is on
 a row index. Group and unloaded placeholder rows are not included in ranges.
 The full framework-independent model and projection rules are documented in
-the [row-selection reference](../../packages/datagrid-core/docs/reference/row-selection.md).
+the [row-selection reference](../datagrid-core/docs/reference/modules/selection/row-selection.md).
 
 For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
 

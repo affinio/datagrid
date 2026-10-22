@@ -346,6 +346,14 @@ The public ref exposes:
 
 Use getApi() only when the component-level props/events do not express the integration. For core namespace semantics, see [Core API](../packages/datagrid-core/docs/README.md).
 
+The API returned by `getApi()` also exposes `columnSelection`, a stable-key
+selection state independent of cell ranges and selected rows. Subscribe to
+`column-selection:changed` and update it with methods such as `setSelected`,
+`selectColumns`, or `clear`. The Vue component does not assign header gestures
+or cell highlighting to this state; the host chooses those presentation rules.
+See the [column-selection Core reference](../packages/datagrid-core/docs/reference/modules/selection/column-selection.md)
+and the sandbox example at `/vue/column-selection-grid`.
+
 ### Server history synchronization
 
 `server-history` (`DataGridServerHistoryProp`) controls only the automatic server-history integration for a datasource-backed row model. With `:server-history="false"`, DataGrid does not call `getHistoryStatus()`, does not subscribe through `subscribeHistoryStatus()`, and does not call server undo/redo methods. The local `history` prop keeps its existing meaning and remains independent.

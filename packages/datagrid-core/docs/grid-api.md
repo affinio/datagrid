@@ -4,11 +4,11 @@ Status: current public contract.
 
 `DataGridApi` is the framework-independent command and query interface for `@affino/datagrid-core`. It exposes model state and operations; it does not render cells or own DOM events. Create it from the Core services, then keep the instance as the integration boundary between the host UI and the engine.
 
-For the full method signatures, parameters, return values, and capability notes, use the [API method reference](./reference/grid-api-methods.md). This page explains how the surface is organized and which contract to use for common tasks.
+For the full method signatures, parameters, and return types, use the [API method reference](reference/api/grid-api-methods.md). For the behavior of individual methods—including state effects, capability requirements, ordering semantics, and failure cases—use its [method behavior guide](reference/api/methods/README.md). This page explains how the surface is organized and which contract to use for common tasks.
 
 ## Create and start the API
 
-Use `createDataGridApi` with a `DataGridCore` assembled from row and column model services. The [factories reference](./reference/factories.md) has the complete assembly example and supported inputs.
+Use `createDataGridApi` with a `DataGridCore` assembled from row and column model services. The [factories reference](reference/api/factories.md) has the complete assembly example and supported inputs.
 
 ```ts
 const api = createDataGridApi({ core })
@@ -36,6 +36,7 @@ await api.dispose()
 | `view` | Viewport targets, cell activation, row heights, refresh | `scrollToCell`, `activateCell`, `reapply` |
 | `selection` | Cell and range selection | snapshots, summaries, selected range data |
 | `rowSelection` | Selected and focused records | selected row IDs and snapshots |
+| `columnSelection` | Selected whole columns | selected column keys and snapshots |
 | `transaction` | History-aware mutations | apply, batch, undo, redo |
 | `pivot` | Analytical pivot state and layout | model, drilldown, import/export layout |
 | `state` | Versioned state export, migration, restore | `get`, `migrate`, `set` |
@@ -46,7 +47,7 @@ await api.dispose()
 | `policy` | Projection policy | get/set projection mode |
 | `plugins` | Public plugin lifecycle | register, unregister, observe events |
 
-The API keeps cell/range selection and record selection in separate namespaces. Read [cell and range selection](./reference/cell-range-selection.md) for rectangular snapshots and geometry, and [row selection](./reference/row-selection.md) for selected record IDs and interaction primitives. Renderer-specific gestures belong to the adapter.
+The API keeps cell/range, record, and whole-column selection in separate namespaces. Read [cell and range selection](reference/modules/selection/cell-range.md), [column selection](reference/modules/selection/column-selection.md), and [row selection](reference/modules/selection/row-selection.md) for their distinct state contracts. Renderer-specific gestures belong to the adapter.
 
 ## Choose the operation by intent
 
@@ -65,7 +66,7 @@ These operations are not interchangeable. The method reference documents row-mod
 
 `DataGridApi` always exposes its namespaces, but available operations depend on the bound Core services and row model. Row and column models are required when creating the API. Selection, transactions, viewport control, histogram queries, compute switching, and datasource controls are optional.
 
-Check `api.capabilities` or the relevant `hasSupport()` method before enabling an optional operation in the host UI. Unsupported mutations fail explicitly; optional queries can return `null` or an empty result. See the [method reference](./reference/grid-api-methods.md#capability-checks-and-errors) for each operation's behavior.
+Check `api.capabilities` or the relevant `hasSupport()` method before enabling an optional operation in the host UI. Unsupported mutations fail explicitly; optional queries can return `null` or an empty result. See the [method reference](reference/api/grid-api-methods.md#capability-checks-and-errors) for each operation's behavior.
 
 ## State, events, and consistency
 
@@ -80,7 +81,7 @@ Check `api.capabilities` or the relevant `hasSupport()` method before enabling a
 ## Reference path
 
 1. Start with this page to understand namespaces and operation choices.
-2. Use the [method reference](./reference/grid-api-methods.md) for the complete `DataGridApi` surface.
-3. Use the [factories reference](./reference/factories.md) to assemble row models and services.
+2. Use the [method reference](reference/api/grid-api-methods.md) for the complete `DataGridApi` surface.
+3. Use the [factories reference](reference/api/factories.md) to assemble row models and services.
 4. Use [Core and UI adapter boundaries](./integration-guide.md) to understand who owns viewport, DOM, rendering, and interaction lifecycles.
 5. Use the [API stability policy](../../../docs/api-stability.md) for stable, advanced, and internal import guarantees.

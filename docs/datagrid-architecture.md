@@ -135,6 +135,7 @@ Selection has separate logical state machines for committed row selection, cell 
 | Normalized cell ranges, active range index, active cell shape | `@affino/datagrid-core` selection helpers and snapshot contracts |
 | App selection snapshot, anchor, virtual-selection metadata, aggregate labels | `@affino/datagrid-vue` app selection composables |
 | Committed selected row ids and versioned immutable snapshots | `@affino/datagrid-core` row-selection model |
+| Persistent whole-column selection by stable `columnKey` | `@affino/datagrid-core` column-selection API and Vue selection service |
 | Row-selection anchor, extent, modifier rules, and preview/commit transitions | `@affino/datagrid-core` row-selection interaction model |
 | Active pointer drag-session lifecycle and exclusive gesture lease | `@affino/datagrid-orchestration` |
 | DOM event normalization and lifecycle subscriptions | `@affino/datagrid-vue` adapters |
@@ -149,7 +150,7 @@ default. Consumers opt into record selection with `rowHeader.action:
 "select-records"`; `"none"` disables row-header selection. The adapter resolves
 drag targets and ranges against the logical projection, publishes preview to
 the existing row selection visuals, and writes one committed result through
-`api.rowSelection`. See the [row-selection model reference](../packages/datagrid-core/docs/reference/row-selection.md)
+`api.rowSelection`. See the [row-selection model reference](../packages/datagrid-core/docs/reference/modules/selection/row-selection.md)
 for the supported gestures and configuration.
 
 The row-header record-selection path is integrated across these layers. Core

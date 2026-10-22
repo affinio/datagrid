@@ -6,7 +6,7 @@ Framework-agnostic data grid core.
 
 - [Core documentation index](./docs/README.md)
 - [Unified Grid API](./docs/grid-api.md)
-- [API method reference](./docs/reference/grid-api-methods.md)
+- [API method reference](docs/reference/api/grid-api-methods.md)
 - [Framework-independent example](./docs/examples/local-data/README.md)
 
 ## Canonical Feature Catalog

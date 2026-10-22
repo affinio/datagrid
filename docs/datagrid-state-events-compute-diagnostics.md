@@ -42,6 +42,8 @@ if (migrated) {
 - `rows.aggregationModel`
 - `columns` (order/visibility/widths/pins)
 - `selection`
+- `rowSelection`
+- `columnSelection`
 - `transaction`
 
 Important:
@@ -68,6 +70,7 @@ Stable event set:
 - `projection:recomputed`
 - `selection:changed`
 - `row-selection:changed`
+- `column-selection:changed`
 - `pivot:changed`
 - `transaction:changed`
 - `viewport:changed`

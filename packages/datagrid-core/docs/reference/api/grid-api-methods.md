@@ -9,6 +9,22 @@ an old flat method such as `api.setData(...)`.
 All argument and result types below are public exports from
 `@affino/datagrid-core`. `TRow` is the row type used to create the API.
 
+This file is the canonical signature inventory. For method intent, state
+effects, ordering rules, capability requirements, and failure behavior, use the
+[method behavior guide](methods/README.md):
+
+| Namespace | Detailed method behavior |
+| --- | --- |
+| `rows` | [Rows and projection](methods/rows.md) |
+| `columns` | [Columns](methods/columns.md) |
+| `view` | [View and viewport](methods/view.md) |
+| `selection`, `rowSelection`, `columnSelection` | [Selection](methods/selection.md) |
+| `transaction` | [Transactions](methods/transactions.md) |
+| `pivot` | [Pivot](methods/pivot.md) |
+| `data` | [Datasource controls](methods/datasource.md) |
+| `state`, `events`, `plugins` | [State and events](methods/state-events.md) |
+| `lifecycle`, `capabilities`, `compute`, `policy`, `diagnostics`, `meta` | [Runtime and diagnostics](methods/runtime.md) |
+
 ## Lifecycle
 
 ```ts
@@ -20,7 +36,7 @@ api.lifecycle.runExclusive<TResult>(fn: () => TResult | Promise<TResult>): Promi
 
 api.capabilities: DataGridApiCapabilities
 // patch, externalUpdate, dataMutation, backpressureControl, compute,
-// selection, rowSelection, transaction, histogram, sortFilterBatch,
+// selection, rowSelection, columnSelection, transaction, histogram, sortFilterBatch,
 // viewportPosition
 
 api.init(): Promise<void>
@@ -254,13 +270,27 @@ api.rowSelection.selectRows(rowIds: Iterable<DataGridRowId>, context?: DataGridC
 api.rowSelection.deselectRows(rowIds: Iterable<DataGridRowId>, context?: DataGridChangeContext): void
 api.rowSelection.clearSelectedRows(context?: DataGridChangeContext): void
 api.rowSelection.getSelectedRowData(): TRow[]
+
+api.columnSelection.hasSupport(): boolean
+api.columnSelection.getSnapshot(): DataGridColumnSelectionSnapshot | null
+api.columnSelection.setSnapshot(snapshot: DataGridColumnSelectionSnapshot, context?: DataGridChangeContext): void
+api.columnSelection.clear(context?: DataGridChangeContext): void
+api.columnSelection.getSelectedColumns(): readonly string[]
+api.columnSelection.isSelected(columnKey: string): boolean
+api.columnSelection.setSelected(columnKey: string, selected: boolean, context?: DataGridChangeContext): void
+api.columnSelection.selectColumns(columnKeys: Iterable<string>, context?: DataGridChangeContext): void
+api.columnSelection.deselectColumns(columnKeys: Iterable<string>, context?: DataGridChangeContext): void
+api.columnSelection.clearSelectedColumns(context?: DataGridChangeContext): void
 ```
 
 `selection` is cell/range selection. `rowSelection` is focused/selected row
-state; the two namespaces are independent. Mutating selection methods accept an
-optional `DataGridChangeContext` with `origin` and `operationId`. Selection
-change events include an operation ID (generated when omitted) and the supplied
-origin. This is provenance metadata; it does not deduplicate changes.
+state, and `columnSelection` is a set of selected column keys; all three
+namespaces are independent. Mutating selection methods accept an optional
+`DataGridChangeContext` with `origin` and `operationId`. Selection change events
+include an operation ID (generated when omitted) and the supplied origin. This
+is provenance metadata; it does not deduplicate changes. See the focused
+[column-selection reference](../modules/selection/column-selection.md) for identity, ordering, and
+versioned-state semantics.
 
 ## Transactions
 
@@ -326,7 +356,9 @@ api.plugins.list(): readonly string[]
 api.plugins.clear(): void
 ```
 
-`state.get()` is the unified versioned snapshot boundary. `state.set()` applies
+`state.get()` is the unified versioned snapshot boundary. When supported,
+`columnSelection` is captured as `DataGridColumnSelectionSnapshot | null`; older
+states that omit this optional field migrate to `null`. `state.set()` applies
 row projection state by default; pass `{ applyRows: false }` to restore column
 layout, selection, and optional viewport state without changing the active
 source rows or their sort/filter/group/pivot/pagination state. The same options
@@ -344,6 +376,7 @@ source mutations are finalized.
 
 Public event names are `rows:changed`, `columns:changed`,
 `projection:recomputed`, `selection:changed`, `row-selection:changed`,
+`column-selection:changed`,
 `pivot:changed`, `transaction:changed`, `viewport:changed`,
 `state:import:begin`, `state:import:end`, `state:imported`, and `error`.
 `events.on` returns an unsubscribe function. Selection change events include `origin` when supplied and always include an `operationId`; see `DataGridChangeContext` and the event payload types for their exact shape.
@@ -365,5 +398,5 @@ host needs recoverable runtime diagnostics.
 
 ## Related guides
 
-- [API overview](../grid-api.md) — namespaces and operation choices; [factories](./factories.md) — model construction.
-- [API stability policy](../../../../docs/api-stability.md) — stable versus advanced imports.
+- [API overview](../../grid-api.md) — namespaces and operation choices; [factories](factories.md) — model construction.
+- [API stability policy](../../../../../docs/api-stability.md) — stable versus advanced imports.

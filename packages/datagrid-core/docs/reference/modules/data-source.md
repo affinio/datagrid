@@ -5,7 +5,7 @@ Status: maintained public documentation.
 This document defines the canonical in-process data-source boundary for
 `@affino/datagrid-core`. It describes the TypeScript datasource API and row
 model lifecycle, not the HTTP payloads used by a backend. For HTTP integration,
-use the [server datasource protocol](../../../../docs/server-datasource/reference/protocol.md).
+use the [server datasource protocol](../../../../../docs/server-datasource/reference/protocol.md).
 
 Import path:
 - `@affino/datagrid-core/advanced`
@@ -68,7 +68,7 @@ Histogram `options.search` is scoped only to value-list search. It is independen
 - push application and refetch-on-overlap behavior
 - diagnostics via `getBackpressureDiagnostics()`
 
-Server-backed selection operation semantics are defined in the [server selection operations contract](../../../../docs/server-datasource/reference/selection-operations.md). Current data-source row models expose loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, and range move still require explicit backend capability wiring before they can run over unloaded rows.
+Server-backed selection operation semantics are defined in the [server selection operations contract](../../../../../docs/server-datasource/reference/selection-operations.md). Current data-source row models expose loaded-interval metadata for operation decisions, but delegated copy/export, cut, clear/delete, paste, and range move still require explicit backend capability wiring before they can run over unloaded rows.
 
 ## Formula Boundary
 
@@ -113,6 +113,6 @@ Counters are monotonic except runtime-state fields:
 
 ## Related contracts
 
-Этот API описывает in-process контракт datasource и Core row model. Формат HTTP-запросов, backend consistency и UX серверной таблицы находятся в отдельной [документации server datasource](../../../../docs/server-datasource/README.md).
+This API describes the in-process contract between a data source and the Core row model. HTTP request formats, backend consistency, and server-grid UX are covered in the separate [server datasource documentation](../../../../../docs/server-datasource/README.md).
 
-Для серверных операций над выбором, включая диапазоны с незагруженными строками, используйте [контракт server selection operations](../../../../docs/server-datasource/reference/selection-operations.md). Он описывает интеграционный контракт backend и не является методом `DataGridApi`.
+For server-side selection operations, including ranges containing unloaded rows, use the [server selection operations contract](../../../../../docs/server-datasource/reference/selection-operations.md). It defines a backend integration contract and is not a `DataGridApi` method.

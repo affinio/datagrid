@@ -62,6 +62,6 @@ For product integrations prefer `core` form.
 
 ## Related references
 
-- [Unified Grid API](../grid-api.md)
-- [Advanced API](./advanced-api.md)
+- [Unified Grid API](../../grid-api.md)
+- [Advanced API](advanced-api.md)
 - `docs/datagrid-state-events-compute-diagnostics.md`
