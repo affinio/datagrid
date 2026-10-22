@@ -90,6 +90,6 @@ controls individual row sizing and is independent from component layout mode.
 
 ## Choosing the next layer
 
-Use [the app layer guide](./app-layer.md) for props and user-facing features. Move to [the Vue adapter](./vue-adapter.md) when your application owns the renderer or row-model lifecycle. Use [the core guide](./core-api.md) when a framework-independent runtime or `DataGridApi` is the integration boundary.
+Use [the app layer guide](./app-layer.md) for props and user-facing features. Move to [the Vue adapter](./vue-adapter.md) when your application owns the renderer or row-model lifecycle. Use [the core guide](../packages/datagrid-core/docs/README.md) when a framework-independent runtime or `DataGridApi` is the integration boundary.
 
 For backend-owned data, follow the [server datasource quick start](./server-datasource/quick-start.md).

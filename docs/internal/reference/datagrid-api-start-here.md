@@ -175,7 +175,7 @@ Then pass `rowModel` to `DataGrid`:
 
 - [Package map](../../datagrid-package-map.md) - package roles, tiers, install paths, and package ownership and support status.
 - [Vue stable entrypoint](../../reference/datagrid-vue-stable-entrypoint.md) - stable Vue runtime entrypoints.
-- [Grid API](../../datagrid-grid-api.md) - full `DataGridApi` reference.
+- [Grid API](../../../packages/datagrid-core/docs/grid-api.md) - full `DataGridApi` reference.
 - [Versioned public protocol](./datagrid-versioned-public-protocol.md) - semver, deprecation, codemod, and deep-import rules.
 - [Feature catalog](../../datagrid-feature-catalog.md) - full capability inventory.
 - [App component API](../../app-api.md) - props, events, state, and refs.

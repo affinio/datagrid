@@ -50,7 +50,7 @@ import { createAdvancedClientRowModel } from "@affino/datagrid-core/advanced-cli
 
 A change needs a migration note when it affects a stable export, component prop, emitted event, public type, datasource request/response contract, state payload, or documented behavior. The migration note should identify the old contract, the replacement, and the version boundary.
 
-Put consumer-facing migration notes next to the affected guide or release note. Data-source API changes belong in the [data source API](./reference/datagrid-data-source-api.md); HTTP wire changes belong in the [server datasource protocol](./server-datasource/reference/protocol.md). Historical repository migrations are kept in the internal [legacy migration reference](./internal/reference/datagrid-legacy-migration-guide.md).
+Put consumer-facing migration notes next to the affected guide or release note. Data-source API changes belong in the [data source API](../packages/datagrid-core/docs/reference/data-source-api.md); HTTP wire changes belong in the [server datasource protocol](./server-datasource/reference/protocol.md). Historical repository migrations are kept in the internal [legacy migration reference](./internal/reference/datagrid-legacy-migration-guide.md).
 
 ## Package ownership
 

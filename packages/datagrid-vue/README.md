@@ -19,7 +19,7 @@ layer over `@affino/datagrid-core` and `@affino/datagrid-orchestration`.
 
 - [Vue adapter guide](../../docs/vue-adapter.md)
 - [DataGrid component guide](./README.component.md)
-- [Core API guide](../../docs/core-api.md)
+- [Core API guide](../../packages/datagrid-core/docs/README.md)
 
 ## Canonical Feature Catalog
 

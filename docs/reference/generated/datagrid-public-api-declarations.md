@@ -197,7 +197,7 @@ Source package: `packages/datagrid-vue`
 
 | Entrypoint | Tier | Declaration | Files in declaration graph |
 | --- | --- | --- | ---: |
-| `.` | stable | `packages/datagrid-vue/dist/index.d.ts` | 60 |
+| `.` | stable | `packages/datagrid-vue/dist/index.d.ts` | 65 |
 | `./advanced` | advanced | `packages/datagrid-vue/dist/headless/advanced.d.ts` | 86 |
 | `./advanced-filter` | stable-feature | `packages/datagrid-vue/dist/app/advanced-filter.d.ts` | 3 |
 | `./advanced/clipboard` | advanced | `packages/datagrid-vue/dist/headless/advanced/clipboard.d.ts` | 5 |
@@ -211,11 +211,11 @@ Source package: `packages/datagrid-vue`
 | `./app` | advanced | `packages/datagrid-vue/dist/headless/app/index.d.ts` | 114 |
 | `./app/worker` | advanced | `packages/datagrid-vue/dist/headless/app/worker.d.ts` | 4 |
 | `./find-replace` | stable-feature | `packages/datagrid-vue/dist/app/find-replace.d.ts` | 3 |
-| `./gantt` | stable-feature | `packages/datagrid-vue/dist/app/gantt.d.ts` | 42 |
+| `./gantt` | stable-feature | `packages/datagrid-vue/dist/app/gantt.d.ts` | 47 |
 | `./headless` | stable | `packages/datagrid-vue/dist/headless/index.d.ts` | 21 |
 | `./headless/app` | advanced | `packages/datagrid-vue/dist/headless/app/index.d.ts` | 114 |
 | `./headless/app/worker` | advanced | `packages/datagrid-vue/dist/headless/app/worker.d.ts` | 4 |
-| `./internal` | internal | `packages/datagrid-vue/dist/app/internal.d.ts` | 47 |
+| `./internal` | internal | `packages/datagrid-vue/dist/app/internal.d.ts` | 49 |
 | `./quick-filter` | stable-feature | `packages/datagrid-vue/dist/app/quick-filter.d.ts` | 3 |
 | `./stable` | stable | `packages/datagrid-vue/dist/headless/stable.d.ts` | 20 |
 | `./worker` | advanced | `packages/datagrid-vue/dist/headless/worker.d.ts` | 1 |
@@ -226,7 +226,7 @@ Entrypoint exports:
 
 - `export * from "./app/index.js" export * from "./headless/index.js" export { default } from "./app/index.js"`
 
-Declaration graph hash: `650a1d38fdcde229e8f345325990cf5c6ab5c62605e32780a272c335b0a59a4a`
+Declaration graph hash: `311b7fd6df52a195b7047c6095fc1276d1f62f7b9a617d18990d520b0da8fd5e`
 
 ### ./advanced
 
@@ -381,7 +381,7 @@ Entrypoint exports:
 - `export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from "./config/dataGridAggregations"`
 - `export { default as DataGridAggregationsPopover } from "./overlays/DataGridAggregationsPopover.vue"`
 
-Declaration graph hash: `bd4bcb3594afdecb00b19b8575c8df18220064e9254971cdba735b39666928b0`
+Declaration graph hash: `ff9b2286b27842300ff948408fd16acf42ea4283c01c67e95fabb764525ae751`
 
 ### ./app
 
@@ -441,7 +441,7 @@ Entrypoint exports:
 - `export { DataGridWithGantt as DataGrid }`
 - `export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from "./gantt/dataGridGantt"`
 
-Declaration graph hash: `5be484d8e65e8f2b725ba5baa4f94d324c56fde703c4fe94e48bbc8dfc261dda`
+Declaration graph hash: `272d0805533825c4dcdb327d4c6470a84573c964dd060cf8f34d99198171e4ce`
 
 ### ./headless
 
@@ -496,7 +496,7 @@ Entrypoint exports:
 
 - `export type { AnyDataGridTableStageContext, DataGridTableStageContextSource, DataGridTableStageSectionKey, } from "./stage/dataGridTableStageContext"`
 - `export type { BuildDataGridChromePaneModelInput, BuildDataGridChromeRenderModelInput, DataGridChromeBand, DataGridChromeLine, DataGridChromePaneModel, DataGridChromeRenderModel, DataGridChromeRowBand, DataGridChromeRowMetric, DataGridChromeVisibleRange, } from "@affino/datagrid-chrome"`
-- `export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridAppEnterpriseFormulaRuntimeOptions, ResolveDataGridFormulaRowModelOptionsInput, } from "./config/dataGridFormulaOptions"`
+- `export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridAppFormulaRuntimeOptions, ResolveDataGridFormulaRowModelOptionsInput, } from "./config/dataGridFormulaOptions"`
 - `export type { DataGridAppInspectorPanel, DataGridAppToolbarModule, } from "./host/DataGridModuleHost"`
 - `export type { DataGridAppViewMode, DataGridGanttBarFrame, DataGridGanttBarLayout, DataGridGanttCriticalTaskNode, DataGridGanttDependencyPath, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttHorizontalAlign, DataGridGanttOptions, DataGridGanttProp, DataGridGanttRowEditPatch, DataGridGanttTimelineState, DataGridGanttZoomLevel, DataGridResolvedGanttOptions, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from "./gantt/dataGridGantt"`
 - `export type { DataGridBuiltInToolbarItem, DataGridToolbarActionOptions, DataGridToolbarAlignment, DataGridToolbarItemPlacement, DataGridToolbarLayoutOptions, DataGridToolbarLayoutProp, } from "./config/dataGridToolbarLayout"`
@@ -526,7 +526,7 @@ Entrypoint exports:
 - `export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"`
 - `export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"`
 
-Declaration graph hash: `7595ea0c89fed7614802a1af10df9bae189da1f5112335ac53fc6f3a5abff218`
+Declaration graph hash: `4e0ca30b5c50d8be7b7a86ad5f20513f8516c3e3323bd73cfda0887839dfc57a`
 
 ### ./quick-filter
 

@@ -196,4 +196,4 @@ Behavioral difference to expect:
 
 - [TreeData behavior matrix](./reference/datagrid-tree-data-behavior-matrix.md)
 - `docs/internal/reference/datagrid-model-contracts.md`
-- `docs/reference/datagrid-data-source-api.md`
+- `packages/datagrid-core/docs/reference/data-source-api.md`

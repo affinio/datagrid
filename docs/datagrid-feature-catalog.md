@@ -27,7 +27,7 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | Add local editing, fill, or undo/redo | App props and column capabilities | [Editing and fill](./examples/editing-and-fill.md), [Editing](./datagrid-editing.md) |
 | Persist filters, layout, selection, or viewport | Unified `state` | [Controlled state](./examples/controlled-state.md), [State reference](./datagrid-state-events-compute-diagnostics.md) |
 | Render your own Vue host | `@affino/datagrid-vue` | [Vue adapter guide](./vue-adapter.md) |
-| Integrate without Vue | `@affino/datagrid-core` | [Core API](./core-api.md), [Unified Grid API](./datagrid-grid-api.md) |
+| Integrate without Vue | `@affino/datagrid-core` | [Core API](../packages/datagrid-core/docs/README.md), [Unified Grid API](../packages/datagrid-core/docs/grid-api.md) |
 | Query a large backend-owned table | Datasource-backed row model | [Server quick start](./server-datasource/quick-start.md) |
 | Understand browser/runtime limits | Runtime mode and support matrix | [Virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md) |
 
@@ -75,7 +75,7 @@ For the meaning of capability labels and the current product boundary, see [Supp
 | App UX | Runtime diagnostics and performance presets | App + Core | main-thread, worker-owned | The standard `@affino/datagrid-vue` package provides the inspector, formula explain views, trace history, and workload presets through `diagnostics` and `performance` props. |
 | Formula | Reusable function packs | Formula engine + App | main-thread, worker-owned | `@affino/datagrid-formula-engine` exports built-in packs such as `finance`; enable them with the `formulaPacks` prop or combine them with app-defined formula functions. |
 | Selection | Cell/range selection | Core + Adapter + App | main-thread, worker-owned | Anchor/focus/range model, keyboard and pointer transitions, and overlay materialization. |
-| Selection | Record selection by row ID | Core + Adapter + App | main-thread, worker-owned | Opt-in row-header action supports click modifiers, Shift keyboard extension, projection-aware drag preview/commit/cancel, and selectable-row policy. The row-header default remains cell-range selection. See the [row-selection reference](./reference/datagrid-row-selection-model.md). |
+| Selection | Record selection by row ID | Core + Adapter + App | main-thread, worker-owned | Opt-in row-header action supports click modifiers, Shift keyboard extension, projection-aware drag preview/commit/cancel, and selectable-row policy. The row-header default remains cell-range selection. See the [row-selection reference](../packages/datagrid-core/docs/reference/row-selection.md). |
 | Selection | Fill handle + drag-fill | Core + Adapter + App | main-thread, worker-owned | Spreadsheet-like fill interaction primitives, including drag-fill, double-click fill-down, and post-fill `Series` / `Copy` reapply in app facades. |
 | Selection | Range move / drag-move | Core + Adapter | main-thread, worker-owned | Move selected ranges with deterministic lifecycle hooks. |
 | Clipboard | Copy/cut/paste orchestration | Core + Adapter | main-thread, worker-owned | Clipboard bridge/mutation policy and selection-aware operations. |

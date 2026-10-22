@@ -18,6 +18,45 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, unified `@affi
 | `@affino/datagrid-vue/headless` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics, adapter materialization from canonical runtime windows | canonical virtualization math, duplicate coordinate conversion logic, core business invariants |
 | `@affino/datagrid-vue` app entries | mounted table stage, DOM event binding, native body viewport, viewport materialization, header/pinned pane wiring, overlays, focus surfaces, editors, product UX composition | core viewport range/clamp math, model mutation primitives, stable public core API ownership |
 
+## Engine and Adapter Data Flow
+
+The diagrams below show logical ownership and the runtime round trip. The host framework is replaceable; Core contracts and row identity remain the same.
+
+```mermaid
+flowchart LR
+  Host[Application policy] --> Adapter[UI adapter / renderer]
+  Adapter -->|normalized command| Facade[DataGridApi]
+  Facade --> Services[Core service registry]
+  Services --> Rows[Row model + projection]
+  Services --> Columns[Column model]
+  Services --> Selection[Selection + transactions]
+  Services --> View[Viewport + view state]
+  Rows --> Events[Snapshots + typed events]
+  Columns --> Events
+  Selection --> Events
+  View --> Events
+  Events -->|read snapshots, materialize visible view| Adapter
+  Orchestration[datagrid-orchestration] -. optional gesture lifecycle .-> Adapter
+  Orchestration -. core selection/session contracts .-> Services
+```
+
+```mermaid
+sequenceDiagram
+  participant UI as Host UI / adapter
+  participant API as DataGridApi
+  participant Model as Core models
+  participant Events as Core events
+  UI->>API: command by rowId / columnKey
+  API->>Model: validate capability and apply transition
+  Model-->>Events: publish revisioned change
+  Events-->>UI: typed notification
+  UI->>API: read current snapshot
+  API-->>UI: projected rows, columns, selection, view state
+  UI->>UI: render current window; DOM indices are ephemeral
+```
+
+`@affino/datagrid-orchestration` is an optional adapter dependency. It coordinates stateful interaction lifecycles (for example drag preview, cancellation, keyboard routing, and scroll scheduling); it does not replace Core models or own domain mutation decisions. Ready-made app consumers generally do not call it directly. Custom adapter authors may use it when they need shared lifecycle behavior rather than reimplementing gesture arbitration. Its current package root is classified as advanced adapter-internal; see the [contract](internal/reference/datagrid-orchestration-public-contract.md).
+
 ## Dependency Direction
 
 - `datagrid-core` has no dependency on Vue.
@@ -110,7 +149,7 @@ default. Consumers opt into record selection with `rowHeader.action:
 "select-records"`; `"none"` disables row-header selection. The adapter resolves
 drag targets and ranges against the logical projection, publishes preview to
 the existing row selection visuals, and writes one committed result through
-`api.rowSelection`. See the [row-selection model reference](reference/datagrid-row-selection-model.md)
+`api.rowSelection`. See the [row-selection model reference](../packages/datagrid-core/docs/reference/row-selection.md)
 for the supported gestures and configuration.
 
 The row-header record-selection path is integrated across these layers. Core

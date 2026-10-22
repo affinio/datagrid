@@ -45,7 +45,7 @@ Pass the model to `DataGrid` or bind it to a custom renderer. Filtering and sort
 
 The adapter owns Vue lifecycle, refs, DOM integration, overlay transforms, selectors, and event bridging. The core owns deterministic row/model state and does not know about Vue components or DOM nodes. Keep those responsibilities separate when building a custom renderer.
 
-Useful stable surfaces include `useDataGridRuntime`, settings adapters, accessibility mapping, overlay transforms, context-menu integration, and the `DATA_GRID_SELECTORS` contract. Use the [core API guide](./core-api.md) for model semantics and the [advanced entrypoint reference](./reference/datagrid-vue-advanced-entrypoint.md) for low-level APIs.
+Useful stable surfaces include `useDataGridRuntime`, settings adapters, accessibility mapping, overlay transforms, context-menu integration, and the `DATA_GRID_SELECTORS` contract. Use the [core API guide](../packages/datagrid-core/docs/README.md) for model semantics and the [advanced entrypoint reference](./reference/datagrid-vue-advanced-entrypoint.md) for low-level APIs.
 
 ## When to use advanced APIs
 

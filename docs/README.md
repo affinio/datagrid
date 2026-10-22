@@ -10,9 +10,7 @@ This is the public documentation for the DataGrid repository. Choose one entry p
 - [Theme token reference](./reference/datagrid-theme-tokens.md) - complete token-to-CSS-variable catalog.
 - [Vue adapter guide](./vue-adapter.md) - headless Vue runtime, custom renderers, row models, and adapter ownership.
 - [Vue package migration](./vue-package-migration.md) - unified Vue entry points and temporary compatibility imports.
-- [Core API guide](./core-api.md) - framework-independent row models, `DataGridApi`, lifecycle, state, events, and projection semantics.
-- [Core factories reference](./reference/datagrid-core-factories-reference.md) - core runtime assembly and constructor options.
-- [Core row-selection model](./reference/datagrid-row-selection-model.md) - committed selection, intent, and session primitives.
+- [Core engine documentation](../packages/datagrid-core/docs/README.md) - maintained beside the package: architecture, integration guide, API references, and framework-independent examples.
 - [Package map](./datagrid-package-map.md) - package roles and when to move between layers.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability matrix and runtime modes.
 - [Support status](./support-status.md) - implemented, partial, planned, advanced, and internal labels.
@@ -20,7 +18,7 @@ This is the public documentation for the DataGrid repository. Choose one entry p
 - [App component API](./app-api.md) - props, events, state, and component refs.
 - [API stability](./api-stability.md) - stable, advanced, and internal import guarantees.
 
-The app guide is the primary user experience. The Vue and core guides are complete integration surfaces, not prerequisites for ordinary usage.
+The app guide is the primary user experience. Core documentation is maintained in `packages/datagrid-core/docs`; this folder focuses on product and cross-package guides.
 
 ## Integration guides
 
@@ -48,9 +46,9 @@ The app guide is the primary user experience. The Vue and core guides are comple
 
 ## API and architecture reference
 
-- [Unified Grid API](./datagrid-grid-api.md)
+- [Unified Grid API](../packages/datagrid-core/docs/grid-api.md)
 - [Event matrix](./reference/datagrid-event-matrix.md)
-- [Data source API](./reference/datagrid-data-source-api.md)
+- [Data source API](../packages/datagrid-core/docs/reference/data-source-api.md)
 - [Architecture](./datagrid-architecture.md)
 - [Virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md)
 - [Vue stable entrypoint](./reference/datagrid-vue-stable-entrypoint.md)

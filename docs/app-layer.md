@@ -54,7 +54,7 @@ The app package also provides opt-in subpaths for `quick-filter`, `advanced-filt
 
 ## State and refs
 
-Persist user-facing saved views through the unified state boundary exposed by the component/runtime. Do not persist DOM scroll positions or query internal signals. For lower-level state control, use the [core API guide](./core-api.md).
+Persist user-facing saved views through the unified state boundary exposed by the component/runtime. Do not persist DOM scroll positions or query internal signals. For lower-level state control, use the [core API guide](../packages/datagrid-core/docs/README.md).
 
 ## Server-backed rows
 

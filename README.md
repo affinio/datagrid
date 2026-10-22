@@ -154,7 +154,7 @@ Start here:
 - [Getting started](./docs/getting-started.md)
 - [App layer guide](./docs/app-layer.md)
 - [Vue adapter guide](./docs/vue-adapter.md)
-- [Core API guide](./docs/core-api.md)
+- [Core API guide](./packages/datagrid-core/docs/README.md)
 
 - [Documentation index](./docs/README.md)
 - [Package map](./docs/datagrid-package-map.md)
@@ -168,7 +168,7 @@ Start here:
 
 Core references:
 
-- [Grid API](./docs/datagrid-grid-api.md)
+- [Grid API](./packages/datagrid-core/docs/grid-api.md)
 - [Architecture](./docs/datagrid-architecture.md)
 
 Feature guides:

@@ -344,7 +344,7 @@ The public ref exposes:
 - history / getHistory() for undo and redo;
 - focus-anchor capture/restore and selection aggregate helpers.
 
-Use getApi() only when the component-level props/events do not express the integration. For core namespace semantics, see [Core API](./core-api.md).
+Use getApi() only when the component-level props/events do not express the integration. For core namespace semantics, see [Core API](../packages/datagrid-core/docs/README.md).
 
 ### Server history synchronization
 

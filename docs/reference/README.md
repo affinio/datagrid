@@ -2,9 +2,7 @@
 
 These documents are public and supported, but they are intended for integrators who own runtime, renderer, accessibility, or adapter details. Start with the [app layer guide](../app-layer.md) unless you need one of these contracts.
 
-- [DataGrid API method reference](./datagrid-grid-api-methods.md) — every public namespace method with its TypeScript signature, parameters, return value, and capability notes.
 - [Generated public API declarations](./generated/datagrid-public-api-declarations.md) — declaration-derived entrypoint and export index.
-- [Data Source API](./datagrid-data-source-api.md) — in-process pull, push, invalidation, histogram, and backpressure contracts.
 - [Formula function reference](./datagrid-formula-engine-function-reference.md) — built-in formula names, arguments, and examples.
 - [TreeData behavior matrix](./datagrid-tree-data-behavior-matrix.md) — exact projection, identity, filtering, and expansion semantics.
 - [Virtualization support matrix](./datagrid-virtualization-support-matrix.md) — supported, partial, and unsupported runtime combinations.
@@ -13,9 +11,7 @@ These documents are public and supported, but they are intended for integrators 
 - [Cell refresh API](./datagrid-cell-refresh-api.md) — targeted rendered-cell refresh contracts.
 - [Theme ownership](./datagrid-theme-ownership.md) — ownership of tokens, CSS, and adapter styling.
 
-- [Core factories](./datagrid-core-factories-reference.md)
-- [Core row-selection model](./datagrid-row-selection-model.md) — framework-independent committed selection, range intent, and session primitives.
-- [Core advanced API](./datagrid-core-advanced-reference.md)
+- [Core API references](../../packages/datagrid-core/docs/README.md) — complete Core documentation index, constructors, selection, advanced exports, and framework-independent examples.
 - [Vue stable entrypoint](./datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./datagrid-vue-advanced-entrypoint.md)
 - [Vue adapter integration](./datagrid-vue-adapter-integration.md)

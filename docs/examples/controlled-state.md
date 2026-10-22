@@ -31,4 +31,4 @@ const state = ref<DataGridUnifiedState<Order> | null>(null)
 </template>
 ```
 
-For storage, serialize the received snapshot and restore it only after rows and columns are available. For untrusted or older data, call the component ref's `migrateState` before `applyState`; see [Unified Grid API](../datagrid-grid-api.md) for the core state semantics.
+For storage, serialize the received snapshot and restore it only after rows and columns are available. For untrusted or older data, call the component ref's `migrateState` before `applyState`; see [Unified Grid API](../../packages/datagrid-core/docs/grid-api.md) for the core state semantics.

@@ -1741,7 +1741,7 @@ row index previews a range and commits once on release; Escape or a canceled
 gesture discards the preview. Shift+Up/Down extends the range while focus is on
 a row index. Group and unloaded placeholder rows are not included in ranges.
 The full framework-independent model and projection rules are documented in
-the [row-selection reference](../../docs/reference/datagrid-row-selection-model.md).
+the [row-selection reference](../../packages/datagrid-core/docs/reference/row-selection.md).
 
 For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
 
