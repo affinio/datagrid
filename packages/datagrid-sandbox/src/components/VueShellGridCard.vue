@@ -1382,6 +1382,7 @@ const isPivotAdvancedPanelOpen = ref(false);
 const pivotAdvancedImportText = ref("");
 const pivotAdvancedOutputText = ref("");
 const columnState = ref<DataGridUnifiedColumnState | null>(null);
+let groupedLeafVisibilityRestorePending = false;
 const stateModel = ref<DataGridUnifiedState<unknown> | null>(null);
 const savedViewModel = ref<DataGridSavedViewSnapshot<Record<string, unknown>> | null>(null);
 const hasPersistedSavedView = ref(false);
@@ -2316,6 +2317,12 @@ watch(
 );
 
 const handleGroupByUpdate = (nextGroupBy: DataGridGroupBySpec | null): void => {
+  if (props.groupedShowcase && groupByModel.value?.fields.length && !nextGroupBy?.fields.length) {
+    groupedLeafVisibilityRestorePending = true;
+    void nextTick(() => {
+      setTimeout(() => { groupedLeafVisibilityRestorePending = false }, 0);
+    });
+  }
   groupByModel.value = nextGroupBy;
 };
 
@@ -2323,6 +2330,9 @@ const handleColumnStateUpdate = (
   nextState: DataGridUnifiedColumnState,
 ): void => {
   const normalizedNextState = normalizeColumnState(nextState, columns.value);
+  if (groupedLeafVisibilityRestorePending && normalizedNextState.visibility.name === false) {
+    normalizedNextState.visibility.name = true;
+  }
   if (!shouldHideUnusedPivotSourceColumns.value) {
     setColumnStateIfChanged(normalizedNextState);
     return;
