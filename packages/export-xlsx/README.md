@@ -1,21 +1,21 @@
 # @affino/export-xlsx
 
-Minimal standalone `.xlsx` writer.
+Standalone `.xlsx` writer for typed worksheet documents. It has no DataGrid or UI dependency.
 
 Supported baseline:
 
 - multiple worksheets
-- string, number, boolean, and formula cells
+- string, number, boolean, date, and formula cells
 - shared strings and XML escaping
 - sheet-name sanitization to Excel-safe names
+- cell number formats, bold text, font and fill colors
+- column widths and frozen header rows
 - Node.js and browser-friendly `Uint8Array` output
 
-Out of scope in `0.1.x`:
+Out of scope:
 
-- styling and number formats
-- column widths, row heights, merges, frozen panes
-- dates/times as first-class cell types
 - images, comments, charts, tables, workbook metadata
+- row heights and merged cells
 
 ## Install
 
@@ -104,6 +104,10 @@ Workbook input:
 interface XlsxSheetInput {
   name: string
   rows: readonly WorksheetRow[]
+  columns?: readonly { width?: number }[]
+  headerRows?: number
+  freezeRows?: number
+  rowOutlineLevels?: readonly number[]
 }
 
 interface XlsxWorkbookInput {
@@ -114,16 +118,28 @@ interface XlsxWorkbookInput {
 Notes:
 
 - workbook must contain at least one sheet
-- empty or invalid sheet names are normalized to `Sheet1`, `Sheet2`, ...
+- invalid and duplicate sheet names are normalized to Excel-safe unique names
 - formulas may be passed as `"A1+B1"` or `"=A1+B1"`
-- non-finite numeric values are written as `0`
+- non-finite numeric values are rejected
+- dates are serialized as Excel date serials using UTC timestamps
+- `freezeRows` freezes the requested number of top rows; `headerRows` applies default header styling
+- widths use Excel character units and are clamped to the supported range
 
 Cell type:
 
 ```ts
 type WorksheetCell =
-  | { type: "string"; value: string }
-  | { type: "number"; value: number }
-  | { type: "boolean"; value: boolean }
-  | { type: "formula"; value: string }
+  | { type: "string"; value: string; style?: WorksheetCellStyle }
+  | { type: "number"; value: number; style?: WorksheetCellStyle }
+  | { type: "boolean"; value: boolean; style?: WorksheetCellStyle }
+  | { type: "date"; value: Date; style?: WorksheetCellStyle }
+  | { type: "formula"; value: string; cachedValue?: string | number | boolean; style?: WorksheetCellStyle }
+
+interface WorksheetCellStyle {
+  bold?: boolean
+  indent?: number
+  numberFormat?: string
+  fillColor?: string
+  fontColor?: string
+}
 ```

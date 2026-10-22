@@ -2,7 +2,7 @@
 
 Status: public API reference.
 
-This page documents the public surface of DataGrid from @affino/datagrid-vue-app. It is a practical index; types and editor completion remain the authoritative details for option objects.
+This page documents the public surface of DataGrid from @affino/datagrid-vue. It is a practical index; types and editor completion remain the authoritative details for option objects.
 
 ## Data inputs
 
@@ -16,6 +16,10 @@ This page documents the public surface of DataGrid from @affino/datagrid-vue-app
 | external-filter-indicators | Active filter conditions owned by the host app; shown in the matching header with a plain-text tooltip and included in its accessible label. |
 | computed-fields / formulas | Computed and formula-backed field definitions. |
 | formula-functions | Named formula function registry. |
+| formula-packs | Registers named function packs from `@affino/datagrid-formula-engine`; `true` enables all built-in packs, or pass a list such as `['finance']`. |
+| formula-runtime | Optional client formula runtime overrides such as `computeMode` and `formulaColumnCacheMaxColumns`. |
+| performance | Optional workload preset (`balanced`, `throughput`, `formulaHeavy`, or `patchHeavy`) with explicit settings taking precedence. |
+| diagnostics | Adds the built-in diagnostics inspector with runtime, formula, performance, trace, and raw snapshot views. |
 | aggregation-model | Core aggregation configuration. |
 | sort-model / filter-model | Controlled projection state. |
 | group-by / pivot-model | Grouping and pivot projection state. |
@@ -23,6 +27,11 @@ This page documents the public surface of DataGrid from @affino/datagrid-vue-app
 Active group-by levels appear in the toolbar in hierarchy order. Adding a level scrolls the grouping tree column to the start of the center viewport. Removing a level from its chip rebuilds the hierarchy with the remaining levels; collapsing a group returns focus to its visible disclosure control.
 
 Use rows for ordinary local tables. Use row-model when data ownership or lifecycle belongs to another runtime; do not provide both for the same grid.
+
+These features are part of the standard `@affino/datagrid-vue` package. They do
+not require a separate package or license key. Presets apply only where the grid
+owns the client row model; a caller-supplied row model remains responsible for
+its own runtime configuration.
 
 External conditions can be surfaced without registering them in the grid's filter model:
 
@@ -62,6 +71,7 @@ or the grid's built-in filter state.
 | quick-filter / advanced-filter / find-replace | Optional query and editing tools. |
 | grid-lines | Grid-line presentation preset/options. |
 | history | Built-in or injected undo/redo controls. |
+| xlsx-export | Adds the built-in XLSX export toolbar action. Accepts `true` or an options object. |
 | server-history | Enable synchronization with datasource-backed server history. Defaults to `true`; set `:server-history="false"` when the backend does not expose history endpoints. This is independent from local `history`. |
 | empty-state | Optional typed renderer for content shown inside the row body when no rows are available. |
 | empty-state-alignment | `"content"` (default) centers across the virtual content; `"viewport"` centers within the visible center table viewport and remains anchored during horizontal scrolling. |
@@ -136,7 +146,7 @@ Use `emptyState` when the application needs localized or domain-specific copy:
 ```vue
 <script setup lang="ts">
 import { h } from "vue"
-import { DataGrid, type DataGridEmptyStateProps } from "@affino/datagrid-vue-app"
+import { DataGrid, type DataGridEmptyStateProps } from "@affino/datagrid-vue"
 
 const renderEmptyState = ({ reason }: DataGridEmptyStateProps) =>
   h("p", { class: "trades-empty-state" }, reason === "filtered"
@@ -273,11 +283,48 @@ row count and ID order. It still scans the old and new arrays and compares their
 values. A length or ID-order change uses the existing replace path. It does not
 represent an O(changed rows) delta; use the explicit row API above for that.
 
+## XLSX export
+
+`xlsx-export` prepares a single-sheet workbook from the current logical view. It is independent of the rendered virtual window. `current-view` means the current page after filtering, sorting, and expansion. Visible columns are included by default; set `columns: "all"` to include hidden columns.
+
+```vue
+<DataGrid
+  :rows="orders"
+  :columns="columns"
+  :xlsx-export="{
+    fileName: 'orders.xlsx',
+    sheetName: 'Orders',
+    rows: 'current-view',
+    columns: 'visible',
+    includeHeaders: true,
+    formulas: 'values',
+  }"
+/>
+```
+
+Formula cells export their computed values by default. Set `formulas: "excel"` to translate supported formula columns into native Excel formula cells; same-row column references become cell addresses, arithmetic and common Excel functions are translated, and `SAFE_DIVIDE` maps to `IF`. Supported grouped `sum`, `avg`, `min`, `max`, and `countNonNull` aggregates become `SUBTOTAL` formulas over the exported child range when their basis is the current filtered view. Collapsed groups, source-based aggregates, and operations without an equivalent Excel function keep their computed value. Unsupported formula references or functions return `unsupported` with `formula-translation` instead of being written as text. The writer marks formula workbooks for recalculation when opened. Grouped views include group labels, available aggregates, and Excel outline levels. Tree views include currently expanded rows with indentation and outline levels; descendants hidden by collapsed nodes are omitted. Pivot projections remain unsupported. While the row model is loading, or when a projected server row is absent or a loading placeholder, the operation returns `unsupported` with `incomplete-data` rather than exporting a partial file. Dates are written as Excel serials interpreted in UTC. A column can specify `export: { header, value, dataType, numberFormat, width, style }` to resolve values and workbook formatting independently of its Vue renderer. `style` supports `fillColor`, `fontColor`, and `bold`; colors accept six-digit RGB hex values with or without `#`.
+
+The same path is available programmatically and returns bytes without downloading:
+
+```ts
+import { exportDataGridXlsx } from "@affino/datagrid-vue"
+
+const result = await exportDataGridXlsx(gridRef.value!.getApi()!, {
+  rows: "current-view",
+  columns: "visible",
+  formulas: "values",
+  signal,
+})
+if (result.status === "success") uploadWorkbook(result.bytes)
+```
+
+The result is a discriminated union for success, cancellation, unsupported projections/data, and errors. `onProgress` reports row preparation and worker serialization. The toolbar and programmatic helper share the same data preparation and worker path; only the toolbar initiates browser download.
+
 ## Component ref
 
 ```vue
 <script setup lang="ts">
-import { useDataGridRef } from "@affino/datagrid-vue-app"
+import { useDataGridRef } from "@affino/datagrid-vue"
 
 type Order = { rowId: string; amount: number }
 const gridRef = useDataGridRef<Order>()
@@ -318,10 +365,10 @@ The default is enabled for backwards compatibility. Set it to `false` for read-o
 
 The root import is the ordinary table path. Use explicit subpaths for optional features:
 
-- @affino/datagrid-vue-app/quick-filter
-- @affino/datagrid-vue-app/advanced-filter
-- @affino/datagrid-vue-app/find-replace
-- @affino/datagrid-vue-app/aggregations
-- @affino/datagrid-vue-app/gantt
+- @affino/datagrid-vue/quick-filter
+- @affino/datagrid-vue/advanced-filter
+- @affino/datagrid-vue/find-replace
+- @affino/datagrid-vue/aggregations
+- @affino/datagrid-vue/gantt
 
 See [API stability](./api-stability.md) before depending on advanced or internal entrypoints.

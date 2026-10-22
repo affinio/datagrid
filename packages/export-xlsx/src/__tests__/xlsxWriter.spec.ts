@@ -104,4 +104,78 @@ describe("xlsxWriter", () => {
   it("rejects empty workbooks", () => {
     expect(() => writeXlsx({ sheets: [] })).toThrow("Workbook must contain at least one sheet")
   })
+
+  it("emits typed date styles, header styling, widths and a frozen header row", () => {
+    const archive = unzipSync(writeXlsx({
+      sheets: [{
+        name: "Orders",
+        headerRows: 1,
+        columns: [{ width: 18 }, { width: 32 }],
+        rows: [
+          [{ type: "string", value: "Date" }, { type: "string", value: "Amount" }],
+          [
+            { type: "date", value: new Date("2026-01-01T00:00:00.000Z"), style: { numberFormat: "yyyy-mm-dd" } },
+            { type: "number", value: 1200, style: { numberFormat: '[$£-en-GB]#,##0.00' } },
+          ],
+        ],
+      }],
+    }))
+    const sheet = strFromU8(archive["xl/worksheets/sheet1.xml"]!)
+    const styles = strFromU8(archive["xl/styles.xml"]!)
+
+    expect(sheet).toContain('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>')
+    expect(sheet).toContain('<col min="1" max="1" width="18" customWidth="1"/>')
+    expect(sheet).toContain("<c r=\"A2\" s=\"")
+    expect(sheet).toContain("<v>46023</v>")
+    expect(styles).toContain('formatCode="yyyy-mm-dd"')
+    expect(styles).toContain("<b/>")
+    expect(styles).toContain('rgb="FFF1F3F5"')
+  })
+
+  it("makes sanitized sheet names unique and preserves whitespace in strings", () => {
+    const archive = unzipSync(writeXlsx({
+      sheets: [
+        { name: "A/B", rows: [[{ type: "string", value: "  id  " }]] },
+        { name: "A?B", rows: [] },
+        { name: "a_b", rows: [] },
+      ],
+    }))
+    const workbook = strFromU8(archive["xl/workbook.xml"]!)
+    const sharedStrings = strFromU8(archive["xl/sharedStrings.xml"]!)
+
+    expect(workbook).toContain('name="A_B"')
+    expect(workbook).toContain('name="A_B (2)"')
+    expect(workbook).toContain('name="a_b (3)"')
+    expect(sharedStrings).toContain('<t xml:space="preserve">  id  </t>')
+  })
+
+  it("marks formula caches for recalculation and rejects invalid numbers", () => {
+    const archive = unzipSync(writeXlsx({
+      sheets: [{ name: "Calc", rows: [[{ type: "formula", value: "=1+1", cachedValue: 2 }]] }],
+    }))
+    expect(strFromU8(archive["xl/workbook.xml"]!)).toContain('fullCalcOnLoad="1"')
+    expect(strFromU8(archive["xl/worksheets/sheet1.xml"]!)).toContain("<f>1+1</f><v>2</v>")
+    expect(() => writeXlsx({ sheets: [{ name: "Data", rows: [[{ type: "number", value: Number.NaN }]] }] }))
+      .toThrow("must be finite")
+  })
+
+  it("writes row outline levels and cell indentation for grouped worksheets", () => {
+    const archive = unzipSync(writeXlsx({
+      sheets: [{
+        name: "Grouped",
+        rows: [
+          [{ type: "string", value: "Region" }],
+          [{ type: "string", value: "North", style: { bold: true } }],
+          [{ type: "string", value: "Order 1", style: { indent: 1 } }],
+        ],
+        rowOutlineLevels: [0, 0, 1],
+      }],
+    }))
+    const sheet = strFromU8(archive["xl/worksheets/sheet1.xml"]!)
+    const styles = strFromU8(archive["xl/styles.xml"]!)
+
+    expect(sheet).toContain('<sheetPr><outlinePr summaryBelow="0"/></sheetPr>')
+    expect(sheet).toContain('<row r="3" outlineLevel="1">')
+    expect(styles).toContain('<alignment indent="1"/>')
+  })
 })
