@@ -9,6 +9,7 @@ import {
   type DataGridRowSelectionCapability,
 } from "./gridApiCapabilities"
 import type { DataGridChangeContext } from "./gridApiContracts"
+import { buildDataGridSelectionProjectionIdentity } from "../selection/virtualSelection.js"
 
 export interface DataGridApiRowSelectionMethods<TRow = unknown> {
   hasRowSelectionSupport: () => boolean
@@ -41,7 +42,7 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
   const rowIdSignature = (rowId: DataGridRowId): string => `${typeof rowId}:${String(rowId)}`
   const currentScope = () => ({
     kind: "current-projection" as const,
-    queryRevision: rowModel.getSnapshot().revision ?? null,
+    queryRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
     datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
   })
   const getScopeStatus = (): "current" | "stale" | "unscoped" | "not-applicable" | "unsupported" => {

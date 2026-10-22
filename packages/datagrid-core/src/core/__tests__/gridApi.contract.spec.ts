@@ -2426,6 +2426,46 @@ describe("data grid api facade contracts", () => {
     expect(events[0]).toMatchObject({ origin: "signal-list-sync", operationId: "sync-1" })
   })
 
+  it("keeps current-projection row selection current across value edits and stales it on projection changes", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", amount: 1 }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", amount: 2 }, rowId: "b", originalIndex: 1 },
+    ] })
+    let selected: DataGridRowSelectionSnapshot | null = null
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [
+        { key: "id", label: "ID" },
+        { key: "amount", label: "Amount" },
+      ] }) },
+      selection: {
+        name: "selection",
+        getRowSelectionSnapshot: () => selected,
+        setRowSelectionSnapshot: snapshot => { selected = snapshot },
+        clearRowSelection: () => { selected = null },
+        getFocusedRow: () => selected?.focusedRow ?? null,
+        setFocusedRow: () => {},
+        getSelectedRows: () => selected?.selectedRows ?? [],
+        isRowSelected: rowId => selected?.selectedRows.includes(rowId) ?? false,
+        setRowSelected: () => {},
+        selectRows: () => {},
+        deselectRows: () => {},
+        clearSelectedRows: () => {},
+      },
+    } }) })
+
+    api.rowSelection.setSnapshot({ focusedRow: null, selectedRows: [], mode: "all", excludedRows: [] })
+    expect(api.rowSelection.getScopeStatus()).toBe("current")
+
+    api.rows.applyEdits([{ rowId: "a", data: { amount: 3 } }])
+    expect(api.rowSelection.getScopeStatus()).toBe("current")
+    expect(api.rowSelection.getSnapshot()?.mode).toBe("all")
+
+    api.rows.setFilterModel({ columnFilters: { amount: { kind: "valueSet", tokens: ["number:3"] } } })
+    expect(api.rowSelection.getScopeStatus()).toBe("stale")
+    expect(api.rowSelection.getSnapshot()).toBeNull()
+  })
+
   it("resolves selected row data through the current projected row order", () => {
     const rowA = { id: "a", score: 1 }
     const rowB = { id: "b", score: 2 }
