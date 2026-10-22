@@ -1,0 +1,2261 @@
+## DataGrid component guide
+
+![npm](https://img.shields.io/npm/v/@affino/datagrid-vue)
+![downloads](https://img.shields.io/npm/dt/@affino/datagrid-vue)
+![license](https://img.shields.io/npm/l/@affino/datagrid-vue)
+
+Declarative Vue component layer for Affino DataGrid, published alongside the
+headless Vue adapter in `@affino/datagrid-vue`.
+
+Documentation:
+
+- [App layer guide](../../docs/app-layer.md)
+- [App component API](../../docs/app-api.md)
+- [Getting started](../../docs/getting-started.md)
+
+Public export:
+
+- `DataGrid`
+- `DataGridModuleHost`
+
+The package ships its own runtime table-stage styles, so the default renderer does not depend on sandbox CSS.
+
+## XLSX export
+
+Enable the built-in toolbar action with `xlsxExport`. This prepares a workbook from the logical row model, so virtualization does not limit the exported rows:
+
+```vue
+<DataGrid
+  :rows="orders"
+  :columns="columns"
+  :xlsx-export="{
+    fileName: 'orders.xlsx',
+    sheetName: 'Orders',
+    rows: 'current-view',
+    columns: 'visible',
+    includeHeaders: true,
+    formulas: 'values',
+  }"
+/>
+```
+
+`current-view` means the current page after filtering, sorting, and expansion, independent of the rendered DOM window. Grouped views include group labels, available aggregate values, and Excel outline levels. Tree views include the currently expanded hierarchy with indentation and outline levels; descendants hidden by collapsed nodes are omitted. Pivot projections return an `unsupported` result. Exports also refuse to run while loading or when a projected row is unavailable, rather than silently writing a partial server result. Formula cells export their computed values.
+
+Columns can provide explicit export metadata for cases where the displayed renderer differs from the source value:
+
+```ts
+const columns = [{
+  key: 'orderCode',
+  label: 'Order',
+  field: 'orderCode',
+  dataType: 'text',
+  export: { width: 18 },
+}]
+```
+
+`export.value` can resolve a custom typed value, and `export.numberFormat` can set an Excel number format. Dates are written as Excel serials interpreted in UTC. The helper `exportDataGridXlsx(api, options)` uses the same preparation and worker serialization path as the toolbar, returning bytes without triggering a download:
+
+```ts
+import { exportDataGridXlsx, useDataGridRef } from "@affino/datagrid-vue"
+
+const grid = useDataGridRef<Order>()
+const result = await exportDataGridXlsx(grid.value!.getApi()!, { rows: "current-view" })
+if (result.status === "success") {
+  uploadWorkbook(result.bytes)
+}
+```
+
+The writer runs in a separate worker chunk and starts only when an export is requested.
+
+## Built-in app capabilities
+
+The standard package includes diagnostics, formula runtime configuration,
+formula function packs, and performance presets. These features require no
+separate package or license key. Formula language and reusable function packs
+are also available directly from `@affino/datagrid-formula-engine`.
+
+## Why Affino DataGrid?
+
+Affino DataGrid is designed for applications that need more than a simple table.
+
+It combines:
+
+- Virtualized rendering for large datasets
+- Spreadsheet-style formulas
+- Grouping, aggregation, and pivot views
+- Incremental row patch updates
+- Unified grid state persistence
+
+The goal is to provide a reactive analytics grid that can power dashboards, internal tools, and data-heavy applications.
+In practice, the project sits somewhere between a data grid and a reactive data processing engine with grid UI.
+
+## Key Capabilities
+
+- Declarative grid configuration
+- Reactive data transformations
+- Spreadsheet-style formulas
+- Built-in analytics features
+- Large dataset performance
+- Package-level height integration via `layoutMode`
+- Custom Vue cell content via per-column `cellRenderer`
+
+## Install
+
+```bash
+npm install @affino/datagrid-vue
+```
+
+```bash
+pnpm add @affino/datagrid-vue
+```
+
+Peer dependencies:
+
+- `vue ^3.3.0`
+
+## Optional Entrypoints
+
+The root package entry is intentionally kept as the base table app surface.
+
+Use subpath imports when you want optional feature modules explicitly:
+
+- `@affino/datagrid-vue/gantt`
+- `@affino/datagrid-vue/advanced-filter`
+- `@affino/datagrid-vue/quick-filter`
+- `@affino/datagrid-vue/find-replace`
+- `@affino/datagrid-vue/aggregations`
+
+Practical implications:
+
+- ordinary `DataGrid` table usage no longer needs to install or resolve `@affino/datagrid-gantt`; the optional peer is required only by the explicit Gantt entrypoint
+- gantt stage code is loaded lazily only when the gantt view is rendered
+- the column options menu is loaded on demand; pointer hover or keyboard focus on its trigger starts loading before activation
+- advanced filter, quick filter, find / replace, and aggregations remain available as optional package entrypoints instead of mandatory consumer-side chunking requirements
+
+Consumer-side chunk tuning can still help, but it is now an optimization rather than a workaround for the package boundary.
+
+The root entry renders ordinary tables and does not register the Gantt stage. To use the Gantt view, import the opt-in component from
+the Gantt subpath:
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue/gantt"
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    view-mode="gantt"
+    :gantt="{ startDateField: 'start', endDateField: 'end' }"
+  />
+</template>
+```
+
+`@affino/datagrid-vue/gantt` also exports `DataGridGanttStage` and the Gantt timeline helpers. Applications that only render ordinary
+tables should import `DataGrid` from the package root.
+
+## Quick Start
+
+Minimal example with virtualization and built-in features.
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue"
+
+const rows = [
+  { id: 1, owner: "Maya", region: "EMEA", amount: 1200, qty: 3 },
+  { id: 2, owner: "Liam", region: "AMER", amount: 860, qty: 2 },
+]
+
+const columns = [
+  { key: "owner", label: "Owner" },
+  { key: "region", label: "Region" },
+  {
+    key: "amount",
+    label: "Amount",
+    dataType: "currency",
+    initialState: { width: 140 },
+    presentation: {
+      align: "right",
+      headerAlign: "right",
+      numberFormat: {
+        locale: "en-GB",
+        style: "currency",
+        currency: "GBP",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      },
+    },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+  },
+  {
+    key: "start",
+    label: "Start",
+    dataType: "date",
+    initialState: { width: 128 },
+    presentation: {
+      dateTimeFormat: {
+        locale: "en-GB",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+      },
+    },
+  },
+  {
+    key: "qty",
+    label: "Qty",
+    dataType: "number",
+    initialState: { width: 96 },
+    presentation: {
+      align: "right",
+      headerAlign: "right",
+      numberFormat: {
+        locale: "en-GB",
+        style: "decimal",
+        maximumFractionDigits: 1,
+      },
+    },
+    capabilities: { sortable: true, filterable: true, aggregatable: true },
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    virtualization
+  />
+</template>
+```
+
+Result:
+
+- virtualized table
+- column resizing
+- sorting and filtering
+- keyboard navigation
+- selection
+
+`presentation.numberFormat` and `presentation.dateTimeFormat` are display-only. Editing, clipboard and patch flows continue to use the raw cell value.
+The shared formatter implementation lives in `@affino/datagrid-format`, so the same column formatting rules can be reused by other adapters.
+
+## Layout Modes
+
+`DataGrid` exposes a package-level height contract. `fill` is the default and occupies a bounded host; `auto-height` follows the row content for ordinary document flow.
+
+- `fill`: the grid fills the height assigned by its host, including the built-in toolbar. The host must have a definite height from its own parent or layout.
+- `auto-height`: the grid computes its own table height from header and rows
+- `minRows`: optional lower bound for `auto-height`
+- `maxRows`: optional upper bound for `auto-height`; scrolling stays inside the body after this clamp
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  layout-mode="auto-height"
+  :min-rows="6"
+  :max-rows="14"
+/>
+```
+
+Normalization rules:
+
+- row limits are only applied in `auto-height`
+- `fill` always ignores `minRows` and `maxRows`
+- `0`, negative, `NaN`, and non-finite row limits are treated as unset
+- if both limits are present and `maxRows < minRows`, `maxRows` is clamped up to `minRows`
+- use `fill` for bounded application panels and `auto-height` for normal document flow, embedded cards, and forms
+
+## Chrome Layout
+
+`DataGrid` now exposes package-level chrome controls so apps do not need CSS overrides just to remove the default toolbar-to-stage gap or collapse spreadsheet shells into a single surface.
+
+- `chrome.toolbarPlacement`: `"stacked"`, `"integrated"`, or `"hidden"`
+- `chrome.density`: `"comfortable"` or `"compact"`
+- `chrome.toolbarGap`: controls `--datagrid-app-layout-gap`
+- `chrome.workspaceGap`: controls `--datagrid-app-workspace-gap`
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :chrome="{
+    toolbarPlacement: 'integrated',
+    density: 'compact',
+    toolbarGap: 0,
+    workspaceGap: 8,
+  }"
+  :history="{ controls: true }"
+/>
+```
+
+Notes:
+
+- `stacked` keeps the previous app-shell structure and remains the default
+- `integrated` renders the toolbar inside the same surface as the table with a divider instead of a vertical gap
+- `hidden` disables the internal toolbar renderer so the host can place modules in its own header
+- gantt currently falls back to `stacked` when `integrated` is requested
+
+When you hide the internal toolbar, the component emits the resolved built-in plus custom toolbar modules through `@toolbar-modules-change`, and the package exports `DataGridModuleHost` so the host can render the exact same modules externally.
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import {
+  DataGrid,
+  DataGridModuleHost,
+  type DataGridAppToolbarModule,
+} from "@affino/datagrid-vue"
+
+const toolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
+const gridTheme = 'industrial-neutral' as const
+const gridChrome = { toolbarPlacement: 'hidden' as const, density: 'compact' as const }
+</script>
+
+<template>
+  <header class="sheet-header">
+    <DataGridModuleHost
+      :modules="toolbarModules"
+      :theme="gridTheme"
+      :chrome="gridChrome"
+    />
+  </header>
+
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :history="{ controls: true }"
+    :theme="gridTheme"
+    :chrome="gridChrome"
+    @toolbar-modules-change="toolbarModules = $event"
+  />
+</template>
+```
+
+Pass the same `theme` and `chrome` values to `DataGridModuleHost`; its CSS
+scope is separate from the sibling DataGrid root.
+
+## Placeholder Rows
+
+`DataGrid` can render an Excel-like visual tail without forcing your app to persist empty records up front.
+
+- `rows` stay materialized only: real rows still drive save/export/formulas/filtering/sorting/history snapshots.
+- `placeholderRows.count` adds a visual empty tail after the last real row.
+- `placeholderRows.createRowAt(...)` materializes a real row only when the user performs a write action.
+- the current package-level policy is `fixed-tail`
+- built-in materialization triggers are `edit`, `paste`, and checkbox/toggle writes
+- before materialization, placeholder rows do not increase `api.rows.getCount()`
+- row-index `copy`, `cut`, and `delete selected` actions continue to operate on the real materialized rows from a full-row selection, even when that selection extends into the placeholder tail
+- authored `cellRenderer` and `groupCellRenderer` contexts expose `surface.kind` so custom rendering can distinguish real rows from placeholder visual rows
+- the Vue sandbox base-table card includes a live `Placeholder tail` toggle so you can verify visual tail rendering and first-write materialization end to end
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue"
+
+const rows = [
+  { rowId: "r1", owner: "NOC", amount: 10 },
+]
+
+const columns = [
+  { key: "owner", label: "Owner", capabilities: { editable: true } },
+  { key: "amount", label: "Amount", capabilities: { editable: true } },
+]
+
+let nextRowId = 2
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :placeholder-rows="{
+      count: 8,
+      createRowAt: ({ visualRowIndex, reason }) => ({
+        rowId: `new-${nextRowId++}`,
+        owner: reason === 'paste' ? `Imported ${visualRowIndex + 1}` : '',
+        amount: 0,
+      }),
+    }"
+  />
+</template>
+```
+
+Current semantics:
+
+- editing the first placeholder row materializes exactly that row
+- editing a deeper placeholder row materializes rows up to that visual index so coordinates stay stable
+- when built-in `history` is enabled, undo restores a just-materialized placeholder row back to visual-tail state
+
+## Spreadsheet Fill Handle
+
+`DataGrid` keeps spreadsheet-style fill interactions off by default.
+Enable them declaratively with `fill-handle` when the host flow actually wants spreadsheet editing affordances.
+
+- Drag the fill handle from the active selection corner to extend the fill range.
+- Double-click the fill handle to fill the selected range down to the last row in the current projection.
+- After a fill is applied, a floating action chip stays inside the visible viewport so the user can reapply the last fill as `Series` or `Copy`.
+- Default behavior is inferred from the source matrix: numeric sequences default to `Series`, everything else defaults to `Copy`.
+- Fill writes only into editable cells. Mark read-only columns with `capabilities: { editable: false }`.
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue"
+
+const rows = [
+  { id: 1, sku: "A-100", month: 1, amount: 120 },
+  { id: 2, sku: "A-100", month: 2, amount: 150 },
+  { id: 3, sku: "A-100", month: 3, amount: 0 },
+]
+
+const columns = [
+  {
+    key: "sku",
+    label: "SKU",
+    capabilities: { editable: false },
+  },
+  {
+    key: "month",
+    label: "Month",
+    capabilities: { editable: true },
+  },
+  {
+    key: "amount",
+    label: "Amount",
+    capabilities: { editable: true },
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :client-row-model-options="{ resolveRowId: row => row.id }"
+    fill-handle
+  />
+</template>
+```
+
+Recommended usage:
+
+- Keep identifier, formula-result, and derived columns read-only.
+- Use fill for base table editing flows; it is not surfaced in pivot/tree/worker stage modes.
+- Prefer `@affino/datagrid-vue` for the built-in UX; custom renderers should use the app hooks exported from `@affino/datagrid-vue`.
+
+## Range Move
+
+Selection drag-move is also off by default in `DataGrid`.
+Enable it with `range-move` when you want spreadsheet-style move semantics for an existing selection.
+
+- drag starts from inside the current selection
+- the grid shows a move preview before commit
+- dropping writes the moved cell payload back through the normal grid mutation path
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :client-row-model-options="{ resolveRowId: row => row.id }"
+  fill-handle
+  range-move
+/>
+```
+
+Recommended usage:
+
+- leave both props off for form-like tables where accidental spreadsheet gestures are a UX risk
+- enable them together for spreadsheet-heavy editing surfaces
+- keep them off for read-only, reporting, and embedded summary tables unless the interaction model is explicitly spreadsheet-like
+
+## Custom Toolbar Modules
+
+`DataGrid` exposes a public `toolbar-modules` prop for additive toolbar actions.
+Use it when you want to keep the built-in app renderer and append custom buttons, popovers, or small workflow panels to the same toolbar row.
+
+- built-in modules such as column layout, advanced filter, and aggregations still render first
+- custom modules are appended after the built-in modules in declaration order
+- each module provides a stable `key`, a Vue `component`, and optional props passed into that component
+
+Type shape:
+
+```ts
+interface DataGridAppToolbarModule {
+  key: string
+  component: Component
+  props?: Record<string, unknown>
+}
+```
+
+Practical guidance:
+
+- use a stable `key` per module instance
+- keep the rendered trigger on the shared toolbar button class when you want built-in styling: `datagrid-app-toolbar__button`
+- add your own `data-datagrid-toolbar-action` when you want deterministic selectors for tests or analytics
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridAppToolbarModule } from "@affino/datagrid-vue"
+import { defineComponent, h } from "vue"
+
+const ExportButton = defineComponent({
+  name: "ExportButton",
+  props: {
+    label: {
+      type: String,
+      required: true,
+    },
+    onTrigger: {
+      type: Function,
+      required: true,
+    },
+  },
+  setup(props) {
+    return () => h("button", {
+      type: "button",
+      class: "datagrid-app-toolbar__button",
+      onClick: () => props.onTrigger(),
+    }, props.label)
+  },
+})
+
+const toolbarModules: readonly DataGridAppToolbarModule[] = [
+  {
+    key: "export",
+    component: ExportButton,
+    props: {
+      label: "Export",
+      onTrigger: () => {
+        console.log("export current view")
+      },
+    },
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :toolbar-modules="toolbarModules"
+    column-layout
+    quick-filter
+    advanced-filter
+  />
+</template>
+```
+
+Prefer `toolbar-modules` over replacing the whole default slot when the only goal is to extend the built-in toolbar.
+Use the default slot only when you need to take over the entire runtime renderer contract.
+
+## Declarative History
+
+Enable built-in undo/redo with one prop:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  history
+/>
+```
+
+The object form lets you control the source, depth, shortcuts, and built-in controls:
+
+```vue
+<script setup lang="ts">
+import {
+  DataGrid,
+  useDataGridRef,
+  type DataGridHistoryProp,
+  type DataGridTableStageHistoryAdapter,
+} from "@affino/datagrid-vue"
+
+const historyAdapter: DataGridTableStageHistoryAdapter = {
+  captureSnapshot: () => null,
+  recordIntentTransaction: () => undefined,
+  canUndo: () => true,
+  canRedo: () => false,
+  runHistoryAction: async direction => direction === "undo" ? "intent-1" : null,
+}
+
+const history: DataGridHistoryProp = {
+  depth: 80,
+  shortcuts: "window",
+  controls: "toolbar",
+  adapter: historyAdapter,
+}
+
+type DemoRow = {
+  rowId: string
+  owner: string
+  amount: number
+}
+
+const gridRef = useDataGridRef<DemoRow>()
+
+async function undoFromExternalButton() {
+  await gridRef.value?.getHistory()?.runHistoryAction("undo")
+}
+</script>
+
+<template>
+  <button type="button" @click="undoFromExternalButton">
+    Undo from external UI
+  </button>
+
+  <DataGrid
+    ref="gridRef"
+    :rows="rows"
+    :columns="columns"
+    :history="history"
+  />
+</template>
+```
+
+Supported history options:
+
+- `enabled`: explicit on/off switch when the object form is used
+- `depth`: max undo depth for recorded transactions/intents
+- `shortcuts`: `false`, `"grid"`, or `"window"`
+- `controls`: `false`, `"toolbar"`, or `"external-only"`
+- `adapter`: provide an external history source instead of the built-in app intent history
+
+For datasource-backed tables, `server-history` is a separate boolean prop. It defaults to `true` for backwards compatibility. Set `:server-history="false"` when the backend does not expose history endpoints; this prevents status polling/subscription and server undo/redo calls without changing local `history` behavior.
+
+Notes:
+
+- `depth` limits undoable transactions/intents, not raw per-cell keystrokes.
+- When `adapter` is omitted, the app facade falls back to its built-in intent history.
+- The component ref always exposes a stable history controller through `history` and `getHistory()`.
+
+## Declarative Column Menu
+
+Enable the built-in header menu with one prop:
+
+```vue
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    column-menu
+    column-layout
+    quick-filter
+    advanced-filter
+    aggregations
+    row-hover
+    striped-rows
+  />
+```
+
+`column-menu` also accepts a declarative object when you want to control the
+built-in sections instead of replacing the menu renderer.
+
+Built-in menu items and the `Cancel`/`Apply` footer buttons use compact spacing
+by default. In the value filter,
+`Select all` and `Clear all` are text links, and the value list omits the
+repetitive visible-count and scroll instructions. Loading, error, empty-result,
+and selected-count states remain available. The value list uses a compact
+default height and scrolls internally when it contains more values.
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridColumnMenuProp } from "@affino/datagrid-vue"
+
+const columnMenu: DataGridColumnMenuProp = {
+  trigger: "button+contextmenu",
+  items: ["sort", "group", "pin", "filter"],
+  disabled: ["pin"],
+  disabledReasons: {
+    pin: "Pinning is locked for this saved view",
+  },
+  labels: {
+    group: "Toggle grouping",
+    filter: "Quick filters",
+    valueSearchPlaceholder: "Search values",
+    selectedValuesSummary: "{selected} / {total} selected",
+  },
+  actions: {
+    sortAsc: { label: "Ascending order" },
+    clearSort: { hidden: true },
+    pinMenu: { disabled: true, disabledReason: "Pinning is managed globally" },
+  },
+  customItems: [
+    {
+      key: "insert-left",
+      label: "Insert column left",
+      placement: "after:group",
+      onSelect: ({ columnKey }) => {
+        console.log("Insert before", columnKey)
+      },
+    },
+    {
+      key: "organize",
+      kind: "submenu",
+      label: "Organize",
+      placement: "end",
+      items: [
+        {
+          key: "duplicate",
+          label: "Duplicate column",
+          onSelect: ({ columnKey }) => {
+            console.log("Duplicate", columnKey)
+          },
+        },
+        {
+          key: "advanced",
+          kind: "submenu",
+          label: "Advanced",
+          items: [
+            {
+              key: "freeze-snapshot",
+              label: "Freeze current layout",
+              onSelect: ({ columnKey, closeMenu }) => {
+                console.log("Freeze", columnKey)
+                closeMenu()
+              },
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  columns: {
+    amount: {
+      hide: ["group"],
+      labels: {
+        pin: "Freeze amount",
+      },
+      actions: {
+        pinLeft: { label: "Freeze left" },
+      },
+    },
+    owner: {
+      customItems: [
+        {
+          key: "rename",
+          label: "Rename column",
+          placement: "end",
+          onSelect: ({ columnKey, closeMenu }) => {
+            console.log("Rename", columnKey)
+            closeMenu()
+          },
+        },
+      ],
+    },
+    start: {
+      disabled: ["filter"],
+      disabledReasons: {
+        filter: "Filtering is disabled for schedule columns",
+      },
+    },
+  },
+}
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :column-menu="columnMenu"
+  />
+</template>
+```
+
+Supported app-level menu controls:
+
+- `trigger`: `button`, `contextmenu`, or `button+contextmenu` (default)
+- `items`: choose and order built-in sections (`sort`, `group`, `pin`, `filter`)
+- `disabled`: force specific built-in sections into a disabled state
+- `disabledReasons`: attach explanatory text to disabled built-in sections
+- `labels`: override built-in section labels
+- `actions`: override built-in action `label`, `hidden`, `disabled`, and `disabledReason` state
+- `customItems`: add custom menu entries around the built-in sections
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, `actions`, and `customItems`
+
+Custom menu items support:
+
+- `key`: stable item id
+- `kind`: `item` (default) or `submenu`
+- `label`: rendered menu text
+- `placement`: `start`, `end`, `before:sort`, `after:sort`, `before:group`, `after:group`, `before:pin`, `after:pin`, `before:filter`, `after:filter`
+- `hidden`, `disabled`, `disabledReason`
+- `onSelect(context)`: callback with `{ columnKey, columnLabel, closeMenu }` for leaf items
+- `items`: nested submenu entries when `kind: "submenu"`
+
+Grouping triggered from the built-in column menu updates the public controlled
+surface through `@update:groupBy` / `v-model:groupBy`.
+
+Out of the box this wires:
+
+- sort ascending / descending / clear
+- group / ungroup for groupable columns
+- pin column submenu (`left`, `right`, `none`)
+- value-set filter picker with search + apply/clear; server-backed row models may resolve values asynchronously through `api.columns.getHistogram(columnKey, { ignoreSelfFilter: true, search })`
+- column order / visibility popover
+
+Supported action keys for `actions` are:
+
+- `sortAsc`, `sortDesc`, `clearSort`
+- `toggleGroup`
+- `pinMenu`, `pinLeft`, `pinRight`, `unpin`
+- `clearFilter`, `addCurrentSelectionToFilter`, `selectAllValues`, `clearAllValues`, `applyFilter`, `cancelFilter`
+
+## Declarative Cell Menu
+
+`cell-menu` exposes the same native configuration direction as the header menu, so apps can tune the built-in cell context menu without replacing the renderer.
+
+```vue
+<script setup lang="ts">
+import { DataGrid, type DataGridCellMenuProp } from "@affino/datagrid-vue"
+
+const cellMenu: DataGridCellMenuProp = {
+  items: ["clipboard", "pasteSpecial", "edit"],
+  labels: {
+    pasteSpecial: "Paste special",
+  },
+  actions: {
+    copy: { label: "Copy value" },
+    pasteValues: { label: "Values only" },
+  },
+  customItems: [
+    {
+      key: "organize",
+      label: "Organize",
+      placement: "after:pasteSpecial",
+      kind: "submenu",
+      items: [
+        {
+          key: "duplicate",
+          label: "Duplicate cell",
+          onSelect: ({ columnKey, rowId }) => {
+            console.log("Duplicate", columnKey, rowId)
+          },
+        },
+      ],
+    },
+  ],
+  columns: {
+    owner: {
+      customItems: [
+        {
+          key: "inspect",
+          label: "Inspect cell",
+          placement: "start",
+          onSelect: ({ zone, columnKey, rowId, closeMenu }) => {
+            console.log(zone, columnKey, rowId)
+            closeMenu()
+          },
+        },
+      ],
+    },
+  },
+}
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :cell-menu="cellMenu"
+  />
+</template>
+```
+
+Supported built-in cell-menu sections:
+
+- `clipboard`: `cut`, `copy`, `paste`
+- `pasteSpecial`: `pasteValues`
+- `edit`: `clear`
+
+Supported cell-menu controls:
+
+- `items`: choose and order built-in sections (`clipboard`, `pasteSpecial`, `edit`)
+- `disabled`, `disabledReasons`, `labels`
+- `actions`: override built-in action `label`, `hidden`, `disabled`, and `disabledReason`
+- `customItems`: add custom items or nested submenus around the built-in sections
+- `columns[columnKey]`: per-column `items`, `hide`, `disabled`, `disabledReasons`, `labels`, `actions`, and `customItems`
+
+Custom cell-menu items support:
+
+- `key`, `kind`, `label`, `hidden`, `disabled`, `disabledReason`
+- `placement`: `start`, `end`, `before:clipboard`, `after:clipboard`, `before:pasteSpecial`, `after:pasteSpecial`, `before:edit`, `after:edit`
+- `onSelect(context)`: leaf callbacks receive `{ zone, columnKey, rowId, closeMenu }`
+- `items`: nested submenu entries when `kind: "submenu"`
+
+`Paste special -> Values only` uses the same native clipboard pipeline as ordinary paste. When the source copy came from the grid itself, the app runtime can preserve internal semantics instead of degrading to a plain system-clipboard round trip.
+
+Disabled sections and actions can expose a reason string so users see why a menu affordance is unavailable.
+- `trigger: "button"` disables the standard header `contextmenu` open path while keeping the menu button.
+- `trigger: "contextmenu"` keeps right-click open on the header cell and hides the button.
+- clause-based advanced filter popover
+- aggregation model popover
+
+## Features
+
+Rendering:
+
+- virtualized rows and columns
+- pagination
+- tree data
+- gantt view
+
+Data computation:
+
+- built-in formulas
+- grouping and aggregation
+- pivot tables
+- advanced filtering
+- staged data projection pipeline
+
+State and configuration:
+
+- declarative columns
+- unified grid state
+- column state
+- incremental row updates
+
+Customization:
+
+- theme presets
+- token overrides
+- plugins and services
+
+## Gantt View
+
+`@affino/datagrid-vue` includes a split table + timeline gantt mode.
+
+The gantt renderer is intentionally not a separate task system.
+It reads the same row cells already used by the grid and renders only the current visible rows.
+
+Typical source columns:
+
+- `task`
+- `start`
+- `end`
+- `baselineStart`
+- `baselineEnd`
+- `% complete`
+- `predecessors`
+
+Predecessors can stay simple (`task-1`) or include a dependency type:
+
+- `task-1`
+- `task-1:SS`
+- `task-1->FF`
+- `12FS`
+
+Minimal example:
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue"
+
+const rows = [
+  {
+    id: "task-1",
+    task: "Plan rollout",
+    start: new Date("2026-03-02T00:00:00.000Z"),
+    end: new Date("2026-03-06T00:00:00.000Z"),
+    progress: 35,
+    baselineStart: new Date("2026-03-01T00:00:00.000Z"),
+    baselineEnd: new Date("2026-03-05T00:00:00.000Z"),
+    dependencies: [],
+  },
+  {
+    id: "task-2",
+    task: "Launch",
+    start: new Date("2026-03-09T00:00:00.000Z"),
+    end: new Date("2026-03-10T00:00:00.000Z"),
+    progress: 0,
+    baselineStart: new Date("2026-03-08T00:00:00.000Z"),
+    baselineEnd: new Date("2026-03-09T00:00:00.000Z"),
+    dependencies: ["task-1:FS"],
+  },
+]
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="[
+      { key: 'task', label: 'Task' },
+      { key: 'start', label: 'Start', dataType: 'date' },
+      { key: 'end', label: 'End', dataType: 'date' },
+      { key: 'baselineStart', label: 'Baseline Start', dataType: 'date' },
+      { key: 'baselineEnd', label: 'Baseline End', dataType: 'date' },
+      { key: 'progress', label: '% Complete', dataType: 'number' },
+      { key: 'dependencies', label: 'Predecessors' },
+    ]"
+    view-mode="gantt"
+    :gantt="{
+      idKey: 'id',
+      labelKey: 'task',
+      startKey: 'start',
+      endKey: 'end',
+      baselineStartKey: 'baselineStart',
+      baselineEndKey: 'baselineEnd',
+      progressKey: 'progress',
+      dependencyKey: 'dependencies',
+      computedCriticalPath: true,
+      zoomLevel: 'week',
+      workingCalendar: {
+        workingWeekdays: [1, 2, 3, 4, 5],
+      },
+    }"
+  />
+</template>
+```
+
+Current gantt capabilities:
+
+- canvas timeline renderer
+- dependency lines and dependency selection
+- drag move / resize writing back to row cells
+- baseline bars from row cells
+- baseline variance markers
+- dependency types (`FS`, `SS`, `FF`, `SF`)
+- milestones
+- progress overlay
+- working calendar and holiday shading
+- summary bars for visible group rows
+- computed critical path highlighting
+
+Reference:
+
+- [datagrid-gantt.md](https://github.com/affinio/datagrid/blob/main/docs/datagrid-gantt.md)
+
+## Table Chrome Engine
+
+The default table renderer uses [`@affino/datagrid-chrome`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-chrome#readme) for shared headless table chrome geometry.
+
+That engine derives:
+
+- row divider positions
+- column divider positions
+- row background bands for striped / group / tree / pivot states
+- pinned left / center / right pane line projection
+
+It also accepts optional visible row / column range hints, so future adapters can clip chrome geometry earlier when they already know viewport index windows.
+
+Vue still owns the browser-specific work:
+
+- DOM measurement
+- scroll wiring
+- `ResizeObserver`
+- canvas drawing
+
+That split keeps the table renderer reusable across frameworks without duplicating pane math.
+
+## Comparison
+
+| Feature | Affino DataGrid | Simple Table | Spreadsheet |
+| --- | --- | --- | --- |
+| Virtualization | ✓ | ✗ | partial |
+| Formulas | ✓ | ✗ | ✓ |
+| Pivot | ✓ | ✗ | ✓ |
+| Tree data | ✓ | ✗ | ✗ |
+| Incremental updates | ✓ | ✗ | ✗ |
+
+## Use Cases
+
+Affino DataGrid works well for:
+
+- analytics dashboards
+- admin panels
+- financial data tools
+- operational back-office systems
+- engineering data tools
+
+## Public API
+
+### Core props
+
+- `rows`
+- `columns`
+- `theme`
+- `layout-mode`
+- `min-rows`
+- `max-rows`
+- `fill-handle`
+- `range-move`
+- `column-menu`
+- `column-layout`
+- `advanced-filter`
+- `aggregations`
+- `row-hover`
+- `striped-rows`
+- `grid-lines`
+- `row-height-mode`
+- `base-row-height`
+
+### Data shaping props
+
+- `sort-model`
+- `filter-model`
+- `group-by`
+- `aggregation-model`
+- `pivot-model`
+- `computed-fields`
+- embedded formulas on `columns`
+- `formulas`
+- `formula-functions`
+
+### View modes
+
+- `virtualization`
+- `pagination`
+- `page-size`
+- `current-page`
+- `render-mode`
+
+`render-mode` exists as an advanced/internal-oriented prop.
+Most consumers should use `virtualization` and `pagination`.
+
+### State
+
+- `column-state`
+- `column-order`
+- `hidden-column-keys`
+- `column-widths`
+- `column-pins`
+- `state`
+- `state-options`
+
+### Runtime
+
+- `row-model`
+- `client-row-model-options`
+- `plugins`
+- `services`
+- `startup-order`
+- `auto-start`
+
+## Formulas
+
+Recommended sugar: embed formulas in `columns`.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="[
+    { key: 'price', label: 'Price' },
+    { key: 'qty', label: 'Qty' },
+    { key: 'taxRate', label: 'Tax rate' },
+    { key: 'subtotal', label: 'Subtotal', formula: 'price * qty' },
+    { key: 'tax', label: 'Tax', formula: 'subtotal * taxRate' },
+    { key: 'total', label: 'Total', formula: 'subtotal + tax' },
+  ]"
+  :client-row-model-options="{ resolveRowId: row => row.id }"
+/>
+```
+
+Advanced formula registration is still supported through `formulas`:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :client-row-model-options="{ resolveRowId: row => row.id }"
+  :formulas="[
+    { name: 'subtotal', formula: 'price * qty' },
+    { name: 'tax', formula: 'subtotal * taxRate' },
+  ]"
+/>
+```
+
+Built-in function packs are available through the standard formula engine:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="[
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'cost', label: 'Cost' },
+    { key: 'margin', label: 'Margin', formula: 'SAFE_DIVIDE(revenue - cost, revenue, 0)' },
+  ]"
+  :formula-packs="['finance']"
+/>
+```
+
+The standard app also accepts `formula-runtime`, `performance`, and
+`diagnostics` props. Runtime overrides and workload presets configure a
+client-owned row model; diagnostics adds the built-in inspector to the toolbar.
+No separate package or license key is required.
+
+## Common Patterns
+
+### Virtualization
+
+Simple:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  virtualization
+/>
+```
+
+Advanced:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :virtualization="{
+    rows: true,
+    columns: true,
+    overscan: 8,
+  }"
+/>
+```
+
+Full override:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :virtualization="{
+    rows: true,
+    columns: true,
+    rowOverscan: 8,
+    columnOverscan: 2,
+  }"
+/>
+```
+
+### Pagination
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  pagination
+  :page-size="100"
+  :current-page="0"
+/>
+```
+
+### Grid lines
+
+`DataGrid` uses full spreadsheet-style grid lines by default.
+
+Preset form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  grid-lines="rows"
+/>
+```
+
+Supported presets:
+
+- `all`
+- `rows`
+- `columns`
+- `none`
+
+Object form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :grid-lines="{
+    body: 'rows',
+    header: 'columns',
+    pinnedSeparators: true,
+  }"
+/>
+```
+
+`body` controls body row and column dividers, `header` controls header vertical dividers, and `pinnedSeparators` controls the stronger seam between left / center / right panes.
+
+In this monorepo, `/vue/shell/base-grid` exposes the same options as live checkboxes so you can compare the visual modes before wiring them into a product surface.
+
+### Grouping and aggregation
+
+Simple `group-by` sugar:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  group-by="department"
+  :aggregation-model="{
+    columns: [
+      { key: 'amount', op: 'sum' },
+      { key: 'qty', op: 'sum' },
+    ],
+    basis: 'filtered',
+  }"
+/>
+```
+
+Object form:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :group-by="{
+    fields: ['department'],
+    expandedByDefault: true,
+  }"
+/>
+```
+
+## Pivot
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :pivot-model="{
+    rows: ['department'],
+    columns: ['month'],
+    values: [{ field: 'amount', agg: 'sum' }],
+  }"
+/>
+```
+
+## Example: Analytics Dashboard
+
+```vue
+<DataGrid
+  :rows="sales"
+  :columns="columns"
+  group-by="department"
+  :aggregation-model="{
+    columns: [{ key: 'amount', op: 'sum' }],
+    basis: 'filtered',
+  }"
+  :pivot-model="{
+    rows: ['department'],
+    columns: ['month'],
+    values: [{ field: 'amount', agg: 'sum' }],
+  }"
+/>
+```
+
+## Tree Data
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :client-row-model-options="{
+    resolveRowId: row => row.id,
+    initialTreeData: {
+      mode: 'path',
+      getDataPath: row => row.path,
+      expandedByDefault: true,
+      filterMode: 'include-descendants',
+    },
+  }"
+/>
+```
+
+## Custom Cell Renderers
+
+Columns can provide a `cellRenderer` callback that returns Vue content for the display layer.
+If a custom cell also needs keyboard-accessible interaction without breaking the grid-owned focus model, declare `cellInteraction` on the column and use `context.interactive` inside the renderer.
+For grouped rows, prefer `groupCellRenderer` so you receive structured group metadata instead of reverse-engineering the formatted disclosure label.
+If an authored renderer throws, the stage preserves the cell wrapper and falls back to the resolved `displayValue` for that cell.
+The full lifecycle, remount, cleanup, focus, async, and performance contract is documented in [`docs/reference/datagrid-renderer-lifecycle.md`](../../docs/reference/datagrid-renderer-lifecycle.md).
+
+```vue
+<script setup lang="ts">
+import { h } from "vue"
+import { DataGrid, type DataGridAppColumnInput } from "@affino/datagrid-vue"
+
+interface Row {
+  id: string
+  employee: string
+  status: string
+  approval: string
+  approved: boolean
+}
+
+const rows: Row[] = [
+  { id: "w1", employee: "Maya Patel", status: "Submitted", approval: "Waiting", approved: false },
+  { id: "w2", employee: "Liam Chen", status: "Approved", approval: "Approved", approved: true },
+]
+
+const columns: DataGridAppColumnInput<Row>[] = [
+  { key: "employee", label: "Employee" },
+  {
+    key: "status",
+    label: "Status",
+    cellInteraction: {
+      click: true,
+      keyboard: ["enter", "space"],
+      role: "button",
+      label: ({ row }) => row?.approved ? "Reopen approval" : "Approve row",
+      pressed: ({ row }) => row?.approved === true,
+      onInvoke: ({ rowId, row }) => {
+        console.log("toggle approval", rowId, row?.status)
+      },
+    },
+    cellRenderer: ({ displayValue, row }) => h("span", {
+      class: [
+        "status-pill",
+        row?.status === "Approved" ? "status-pill--success" : "status-pill--info",
+      ],
+    }, displayValue),
+  },
+  {
+    key: "approval",
+    label: "Approval",
+    cellRenderer: ({ displayValue, interactive }) => h("button", {
+      type: "button",
+      class: "approval-action",
+      disabled: interactive?.enabled === false,
+      "aria-pressed": interactive?.ariaPressed,
+      onClick: event => {
+        event.stopPropagation()
+        interactive?.activate("click")
+      },
+    }, displayValue),
+  },
+]
+</script>
+
+<template>
+  <DataGrid :rows="rows" :columns="columns" />
+</template>
+```
+
+`cellRenderer` receives a context with:
+
+- `row`: current authored row object when available
+- `rowNode`: runtime row node
+- `rowOffset`: visible row offset inside the current viewport lane
+- `column` and `columnIndex`
+- `value`: raw string value used by the stage
+- `displayValue`: formatted display string after presentation rules
+- `surface`: rendered surface metadata; `surface.kind` is `"real"` for materialized rows and `"placeholder"` for visual placeholder rows
+- `interactive`: resolved cell interaction contract when the column declares `cellInteraction`; otherwise `null`
+
+`groupCellRenderer` receives the same display fields for group rows plus `group`, which includes:
+
+- `key`, `field`, `value`
+- `childrenCount`
+- `isLabelColumn`
+- `renderMeta` with normalized `level`, `isExpanded`, and `hasChildren`
+- `toggle()` to expand or collapse the current group row
+
+When you author `groupCellRenderer`, treat `group.toggle()` as the canonical expand/collapse trigger.
+The stage keeps the rest of the group cell surface available for grid selection and navigation, so expansion should live behind an explicit trigger button or disclosure control inside the renderer rather than on the entire cell wrapper.
+
+```ts
+{
+  key: "name",
+  label: "Name",
+  groupCellRenderer: ({ displayValue, group }) => h("div", { class: "group-cell" }, [
+    h("button", {
+      type: "button",
+      class: "group-cell__trigger",
+      "aria-label": group.renderMeta.isExpanded ? "Collapse group" : "Expand group",
+      onClick: event => {
+        event.stopPropagation()
+        group.toggle()
+      },
+    }, group.renderMeta.isExpanded ? "▾" : "▸"),
+    h("span", { class: "group-cell__label" }, displayValue),
+    h("span", { class: "group-cell__count" }, String(group.childrenCount)),
+  ]),
+}
+```
+
+`interactive` exposes:
+
+- `enabled`: `false` only when the interaction is currently disabled
+- `click`: whether click invocation is enabled for the cell wrapper
+- `keyboard`: enabled keyboard triggers (`enter`, `space`)
+- `role`, `ariaLabel`, `ariaPressed`, `ariaChecked`, `ariaDisabled`
+- `activate(trigger?)`: invoke the same column-level interaction path used by grid keyboard and wrapper click handling
+
+Guidelines:
+
+- keep interaction intent on the column via `cellInteraction`; use `interactive.activate(...)` from the renderer instead of ad-hoc row-local handlers
+- keep group expand/collapse behind an explicit trigger inside `groupCellRenderer`; do not rely on the whole group cell acting as the disclosure target
+- the grid shell still owns focus, selection, fill, clipboard, menus, and editing; `cellInteraction` only adds semantic invoke behavior inside that model
+- prefer pure render output from row data over local mutable renderer state
+- do not mutate grid state, row data, selection, focus, or editor state while the renderer is running
+- avoid synchronous layout reads such as `getBoundingClientRect()`, `clientWidth`, or computed-style reads inside renderers; measure layout in your surrounding app lifecycle instead
+- return bounded Vue content for each cell; expensive charts, popovers, network work, or observers should mount lazily behind explicit user intent
+- provide stable keys for repeated child VNodes returned from a renderer so virtualized row/column remounts do not lose child identity unnecessarily
+- treat `surface.kind === "placeholder"` as a display-only state; do not assume placeholder rows are persisted or editable until the grid materializes them through the placeholder-row policy
+- keep per-cell renderer work proportional to one cell because the stage invokes renderers synchronously for every rendered center and pinned cell
+- keep identifiers, derived values, and formula-result columns read-only where appropriate
+- if a renderer caches local UI state, listen for targeted app-layer cell refresh and re-sync on refresh
+
+Performance expectations:
+
+- Renderers run in the same Vue render pass as virtualized row and column window updates.
+- Wide grids, pinned panes, and pinned-bottom rows multiply the number of rendered cell surfaces.
+- Renderer exceptions are isolated to the affected cell and fall back to `displayValue`; they are still application bugs and should be fixed rather than used as control flow.
+- The grid may use lightweight display-value rendering during active touch scroll; renderers must not be the only place where essential text, ARIA labels, selection state, or edit affordances exist.
+- Large custom-renderer scenarios should be validated with the browser-frame/perf gates documented in `docs/perf/datagrid-performance-gates.md` before being treated as a performance baseline.
+
+### System checkbox interactions
+
+The built-in row-selection checkbox column uses the same `cellInteraction` contract internally.
+That means row checkboxes and the header select-all control now follow the same semantic path as authored interactive cells: click and keyboard invoke flow through one runtime contract, while the stage exposes the matching checkbox ARIA state.
+
+Practical implications:
+
+- `row-selection` is the reference example of a package-owned `cellInteraction` column
+- row checkboxes expose checkbox semantics without introducing nested focus targets inside the grid cell
+- the header checkbox stays aligned with the current visible body rows, including filtered slices
+- custom boolean/action columns should prefer this pattern instead of bespoke click handlers attached inside renderers
+
+For a live example, open the sandbox route `/vue/row-selection-grid` and switch between the visible row filters before using the header checkbox.
+
+## Theme
+
+Preset string:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  theme="sugar"
+/>
+```
+
+Preset object:
+
+```vue
+<script setup lang="ts">
+import { DataGrid } from "@affino/datagrid-vue"
+import { industrialNeutralTheme } from "@affino/datagrid-theme"
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    :theme="industrialNeutralTheme"
+  />
+</template>
+```
+
+Lightweight token override:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :theme="{
+    tokens: {
+      gridAccentStrong: '#b45309',
+      gridHeaderCellBackgroundColor: '#f4e8d5',
+      pinnedRightBackgroundColor: '#fff7e8',
+    },
+  }"
+/>
+```
+
+Supported preset names:
+
+- `default`
+- `industrial-neutral`
+- `industrialNeutral`
+- `sugar`
+
+Live canvas chrome follows changes to the `theme` prop and, for configurations
+that inherit from the document, changes to `document.documentElement`'s
+`data-theme` attribute or configured dark-mode class. The app applies the theme
+tokens before invalidating the stage palette, then batches a full header, body,
+and pinned-bottom chrome redraw. Static CSS custom-property overrides are
+supported before rendering; changing CSS variables through another class,
+inline-style, or stylesheet mutation does not notify the canvas runtime. Use
+the `theme` prop or the document theme attributes for live theme switching.
+
+## Unified State
+
+The public component exposes full grid state round-tripping.
+
+When `state` is the only controlled input, the built-in app toolbar and filter affordances derive their effective sort, filter, grouping, and pivot state from that unified snapshot. You do not need to mirror the same payload back into separate `sort-model`, `filter-model`, `group-by`, or `pivot-model` props just to keep the default renderer synchronized.
+
+Quick filter can be enabled as a built-in toolbar control next to `advanced-filter`:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  quick-filter
+  advanced-filter
+/>
+```
+
+The object form controls placeholder text, explicit searchable columns, and matching mode:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :quick-filter="{
+    placeholder: 'Search accounts',
+    columns: ['service', 'owner', 'region'],
+    mode: 'tokens',
+    applyMode: 'debounce',
+    debounceMs: 400,
+  }"
+/>
+```
+
+The toolbar renders quick filter as a search field without a separate visible label. Its accessible name remains `Quick filter`; set `placeholder` to the concise prompt shown inside the field.
+
+This prop is a shell convenience API. By default, typing in the input updates `filterModel.quickFilter` immediately. `applyMode: 'debounce'` commits after `debounceMs`, while `applyMode: 'manual'` keeps a local draft until Enter or the built-in Apply button. Clearing the input removes quick filter from the snapshot. It does not add a separate `update:quickFilter` event or a second state channel.
+
+Controlled consumers can still manage quick filter directly through the same `filter-model` contract:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :filter-model="{
+    columnFilters: {},
+    advancedExpression: null,
+    quickFilter: {
+      query: 'platform eu',
+      columns: ['service', 'owner', 'region'],
+      mode: 'tokens',
+    },
+  }"
+/>
+```
+
+The app facade remains `filterModel`-first. `quick-filter` only drives the existing filter snapshot, so quick filter stays serializable and aligned with the core projection/filter pipeline. See [DataGrid Quick Filter](https://github.com/affinio/datagrid/blob/main/docs/datagrid-quick-filter.md).
+
+Automatic preferences (recommended for ordinary integrations):
+
+```vue
+<DataGrid :rows="rows" :columns="columns" state-persistence="orders:v1:user-42" />
+```
+
+Supports local/session storage or async `load`/`save` callbacks, loading/error
+status through `persistence-change`, and `resetPersistedState()` on the component
+ref. Resize saves after release; restoration finishes before `ready`. Scroll,
+selection and group expansion are opt-in; history is excluded. See
+[Saved table preferences](../../docs/datagrid-state-persistence.md) for defaults,
+controlled-prop priority, async examples and migration notes.
+
+Controlled state:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :state="state"
+  @update:state="state = $event"
+/>
+```
+
+Imperative state helpers via `ref`:
+
+```vue
+<script setup lang="ts">
+import { DataGrid, useDataGridRef } from "@affino/datagrid-vue"
+
+type DemoRow = {
+  rowId: string
+  owner: string
+  region: string
+  amount: number
+}
+
+const gridRef = useDataGridRef<DemoRow>()
+
+function exportState() {
+  return gridRef.value?.getState()
+}
+
+function importState(raw: unknown) {
+  const migrated = gridRef.value?.migrateState(raw)
+  if (migrated) {
+    gridRef.value?.applyState(migrated)
+  }
+}
+
+`applyState()` and `applySavedView()` also queue the restore until the runtime and declared columns are ready. Host pages can restore presets before async column definitions finish loading instead of maintaining a separate pending-saved-view scheduler.
+
+Saved views sanitize transient transaction history before serialization and restore. The persisted envelope keeps layout, filters, grouping, pivoting, row selection, and `viewMode`, but drops undo/redo history.
+
+### Controlled Row Selection
+
+`rowSelection` still enables the built-in checkbox column and header select-all control. When a page wants to own the selected-row snapshot directly, use `rowSelectionState` with `update:rowSelectionState`.
+
+```vue
+<script setup lang="ts">
+import { ref } from "vue"
+import { DataGrid } from "@affino/datagrid-vue"
+
+const rowSelectionState = ref({
+  focusedRow: null,
+  selectedRows: ["r2"],
+})
+</script>
+
+<template>
+  <DataGrid
+    :rows="rows"
+    :columns="columns"
+    row-selection
+    :row-selection-state="rowSelectionState"
+    @update:row-selection-state="rowSelectionState = $event"
+  />
+</template>
+```
+
+`rowSelectionState` is the controlled API when the page wants to bind selected row ids without diffing unified-state updates.
+
+### Row-header record selection
+
+The row-index header selects cell ranges by default. Opt into selecting records
+from that header with `rowHeader.action: "select-records"`; use `"none"` when
+the row index should not start a selection interaction. The separate checkbox
+column remains available when `rowSelection` is enabled.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :row-selection="{ enabled: true, isSelectable: row => row.rowId !== 'locked' }"
+  :row-header="{ action: 'select-records' }"
+/>
+```
+
+Click replaces the record selection, Ctrl/Meta-click toggles a row, Shift-click
+extends the anchor range, and Ctrl/Meta+Shift-click adds a range. Dragging the
+row index previews a range and commits once on release; Escape or a canceled
+gesture discards the preview. Shift+Up/Down extends the range while focus is on
+a row index. Group and unloaded placeholder rows are not included in ranges.
+The full framework-independent model and projection rules are documented in
+the [row-selection reference](../../docs/reference/datagrid-row-selection-model.md).
+
+For server-backed row models, the header checkbox selects the full current row projection without materializing every row id:
+
+```ts
+{
+  focusedRow: null,
+  selectedRows: [],
+  mode: "all",
+  excludedRows: [],
+}
+```
+
+In `mode: "all"`, visible row checkboxes render as selected unless their id is present in `excludedRows`. This keeps header select-all O(1) for large filtered datasets; `selectedRows` remains the explicit-id list for the default `mode: "explicit"`.
+
+function exportSavedView() {
+  return gridRef.value?.getSavedView()
+}
+
+function importSavedView(raw: unknown) {
+  const migrated = gridRef.value?.migrateSavedView(raw)
+  if (migrated) {
+    gridRef.value?.applySavedView(migrated)
+  }
+}
+
+function persistSavedView() {
+  const savedView = gridRef.value?.getSavedView()
+  if (!savedView) {
+    return
+  }
+  localStorage.setItem("demo-saved-view", JSON.stringify(savedView))
+}
+</script>
+```
+
+### Typed facade helpers
+
+When you want row-aware typing to stay explicit across columns, filter/selection readers, imperative refs, and authored `h()` / JSX rendering, use the typed facade helpers exported by `@affino/datagrid-vue`.
+
+```ts
+import { h } from "vue"
+import {
+  defineDataGridColumns,
+  defineDataGridComponent,
+  defineDataGridFilterCellReader,
+  defineDataGridSelectionCellReader,
+  useDataGridRef,
+} from "@affino/datagrid-vue"
+
+type InvoiceRow = {
+  rowId: string
+  statusCode: "a" | "b"
+  formula: string
+  effectiveAmount: number
+}
+
+const TypedDataGrid = defineDataGridComponent<InvoiceRow>()
+
+const columns = defineDataGridColumns<InvoiceRow>()([
+  {
+    key: "status",
+    field: "statusCode",
+    label: "Status",
+    valueGetter: row => row.statusCode === "a" ? "Active" : "Blocked",
+  },
+  {
+    key: "formula",
+    label: "Formula",
+  },
+] as const)
+
+const readFilterCell = defineDataGridFilterCellReader<InvoiceRow>()((row, columnKey) => {
+  if (columnKey !== "status") {
+    return undefined
+  }
+  return row.data.statusCode === "a" ? "Active" : "Blocked"
+})
+
+const readSelectionCell = defineDataGridSelectionCellReader<InvoiceRow>()((row, columnKey) => {
+  if (columnKey !== "formula") {
+    return undefined
+  }
+  return row.data.effectiveAmount
+})
+
+const gridRef = useDataGridRef<InvoiceRow>()
+
+export function renderGrid(rows: readonly InvoiceRow[]) {
+  return h(TypedDataGrid, {
+    ref: gridRef,
+    rows,
+    columns,
+    readFilterCell,
+    readSelectionCell,
+  })
+}
+```
+
+Use the regular `DataGrid` component directly in template-first SFCs. Reach for `defineDataGridComponent<TRow>()` when you are authoring render functions, JSX, or wrapper components that need one explicit row type carried through the whole facade.
+
+For a live example, open the sandbox route `/vue/typed-facade-grid`.
+
+## Column State
+
+Column definitions can also declare `flex` when a center-pane column should absorb the remaining viewport width.
+The column keeps its base width from `initialState.width`, controlled `column-widths`, or the default width, and `flex` adds a proportional share of any free space on top.
+
+```vue
+<script setup lang="ts">
+const columns = [
+  {
+    key: 'project',
+    label: 'Project',
+    flex: 1,
+    minWidth: 240,
+    initialState: { width: 240 },
+  },
+  {
+    key: 'mon',
+    label: 'Mon',
+    initialState: { width: 104 },
+  },
+  {
+    key: 'total',
+    label: 'Total',
+    initialState: { width: 128, pin: 'right' },
+  },
+]
+</script>
+```
+
+Notes:
+
+- `flex` is declared on the column definition, not in unified column state.
+- Multiple flex columns share leftover available stage width by their flex weight.
+- If there is no free space, the column falls back to its base width.
+- Only visible center columns participate in flex fill. Pinned columns keep their authored or user-resized width, so resizing center columns does not resize pinned panes or move the center boundary.
+- `columnGroup` can be a string id, `{ id, label }`, or a nested path. The stage renders group headers across left-pinned, center, and right-pinned panes; visibility, resize, reorder, and pinning recalculate group spans from the current visible column snapshot. Labels start with a small inset from the group's left edge and remain visible at the left edge of the visible group while scrolling; their position is clamped at the group's right edge so text stays within the group. The label disappears when no part of its group remains visible, and ellipsis appears when the visible space is too narrow.
+- Each labeled group has a right-edge resize handle that resizes its last visible leaf column. It uses that column's normal min/max constraints, resize interaction, and persisted column state; adjacent groups share one handle at their common boundary.
+
+Unified column-state object:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-state="{
+    order: ['amount', 'owner', 'region'],
+    visibility: {
+      owner: true,
+      region: false,
+      amount: true,
+    },
+    widths: {
+      owner: 240,
+      region: 180,
+      amount: 150,
+    },
+    pins: {
+      owner: 'left',
+      region: 'none',
+      amount: 'right',
+    },
+  }"
+/>
+```
+
+Or split control:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-order="columnOrder"
+  :hidden-column-keys="hiddenColumnKeys"
+  :column-widths="columnWidths"
+  :column-pins="columnPins"
+/>
+```
+
+Update events:
+
+- `@update:column-state`
+- `@update:column-order`
+- `@update:hidden-column-keys`
+- `@update:column-widths`
+- `@update:column-pins`
+
+## Performance
+
+Affino DataGrid is designed for large datasets.
+It is intended for datasets from hundreds to tens of thousands of rows.
+Virtualization keeps DOM size effectively constant as data volume grows.
+
+Key techniques:
+
+- row and column virtualization
+- incremental row patch updates
+- staged projection pipeline
+- formula dependency graph
+
+Typical use cases:
+
+- 10k+ row interactive tables
+- analytics dashboards
+- operational back-office tools
+
+## Non-goals
+
+Affino DataGrid is not intended to be a spreadsheet editor.
+For spreadsheet-first editing scenarios, use a dedicated spreadsheet engine.
+
+## Events
+
+The component emits:
+
+- `cell-change`
+- `selection-change`
+- `row-selection-change`
+- `update:column-state`
+- `update:column-order`
+- `update:hidden-column-keys`
+- `update:column-widths`
+- `update:column-pins`
+- `update:state`
+- `ready`
+
+## Advanced Filter UX
+
+- The global filter editor is labeled `Filter` by default. When at least one filter is active, its toolbar button shows an active filter icon and active button styling.
+- The column menu's `Filter by condition` submenu provides a condition dropdown and a value/formula field without opening the global editor. It can be hidden with `columnMenu.hide: ["condition"]` or per column with `columns.<key>.hide: ["condition"]`.
+- Removing the only advanced-filter clause does not lock the UI; the builder keeps one empty clause row so the user can clear and rebuild the expression in place.
+- `advancedFilter.labels` customizes the toolbar text, panel headings, field labels, action labels, logical join labels, and operator labels. This is the supported localization path for built-in advanced-filter copy.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :advanced-filter="{
+    labels: {
+      buttonLabel: 'Расширенный фильтр',
+      title: 'Условия отбора',
+      joinLabel: 'Связь',
+      columnLabel: 'Колонка',
+      operatorLabel: 'Оператор',
+      valueLabel: 'Значение',
+      apply: 'Применить',
+      cancel: 'Отмена',
+      operators: {
+        contains: 'содержит',
+        equals: 'равно',
+        'not-equals': 'не равно',
+      },
+      joins: { and: 'И', or: 'ИЛИ' },
+    },
+  }"
+/>
+```
+
+## Built-in Overlay Panels
+
+- The built-in `Column layout`, `Advanced filter`, and `Find / replace` toolbar panels render through the shared Affino overlay host rather than inline in the grid tree.
+- These built-in panels are draggable by their header title area and reopen at the last detached position for the current grid instance during the active page session.
+- `columnLayout.labels` customizes the built-in columns panel text, including the toolbar label, panel title, close/cancel/apply actions, and move-button accessible labels.
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-layout="{
+    labels: {
+      buttonLabel: 'Колонки',
+      eyebrow: 'Настройка колонок',
+      title: 'Порядок и видимость',
+      close: 'Закрыть',
+      cancel: 'Отмена',
+      apply: 'Применить',
+      moveUp: 'Вверх',
+      moveDown: 'Вниз',
+    },
+  }"
+/>
+```
+
+## Column Reorder
+
+Column drag-and-drop is declarative and opt-in.
+
+- `columnReorder: true` enables drag reorder from header cells
+- `columnReorder: false` keeps header cells non-draggable
+- the feature reorders regular visible data columns and can move them across `left` / `center` / `right` pin lanes by dropping onto a target header in that lane
+- row-selection headers and pivot header layouts do not participate in header drag reorder
+- after reorder, keyboard navigation and any active body selection stay attached to the moved logical column instead of the previous visual column index
+- with a focused leaf header, `Shift+Alt/Option+←/→` moves the column within its pin zone; `Ctrl/⌘+Shift+←/→` remains supported
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :column-reorder="true"
+/>
+```
+
+If you only want manual order changes inside the built-in `Columns` panel, leave `columnReorder` unset and keep using `columnLayout`.
+
+## Row Reorder
+
+Row drag-and-drop is declarative and opt-in.
+
+- `rowReorder: true` enables drag reorder from the row index column
+- `rowReorder: false` keeps the row index non-draggable
+- the feature only applies when the grid is using a mutable rows API and `showRowIndex` is enabled
+- placeholder rows, group rows, and pinned rows are not draggable
+- rows with `state.pinned: 'top' | 'bottom'` render outside the scrollable body; body virtualization and row drag only operate on unpinned rows
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  :show-row-index="true"
+  :row-reorder="true"
+/>
+```
+
+If you need to ship the UI but keep row order locked, leave `rowReorder` unset or pass `false`.
+
+## Ref API
+
+### Runtime access
+
+- `getApi()`
+- `getRuntime()` returns the typed runtime bridge (`DataGridExposedRuntime`) for virtual-window and body-row APIs.
+- `getCore()`
+
+### History
+
+- `history.canUndo()`
+- `history.canRedo()`
+- `history.runHistoryAction(direction)`
+- `getHistory()`
+
+### Column state
+
+- `getColumnState()`
+- `getColumnSnapshot()`
+- `applyColumnState(columnState)`
+- `insertColumnsAt(index, columns)`
+- `insertColumnBefore(columnKey, columns)`
+- `insertColumnAfter(columnKey, columns)`
+
+### Grid state
+
+- `getState()`
+- `migrateState(state, options?)`
+- `applyState(state, options?)`
+- `getSavedView()`
+- `migrateSavedView(savedView, options?)`
+- `applySavedView(savedView, options?)`
+
+Saved-view persistence helpers:
+
+- `serializeDataGridSavedView(savedView)`
+- `parseDataGridSavedView(raw, migrateState, options?)`
+- `writeDataGridSavedViewToStorage(storage, key, savedView)`
+- `readDataGridSavedViewFromStorage(storage, key, migrateState, options?)`
+- `clearDataGridSavedViewInStorage(storage, key)`
+
+Saved views are a thin app-level envelope around unified state plus `viewMode`, so presets can restore both grid layout/runtime state and whether the app is currently in `table` or `gantt` mode.
+
+### Row and column insertion
+
+- `insertRowsAt(index, rows)`
+- `insertRowBefore(rowId, rows)`
+- `insertRowAfter(rowId, rows)`
+- `runStructuralRowAction(action, rowId)`
+
+Use `runStructuralRowAction(...)` when row inserts or deletes must be delegated to a higher-level model such as a spreadsheet sheet/workbook that owns structural rewrite semantics. The built-in row-index menu and keyboard shortcuts route through the same entry point before falling back to generic row mutations.
+
+### Selection
+
+- `getSelectionAggregatesLabel()`
+- `getSelectionSummary()`
+
+### Pivot
+
+- `exportPivotLayout()`
+- `exportPivotInterop()`
+- `importPivotLayout(layout, options?)`
+
+### Groups
+
+- `expandAllGroups()`
+- `collapseAllGroups()`
+
+## Architecture
+
+Affino DataGrid is built in layers:
+
+`@affino/datagrid-core`  
+-> grid engine, projection pipeline, formula runtime
+
+`@affino/datagrid-vue`  
+-> Vue adapter and reactive bindings
+
+`@affino/datagrid-vue`
+-> declarative component and default renderer
+
+## Empty state
+
+The grid keeps its toolbar, column headers, and filter controls visible while
+rendering an empty-state message inside the row body. When `emptyState` is not
+provided, the default messages are `No rows to display.` and `No rows match the
+current filters.`.
+
+Provide a typed renderer for localized or domain-specific content:
+
+```vue
+<script setup lang="ts">
+import { h } from "vue"
+import { DataGrid, type DataGridEmptyStateProps } from "@affino/datagrid-vue"
+
+const renderEmptyState = ({ reason }: DataGridEmptyStateProps) =>
+  h("p", reason === "filtered"
+    ? "No trades match the current filters."
+    : "No trades have been added yet.")
+</script>
+
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+/>
+```
+
+The renderer payload is `{ reason, hasActiveFilters, rowCount }`. `reason` is
+`"no-rows"` for an empty row model and `"filtered"` when active filters leave
+no matches. It is only rendered after loading completes and never for a row
+model error. The contract is the same for local and datasource-backed grids.
+
+The body uses `role="status"` with a polite live region. The default state can
+be themed with public CSS custom properties, including
+`--datagrid-empty-state-color`, `--datagrid-empty-state-background`,
+`--datagrid-empty-state-min-height`, and `--datagrid-empty-state-padding`.
+These hooks work with light/dark themes and with `auto-height`, `fill`, and
+bounded `maxRows` layouts. No synthetic rows or `customOverlays` are involved.
+
+For wide tables, set `empty-state-alignment="viewport"` to center the message
+inside the visible center viewport and keep it centered during horizontal
+scrolling. The default `"content"` mode preserves centering across the full
+virtual content width. Pinned columns remain outside the viewport alignment
+area. Both modes support column virtualization, `fill`, `auto-height`, and
+`maxRows`.
+
+```vue
+<DataGrid
+  :rows="trades"
+  :columns="columns"
+  :empty-state="renderEmptyState"
+  empty-state-alignment="viewport"
+/>
+```
+
+## Custom Renderer Slot
+
+If you need to keep the public `DataGrid` runtime but render your own shell, use the default slot.
+
+The slot receives:
+
+- `api`
+- `core`
+- `runtime`
+- `grid`
+- `rowModel`
+- `columnModel`
+- `columnSnapshot`
+- `setRows`
+- `syncRowsInRange`
+- `virtualWindow`
+
+Example:
+
+```vue
+<DataGrid :rows="rows" :columns="columns">
+  <template #default="{ api, columnSnapshot, virtualWindow }">
+    <pre>{{ columnSnapshot.visibleColumns.length }}</pre>
+    <pre>{{ virtualWindow }}</pre>
+    <button type="button" @click="api.rows.expandAllGroups()">Expand all</button>
+  </template>
+</DataGrid>
+```
+
+## Escape Hatches
+
+Use these only if the declarative API is not sufficient.
+
+For advanced integrations you can still pass:
+
+- a custom `row-model`
+- `client-row-model-options` for owned client row models
+- `plugins`
+- `services`
+- `startup-order`
+- `auto-start`
+
+This keeps `@affino/datagrid-vue` ergonomic for the common path without blocking advanced usage.
+
+## Server-wide selection summaries
+
+For datasource-backed tables, use the exposed async method when a selected range can include rows outside the loaded viewport:
+
+~~~ts
+const summary = await gridRef.value?.getServerSelectionSummary({
+  columns: [{ key: "profit", aggregations: ["sum", "count"] }],
+})
+~~~
+
+The method delegates to the datasource selection-summary capability and preserves native selection and keyboard navigation. It is independent of local DataGrid history and local selection aggregation.

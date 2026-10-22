@@ -32,6 +32,12 @@ const heroDemos: ShowcaseDemo[] = [
     meta: "Spreadsheet UX",
   },
   {
+    title: "Formula & Export Workbench",
+    to: "/vue/formula-export-workbench",
+    description: "Edit formula inputs, inspect highlights and cell fills, then export the filtered and sorted view to XLSX.",
+    meta: "Formula + XLSX",
+  },
+  {
     title: "Gantt Planning",
     to: "/vue/shell/gantt-grid",
     description: "Review planning timelines, dependencies, summaries, and critical path output.",

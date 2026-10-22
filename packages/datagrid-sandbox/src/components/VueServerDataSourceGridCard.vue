@@ -636,8 +636,8 @@ import {
   type DataGridSortState,
 } from "@affino/datagrid-vue"
 import type { DataGridSparseRowModelDiagnostics } from "@affino/datagrid-core"
-import { type DataGridAppColumnInput } from "@affino/datagrid-vue-app"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { type DataGridAppColumnInput } from "@affino/datagrid-vue"
+import { DataGrid } from "@affino/datagrid-vue"
 import {
   createFakeServerDatasource,
 } from "../serverDatasourceDemo/fakeServerDatasource"
@@ -673,7 +673,7 @@ import {
   SERVER_DEMO_ROW_COUNT as ROW_COUNT,
   SERVER_DEMO_LATENCY_MS as LATENCY_MS,
 } from "../serverDatasourceDemo/types"
-import type { DataGridTableStageHistoryAdapter } from "@affino/datagrid-vue-app"
+import type { DataGridTableStageHistoryAdapter } from "@affino/datagrid-vue"
 
 const props = defineProps<{
   title: string

@@ -24,11 +24,12 @@
       "@affino/datagrid-vue/app/worker": ["../datagrid-vue/src/app/worker.ts"],
       "@affino/datagrid-vue/app/*": ["../datagrid-vue/src/app/*"],
       "@affino/datagrid-vue/advanced": ["../datagrid-vue/src/advanced.ts"],
-      "@affino/datagrid-vue": ["../datagrid-vue/src/index.ts"],
-      "@affino/datagrid-vue/*": ["../datagrid-vue/src/*"],
-      "@affino/datagrid-vue-app": ["../datagrid-vue-app/src/index.ts"],
-      "@affino/datagrid-vue-app/internal": ["../datagrid-vue-app/src/internal.ts"],
-      "@affino/datagrid-vue-app/*": ["../datagrid-vue-app/src/*"],
+      "@affino/datagrid-vue": ["../datagrid-vue/src/unified.ts"],
+      "@affino/datagrid-vue/*": [
+        "../datagrid-vue/src/app-layer/*",
+        "../datagrid-vue/src/*"
+      ],
+      "@affino/datagrid-vue/internal": ["../datagrid-vue/src/app-layer/internal.ts"],
       "@affino/datagrid-worker": ["../datagrid-worker/src/index.ts"],
       "@affino/datagrid-worker/*": ["../datagrid-worker/src/*"],
       "@affino/charts-core": ["../charts-core/src/index.ts"],

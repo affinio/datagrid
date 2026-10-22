@@ -9,6 +9,7 @@ const navGroups = [
       { to: "/vue/column-flex-stress", label: "Column Flex Stress" },
       { to: "/vue/server-data-source-grid", label: "Server Datasource" },
       { to: "/vue/spreadsheet-workbook", label: "Spreadsheet Workflow" },
+      { to: "/vue/formula-export-workbench", label: "Formula & Export Workbench" },
       { to: "/vue/shell/gantt-grid", label: "Gantt Planning" },
       { to: "/vue/base-grid?rows=50000&cols=128", label: "Performance Stress" },
     ],

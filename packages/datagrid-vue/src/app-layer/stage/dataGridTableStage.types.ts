@@ -1,0 +1,332 @@
+import type { ComponentPublicInstance, CSSProperties, Ref } from "vue"
+import type {
+  DataGridColumnHistogramEntry,
+  DataGridColumnPin,
+  DataGridColumnSnapshot,
+  DataGridOverlayRange,
+  DataGridRowNode,
+  DataGridViewportColumnTarget,
+} from "@affino/datagrid-vue/headless"
+import type { DataGridFillBehavior } from "@affino/datagrid-vue/advanced"
+import type { DataGridLayoutMode } from "../config/dataGridLayout"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateProps } from "../config/dataGridEmptyState"
+import type { DataGridAuthoredRendererPolicy } from "../config/dataGridRendererPolicy"
+import type { DataGridExternalFilterIndicator } from "../config/dataGridExternalFilterIndicators"
+import type { StickyGroupRowsOptions } from "../config/dataGridStickyGroupRows"
+import type {
+  DataGridColumnMenuActionOptions,
+  DataGridColumnMenuCustomItem,
+  DataGridColumnMenuDisabledReasons,
+  DataGridColumnMenuItemKey,
+  DataGridColumnMenuItemLabels,
+  DataGridColumnMenuTriggerMode,
+} from "../overlays/dataGridColumnMenu"
+
+export type DataGridTableMode = "base" | "tree" | "pivot" | "worker"
+export type DataGridColumnMenuOpenReason = "button" | "contextmenu" | "keyboard"
+export type DataGridColumnMenuValueEntriesResult =
+  | readonly DataGridColumnHistogramEntry[]
+  | Promise<readonly DataGridColumnHistogramEntry[]>
+export type DataGridPendingEdge = "top" | "right" | "bottom" | "left"
+export type DataGridTableRow<TRow extends Record<string, unknown>> = DataGridRowNode<TRow>
+export type DataGridElementRefHandler = (value: Element | ComponentPublicInstance | null) => void
+export type DataGridMaybeRef<T> = T | Ref<T>
+export type DataGridTableStageCellClass =
+  | string
+  | readonly string[]
+  | Readonly<Record<string, boolean>>
+
+export interface DataGridTableStageCustomOverlay {
+  key: string
+  ranges: readonly DataGridOverlayRange[]
+  className?: string
+  segmentClassName?: string
+  borderColor?: string
+  backgroundColor?: string
+  borderStyle?: "solid" | "dashed"
+  hideSingleCell?: boolean
+  zIndex?: number
+}
+
+export interface DataGridActiveColumnMenuState {
+  columnId: string
+  anchorEl: HTMLElement
+  reason: DataGridColumnMenuOpenReason
+}
+
+export interface DataGridTableStageCenterPaneDiagnostics {
+  mounted?: boolean
+  debugJson?: string
+  renderedViewport?: {
+    start: number
+    end: number
+  } | null
+  displayRowsRecomputeCount?: number
+  centerPaneRuntimeRevision?: string | number | null
+  centerPaneBodyRowsRevision?: string | number | null
+}
+
+export interface DataGridTableStageAnchorCell {
+  rowIndex: number
+  columnIndex: number
+}
+
+export interface DataGridTableStageLayoutSection {
+  gridContentStyle: CSSProperties
+  mainTrackStyle: CSSProperties
+  indexColumnStyle: CSSProperties
+  stageStyle: CSSProperties
+  bodyShellStyle: CSSProperties
+  columnStyle: (key: string) => CSSProperties
+}
+
+export interface DataGridTableStageViewportSection {
+  topSpacerHeight: number
+  bottomSpacerHeight: number
+  viewportRowStart: number
+  viewportRowEnd?: number
+  virtualRowTotal?: number
+  baseRowHeight?: number
+  resolveRowHeight?: (rowIndex: number) => number
+  resolveRowOffset?: (rowIndex: number) => number
+  columnWindowStart: number
+  leftColumnSpacerWidth: number
+  rightColumnSpacerWidth: number
+  headerViewportRef: DataGridElementRefHandler
+  bodyViewportRef: DataGridElementRefHandler
+  handleViewportScroll: (event: Event) => void
+  handleViewportKeydown: (event: KeyboardEvent) => void
+}
+
+export interface DataGridTableStageColumnsSection {
+  visibleColumns: readonly DataGridColumnSnapshot[]
+  renderedColumns: readonly DataGridColumnSnapshot[]
+  scrollToColumn?: (target: DataGridViewportColumnTarget) => void
+  columnFilterTextByKey: Readonly<Record<string, string>>
+  reorderColumnsByHeader?: (payload: {
+    sourceColumnKey: string
+    targetColumnKey: string
+    placement: "before" | "after"
+  }) => boolean
+  resizeColumnByKeyboard?: (columnKey: string, direction: -1 | 1) => boolean
+  toggleSortForColumn: (columnKey: string, additive?: boolean) => void
+  handleHeaderColumnClick?: (columnKey: string, options: { additive: boolean; extend: boolean }) => void
+  sortIndicator: (columnKey: string) => string
+  setColumnFilterText: (columnKey: string, value: string) => void
+  columnMenuEnabled?: boolean
+  columnMenuTrigger?: DataGridColumnMenuTriggerMode
+  columnMenuValueFilterEnabled?: boolean
+  columnMenuValueFilterRowLimit?: number
+  columnMenuMaxFilterValues?: number
+  resolveColumnMenuItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledItems?: (columnKey: string) => readonly DataGridColumnMenuItemKey[]
+  resolveColumnMenuDisabledReasons?: (columnKey: string) => DataGridColumnMenuDisabledReasons
+  resolveColumnMenuLabels?: (columnKey: string) => DataGridColumnMenuItemLabels
+  resolveColumnMenuActionOptions?: (columnKey: string) => DataGridColumnMenuActionOptions
+  resolveColumnMenuCustomItems?: (columnKey: string) => readonly DataGridColumnMenuCustomItem[]
+  isColumnFilterActive?: (columnKey: string) => boolean
+  isColumnGrouped?: (columnKey: string) => boolean
+  resolveColumnGroupOrder?: (columnKey: string) => number | null
+  resolveColumnMenuSortDirection?: (columnKey: string) => "asc" | "desc" | null
+  resolveColumnMenuSelectedTokens?: (columnKey: string) => readonly string[]
+  resolveColumnMenuValueEntries?: (columnKey: string, search?: string) => DataGridColumnMenuValueEntriesResult
+  applyColumnMenuSort?: (columnKey: string, direction: "asc" | "desc" | null) => void
+  applyColumnMenuPin?: (columnKey: string, pin: DataGridColumnPin) => void
+  applyColumnMenuGroupBy?: (columnKey: string, grouped: boolean) => void
+  applyColumnMenuFilter?: (columnKey: string, tokens: readonly string[]) => void
+  clearColumnMenuFilter?: (columnKey: string) => void
+  resolveColumnMenuCondition?: (columnKey: string) => { operator: string; formula?: string; formula2?: string } | null
+  applyColumnMenuCondition?: (columnKey: string, condition: { operator: string; formula?: string; formula2?: string }) => void
+  clearColumnMenuCondition?: (columnKey: string) => void
+  activeColumnMenu?: DataGridActiveColumnMenuState | null
+  openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
+  closeColumnMenu?: () => void
+  startResize: (event: MouseEvent, columnKey: string) => void
+  handleResizeDoubleClick: (event: MouseEvent, columnKey: string) => void
+}
+
+export interface DataGridTableStageRowsSection<TRow extends Record<string, unknown>> {
+  displayRows: readonly DataGridTableRow<TRow>[]
+  displayRowsRevision?: number
+  runtimeRevision?: string | number | null
+  projectionRevision?: string | number | null
+  hasGrouping: boolean
+  getBodyRowAtIndex?: (rowIndex: number) => DataGridRowNode<TRow> | null
+  pinnedTopRows: readonly DataGridTableRow<TRow>[]
+  pinnedBottomRows: readonly DataGridTableRow<TRow>[]
+  sourceRows?: readonly TRow[]
+  resolveSourceRowId?: (row: TRow, index: number) => string | number | null | undefined
+  showRowIndex?: boolean
+  rowHeaderAction?: "select-cells" | "select-records" | "none"
+  rowHover?: boolean
+  stripedRows?: boolean
+  rowClass: (row: DataGridTableRow<TRow>) => string
+  isRowAutosizeProbe: (row: DataGridTableRow<TRow>, rowOffset: number) => boolean
+  rowStyle: (row: DataGridTableRow<TRow>, rowOffset: number) => CSSProperties
+  isRowInPendingClipboardCut?: (row: DataGridTableRow<TRow>) => boolean
+  isRowFocused?: (row: DataGridTableRow<TRow>) => boolean
+  isRowCheckboxSelected?: (row: DataGridTableRow<TRow>) => boolean
+  allVisibleRowsSelected?: boolean
+  someVisibleRowsSelected?: boolean
+  handleRowClick?: (row: DataGridTableRow<TRow>) => void
+  handleRowIndexClick?: (row: DataGridTableRow<TRow>, rowOffset: number, extend: boolean, additive?: boolean) => void
+  handleRowCheckboxRange?: (row: DataGridTableRow<TRow>, rowOffset: number, additive?: boolean) => void
+  handleRowIndexPointerDown?: (row: DataGridTableRow<TRow>, rowOffset: number, event: PointerEvent) => void
+  consumeRowSelectionClick?: () => boolean
+  handleRowIndexKeydown?: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  reorderRowsByIndex?: (payload: {
+    sourceRowId: string | number
+    targetRowId: string | number
+    placement: "before" | "after"
+  }) => boolean
+  handleToggleAllVisibleRows?: () => void
+  toggleGroupRow: (row: DataGridTableRow<TRow>) => void
+  rowIndexLabel: (row: DataGridTableRow<TRow>, rowOffset: number) => string
+  startRowResize: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  autosizeRow: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number) => void
+  consumeRecentRowResizeInteraction?: () => boolean
+}
+
+export interface DataGridTableStageSelectionSection {
+  selectionRange: DataGridOverlayRange | null
+  selectionRanges?: readonly DataGridOverlayRange[]
+  selectionAnchorCell?: DataGridTableStageAnchorCell | null
+  totalRowCount?: number
+  selectColumn?: (columnIndex: number) => void
+  selectColumnRange?: (startColumnIndex: number, endColumnIndex: number) => void
+  selectCell?: (rowIndex: number, columnIndex: number) => void
+  selectColumnThroughRow?: (rowIndex: number, columnIndex: number) => void
+  clearCellSelection?: () => void
+  copySelectedCells?: (trigger?: "keyboard" | "context-menu") => Promise<boolean>
+  fillPreviewRange: DataGridOverlayRange | null
+  rangeMovePreviewRange: DataGridOverlayRange | null
+  fillHandleEnabled: boolean
+  rangeMoveEnabled: boolean
+  isFillDragging: boolean
+  isRangeMoving: boolean
+  fillActionAnchorCell?: DataGridTableStageAnchorCell | null
+  fillActionBehavior?: DataGridFillBehavior | null
+  applyFillActionBehavior: (behavior: DataGridFillBehavior) => void
+  isFillHandleCell: (rowOffset: number, columnIndex: number) => boolean
+  startFillHandleDrag: (event: MouseEvent) => void
+  startFillHandleDoubleClick: (event: MouseEvent) => void
+}
+
+export interface DataGridTableStageEditingSection<TRow extends Record<string, unknown>> {
+  editingCellValue: string
+  editingCellInitialFilter: string
+  editingCellOpenOnMount: boolean
+  editingCellValidationMessage: string | null
+  editingCellPending: boolean
+  editingCellRejectedReason: string | null
+  isEditingCell: (row: DataGridTableRow<TRow>, columnKey: string) => boolean
+  startInlineEdit: (
+    row: DataGridTableRow<TRow>,
+    columnKey: string,
+    options?: { draftValue?: string; openOnMount?: boolean },
+  ) => void
+  updateEditingCellValue: (value: string) => void
+  handleEditorKeydown: (event: KeyboardEvent) => void
+  handleEditorBlur: () => void
+  commitInlineEdit: (target?: "stay" | "next" | "previous" | "none") => void
+  cancelInlineEdit: () => void
+}
+
+export interface DataGridTableStageCellsSection<TRow extends Record<string, unknown>> {
+  cellClass?: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => DataGridTableStageCellClass | null | undefined
+  cellStyle?: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => CSSProperties | null | undefined
+  isCellSelected: (rowOffset: number, columnIndex: number) => boolean
+  isSelectionAnchorCell: (rowOffset: number, columnIndex: number) => boolean
+  shouldHighlightSelectedCell: (rowOffset: number, columnIndex: number) => boolean
+  isCellOnSelectionEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean
+  isCellInFillPreview: (rowOffset: number, columnIndex: number) => boolean
+  isCellInPendingClipboardRange: (rowOffset: number, columnIndex: number) => boolean
+  isCellOnPendingClipboardEdge: (rowOffset: number, columnIndex: number, edge: DataGridPendingEdge) => boolean
+  isCellEditable: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => boolean
+  readCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
+  readDisplayCell: (row: DataGridTableRow<TRow>, columnKey: string) => string
+}
+
+export interface DataGridTableStageInteractionSection<TRow extends Record<string, unknown>> {
+  handleCellMouseDown: (event: MouseEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
+  handleCellClick: (
+    row: DataGridTableRow<TRow>,
+    rowOffset: number,
+    column: DataGridColumnSnapshot,
+    columnIndex: number,
+  ) => void
+  handleCellKeydown: (event: KeyboardEvent, row: DataGridTableRow<TRow>, rowOffset: number, columnIndex: number) => void
+}
+
+export interface DataGridTableStageSectionedProps<TRow extends Record<string, unknown>> {
+  layout: DataGridTableStageLayoutSection
+  viewport: DataGridTableStageViewportSection
+  columns: DataGridTableStageColumnsSection
+  rows: DataGridTableStageRowsSection<TRow>
+  selection: DataGridTableStageSelectionSection
+  editing: DataGridTableStageEditingSection<TRow>
+  cells: DataGridTableStageCellsSection<TRow>
+  interaction: DataGridTableStageInteractionSection<TRow>
+}
+
+export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
+  extends DataGridTableStageSectionedProps<TRow> {
+  mode: DataGridTableMode
+  rowHeightMode: "fixed" | "auto"
+  stickyGroupRows?: StickyGroupRowsOptions
+  layoutMode: DataGridLayoutMode
+  chromeSignature?: string
+  customOverlays?: readonly DataGridTableStageCustomOverlay[]
+  emptyState?: DataGridEmptyStateProps | null
+  emptyStateAlignment?: DataGridEmptyStateAlignment
+  reportCenterPaneDiagnostics?: (payload: DataGridTableStageCenterPaneDiagnostics) => void
+  reportFillPlumbingState?: (layer: string, present: boolean) => void
+  reportFillPlumbingDetail?: (layer: string, value: string) => void
+  rendererPolicy?: DataGridAuthoredRendererPolicy
+  externalFilterIndicators?: readonly DataGridExternalFilterIndicator[]
+}
+
+interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
+  extends DataGridTableStageLayoutSection,
+    DataGridTableStageViewportSection,
+    DataGridTableStageColumnsSection,
+    DataGridTableStageRowsSection<TRow>,
+    DataGridTableStageSelectionSection,
+    DataGridTableStageEditingSection<TRow>,
+    DataGridTableStageCellsSection<TRow>,
+    DataGridTableStageInteractionSection<TRow> {
+  mode: DataGridTableMode
+  rowHeightMode: "fixed" | "auto"
+  stickyGroupRows: StickyGroupRowsOptions
+  layoutMode: DataGridLayoutMode
+  chromeSignature?: string
+}
+
+export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>
+  extends Omit<{
+    [K in keyof DataGridTableStageBindingsSource<TRow>]: DataGridMaybeRef<DataGridTableStageBindingsSource<TRow>[K]>
+  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef"> {
+  editingCellValueRef: Ref<string>
+  headerViewportRef: Ref<HTMLElement | null>
+  bodyViewportRef: Ref<HTMLElement | null>
+  customOverlays?: DataGridMaybeRef<readonly DataGridTableStageCustomOverlay[]>
+  reportCenterPaneDiagnostics?: DataGridMaybeRef<(payload: DataGridTableStageCenterPaneDiagnostics) => void>
+  reportFillPlumbingState?: DataGridMaybeRef<(layer: string, present: boolean) => void>
+  reportFillPlumbingDetail?: DataGridMaybeRef<(layer: string, value: string) => void>
+  rendererPolicy?: DataGridMaybeRef<DataGridTableStageProps<TRow>["rendererPolicy"]>
+}

@@ -1,4 +1,4 @@
-import type { DataGridThemeProp } from "@affino/datagrid-vue-app"
+import type { DataGridThemeProp } from "@affino/datagrid-vue"
 
 export const sheetsAppLightGridTheme: DataGridThemeProp = {
   tokens: {

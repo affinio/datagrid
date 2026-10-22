@@ -2,9 +2,9 @@
   "extends": "../../tsconfig.adapter.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist",
+    "outDir": "dist/headless",
     "declaration": true,
-    "declarationDir": "dist",
+    "declarationDir": "dist/headless",
     "emitDeclarationOnly": false,
     "moduleResolution": "bundler",
     "types": ["node"],

@@ -1,16 +1,24 @@
 # @affino/datagrid-vue
 
-Vue adapter and headless foundation for `@affino/datagrid-core`.
+The package combines the ready-made Vue DataGrid with the lower-level Vue
+adapter. Import the component from the package root and use `/headless` when
+building a custom renderer:
 
-`@affino/datagrid-vue` is the adapter layer between Vue and the grid engine.
-`@affino/datagrid-core` and `@affino/datagrid-orchestration` remain internal dependencies of this package.
+```ts
+import { DataGrid } from "@affino/datagrid-vue"
+import { useDataGridRuntime } from "@affino/datagrid-vue/headless"
+```
 
-If you want a declarative app-facing component, use
-[`@affino/datagrid-vue-app`](https://github.com/affinio/datagrid/tree/main/packages/datagrid-vue-app#readme).
+The app implementation lives under `src/app-layer`; the adapter source and
+`/headless` build remain separate. See the [Vue package migration guide](../../docs/vue-package-migration.md) for the old-package migration map.
+
+`@affino/datagrid-vue` provides the declarative DataGrid and the Vue adapter
+layer over `@affino/datagrid-core` and `@affino/datagrid-orchestration`.
 
 ## Documentation
 
 - [Vue adapter guide](../../docs/vue-adapter.md)
+- [DataGrid component guide](./README.component.md)
 - [Core API guide](../../docs/core-api.md)
 
 ## Canonical Feature Catalog
@@ -105,9 +113,9 @@ const viewportSelector = DATA_GRID_SELECTORS.viewport
 const ownerCellSelector = dataGridCellSelector("owner")
 ```
 
-## App layer (`@affino/datagrid-vue-app`)
+## DataGrid component
 
-Component-facing surface lives in the app package:
+The package root exports the component-facing surface:
 
 - `DataGrid`
 
@@ -388,7 +396,7 @@ Recommended ownership:
 
 ```ts
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC" },
@@ -424,8 +432,8 @@ The legacy `useAffinoDataGrid`, `useAffinoDataGridUi`, and `useAffinoDataGridMin
 
 For new integrations:
 
-- Use `DataGrid` from `@affino/datagrid-vue-app` for the canonical component path.
-- Use `useDataGridRuntime` from `@affino/datagrid-vue` when you need a headless runtime.
+- Use `DataGrid` from `@affino/datagrid-vue` for the canonical component path.
+- Use `useDataGridRuntime` from `@affino/datagrid-vue/headless` when you need a headless runtime.
 - Use `@affino/datagrid-vue/advanced/*` and app-layer hooks for custom interaction flows.
 
 For end-to-end UI behavior, use the public guides:

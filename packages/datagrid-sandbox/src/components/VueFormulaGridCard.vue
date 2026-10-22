@@ -2,8 +2,8 @@
   <article class="card">
     <header class="card__header">
       <div class="card__title-row">
-        <h2>Vue: Formula Grid</h2>
-        <div class="mode-badge">Formula</div>
+        <h2>Vue: Formula &amp; Export Workbench</h2>
+        <div class="mode-badge">Formula + XLSX</div>
       </div>
 
       <div class="controls">
@@ -59,6 +59,8 @@
         <span>Formulas: {{ formulaPlan?.order.length ?? 0 }}</span>
         <span>Levels: {{ formulaPlan?.levels.length ?? 0 }}</span>
         <span>Grouping: {{ groupByLabel }}</span>
+        <span>View: Segment contains “Enterprise” · Total descending</span>
+        <span>Visible rows: {{ gridRef?.getApi()?.rows.getCount() ?? 0 }}</span>
         <span>Saved view: {{ savedViewStatus }}</span>
         <span>Last action: {{ lastAction }}</span>
       </div>
@@ -75,7 +77,7 @@
     </header>
 
     <section class="grid-host">
-      <DataGrid
+      <FormulaDataGrid
         ref="gridRef"
         :rows="rows"
         :columns="columns"
@@ -84,7 +86,6 @@
         :max-rows="16"
         fill-handle
         range-move
-        license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         diagnostics
         formula-packs
         performance="balanced"
@@ -95,8 +96,16 @@
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
         :aggregation-model="aggregationModel"
+        :xlsx-export="{
+          fileName: 'formula-export-workbench.xlsx',
+          sheetName: 'Enterprise orders',
+          formulas: 'excel',
+        }"
+        :cell-class="highlightFormulaCells"
+        :cell-style="formulaCellStyle"
         theme="industrial-neutral"
         virtualization
+        @ready="applyWorkbenchProjection"
         @cell-change="handleGridCellChange"
         @selection-change="syncSelectionAggregatesLabel"
         @update:group-by="handleGroupByUpdate"
@@ -104,8 +113,8 @@
     </section>
 
     <footer class="card__footer">
-      Enterprise formula demo:
-      <code>diagnostics + formula-packs + performance + formula-runtime</code>
+      Enterprise rows are filtered and sorted by Total descending. Click a cell to inspect selection, then drag its fill handle; XLSX exports formula columns as native Excel formulas.
+      <code>diagnostics + formula-packs + performance + formula-runtime + xlsx-export</code>
       <span>{{ formulaPlan?.order.join(" -> ") || "—" }}</span>
     </footer>
   </article>
@@ -114,11 +123,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import {
-  DataGrid,
   type DataGridColumnMenuProp,
-} from "@affino/datagrid-vue-app-enterprise";
+} from "@affino/datagrid-vue";
 import {
   defineDataGridColumns,
+  defineDataGridCellClassResolver,
+  defineDataGridCellStyleResolver,
+  defineDataGridComponent,
   defineDataGridColumnMenu,
   clearDataGridSavedViewInStorage,
   readDataGridSavedViewFromStorage,
@@ -126,7 +137,7 @@ import {
   type DataGridAppClientRowModelOptions,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
-} from "@affino/datagrid-vue-app";
+} from "@affino/datagrid-vue";
 import type {
   DataGridApi,
   DataGridAggregationModel,
@@ -150,7 +161,10 @@ interface FormulaSandboxRow {
   total?: number;
   margin?: number;
   marginPct?: number;
+  [key: string]: unknown;
 }
+
+const FormulaDataGrid = defineDataGridComponent<FormulaSandboxRow>();
 
 interface FormulaExplainSnapshot {
   executionPlan: {
@@ -166,6 +180,10 @@ type FormulaSavedView = DataGridSavedViewSnapshot<FormulaSavedViewRow>;
 type ColumnMenuPreset = "default" | "compact" | "labels" | "actions" | "locked";
 
 const FORMULA_SAVED_VIEW_STORAGE_KEY = "affino-datagrid-sandbox:formula-saved-view";
+const WORKBOOK_CELL_STYLES = {
+  total: { fillColor: "DCFCE7", fontColor: "166534", bold: true },
+  marginPct: { fillColor: "DBEAFE", fontColor: "1E40AF", bold: true },
+} as const;
 
 function getBrowserStorage(): Storage | null {
   return typeof window === "undefined" ? null : window.localStorage;
@@ -360,6 +378,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     initialState: { width: 118 },
     presentation: { align: "right", headerAlign: "right" },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
+    export: { style: WORKBOOK_CELL_STYLES.total },
     formula: "subtotal + tax + shipping - discount",
   },
   {
@@ -378,6 +397,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     initialState: { width: 108 },
     presentation: { align: "right", headerAlign: "right" },
     capabilities: { sortable: true, filterable: true },
+    export: { style: WORKBOOK_CELL_STYLES.marginPct },
     formula: "SAFE_DIVIDE(total - cost, total, 0)",
   },
 ] as const);
@@ -400,6 +420,33 @@ const selectionAggregatesLabel = ref("");
 const clientRowModelOptions = {
   resolveRowId: (row: FormulaSandboxRow) => row.id,
 } satisfies DataGridAppClientRowModelOptions<FormulaSandboxRow>;
+const highlightFormulaCells = defineDataGridCellClassResolver<unknown>()((row, _rowIndex, column) => {
+  if (row.kind === "group") return null;
+  if (column.key === "segment") {
+    return { "formula-workbench-cell--filtered-segment": true };
+  }
+  return null;
+});
+const formulaCellStyle = defineDataGridCellStyleResolver<unknown>()((_row, _rowIndex, column) => {
+  if (column.key === "total") {
+    return { backgroundColor: "#DCFCE7", color: "#166534", fontWeight: 700 };
+  }
+  if (column.key === "marginPct") {
+    return { backgroundColor: "#DBEAFE", color: "#1E40AF", fontWeight: 700 };
+  }
+  return null;
+});
+const applyWorkbenchProjection = (event: { api: DataGridApi<Record<string, unknown>> }): void => {
+  const api = event.api as unknown as DataGridApi<FormulaSandboxRow>;
+  api.rows.setSortAndFilterModel({
+    sortModel: [{ key: "total", direction: "desc" }],
+    filterModel: {
+      columnFilters: {
+        segment: { kind: "predicate", operator: "contains", value: "Enterprise", caseSensitive: false },
+      },
+    },
+  });
+};
 const groupBy = computed(() => {
   return groupByModel.value;
 });
@@ -647,4 +694,11 @@ rebuildModel();
   min-width: 0;
   min-height: 0;
 }
+
+:deep(.formula-workbench-cell--filtered-segment) {
+  background: color-mix(in srgb, #16a34a 16%, var(--datagrid-cell-background-color, white));
+  color: #166534;
+  font-weight: 650;
+}
+
 </style>

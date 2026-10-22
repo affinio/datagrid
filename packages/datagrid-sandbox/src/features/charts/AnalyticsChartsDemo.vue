@@ -208,12 +208,12 @@ import {
   defineDataGridColumns,
   defineDataGridComponent,
   useDataGridRef,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 import type {
   DataGridAppClientRowModelOptions,
   DataGridCellEditEvent,
   DataGridQuickFilterOptions,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 import type {
   DataGridApiRowSelectionChangedEvent,
   DataGridApiSelectionChangedEvent,

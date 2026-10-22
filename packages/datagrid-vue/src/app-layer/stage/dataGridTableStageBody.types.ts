@@ -1,0 +1,185 @@
+import type { ComponentPublicInstance, CSSProperties, VNodeChild } from "vue"
+import type { DataGridColumnSnapshot } from "@affino/datagrid-vue/headless"
+import type {
+  DataGridAppCellRenderer,
+  DataGridAppGroupCellRenderer,
+} from "../config/dataGridFormulaOptions"
+import type { DataGridFilterableComboboxOption } from "../overlays/dataGridFilterableCombobox"
+import type { DataGridTableRow } from "./dataGridTableStage.types"
+import type { StickyGroupPlacement } from "./dataGridStickyGroupLayout"
+
+export type DataGridTableStageBodyRow = DataGridTableRow<Record<string, unknown>>
+export type DataGridTableStageBodyRowKeyMode = "row" | "recycled"
+
+export type DataGridTableStageBodyColumn = DataGridColumnSnapshot & {
+  column: DataGridColumnSnapshot["column"] & {
+    cellRenderer?: DataGridAppCellRenderer<Record<string, unknown>> | null
+    groupCellRenderer?: DataGridAppGroupCellRenderer<Record<string, unknown>> | null
+    presentation?: {
+      align?: "left" | "center" | "right"
+      headerAlign?: "left" | "center" | "right"
+    }
+    capabilities?: {
+      editable?: boolean
+      sortable?: boolean
+      filterable?: boolean
+    }
+  }
+}
+
+export interface DataGridTableStageStickyRow {
+  row: DataGridTableStageBodyRow
+  placement: StickyGroupPlacement
+  style: CSSProperties
+  selectionOverlaySegments?: Partial<Record<"left" | "center" | "right", readonly DataGridTableStageOverlaySegment[]>>
+  selectionSeamOverlaySegments?: Partial<Record<"left" | "right", readonly DataGridTableStageOverlaySegment[]>>
+}
+
+export type DataGridTableStageOverlaySegment = {
+  key: string
+  style: CSSProperties
+}
+
+export type DataGridTableStageOverlayLane = {
+  key: string
+  className?: string
+  segmentClassName?: string
+  segments: readonly DataGridTableStageOverlaySegment[]
+}
+
+export type DataGridTableStageSelectEditorOption = {
+  label: string
+  value: string
+}
+
+export type DataGridTableStageSelectEditorOptionsLoader = (
+  query: string,
+) => Promise<readonly DataGridTableStageSelectEditorOption[]>
+
+export interface DataGridTableStageBodyRenderApiBase {
+  absoluteRowIndex: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  viewportRowOffset: (row: DataGridTableStageBodyRow, rowOffset: number) => number
+  rowAriaExpanded: (row: DataGridTableStageBodyRow) => "true" | "false" | undefined
+  rowAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number) => string | undefined
+  rowAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number) => "true" | undefined
+  rowStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
+  handleRowContainerClick: (row: DataGridTableStageBodyRow) => void
+  setHoveredRow: (row: DataGridTableStageBodyRow, rowOffset: number) => void
+  builtInCellClasses: (
+    row: DataGridTableStageBodyRow,
+    rowOffset: number,
+    column: DataGridTableStageBodyColumn,
+    columnIndex: number,
+  ) => Record<string, boolean>
+  cellStateClasses: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => Record<string, boolean>
+  resolveCellCustomClass: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => unknown
+  columnStyle: (key: string) => CSSProperties
+  bodyCellPresentationStyle: (column: DataGridTableStageBodyColumn) => CSSProperties
+  bodyCellSelectionStyle: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, columnIndex: number) => CSSProperties
+  resolveCellCustomStyle: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => CSSProperties
+  columnIndexByKey: (columnKey: string) => number
+  cellDomId: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
+  cellTabIndex: (rowOffset: number, columnIndex: number) => number
+  cellAriaSelected: (rowOffset: number, columnIndex: number) => "true" | "false"
+  cellAriaRole: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
+  cellAriaChecked: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
+  cellAriaPressed: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | "false" | "mixed" | undefined
+  cellAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string | undefined
+  cellAriaDisabled: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => "true" | undefined
+  handleCellMouseDown: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleBodyCellClick: (event: MouseEvent, row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => void
+  handleCellMouseMove: (event: MouseEvent, rowOffset: number, columnIndex: number) => void
+  clearRangeMoveHandleHover: () => void
+  handleCellKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  startInlineEditIfAllowed: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, rowOffset: number, event?: MouseEvent) => void
+  handleTouchSelectionHandleMouseDown: (event: MouseEvent) => void
+  handleTouchSelectionHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchSelectionHandleTouchMove: (event: TouchEvent) => void
+  handleTouchSelectionHandleTouchEnd: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleMouseDown: (event: MouseEvent) => void
+  handleTouchRangeMoveHandleTouchStart: (event: TouchEvent, row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => void
+  handleTouchRangeMoveHandleTouchMove: (event: TouchEvent) => void
+  handleTouchRangeMoveHandleTouchEnd: (event: TouchEvent) => void
+  isCellEditableSafe: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  isFillHandleCellSafe: (rowOffset: number, columnIndex: number) => boolean
+  isTouchSelectionAnchorHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
+  isTouchRangeMoveHandleCell: (row: DataGridTableStageBodyRow, rowOffset: number, columnIndex: number) => boolean
+  isEditingCellSafe: (row: DataGridTableStageBodyRow, columnKey: string) => boolean
+  handleFillHandleMouseDown: (event: MouseEvent) => void
+  handleFillHandleDoubleClick: (event: MouseEvent) => void
+  handleFillHandleTouchStart: (event: TouchEvent) => void
+  handleFillHandleTouchMove: (event: TouchEvent) => void
+  handleFillHandleTouchEnd: (event: TouchEvent) => void
+  isSelectEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  resolveSelectEditorValue: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
+  resolveSelectEditorOptions: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => readonly DataGridTableStageSelectEditorOption[]
+  resolveSelectEditorOptionsLoader: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => DataGridTableStageSelectEditorOptionsLoader | undefined
+  cellEditorAriaLabel: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => string
+  handleSelectEditorCommit: (value: string, target?: "stay" | "next" | "previous") => void
+  handleSelectEditorCancel: () => void
+  handleSelectEditorOptionsResolved: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn, options: ReadonlyArray<DataGridFilterableComboboxOption>) => void
+  isDateEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  resolveDateEditorInputType: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => "date" | "datetime-local"
+  handleDateEditorChange: (value: string, target?: "stay" | "next" | "previous") => void
+  isTextEditorCell: (row: DataGridTableStageBodyRow, rowOffset: number, column: DataGridTableStageBodyColumn, columnIndex: number) => boolean
+  updateEditingCellValue: (value: string) => void
+  handleEditorKeydown: (event: KeyboardEvent) => void
+  handleTextEditorBlur: () => void
+  shouldRenderCheckboxCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => boolean
+  checkboxIndicatorClass: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
+  checkboxIndicatorMarkClass: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => Record<string, boolean>
+  readResolvedDisplayCell: (row: DataGridTableStageBodyRow, column: DataGridTableStageBodyColumn) => string
+  renderResolvedCellContent: (
+    row: DataGridTableStageBodyRow,
+    rowOffset: number,
+    column: DataGridTableStageBodyColumn,
+    columnIndex: number,
+  ) => VNodeChild
+}
+
+export interface DataGridTableStageCenterPaneRenderApi extends DataGridTableStageBodyRenderApiBase {
+  handleCenterViewportScroll: (event: Event) => void
+  handleBodyViewportWheel: (event: WheelEvent) => void
+  handleViewportKeydown: (event: KeyboardEvent) => void
+  spacerStyle: (width: number) => CSSProperties
+}
+
+export interface DataGridTableStagePinnedPaneProps {
+  side: "left" | "right"
+  rowKeyMode?: DataGridTableStageBodyRowKeyMode
+  width: number
+  style: CSSProperties
+  contentStyle: CSSProperties
+  contentRef?: (value: Element | ComponentPublicInstance | null) => void
+  columns: readonly DataGridTableStageBodyColumn[]
+  showIndexColumn: boolean
+  displayRows: readonly DataGridTableStageBodyRow[]
+  topSpacerHeight?: number
+  bottomSpacerHeight?: number
+  selectionOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  fillPreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  movePreviewOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  overlayLanes?: readonly DataGridTableStageOverlayLane[]
+  selectionSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  fillPreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  movePreviewSeamOverlaySegments: readonly DataGridTableStageOverlaySegment[]
+  seamOverlayLanes?: readonly DataGridTableStageOverlayLane[]
+}
+
+export interface DataGridTableStagePinnedPaneRenderApi extends DataGridTableStageBodyRenderApiBase {
+  handleLinkedViewportWheel: (event: WheelEvent) => void
+  paneRowStyle: (row: DataGridTableStageBodyRow, rowOffset: number, paneWidth: number) => CSSProperties
+  isFullRowSelectionSafe: (rowOffset: number) => boolean
+  rowIndexColumnStyle: CSSProperties
+  rowIndexCellClasses: (row: DataGridTableStageBodyRow, rowOffset: number) => Record<string, boolean>
+  rowIndexCellStyle: (row: DataGridTableStageBodyRow, rowOffset: number) => CSSProperties
+  rowIndexTabIndex: (row: DataGridTableStageBodyRow) => number
+  isRowIndexDraggable: (row: DataGridTableStageBodyRow) => boolean
+  handleRowIndexClickSafe: (row: DataGridTableStageBodyRow, rowOffset: number, event: MouseEvent) => void
+  handleRowIndexPointerDownSafe: (event: PointerEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexKeydown: (event: KeyboardEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragStart: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragOver: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDrop: (event: DragEvent, row: DataGridTableStageBodyRow, rowOffset: number) => void
+  handleRowIndexDragEnd: () => void
+}

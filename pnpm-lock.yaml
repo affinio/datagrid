@@ -121,15 +121,6 @@ importers:
         specifier: workspace:*
         version: link:../projection-engine
 
-  packages/datagrid-diagnostics-enterprise:
-    dependencies:
-      '@affino/datagrid-vue-app':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app
-      vue:
-        specifier: 3.4.38
-        version: 3.4.38(typescript@5.9.3)
-
   packages/datagrid-format:
     devDependencies:
       vitest:
@@ -137,12 +128,6 @@ importers:
         version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
 
   packages/datagrid-formula-engine: {}
-
-  packages/datagrid-formula-engine-enterprise:
-    dependencies:
-      '@affino/datagrid-formula-engine':
-        specifier: workspace:*
-        version: link:../datagrid-formula-engine
 
   packages/datagrid-gantt:
     dependencies:
@@ -169,12 +154,6 @@ importers:
       tsup:
         specifier: ^8.5.1
         version: 8.5.1(@swc/core@1.15.11)(jiti@2.6.1)(postcss@8.5.10)(typescript@5.9.3)
-
-  packages/datagrid-laravel-app:
-    dependencies:
-      '@affino/datagrid-laravel':
-        specifier: workspace:*
-        version: link:../datagrid-laravel
 
   packages/datagrid-orchestration:
     dependencies:
@@ -218,12 +197,6 @@ importers:
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
-      '@affino/datagrid-vue-app':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app
-      '@affino/datagrid-vue-app-enterprise':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app-enterprise
       '@affino/datagrid-worker':
         specifier: workspace:*
         version: link:../datagrid-worker
@@ -279,9 +252,6 @@ importers:
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
-      '@affino/datagrid-vue-app':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app
       vue:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
@@ -313,9 +283,6 @@ importers:
       '@affino/datagrid-vue':
         specifier: workspace:*
         version: link:../datagrid-vue
-      '@affino/datagrid-vue-app':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app
       '@affino/menu-vue':
         specifier: ^2.2.0
         version: 2.2.0(vue@3.4.38(typescript@5.9.3))
@@ -327,18 +294,39 @@ importers:
 
   packages/datagrid-vue:
     dependencies:
+      '@affino/datagrid-chrome':
+        specifier: workspace:*
+        version: link:../datagrid-chrome
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
+      '@affino/datagrid-gantt':
+        specifier: workspace:^
+        version: link:../datagrid-gantt
       '@affino/datagrid-orchestration':
         specifier: workspace:*
         version: link:../datagrid-orchestration
       '@affino/datagrid-pivot':
         specifier: workspace:*
         version: link:../datagrid-pivot
+      '@affino/datagrid-theme':
+        specifier: workspace:*
+        version: link:../datagrid-theme
       '@affino/datagrid-worker':
         specifier: workspace:*
         version: link:../datagrid-worker
+      '@affino/export-xlsx':
+        specifier: workspace:*
+        version: link:../export-xlsx
+      '@affino/menu-vue':
+        specifier: ^2.2.0
+        version: 2.2.0(vue@3.4.38(typescript@5.9.3))
+      '@affino/popover-vue':
+        specifier: ^1.1.0
+        version: 1.1.0(vue@3.4.38(typescript@5.9.3))
       pinia:
         specifier: ^2.1.0 || ^3.0.0
         version: 3.0.4(typescript@5.9.3)(vue@3.4.38(typescript@5.9.3))
@@ -346,64 +334,18 @@ importers:
         specifier: 3.4.38
         version: 3.4.38(typescript@5.9.3)
     devDependencies:
-      '@affino/datagrid-theme':
-        specifier: workspace:^
-        version: link:../datagrid-theme
-
-  packages/datagrid-vue-app:
-    dependencies:
-      '@affino/datagrid-chrome':
-        specifier: workspace:*
-        version: link:../datagrid-chrome
-      '@affino/datagrid-core':
-        specifier: workspace:*
-        version: link:../datagrid-core
-      '@affino/datagrid-orchestration':
-        specifier: workspace:*
-        version: link:../datagrid-orchestration
-      '@affino/datagrid-theme':
-        specifier: workspace:*
-        version: link:../datagrid-theme
-      '@affino/datagrid-vue':
-        specifier: workspace:*
-        version: link:../datagrid-vue
-      '@affino/menu-vue':
-        specifier: ^2.2.0
-        version: 2.2.0(vue@3.4.38(typescript@5.9.3))
-      '@affino/popover-vue':
-        specifier: ^1.1.0
-        version: 1.1.0(vue@3.4.38(typescript@5.9.3))
-      vue:
-        specifier: 3.4.38
-        version: 3.4.38(typescript@5.9.3)
-    devDependencies:
-      '@affino/datagrid-gantt':
-        specifier: workspace:*
-        version: link:../datagrid-gantt
-
-  packages/datagrid-vue-app-enterprise:
-    dependencies:
-      '@affino/datagrid-chrome':
-        specifier: workspace:*
-        version: link:../datagrid-chrome
-      '@affino/datagrid-diagnostics-enterprise':
-        specifier: workspace:*
-        version: link:../datagrid-diagnostics-enterprise
-      '@affino/datagrid-formula-engine-enterprise':
-        specifier: workspace:*
-        version: link:../datagrid-formula-engine-enterprise
-      '@affino/datagrid-theme':
-        specifier: workspace:*
-        version: link:../datagrid-theme
-      '@affino/datagrid-vue':
-        specifier: workspace:*
-        version: link:../datagrid-vue
-      '@affino/datagrid-vue-app':
-        specifier: workspace:*
-        version: link:../datagrid-vue-app
-      vue:
-        specifier: 3.4.38
-        version: 3.4.38(typescript@5.9.3)
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.4
+        version: 6.0.4(vite@7.3.2(@types/node@25.3.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0))(vue@3.4.38(typescript@5.9.3))
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 7.3.2
+        version: 7.3.2(@types/node@25.3.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)
+      vue-tsc:
+        specifier: ^3.2.5
+        version: 3.2.5(typescript@5.9.3)
 
   packages/datagrid-worker:
     dependencies:

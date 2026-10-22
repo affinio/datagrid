@@ -63,7 +63,7 @@ import {
   defineDataGridColumns,
   defineDataGridComponent,
   type DataGridAppClientRowModelOptions,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 
 type FilterMode = "all" | "submitted" | "approved" | "needs-action"
 

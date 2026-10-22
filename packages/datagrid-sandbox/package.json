@@ -21,8 +21,6 @@
     "@affino/datagrid-server-client": "workspace:*",
     "@affino/datagrid-spreadsheet-vue-app": "workspace:*",
     "@affino/datagrid-vue": "workspace:*",
-    "@affino/datagrid-vue-app": "workspace:*",
-    "@affino/datagrid-vue-app-enterprise": "workspace:*",
     "@affino/datagrid-worker": "workspace:*",
     "@affino/popover-vue": "^1.1.0",
     "@affino/world-map-core": "workspace:*",

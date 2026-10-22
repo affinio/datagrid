@@ -41,8 +41,8 @@
 
 <script setup lang="ts">
 import { ref } from "vue"
-import { DataGrid } from "../../../datagrid-vue-app/src/gantt"
-import { DataGridDefaultRenderer } from "@affino/datagrid-vue-app/internal"
+import { DataGrid } from "../../../datagrid-vue/src/app-layer/gantt"
+import { DataGridDefaultRenderer } from "@affino/datagrid-vue/internal"
 import { defineComponent, h } from "vue"
 
 const InspectorPanel = defineComponent({

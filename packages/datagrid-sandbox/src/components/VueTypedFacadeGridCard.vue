@@ -8,7 +8,7 @@ import {
   defineDataGridSelectionCellReader,
   useDataGridRef,
   type DataGridAppClientRowModelOptions,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 import type { DataGridUnifiedState } from "@affino/datagrid-vue"
 
 interface TypedFacadeRow {

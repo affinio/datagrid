@@ -79,6 +79,10 @@ const routes = [
     component: VueFormulaGridCard,
   },
   {
+    path: "/vue/formula-export-workbench",
+    component: VueFormulaGridCard,
+  },
+  {
     path: "/vue/cell-renderer-grid",
     component: VueCellRendererGridCard,
   },

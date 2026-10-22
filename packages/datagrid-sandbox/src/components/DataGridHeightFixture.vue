@@ -43,7 +43,7 @@ import {
   DataGridModuleHost,
   type DataGridAppToolbarModule,
   type DataGridToolbarPlacement,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 
 const theme = "default" as const
 const toolbarPlacement = ref<DataGridToolbarPlacement>("stacked")

@@ -1,0 +1,2916 @@
+<template>
+  <section
+    ref="stageRootEl"
+    class="grid-stage"
+    :class="{
+      'grid-stage--canvas-chrome': true,
+      'grid-stage--auto-row-height': mode === 'base' && rowHeightMode === 'auto',
+      'grid-stage--layout-fill': layoutMode === 'fill',
+      'grid-stage--layout-auto-height': layoutMode === 'auto-height',
+      'grid-stage--empty-state': Boolean(props.emptyState),
+      'grid-stage--fill-dragging': isFillDragging,
+      'grid-stage--range-moving': isRangeMoving,
+      'grid-stage--coarse-pointer': isCoarsePointer,
+      'grid-stage--interaction-touch': interactionMode === 'touch',
+      'grid-stage--interaction-desktop': interactionMode === 'desktop',
+      'grid-stage--single-cell-selection': isSingleSelectedCell,
+      'grid-stage--additive-selection': isAdditiveSelection,
+    }"
+    :style="layout.stageStyle"
+  >
+    <DataGridTableStageHeader
+      :pane-layout-style="paneLayoutStyle"
+      :left-pane-style="leftPaneStyle"
+      :right-pane-style="rightPaneStyle"
+      :left-track-style="leftTrackStyle"
+      :right-track-style="rightTrackStyle"
+      :row-index-column-style="resolvedRowIndexColumnStyle"
+      :show-index-column="showRowIndex"
+      :navigate-to-row-index="navigateToRowIndex"
+      :focused-body-column-key="focusedBodyColumnKey"
+      :focused-body-row-index="focusedBodyRowIndex"
+      :copy-selected-cells="selection.copySelectedCells"
+      :external-filter-indicators="props.externalFilterIndicators"
+      :is-coarse-pointer="isCoarsePointer"
+      :on-linked-viewport-wheel="handleLinkedViewportWheel"
+    >
+      <template #left-chrome>
+        <canvas ref="leftHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+      </template>
+      <template #right-chrome>
+        <canvas ref="rightHeaderChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+      </template>
+    </DataGridTableStageHeader>
+
+    <div
+      v-if="rows.pinnedTopRows.length > 0"
+      class="grid-body-shell grid-body-shell--pinned-top"
+      :style="paneLayoutStyle"
+      @mouseleave="clearHoveredRow"
+    >
+      <DataGridTableStagePinnedPane
+        :pane="leftPinnedTopPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      />
+
+      <DataGridTableStageCenterPane
+        :display-rows="rows.pinnedTopRows"
+        :runtime-revision="rows.runtimeRevision"
+        :body-rows-revision="rows.displayRowsRevision"
+        viewport-class="grid-body-viewport grid-body-viewport--pinned-top"
+        :viewport-ref="capturePinnedTopViewportRef"
+        :viewport-tab-index="pinnedTopViewportTabIndex"
+        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="props.reportFillPlumbingState"
+        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+        :perf-trace-enabled="perfTraceEnabled"
+        :handle-scroll="handlePinnedTopViewportScroll"
+        :handle-wheel="handleBodyViewportWheel"
+        :handle-keydown="handlePinnedTopViewportKeydown"
+        :handle-context-menu="onViewportContextMenu"
+        :selection-overlay-segments="emptyOverlaySegments"
+        :fill-preview-overlay-segments="emptyOverlaySegments"
+        :move-preview-overlay-segments="emptyOverlaySegments"
+        :overlay-lanes="emptyOverlayLanes"
+        :render-api="centerPaneRenderApi"
+      />
+
+      <DataGridTableStagePinnedPane
+        :pane="rightPinnedTopPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      />
+    </div>
+
+    <div
+      ref="bodyShellRef"
+      class="grid-body-shell"
+      :style="[paneLayoutStyle, layout.bodyShellStyle]"
+      @mouseleave="clearHoveredRow"
+      @touchstart.passive="handleBodyTouchStart"
+      @touchmove.passive="handleBodyTouchMove"
+      @touchend.passive="handleBodyTouchEnd"
+      @touchcancel.passive="handleBodyTouchEnd"
+      @contextmenu.capture="handleBodyContextMenuCapture"
+    >
+      <div
+        :ref="captureSharedVerticalViewportRef"
+        class="grid-body-shared-vertical-scroll-shell"
+        :style="[paneLayoutStyle, sharedVerticalScrollStyle]"
+        data-datagrid-scroll-owner="shared-vertical"
+        role="grid"
+        :aria-rowcount="gridAriaRowCount"
+        :aria-colcount="gridAriaColumnCount"
+        aria-multiselectable="true"
+        :tabindex="bodyViewportTabIndex"
+        @scroll.passive="handleSharedVerticalViewportScroll"
+        @keydown.stop="viewport.handleViewportKeydown"
+      >
+        <div
+          class="grid-body-shared-vertical-scroll-spacer"
+          :style="sharedVerticalScrollSpacerStyle"
+          aria-hidden="true"
+        />
+        <DataGridTableStagePinnedPane
+          :pane="bodyLeftPinnedPane"
+          :sticky-row="stickyBodyRowWithOverlay"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="leftChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
+
+        <DataGridTableStageCenterPane
+          :display-rows="rows.displayRows"
+          :sticky-row="stickyBodyRowWithOverlay"
+          viewport-class="grid-body-viewport grid-body-viewport--shared-vertical"
+          :runtime-revision="rows.runtimeRevision"
+          :body-rows-revision="rows.displayRowsRevision"
+          row-key-mode="recycled"
+          :top-spacer-height="0"
+          :bottom-spacer-height="0"
+          :viewport-ref="captureBodyViewportRef"
+          inner-horizontal-scrollport
+          :viewport-tab-index="-1"
+          :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+          :report-fill-plumbing-state="props.reportFillPlumbingState"
+          :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+          :perf-trace-enabled="perfTraceEnabled"
+          :handle-scroll="handleCenterViewportScroll"
+          :handle-wheel="handleBodyViewportWheel"
+          :handle-keydown="viewport.handleViewportKeydown"
+          :handle-context-menu="onViewportContextMenu"
+          :selection-overlay-segments="centerSelectionOverlaySegments"
+          :fill-preview-overlay-segments="centerFillPreviewOverlaySegments"
+          :move-preview-overlay-segments="centerMovePreviewOverlaySegments"
+          :overlay-lanes="centerCustomOverlayLanes"
+          :empty-state="props.emptyState"
+          :empty-state-alignment="props.emptyStateAlignment"
+          :render-api="centerPaneRenderApi"
+        >
+          <template #content-chrome>
+            <DataGridTableStageChromeLayer
+              class="grid-chrome-layer--body-center"
+              :model="bodyCenterChromeLayerModel"
+            />
+          </template>
+          <template #empty-state="slotProps">
+            <slot name="empty-state" v-bind="slotProps" />
+          </template>
+        </DataGridTableStageCenterPane>
+
+        <DataGridTableStagePinnedPane
+          :pane="bodyRightPinnedPane"
+          :sticky-row="stickyBodyRow"
+          :render-api="pinnedPaneRenderApi"
+          :handle-context-menu="onViewportContextMenu"
+          :perf-trace-enabled="perfTraceEnabled"
+        >
+          <template #chrome>
+            <canvas ref="rightChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+          </template>
+        </DataGridTableStagePinnedPane>
+
+        <DataGridTableStageFillActionMenu
+          :is-open="fillActionMenuOpen"
+          :style="floatingFillActionStyle"
+          @toggle="toggleFloatingFillActionMenu"
+          @selected="handleFillActionSelection"
+        />
+      </div>
+    </div>
+
+    <div
+      v-if="rows.pinnedBottomRows.length > 0"
+      class="grid-body-shell grid-body-shell--pinned-bottom"
+      :style="paneLayoutStyle"
+      @mouseleave="clearHoveredRow"
+    >
+      <canvas
+        ref="centerBottomChromeCanvasEl"
+        class="grid-chrome-canvas grid-chrome-canvas--center-shell"
+        :style="centerBottomChromeCanvasStyle"
+        aria-hidden="true"
+      />
+      <DataGridTableStagePinnedPane
+        :pane="leftPinnedBottomPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      >
+        <template #chrome>
+          <canvas ref="leftBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+        </template>
+      </DataGridTableStagePinnedPane>
+
+      <DataGridTableStageCenterPane
+        :display-rows="rows.pinnedBottomRows"
+        :runtime-revision="rows.runtimeRevision"
+        :body-rows-revision="rows.displayRowsRevision"
+        viewport-class="grid-body-viewport grid-body-viewport--pinned-bottom"
+        :viewport-ref="capturePinnedBottomViewportRef"
+        :viewport-tab-index="pinnedBottomViewportTabIndex"
+        :report-center-pane-diagnostics="props.reportCenterPaneDiagnostics"
+        :report-fill-plumbing-state="props.reportFillPlumbingState"
+        :report-fill-plumbing-detail="props.reportFillPlumbingDetail"
+        :perf-trace-enabled="perfTraceEnabled"
+        :handle-scroll="handlePinnedBottomViewportScroll"
+        :handle-wheel="handleBodyViewportWheel"
+        :handle-keydown="handlePinnedBottomViewportKeydown"
+        :handle-context-menu="onViewportContextMenu"
+        :selection-overlay-segments="centerPinnedBottomSelectionOverlaySegments"
+        :fill-preview-overlay-segments="centerPinnedBottomFillPreviewOverlaySegments"
+        :move-preview-overlay-segments="centerPinnedBottomMovePreviewOverlaySegments"
+        :overlay-lanes="centerPinnedBottomCustomOverlayLanes"
+        :render-api="centerPaneRenderApi"
+      />
+
+      <DataGridTableStagePinnedPane
+        :pane="rightPinnedBottomPane"
+        :render-api="pinnedPaneRenderApi"
+        :handle-context-menu="onViewportContextMenu"
+        :perf-trace-enabled="perfTraceEnabled"
+      >
+        <template #chrome>
+          <canvas ref="rightBottomChromeCanvasEl" class="grid-chrome-canvas" aria-hidden="true" />
+        </template>
+      </DataGridTableStagePinnedPane>
+    </div>
+
+    <DataGridColumnMenu
+      v-if="activeColumnMenu && activeColumnMenuColumn"
+      :key="activeColumnMenuOverlayKey"
+      :row-count="activeColumnMenuRowCount"
+      :resolve-value-entries="resolveActiveColumnMenuValueEntries"
+      :items="activeColumnMenuItems"
+      :disabled-items="activeColumnMenuDisabledItems"
+      :disabled-reasons="activeColumnMenuDisabledReasons"
+      :labels="activeColumnMenuLabels"
+      :action-options="activeColumnMenuActionOptions"
+      :custom-items="activeColumnMenuCustomItems"
+      trigger-mode="button"
+      :column-key="activeColumnMenuColumn.key"
+      :column-label="activeColumnMenuColumn.column.label ?? activeColumnMenuColumn.key"
+      :column-data-type="activeColumnMenuColumn.column.dataType"
+      :sort-direction="activeColumnMenuSortDirection"
+      :sort-enabled="isColumnMenuSortable(activeColumnMenuColumn)"
+      :pin="activeColumnMenuColumn.pin"
+      :grouped="activeColumnMenuGrouped"
+      :group-order="activeColumnMenuGroupOrder"
+      :group-enabled="isColumnMenuGroupable(activeColumnMenuColumn)"
+      :filter-enabled="isColumnMenuFilterable(activeColumnMenuColumn) && activeColumnMenuValueFilterEnabled"
+      :value-filter-row-limit="activeColumnMenuValueFilterRowLimit"
+      :text-filter-enabled="isColumnMenuFilterable(activeColumnMenuColumn)"
+      :text-filter-value="activeColumnMenuTextFilterValue"
+      :filter-active="activeColumnMenuFilterActive"
+      :selected-filter-tokens="activeColumnMenuSelectedTokens"
+      :max-filter-values="activeColumnMenuMaxFilterValues"
+      :condition-active="Boolean(activeColumnMenuCondition)"
+      :condition-operator="activeColumnMenuCondition?.operator"
+      :condition-formula="activeColumnMenuCondition?.formula"
+      :condition-formula2="activeColumnMenuCondition?.formula2"
+      :anchor-element="activeColumnMenu.anchorEl"
+      :open-reason="activeColumnMenu.reason"
+      @sort="applyActiveColumnMenuSort"
+      @pin="applyActiveColumnMenuPin"
+      @group="applyActiveColumnMenuGroupBy"
+      @apply-condition="applyActiveColumnMenuCondition"
+      @clear-condition="clearActiveColumnMenuCondition"
+      @apply-filter="applyActiveColumnMenuFilter"
+      @update-text-filter="updateActiveColumnMenuTextFilter"
+      @clear-filter="clearActiveColumnMenuFilter"
+      @close="closeActiveColumnMenu"
+    />
+  </section>
+</template>
+
+<script setup lang="ts">
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
+import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
+import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
+import DataGridTableStageChromeLayer from "./DataGridTableStageChromeLayer.vue"
+import DataGridTableStagePinnedPane from "./DataGridTableStagePinnedPane.vue"
+import {
+  DATAGRID_COLUMN_MENU_ITEM_KEYS,
+  type DataGridColumnMenuActionOptions,
+  type DataGridColumnMenuCustomItem,
+  type DataGridColumnMenuDisabledReasons,
+  type DataGridColumnMenuItemKey,
+  type DataGridColumnMenuItemLabels,
+} from "../overlays/dataGridColumnMenu"
+import type {
+  DataGridTableStageBodyColumn as TableColumn,
+  DataGridTableStageBodyRow as TableRow,
+} from "./dataGridTableStageBody.types"
+import type {
+  DataGridColumnMenuValueEntriesResult,
+  DataGridTableStageCustomOverlay,
+  DataGridTableStageProps,
+} from "./dataGridTableStage.types"
+import {
+  createDataGridTableStageContextFromProps,
+  type DataGridTableStageContext,
+  provideDataGridTableStageContext,
+} from "./dataGridTableStageContext"
+import type { DataGridStageOverlayGeometryContext } from "./dataGridStageOverlayGeometry"
+import type { DataGridEmptyStateAlignment } from "../config/dataGridEmptyState"
+import {
+  hasGroupCellRenderer,
+  parsePixelValue,
+  readPivotHeaderMeta,
+  resolveColumnWidth as resolveColumnWidthFromHelper,
+  resolveTextAlign,
+} from "./dataGridTableStageHelpers"
+import { ensureDataGridAppStyles } from "../theme/ensureDataGridAppStyles"
+import { dataGridAppThemeRevisionKey } from "../dataGridAppContext"
+import { isDataGridPlaceholderSurfaceRow } from "./useDataGridTableStagePlaceholderRows"
+import {
+  buildStickyRootGroupIntervals,
+  resolveStickyRootGroupPlacement,
+} from "./dataGridStickyGroupLayout"
+import { resolveDataGridPerfTraceEnabled } from "../perf/dataGridPerfTrace"
+import { useDataGridPerfTrace } from "./useDataGridPerfTrace"
+import { useDataGridStageCellRendering } from "./useDataGridStageCellRendering"
+import { useDataGridStageCellState } from "./useDataGridStageCellState"
+import { useDataGridStageFillAction } from "./useDataGridStageFillAction"
+import { useDataGridStageFocusRuntime } from "./useDataGridStageFocusRuntime"
+import { useDataGridStagePointerInteractions } from "./useDataGridStagePointerInteractions"
+import { useDataGridStageRowState } from "./useDataGridStageRowState"
+import { useDataGridStageRowIndex } from "./useDataGridStageRowIndex"
+import {
+  useDataGridStageViewportRuntime,
+  type UseDataGridStageViewportRuntimeSyncers,
+} from "./useDataGridStageViewportRuntime"
+import { useDataGridStagePanes } from "./useDataGridStagePanes.grouped"
+import { useDataGridStageRenderApis } from "./useDataGridStageRenderApis.grouped"
+import { useDataGridStageChromeModel } from "./useDataGridStageChromeModel"
+import { useDataGridStageChromeCanvas } from "./useDataGridStageChromeCanvas"
+import { useDataGridStageOverlays } from "./useDataGridStageOverlays"
+import {
+  isTouchGeneratedMouseEvent,
+  resolveDataGridInteractionMode,
+  shouldPrioritizeNativeScrollForMouseDown,
+} from "./dataGridMouseEventGuards"
+import { resolveDataGridStageCellId } from "./dataGridTableStageA11y"
+
+const DataGridColumnMenu = defineAsyncComponent(() => import("../overlays/DataGridColumnMenu.vue"))
+
+ensureDataGridAppStyles()
+
+const TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX = 8
+const TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS = 700
+const TOUCH_LONG_PRESS_DELAY_MS = 520
+const perfTraceEnabled = resolveDataGridPerfTraceEnabled()
+const DEFAULT_COLUMN_MENU_ITEMS = Object.freeze([...DATAGRID_COLUMN_MENU_ITEM_KEYS])
+const EMPTY_COLUMN_MENU_DISABLED_ITEMS = Object.freeze([]) as readonly DataGridColumnMenuItemKey[]
+const EMPTY_COLUMN_MENU_DISABLED_REASONS = Object.freeze({}) as DataGridColumnMenuDisabledReasons
+const EMPTY_COLUMN_MENU_LABELS = Object.freeze({}) as DataGridColumnMenuItemLabels
+const EMPTY_COLUMN_MENU_ACTION_OPTIONS = Object.freeze({}) as DataGridColumnMenuActionOptions
+const EMPTY_COLUMN_MENU_CUSTOM_ITEMS = Object.freeze([]) as readonly DataGridColumnMenuCustomItem[]
+const DEFAULT_COLUMN_MENU_MAX_FILTER_VALUES = 120
+
+const props = defineProps({
+  mode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["mode"]>,
+    required: true,
+  },
+  rowHeightMode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["rowHeightMode"]>,
+    required: true,
+  },
+  stickyGroupRows: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["stickyGroupRows"]>,
+    default: () => ({ enabled: false, mode: "root-only", transition: "push-off" }),
+  },
+  layoutMode: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["layoutMode"]>,
+    required: true,
+  },
+  chromeSignature: {
+    type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["chromeSignature"]>,
+    default: "",
+  },
+  rendererPolicy: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["rendererPolicy"]>,
+    default: undefined,
+  },
+  externalFilterIndicators: {
+    type: Array as PropType<DataGridTableStageProps<Record<string, unknown>>["externalFilterIndicators"]>,
+    default: () => [],
+  },
+  reportFillPlumbingState: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingState"]>,
+    default: undefined,
+  },
+  reportFillPlumbingDetail: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportFillPlumbingDetail"]>,
+    default: undefined,
+  },
+  layout: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["layout"]>,
+    required: true,
+  },
+  viewport: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["viewport"]>,
+    required: true,
+  },
+  columns: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["columns"]>,
+    required: true,
+  },
+  rows: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["rows"]>,
+    required: true,
+  },
+  selection: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["selection"]>,
+    required: true,
+  },
+  editing: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["editing"]>,
+    required: true,
+  },
+  cells: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["cells"]>,
+    required: true,
+  },
+  interaction: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["interaction"]>,
+    required: true,
+  },
+  customOverlays: {
+    type: Array as PropType<readonly DataGridTableStageCustomOverlay[]>,
+    default: () => [],
+  },
+  emptyState: {
+    type: Object as PropType<DataGridTableStageProps<Record<string, unknown>>["emptyState"]>,
+    default: null,
+  },
+  emptyStateAlignment: {
+    type: String as PropType<DataGridEmptyStateAlignment>,
+    default: "content",
+  },
+  reportCenterPaneDiagnostics: {
+    type: Function as PropType<DataGridTableStageProps<Record<string, unknown>>["reportCenterPaneDiagnostics"]>,
+    default: undefined,
+  },
+  onViewportContextMenu: {
+    type: Function as PropType<(event: MouseEvent) => void>,
+    default: undefined,
+  },
+  stageContext: {
+    type: Object as PropType<DataGridTableStageContext<Record<string, unknown>>>,
+    default: undefined,
+  },
+})
+
+const stageContext = props.stageContext ?? createDataGridTableStageContextFromProps(
+  props as DataGridTableStageProps<Record<string, unknown>>,
+)
+
+provideDataGridTableStageContext(stageContext)
+
+const mode = stageContext.mode
+const rowHeightMode = stageContext.rowHeightMode
+const layoutMode = stageContext.layoutMode
+const layout = stageContext.layout
+const viewport = stageContext.viewport
+const columns = stageContext.columns
+const rows = stageContext.rows
+const selection = stageContext.selection
+const editing = stageContext.editing
+const cells = stageContext.cells
+const interaction = stageContext.interaction
+
+const visibleColumns = computed(() => columns.value?.visibleColumns ?? [])
+const renderedColumns = computed(() => columns.value?.renderedColumns ?? [])
+const displayRows = computed(() => rows.value?.displayRows ?? [])
+const sharedVerticalScrollStyle = computed<CSSProperties>(() => ({
+  "--datagrid-body-row-origin": `${Math.max(0, Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0)}px`,
+}) as CSSProperties)
+
+const bodyOverlayRowOrigin = computed(() => Math.max(
+  0,
+  Number.isFinite(viewport.value.topSpacerHeight) ? viewport.value.topSpacerHeight : 0,
+))
+
+const gridAriaRowCount = computed(() => Math.max(
+  0,
+  selection.value?.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length,
+))
+const gridAriaColumnCount = computed(() => Math.max(0, visibleColumns.value.length))
+const activeColumnMenu = computed(() => columns.value.activeColumnMenu ?? null)
+const activeColumnMenuCondition = computed(() => {
+  const columnKey = resolveActiveColumnMenuKey()
+  return columnKey ? columns.value.resolveColumnMenuCondition?.(columnKey) ?? null : null
+})
+// DataGridColumnMenu closes before emitting some actions, so retain the action column for that synchronous emit.
+const activeColumnMenuActionColumnKey = ref<string | null>(null)
+const activeColumnMenuColumn = computed(() => {
+  const active = activeColumnMenu.value
+  return active ? visibleColumns.value.find(column => column.key === active.columnId) ?? null : null
+})
+watch(activeColumnMenu, active => {
+  if (active) {
+    activeColumnMenuActionColumnKey.value = active.columnId
+  }
+}, { immediate: true })
+const activeColumnMenuRowCount = computed(() => rows.value.sourceRows?.length ?? rows.value.displayRows.length)
+const activeColumnMenuValueFilterEnabled = computed(() => columns.value.columnMenuValueFilterEnabled !== false)
+const activeColumnMenuValueFilterRowLimit = computed(() => {
+  const value = columns.value.columnMenuValueFilterRowLimit
+  return typeof value === "number" && Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+})
+const activeColumnMenuMaxFilterValues = computed(() => {
+  const value = columns.value.columnMenuMaxFilterValues
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(20, Math.trunc(value))
+    : DEFAULT_COLUMN_MENU_MAX_FILTER_VALUES
+})
+const activeColumnMenuOverlayKey = computed(() => {
+  const column = activeColumnMenuColumn.value
+  return [
+    "active-column-menu",
+    column?.key ?? "none",
+    activeColumnMenuValueFilterEnabled.value ? "value-filter" : "text-only",
+    activeColumnMenuValueFilterRowLimit.value,
+  ].join(":")
+})
+const activeColumnMenuItems = computed(() => resolveColumnMenuItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuDisabledItems = computed(() => resolveColumnMenuDisabledItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuDisabledReasons = computed(() => resolveColumnMenuDisabledReasonsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuLabels = computed(() => resolveColumnMenuLabelsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuActionOptions = computed(() => resolveColumnMenuActionOptionsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuCustomItems = computed(() => resolveColumnMenuCustomItemsSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuSortDirection = computed(() => resolveColumnMenuSortDirectionSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuGrouped = computed(() => isColumnGroupedSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuGroupOrder = computed(() => resolveColumnGroupOrderSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuFilterActive = computed(() => isColumnFilterActiveSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuSelectedTokens = computed(() => resolveColumnMenuSelectedTokensSafe(activeColumnMenuColumn.value?.key ?? ""))
+const activeColumnMenuTextFilterValue = computed(() => {
+  const column = activeColumnMenuColumn.value
+  return column ? columns.value.columnFilterTextByKey[column.key] ?? "" : ""
+})
+
+function resolveColumnMenuItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
+  return columns.value.resolveColumnMenuItems?.(columnKey) ?? DEFAULT_COLUMN_MENU_ITEMS
+}
+
+function resolveColumnMenuDisabledItemsSafe(columnKey: string): readonly DataGridColumnMenuItemKey[] {
+  return columns.value.resolveColumnMenuDisabledItems?.(columnKey) ?? EMPTY_COLUMN_MENU_DISABLED_ITEMS
+}
+
+function resolveColumnMenuDisabledReasonsSafe(columnKey: string): DataGridColumnMenuDisabledReasons {
+  return columns.value.resolveColumnMenuDisabledReasons?.(columnKey) ?? EMPTY_COLUMN_MENU_DISABLED_REASONS
+}
+
+function resolveColumnMenuLabelsSafe(columnKey: string): DataGridColumnMenuItemLabels {
+  return columns.value.resolveColumnMenuLabels?.(columnKey) ?? EMPTY_COLUMN_MENU_LABELS
+}
+
+function resolveColumnMenuActionOptionsSafe(columnKey: string): DataGridColumnMenuActionOptions {
+  return columns.value.resolveColumnMenuActionOptions?.(columnKey) ?? EMPTY_COLUMN_MENU_ACTION_OPTIONS
+}
+
+function resolveColumnMenuCustomItemsSafe(columnKey: string): readonly DataGridColumnMenuCustomItem[] {
+  return columns.value.resolveColumnMenuCustomItems?.(columnKey) ?? EMPTY_COLUMN_MENU_CUSTOM_ITEMS
+}
+
+function resolveColumnMenuSortDirectionSafe(columnKey: string): "asc" | "desc" | null {
+  return columns.value.resolveColumnMenuSortDirection?.(columnKey) ?? null
+}
+
+function resolveColumnMenuSelectedTokensSafe(columnKey: string): readonly string[] {
+  return columns.value.resolveColumnMenuSelectedTokens?.(columnKey) ?? []
+}
+
+function isColumnFilterActiveSafe(columnKey: string): boolean {
+  return columns.value.isColumnFilterActive?.(columnKey) ?? Boolean(columns.value.columnFilterTextByKey[columnKey])
+}
+
+function isColumnGroupedSafe(columnKey: string): boolean {
+  return columns.value.isColumnGrouped?.(columnKey) ?? false
+}
+
+function resolveColumnGroupOrderSafe(columnKey: string): number | null {
+  return columns.value.resolveColumnGroupOrder?.(columnKey) ?? null
+}
+
+function isColumnMenuSortable(column: TableColumn): boolean {
+  return column.column.capabilities?.sortable !== false
+}
+
+function isColumnMenuFilterable(column: TableColumn): boolean {
+  return column.column.capabilities?.filterable !== false
+}
+
+function isColumnMenuGroupable(column: TableColumn): boolean {
+  return column.column.capabilities?.groupable !== false || isColumnGroupedSafe(column.key)
+}
+
+function resolveActiveColumnMenuKey(): string | null {
+  return activeColumnMenuColumn.value?.key ?? activeColumnMenu.value?.columnId ?? activeColumnMenuActionColumnKey.value
+}
+
+function resolveActiveColumnMenuValueEntries(search?: string): DataGridColumnMenuValueEntriesResult {
+  const columnKey = resolveActiveColumnMenuKey()
+  return columnKey ? columns.value.resolveColumnMenuValueEntries?.(columnKey, search) ?? [] : []
+}
+
+function applyActiveColumnMenuSort(direction: "asc" | "desc" | null): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuSort?.(columnKey, direction)
+  }
+}
+
+function applyActiveColumnMenuPin(pin: TableColumn["pin"]): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuPin?.(columnKey, pin)
+  }
+}
+
+function applyActiveColumnMenuGroupBy(grouped: boolean): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuGroupBy?.(columnKey, grouped)
+  }
+}
+
+function applyActiveColumnMenuFilter(tokens: readonly string[]): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuFilter?.(columnKey, tokens)
+  }
+}
+
+function applyActiveColumnMenuCondition(condition: { operator: string; formula?: string; formula2?: string }): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.applyColumnMenuCondition?.(columnKey, condition)
+  }
+}
+
+function clearActiveColumnMenuCondition(): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) columns.value.clearColumnMenuCondition?.(columnKey)
+}
+
+function updateActiveColumnMenuTextFilter(value: string): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (columnKey) {
+    columns.value.setColumnFilterText(columnKey, value)
+  }
+}
+
+function clearActiveColumnMenuFilter(): void {
+  const columnKey = resolveActiveColumnMenuKey()
+  if (!columnKey) {
+    return
+  }
+  if (typeof columns.value.clearColumnMenuFilter === "function") {
+    columns.value.clearColumnMenuFilter(columnKey)
+    return
+  }
+  columns.value.setColumnFilterText(columnKey, "")
+}
+
+function restoreGridFocusAfterMenuClose(): void {
+  void nextTick(() => {
+    if (typeof window === "undefined") {
+      if (stageRootEl.value) focusRuntime.restoreAnchorCellFocus()
+      return
+    }
+    window.requestAnimationFrame(() => {
+      if (stageRootEl.value) focusRuntime.restoreAnchorCellFocus()
+    })
+  })
+}
+
+function closeActiveColumnMenu(): void {
+  columns.value.closeColumnMenu?.()
+  restoreGridFocusAfterMenuClose()
+}
+
+const sharedVerticalScrollSpacerStyle = computed<CSSProperties>(() => {
+  const section = viewport.value
+  const topSpacerHeight = Number.isFinite(section.topSpacerHeight) ? Math.max(0, section.topSpacerHeight) : 0
+  const bottomSpacerHeight = Number.isFinite(section.bottomSpacerHeight) ? Math.max(0, section.bottomSpacerHeight) : 0
+  const totalRows = Number.isFinite(section.virtualRowTotal)
+    ? Math.max(0, Math.trunc(section.virtualRowTotal as number))
+    : null
+  if (totalRows !== null) {
+    if (typeof section.resolveRowOffset === "function") {
+      return { height: `${Math.max(0, section.resolveRowOffset(totalRows))}px` }
+    }
+    if (Number.isFinite(section.baseRowHeight)) {
+      return { height: `${Math.max(0, totalRows * (section.baseRowHeight as number))}px` }
+    }
+  }
+  const rowHeight = Number.isFinite(section.baseRowHeight) ? Math.max(0, section.baseRowHeight as number) : 31
+  const renderedRowsHeight = displayRows.value.reduce((sum, _row, rowOffset) => {
+    const rowIndex = section.viewportRowStart + rowOffset
+    const resolvedHeight = typeof section.resolveRowHeight === "function" ? section.resolveRowHeight(rowIndex) : rowHeight
+    return sum + (Number.isFinite(resolvedHeight) ? Math.max(0, resolvedHeight) : rowHeight)
+  }, 0)
+  return { height: `${topSpacerHeight + renderedRowsHeight + bottomSpacerHeight}px` }
+})
+const pinnedTopRows = computed(() => rows.value?.pinnedTopRows ?? [])
+const pinnedBottomRows = computed(() => rows.value?.pinnedBottomRows ?? [])
+const selectionRange = computed(() => selection.value?.selectionRange ?? null)
+const focusedBodyRowIndex = ref<number | null>(null)
+const focusedBodyColumnKey = ref<string | null>(null)
+const selectionRanges = computed<readonly OverlayRange[]>(() => {
+  const ranges = selection.value?.selectionRanges
+  if (Array.isArray(ranges) && ranges.length > 0) {
+    return ranges
+  }
+  return selectionRange.value ? [selectionRange.value] : []
+})
+const isFillDragging = computed(() => selection.value?.isFillDragging === true)
+const hasExplicitGroupCellRenderer = computed(() => (
+  visibleColumns.value.some(column => hasGroupCellRenderer(column))
+))
+function columnStyle(key: string): CSSProperties {
+  return layout.value.columnStyle(key)
+}
+
+function resolveColumnWidth(column: TableColumn): number {
+  return resolveColumnWidthFromHelper(column, layout.value.columnStyle)
+}
+
+function handleCellMouseDown(event: MouseEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  if (shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)) {
+    return
+  }
+  interaction.value.handleCellMouseDown(event, row, rowOffset, columnIndex)
+}
+
+function handleCellKeydown(event: KeyboardEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  clearPendingRowIndexFocus()
+  const currentColumn = visibleColumns.value[columnIndex]
+  const firstColumn = visibleColumns.value[0]
+  const previousColumn = visibleColumns.value[columnIndex - 1]
+  if (
+    event.key === "ArrowLeft"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && previousColumn?.column.meta?.rowSelection === true
+  ) {
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const selectionCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === columnIndex - 1)
+    if (selectionCell) {
+      event.preventDefault()
+      selection.value.selectCell?.(rowIndex, columnIndex - 1)
+      selectionCell.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    event.key === "ArrowRight"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && currentColumn?.column.meta?.rowSelection === true
+  ) {
+    const nextDataColumnIndex = visibleColumns.value.findIndex((column, index) => (
+      index > columnIndex && column.column.meta?.rowSelection !== true
+    ))
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const nextDataCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === nextDataColumnIndex)
+    if (nextDataColumnIndex >= 0 && nextDataCell) {
+      event.preventDefault()
+      selection.value.selectCell?.(rowIndex, nextDataColumnIndex)
+      nextDataCell.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    event.key === "ArrowLeft"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && rows.value.showRowIndex !== false
+    && (
+      currentColumn?.column.meta?.rowSelection === true
+      || (columnIndex === 0 && firstColumn?.column.meta?.rowSelection !== true)
+    )
+  ) {
+    const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const rowIndexCell = Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-cell--index-number[data-row-index]") ?? [])
+      .find(cell => Number(cell.dataset.rowIndex) === rowIndex)
+    if (rowIndexCell) {
+      event.preventDefault()
+      rows.value.handleRowIndexClick?.(row, rowOffset, false)
+      retainRowIndexFocus(rowIndex, false, false, true)
+      rowIndexCell.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    event.key === "ArrowUp"
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && event.target === event.currentTarget
+    && resolveAbsoluteRowIndex(row, rowOffset) === 0
+  ) {
+    const columnKey = visibleColumns.value[columnIndex]?.key
+    const stageRoot = (event.currentTarget as HTMLElement).closest(".grid-stage")
+    const headerCell = columnKey
+      ? Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])
+        .find(element => element.dataset.columnKey === columnKey)
+      : undefined
+    if (headerCell) {
+      event.preventDefault()
+      const column = visibleColumns.value[columnIndex]
+      const isRowSelection = column?.column.meta?.rowSelection === true
+      if (column && !isRowSelection) {
+        selection.value.selectColumn?.(columnIndex)
+      } else if (isRowSelection) {
+        selection.value.clearCellSelection?.()
+      }
+      const focusTarget = isRowSelection
+        ? headerCell.querySelector<HTMLElement>(".grid-checkbox-trigger") ?? headerCell
+        : headerCell
+      focusTarget.focus({ preventScroll: true })
+      return
+    }
+  }
+  if (
+    row.kind === "group"
+    && !hasExplicitGroupCellRenderer.value
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+    && (event.key === " " || event.key === "Spacebar")
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+    rows.value.toggleGroupRow(row)
+    return
+  }
+  interaction.value.handleCellKeydown(event, row, rowOffset, columnIndex)
+}
+
+type OverlayRange = NonNullable<DataGridTableStageProps<Record<string, unknown>>["selection"]["selectionRange"]>
+function isColumnEditable(column: TableColumn): boolean {
+  return column.column.capabilities?.editable !== false
+}
+
+function bodyCellPresentationStyle(column: TableColumn): CSSProperties {
+  const textAlign = resolveTextAlign(column.column.presentation?.align)
+  return textAlign ? { textAlign } : {}
+}
+
+function resolveCellCustomClass(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+) {
+  return cells.value.cellClass?.(row, rowOffset, column, columnIndex) ?? null
+}
+
+function resolveCellCustomStyle(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): CSSProperties {
+  return cells.value.cellStyle?.(row, rowOffset, column, columnIndex) ?? {}
+}
+
+function cellTabIndex(rowOffset: number, columnIndex: number): number {
+  if (hasVisibleRowIndexFocusTarget.value) {
+    return -1
+  }
+  return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true ? 0 : -1
+}
+
+function cellDomId(row: TableRow, column: TableColumn): string {
+  return resolveDataGridStageCellId(row.rowId, column.key)
+}
+
+function hasVisibleCellAnchorInRows(rowsList: readonly TableRow[]): boolean {
+  for (let rowOffset = 0; rowOffset < rowsList.length; rowOffset += 1) {
+    const row = rowsList[rowOffset]
+    if (!row) {
+      continue
+    }
+    const viewportRowOffset = resolveViewportRowOffset(row, rowOffset)
+    for (let columnIndex = 0; columnIndex < visibleColumns.value.length; columnIndex += 1) {
+      if (isSelectionAnchorCellSafe(viewportRowOffset, columnIndex)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function hasVisibleFocusedRowIndexInRows(rowsList: readonly TableRow[]): boolean {
+  if (!showRowIndex.value || typeof rows.value.isRowFocused !== "function") {
+    return false
+  }
+  return rowsList.some(row => rows.value.isRowFocused?.(row) === true)
+}
+
+const hasVisibleCellFocusTarget = computed(() => (
+  hasVisibleCellAnchorInRows(rows.value.pinnedTopRows ?? [])
+  || hasVisibleCellAnchorInRows(rows.value.displayRows)
+  || hasVisibleCellAnchorInRows(rows.value.pinnedBottomRows ?? [])
+))
+
+const hasVisibleRowIndexFocusTarget = computed(() => (
+  hasVisibleFocusedRowIndexInRows(rows.value.pinnedTopRows ?? [])
+  || hasVisibleFocusedRowIndexInRows(rows.value.displayRows)
+  || hasVisibleFocusedRowIndexInRows(rows.value.pinnedBottomRows ?? [])
+))
+
+const bodyViewportTabIndex = computed(() => (
+  hasVisibleCellFocusTarget.value || hasVisibleRowIndexFocusTarget.value ? -1 : 0
+))
+
+const pinnedBottomViewportTabIndex = computed(() => -1)
+const pinnedTopViewportTabIndex = computed(() => -1)
+const useCanvasChrome = computed(() => true)
+
+function resolveViewportRowStart(): number {
+  return viewport.value?.viewportRowStart ?? 0
+}
+
+function resolveViewportRowEnd(): number {
+  const explicitEnd = viewport.value?.viewportRowEnd
+  if (Number.isFinite(explicitEnd)) {
+    return Math.max(resolveViewportRowStart(), Math.trunc(explicitEnd as number))
+  }
+  const actualCount = displayRows.value.length
+  return actualCount > 0
+    ? resolveViewportRowStart() + actualCount - 1
+    : resolveViewportRowStart() - 1
+}
+
+function resolveLeftColumnSpacerWidth(): number {
+  return viewport.value?.leftColumnSpacerWidth ?? 0
+}
+
+function resolveRightColumnSpacerWidth(): number {
+  return viewport.value?.rightColumnSpacerWidth ?? 0
+}
+
+function isCellSelectedSafe(rowOffset: number, columnIndex: number): boolean {
+  const evaluate = cells.value.isCellSelected
+  return typeof evaluate === "function"
+    ? evaluate(rowOffset, columnIndex)
+    : false
+}
+
+function resolveInlineRowStateFill(
+  row: TableRow,
+  rowOffset: number,
+  options: { fullBleed?: boolean } = {},
+): CSSProperties | null {
+  return rowStateRuntime?.resolveInlineRowStateFill(row, rowOffset, options) ?? null
+}
+
+function rowStateClasses(row: TableRow, rowOffset: number): Record<string, boolean> {
+  return rowStateRuntime?.rowStateClasses(row, rowOffset) ?? {}
+}
+
+function bodyCellSelectionStyle(
+  row: TableRow,
+  column: TableColumn,
+  rowOffset: number,
+  columnIndex: number,
+): CSSProperties {
+  return rowStateRuntime?.bodyCellSelectionStyle(row, column, rowOffset, columnIndex) ?? {}
+}
+
+function readTouchAt(touches: TouchList, identifier: number): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = typeof touches.item === "function" ? touches.item(index) : indexedTouches[index]
+    if (touch?.identifier === identifier) {
+      return touch
+    }
+  }
+  return null
+}
+
+function readFirstTouch(touches: TouchList): Touch | null {
+  const indexedTouches = touches as TouchList & { [index: number]: Touch | undefined }
+  return (typeof touches.item === "function" ? touches.item(0) : indexedTouches[0]) ?? null
+}
+
+function clearTouchClickSuppressionTimer(): void {
+  if (suppressTouchClickTimer == null || typeof window === "undefined") {
+    suppressTouchClickTimer = null
+    return
+  }
+  window.clearTimeout(suppressTouchClickTimer)
+  suppressTouchClickTimer = null
+}
+
+function scheduleTouchClickSuppressionClear(): void {
+  if (typeof window === "undefined") {
+    return
+  }
+  clearTouchClickSuppressionTimer()
+  suppressTouchClickTimer = window.setTimeout(() => {
+    suppressNextTouchClick = false
+    suppressNextTouchContextMenu = false
+    suppressTouchClickTimer = null
+  }, TOUCH_PAN_CLICK_SUPPRESSION_TIMEOUT_MS)
+}
+
+function clearTouchLongPressTimer(): void {
+  if (touchLongPressTimer == null || typeof window === "undefined") {
+    touchLongPressTimer = null
+    return
+  }
+  window.clearTimeout(touchLongPressTimer)
+  touchLongPressTimer = null
+}
+
+function clearPendingTouchLongPress(): void {
+  clearTouchLongPressTimer()
+  pendingTouchLongPress = null
+}
+
+function resolveTouchLongPressCell(target: EventTarget | null): Omit<NonNullable<typeof pendingTouchLongPress>, "identifier" | "clientX" | "clientY"> | null {
+  if (!(target instanceof Element)) {
+    return null
+  }
+  if (target.closest(".cell-fill-handle, .row-resize-handle, .cell-editor-control, input, button, textarea, select, [contenteditable='true']")) {
+    return null
+  }
+  const cell = target.closest<HTMLElement>(".grid-cell[data-row-id][data-row-index][data-column-index]")
+  if (!cell || !bodyShellRef.value?.contains(cell)) {
+    return null
+  }
+  const columnIndex = Number(cell.dataset.columnIndex)
+  const absoluteRowIndex = Number(cell.dataset.rowIndex)
+  const rowId = cell.dataset.rowId
+  if (!Number.isFinite(columnIndex) || !Number.isFinite(absoluteRowIndex) || rowId == null) {
+    return null
+  }
+  const column = visibleColumns.value[columnIndex]
+  const row = [...displayRows.value, ...pinnedBottomRows.value].find(candidate => String(candidate.rowId) === rowId)
+  if (!row || !column || row.kind === "group" || column.column.meta?.rowSelection === true) {
+    return null
+  }
+  return {
+    row,
+    rowOffset: Math.trunc(absoluteRowIndex) - viewport.value.viewportRowStart,
+    column,
+    columnIndex: Math.trunc(columnIndex),
+    cell,
+  }
+}
+
+function startTouchLongPress(event: TouchEvent, touch: Touch): void {
+  clearPendingTouchLongPress()
+  if (interactionMode.value !== "touch") {
+    return
+  }
+  const target = resolveTouchLongPressCell(event.target)
+  if (!target || typeof window === "undefined") {
+    return
+  }
+  pendingTouchLongPress = {
+    identifier: touch.identifier,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    ...target,
+  }
+  touchLongPressTimer = window.setTimeout(() => {
+    const pending = pendingTouchLongPress
+    touchLongPressTimer = null
+    pendingTouchLongPress = null
+    if (!pending) {
+      return
+    }
+    suppressNextTouchClick = true
+    suppressNextTouchContextMenu = true
+    scheduleTouchClickSuppressionClear()
+    pending.cell.focus({ preventScroll: true })
+    const mouseDown = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: pending.clientX,
+      clientY: pending.clientY,
+    })
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: pending.cell,
+    })
+    interaction.value.handleCellMouseDown(mouseDown, pending.row, pending.rowOffset, pending.columnIndex)
+  }, TOUCH_LONG_PRESS_DELAY_MS)
+}
+
+function cancelTouchLongPressIfMoved(touch: Touch): void {
+  if (!pendingTouchLongPress || touch.identifier !== pendingTouchLongPress.identifier) {
+    return
+  }
+  const deltaX = Math.abs(touch.clientX - pendingTouchLongPress.clientX)
+  const deltaY = Math.abs(touch.clientY - pendingTouchLongPress.clientY)
+  if (Math.max(deltaX, deltaY) >= TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX) {
+    clearPendingTouchLongPress()
+  }
+}
+
+function handleBodyTouchStart(event: TouchEvent): void {
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  bodyTouchStart = touch
+    ? { identifier: touch.identifier, clientX: touch.clientX, clientY: touch.clientY }
+    : null
+  if (touch) {
+    startTouchLongPress(event, touch)
+  } else {
+    clearPendingTouchLongPress()
+  }
+}
+
+function handleBodyTouchMove(event: TouchEvent): void {
+  if (!bodyTouchStart) {
+    return
+  }
+  const touch = readTouchAt(event.touches, bodyTouchStart.identifier)
+  if (!touch) {
+    bodyTouchStart = null
+    clearPendingTouchLongPress()
+    return
+  }
+  cancelTouchLongPressIfMoved(touch)
+  const deltaX = Math.abs(touch.clientX - bodyTouchStart.clientX)
+  const deltaY = Math.abs(touch.clientY - bodyTouchStart.clientY)
+  if (Math.max(deltaX, deltaY) < TOUCH_PAN_CLICK_SUPPRESSION_THRESHOLD_PX) {
+    return
+  }
+  suppressNextTouchClick = true
+  scheduleTouchClickSuppressionClear()
+}
+
+function handleBodyTouchEnd(): void {
+  bodyTouchStart = null
+  clearPendingTouchLongPress()
+}
+
+function consumeTouchPanClickSuppression(event: MouseEvent): boolean {
+  if (!suppressNextTouchClick || !isTouchGeneratedMouseEvent(event)) {
+    return false
+  }
+  suppressNextTouchClick = false
+  return true
+}
+
+function handleBodyContextMenuCapture(event: MouseEvent): void {
+  if (!suppressNextTouchContextMenu) {
+    return
+  }
+  suppressNextTouchContextMenu = false
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function handleBodyCellClick(
+  event: MouseEvent,
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): void {
+  if (consumeTouchPanClickSuppression(event)) {
+    return
+  }
+  rowStateRuntime?.handleBodyCellClick(event, row, rowOffset, column, columnIndex)
+}
+
+function handleTouchSelectionHandleMouseDown(event: MouseEvent): void {
+  event.preventDefault()
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+}
+
+function createTouchSelectionMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+    shiftKey: type === "mousedown",
+  })
+}
+
+function createTouchRangeMoveMouseEvent(type: "mousedown" | "mousemove" | "mouseup", touch: Touch): MouseEvent {
+  return new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX: touch.clientX,
+    clientY: touch.clientY,
+  })
+}
+
+function handleTouchSelectionHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  clearPendingTouchLongPress()
+  bodyTouchStart = null
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchSelectionHandleTouchId = null
+    return
+  }
+  activeTouchSelectionHandleTouchId = touch.identifier
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+  const mouseDown = createTouchSelectionMouseEvent("mousedown", touch)
+  if (cell) {
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: cell,
+    })
+  }
+  interaction.value.handleCellMouseDown(mouseDown, row, rowOffset, columnIndex)
+}
+
+function handleTouchSelectionHandleTouchMove(event: TouchEvent): void {
+  if (activeTouchSelectionHandleTouchId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchSelectionHandleTouchId)
+  if (!touch) {
+    return
+  }
+  window.dispatchEvent(createTouchSelectionMouseEvent("mousemove", touch))
+}
+
+function handleTouchSelectionHandleTouchEnd(event: TouchEvent): void {
+  if (activeTouchSelectionHandleTouchId == null || typeof window === "undefined") {
+    activeTouchSelectionHandleTouchId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchSelectionHandleTouchId)
+  activeTouchSelectionHandleTouchId = null
+  if (!touch) {
+    return
+  }
+  window.dispatchEvent(createTouchSelectionMouseEvent("mouseup", touch))
+}
+
+function handleTouchRangeMoveHandleMouseDown(event: MouseEvent): void {
+  event.preventDefault()
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+}
+
+function handleTouchRangeMoveHandleTouchStart(event: TouchEvent, row: TableRow, rowOffset: number, columnIndex: number): void {
+  clearPendingTouchLongPress()
+  bodyTouchStart = null
+  const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
+  if (!touch) {
+    activeTouchRangeMoveHandleTouchId = null
+    return
+  }
+  activeTouchRangeMoveHandleTouchId = touch.identifier
+  const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  const cell = handle?.closest<HTMLElement>(".grid-cell")
+  cell?.focus({ preventScroll: true })
+  const mouseDown = createTouchRangeMoveMouseEvent("mousedown", touch)
+  if (cell) {
+    Object.defineProperty(mouseDown, "currentTarget", {
+      configurable: true,
+      value: cell,
+    })
+  }
+  interaction.value.handleCellMouseDown(mouseDown, row, rowOffset, columnIndex)
+}
+
+function handleTouchRangeMoveHandleTouchMove(event: TouchEvent): void {
+  if (activeTouchRangeMoveHandleTouchId == null || typeof window === "undefined") {
+    return
+  }
+  const touch = readTouchAt(event.touches, activeTouchRangeMoveHandleTouchId)
+  if (!touch) {
+    return
+  }
+  window.dispatchEvent(createTouchRangeMoveMouseEvent("mousemove", touch))
+}
+
+function handleTouchRangeMoveHandleTouchEnd(event: TouchEvent): void {
+  if (activeTouchRangeMoveHandleTouchId == null || typeof window === "undefined") {
+    activeTouchRangeMoveHandleTouchId = null
+    return
+  }
+  const touch = readTouchAt(event.changedTouches, activeTouchRangeMoveHandleTouchId)
+  activeTouchRangeMoveHandleTouchId = null
+  if (!touch) {
+    return
+  }
+  window.dispatchEvent(createTouchRangeMoveMouseEvent("mouseup", touch))
+}
+
+function isEditingCellSafeBase(row: TableRow, columnKey: string): boolean {
+  const evaluate = editing.value.isEditingCell
+  return typeof evaluate === "function"
+    ? evaluate(row, columnKey)
+    : false
+}
+
+function isCellEditableSafeBase(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  const evaluate = cells.value.isCellEditable
+  return typeof evaluate === "function"
+    ? evaluate(row, rowOffset, column, columnIndex)
+    : isColumnEditable(column)
+}
+
+function isVisualSelectionAnchorCell(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isVisualSelectionAnchorCell(rowOffset, columnIndex) === true
+}
+
+function shouldHighlightSelectedCellVisual(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.shouldHighlightSelectedCellVisual(rowOffset, columnIndex) === true
+}
+
+function isSelectionAnchorCellSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isSelectionAnchorCellSafe(rowOffset, columnIndex) === true
+}
+
+function isCellInFillPreviewSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isCellInFillPreviewSafe(rowOffset, columnIndex) === true
+}
+
+function isCellInPendingClipboardRangeSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isCellInPendingClipboardRangeSafe(rowOffset, columnIndex) === true
+}
+
+function isCellOnPendingClipboardEdgeSafe(
+  rowOffset: number,
+  columnIndex: number,
+  edge: "top" | "right" | "bottom" | "left",
+): boolean {
+  return rowStateRuntime?.isCellOnPendingClipboardEdgeSafe(rowOffset, columnIndex, edge) === true
+}
+
+function isEditingCellSafe(row: TableRow, columnKey: string): boolean {
+  return rowStateRuntime?.isEditingCellSafe(row, columnKey) === true
+}
+
+function isCellEditableSafe(
+  row: TableRow,
+  rowOffset: number,
+  column: TableColumn,
+  columnIndex: number,
+): boolean {
+  return rowStateRuntime?.isCellEditableSafe(row, rowOffset, column, columnIndex) === true
+}
+
+function isCellOnSelectionEdgeSafe(
+  rowOffset: number,
+  columnIndex: number,
+  edge: "top" | "right" | "bottom" | "left",
+): boolean {
+  return rowStateRuntime?.isCellOnSelectionEdgeSafe(rowOffset, columnIndex, edge) === true
+}
+
+function isFillHandleCellSafe(rowOffset: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isFillHandleCellSafe(rowOffset, columnIndex) === true
+}
+
+function isVisibleCellEditableByAbsoluteCoord(rowIndex: number, columnIndex: number): boolean {
+  return rowStateRuntime?.isVisibleCellEditableByAbsoluteCoord(rowIndex, columnIndex) === true
+}
+
+const isRangeMoving = computed(() => selection.value.isRangeMoving)
+
+const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
+const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
+const emptyOverlaySegments = computed(() => [])
+const emptyOverlayLanes = computed(() => [])
+
+const stageRootEl = ref<HTMLElement | null>(null)
+const themeRevision = inject(dataGridAppThemeRevisionKey, null)
+const bodyShellRef = ref<HTMLElement | null>(null)
+const leftPaneContentRef = ref<HTMLElement | null>(null)
+const rightPaneContentRef = ref<HTMLElement | null>(null)
+const leftTopPaneContentRef = ref<HTMLElement | null>(null)
+const rightTopPaneContentRef = ref<HTMLElement | null>(null)
+const leftBottomPaneContentRef = ref<HTMLElement | null>(null)
+const rightBottomPaneContentRef = ref<HTMLElement | null>(null)
+const leftHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightHeaderChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const leftChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const leftBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const centerBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const rightBottomChromeCanvasEl = ref<HTMLCanvasElement | null>(null)
+const gridFocusOwned = ref(false)
+const hoveredRowIndex = ref<number | null>(null)
+const isCoarsePointer = ref(false)
+const isBodyViewportScrolling = ref(false)
+const interactionModeInput = computed(() => ({
+  interactionMode: "auto" as const,
+  isCoarsePointer: isCoarsePointer.value,
+}))
+const interactionMode = computed(() => resolveDataGridInteractionMode(interactionModeInput.value))
+const suppressHoverInteractions = computed(() => isCoarsePointer.value || isBodyViewportScrolling.value)
+let coarsePointerQuery: MediaQueryList | null = null
+let coarsePointerQueryListener: ((event: MediaQueryListEvent) => void) | null = null
+let bodyTouchStart: { identifier: number; clientX: number; clientY: number } | null = null
+let pendingTouchLongPress: {
+  identifier: number
+  clientX: number
+  clientY: number
+  row: TableRow
+  rowOffset: number
+  column: TableColumn
+  columnIndex: number
+  cell: HTMLElement
+} | null = null
+let touchLongPressTimer: number | null = null
+let activeTouchSelectionHandleTouchId: number | null = null
+let activeTouchRangeMoveHandleTouchId: number | null = null
+let suppressNextTouchClick = false
+let suppressNextTouchContextMenu = false
+let suppressTouchClickTimer: number | null = null
+const gridChromeSyncers = shallowRef<UseDataGridStageViewportRuntimeSyncers>({
+  syncBodyViewportMetrics: () => {},
+  syncPinnedBottomViewportMetrics: () => {},
+  syncPinnedBottomViewportScrollLeft: () => {},
+  scheduleGridChromeRedraw: () => {},
+  flushGridChromeRedraw: () => {},
+  connectGridChromeResizeObserver: () => {},
+  disconnectGridChromeResizeObserver: () => {},
+})
+
+function clearHoveredRow(): void {
+  if (hoveredRowIndex.value == null) {
+    return
+  }
+  hoveredRowIndex.value = null
+}
+
+function resolveAbsoluteRowIndex(row: TableRow, rowOffset: number): number {
+  return Number.isFinite(row.displayIndex)
+    ? Math.max(0, Math.trunc(row.displayIndex))
+    : viewport.value.viewportRowStart + rowOffset
+}
+
+function navigateFromRowIndexToFirstColumn(row: TableRow, rowOffset: number): boolean {
+  const columnIndex = visibleColumns.value.length > 0 ? 0 : -1
+  if (columnIndex < 0) return false
+  const rowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+  const stageRoot = stageRootEl.value
+  const resolveTargetCell = () => Array.from(stageRoot?.querySelectorAll<HTMLElement>(".datagrid-stage__cell[data-row-index][data-column-index]") ?? [])
+    .find(cell => Number(cell.dataset.rowIndex) === rowIndex && Number(cell.dataset.columnIndex) === columnIndex)
+  const targetCell = resolveTargetCell()
+  if (!targetCell) return false
+  clearPendingRowIndexFocus()
+  selection.value.selectCell?.(rowIndex, columnIndex)
+  targetCell.focus({ preventScroll: true })
+  return true
+}
+
+const pendingRowIndexFocus = ref<{ rowIndex: number; extend: boolean; additive: boolean; selectionApplied: boolean } | null>(null)
+let pendingRowIndexFocusFrame: number | null = null
+let pendingRowIndexFocusIdleTimer: number | null = null
+
+function clearPendingRowIndexFocus(): void {
+  pendingRowIndexFocus.value = null
+  if (pendingRowIndexFocusIdleTimer != null) {
+    window.clearTimeout(pendingRowIndexFocusIdleTimer)
+    pendingRowIndexFocusIdleTimer = null
+  }
+}
+
+function retainRowIndexFocus(rowIndex: number, extend: boolean, additive: boolean, selectionApplied: boolean): void {
+  pendingRowIndexFocus.value = { rowIndex, extend, additive, selectionApplied }
+  if (pendingRowIndexFocusIdleTimer != null) window.clearTimeout(pendingRowIndexFocusIdleTimer)
+  pendingRowIndexFocusIdleTimer = window.setTimeout(() => {
+    pendingRowIndexFocus.value = null
+    pendingRowIndexFocusIdleTimer = null
+  }, 250)
+}
+
+function scheduleRowIndexFocus(): void {
+  if (pendingRowIndexFocusFrame != null || typeof window === "undefined") return
+  pendingRowIndexFocusFrame = window.requestAnimationFrame(() => {
+    pendingRowIndexFocusFrame = null
+    if (pendingRowIndexFocus.value != null) focusRowIndexCell(pendingRowIndexFocus.value.rowIndex)
+  })
+}
+
+function focusRowIndexCell(rowIndex: number): boolean {
+  const target = Array.from(stageRootEl.value?.querySelectorAll<HTMLElement>(".grid-body-shell:not(.grid-body-shell--pinned-top):not(.grid-body-shell--pinned-bottom) .grid-cell--index-number[data-row-index]") ?? [])
+    .find(cell => Number(cell.dataset.rowIndex) === rowIndex)
+  if (!target) return false
+  const rowOffset = rowIndex - viewport.value.viewportRowStart
+  const targetRow = displayRows.value[rowOffset]
+  if (targetRow && pendingRowIndexFocus.value?.selectionApplied !== true) {
+    if (pendingRowIndexFocus.value?.additive === true) {
+      rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true, true)
+    } else {
+      rows.value.handleRowIndexClick?.(targetRow, rowOffset, pendingRowIndexFocus.value?.extend === true)
+    }
+    if (pendingRowIndexFocus.value?.rowIndex === rowIndex) {
+      pendingRowIndexFocus.value.selectionApplied = true
+    }
+  }
+  if (document.activeElement !== target) target.focus({ preventScroll: true })
+  return true
+}
+
+function navigateToRowIndex(targetIndex: number, extend: boolean, additive = false): boolean {
+  const rowTotal = selection.value.totalRowCount ?? viewport.value.virtualRowTotal ?? displayRows.value.length
+  if (targetIndex < 0 || targetIndex >= rowTotal) return false
+
+  retainRowIndexFocus(targetIndex, extend, additive, false)
+  const scrollOwner = stageRootEl.value?.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell")
+  if (scrollOwner && scrollOwner.clientHeight > 0) {
+    const rowTop = viewport.value.resolveRowOffset?.(targetIndex)
+      ?? targetIndex * (viewport.value.baseRowHeight ?? 31)
+    const rowHeight = viewport.value.resolveRowHeight?.(targetIndex)
+      ?? viewport.value.baseRowHeight ?? 31
+    if (rowTop < scrollOwner.scrollTop) {
+      scrollOwner.scrollTop = rowTop
+    } else if (rowTop + rowHeight > scrollOwner.scrollTop + scrollOwner.clientHeight) {
+      scrollOwner.scrollTop = rowTop + rowHeight - scrollOwner.clientHeight
+    }
+  }
+  if (!focusRowIndexCell(targetIndex)) {
+    void nextTick(scheduleRowIndexFocus)
+  } else {
+    scheduleRowIndexFocus()
+  }
+  return true
+}
+
+function navigateRowIndex(row: TableRow, rowOffset: number, direction: -1 | 1, extend: boolean, additive = false): boolean {
+  const currentIndex = pendingRowIndexFocus.value?.rowIndex ?? resolveAbsoluteRowIndex(row, rowOffset)
+  return navigateToRowIndex(currentIndex + direction, extend, additive)
+}
+
+watch(
+  [() => viewport.value.viewportRowStart, displayRows],
+  () => {
+    if (pendingRowIndexFocus.value != null) {
+      void nextTick(scheduleRowIndexFocus)
+    }
+  },
+  { flush: "post" },
+)
+
+function resolveViewportRowOffset(row: TableRow, rowOffset: number): number {
+  return resolveAbsoluteRowIndex(row, rowOffset) - viewport.value.viewportRowStart
+}
+
+function rowAriaExpanded(row: TableRow): "true" | "false" | undefined {
+  if (row.kind !== "group") {
+    return undefined
+  }
+  return row.state.expanded === true ? "true" : "false"
+}
+
+function rowAriaLabel(row: TableRow, rowOffset: number): string | undefined {
+  if (row.kind === "group") {
+    const value = String(row.groupMeta?.groupValue ?? row.rowId ?? "group")
+    const field = String(row.groupMeta?.groupField ?? "group")
+    const childrenCount = Number.isFinite(row.groupMeta?.childrenCount)
+      ? Math.max(0, Math.trunc(Number(row.groupMeta?.childrenCount)))
+      : 0
+    const state = row.state.expanded === true ? "expanded" : "collapsed"
+    return `${field}: ${value}, ${state}, ${childrenCount} ${childrenCount === 1 ? "row" : "rows"}`
+  }
+  if (isDataGridPlaceholderSurfaceRow(row)) {
+    return `Placeholder row ${resolveAbsoluteRowIndex(row, rowOffset) + 1}`
+  }
+  return undefined
+}
+
+function rowAriaDisabled(row: TableRow, rowOffset: number): "true" | undefined {
+  if (!isDataGridPlaceholderSurfaceRow(row)) {
+    return undefined
+  }
+  const viewportRowOffset = resolveViewportRowOffset(row, rowOffset)
+  const hasEditableCell = visibleColumns.value.some((column, columnIndex) => (
+    isCellEditableSafeBase(row, viewportRowOffset, column, columnIndex)
+  ))
+  return hasEditableCell ? undefined : "true"
+}
+
+function columnAccessibleLabel(column: TableColumn): string {
+  const label = String(column.column.label ?? column.key).trim()
+  return label.length > 0 ? label : column.key
+}
+
+function cellEditorAriaLabel(row: TableRow, rowOffset: number, column: TableColumn, _columnIndex: number): string {
+  const absoluteRowNumber = resolveAbsoluteRowIndex(row, rowOffset) + 1
+  const rowLabel = isDataGridPlaceholderSurfaceRow(row)
+    ? `placeholder row ${absoluteRowNumber}`
+    : `row ${absoluteRowNumber}`
+  return `Edit ${columnAccessibleLabel(column)}, ${rowLabel}`
+}
+
+function setHoveredRow(row: TableRow, rowOffset: number): void {
+  if (!rows.value.rowHover || suppressHoverInteractions.value) {
+    return
+  }
+  hoveredRowIndex.value = resolveAbsoluteRowIndex(row, rowOffset)
+}
+
+function isHoveredRow(row: TableRow, rowOffset: number): boolean {
+  return rows.value.rowHover === true
+    && hoveredRowIndex.value === resolveAbsoluteRowIndex(row, rowOffset)
+    && !suppressHoverInteractions.value
+}
+
+function isStripedRow(row: TableRow, rowOffset: number): boolean {
+  return rows.value.stripedRows === true && resolveAbsoluteRowIndex(row, rowOffset) % 2 === 1
+}
+
+const rowIndexState = useDataGridStageRowIndex({
+  rows,
+  layout,
+  totalRowCount: computed(() => selection.value?.totalRowCount ?? rows.value.displayRows.length),
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  selectionRange,
+  selectionRanges,
+  focusedBodyRowIndex,
+  visibleColumns,
+  isHoveredRow,
+  isStripedRow,
+  resolveAbsoluteRowIndex,
+  resolveInlineRowStateFill,
+  isDataGridPlaceholderSurfaceRow,
+  navigateFromRowIndex: navigateFromRowIndexToFirstColumn,
+  navigateRowIndex,
+})
+
+const leftPaneWidth = computed(() => {
+  return rowIndexState.indexColumnWidthPx.value + (pinnedLeftColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+})
+
+const rightPaneWidth = computed(() => {
+  return (pinnedRightColumns.value ?? []).reduce((sum, column) => sum + resolveColumnWidth(column), 0)
+})
+
+const {
+  bodyViewportEl,
+  verticalBodyViewportEl,
+  bottomViewportEl,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  bodyViewportShellClientWidth,
+  pinnedBottomViewportClientHeight,
+  bodyViewportTopOffset,
+  headerShellHeight,
+  headerViewportClientWidth,
+  isBodyViewportScrolling: runtimeBodyViewportScrolling,
+  runWhenBodyViewportScrollIdle,
+  captureBodyViewportRef,
+  captureSharedVerticalViewportRef,
+  capturePinnedTopViewportRef,
+  capturePinnedBottomViewportRef,
+  handleCenterViewportScroll: handleCenterViewportScrollRaw,
+  handleSharedVerticalViewportScroll: handleSharedVerticalViewportScrollRaw,
+  handlePinnedTopViewportScroll: handlePinnedTopViewportScrollRaw,
+  handlePinnedBottomViewportScroll: handlePinnedBottomViewportScrollRaw,
+  handleLinkedViewportWheel: handleLinkedViewportWheelRaw,
+  handleBodyViewportWheel,
+} = useDataGridStageViewportRuntime({
+  stageRootEl,
+  viewport,
+  gridChromeSyncers,
+})
+
+const stickyRootGroupIntervals = computed(() => {
+  const rowCount = Math.max(0, Math.trunc(viewport.value.virtualRowTotal ?? displayRows.value.length))
+  const getRow = rows.value.getBodyRowAtIndex
+  if (
+    !props.stickyGroupRows?.enabled
+    || !rows.value.hasGrouping
+    || mode.value !== "base"
+    || typeof getRow !== "function"
+  ) {
+    return []
+  }
+  // Rebuild only when the row-model revision changes. Scroll frames use the
+  // interval index below and never scan the projection.
+  void rows.value.projectionRevision
+  return buildStickyRootGroupIntervals(rowCount, index => getRow(index))
+})
+
+const stickyRootGroupPlacement = computed(() => resolveStickyRootGroupPlacement(
+  stickyRootGroupIntervals.value,
+  {
+    enabled: props.stickyGroupRows?.enabled === true,
+    scrollTop: bodyViewportScrollTop.value,
+    viewportWidth: bodyViewportShellClientWidth.value,
+    viewportHeight: bodyViewportClientHeight.value,
+    topInset: 0,
+    resolveRowOffset: rowIndex => viewport.value.resolveRowOffset?.(rowIndex)
+      ?? rowIndex * Math.max(1, viewport.value.baseRowHeight ?? 31),
+    resolveRowHeight: rowIndex => viewport.value.resolveRowHeight?.(rowIndex)
+      ?? viewport.value.baseRowHeight
+      ?? 31,
+  },
+))
+
+const stickyBodyRow = computed(() => {
+  const placement = stickyRootGroupPlacement.value
+  const row = placement ? rows.value.getBodyRowAtIndex?.(placement.sourceIndex) : null
+  if (!placement || !row || String(row.rowId) !== placement.nodeId) return null
+  return {
+    row,
+    placement,
+    style: {
+      position: "absolute",
+      top: `${bodyViewportScrollTop.value + placement.viewportY - bodyOverlayRowOrigin.value}px`,
+      left: "0px",
+      height: `${placement.height}px`,
+      zIndex: 8,
+    } as CSSProperties,
+  }
+})
+
+function readScrollEventElement(event: Event): HTMLElement | null {
+  return event.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : event.target instanceof HTMLElement
+      ? event.target
+      : null
+}
+
+function closeColumnMenuForViewportScroll(
+  event: Event,
+  axes: { horizontal?: boolean; vertical?: boolean },
+): void {
+  if (!columns.value.activeColumnMenu) {
+    return
+  }
+  const target = readScrollEventElement(event)
+  if (!target) {
+    return
+  }
+  const movedHorizontally = axes.horizontal === true
+    && Math.abs(target.scrollLeft - bodyViewportScrollLeft.value) > 0.5
+  const movedVertically = axes.vertical === true
+    && Math.abs(target.scrollTop - bodyViewportScrollTop.value) > 0.5
+  if (movedHorizontally || movedVertically) {
+    columns.value.closeColumnMenu?.()
+  }
+}
+
+function handleCenterViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handleCenterViewportScrollRaw(event)
+}
+
+function handleSharedVerticalViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { vertical: true })
+  handleSharedVerticalViewportScrollRaw(event)
+}
+
+function handlePinnedTopViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handlePinnedTopViewportScrollRaw(event)
+}
+
+function isHorizontalWheelGesture(event: WheelEvent): boolean {
+  const absX = Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0)
+  const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
+  return absX > 0 && absX > absY
+}
+
+function handleLinkedViewportWheel(event: WheelEvent): void {
+  if (isHorizontalWheelGesture(event)) {
+    closeColumnMenuForViewportScroll(event, { horizontal: true })
+  }
+  handleLinkedViewportWheelRaw(event)
+}
+
+function handlePinnedBottomViewportScroll(event: Event): void {
+  closeColumnMenuForViewportScroll(event, { horizontal: true })
+  handlePinnedBottomViewportScrollRaw(event)
+}
+
+watch(runtimeBodyViewportScrolling, value => {
+  isBodyViewportScrolling.value = value
+}, { immediate: true })
+
+useDataGridPerfTrace({
+  viewport,
+  displayRows,
+  bodyViewportScrollTop,
+  perfTraceEnabled,
+})
+
+const {
+  chromeRenderModel,
+  headerChromeRenderModel,
+  pinnedBottomChromeRenderModel,
+  bodyCenterChromeLayerModel,
+  hasPivotHeaderGroups,
+  rowMetrics,
+  pinnedBottomRowMetrics,
+  chromeColumnsRevision,
+  chromeRowsRevision,
+  rowMetricsSignature,
+  pinnedBottomRowMetricsSignature,
+  rowBandsSignature,
+  pinnedBottomRowBandsSignature,
+  leftChromeColumnsSignature,
+  centerChromeColumnsSignature,
+  rightChromeColumnsSignature,
+  headerPivotGroupsSignature,
+  resolveVisibleRowMetricsFromDom,
+} = useDataGridStageChromeModel({
+  mode,
+  rowHeightMode,
+  layout,
+  viewport,
+  rows,
+  visibleColumns,
+  renderedColumns,
+  displayRows,
+  pinnedBottomRows,
+  selectionTotalRowCount: computed(() => selection.value?.totalRowCount ?? null),
+  leftPaneWidth,
+  rightPaneWidth,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  pinnedBottomViewportClientHeight,
+  headerShellHeight,
+  headerViewportClientWidth,
+  bodyViewportEl,
+  indexColumnWidthPx: rowIndexState.indexColumnWidthPx,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+  resolveColumnWidth,
+  resolveLeftColumnSpacerWidth,
+  resolveRightColumnSpacerWidth,
+  resolveAbsoluteRowIndex,
+  resolveViewportRowOffset,
+  isHoveredRow,
+  isStripedRow,
+  readPivotHeaderMeta,
+})
+
+const {
+  showRowIndex,
+  indexColumnWidthPx,
+  resolvedRowIndexColumnStyle,
+  rowIndexCellClasses,
+  rowIndexCellStyle,
+  rowIndexTabIndex,
+  isFullRowSelectionSafe,
+  isRowIndexDraggable,
+  handleRowClickSafe,
+  handleRowIndexClickSafe,
+  handleRowIndexPointerDownSafe,
+  handleRowIndexKeydownSafe,
+  handleRowIndexDragStart,
+  handleRowIndexDragOver,
+  handleRowIndexDrop,
+  clearRowIndexDragState,
+} = rowIndexState
+
+const handleRowContainerClick = handleRowClickSafe
+
+const {
+  startInlineEditIfAllowed,
+  resolveCellEditorMode,
+  resolveSelectEditorOptions,
+  resolveSelectEditorOptionsLoader,
+  handleSelectEditorOptionsResolved,
+  readResolvedDisplayCell,
+  renderResolvedCellContent,
+  resolveSelectEditorValue,
+  isSelectEditorCell,
+  isDateEditorCell,
+  resolveDateEditorInputType,
+  isTextEditorCell,
+  handleSelectEditorCommit,
+  handleSelectEditorCancel,
+  handleDateEditorChange,
+  handleTextEditorBlur,
+  updateEditingCellValue,
+  handleEditorKeydown,
+} = useDataGridStageCellRendering({
+  mode,
+  visibleColumns,
+  rows,
+  cells,
+  editing,
+  isCellEditableSafe: isCellEditableSafeBase,
+  isEditingCellSafe: isEditingCellSafeBase,
+  columnIndexByKey,
+  suppressInlineEditStart: isBodyViewportScrolling,
+  rendererPolicy: computed(() => props.rendererPolicy),
+  isScrolling: isBodyViewportScrolling,
+  perfTraceEnabled,
+})
+
+const rowStateRuntime = useDataGridStageRowState({
+  rows,
+  selection,
+  selectionRange,
+  selectionRanges,
+  displayRows,
+  visibleColumns,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  isHoveredRow,
+  isStripedRow,
+  resolveAbsoluteRowIndex,
+  isCellSelectedSafe,
+  isEditingCellSafe: isEditingCellSafeBase,
+  isCellEditableSafe: isCellEditableSafeBase,
+  resolveCellEditorMode,
+  startInlineEditIfAllowed,
+  handleCellClick: (row, rowOffset, column, columnIndex) => interaction.value.handleCellClick(row, rowOffset, column, columnIndex),
+  hasExplicitGroupCellRenderer,
+  useCanvasChrome,
+  cells: computed(() => ({
+    isSelectionAnchorCell: cells.value.isSelectionAnchorCell,
+    isCellInFillPreview: cells.value.isCellInFillPreview,
+    isCellInPendingClipboardRange: cells.value.isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge: cells.value.isCellOnPendingClipboardEdge,
+    isCellOnSelectionEdge: cells.value.isCellOnSelectionEdge,
+  })),
+})
+const isRangeMoveHandleHoverCellBridge = shallowRef<(rowOffset: number, columnIndex: number) => boolean>(() => false)
+
+function isRangeMoveHandleHoverCellSafe(rowOffset: number, columnIndex: number): boolean {
+  return isRangeMoveHandleHoverCellBridge.value(rowOffset, columnIndex)
+}
+
+function isTouchSelectionAnchorHandleCell(row: TableRow, rowOffset: number, columnIndex: number): boolean {
+  if (interactionMode.value !== "touch" || isBodyViewportScrolling.value || row.kind === "group") {
+    return false
+  }
+  const column = visibleColumns.value[columnIndex]
+  if (!column || isEditingCellSafeBase(row, column.key)) {
+    return false
+  }
+  if (isCellEditableSafeBase(row, rowOffset, column, columnIndex) && isFillHandleCellSafe(rowOffset, columnIndex)) {
+    return false
+  }
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
+}
+
+function isTouchRangeMoveHandleCell(row: TableRow, rowOffset: number, columnIndex: number): boolean {
+  if (
+    interactionMode.value !== "touch"
+    || isBodyViewportScrolling.value
+    || mode.value !== "base"
+    || row.kind === "group"
+    || selection.value?.rangeMoveEnabled !== true
+    || selection.value?.isFillDragging === true
+  ) {
+    return false
+  }
+  const column = visibleColumns.value[columnIndex]
+  if (!column || isEditingCellSafeBase(row, column.key)) {
+    return false
+  }
+  return isVisualSelectionAnchorCell(rowOffset, columnIndex)
+    && isCellEditableSafeBase(row, rowOffset, column, columnIndex)
+}
+
+const {
+  builtInCellClasses,
+  cellStateClasses,
+  cellAriaSelected,
+  cellAriaRole,
+  cellAriaChecked,
+  cellAriaPressed,
+  cellAriaLabel,
+  cellAriaDisabled,
+  shouldRenderCheckboxCell,
+  checkboxIndicatorClass,
+  checkboxIndicatorMarkClass,
+} = useDataGridStageCellState({
+  visibleColumns,
+  cells: computed(() => ({
+    readCell: cells.value.readCell,
+  })),
+  isCellEditableSafe,
+  isEditingCellSafe,
+  resolveCellEditorMode,
+  isCellSelectedSafe,
+  isVisualSelectionAnchorCell,
+  shouldHighlightSelectedCellVisual,
+  isRangeMoveHandleHoverCell: isRangeMoveHandleHoverCellSafe,
+  isCellInFillPreviewSafe,
+  isCellInPendingClipboardRangeSafe,
+  isCellOnPendingClipboardEdgeSafe,
+})
+
+const {
+  syncBodyViewportMetrics,
+  syncPinnedBottomViewportMetrics,
+  syncPinnedBottomViewportScrollLeft,
+  scheduleGridChromeRedraw,
+  flushGridChromeRedraw,
+  invalidateGridChromeStyle,
+  connectGridChromeResizeObserver,
+  disconnectGridChromeResizeObserver,
+} = useDataGridStageChromeCanvas({
+  stageRootEl,
+  bodyShellRef,
+  bodyViewportEl,
+  verticalBodyViewportEl,
+  bottomViewportEl,
+  leftHeaderChromeCanvasEl,
+  centerHeaderChromeCanvasEl,
+  rightHeaderChromeCanvasEl,
+  leftChromeCanvasEl,
+  centerChromeCanvasEl,
+  rightChromeCanvasEl,
+  leftBottomChromeCanvasEl,
+  centerBottomChromeCanvasEl,
+  rightBottomChromeCanvasEl,
+  bodyViewportScrollTop,
+  bodyViewportScrollLeft,
+  bodyViewportClientWidth,
+  bodyViewportClientHeight,
+  bodyViewportShellClientWidth,
+  pinnedBottomViewportClientHeight,
+  bodyViewportTopOffset,
+  headerShellHeight,
+  headerViewportClientWidth,
+  chromeRenderModel,
+  headerChromeRenderModel,
+  pinnedBottomChromeRenderModel,
+  hasPivotHeaderGroups,
+  stickyRowPlacement: stickyRootGroupPlacement,
+  hideBodyVerticalLines: computed(() => Boolean(props.emptyState)),
+  perfTraceEnabled,
+})
+
+gridChromeSyncers.value = {
+  syncBodyViewportMetrics,
+  syncPinnedBottomViewportMetrics,
+  syncPinnedBottomViewportScrollLeft,
+  scheduleGridChromeRedraw,
+  flushGridChromeRedraw,
+  connectGridChromeResizeObserver,
+  disconnectGridChromeResizeObserver,
+}
+
+const chromeBodyRowsRedrawSignature = computed(() => [
+  rowMetricsSignature.value,
+  rowBandsSignature.value,
+].join("||"))
+
+const chromePinnedBottomRowsRedrawSignature = computed(() => [
+  pinnedBottomRowMetricsSignature.value,
+  pinnedBottomRowBandsSignature.value,
+].join("||"))
+
+let lastLeftChromeColumnsRedrawSignature = leftChromeColumnsSignature.value
+let lastCenterChromeColumnsRedrawSignature = centerChromeColumnsSignature.value
+let lastRightChromeColumnsRedrawSignature = rightChromeColumnsSignature.value
+let lastHeaderPivotGroupsRedrawSignature = headerPivotGroupsSignature.value
+let lastChromeBodyRowsRedrawSignature = chromeBodyRowsRedrawSignature.value
+let lastChromePinnedBottomRowsRedrawSignature = chromePinnedBottomRowsRedrawSignature.value
+
+watch(
+  chromeColumnsRevision,
+  () => {
+    const nextLeftSignature = leftChromeColumnsSignature.value
+    const nextCenterSignature = centerChromeColumnsSignature.value
+    const nextRightSignature = rightChromeColumnsSignature.value
+    const nextHeaderPivotGroupsSignature = headerPivotGroupsSignature.value
+    const leftChanged = nextLeftSignature !== lastLeftChromeColumnsRedrawSignature
+    const centerChanged = nextCenterSignature !== lastCenterChromeColumnsRedrawSignature
+    const rightChanged = nextRightSignature !== lastRightChromeColumnsRedrawSignature
+    const pivotGroupsChanged = nextHeaderPivotGroupsSignature !== lastHeaderPivotGroupsRedrawSignature
+    if (!leftChanged && !centerChanged && !rightChanged && !pivotGroupsChanged) {
+      return
+    }
+    lastLeftChromeColumnsRedrawSignature = nextLeftSignature
+    lastCenterChromeColumnsRedrawSignature = nextCenterSignature
+    lastRightChromeColumnsRedrawSignature = nextRightSignature
+    lastHeaderPivotGroupsRedrawSignature = nextHeaderPivotGroupsSignature
+    if (centerChanged && !leftChanged && !rightChanged && !pivotGroupsChanged) {
+      scheduleGridChromeRedraw("center-scroll", "chrome-center-columns-revision")
+      return
+    }
+    syncBodyViewportMetrics()
+    scheduleGridChromeRedraw("full", "chrome-columns-revision")
+  },
+)
+
+watch(
+  () => props.chromeSignature,
+  () => {
+    void nextTick(() => {
+      syncBodyViewportMetrics()
+      scheduleGridChromeRedraw("full", "chrome-signature")
+    })
+  },
+)
+
+watch(
+  () => themeRevision?.value,
+  (revision, previousRevision) => {
+    if (revision == null || revision === previousRevision) {
+      return
+    }
+    invalidateGridChromeStyle()
+    void nextTick(() => {
+      scheduleGridChromeRedraw("full", "theme-change")
+    })
+  },
+)
+
+watch(
+  chromeRowsRevision,
+  () => {
+    const nextBodySignature = chromeBodyRowsRedrawSignature.value
+    const nextPinnedBottomSignature = chromePinnedBottomRowsRedrawSignature.value
+    const bodyRowsChanged = nextBodySignature !== lastChromeBodyRowsRedrawSignature
+    const pinnedBottomRowsChanged = nextPinnedBottomSignature !== lastChromePinnedBottomRowsRedrawSignature
+    lastChromeBodyRowsRedrawSignature = nextBodySignature
+    lastChromePinnedBottomRowsRedrawSignature = nextPinnedBottomSignature
+    if (pinnedBottomRowsChanged) {
+      scheduleGridChromeRedraw(
+        "full",
+        bodyRowsChanged ? "chrome-rows-revision" : "chrome-pinned-bottom-rows-revision",
+      )
+      return
+    }
+    if (bodyRowsChanged) {
+      scheduleGridChromeRedraw("body-scroll", "chrome-body-rows-revision")
+    }
+  },
+)
+
+const effectiveBodyViewportWidth = computed(() => {
+  return bodyViewportClientWidth.value > 0
+    ? bodyViewportClientWidth.value
+    : parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0)
+})
+
+function hasVisibleInlineEditor(): boolean {
+  return displayRows.value.some(row => (
+    visibleColumns.value.some(column => editing.value.isEditingCell(row, column.key))
+  ))
+}
+
+const focusRuntime = useDataGridStageFocusRuntime({
+  bodyShellRef,
+  bodyViewportEl,
+  keyboardFocusTarget: verticalBodyViewportEl,
+  leftPaneContentRef,
+  rightPaneContentRef,
+  leftBottomPaneContentRef,
+  rightBottomPaneContentRef,
+  displayRows,
+  visibleColumns,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  resolveAbsoluteRowIndex,
+  isSelectionAnchorCellSafe,
+  isCellEditableSafe: isCellEditableSafeBase,
+  isBodyViewportScrolling,
+  runWhenBodyViewportScrollIdle,
+  shouldRestoreAnchorFocus: () => !hasVisibleInlineEditor() && !isFillDragging.value && !isRangeMoving.value,
+})
+
+const remountFocusSignature = computed(() => {
+  if (!gridFocusOwned.value) {
+    return "unfocused"
+  }
+  const firstRow = displayRows.value[0]
+  const lastRow = displayRows.value[displayRows.value.length - 1]
+  const firstColumn = visibleColumns.value[0]
+  const lastColumn = visibleColumns.value[visibleColumns.value.length - 1]
+  const firstRenderedColumn = renderedColumns.value[0]
+  const lastRenderedColumn = renderedColumns.value[renderedColumns.value.length - 1]
+  return [
+    "focused",
+    viewport.value.viewportRowStart,
+    displayRows.value.length,
+    firstRow ? String(firstRow.rowId) : "",
+    lastRow ? String(lastRow.rowId) : "",
+    visibleColumns.value.length,
+    firstColumn?.key ?? "",
+    lastColumn?.key ?? "",
+    renderedColumns.value.length,
+    firstRenderedColumn?.key ?? "",
+    lastRenderedColumn?.key ?? "",
+  ].join("|")
+})
+
+watch(
+  remountFocusSignature,
+  async () => {
+    if (!gridFocusOwned.value) {
+      return
+    }
+    const previousFocusTarget = document.activeElement
+    const previousIndexCell = previousFocusTarget instanceof HTMLElement
+      ? previousFocusTarget.closest<HTMLElement>(".grid-cell--index-number[data-row-index]")
+      : null
+    const previousIndexRow = previousIndexCell?.dataset.rowIndex ?? null
+    const previousIndexRowId = previousIndexCell?.dataset.rowId ?? null
+    await nextTick()
+    const activeTarget = document.activeElement
+    if (previousIndexCell) {
+      if (activeTarget instanceof HTMLElement && stageRootEl.value?.contains(activeTarget)) {
+        const activeIndexCell = activeTarget.closest<HTMLElement>(".grid-cell--index-number[data-row-index]")
+        if (activeTarget !== previousFocusTarget && activeTarget.closest(".datagrid-stage__cell[data-row-index]")) {
+          return
+        }
+        if (activeIndexCell?.dataset.rowIndex === previousIndexRow && activeIndexCell.dataset.rowId === previousIndexRowId) {
+          return
+        }
+      }
+      const restoredIndexCell = Array.from(stageRootEl.value?.querySelectorAll<HTMLElement>(".grid-cell--index-number[data-row-index]") ?? [])
+        .find(cell => cell.dataset.rowIndex === previousIndexRow && cell.dataset.rowId === previousIndexRowId)
+      if (restoredIndexCell) {
+        restoredIndexCell.focus({ preventScroll: true })
+        return
+      }
+    }
+    focusRuntime.restoreAnchorCellFocus()
+  },
+  { flush: "post" },
+)
+
+const {
+  fillActionMenuOpen,
+  floatingFillActionStyle,
+  toggleFloatingFillActionMenu,
+  handleFillActionSelection,
+} = useDataGridStageFillAction({
+  selection,
+  selectionRange,
+  visibleColumns,
+  renderedColumns,
+  displayRows,
+  bodyViewportEl,
+  bodyShellRef,
+  bodyViewportClientHeight,
+  bodyViewportTopOffset,
+  bodyViewportScrollLeft,
+  leftPaneWidth,
+  rightPaneWidth,
+  effectiveBodyViewportWidth,
+  indexColumnWidthPx,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+  resolveColumnWidth,
+  resolveViewportRowStart,
+  resolveVisibleCellElement: focusRuntime.resolveVisibleCellElement,
+  resolveVisibleRowElement: focusRuntime.resolveVisibleRowElement,
+  resolveRelativeCellRect: focusRuntime.resolveRelativeCellRect,
+  isVisibleCellEditableByAbsoluteCoord,
+  restoreAnchorCellFocus: focusRuntime.restoreAnchorCellFocus,
+})
+
+const {
+  clearRangeMoveHandleHover,
+  isRangeMoveHandleHoverCell: isRangeMoveHandleHoverCellFromPointer,
+  handleCellMouseMove,
+  handleFillHandleMouseDown,
+  handleFillHandleDoubleClick,
+  handleFillHandleTouchStart,
+  handleFillHandleTouchMove,
+  handleFillHandleTouchEnd,
+} = useDataGridStagePointerInteractions({
+  mode,
+  selection,
+  selectionRange,
+  visibleColumns,
+  displayRows,
+  viewportRowStart: computed(() => viewport.value.viewportRowStart),
+  fillActionMenuOpen,
+  interactionModeInput,
+  suppressHoverInteractions,
+  isCellSelectedSafe,
+  isCellEditableSafe,
+  isCellOnSelectionEdgeSafe,
+})
+
+isRangeMoveHandleHoverCellBridge.value = isRangeMoveHandleHoverCellFromPointer
+
+function syncCoarsePointerState(): void {
+  isCoarsePointer.value = coarsePointerQuery?.matches === true
+}
+
+function isBodyGridFocusTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) {
+    return false
+  }
+  return (
+    target === bodyViewportEl.value
+    || bodyShellRef.value?.contains(target) === true
+    || leftPaneContentRef.value?.contains(target) === true
+    || rightPaneContentRef.value?.contains(target) === true
+    || leftTopPaneContentRef.value?.contains(target) === true
+    || rightTopPaneContentRef.value?.contains(target) === true
+    || leftBottomPaneContentRef.value?.contains(target) === true
+    || rightBottomPaneContentRef.value?.contains(target) === true
+  )
+}
+
+function handleStageFocusIn(event: FocusEvent): void {
+  const focusedElement = event.target instanceof HTMLElement ? event.target : null
+  const bodyCell = focusedElement?.closest<HTMLElement>(".grid-body-shell .grid-cell[data-row-index]")
+  const rowIndex = Number(bodyCell?.dataset.rowIndex)
+  if (bodyCell && Number.isInteger(rowIndex) && rowIndex >= 0) {
+    focusedBodyRowIndex.value = rowIndex
+    focusedBodyColumnKey.value = bodyCell.classList.contains("datagrid-stage__cell")
+      ? bodyCell.dataset.columnKey ?? null
+      : null
+  } else if (isBodyGridFocusTarget(event.target)) {
+    // Keep the last body row axis when virtualization moves focus to the grid viewport.
+    focusedBodyColumnKey.value = null
+  } else {
+    focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
+  }
+  if (focusedElement?.closest("[data-datagrid-row-index-header='true']")) {
+    clearPendingRowIndexFocus()
+  }
+  if (isBodyGridFocusTarget(event.target)) {
+    gridFocusOwned.value = true
+  }
+}
+
+function handleStageClickCapture(): void {
+  clearPendingRowIndexFocus()
+}
+
+function handleStageFocusOut(event: FocusEvent): void {
+  const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
+  if (!nextTarget) {
+    if (!gridFocusOwned.value) {
+      focusedBodyRowIndex.value = null
+      focusedBodyColumnKey.value = null
+    }
+    return
+  }
+  if (!isBodyGridFocusTarget(nextTarget)) {
+    focusedBodyRowIndex.value = null
+    focusedBodyColumnKey.value = null
+  } else if (!(nextTarget instanceof Element) || !nextTarget.closest(".grid-body-shell .grid-cell[data-row-index]")) {
+    focusedBodyColumnKey.value = null
+  }
+  if (!isBodyGridFocusTarget(nextTarget)) {
+    gridFocusOwned.value = false
+  }
+}
+
+onMounted(() => {
+  if (stageRootEl.value) {
+    stageRootEl.value.addEventListener("focusin", handleStageFocusIn)
+    stageRootEl.value.addEventListener("focusout", handleStageFocusOut)
+    stageRootEl.value.addEventListener("click", handleStageClickCapture, true)
+  }
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return
+  }
+  coarsePointerQuery = window.matchMedia("(hover: none) and (pointer: coarse)")
+  coarsePointerQueryListener = event => {
+    isCoarsePointer.value = event.matches
+  }
+  syncCoarsePointerState()
+  if (typeof coarsePointerQuery.addEventListener === "function") {
+    coarsePointerQuery.addEventListener("change", coarsePointerQueryListener)
+  } else {
+    coarsePointerQuery.addListener(coarsePointerQueryListener)
+  }
+})
+
+onBeforeUnmount(() => {
+  columns.value.closeColumnMenu?.()
+  stageRootEl.value?.removeEventListener("focusin", handleStageFocusIn)
+  stageRootEl.value?.removeEventListener("focusout", handleStageFocusOut)
+  stageRootEl.value?.removeEventListener("click", handleStageClickCapture, true)
+  clearPendingRowIndexFocus()
+  if (pendingRowIndexFocusFrame != null) {
+    window.cancelAnimationFrame(pendingRowIndexFocusFrame)
+    pendingRowIndexFocusFrame = null
+  }
+  clearTouchClickSuppressionTimer()
+  clearPendingTouchLongPress()
+  bodyTouchStart = null
+  activeTouchSelectionHandleTouchId = null
+  activeTouchRangeMoveHandleTouchId = null
+  suppressNextTouchClick = false
+  suppressNextTouchContextMenu = false
+  if (!coarsePointerQuery || !coarsePointerQueryListener) {
+    return
+  }
+  if (typeof coarsePointerQuery.removeEventListener === "function") {
+    coarsePointerQuery.removeEventListener("change", coarsePointerQueryListener)
+  } else {
+    coarsePointerQuery.removeListener(coarsePointerQueryListener)
+  }
+  coarsePointerQuery = null
+  coarsePointerQueryListener = null
+})
+
+watch(suppressHoverInteractions, suppressed => {
+  if (suppressed) {
+    clearHoveredRow()
+    clearRangeMoveHandleHover()
+  }
+})
+
+const rowRuntime = computed(() => ({
+  rows,
+  resolveAbsoluteRowIndex,
+  resolveViewportRowOffset,
+  rowAriaExpanded,
+  rowAriaLabel,
+  rowAriaDisabled,
+  rowStateClasses,
+  handleRowContainerClick,
+  setHoveredRow,
+  isFullRowSelectionSafe,
+  rowIndexColumnStyle: resolvedRowIndexColumnStyle,
+  rowIndexCellClasses,
+  rowIndexCellStyle,
+  rowIndexTabIndex,
+  isRowIndexDraggable: (row: TableRow) => !isCoarsePointer.value && isRowIndexDraggable(row),
+  handleRowIndexClickSafe,
+  handleRowIndexPointerDownSafe,
+  handleRowIndexKeydownSafe,
+  handleRowIndexDragStart,
+  handleRowIndexDragOver,
+  handleRowIndexDrop,
+  clearRowIndexDragState,
+  columnIndexByKey,
+}))
+
+const cellRuntime = computed(() => ({
+  visibleColumns: visibleColumns.value,
+  cells: {
+    isSelectionAnchorCell: cells.value.isSelectionAnchorCell,
+    isCellInFillPreview: cells.value.isCellInFillPreview,
+    isCellInPendingClipboardRange: cells.value.isCellInPendingClipboardRange,
+    isCellOnPendingClipboardEdge: cells.value.isCellOnPendingClipboardEdge,
+    isCellOnSelectionEdge: cells.value.isCellOnSelectionEdge,
+    readCell: cells.value.readCell,
+    readDisplayCell: cells.value.readDisplayCell,
+  },
+  isCellEditableSafe: isCellEditableSafeBase,
+  isEditingCellSafe: isEditingCellSafeBase,
+  isCellSelectedSafe,
+  isTouchSelectionAnchorHandleCell,
+  isTouchRangeMoveHandleCell,
+  isSelectionAnchorCellSafe,
+  shouldHighlightSelectedCellVisual,
+  isCellInFillPreviewSafe,
+  isCellInPendingClipboardRangeSafe,
+  isCellOnPendingClipboardEdgeSafe,
+  isCellOnSelectionEdgeSafe,
+  isFillHandleCellSafe,
+  isVisibleCellEditableByAbsoluteCoord,
+  builtInCellClasses,
+  cellStateClasses,
+  resolveCellCustomClass,
+  columnStyle,
+  bodyCellPresentationStyle,
+  bodyCellSelectionStyle,
+  resolveCellCustomStyle,
+  cellDomId,
+  cellTabIndex,
+  cellAriaSelected,
+  cellAriaRole,
+  cellAriaChecked,
+  cellAriaPressed,
+  cellAriaLabel,
+  cellAriaDisabled,
+  handleCellMouseDown,
+  handleBodyCellClick,
+  handleCellMouseMove,
+  clearRangeMoveHandleHover,
+  handleCellKeydown,
+  startInlineEditIfAllowed,
+  handleTouchSelectionHandleMouseDown,
+  handleTouchSelectionHandleTouchStart,
+  handleTouchSelectionHandleTouchMove,
+  handleTouchSelectionHandleTouchEnd,
+  handleTouchRangeMoveHandleMouseDown,
+  handleTouchRangeMoveHandleTouchStart,
+  handleTouchRangeMoveHandleTouchMove,
+  handleTouchRangeMoveHandleTouchEnd,
+  handleFillHandleMouseDown,
+  handleFillHandleDoubleClick,
+  handleFillHandleTouchStart,
+  handleFillHandleTouchMove,
+  handleFillHandleTouchEnd,
+  shouldRenderCheckboxCell,
+  checkboxIndicatorClass,
+  checkboxIndicatorMarkClass,
+}))
+
+const editorRuntime = computed(() => ({
+  mode: mode.value,
+  rows,
+  cells,
+  editing,
+  startInlineEditIfAllowed,
+  resolveCellEditorMode,
+  resolveSelectEditorOptions,
+  resolveSelectEditorOptionsLoader,
+  cellEditorAriaLabel,
+  handleSelectEditorOptionsResolved,
+  readResolvedDisplayCell,
+  renderResolvedCellContent,
+  resolveSelectEditorValue,
+  isSelectEditorCell,
+  isDateEditorCell,
+  resolveDateEditorInputType,
+  isTextEditorCell,
+  handleSelectEditorCommit,
+  handleSelectEditorCancel,
+  handleDateEditorChange,
+  handleTextEditorBlur,
+  updateEditingCellValue,
+  handleEditorKeydown,
+}))
+
+const viewportRuntime = computed(() => ({
+  handleCenterViewportScroll,
+  handleBodyViewportWheel,
+  handleViewportKeydown: (event: KeyboardEvent) => viewport.value.handleViewportKeydown(event),
+  handleLinkedViewportWheel,
+}))
+
+function handlePinnedBottomViewportKeydown(event: KeyboardEvent): void {
+  viewport.value.handleViewportKeydown(event)
+}
+
+function handlePinnedTopViewportKeydown(event: KeyboardEvent): void {
+  viewport.value.handleViewportKeydown(event)
+}
+
+const overlayGeometryContext = computed<DataGridStageOverlayGeometryContext>(() => ({
+  bodyViewportClientHeight: bodyViewportClientHeight.value,
+  indexColumnWidthPx: indexColumnWidthPx.value,
+  leftPaneWidth: leftPaneWidth.value,
+  rightPaneWidth: rightPaneWidth.value,
+  renderedColumns: renderedColumns.value,
+  pinnedLeftColumns: pinnedLeftColumns.value,
+  pinnedRightColumns: pinnedRightColumns.value,
+  layoutGridContentWidth: parsePixelValue(layout.value.gridContentStyle.width ?? layout.value.gridContentStyle.minWidth, 0),
+  columnIndexByKey,
+  resolveColumnWidth,
+  resolveLeftColumnSpacerWidth,
+}))
+
+const visibleColumnIndexByKey = computed(() => {
+  const indexByKey = new Map<string, number>()
+  visibleColumns.value.forEach((column, index) => {
+    indexByKey.set(column.key, index)
+  })
+  return indexByKey
+})
+
+const isSingleSelectedCell = computed(() => {
+  const ranges = selectionRanges.value
+  if (ranges.length !== 1) {
+    return false
+  }
+  const range = ranges[0]
+  if (!range) {
+    return false
+  }
+  return range.startRow === range.endRow
+    && range.startColumn === range.endColumn
+})
+
+const isAdditiveSelection = computed(() => selectionRanges.value.length > 1)
+
+function columnIndexByKey(columnKey: string): number {
+  return visibleColumnIndexByKey.value.get(columnKey) ?? 0
+}
+
+function resolveVisibleRangeBoundsForRows(
+  range: OverlayRange | null,
+  laneRows: readonly TableRow[],
+) {
+  if (!range || laneRows.length === 0 || visibleColumns.value.length === 0) {
+    return null
+  }
+
+  const visibleColumnStart = 0
+  const visibleColumnEnd = visibleColumns.value.length - 1
+  const startColumnIndex = Math.max(range.startColumn, visibleColumnStart)
+  const endColumnIndex = Math.min(range.endColumn, visibleColumnEnd)
+
+  if (startColumnIndex > endColumnIndex) {
+    return null
+  }
+
+  let startRowOffset: number | null = null
+  let endRowOffset: number | null = null
+
+  laneRows.forEach((row, rowOffset) => {
+    const absoluteRowIndex = resolveAbsoluteRowIndex(row, rowOffset)
+    if (absoluteRowIndex < range.startRow || absoluteRowIndex > range.endRow) {
+      return
+    }
+    if (startRowOffset == null) {
+      startRowOffset = rowOffset
+    }
+    endRowOffset = rowOffset
+  })
+
+  if (startRowOffset == null || endRowOffset == null) {
+    return null
+  }
+
+  return {
+    startRowOffset,
+    endRowOffset,
+    startColumnIndex,
+    endColumnIndex,
+  }
+}
+
+function resolveVisibleRangeBounds(range: OverlayRange | null) {
+  if (!range || visibleColumns.value.length === 0) {
+    return null
+  }
+
+  const visibleColumnStart = 0
+  const visibleColumnEnd = visibleColumns.value.length - 1
+  const startColumnIndex = Math.max(range.startColumn, visibleColumnStart)
+  const endColumnIndex = Math.min(range.endColumn, visibleColumnEnd)
+
+  if (startColumnIndex > endColumnIndex) {
+    return null
+  }
+
+  const visibleRowStart = resolveViewportRowStart()
+  const visibleRowEnd = resolveViewportRowEnd()
+  const startRowIndex = Math.max(range.startRow, visibleRowStart)
+  const endRowIndex = Math.min(range.endRow, visibleRowEnd)
+
+  if (startRowIndex > endRowIndex) {
+    return null
+  }
+
+  return {
+    startRowOffset: startRowIndex - visibleRowStart,
+    endRowOffset: endRowIndex - visibleRowStart,
+    startColumnIndex,
+    endColumnIndex,
+  }
+}
+
+function resolvePinnedBottomVisibleRangeBounds(range: OverlayRange | null) {
+  return resolveVisibleRangeBoundsForRows(range, pinnedBottomRows.value)
+}
+
+const customOverlays = computed(() => props.customOverlays ?? [])
+const {
+  leftSelectionOverlaySegments,
+  leftStickySelectionOverlaySegments,
+  leftStickySelectionSeamOverlaySegments,
+  leftSelectionSeamOverlaySegments,
+  centerSelectionOverlaySegments,
+  centerStickySelectionOverlaySegments,
+  rightSelectionOverlaySegments,
+  rightStickySelectionOverlaySegments,
+  rightStickySelectionSeamOverlaySegments,
+  rightSelectionSeamOverlaySegments,
+  leftPinnedBottomSelectionOverlaySegments,
+  leftPinnedBottomSelectionSeamOverlaySegments,
+  centerPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionSeamOverlaySegments,
+  leftFillPreviewOverlaySegments,
+  leftFillPreviewSeamOverlaySegments,
+  centerFillPreviewOverlaySegments,
+  rightFillPreviewOverlaySegments,
+  rightFillPreviewSeamOverlaySegments,
+  leftPinnedBottomFillPreviewOverlaySegments,
+  leftPinnedBottomFillPreviewSeamOverlaySegments,
+  centerPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewSeamOverlaySegments,
+  leftMovePreviewOverlaySegments,
+  leftMovePreviewSeamOverlaySegments,
+  centerMovePreviewOverlaySegments,
+  rightMovePreviewOverlaySegments,
+  rightMovePreviewSeamOverlaySegments,
+  leftPinnedBottomMovePreviewOverlaySegments,
+  leftPinnedBottomMovePreviewSeamOverlaySegments,
+  centerPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewSeamOverlaySegments,
+  leftCustomOverlayLanes,
+  centerCustomOverlayLanes,
+  rightCustomOverlayLanes,
+  leftCustomSeamOverlayLanes,
+  rightCustomSeamOverlayLanes,
+  leftPinnedBottomCustomOverlayLanes,
+  centerPinnedBottomCustomOverlayLanes,
+  rightPinnedBottomCustomOverlayLanes,
+  leftPinnedBottomCustomSeamOverlayLanes,
+  rightPinnedBottomCustomSeamOverlayLanes,
+} = useDataGridStageOverlays({
+  overlayGeometryContext,
+  bodyViewportClientHeight,
+  bodyViewportScrollTop,
+  bodyOverlayRowOrigin,
+  stickyRowPlacement: stickyRootGroupPlacement,
+  bottomViewportClientHeight: pinnedBottomViewportClientHeight,
+  visibleColumns,
+  displayRows,
+  selectionRanges,
+  selectionRange,
+  fillPreviewRange: computed(() => selection.value?.fillPreviewRange ?? null),
+  rangeMovePreviewRange: computed(() => selection.value?.rangeMovePreviewRange ?? null),
+  rowMetrics,
+  pinnedBottomRowMetrics,
+  isCellSelectedSafe,
+  isCellInFillPreviewSafe,
+  isAdditiveSelection,
+  isFillDragging,
+  isRangeMoving,
+  resolveVisibleRangeBounds,
+  resolvePinnedBottomVisibleRangeBounds,
+  customOverlays,
+  perfTraceEnabled,
+})
+
+const stickyBodyRowWithOverlay = computed(() => {
+  const sticky = stickyBodyRow.value
+  if (!sticky) return null
+  return {
+    ...sticky,
+    selectionOverlaySegments: {
+      left: leftStickySelectionOverlaySegments.value,
+      center: centerStickySelectionOverlaySegments.value,
+      right: rightStickySelectionOverlaySegments.value,
+    },
+    selectionSeamOverlaySegments: {
+      left: leftStickySelectionSeamOverlaySegments.value,
+      right: rightStickySelectionSeamOverlaySegments.value,
+    },
+  }
+})
+
+const layoutRuntime = computed(() => ({
+  leftPaneWidth: leftPaneWidth.value,
+  rightPaneWidth: rightPaneWidth.value,
+  bodyViewportClientWidth: bodyViewportClientWidth.value,
+  bodyViewportClientHeight: bodyViewportClientHeight.value,
+  pinnedBottomViewportClientHeight: pinnedBottomViewportClientHeight.value,
+  headerShellHeight: headerShellHeight.value,
+  headerViewportClientWidth: headerViewportClientWidth.value,
+}))
+
+const paneRuntime = computed(() => ({
+  leftPaneContentRef,
+  rightPaneContentRef,
+  leftTopPaneContentRef,
+  rightTopPaneContentRef,
+  leftBottomPaneContentRef,
+  rightBottomPaneContentRef,
+  displayRows,
+  pinnedTopRows,
+  pinnedBottomRows,
+  showRowIndex: rowIndexState.showRowIndex,
+  pinnedLeftColumns,
+  pinnedRightColumns,
+}))
+
+const overlayRuntime = computed(() => ({
+  leftSelectionOverlaySegments,
+  leftSelectionSeamOverlaySegments,
+  centerSelectionOverlaySegments,
+  rightSelectionOverlaySegments,
+  rightSelectionSeamOverlaySegments,
+  leftPinnedBottomSelectionOverlaySegments,
+  leftPinnedBottomSelectionSeamOverlaySegments,
+  centerPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionOverlaySegments,
+  rightPinnedBottomSelectionSeamOverlaySegments,
+  leftFillPreviewOverlaySegments,
+  leftFillPreviewSeamOverlaySegments,
+  centerFillPreviewOverlaySegments,
+  rightFillPreviewOverlaySegments,
+  rightFillPreviewSeamOverlaySegments,
+  leftPinnedBottomFillPreviewOverlaySegments,
+  leftPinnedBottomFillPreviewSeamOverlaySegments,
+  centerPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewOverlaySegments,
+  rightPinnedBottomFillPreviewSeamOverlaySegments,
+  leftMovePreviewOverlaySegments,
+  leftMovePreviewSeamOverlaySegments,
+  centerMovePreviewOverlaySegments,
+  rightMovePreviewOverlaySegments,
+  rightMovePreviewSeamOverlaySegments,
+  leftPinnedBottomMovePreviewOverlaySegments,
+  leftPinnedBottomMovePreviewSeamOverlaySegments,
+  centerPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewOverlaySegments,
+  rightPinnedBottomMovePreviewSeamOverlaySegments,
+  leftCustomOverlayLanes,
+  centerCustomOverlayLanes,
+  rightCustomOverlayLanes,
+  leftCustomSeamOverlayLanes,
+  rightCustomSeamOverlayLanes,
+  leftPinnedBottomCustomOverlayLanes,
+  centerPinnedBottomCustomOverlayLanes,
+  rightPinnedBottomCustomOverlayLanes,
+  leftPinnedBottomCustomSeamOverlayLanes,
+  rightPinnedBottomCustomSeamOverlayLanes,
+}))
+
+const {
+  paneLayoutStyle,
+  leftPaneStyle,
+  rightPaneStyle,
+  leftTrackStyle,
+  rightTrackStyle,
+  centerBottomChromeCanvasStyle,
+  leftPinnedPane,
+  rightPinnedPane,
+  leftPinnedTopPane,
+  rightPinnedTopPane,
+  leftPinnedBottomPane,
+  rightPinnedBottomPane,
+} = useDataGridStagePanes({
+  layoutRuntime,
+  paneRuntime,
+  overlayRuntime,
+})
+
+const bodyLeftPinnedPane = computed(() => ({
+  ...leftPinnedPane.value,
+  rowKeyMode: "recycled" as const,
+  topSpacerHeight: 0,
+  bottomSpacerHeight: 0,
+}))
+const bodyRightPinnedPane = computed(() => ({
+  ...rightPinnedPane.value,
+  rowKeyMode: "recycled" as const,
+  topSpacerHeight: 0,
+  bottomSpacerHeight: 0,
+}))
+
+const {
+  pinnedPaneRenderApi,
+  centerPaneRenderApi,
+} = useDataGridStageRenderApis({
+  rowRuntime,
+  cellRuntime,
+  editorRuntime,
+  viewportRuntime,
+})
+
+defineExpose({
+  getStageRootElement: () => stageRootEl.value,
+  getHeaderElement: () => stageRootEl.value?.querySelector<HTMLElement>(".grid-header-shell") ?? null,
+  getBodyViewportElement: () => verticalBodyViewportEl.value ?? bodyViewportEl.value,
+  getVisibleRowMetrics: () => resolveVisibleRowMetricsFromDom(rowMetrics.value),
+})
+</script>

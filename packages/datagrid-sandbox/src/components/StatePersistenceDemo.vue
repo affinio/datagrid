@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import { DataGrid, useDataGridRef, type DataGridPersistenceChangeEvent, type DataGridStatePersistenceOptions } from "@affino/datagrid-vue-app"
+import { DataGrid, useDataGridRef, type DataGridPersistenceChangeEvent, type DataGridStatePersistenceOptions } from "@affino/datagrid-vue"
 
 const grid = useDataGridRef()
 const profile = ref("A")

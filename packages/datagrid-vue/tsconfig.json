@@ -23,5 +23,6 @@
       "@affino/datagrid-worker/*": ["../datagrid-worker/src/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/app-layer/**"]
 }

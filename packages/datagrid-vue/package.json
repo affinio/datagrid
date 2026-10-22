@@ -1,61 +1,97 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.12.0",
+  "version": "0.14.0",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
-  "description": "Vue adapter and headless foundation for Affino DataGrid",
+  "description": "Vue DataGrid component and headless adapter for Affino DataGrid",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./headless": {
+      "types": "./dist/headless/index.d.ts",
+      "import": "./dist/headless/index.js"
+    },
+    "./headless/app": {
+      "types": "./dist/headless/app/index.d.ts",
+      "import": "./dist/headless/app/index.js"
+    },
+    "./headless/app/worker": {
+      "types": "./dist/headless/app/worker.d.ts",
+      "import": "./dist/headless/app/worker.js"
+    },
     "./app": {
-      "types": "./dist/app/index.d.ts",
-      "import": "./dist/app/index.js"
+      "types": "./dist/headless/app/index.d.ts",
+      "import": "./dist/headless/app/index.js"
     },
     "./app/worker": {
-      "types": "./dist/app/worker.d.ts",
-      "import": "./dist/app/worker.js"
+      "types": "./dist/headless/app/worker.d.ts",
+      "import": "./dist/headless/app/worker.js"
     },
     "./stable": {
-      "types": "./dist/stable.d.ts",
-      "import": "./dist/stable.js"
+      "types": "./dist/headless/stable.d.ts",
+      "import": "./dist/headless/stable.js"
     },
     "./advanced": {
-      "types": "./dist/advanced.d.ts",
-      "import": "./dist/advanced.js"
+      "types": "./dist/headless/advanced.d.ts",
+      "import": "./dist/headless/advanced.js"
     },
     "./advanced/layout": {
-      "types": "./dist/advanced/layout.d.ts",
-      "import": "./dist/advanced/layout.js"
+      "types": "./dist/headless/advanced/layout.d.ts",
+      "import": "./dist/headless/advanced/layout.js"
     },
     "./advanced/pointer": {
-      "types": "./dist/advanced/pointer.d.ts",
-      "import": "./dist/advanced/pointer.js"
+      "types": "./dist/headless/advanced/pointer.d.ts",
+      "import": "./dist/headless/advanced/pointer.js"
     },
     "./advanced/selection": {
-      "types": "./dist/advanced/selection.d.ts",
-      "import": "./dist/advanced/selection.js"
+      "types": "./dist/headless/advanced/selection.d.ts",
+      "import": "./dist/headless/advanced/selection.js"
     },
     "./advanced/editing": {
-      "types": "./dist/advanced/editing.d.ts",
-      "import": "./dist/advanced/editing.js"
+      "types": "./dist/headless/advanced/editing.d.ts",
+      "import": "./dist/headless/advanced/editing.js"
     },
     "./advanced/clipboard": {
-      "types": "./dist/advanced/clipboard.d.ts",
-      "import": "./dist/advanced/clipboard.js"
+      "types": "./dist/headless/advanced/clipboard.d.ts",
+      "import": "./dist/headless/advanced/clipboard.js"
     },
     "./advanced/filtering": {
-      "types": "./dist/advanced/filtering.d.ts",
-      "import": "./dist/advanced/filtering.js"
+      "types": "./dist/headless/advanced/filtering.d.ts",
+      "import": "./dist/headless/advanced/filtering.js"
     },
     "./advanced/history": {
-      "types": "./dist/advanced/history.d.ts",
-      "import": "./dist/advanced/history.js"
+      "types": "./dist/headless/advanced/history.d.ts",
+      "import": "./dist/headless/advanced/history.js"
     },
     "./worker": {
-      "types": "./dist/worker.d.ts",
-      "import": "./dist/worker.js"
+      "types": "./dist/headless/worker.d.ts",
+      "import": "./dist/headless/worker.js"
+    },
+    "./gantt": {
+      "types": "./dist/app/gantt.d.ts",
+      "import": "./dist/gantt.js"
+    },
+    "./aggregations": {
+      "types": "./dist/app/aggregations.d.ts",
+      "import": "./dist/aggregations.js"
+    },
+    "./advanced-filter": {
+      "types": "./dist/app/advanced-filter.d.ts",
+      "import": "./dist/advanced-filter.js"
+    },
+    "./quick-filter": {
+      "types": "./dist/app/quick-filter.d.ts",
+      "import": "./dist/quick-filter.js"
+    },
+    "./find-replace": {
+      "types": "./dist/app/find-replace.d.ts",
+      "import": "./dist/find-replace.js"
+    },
+    "./internal": {
+      "types": "./dist/app/internal.d.ts",
+      "import": "./dist/internal.js"
     }
   },
   "main": "dist/index.js",
@@ -63,12 +99,13 @@
   "files": [
     "dist"
   ],
-  "sideEffects": false,
+  "sideEffects": ["**/*.css"],
   "scripts": {
-    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/datagrid-core build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist",
-    "type-check": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/export-xlsx build && pnpm --filter @affino/datagrid-core^... build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker^... build && pnpm --filter @affino/datagrid-chrome^... build && pnpm --filter @affino/datagrid-theme^... build && pnpm --filter @affino/datagrid-gantt^... build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist/headless && vite build --config vite.app.config.ts && vue-tsc -p tsconfig.app.json --declaration --emitDeclarationOnly --outDir dist/app && node scripts/write-unified-root.mjs",
+    "type-check": "tsc -p tsconfig.json --noEmit && vue-tsc -p tsconfig.app.json --noEmit && vue-tsc -p tsconfig.type-contracts.app.json --noEmit",
     "type-check:public": "node ./scripts/type-check-public.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
+    "test:consumer": "node ../../scripts/test-datagrid-vue-package-consumers.mjs",
     "test:contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract\"",
     "test:strict-contracts": "vitest run --config vitest.config.ts --testNamePattern=\"contract|lifecycle|property|stress|determinism\" --passWithNoTests",
     "test:integration": "vitest run --config vitest.config.ts --testNamePattern=\"contract|integration|property|stress\" --passWithNoTests",
@@ -78,21 +115,30 @@
   "peerDependencies": {
     "pinia": "^2.1.0 || ^3.0.0",
     "vue": "^3.3.0",
-    "@affino/datagrid-theme": "workspace:^"
+    "@affino/datagrid-gantt": "workspace:^"
   },
   "peerDependenciesMeta": {
-    "@affino/datagrid-theme": {
+    "@affino/datagrid-gantt": {
       "optional": true
     }
   },
   "dependencies": {
     "@affino/datagrid-core": "workspace:*",
+    "@affino/export-xlsx": "workspace:*",
+    "@affino/datagrid-formula-engine": "workspace:*",
     "@affino/datagrid-pivot": "workspace:*",
     "@affino/datagrid-orchestration": "workspace:*",
-    "@affino/datagrid-worker": "workspace:*"
+    "@affino/datagrid-worker": "workspace:*",
+    "@affino/datagrid-chrome": "workspace:*",
+    "@affino/datagrid-theme": "workspace:*",
+    "@affino/menu-vue": "^2.2.0",
+    "@affino/popover-vue": "^1.1.0"
   },
   "devDependencies": {
-    "@affino/datagrid-theme": "workspace:^"
+    "@vitejs/plugin-vue": "^6.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.2",
+    "vue-tsc": "^3.2.5"
   },
   "repository": {
     "type": "git",

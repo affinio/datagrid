@@ -288,7 +288,6 @@
         :max-rows="sandboxMaxRows"
         fill-handle
         range-move
-        license-key="affino-dg-v1:enterprise:sandbox-demo:2099-12-31:all:0HTTHMS"
         :column-menu="columnMenu"
         :cell-menu="cellMenu"
         :row-index-menu="rowIndexMenu"
@@ -307,6 +306,7 @@
           : undefined"
         :aggregation-model="aggregationModel"
         :pivot-model="pivotModel"
+        :xlsx-export="props.groupedShowcase ? { fileName: 'grouped-grid.xlsx' } : false"
         :pagination="pagination"
         :page-size="paginationPageSize"
         :current-page="Math.max(0, paginationPage - 1)"
@@ -338,8 +338,8 @@
     </section>
 
     <footer class="card__footer">
-      Enterprise app package demo:
-      <code>import { DataGrid } from "@affino/datagrid-vue-app-enterprise"</code>
+      Standard DataGrid package demo:
+      <code>import { DataGrid } from "@affino/datagrid-vue"</code>
       <span v-if="toolbarActionStatus">{{ toolbarActionStatus }}</span>
       <span v-if="selectionAggregatesLabel">
         {{ selectionAggregatesLabel }}</span
@@ -356,7 +356,7 @@ import {
   type DataGridAppViewMode,
   type DataGridGanttOptions,
   type DataGridGanttZoomLevel,
-} from "@affino/datagrid-vue-app-enterprise";
+} from "@affino/datagrid-vue";
 import {
   clearDataGridSavedViewInStorage,
   defineDataGridColumnMenu,
@@ -370,7 +370,7 @@ import {
   type DataGridRowIndexMenuProp,
   type DataGridSavedViewSnapshot,
   writeDataGridSavedViewToStorage,
-} from "@affino/datagrid-vue-app";
+} from "@affino/datagrid-vue";
 import {
   industrialNeutralTheme,
   sugarTheme,

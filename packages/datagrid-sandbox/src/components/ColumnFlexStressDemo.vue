@@ -63,9 +63,9 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 import type { DataGridUnifiedColumnState } from "@affino/datagrid-vue"
-import type { DataGridAppColumnInput } from "@affino/datagrid-vue-app"
+import type { DataGridAppColumnInput } from "@affino/datagrid-vue"
 
 type Pin = "none" | "left" | "right"
 

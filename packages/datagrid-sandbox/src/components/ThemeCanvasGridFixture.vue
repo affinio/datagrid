@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 import type { DataGridStyleConfig } from "@affino/datagrid-theme"
 
 const theme = ref<"default" | "industrial-neutral" | DataGridStyleConfig>("default")

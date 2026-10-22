@@ -221,7 +221,7 @@ import {
   DataGridTableStage,
   createDataGridTableStageContext,
   useDataGridTableStageRuntime,
-} from "@affino/datagrid-vue-app/internal"
+} from "@affino/datagrid-vue/internal"
 import {
   type DataGridAppAdvancedFilterColumnOption,
   useDataGridAppAdvancedFilterBuilder,

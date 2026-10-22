@@ -1,0 +1,2142 @@
+import {
+  computed,
+  defineComponent,
+  type CSSProperties,
+  type ExtractPublicPropTypes,
+  h,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  toRef,
+  unref,
+  watch,
+  type PropType,
+  type VNode,
+} from "vue"
+import {
+  type CreateDataGridCoreOptions,
+  type DataGridApi,
+  type DataGridApiRowSelectionChangedEvent,
+  type DataGridDataSourceSelectionSummaryColumn,
+  type DataGridDataSourceSelectionSummaryResult,
+  type DataGridApiSelectionChangedEvent,
+  type DataGridApiPluginDefinition,
+  type DataGridAggregationModel,
+  type DataGridColumnSnapshot,
+  type DataGridColumnModel,
+  type DataGridColumnPin,
+  type DataGridComputedFieldDefinition,
+  type DataGridCoreServiceRegistry,
+  cloneDataGridFilterSnapshot,
+  type DataGridFilterSnapshot,
+  type DataGridFormulaFieldDefinition,
+  type DataGridFormulaFunctionRegistry,
+  type DataGridGroupBySpec,
+  type DataGridMigrateStateOptions,
+  type DataGridRowNode,
+  type DataGridRowSelectionSnapshot,
+  type DataGridRowModel,
+  type DataGridRowNodeInput,
+  type DataGridSetStateOptions,
+  type DataGridSortState,
+  type DataGridUnifiedColumnState,
+  type DataGridUnifiedState,
+  type DataGridPivotSpec,
+  type DataGridRowId,
+  type UseDataGridRuntimeResult,
+} from "@affino/datagrid-vue/headless"
+import {
+  useDataGridAppRowSelection,
+  useDataGridAppSelection,
+} from "@affino/datagrid-vue/app"
+import {
+  defineDataGridStructuralRowActionHandler,
+  type DataGridStructuralRowActionHandler,
+  type DataGridStructuralRowActionId,
+} from "./dataGridStructuralRowActions"
+import type { DataGridBivariantCallback } from "./types/bivariance"
+import type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"
+import type { DataGridExternalFilterIndicator } from "./config/dataGridExternalFilterIndicators"
+import DataGridDefaultRenderer, { type DataGridDefaultRendererRuntime } from "./host/DataGridDefaultRenderer"
+import type {
+  DataGridCaptureFocusAnchorOptions,
+  DataGridFocusAnchor,
+  DataGridRestoreFocusAnchorOptions,
+} from "./host/DataGridRuntimeHost"
+import type { DataGridAppToolbarModule } from "./host/DataGridModuleHost"
+import type { DataGridToolbarLayoutProp } from "./config/dataGridToolbarLayout"
+import {
+  DATA_GRID_HIERARCHY_COLUMN_ID,
+  type GroupingPresentationOptions,
+} from "./config/dataGridGroupingPresentation"
+import type { DataGridEmptyStateAlignment, DataGridEmptyStateRenderer } from "./config/dataGridEmptyState"
+import {
+  resolveDataGridColumns,
+  resolveDataGridFormulaRowModelOptions,
+  type DataGridAppClientRowModelOptions,
+  type DataGridAppColumnInput,
+} from "./config/dataGridFormulaOptions"
+import { resolveDataGridDiagnostics, type DataGridDiagnosticsProp } from "./config/dataGridDiagnostics"
+import { resolveDataGridFormulaRuntime, type DataGridFormulaRuntimeProp } from "./config/dataGridFormulaRuntime"
+import { resolveDataGridFormulaPacks, type DataGridFormulaPacksProp } from "./config/dataGridFormulaPacks"
+import { resolveDataGridPerformance, type DataGridPerformanceProp } from "./config/dataGridPerformance"
+import DataGridDiagnosticsRenderer from "./diagnostics/DataGridDiagnosticsRenderer"
+import type { DataGridXlsxExportProp } from "./exportDataGridXlsx"
+import { mergeDataGridFormulaFunctionRegistries, resolveDataGridFormulaFunctions } from "@affino/datagrid-formula-engine"
+import {
+  normalizeDataGridAppFilterModel,
+  normalizeDataGridAppUnifiedStateFilters,
+} from "./config/dataGridFilterNormalization"
+import {
+  resolveDataGridChrome,
+  type DataGridChromeProp,
+  type DataGridResolvedChromeOptions,
+} from "./config/dataGridChrome"
+import { type DataGridThemeProp } from "./theme/dataGridTheme"
+import { DEFAULT_STICKY_GROUP_ROWS, type StickyGroupRowsOptions } from "./config/dataGridStickyGroupRows"
+import {
+  resolveDataGridGroupBy,
+  resolveDataGridPagination,
+  resolveDataGridRenderMode,
+  type DataGridGroupByProp,
+  type DataGridPaginationProp,
+} from "./config/dataGridPublicProps"
+import {
+  resolveDataGridStatePersistence,
+  type DataGridPersistenceChangeEvent,
+  type DataGridStatePersistenceProp,
+} from "./config/dataGridStatePersistence"
+import { useDataGridStatePersistence } from "./useDataGridStatePersistence"
+import {
+  resolveDataGridAdvancedFilter,
+  type DataGridAdvancedFilterOptions,
+  type DataGridAdvancedFilterProp,
+} from "./config/dataGridAdvancedFilter"
+import {
+  resolveDataGridQuickFilter,
+  type DataGridQuickFilterProp,
+  type DataGridResolvedQuickFilterOptions,
+} from "./config/dataGridQuickFilter"
+import {
+  resolveDataGridFindReplace,
+  type DataGridFindReplaceOptions,
+  type DataGridFindReplaceProp,
+} from "./config/dataGridFindReplace"
+import {
+  resolveDataGridGridLines,
+  type DataGridGridLinesOptions,
+  type DataGridGridLinesProp,
+} from "./config/dataGridGridLines"
+import {
+  resolveDataGridLayoutOptions,
+  type DataGridLayoutMode,
+} from "./config/dataGridLayout"
+import {
+  resolveDataGridPlaceholderRows,
+  type DataGridPlaceholderRowsOptions,
+  type DataGridPlaceholderRowsProp,
+} from "./config/dataGridPlaceholderRows"
+import {
+  migrateDataGridSavedView,
+  sanitizeDataGridSavedView,
+  type DataGridApplySavedViewOptions,
+  type DataGridCaptureSavedViewOptions,
+  type DataGridSavedViewInteractionController,
+  type DataGridSavedViewPart,
+  type DataGridSavedViewSnapshot,
+} from "./config/dataGridSavedView"
+import {
+  resolveDataGridColumnLayout,
+  type DataGridColumnLayoutOptions,
+  type DataGridColumnLayoutProp,
+} from "./config/dataGridColumnLayout"
+import {
+  resolveDataGridColumnReorder,
+  type DataGridColumnReorderOptions,
+  type DataGridColumnReorderProp,
+} from "./config/dataGridColumnReorder"
+import {
+  resolveDataGridRowReorder,
+  type DataGridRowReorderOptions,
+  type DataGridRowReorderProp,
+} from "./config/dataGridRowReorder"
+import {
+  resolveDataGridRowSelection,
+  type DataGridResolvedRowSelectionOptions,
+  type DataGridRowSelectionProp,
+  resolveDataGridRowHeader,
+  type DataGridResolvedRowHeaderOptions,
+  type DataGridRowHeaderProp,
+} from "./config/dataGridRowSelection"
+import {
+  resolveDataGridAggregations,
+  type DataGridAggregationsOptions,
+  type DataGridAggregationsProp,
+} from "./config/dataGridAggregations"
+import {
+  resolveDataGridColumnMenu,
+  type DataGridColumnMenuOptions,
+  type DataGridColumnMenuProp,
+} from "./overlays/dataGridColumnMenu"
+import {
+  resolveDataGridCellMenu,
+  resolveDataGridRowIndexMenu,
+  type DataGridCellMenuOptions,
+  type DataGridCellMenuProp,
+  type DataGridRowIndexMenuOptions,
+  type DataGridRowIndexMenuProp,
+} from "./overlays/dataGridContextMenu"
+import { type DataGridVirtualizationProp, resolveDataGridVirtualization } from "./config/dataGridVirtualization"
+import DataGridRuntimeHost from "./host/DataGridRuntimeHost"
+import {
+  useDataGridAppControlledState,
+  type UseDataGridAppControlledStateOptions,
+} from "./useDataGridAppControlledState"
+import { useDataGridAppRowModel } from "./useDataGridAppRowModel"
+import type { DataGridCellEditablePredicate } from "./dataGridEditability"
+import {
+  createDisabledDataGridHistoryController,
+  resolveDataGridHistory,
+  type DataGridHistoryController,
+  type DataGridHistoryProp,
+  type DataGridServerHistoryProp,
+} from "./dataGridHistory"
+import type {
+  DataGridAppViewMode,
+  DataGridGanttProp,
+} from "./config/dataGridAppView"
+import type {
+  DataGridTableStageCenterPaneDiagnostics,
+  DataGridTableStageCellClass,
+  DataGridTableStageCustomOverlay,
+} from "./stage/dataGridTableStage.types"
+
+export type {
+  DataGridCaptureFocusAnchorOptions,
+  DataGridFocusAnchor,
+  DataGridRestoreFocusAnchorOptions,
+} from "./host/DataGridRuntimeHost"
+
+type DataGridRuntimeOverrides = Omit<
+  Partial<DataGridCoreServiceRegistry>,
+  "rowModel" | "columnModel" | "viewport"
+> & {
+  viewport?: DataGridCoreServiceRegistry["viewport"]
+}
+
+type DataGridSelectionService = NonNullable<DataGridRuntimeOverrides["selection"]>
+
+export type DataGridSelectionCellReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+], unknown>
+
+export type DataGridFilterCellReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+], unknown>
+
+export type DataGridFilterCellStyleReader<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  columnKey: string,
+  styleKey: string,
+], unknown>
+
+export type DataGridCellClassResolver<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  rowIndex: number,
+  column: DataGridColumnSnapshot,
+  columnIndex: number,
+], DataGridTableStageCellClass | null | undefined>
+
+export type DataGridCellStyleResolver<TRow = unknown> = DataGridBivariantCallback<[
+  row: DataGridRowNode<TRow>,
+  rowIndex: number,
+  column: DataGridColumnSnapshot,
+  columnIndex: number,
+], CSSProperties | null | undefined>
+
+export function defineDataGridSelectionCellReader<TRow = unknown>() {
+  return <TReader extends DataGridSelectionCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridFilterCellReader<TRow = unknown>() {
+  return <TReader extends DataGridFilterCellReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridFilterCellStyleReader<TRow = unknown>() {
+  return <TReader extends DataGridFilterCellStyleReader<TRow>>(reader: TReader): TReader => reader
+}
+
+export function defineDataGridCellClassResolver<TRow = unknown>() {
+  return <TResolver extends DataGridCellClassResolver<TRow>>(resolver: TResolver): TResolver => resolver
+}
+
+export function defineDataGridCellStyleResolver<TRow = unknown>() {
+  return <TResolver extends DataGridCellStyleResolver<TRow>>(resolver: TResolver): TResolver => resolver
+}
+
+export { defineDataGridStructuralRowActionHandler }
+
+export type DataGridExposedRuntime<TRow = unknown> = Pick<
+  UseDataGridRuntimeResult<TRow>,
+  | "api"
+  | "syncBodyRowsInRange"
+  | "setViewportRange"
+  | "setVirtualWindowRange"
+  | "setRows"
+  | "rowPartition"
+  | "virtualWindow"
+  | "columnSnapshot"
+  | "getBodyRowAtIndex"
+  | "resolveBodyRowIndexById"
+  | "getViewportPosition"
+  | "setViewportPosition"
+  | "scrollToRow"
+  | "scrollToColumn"
+  | "scrollToCell"
+  | "registerCellActivationAdapter"
+>
+
+type DataGridBodyAwareRuntime = DataGridExposedRuntime<Record<string, unknown>>
+
+function readDataGridRowValueByPath(source: unknown, path: string): unknown {
+  if (!path || typeof source !== "object" || source === null) {
+    return undefined
+  }
+  const segments = path.split(".").filter(Boolean)
+  let current: unknown = source
+  for (const segment of segments) {
+    if (Array.isArray(current)) {
+      const index = Number(segment)
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) {
+        return undefined
+      }
+      current = current[index]
+      continue
+    }
+    if (typeof current !== "object" || current === null || !(segment in (current as Record<string, unknown>))) {
+      return undefined
+    }
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+function createDataGridReadFilterCell(
+  columns: readonly DataGridAppColumnInput[] | undefined,
+  explicitReadFilterCell?: DataGridFilterCellReader,
+): DataGridFilterCellReader | undefined {
+  const columnsByKey = new Map<string, DataGridAppColumnInput>()
+  for (const column of columns ?? []) {
+    const key = String(column.key ?? "").trim()
+    if (!key) {
+      continue
+    }
+    columnsByKey.set(key, column)
+  }
+  if (columnsByKey.size === 0 && typeof explicitReadFilterCell !== "function") {
+    return undefined
+  }
+  return (rowNode: DataGridRowNode<unknown>, columnKey: string) => {
+    if (typeof explicitReadFilterCell === "function") {
+      const explicitValue = explicitReadFilterCell(rowNode, columnKey)
+      if (typeof explicitValue !== "undefined") {
+        return explicitValue
+      }
+    }
+    const column = columnsByKey.get(String(columnKey ?? "").trim())
+    if (!column) {
+      return undefined
+    }
+    const rowData = rowNode.data as Record<string, unknown>
+    if (typeof column.valueGetter === "function") {
+      return column.valueGetter(rowData)
+    }
+    if (typeof column.accessor === "function") {
+      return column.accessor(rowData)
+    }
+    const field = typeof column.field === "string" ? column.field.trim() : ""
+    if (!field) {
+      return undefined
+    }
+    const directValue = rowData[field]
+    if (typeof directValue !== "undefined") {
+      return directValue
+    }
+    return readDataGridRowValueByPath(rowData, field)
+  }
+}
+
+function createDisabledRowSelectionService(): DataGridSelectionService {
+  return {
+    name: "selection",
+    getRowSelectionSnapshot: () => null,
+    setRowSelectionSnapshot: () => undefined,
+    clearRowSelection: () => undefined,
+    getFocusedRow: () => null,
+    setFocusedRow: () => undefined,
+    getSelectedRows: () => [],
+    isRowSelected: () => false,
+    setRowSelected: () => undefined,
+    selectRows: () => undefined,
+    deselectRows: () => undefined,
+    clearSelectedRows: () => undefined,
+  }
+}
+
+function composeSelectionLifecycle(
+  hook: "init" | "start" | "stop" | "dispose",
+  services: readonly (DataGridSelectionService | undefined)[],
+): DataGridSelectionService[typeof hook] {
+  const handlers = services
+    .map(service => service?.[hook])
+    .filter((handler): handler is NonNullable<DataGridSelectionService[typeof hook]> => typeof handler === "function")
+  if (handlers.length === 0) {
+    return undefined
+  }
+  return async context => {
+    for (const handler of handlers) {
+      await handler(context)
+    }
+  }
+}
+
+function composeSelectionService(options: {
+  userSelectionService?: DataGridSelectionService
+  cellSelectionService: DataGridSelectionService
+  rowSelectionService: DataGridSelectionService
+}): DataGridSelectionService {
+  const {
+    userSelectionService,
+    cellSelectionService,
+    rowSelectionService,
+  } = options
+  return {
+    name: "selection",
+    init: composeSelectionLifecycle("init", [userSelectionService, cellSelectionService, rowSelectionService]),
+    start: composeSelectionLifecycle("start", [userSelectionService, cellSelectionService, rowSelectionService]),
+    stop: composeSelectionLifecycle("stop", [userSelectionService, cellSelectionService, rowSelectionService]),
+    dispose: composeSelectionLifecycle("dispose", [userSelectionService, cellSelectionService, rowSelectionService]),
+    getSelectionSnapshot: cellSelectionService.getSelectionSnapshot,
+    setSelectionSnapshot: cellSelectionService.setSelectionSnapshot,
+    clearSelection: cellSelectionService.clearSelection,
+    getRowSelectionSnapshot: rowSelectionService.getRowSelectionSnapshot,
+    setRowSelectionSnapshot: rowSelectionService.setRowSelectionSnapshot,
+    clearRowSelection: rowSelectionService.clearRowSelection,
+    getFocusedRow: rowSelectionService.getFocusedRow,
+    setFocusedRow: rowSelectionService.setFocusedRow,
+    getSelectedRows: rowSelectionService.getSelectedRows,
+    isRowSelected: rowSelectionService.isRowSelected,
+    setRowSelected: rowSelectionService.setRowSelected,
+    selectRows: rowSelectionService.selectRows,
+    deselectRows: rowSelectionService.deselectRows,
+    clearSelectedRows: rowSelectionService.clearSelectedRows,
+  }
+}
+
+interface LowLevelGridExpose {
+  api: DataGridApi<Record<string, unknown>>
+  core: unknown
+  runtime: DataGridBodyAwareRuntime
+  rowModel: DataGridRowModel<Record<string, unknown>>
+  columnModel: DataGridColumnModel
+  columnSnapshot: unknown
+  rowPartition: DataGridBodyAwareRuntime["rowPartition"]
+  setRows: (rows: readonly Record<string, unknown>[]) => void
+  syncBodyRowsInRange: (range: { start: number; end: number }) => readonly unknown[]
+  getBodyRowAtIndex: DataGridBodyAwareRuntime["getBodyRowAtIndex"]
+  resolveBodyRowIndexById: DataGridBodyAwareRuntime["resolveBodyRowIndexById"]
+  virtualWindow: unknown
+  captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) => DataGridFocusAnchor<DataGridRowId> | null
+  restoreFocusAnchor: (
+    anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+    options?: DataGridRestoreFocusAnchorOptions,
+  ) => Promise<boolean>
+  restoreFocus: () => void
+  start: () => Promise<void>
+  stop: () => void
+}
+
+interface DataGridRuntimeHostSlotProps {
+  runtime: LowLevelGridExpose["runtime"]
+  rowModel: LowLevelGridExpose["rowModel"] & {
+    dataSource?: {
+      resolveFillBoundary?: (request: any) => any
+    }
+  }
+  defaultRendererProps?: Record<string, unknown>
+  emptyStateRenderer?: DataGridEmptyStateRenderer
+  emptyStateAlignment: DataGridEmptyStateAlignment
+  [key: string]: unknown
+}
+
+interface DataGridServerHistoryStatusLike {
+  canUndo?: boolean
+  canRedo?: boolean
+  latestUndoOperationId?: string | null
+  latestRedoOperationId?: string | null
+  datasetVersion?: number | null
+}
+
+interface DataGridServerHistoryDataSourceLike {
+  undoHistoryStack?: () => Promise<DataGridServerHistoryStatusLike & { operationId?: string | null }>
+  redoHistoryStack?: () => Promise<DataGridServerHistoryStatusLike & { operationId?: string | null }>
+  getHistoryStatus?: () => Promise<DataGridServerHistoryStatusLike>
+  getCachedHistoryStatus?: () => DataGridServerHistoryStatusLike
+  subscribeHistoryStatus?: (listener: (status: DataGridServerHistoryStatusLike) => void) => () => void
+}
+
+function resolveServerHistoryDataSource(
+  rowModel: DataGridRowModel<Record<string, unknown>> | null | undefined,
+): DataGridServerHistoryDataSourceLike | null {
+  const dataSource = (rowModel as unknown as { dataSource?: unknown } | null | undefined)?.dataSource
+  if (!dataSource || typeof dataSource !== "object") {
+    return null
+  }
+  const candidate = dataSource as DataGridServerHistoryDataSourceLike
+  return typeof candidate.undoHistoryStack === "function" && typeof candidate.redoHistoryStack === "function"
+    ? candidate
+    : null
+}
+
+function rowSelectionSnapshotsEqual(
+  left: DataGridRowSelectionSnapshot | null | undefined,
+  right: DataGridRowSelectionSnapshot | null | undefined,
+): boolean {
+  if (left?.focusedRow !== right?.focusedRow) {
+    return false
+  }
+  if ((left?.mode ?? "explicit") !== (right?.mode ?? "explicit")) {
+    return false
+  }
+  const leftRows = left?.selectedRows ?? []
+  const rightRows = right?.selectedRows ?? []
+  if (leftRows.length !== rightRows.length) {
+    return false
+  }
+  for (let index = 0; index < leftRows.length; index += 1) {
+    if (leftRows[index] !== rightRows[index]) {
+      return false
+    }
+  }
+  const leftExcludedRows = left?.excludedRows ?? []
+  const rightExcludedRows = right?.excludedRows ?? []
+  if (leftExcludedRows.length !== rightExcludedRows.length) {
+    return false
+  }
+  for (let index = 0; index < leftExcludedRows.length; index += 1) {
+    if (leftExcludedRows[index] !== rightExcludedRows[index]) {
+      return false
+    }
+  }
+  return true
+}
+
+function toolbarModulePropsEqual(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): boolean {
+  if (left === right) {
+    return true
+  }
+  const leftEntries = Object.entries(left ?? {})
+  const rightEntries = Object.entries(right ?? {})
+  if (leftEntries.length !== rightEntries.length) {
+    return false
+  }
+  for (const [key, value] of leftEntries) {
+    if (!Object.is(value, right?.[key])) {
+      return false
+    }
+  }
+  return true
+}
+
+function toolbarModulesEqual(
+  left: readonly DataGridAppToolbarModule[],
+  right: readonly DataGridAppToolbarModule[],
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    const leftModule = left[index]
+    const rightModule = right[index]
+    if (!leftModule || !rightModule) {
+      return false
+    }
+    if (
+      leftModule.key !== rightModule.key
+      || leftModule.component !== rightModule.component
+      || !toolbarModulePropsEqual(leftModule.props, rightModule.props)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function mergeVirtualizationProps(
+  preset: DataGridVirtualizationProp | undefined,
+  user: DataGridVirtualizationProp | undefined,
+): DataGridVirtualizationProp | undefined {
+  if (user === undefined) return preset
+  if (preset === undefined || user === false || preset === false) return user === false ? false : user
+  if (user === true) return preset === true ? true : { ...preset, rows: true, columns: true }
+  if (preset === true) return { rows: true, columns: true, ...user }
+  return { ...preset, ...user }
+}
+
+const dataGridProps = {
+  rows: {
+    type: Array as PropType<readonly unknown[]>,
+    default: () => [],
+  },
+  rowModel: {
+    type: Object as PropType<DataGridRowModel<unknown> | undefined>,
+    default: undefined,
+  },
+  rowsUpdateMode: {
+    type: String as PropType<"replace" | "patch">,
+    default: "replace",
+  },
+  clientRowModelOptions: {
+    type: Object as PropType<DataGridAppClientRowModelOptions<unknown> | undefined>,
+    default: undefined,
+  },
+  computedFields: {
+    type: Array as PropType<readonly DataGridComputedFieldDefinition<unknown>[] | null | undefined>,
+    default: undefined,
+  },
+  formulas: {
+    type: Array as PropType<readonly DataGridFormulaFieldDefinition[] | null | undefined>,
+    default: undefined,
+  },
+  formulaFunctions: {
+    type: Object as PropType<DataGridFormulaFunctionRegistry | null | undefined>,
+    default: undefined,
+  },
+  diagnostics: {
+    type: [Boolean, Object] as PropType<DataGridDiagnosticsProp | undefined>,
+    default: undefined,
+  },
+  formulaRuntime: {
+    type: [Boolean, Object] as PropType<DataGridFormulaRuntimeProp | undefined>,
+    default: undefined,
+  },
+  formulaPacks: {
+    type: [Boolean, Array, Object] as PropType<DataGridFormulaPacksProp | undefined>,
+    default: undefined,
+  },
+  performance: {
+    type: [Boolean, String, Object] as PropType<DataGridPerformanceProp | undefined>,
+    default: undefined,
+  },
+  columns: {
+    type: Array as PropType<readonly DataGridAppColumnInput[]>,
+    default: () => [],
+  },
+  externalFilterIndicators: {
+    type: Array as PropType<readonly DataGridExternalFilterIndicator[]>,
+    default: () => [],
+  },
+  rendererPolicy: {
+    type: Object as PropType<DataGridAuthoredRendererPolicy | undefined>,
+    default: undefined,
+  },
+  theme: {
+    type: [String, Object] as PropType<DataGridThemeProp>,
+    default: undefined,
+  },
+  aggregationModel: {
+    type: Object as PropType<DataGridAggregationModel<Record<string, unknown>> | null | undefined>,
+    default: undefined,
+  },
+  renderMode: {
+    type: String as PropType<"virtualization" | "pagination" | undefined>,
+    default: undefined,
+  },
+  virtualization: {
+    type: [Boolean, Object] as PropType<DataGridVirtualizationProp | undefined>,
+    default: undefined,
+  },
+  pagination: {
+    type: [Boolean, Object] as PropType<DataGridPaginationProp | undefined>,
+    default: undefined,
+  },
+  columnMenu: {
+    type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
+    default: undefined,
+  },
+  cellMenu: {
+    type: [Boolean, Object] as PropType<DataGridCellMenuProp | undefined>,
+    default: undefined,
+  },
+  rowIndexMenu: {
+    type: [Boolean, Object] as PropType<DataGridRowIndexMenuProp | undefined>,
+    default: undefined,
+  },
+  runStructuralRowAction: {
+    type: Function as PropType<DataGridStructuralRowActionHandler<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
+  columnLayout: {
+    type: [Boolean, Object] as PropType<DataGridColumnLayoutProp | undefined>,
+    default: undefined,
+  },
+  columnReorder: {
+    type: [Boolean, Object] as PropType<DataGridColumnReorderProp | undefined>,
+    default: undefined,
+  },
+  aggregations: {
+    type: [Boolean, Object] as PropType<DataGridAggregationsProp | undefined>,
+    default: undefined,
+  },
+  advancedFilter: {
+    type: [Boolean, Object] as PropType<DataGridAdvancedFilterProp | undefined>,
+    default: undefined,
+  },
+  quickFilter: {
+    type: [Boolean, Object] as PropType<DataGridQuickFilterProp | undefined>,
+    default: undefined,
+  },
+  findReplace: {
+    type: [Boolean, Object] as PropType<DataGridFindReplaceProp | undefined>,
+    default: undefined,
+  },
+  gridLines: {
+    type: [String, Object] as PropType<DataGridGridLinesProp | undefined>,
+    default: undefined,
+  },
+  showRowIndex: {
+    type: Boolean,
+    default: true,
+  },
+  indexColumnStyle: {
+    type: Object as PropType<CSSProperties | undefined>,
+    default: undefined,
+  },
+  rowSelection: {
+    type: [Boolean, Object] as PropType<DataGridRowSelectionProp>,
+    default: true,
+  },
+  rowHeader: {
+    type: Object as PropType<DataGridRowHeaderProp>,
+    default: undefined,
+  },
+  rowReorder: {
+    type: [Boolean, Object] as PropType<DataGridRowReorderProp | undefined>,
+    default: undefined,
+  },
+  rowSelectionState: {
+    type: Object as PropType<DataGridRowSelectionSnapshot | null | undefined>,
+    default: undefined,
+  },
+  pageSize: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  currentPage: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  plugins: {
+    type: Array as PropType<readonly DataGridApiPluginDefinition<unknown>[]>,
+    default: () => [],
+  },
+  services: {
+    type: Object as PropType<DataGridRuntimeOverrides | undefined>,
+    default: undefined,
+  },
+  startupOrder: {
+    type: Array as PropType<CreateDataGridCoreOptions["startupOrder"] | undefined>,
+    default: undefined,
+  },
+  autoStart: {
+    type: Boolean,
+    default: true,
+  },
+  sortModel: {
+    type: Array as PropType<readonly DataGridSortState[] | undefined>,
+    default: undefined,
+  },
+  filterModel: {
+    type: Object as PropType<DataGridFilterSnapshot | null | undefined>,
+    default: undefined,
+  },
+  groupBy: {
+    type: [String, Array, Object] as PropType<DataGridGroupByProp | undefined>,
+    default: undefined,
+  },
+  groupingPresentation: {
+    type: Object as PropType<GroupingPresentationOptions | undefined>,
+    default: undefined,
+  },
+  pivotModel: {
+    type: Object as PropType<DataGridPivotSpec | null | undefined>,
+    default: undefined,
+  },
+  columnState: {
+    type: Object as PropType<DataGridUnifiedColumnState | null | undefined>,
+    default: undefined,
+  },
+  columnOrder: {
+    type: Array as PropType<readonly string[] | null | undefined>,
+    default: undefined,
+  },
+  hiddenColumnKeys: {
+    type: Array as PropType<readonly string[] | null | undefined>,
+    default: undefined,
+  },
+  columnWidths: {
+    type: Object as PropType<Readonly<Record<string, number | null>> | null | undefined>,
+    default: undefined,
+  },
+  columnPins: {
+    type: Object as PropType<Readonly<Record<string, DataGridColumnPin>> | null | undefined>,
+    default: undefined,
+  },
+  state: {
+    type: Object as PropType<DataGridUnifiedState<Record<string, unknown>> | null | undefined>,
+    default: undefined,
+  },
+  stateOptions: {
+    type: Object as PropType<DataGridSetStateOptions | null | undefined>,
+    default: undefined,
+  },
+  statePersistence: {
+    type: [String, Boolean, Object] as PropType<DataGridStatePersistenceProp>,
+    default: undefined,
+  },
+  rowHeightMode: {
+    type: String as PropType<"fixed" | "auto">,
+    default: "fixed",
+  },
+  stickyGroupRows: {
+    type: Object as PropType<StickyGroupRowsOptions>,
+    default: () => ({ ...DEFAULT_STICKY_GROUP_ROWS }),
+  },
+  baseRowHeight: {
+    type: Number,
+    default: 31,
+  },
+  layoutMode: {
+    type: String as PropType<DataGridLayoutMode>,
+    default: "fill",
+  },
+  minRows: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  maxRows: {
+    type: Number as PropType<number | undefined>,
+    default: undefined,
+  },
+  placeholderRows: {
+    type: [Number, Object] as PropType<DataGridPlaceholderRowsProp<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
+  fillHandle: {
+    type: Boolean,
+    default: false,
+  },
+  rangeMove: {
+    type: Boolean,
+    default: false,
+  },
+  rowHover: {
+    type: Boolean,
+    default: false,
+  },
+  stripedRows: {
+    type: Boolean,
+    default: false,
+  },
+  readSelectionCell: {
+    type: Function as PropType<DataGridSelectionCellReader | undefined>,
+    default: undefined,
+  },
+  readFilterCell: {
+    type: Function as PropType<DataGridFilterCellReader | undefined>,
+    default: undefined,
+  },
+  readFilterCellStyle: {
+    type: Function as PropType<DataGridFilterCellStyleReader | undefined>,
+    default: undefined,
+  },
+  cellClass: {
+    type: Function as PropType<DataGridCellClassResolver | undefined>,
+    default: undefined,
+  },
+  cellStyle: {
+    type: Function as PropType<DataGridCellStyleResolver | undefined>,
+    default: undefined,
+  },
+  isCellEditable: {
+    type: Function as PropType<DataGridCellEditablePredicate<Record<string, unknown>> | undefined>,
+    default: undefined,
+  },
+  viewMode: {
+    type: String as PropType<DataGridAppViewMode | undefined>,
+    default: undefined,
+  },
+  gantt: {
+    type: [Boolean, Object] as PropType<DataGridGanttProp | undefined>,
+    default: undefined,
+  },
+  history: {
+    type: [Boolean, Object] as PropType<DataGridHistoryProp | undefined>,
+    default: undefined,
+  },
+  serverHistory: {
+    type: Boolean as PropType<DataGridServerHistoryProp | undefined>,
+    default: true,
+  },
+  chrome: {
+    type: [String, Object] as PropType<DataGridChromeProp | undefined>,
+    default: undefined,
+  },
+  toolbarModules: {
+    type: Array as PropType<readonly DataGridAppToolbarModule[]>,
+    default: () => [],
+  },
+  toolbarLayout: {
+    type: Object as PropType<DataGridToolbarLayoutProp>,
+    default: undefined,
+  },
+  xlsxExport: {
+    type: [Boolean, Object] as PropType<DataGridXlsxExportProp>,
+    default: false,
+  },
+  customOverlays: {
+    type: Array as PropType<readonly DataGridTableStageCustomOverlay[] | undefined>,
+    default: undefined,
+  },
+  emptyState: {
+    type: Function as PropType<DataGridEmptyStateRenderer | undefined>,
+    default: undefined,
+  },
+  emptyStateAlignment: {
+    type: String as PropType<DataGridEmptyStateAlignment>,
+    default: "content",
+  },
+  reportFillWarning: {
+    type: Function as PropType<((message: string) => void) | undefined>,
+    default: undefined,
+  },
+  reportCenterPaneDiagnostics: {
+    type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,
+    default: undefined,
+  },
+  reportFillPlumbingState: {
+    type: Function as PropType<((layer: string, present: boolean) => void) | undefined>,
+    default: undefined,
+  },
+  reportFillPlumbingDetail: {
+    type: Function as PropType<((layer: string, value: string) => void) | undefined>,
+    default: undefined,
+  },
+} as const
+
+type DataGridPublicPropsBase = ExtractPublicPropTypes<typeof dataGridProps>
+
+export type DataGridProps<TRow = unknown> = Omit<
+  DataGridPublicPropsBase,
+  | "rows"
+  | "rowModel"
+  | "clientRowModelOptions"
+  | "computedFields"
+  | "columns"
+  | "plugins"
+  | "state"
+  | "placeholderRows"
+  | "readSelectionCell"
+  | "readFilterCell"
+  | "readFilterCellStyle"
+  | "cellClass"
+  | "cellStyle"
+  | "isCellEditable"
+> & {
+  rows?: readonly (TRow | DataGridRowNodeInput<TRow>)[]
+  rowModel?: DataGridRowModel<TRow> | undefined
+  clientRowModelOptions?: DataGridAppClientRowModelOptions<TRow> | undefined
+  rowsUpdateMode?: "replace" | "patch"
+  computedFields?: readonly DataGridComputedFieldDefinition<TRow>[] | null | undefined
+  columns?: readonly DataGridAppColumnInput<TRow>[]
+  plugins?: readonly DataGridApiPluginDefinition<TRow>[]
+  state?: DataGridUnifiedState<TRow> | null | undefined
+  placeholderRows?: DataGridPlaceholderRowsProp<TRow> | undefined
+  readSelectionCell?: DataGridSelectionCellReader<TRow> | undefined
+  readFilterCell?: DataGridFilterCellReader<TRow> | undefined
+  readFilterCellStyle?: DataGridFilterCellStyleReader<TRow> | undefined
+  cellClass?: DataGridCellClassResolver<TRow> | undefined
+  cellStyle?: DataGridCellStyleResolver<TRow> | undefined
+  isCellEditable?: DataGridCellEditablePredicate<TRow> | undefined
+}
+
+export interface DataGridServerSelectionSummaryOptions {
+  columns: readonly DataGridDataSourceSelectionSummaryColumn[]
+  signal?: AbortSignal
+}
+
+export interface DataGridExposed<TRow = unknown> {
+  history: DataGridHistoryController
+  getHistory: () => DataGridHistoryController
+  getApi: () => DataGridApi<TRow> | null
+  getRuntime: () => DataGridExposedRuntime<TRow> | null
+  captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) => DataGridFocusAnchor<DataGridRowId> | null
+  restoreFocusAnchor: (
+    anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+    options?: DataGridRestoreFocusAnchorOptions,
+  ) => Promise<boolean>
+  restoreFocus: () => void
+  getSelectionAggregatesLabel: () => string
+  getServerSelectionSummary: (options: DataGridServerSelectionSummaryOptions) => Promise<DataGridDataSourceSelectionSummaryResult | null>
+  runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>
+  resetPersistedState: () => Promise<boolean>
+  getState: () => DataGridUnifiedState<TRow> | null
+  getSavedView: (options?: DataGridCaptureSavedViewOptions) => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
+  migrateSavedView: (
+    savedView: unknown,
+    options?: DataGridMigrateStateOptions,
+  ) => DataGridSavedViewSnapshot<TRow & Record<string, unknown>> | null
+  applySavedView: (
+    savedView: DataGridSavedViewSnapshot<TRow & Record<string, unknown>>,
+    options?: DataGridApplySavedViewOptions,
+  ) => boolean
+  migrateState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
+  applyState: (state: DataGridUnifiedState<TRow> | null, options?: DataGridSetStateOptions) => boolean
+}
+
+
+export interface DataGridCellEditEvent<TRow = unknown> {
+  rowId: DataGridRowId
+  columnKey: string
+  oldValue: unknown
+  newValue: unknown
+  patch: {
+    rowId: DataGridRowId
+    data: Partial<TRow>
+  }
+}
+
+export interface DataGridRowsEditedEvent<TRow = unknown> {
+  /** `grid` means a user-facing grid operation; `application` means a host API update. */
+  source: "grid" | "application"
+  /** One entry per changed row, with values after successful application. */
+  edits: readonly { rowId: DataGridRowId; oldData: TRow; newData: TRow; patch: Partial<TRow> }[]
+}
+
+const DataGridRuntimeComponent = defineComponent({
+  name: "DataGrid",
+  inheritAttrs: false,
+  props: dataGridProps,
+  emits: {
+    "cell-change": (_payload: unknown) => true,
+    "data-change": (_payload: DataGridRowsEditedEvent<Record<string, unknown>>) => true,
+    "cell-edit": (_payload: DataGridCellEditEvent<Record<string, unknown>>) => true,
+    "selection-change": (_payload: DataGridApiSelectionChangedEvent) => true,
+    "row-selection-change": (_payload: DataGridApiRowSelectionChangedEvent) => true,
+    "update:rowSelectionState": (_payload: DataGridRowSelectionSnapshot | null) => true,
+    "update:columnState": (_payload: DataGridUnifiedColumnState | null) => true,
+    "update:columnOrder": (_payload: readonly string[] | null) => true,
+    "update:hiddenColumnKeys": (_payload: readonly string[] | null) => true,
+    "update:columnWidths": (_payload: Readonly<Record<string, number | null>> | null) => true,
+    "update:columnPins": (_payload: Readonly<Record<string, DataGridColumnPin>> | null) => true,
+    "update:groupBy": (_payload: DataGridGroupBySpec | null) => true,
+    "update:viewMode": (_payload: DataGridAppViewMode) => true,
+    "update:state": (_payload: DataGridUnifiedState<Record<string, unknown>> | null) => true,
+    "persistence-change": (_payload: DataGridPersistenceChangeEvent) => true,
+    "toolbar-modules-change": (_payload: readonly DataGridAppToolbarModule[]) => true,
+    "ready": (_payload: { api: DataGridApi<Record<string, unknown>>; rowModel: DataGridRowModel<Record<string, unknown>> | null }) => true,
+  },
+  setup(props, { attrs, slots, emit, expose }) {
+    const dataGridRef = ref<LowLevelGridExpose | null>(null)
+    const disabledHistoryController = createDisabledDataGridHistoryController()
+    const registeredHistoryController = ref<DataGridHistoryController | null>(null)
+    const savedViewInteractionController = ref<DataGridSavedViewInteractionController | null>(null)
+    const registeredStructuralRowActionRunner = ref<((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null>(null)
+    const resolvedToolbarModules = ref<readonly DataGridAppToolbarModule[]>([])
+    let queuedToolbarModules: readonly DataGridAppToolbarModule[] | null = null
+    let toolbarModulesEmitScheduled = false
+    const currentViewMode = ref<DataGridAppViewMode>(props.viewMode === "gantt" ? "gantt" : "table")
+    const runtimeUnifiedState = ref<DataGridUnifiedState<Record<string, unknown>> | null>(props.state ?? null)
+    const resolvedStatePersistence = computed(() => resolveDataGridStatePersistence(props.statePersistence))
+    const resolvedHistory = computed(() => resolveDataGridHistory(props.history))
+    const resolvedChrome = computed<DataGridResolvedChromeOptions>(() => resolveDataGridChrome(props.chrome))
+    const resolvedRenderMode = computed(() => {
+      return resolveDataGridRenderMode(props.renderMode, props.pagination)
+    })
+    const resolvedPagination = computed(() => {
+      return resolveDataGridPagination(
+        props.pagination,
+        resolvedRenderMode.value,
+        props.pageSize,
+        props.currentPage,
+      )
+    })
+    const resolvedColumnMenu = computed<DataGridColumnMenuOptions>(() => {
+      return resolveDataGridColumnMenu(props.columnMenu)
+    })
+    const resolvedCellMenu = computed<DataGridCellMenuOptions>(() => {
+      return resolveDataGridCellMenu(props.cellMenu)
+    })
+    const resolvedRowIndexMenu = computed<DataGridRowIndexMenuOptions>(() => {
+      return resolveDataGridRowIndexMenu(props.rowIndexMenu)
+    })
+    const resolvedColumnLayout = computed<DataGridColumnLayoutOptions>(() => {
+      return resolveDataGridColumnLayout(props.columnLayout)
+    })
+    const resolvedColumnReorder = computed<DataGridColumnReorderOptions>(() => {
+      return resolveDataGridColumnReorder(props.columnReorder)
+    })
+    const resolvedAggregations = computed<DataGridAggregationsOptions>(() => {
+      return resolveDataGridAggregations(props.aggregations)
+    })
+    const resolvedAdvancedFilter = computed<DataGridAdvancedFilterOptions>(() => {
+      return resolveDataGridAdvancedFilter(props.advancedFilter)
+    })
+    const resolvedQuickFilter = computed<DataGridResolvedQuickFilterOptions>(() => {
+      return resolveDataGridQuickFilter(props.quickFilter)
+    })
+    const resolvedFindReplace = computed<DataGridFindReplaceOptions>(() => {
+      return resolveDataGridFindReplace(props.findReplace)
+    })
+    const resolvedGridLines = computed<DataGridGridLinesOptions>(() => {
+      return resolveDataGridGridLines(props.gridLines)
+    })
+    const resolvedGroupBy = computed(() => {
+      return resolveDataGridGroupBy(props.groupBy)
+    })
+    const normalizedControlledState = computed(() => (
+      props.state ? normalizeDataGridAppUnifiedStateFilters(props.state, props.columns) : props.state
+    ))
+    const normalizedControlledFilterModel = computed(() => (
+      normalizeDataGridAppFilterModel(props.filterModel ?? null, props.columns)
+    ))
+    const effectiveUnifiedState = computed(() => props.state ? normalizedControlledState.value : runtimeUnifiedState.value)
+    const effectiveSortModel = computed<readonly DataGridSortState[] | undefined>(() => {
+      if (props.sortModel !== undefined) {
+        return props.sortModel
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.sortModel
+    })
+    const effectiveFilterModel = computed<DataGridFilterSnapshot | null | undefined>(() => {
+      if (props.filterModel !== undefined) {
+        return normalizedControlledFilterModel.value
+      }
+      return cloneDataGridFilterSnapshot(effectiveUnifiedState.value?.rows?.snapshot?.filterModel ?? null)
+    })
+    const effectiveGroupBy = computed<DataGridGroupBySpec | null>(() => {
+      if (props.groupBy !== undefined) {
+        return resolvedGroupBy.value ?? null
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.groupBy ?? null
+    })
+    const effectivePivotModel = computed<DataGridPivotSpec | null | undefined>(() => {
+      if (props.pivotModel !== undefined) {
+        return props.pivotModel
+      }
+      return effectiveUnifiedState.value?.rows?.snapshot?.pivotModel ?? null
+    })
+    const resolvedDiagnostics = computed(() => resolveDataGridDiagnostics(props.diagnostics))
+    const resolvedFormulaRuntime = computed(() => resolveDataGridFormulaRuntime(props.formulaRuntime))
+    const resolvedFormulaPacks = computed(() => resolveDataGridFormulaPacks(props.formulaPacks))
+    const resolvedPerformance = computed(() => resolveDataGridPerformance(props.performance))
+    const resolvedFormulaFunctions = computed(() => {
+      if (!resolvedFormulaPacks.value.enabled) return props.formulaFunctions
+      return mergeDataGridFormulaFunctionRegistries(
+        resolveDataGridFormulaFunctions(resolvedFormulaPacks.value.packs),
+        props.formulaFunctions,
+      )
+    })
+    const resolvedFormulaRuntimeOptions = computed(() => {
+      const performance = resolvedPerformance.value.enabled ? resolvedPerformance.value : null
+      const formulaRuntime = resolvedFormulaRuntime.value.enabled ? resolvedFormulaRuntime.value : null
+      const computeMode = formulaRuntime?.computeMode ?? performance?.computeMode
+      const workerPatchDispatchThreshold = performance?.workerPatchDispatchThreshold
+      const formulaColumnCacheMaxColumns = formulaRuntime?.formulaColumnCacheMaxColumns
+        ?? performance?.formulaColumnCacheMaxColumns
+      if (computeMode === undefined
+        && workerPatchDispatchThreshold === undefined
+        && formulaColumnCacheMaxColumns === undefined) return undefined
+      return {
+        ...(computeMode ? { computeMode } : {}),
+        ...(workerPatchDispatchThreshold !== undefined ? { workerPatchDispatchThreshold } : {}),
+        ...(formulaColumnCacheMaxColumns !== undefined ? { formulaColumnCacheMaxColumns } : {}),
+      }
+    })
+    const resolvedVirtualization = computed(() => {
+      const input = mergeVirtualizationProps(
+        resolvedPerformance.value.enabled ? resolvedPerformance.value.virtualization : undefined,
+        props.virtualization,
+      )
+      return resolveDataGridVirtualization(input, resolvedRenderMode.value)
+    })
+    const resolvedLayout = computed(() => (
+      resolveDataGridLayoutOptions(props.layoutMode, props.minRows, props.maxRows)
+    ))
+    const resolvedPlaceholderRows = computed<DataGridPlaceholderRowsOptions<Record<string, unknown>>>(() => {
+      return resolveDataGridPlaceholderRows(props.placeholderRows)
+    })
+    const resolvedRowReorder = computed<DataGridRowReorderOptions>(() => {
+      return resolveDataGridRowReorder(props.rowReorder)
+    })
+    const resolvedReadFilterCell = computed<DataGridFilterCellReader | undefined>(() => {
+      const clientRowModelReadFilterCell = props.clientRowModelOptions?.readFilterCell as DataGridFilterCellReader | undefined
+      return createDataGridReadFilterCell(
+        props.columns,
+        props.readFilterCell ?? clientRowModelReadFilterCell,
+      )
+    })
+    const resolvedAppClientRowModelOptions = computed<DataGridAppClientRowModelOptions<unknown> | undefined>(() => {
+      const resolvedReadFilterCellStyle = props.readFilterCellStyle
+        ?? props.clientRowModelOptions?.readFilterCellStyle
+      if (!resolvedReadFilterCell.value && !resolvedReadFilterCellStyle) {
+        return props.clientRowModelOptions
+      }
+      return {
+        ...(props.clientRowModelOptions ?? {}),
+        readFilterCell: resolvedReadFilterCell.value as DataGridAppClientRowModelOptions<unknown>["readFilterCell"],
+        readFilterCellStyle: resolvedReadFilterCellStyle as DataGridAppClientRowModelOptions<unknown>["readFilterCellStyle"],
+      }
+    })
+    const resolvedClientRowModelOptions = computed(() => {
+      return resolveDataGridFormulaRowModelOptions({
+        columns: props.columns,
+        clientRowModelOptions: resolvedAppClientRowModelOptions.value,
+        computedFields: props.computedFields,
+        formulas: props.formulas,
+        formulaFunctions: resolvedFormulaFunctions.value,
+        runtimeOptions: resolvedFormulaRuntimeOptions.value,
+      })
+    })
+    const resolvedColumns = computed(() => {
+      const presentation = props.groupingPresentation
+      if (!presentation || !effectiveGroupBy.value?.fields.length) {
+        return resolveDataGridColumns(props.columns)
+      }
+      if (presentation.display !== "hierarchy-column") {
+        throw new Error(`Unsupported grouping presentation: ${String(presentation.display)}`)
+      }
+      const hierarchy = presentation.hierarchyColumn ?? {}
+      const leafColumnId = hierarchy.leafColumnId
+      if (hierarchy.hideLeafSourceColumn === true && !leafColumnId) {
+        throw new Error("groupingPresentation.hierarchyColumn.leafColumnId is required when hideLeafSourceColumn is true")
+      }
+      if (leafColumnId === DATA_GRID_HIERARCHY_COLUMN_ID) {
+        throw new Error("The hierarchy column cannot be used as its own leaf source")
+      }
+      const authoredHierarchyColumn = props.columns.find(column => column.key === DATA_GRID_HIERARCHY_COLUMN_ID)
+      const sourceColumn = leafColumnId
+        ? props.columns.find(column => column.key === leafColumnId)
+        : undefined
+      if (leafColumnId && !sourceColumn) {
+        throw new Error(`Unknown hierarchy leafColumnId '${leafColumnId}'`)
+      }
+      if (sourceColumn?.meta?.rowSelection === true || leafColumnId === "select" || leafColumnId === "__row_number__") {
+        throw new Error(`Column '${leafColumnId}' cannot be used as a hierarchy leaf source`)
+      }
+      if (!leafColumnId) {
+        return resolveDataGridColumns(props.columns)
+      }
+      const groupByFields = effectiveGroupBy.value.fields
+      const showFieldLabel = hierarchy.showGroupFieldLabel === "always"
+        || (hierarchy.showGroupFieldLabel !== "never" && groupByFields.length > 1)
+      const groupCellRenderer = ({ group }: {
+        group: { field: string; value: string; childrenCount: number; renderMeta: { level: number; isExpanded?: boolean }; toggle: () => void }
+      }) => {
+        return h("div", {
+          class: "datagrid-hierarchy-group",
+          style: { "--datagrid-hierarchy-depth": group.renderMeta.level },
+        }, [
+          h("button", {
+            type: "button",
+            class: "datagrid-hierarchy-group__toggle",
+            "aria-label": group.renderMeta.isExpanded ? `Collapse ${group.value}` : `Expand ${group.value}`,
+            "aria-expanded": group.renderMeta.isExpanded ? "true" : "false",
+            onClick: (event: MouseEvent) => { event.stopPropagation(); group.toggle() },
+          }, group.renderMeta.isExpanded ? "▾" : "▸"),
+          showFieldLabel ? h("span", { class: "datagrid-hierarchy-group__field" },
+            String(props.columns.find(column => column.key === group.field)?.label ?? group.field)) : null,
+          h("strong", { class: "datagrid-hierarchy-group__value" }, group.value),
+          hierarchy.showCount === false ? null : h("span", { class: "datagrid-hierarchy-group__count" }, String(group.childrenCount)),
+        ])
+      }
+      const hierarchyColumn: DataGridAppColumnInput = {
+        ...authoredHierarchyColumn,
+        key: DATA_GRID_HIERARCHY_COLUMN_ID,
+        label: hierarchy.headerName ?? authoredHierarchyColumn?.label ?? "Group",
+        field: sourceColumn?.field ?? sourceColumn?.key,
+        accessor: sourceColumn?.accessor,
+        valueGetter: sourceColumn?.valueGetter,
+        dataType: sourceColumn?.dataType,
+        presentation: sourceColumn?.presentation,
+        cellType: sourceColumn?.cellType,
+        placeholder: sourceColumn?.placeholder,
+        constraints: sourceColumn?.constraints,
+        valueSetter: sourceColumn?.valueSetter,
+        initialState: authoredHierarchyColumn?.initialState ?? { width: 240 },
+        capabilities: { ...authoredHierarchyColumn?.capabilities, ...sourceColumn?.capabilities, groupable: false },
+        meta: {
+          ...authoredHierarchyColumn?.meta,
+          hierarchyLeafSourceColumnKey: leafColumnId,
+          hierarchySourceColumn: sourceColumn,
+          hierarchyDepth: groupByFields.length,
+        },
+        groupCellRenderer,
+      }
+      const inputs = props.columns.filter(column => column.key !== DATA_GRID_HIERARCHY_COLUMN_ID)
+      const hierarchyIndex = inputs.findIndex(column => column.initialState?.pin !== "left")
+      inputs.splice(hierarchyIndex < 0 ? inputs.length : hierarchyIndex, 0, hierarchyColumn)
+      return resolveDataGridColumns(inputs)
+    })
+    const controlledProps: UseDataGridAppControlledStateOptions["props"] = {
+      get state() {
+        return normalizedControlledState.value
+      },
+      get stateOptions() {
+        return props.stateOptions
+      },
+      get columnState() {
+        return props.columnState
+      },
+      get columnOrder() {
+        return props.columnOrder
+      },
+      get hiddenColumnKeys() {
+        return props.hiddenColumnKeys
+      },
+      get columnWidths() {
+        return props.columnWidths
+      },
+      get columnPins() {
+        return props.columnPins
+      },
+      get sortModel() {
+        return props.sortModel
+      },
+      get filterModel() {
+        return props.filterModel === undefined ? undefined : normalizedControlledFilterModel.value
+      },
+      get groupBy() {
+        return resolvedGroupBy.value
+      },
+      get aggregationModel() {
+        return props.aggregationModel
+      },
+      get pivotModel() {
+        return props.pivotModel
+      },
+      get rowHeightMode() {
+        return props.rowHeightMode
+      },
+      get baseRowHeight() {
+        return props.baseRowHeight
+      },
+      get columns() {
+        return props.columns
+      },
+    }
+    const inferredMode = computed<"base" | "tree" | "pivot">(() => {
+      if (effectivePivotModel.value) {
+        return "pivot"
+      }
+      if (resolvedClientRowModelOptions.value && "initialTreeData" in resolvedClientRowModelOptions.value) {
+        return "tree"
+      }
+      return "base"
+    })
+    const visibleColumns = computed(() => dataGridRef.value?.api.columns.getSnapshot().visibleColumns ?? [])
+    const totalRows = computed(() => {
+      const runtime = dataGridRef.value?.runtime
+      if (!runtime) {
+        return 0
+      }
+      const rowPartition = unref(runtime.rowPartition)
+      return Math.max(0, rowPartition.pinnedTopRows.length + rowPartition.bodyRowCount + rowPartition.pinnedBottomRows.length)
+    })
+    const resolveSelectionRowAtIndex = (rowIndex: number): DataGridRowNode<unknown> | null => {
+      const runtime = dataGridRef.value?.runtime
+      if (!runtime) {
+        return null
+      }
+      const rowPartition = unref(runtime.rowPartition)
+      const pinnedTopCount = rowPartition.pinnedTopRows.length
+      if (rowIndex < pinnedTopCount) {
+        return rowPartition.pinnedTopRows[rowIndex] ?? null
+      }
+      const bodyRowCount = rowPartition.bodyRowCount
+      const bodyRowIndex = rowIndex - pinnedTopCount
+      if (bodyRowIndex < bodyRowCount) {
+        return runtime.getBodyRowAtIndex(bodyRowIndex)
+      }
+      const pinnedBottomIndex = bodyRowIndex - bodyRowCount
+      return rowPartition.pinnedBottomRows[pinnedBottomIndex] ?? null
+    }
+    const resolvedRowSelection = computed<DataGridResolvedRowSelectionOptions>(() => resolveDataGridRowSelection(props.rowSelection))
+    const resolvedRowHeader = computed<DataGridResolvedRowHeaderOptions>(() => resolveDataGridRowHeader(props.rowHeader))
+    const showRowSelection = computed(() => resolvedRowSelection.value.enabled)
+    const rowSelectionColumnWidth = computed(() => resolvedRowSelection.value.columnWidth)
+    const selectionOptions = {
+      mode: computed(() => inferredMode.value),
+      resolveRuntime: () => dataGridRef.value,
+      visibleColumns,
+      totalRows,
+      showRowSelection,
+      readSelectionCell: props.readSelectionCell,
+      resolveSelectionRowAtIndex,
+    } as Parameters<typeof useDataGridAppSelection<unknown>>[0]
+
+    const {
+      selectionSnapshot,
+      selectionAnchor,
+      syncSelectionSnapshotFromRuntime,
+      selectionService,
+      selectionAggregatesLabel,
+    } = useDataGridAppSelection<unknown>(selectionOptions)
+    const {
+      rowSelectionSnapshot,
+      syncRowSelectionSnapshotFromRuntime,
+      reconcileRowSelectionFromRuntime,
+      selectionService: rowSelectionService,
+    } = useDataGridAppRowSelection<unknown>({
+      resolveRuntime: () => dataGridRef.value,
+    })
+    const resolvedRowSelectionService = computed<DataGridSelectionService>(() => {
+      return showRowSelection.value ? rowSelectionService : createDisabledRowSelectionService()
+    })
+    const resolvedServices = computed<DataGridRuntimeOverrides>(() => ({
+      ...(props.services ?? {}),
+      selection: composeSelectionService({
+        userSelectionService: props.services?.selection,
+        cellSelectionService: selectionService,
+        rowSelectionService: resolvedRowSelectionService.value,
+      }),
+    }))
+    const {
+      dataGridInstanceKey,
+      resolvedRowModel,
+    } = useDataGridAppRowModel({
+      rows: toRef(props, "rows"),
+      rowModel: toRef(props, "rowModel"),
+      clientRowModelOptions: resolvedClientRowModelOptions,
+      rowsUpdateMode: props.rowsUpdateMode,
+      onOwnedRowModelRecreated: () => {
+        controlledState.dispose()
+      },
+    })
+
+    const persistence = useDataGridStatePersistence({
+      config: resolvedStatePersistence,
+      columnKeys: () => props.columns.map(column => column.key),
+      getState: includeViewportPosition => dataGridRef.value?.api.state.get({ includeViewportPosition }) ?? null,
+      migrate: value => controlledState.migrateState(value),
+      apply: (state, setOptions) => {
+        controlledState.applyState(normalizeDataGridAppUnifiedStateFilters(state, props.columns), setOptions)
+        controlledState.reconcileControlledInputs()
+      },
+      emit: event => emit("persistence-change", event),
+      ready: () => {
+        const api = dataGridRef.value?.api
+        if (api) emit("ready", {
+          api,
+          rowModel: resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null,
+        })
+      },
+    })
+
+    const controlledState = useDataGridAppControlledState({
+      gridRef: dataGridRef,
+      props: controlledProps,
+      emit: {
+        columnState: payload => emit("update:columnState", payload),
+        columnOrder: payload => emit("update:columnOrder", payload),
+        hiddenColumnKeys: payload => emit("update:hiddenColumnKeys", payload),
+        columnWidths: payload => emit("update:columnWidths", payload),
+        columnPins: payload => emit("update:columnPins", payload),
+        groupBy: payload => emit("update:groupBy", payload as DataGridGroupBySpec | null),
+        state: payload => {
+          runtimeUnifiedState.value = payload
+          emit("update:state", payload)
+          persistence.scheduleSave()
+        },
+        ready: () => persistence.runtimeReady(),
+      },
+    })
+
+    function handleStatePersistencePageHide(): void {
+      void persistence.save()
+    }
+
+    function handleStatePersistenceVisibilityChange(): void {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        void persistence.save()
+      }
+    }
+
+    const handleCellChange = (payload: unknown): void => {
+      reconcileRowSelectionFromRuntime()
+      emit("cell-change", payload)
+      controlledState.emitSnapshotUpdates()
+    }
+
+    const handleCellEdit = (payload: DataGridCellEditEvent<Record<string, unknown>>): void => {
+      emit("cell-edit", payload)
+    }
+
+    const handleDataChange = (payload: DataGridRowsEditedEvent<Record<string, unknown>>): void => {
+      emit("data-change", payload)
+    }
+
+    const handleSelectionChange = (payload: DataGridApiSelectionChangedEvent): void => {
+      emit("selection-change", payload)
+      controlledState.emitSnapshotUpdates()
+    }
+
+    const handleRowSelectionChange = (payload: DataGridApiRowSelectionChangedEvent): void => {
+      emit("row-selection-change", payload)
+    }
+
+    const flushRowSelectionSnapshotUpdates = (): void => {
+      controlledState.emitSnapshotUpdates()
+    }
+
+    watch(
+      rowSelectionSnapshot,
+      (snapshot: DataGridRowSelectionSnapshot | null) => {
+        emit("update:rowSelectionState", snapshot)
+        flushRowSelectionSnapshotUpdates()
+      },
+      { deep: true },
+    )
+
+    watch(
+      () => [props.rowSelection, props.rowSelectionState, dataGridRef.value] as const,
+      ([enabled, controlledRowSelection]) => {
+        if (enabled) {
+          if (controlledRowSelection !== undefined) {
+            const runtimeRowSelection = dataGridRef.value?.api.rowSelection
+            if (!rowSelectionSnapshotsEqual(rowSelectionSnapshot.value, controlledRowSelection)) {
+              if (controlledRowSelection) {
+                runtimeRowSelection?.setSnapshot(controlledRowSelection)
+              } else {
+                runtimeRowSelection?.clear()
+              }
+              syncRowSelectionSnapshotFromRuntime()
+            }
+            return
+          }
+          syncRowSelectionSnapshotFromRuntime()
+          return
+        }
+        rowSelectionService.clearRowSelection?.()
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => props.viewMode,
+      nextViewMode => {
+        currentViewMode.value = nextViewMode === "gantt" ? "gantt" : "table"
+      },
+      { immediate: true },
+    )
+
+    const setView = (nextViewMode: DataGridAppViewMode): void => {
+      const normalized = nextViewMode === "gantt" ? "gantt" : "table"
+      currentViewMode.value = normalized
+      emit("update:viewMode", normalized)
+    }
+
+    const registerHistoryController = (controller: DataGridHistoryController | null): void => {
+      registeredHistoryController.value = controller
+    }
+
+    const registerSavedViewInteractionController = (
+      controller: DataGridSavedViewInteractionController | null,
+    ): void => {
+      savedViewInteractionController.value = controller
+    }
+
+    const registerStructuralRowActionRunner = (
+      runner: ((action: DataGridStructuralRowActionId, rowId: string | number) => Promise<boolean>) | null,
+    ): void => {
+      registeredStructuralRowActionRunner.value = runner
+    }
+
+    const reportToolbarModules = (modules: readonly DataGridAppToolbarModule[]): void => {
+      if (toolbarModulesEqual(resolvedToolbarModules.value, modules)) {
+        return
+      }
+      resolvedToolbarModules.value = modules
+      queuedToolbarModules = modules
+      if (toolbarModulesEmitScheduled) {
+        return
+      }
+      toolbarModulesEmitScheduled = true
+      Promise.resolve().then(() => {
+        toolbarModulesEmitScheduled = false
+        const nextModules = queuedToolbarModules
+        queuedToolbarModules = null
+        if (!nextModules) {
+          return
+        }
+        emit("toolbar-modules-change", nextModules)
+      })
+    }
+
+    const serverHistoryStatus = ref<DataGridServerHistoryStatusLike>({
+      canUndo: false,
+      canRedo: false,
+    })
+
+    watch(
+      () => [resolvedRowModel.value, props.serverHistory] as const,
+      ([rowModel, serverHistory], _previous, onCleanup) => {
+        if (!serverHistory) {
+          serverHistoryStatus.value = { canUndo: false, canRedo: false }
+          return
+        }
+        const dataSource = resolveServerHistoryDataSource(rowModel as DataGridRowModel<Record<string, unknown>> | null)
+        serverHistoryStatus.value = dataSource?.getCachedHistoryStatus?.() ?? {
+          canUndo: false,
+          canRedo: false,
+        }
+        if (!dataSource) {
+          return
+        }
+        let active = true
+        const unsubscribe = dataSource.subscribeHistoryStatus?.(status => {
+          serverHistoryStatus.value = status
+        })
+        void dataSource.getHistoryStatus?.()
+          .then(status => {
+            if (active) {
+              serverHistoryStatus.value = status
+            }
+          })
+          .catch(() => undefined)
+        onCleanup(() => {
+          active = false
+          unsubscribe?.()
+        })
+      },
+      { immediate: true },
+    )
+
+    const serverHistoryController = computed<DataGridHistoryController>(() => {
+      const dataSource = resolveServerHistoryDataSource(resolvedRowModel.value as DataGridRowModel<Record<string, unknown>> | null)
+      if (!props.serverHistory || !resolvedHistory.value.enabled || resolvedHistory.value.adapter || !dataSource) {
+        return disabledHistoryController
+      }
+      return {
+        canUndo: () => {
+          void serverHistoryStatus.value
+          return serverHistoryStatus.value.canUndo === true
+        },
+        canRedo: () => {
+          void serverHistoryStatus.value
+          return serverHistoryStatus.value.canRedo === true
+        },
+        runHistoryAction: async direction => {
+          void serverHistoryStatus.value
+          if (direction === "undo" && serverHistoryStatus.value.canUndo !== true) {
+            return null
+          }
+          if (direction === "redo" && serverHistoryStatus.value.canRedo !== true) {
+            return null
+          }
+          const result = direction === "undo"
+            ? await dataSource.undoHistoryStack?.()
+            : await dataSource.redoHistoryStack?.()
+          if (result) {
+            serverHistoryStatus.value = {
+              ...serverHistoryStatus.value,
+              ...(typeof result.canUndo === "boolean" ? { canUndo: result.canUndo } : {}),
+              ...(typeof result.canRedo === "boolean" ? { canRedo: result.canRedo } : {}),
+              ...(typeof result.latestUndoOperationId !== "undefined" ? { latestUndoOperationId: result.latestUndoOperationId } : {}),
+              ...(typeof result.latestRedoOperationId !== "undefined" ? { latestRedoOperationId: result.latestRedoOperationId } : {}),
+              ...(typeof result.datasetVersion !== "undefined" ? { datasetVersion: result.datasetVersion } : {}),
+            }
+          }
+          return typeof result?.operationId === "string" && result.operationId.length > 0
+            ? result.operationId
+            : (direction === "undo" ? result?.latestRedoOperationId ?? null : result?.latestUndoOperationId ?? null)
+        },
+      }
+    })
+
+    const adapterHistoryController = computed<DataGridHistoryController>(() => {
+      const adapter = resolvedHistory.value.adapter
+      if (!resolvedHistory.value.enabled || !adapter) {
+        return serverHistoryController.value
+      }
+      return {
+        canUndo: () => adapter.canUndo(),
+        canRedo: () => adapter.canRedo(),
+        runHistoryAction: direction => adapter.runHistoryAction(direction),
+      }
+    })
+
+    const historyController: DataGridHistoryController = {
+      canUndo: () => (registeredHistoryController.value ?? adapterHistoryController.value).canUndo(),
+      canRedo: () => (registeredHistoryController.value ?? adapterHistoryController.value).canRedo(),
+      runHistoryAction: direction => (
+        (registeredHistoryController.value ?? adapterHistoryController.value).runHistoryAction(direction)
+      ),
+    }
+
+    const getSavedView = (
+      captureOptions: DataGridCaptureSavedViewOptions = {},
+    ): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
+      const include = new Set<DataGridSavedViewPart>(captureOptions.include ?? [
+        "columns", "sorting", "filters", "grouping", "pagination", "pivot", "aggregation", "viewMode",
+      ])
+      const state = dataGridRef.value?.api.state.get({
+        includeViewportPosition: include.has("viewportPosition"),
+      }) ?? controlledState.getState()
+      if (!state) {
+        return null
+      }
+      return sanitizeDataGridSavedView({
+        state,
+        viewMode: currentViewMode.value,
+        included: [...include],
+      })
+    }
+
+    const migrateSavedView = (
+      savedView: unknown,
+      options?: DataGridMigrateStateOptions,
+    ): DataGridSavedViewSnapshot<Record<string, unknown>> | null => {
+      return migrateDataGridSavedView(savedView, controlledState.migrateState, options)
+    }
+
+    const applySavedView = (
+      savedView: DataGridSavedViewSnapshot<Record<string, unknown>>,
+      options?: DataGridApplySavedViewOptions,
+    ): boolean => {
+      const migratedView = migrateDataGridSavedView(
+        savedView,
+        controlledState.migrateState,
+        { strict: options?.strict },
+      )
+      if (!migratedView) {
+        return false
+      }
+      const sanitized = sanitizeDataGridSavedView(migratedView)
+      const migrated = sanitized.state
+      const interactionController = savedViewInteractionController.value
+      if (interactionController?.isActive()) {
+        if (options?.interaction !== "cancel" || !interactionController.cancel()) {
+          return false
+        }
+      }
+      const legacyView = sanitized.included === undefined
+      const included = new Set(sanitized.included ?? [])
+      let stateToApply = migrated
+      if (!legacyView) {
+        const current = dataGridRef.value?.api.state.get({ includeViewportPosition: true }) ?? controlledState.getState()
+        if (!current) return false
+        const snapshot = migrated.rows.snapshot
+        const currentSnapshot = current.rows.snapshot
+        stateToApply = {
+          ...migrated,
+          rows: {
+            ...current.rows,
+            snapshot: {
+              ...currentSnapshot,
+              ...(included.has("sorting") ? { sortModel: snapshot.sortModel } : {}),
+              ...(included.has("filters") ? { filterModel: snapshot.filterModel } : {}),
+              ...(included.has("grouping") ? {
+                groupBy: snapshot.groupBy,
+                groupExpansion: snapshot.groupExpansion,
+              } : {}),
+              ...(included.has("pagination") ? { pagination: snapshot.pagination } : {}),
+              ...(included.has("pivot") ? {
+                pivotModel: snapshot.pivotModel,
+                pivotColumns: snapshot.pivotColumns,
+              } : {}),
+            },
+            aggregationModel: included.has("aggregation") ? migrated.rows.aggregationModel : current.rows.aggregationModel,
+          },
+          columns: included.has("columns") ? migrated.columns : current.columns,
+          selection: included.has("selection") ? migrated.selection : current.selection,
+          rowSelection: included.has("selection") ? migrated.rowSelection : current.rowSelection,
+          view: included.has("viewportPosition") ? migrated.view : current.view,
+          transaction: null,
+        }
+      }
+      const { interaction: _interaction, ...stateOptions } = options ?? {}
+      const applyOptions: DataGridSetStateOptions = {
+        ...stateOptions,
+        atomic: true,
+        applyRows: stateOptions.applyRows ?? true,
+        applyColumns: stateOptions.applyColumns ?? (legacyView || included.has("columns")),
+        applySelection: stateOptions.applySelection ?? (legacyView || included.has("selection")),
+        applyViewportPosition: stateOptions.applyViewportPosition ?? (legacyView || included.has("viewportPosition")),
+      }
+      const applied = controlledState.applyState(
+        normalizeDataGridAppUnifiedStateFilters(stateToApply, props.columns),
+        applyOptions,
+      )
+      if (!applied) {
+        return false
+      }
+      if (sanitized.viewMode && (legacyView || included.has("viewMode"))) {
+        setView(sanitized.viewMode)
+      }
+      return true
+    }
+
+    onMounted(() => {
+      if (typeof window !== "undefined") {
+        window.addEventListener("pagehide", handleStatePersistencePageHide)
+        window.addEventListener("beforeunload", handleStatePersistencePageHide)
+      }
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", handleStatePersistenceVisibilityChange)
+      }
+    })
+
+    onBeforeUnmount(() => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", handleStatePersistencePageHide)
+        window.removeEventListener("beforeunload", handleStatePersistencePageHide)
+      }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleStatePersistenceVisibilityChange)
+      }
+      controlledState.dispose()
+      registerStructuralRowActionRunner(null)
+    })
+
+    expose({
+      resetPersistedState: persistence.resetPersistedState,
+      grid: dataGridRef,
+      rowModel: resolvedRowModel,
+      history: historyController,
+      getHistory: () => historyController,
+      toolbarModules: resolvedToolbarModules,
+      getToolbarModules: () => resolvedToolbarModules.value,
+      getApi: () => dataGridRef.value?.api ?? null,
+      getRuntime: () => dataGridRef.value?.runtime ?? null,
+      getCore: () => dataGridRef.value?.core ?? null,
+      captureFocusAnchor: (options?: DataGridCaptureFocusAnchorOptions) =>
+        dataGridRef.value?.captureFocusAnchor(options) ?? null,
+      restoreFocusAnchor: (
+        anchor: DataGridFocusAnchor<DataGridRowId> | null | undefined,
+        options?: DataGridRestoreFocusAnchorOptions,
+      ) => (
+        dataGridRef.value?.restoreFocusAnchor(anchor, options) ?? Promise.resolve(false)
+      ),
+      restoreFocus: () => {
+        dataGridRef.value?.restoreFocus()
+      },
+      getColumnState: () => controlledState.getColumnState(),
+      getColumnSnapshot: () => dataGridRef.value?.api.columns.getSnapshot() ?? null,
+      getSelectionAggregatesLabel: () => selectionAggregatesLabel.value,
+      getServerSelectionSummary: async (
+        options: DataGridServerSelectionSummaryOptions,
+      ): Promise<DataGridDataSourceSelectionSummaryResult | null> => {
+        const rowModel = dataGridRef.value?.rowModel
+        const api = dataGridRef.value?.api
+        const selection = api?.selection.getSnapshot?.() ?? null
+        const dataSource = (rowModel as unknown as {
+          dataSource?: {
+            summarizeSelection?: (request: unknown) => Promise<DataGridDataSourceSelectionSummaryResult>
+          }
+        } | null)?.dataSource
+        if (!rowModel || !selection || !dataSource?.summarizeSelection) {
+          return null
+        }
+        const snapshot = rowModel.getSnapshot()
+        const controller = options.signal ? null : new AbortController()
+        const signal = options.signal ?? controller!.signal
+        try {
+          return await dataSource.summarizeSelection({
+            ranges: selection.ranges.map(range => ({
+              startRow: range.startRow,
+              endRow: range.endRow,
+              startCol: range.startCol,
+              endCol: range.endCol,
+              startRowId: range.startRowId ?? null,
+              endRowId: range.endRowId ?? null,
+            })),
+            columns: options.columns,
+            signal,
+            sortModel: snapshot.sortModel,
+            filterModel: snapshot.filterModel,
+            groupBy: snapshot.groupBy,
+            groupExpansion: snapshot.groupExpansion,
+            treeData: null,
+            pivot: null,
+            pagination: { snapshot: snapshot.pagination, cursor: null },
+            revision: snapshot.revision ?? null,
+            datasetVersion: snapshot.datasetVersion ?? null,
+          })
+        } finally {
+          controller?.abort()
+        }
+      },
+      runStructuralRowAction: (action: DataGridStructuralRowActionId, rowId: string | number) => (
+        registeredStructuralRowActionRunner.value?.(action, rowId) ?? Promise.resolve(false)
+      ),
+      getSelectionSummary: () => {
+        const summarize = dataGridRef.value?.api.selection.summarize
+        if (!summarize) {
+          return null
+        }
+        const summaryOptions: Parameters<typeof summarize>[0] & {
+          readSelectionCell?: typeof props.readSelectionCell
+        } = {
+          readSelectionCell: props.readSelectionCell,
+        }
+        return summarize(summaryOptions)
+      },
+      getView: () => currentViewMode.value,
+      setView,
+      getSavedView,
+      migrateSavedView,
+      applySavedView,
+      applyColumnState: controlledState.applyColumnState,
+      getState: controlledState.getState,
+      migrateState: controlledState.migrateState,
+      applyState: (state: DataGridUnifiedState<Record<string, unknown>> | null, options?: DataGridSetStateOptions) => (
+        state ? controlledState.applyState(normalizeDataGridAppUnifiedStateFilters(state, props.columns), options) : false
+      ),
+      exportPivotLayout: controlledState.exportPivotLayout,
+      exportPivotInterop: controlledState.exportPivotInterop,
+      importPivotLayout: controlledState.importPivotLayout,
+      expandAllGroups: controlledState.expandAllGroups,
+      collapseAllGroups: controlledState.collapseAllGroups,
+      insertRowsAt: (index: number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
+        dataGridRef.value?.api.rows.insertDataAt(index, rows) ?? false,
+      insertRowBefore: (rowId: string | number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
+        dataGridRef.value?.api.rows.insertDataBefore(rowId, rows) ?? false,
+      insertRowAfter: (rowId: string | number, rows: readonly DataGridRowNodeInput<Record<string, unknown>>[]) =>
+        dataGridRef.value?.api.rows.insertDataAfter(rowId, rows) ?? false,
+      insertColumnsAt: (index: number, columns: readonly DataGridAppColumnInput[]) =>
+        dataGridRef.value?.api.columns.insertAt(index, columns) ?? false,
+      insertColumnBefore: (columnKey: string, columns: readonly DataGridAppColumnInput[]) =>
+        dataGridRef.value?.api.columns.insertBefore(columnKey, columns) ?? false,
+      insertColumnAfter: (columnKey: string, columns: readonly DataGridAppColumnInput[]) =>
+        dataGridRef.value?.api.columns.insertAfter(columnKey, columns) ?? false,
+    })
+
+    return (): VNode => {
+      const defaultRendererProps = {
+        mode: inferredMode.value,
+        rows: props.rows as readonly Record<string, unknown>[],
+        runtime: dataGridRef.value?.runtime ?? null,
+        runtimeRowModel: dataGridRef.value?.rowModel ?? null,
+        selectionSnapshot,
+        selectionAnchor,
+        rowSelectionSnapshot,
+        syncSelectionSnapshotFromRuntime,
+        syncRowSelectionSnapshotFromRuntime,
+        flushRowSelectionSnapshotUpdates,
+        sortModel: effectiveSortModel.value,
+        filterModel: effectiveFilterModel.value,
+        filterModelNormalized: true,
+        appColumns: props.columns,
+        externalFilterIndicators: props.externalFilterIndicators,
+        groupBy: effectiveGroupBy.value,
+        groupingPresentation: props.groupingPresentation,
+        pivotModel: effectivePivotModel.value,
+        renderMode: resolvedRenderMode.value,
+        virtualization: resolvedVirtualization.value,
+        columnMenu: resolvedColumnMenu.value,
+        cellMenu: resolvedCellMenu.value,
+        rowIndexMenu: resolvedRowIndexMenu.value,
+        columnLayout: resolvedColumnLayout.value,
+        columnReorder: resolvedColumnReorder.value,
+        aggregations: resolvedAggregations.value,
+        advancedFilter: resolvedAdvancedFilter.value,
+        quickFilter: resolvedQuickFilter.value,
+        findReplace: resolvedFindReplace.value,
+        gridLines: resolvedGridLines.value,
+        rowHeightMode: props.rowHeightMode,
+        stickyGroupRows: props.stickyGroupRows,
+        rendererPolicy: props.rendererPolicy,
+        baseRowHeight: props.baseRowHeight,
+        layoutMode: resolvedLayout.value.layoutMode,
+        minRows: resolvedLayout.value.minRows,
+        maxRows: resolvedLayout.value.maxRows,
+        placeholderRows: resolvedPlaceholderRows.value,
+        fillHandle: props.fillHandle,
+        rangeMove: props.rangeMove,
+        rowHover: props.rowHover,
+        stripedRows: props.stripedRows,
+        readSelectionCell: props.readSelectionCell,
+        cellClass: props.cellClass,
+        cellStyle: props.cellStyle,
+        isCellEditable: props.isCellEditable,
+        showRowIndex: props.showRowIndex,
+        indexColumnStyle: props.indexColumnStyle,
+        rowSelection: showRowSelection.value,
+        rowHeaderAction: resolvedRowHeader.value.action,
+        isRowSelectable: resolvedRowSelection.value.isSelectable,
+        rowSelectionColumnWidth: rowSelectionColumnWidth.value,
+        resolveSourceRowId: resolvedClientRowModelOptions.value?.resolveRowId,
+        rowReorder: resolvedRowReorder.value,
+        viewMode: currentViewMode.value,
+        gantt: props.gantt,
+        history: resolvedHistory.value,
+        serverHistory: props.serverHistory,
+        chrome: resolvedChrome.value,
+        theme: props.theme ?? "default",
+        registerHistoryController,
+        registerSavedViewInteractionController,
+        registerStructuralRowActionRunner,
+        reportToolbarModules,
+        toolbarModules: props.toolbarModules,
+        toolbarLayout: props.toolbarLayout,
+        xlsxExport: props.xlsxExport,
+        customOverlays: props.customOverlays,
+        emptyStateRenderer: props.emptyState,
+        emptyStateAlignment: props.emptyStateAlignment,
+        runStructuralRowAction: props.runStructuralRowAction,
+      }
+      const renderDefaultRenderer = (slotProps: DataGridRuntimeHostSlotProps): VNode => {
+        const rendererProps = {
+          ...defaultRendererProps,
+          emptyStateRenderer: slotProps.emptyStateRenderer,
+          emptyStateAlignment: slotProps.emptyStateAlignment,
+          runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
+          runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot" | "resolveRowProjection"> & {
+            dataSource?: {
+              resolveFillBoundary?: (request: any) => any
+              commitFillOperation?: (request: any) => any
+              undoFillOperation?: (request: any) => any
+              redoFillOperation?: (request: any) => any
+            }
+          },
+          onCellEdit: handleCellEdit,
+          reportFillWarning: props.reportFillWarning,
+          reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
+          reportFillPlumbingState: props.reportFillPlumbingState,
+          reportFillPlumbingDetail: props.reportFillPlumbingDetail,
+        }
+        const performance = resolvedPerformance.value
+        const runtimeOptions = resolvedFormulaRuntimeOptions.value
+        const performanceSummary = {
+          policyLabel: performance.enabled ? performance.preset : "defaults",
+          runtimeSourceLabel: runtimeOptions ? "configured" : "default",
+          configuredComputeMode: runtimeOptions?.computeMode ?? "sync",
+          workerPatchDispatchThreshold: runtimeOptions?.workerPatchDispatchThreshold ?? null,
+          formulaColumnCacheMaxColumns: runtimeOptions?.formulaColumnCacheMaxColumns ?? null,
+          virtualization: {
+            rows: resolvedVirtualization.value.rows,
+            columns: resolvedVirtualization.value.columns,
+            rowOverscan: resolvedVirtualization.value.rowOverscan,
+            columnOverscan: resolvedVirtualization.value.columnOverscan,
+          },
+        }
+        if (!resolvedDiagnostics.value.enabled) {
+          return h(DataGridDefaultRenderer, rendererProps)
+        }
+        return h(DataGridDiagnosticsRenderer, {
+          defaultRendererProps: rendererProps,
+          diagnostics: resolvedDiagnostics.value,
+          performanceSummary,
+        })
+      }
+      return h(
+        DataGridRuntimeHost,
+        {
+          ...attrs,
+          ref: dataGridRef,
+          key: dataGridInstanceKey.value,
+          rows: props.rows,
+          "data-persistence-loading": persistence.loading.value ? "true" : undefined,
+          "aria-busy": persistence.loading.value || undefined,
+          inert: persistence.loading.value ? true : undefined,
+          onMousedownCapture: persistence.startResize,
+          onPointerdownCapture: persistence.startResize,
+          onTouchstartCapture: persistence.startResize,
+          onScrollCapture: () => {
+            if (resolvedStatePersistence.value?.includeViewportPosition) persistence.scheduleSave()
+          },
+        rowModel: resolvedRowModel.value,
+        columns: resolvedColumns.value,
+        emptyStateRenderer: props.emptyState,
+        emptyStateAlignment: props.emptyStateAlignment,
+        theme: props.theme,
+        layoutMode: resolvedLayout.value.layoutMode,
+          renderMode: resolvedRenderMode.value,
+          pagination: resolvedPagination.value,
+          plugins: props.plugins,
+          services: resolvedServices.value,
+          startupOrder: props.startupOrder,
+        autoStart: props.autoStart,
+        onCellChange: handleCellChange,
+        onDataChange: handleDataChange,
+        onCellEdit: handleCellEdit,
+        onSelectionChange: handleSelectionChange,
+        onRowSelectionChange: handleRowSelectionChange,
+      },
+        slots.default
+          ? {
+              default: (slotProps: DataGridRuntimeHostSlotProps) => slots.default?.({
+                ...slotProps,
+                defaultRendererProps: {
+                  ...defaultRendererProps,
+                  runtime: slotProps.runtime as DataGridDefaultRendererRuntime,
+                  runtimeRowModel: slotProps.rowModel as Pick<DataGridRowModel<Record<string, unknown>>, "subscribe" | "getSnapshot" | "resolveRowProjection"> & {
+                    dataSource?: {
+                      resolveFillBoundary?: (request: any) => any
+                      commitFillOperation?: (request: any) => any
+                      undoFillOperation?: (request: any) => any
+                      redoFillOperation?: (request: any) => any
+                    }
+                  },
+                  onCellEdit: handleCellEdit,
+                  reportFillWarning: props.reportFillWarning,
+                  reportCenterPaneDiagnostics: props.reportCenterPaneDiagnostics,
+                  reportFillPlumbingState: props.reportFillPlumbingState,
+                  reportFillPlumbingDetail: props.reportFillPlumbingDetail,
+                },
+              }),
+            }
+          : { default: renderDefaultRenderer },
+      )
+    }
+  },
+})
+
+type DataGridRuntimeStatics = {
+  [K in keyof typeof DataGridRuntimeComponent]: (typeof DataGridRuntimeComponent)[K]
+}
+
+type DataGridComponentInstance<TRow = unknown> = Omit<
+  InstanceType<typeof DataGridRuntimeComponent>,
+  "$props" | keyof DataGridExposed<any>
+> & {
+  $props: DataGridProps<TRow>
+} & DataGridExposed<TRow>
+
+export type DataGridInstance<TRow = unknown> = DataGridComponentInstance<TRow>
+
+export type DataGridComponentFor<TRow = unknown> = DataGridRuntimeStatics & {
+  new (): DataGridComponentInstance<TRow>
+}
+
+export function useDataGridRef<TRow = unknown>() {
+  return ref<DataGridInstance<TRow> | null>(null)
+}
+
+export function defineDataGridComponent<TRow = unknown>() {
+  return DataGridRuntimeComponent as unknown as DataGridComponentFor<TRow>
+}
+
+export type DataGridComponent = DataGridRuntimeStatics & {
+  new <TRow = unknown>(): DataGridComponentInstance<TRow>
+}
+
+export default DataGridRuntimeComponent as unknown as DataGridComponent

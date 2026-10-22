@@ -4,6 +4,7 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { defineComponent, h, nextTick } from "vue"
 import type { DataGridGroupBySpec } from "@affino/datagrid-vue"
+import { exportDataGridXlsx } from "../../../datagrid-vue/src/app-layer/exportDataGridXlsx"
 
 vi.mock("@affino/popover-vue", async () => {
   const { ref } = await import("vue")
@@ -94,11 +95,11 @@ async function flushUi(): Promise<void> {
 }
 
 async function preloadAdvancedFilterPopover(): Promise<void> {
-  await import("../../../datagrid-vue-app/src/overlays/DataGridAdvancedFilterPopover.vue")
+  await import("../../../datagrid-vue/src/app-layer/overlays/DataGridAdvancedFilterPopover.vue")
 }
 
 async function preloadFindReplacePopover(): Promise<void> {
-  await import("../../../datagrid-vue-app/src/overlays/DataGridFindReplacePopover.vue")
+  await import("../../../datagrid-vue/src/app-layer/overlays/DataGridFindReplacePopover.vue")
 }
 
 function queryAdvancedFilterRoot(): HTMLElement | null {
@@ -342,6 +343,8 @@ describe("VueShellGridCard", () => {
     expect(readGridInput("minRows", "min-rows")).toBeUndefined()
     expect(readGridInput("maxRows", "max-rows")).toBeUndefined()
     expect(readGridInput("quickFilter", "quick-filter")).toMatchObject({ placeholder: "Search" })
+    expect(readGridInput("xlsxExport", "xlsx-export")).toMatchObject({ fileName: "grouped-grid.xlsx" })
+    expect(wrapper.find('[data-datagrid-toolbar-action="export-xlsx"]').exists()).toBe(true)
     const resolvedGroupBy = grid.props("groupBy")
       ?? gridVm.$props?.groupBy
       ?? gridVm.$attrs?.groupBy
@@ -402,6 +405,51 @@ describe("VueShellGridCard", () => {
     expect(wrapper.find(".datagrid-hierarchy-group__toggle").attributes("aria-expanded")).toBe("false")
 
     wrapper.unmount()
+  })
+
+  it("shows the XLSX export toolbar action for the grouped shell showcase", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Grouped Grid (Sugar)",
+        mode: "base",
+        groupedShowcase: true,
+      },
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    })
+
+    await flushUi()
+    await flushUi()
+
+    expect(wrapper.find('[data-datagrid-toolbar-action="export-xlsx"]').exists()).toBe(true)
+    const dataGrid = wrapper.findComponent({ name: "DataGrid" })
+    const api = (dataGrid.vm as any).$?.exposed?.getApi?.() as Parameters<typeof exportDataGridXlsx>[0]
+    expect(api).toBeTruthy()
+    let workbookInput: unknown
+    const originalWorker = globalThis.Worker
+    Object.defineProperty(globalThis, "Worker", {
+      configurable: true,
+      value: class {
+        onerror: ((event: ErrorEvent) => void) | null = null
+        onmessage: ((event: MessageEvent<{ bytes: ArrayBuffer }>) => void) | null = null
+        postMessage(payload: unknown): void {
+          workbookInput = payload
+          queueMicrotask(() => this.onmessage?.({ data: { bytes: new Uint8Array([1]).buffer } } as MessageEvent<{ bytes: ArrayBuffer }>))
+        }
+        terminate(): void {}
+      },
+    })
+    try {
+      const result = await exportDataGridXlsx(api)
+      expect(result).toMatchObject({ status: "success" })
+      const workbook = workbookInput as { sheets: Array<{ rows: Array<Array<{ type: string; value: unknown } | null>> }> }
+      expect(workbook.sheets[0]?.rows.length).toBeGreaterThan(1)
+      expect(workbook.sheets[0]?.rows.slice(1).some(row => row.some(cell => cell !== null))).toBe(true)
+    } finally {
+      Object.defineProperty(globalThis, "Worker", { configurable: true, value: originalWorker })
+      wrapper.unmount()
+    }
   })
 
   it("restores advanced filter draft clauses from sandbox saved view storage", async () => {

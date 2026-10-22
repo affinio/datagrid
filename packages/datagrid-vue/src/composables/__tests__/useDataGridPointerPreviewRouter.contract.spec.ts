@@ -163,6 +163,49 @@ describe("useDataGridPointerPreviewRouter contract", () => {
     })
   })
 
+  it("uses the target grid axis when the fill handle's corner offset dominates a one-row drag", () => {
+    const setFillPreviewRange = vi.fn()
+    const buildExtendedRange = vi.fn((base: Range, coord: Coord, fillAxis?: "vertical" | "horizontal") => ({
+      startRow: Math.min(base.startRow, coord.rowIndex),
+      endRow: Math.max(base.endRow, coord.rowIndex),
+      startColumn: fillAxis === "vertical" ? base.startColumn : Math.min(base.startColumn, coord.columnIndex),
+      endColumn: fillAxis === "vertical" ? base.endColumn : Math.max(base.endColumn, coord.columnIndex),
+    }))
+
+    const router = useDataGridPointerPreviewRouter<Coord, Range>({
+      isFillDragging: () => true,
+      resolveFillDragStartPointer: () => ({ clientX: 348, clientY: 749 }),
+      resolveFillPointer: () => ({ clientX: 292, clientY: 779 }),
+      resolveFillBaseRange: () => ({ startRow: 0, endRow: 0, startColumn: 3, endColumn: 3 }),
+      resolveFillPreviewRange: () => ({ startRow: 0, endRow: 0, startColumn: 3, endColumn: 3 }),
+      setFillPreviewRange,
+      isRangeMoving: () => false,
+      resolveRangeMovePointer: () => null,
+      resolveRangeMoveBaseRange: () => null,
+      resolveRangeMoveOrigin: () => null,
+      resolveRangeMovePreviewRange: () => null,
+      setRangeMovePreviewRange: vi.fn(),
+      resolveCellCoordFromPointer: () => ({ rowIndex: 1, columnIndex: 3 }),
+      buildExtendedRange,
+      normalizeSelectionRange: range => range,
+      rangesEqual: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+    })
+
+    router.applyFillPreviewFromPointer()
+
+    expect(buildExtendedRange).toHaveBeenCalledWith(
+      { startRow: 0, endRow: 0, startColumn: 3, endColumn: 3 },
+      { rowIndex: 1, columnIndex: 3 },
+      "vertical",
+    )
+    expect(setFillPreviewRange).toHaveBeenCalledWith({
+      startRow: 0,
+      endRow: 1,
+      startColumn: 3,
+      endColumn: 3,
+    })
+  })
+
   it("keeps fill vertical when horizontal drift is only slightly larger than vertical movement", () => {
     const setFillPreviewRange = vi.fn()
     const buildExtendedRange = vi.fn((base: Range, coord: Coord, fillAxis?: "vertical" | "horizontal") => {
