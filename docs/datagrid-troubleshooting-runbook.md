@@ -66,6 +66,18 @@ Relevant regression:
 - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellRendering.spec.ts` (default/synchronous renderer effects stay unchanged across scroll start and idle; deferred rendering still resumes at idle).
 - [First-scroll diagnostic and reproduction](./perf/datagrid-first-scroll.md).
 
+## Symptom: Worker grid stalls or loses viewport coverage on long scrolls
+
+Checks:
+- Sparse worker row models only have a bounded set of loaded row windows. A viewport-only range update must not trigger a scan across `rowCount` to relocate a cell-selection anchor.
+- Reconcile stable cell anchors when the logical projection changes. For a same-projection update, retry only an anchor already pending materialization or a recognized placeholder anchor.
+- Reading a range already covered by the worker cache must not publish a row-model change; the viewport controller owns range updates explicitly.
+
+Relevant regressions:
+- `packages/datagrid-vue/src/app/__tests__/useDataGridAppSelection.contract.spec.ts` (sparse viewport updates do not scan rows; placeholder anchors still rebind).
+- `packages/datagrid-worker/src/__tests__/workerOwnedRowModel.spec.ts` (cached subrange reads do not publish an update).
+- `e2e/sandbox-grid.spec.ts` (`vue worker grid keeps viewport covered across long scroll jumps`, `stays covered during a rapid scroll burst`, and `reaches the last logical row beyond native scroll height`).
+
 ## Symptom: Header drifts from body near the end of horizontal scrolling
 
 Checks:
@@ -132,6 +144,18 @@ Checks:
 Relevant tests:
 - `packages/datagrid-vue/src/adapters/__tests__/selectionControllerAdapter.contract.spec.ts`
 - `packages/datagrid-vue/src/composables/selection/__tests__/selectionDecomposition.integration.spec.ts`
+
+## Symptom: A cell selection anchor disappears after a row projection change
+
+Checks:
+- Single-cell anchors follow the stable row ID when the row is temporarily removed from the displayed projection, such as during a tree collapse.
+- While that row is absent, do not draw its old positional highlight over the row that now occupies the same index.
+- When the row returns, reconcile the anchor to its current projection index and refresh the Core selection snapshot.
+- Rebind IDs only for recognized loading or visual placeholder rows that materialize in place; ordinary filtered or collapsed rows must not be rebound to a different record.
+
+Relevant regressions:
+- `e2e/sandbox-tree-pivot.spec.ts` (`tree group anchor survives collapse and expand roundtrip`)
+- `e2e/sandbox-interactions.spec.ts` (`placeholder tail materialization keeps selection anchor and fill handle`)
 
 ## Standard Validation Commands
 

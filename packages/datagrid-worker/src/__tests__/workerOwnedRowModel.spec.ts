@@ -908,6 +908,39 @@ describe("worker-owned row model", () => {
     host.dispose()
   })
 
+  it("does not publish a viewport update when reading a cached subrange", async () => {
+    const rows = buildRows(100)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+
+    mirror.setViewportRange({ start: 0, end: 10 })
+    await flushMessages()
+    const snapshotRange = mirror.getSnapshot().viewportRange
+    let notifications = 0
+    const unsubscribe = mirror.subscribe(() => { notifications += 1 })
+
+    expect(mirror.getRowsInRange({ start: 1, end: 8 })).toHaveLength(8)
+    expect(notifications).toBe(0)
+    expect(mirror.getSnapshot().viewportRange).toEqual(snapshotRange)
+
+    mirror.setViewportRange({ start: 1, end: 8 })
+    expect(notifications).toBe(1)
+    expect(mirror.getSnapshot().viewportRange).toEqual({ start: 1, end: 8 })
+
+    unsubscribe()
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("clears loading when update range matches pending viewport even if request id is older", async () => {
     const channel = createMessageChannelPair()
     const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({

@@ -1368,6 +1368,10 @@ const DataGridRuntimeComponent = defineComponent({
       return Math.max(0, rowPartition.pinnedTopRows.length + rowPartition.bodyRowCount + rowPartition.pinnedBottomRows.length)
     })
     const resolveSelectionRowAtIndex = (rowIndex: number): DataGridRowNode<unknown> | null => {
+      const rowModelRow = dataGridRef.value?.rowModel.getRow(rowIndex)
+      if (rowModelRow) {
+        return rowModelRow
+      }
       const runtime = dataGridRef.value?.runtime
       if (!runtime) {
         return null
@@ -1416,7 +1420,7 @@ const DataGridRuntimeComponent = defineComponent({
     })
     watch(dataGridRef, (grid, _previous, onCleanup) => {
       if (!grid) return
-      const unsubscribe = grid.api.events.on("rows:changed", () => {
+      const unsubscribe = grid.rowModel.subscribe(() => {
         syncSelectionSnapshotFromRuntime()
         syncRowSelectionSnapshotFromRuntime()
       })

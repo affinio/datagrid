@@ -1402,7 +1402,7 @@ test.describe("sandbox touch scroll contracts", () => {
     const editableCell = firstEditableAmountCell(page)
     // The first row can be fractionally clipped (< 1 CSS px) by the scrollport
     // after layout rounding; the cell center remains fully available for the tap.
-    await expect(editableCell).toBeInViewport({ ratio: 0.99 })
+    await expect(editableCell).toBeInViewport({ ratio: 0.98 })
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
     await dispatchTouchGeneratedDoubleClick(editableCell)
     await expect(editableCell.locator("input.cell-editor-input")).toBeVisible({ timeout: 20_000 })

@@ -1,5 +1,5 @@
 import { nextTick, ref } from "vue"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { useDataGridAppSelection } from "../useDataGridAppSelection"
 
 type EffectiveSelectionRow = {
@@ -486,6 +486,69 @@ describe("useDataGridAppSelection contract", () => {
     )
   })
 
+  it("rebinds a single-cell anchor when its row materializes at the same projection index", () => {
+    let revision = 1
+    let rowId = "__datagrid_placeholder__:10"
+    let runtimeSnapshot = {
+      ranges: [{
+        startRow: 10,
+        endRow: 10,
+        startCol: 2,
+        endCol: 2,
+        startRowId: rowId,
+        endRowId: rowId,
+        anchor: { rowIndex: 10, colIndex: 2, rowId },
+        focus: { rowIndex: 10, colIndex: 2, rowId },
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 10, colIndex: 2, rowId },
+    }
+    const rowModelListenerRef: { current: (() => void) | null } = { current: null }
+    const selection = useDataGridAppSelection({
+      mode: ref("base"),
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            getSnapshot: () => ({ revision, rowCount: 11 }),
+          },
+          columns: { getSnapshot: () => ({ orderRevision: 0 }) },
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+            setSnapshot: (snapshot: unknown) => { runtimeSnapshot = snapshot as typeof runtimeSnapshot },
+          },
+        },
+        rowModel: {
+          getSnapshot: () => ({
+            kind: "client",
+            revision,
+            rowCount: 11,
+            loading: false,
+            sortModel: [],
+            filterModel: null,
+            groupBy: null,
+            groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+            projection: null,
+          }),
+          getRow: () => ({ rowId }),
+          subscribe: (listener: () => void) => {
+            rowModelListenerRef.current = listener
+            return () => { rowModelListenerRef.current = null }
+          },
+        },
+      } as never),
+    })
+
+    selection.syncSelectionSnapshotFromRuntime()
+    rowId = "row-10"
+    revision += 1
+    rowModelListenerRef.current?.()
+
+    expect(runtimeSnapshot.ranges[0]?.anchor).toEqual({ rowIndex: 10, colIndex: 2, rowId: "row-10" })
+    expect(runtimeSnapshot.activeCell).toEqual({ rowIndex: 10, colIndex: 2, rowId: "row-10" })
+    expect(selection.selectionAnchor.value).toEqual({ rowIndex: 10, colIndex: 2, rowId: "row-10" })
+  })
+
   it("marks virtual selections projection-stale when row indexes are invalidated by sort changes", async () => {
     let sortDirection: "asc" | "desc" = "asc"
     let runtimeSnapshot = {
@@ -682,5 +745,81 @@ describe("useDataGridAppSelection contract", () => {
       projectionStale: true,
       staleReason: "projection-changed",
     })
+  })
+
+  it("does not scan a sparse row model when only its viewport window changes", async () => {
+    let rowSnapshot = {
+      kind: "client",
+      revision: 1,
+      rowCount: 200_000,
+      loading: false,
+      error: null,
+      viewportRange: { start: 0, end: 20 },
+      pagination: {
+        enabled: false,
+        pageSize: 0,
+        currentPage: 0,
+        pageCount: 0,
+        totalRowCount: 200_000,
+        startIndex: 0,
+        endIndex: 199_999,
+      },
+      sortModel: [],
+      filterModel: null,
+      groupBy: null,
+      groupExpansion: { expandedByDefault: false, toggledGroupKeys: [] },
+    }
+    const listeners = new Set<() => void>()
+    const getRow = vi.fn(() => undefined)
+    const rowModel = {
+      getSnapshot: () => rowSnapshot,
+      getRow,
+      getRowById: vi.fn(() => undefined),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    }
+    const runtimeSnapshot = {
+      ranges: [{
+        startRow: 0,
+        endRow: 0,
+        startCol: 0,
+        endCol: 0,
+        startRowId: "r1",
+        endRowId: "r1",
+        anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+        focus: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+      }],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+    }
+    const selection = useDataGridAppSelection({
+      mode: ref("worker"),
+      resolveRuntime: () => ({
+        api: {
+          selection: {
+            hasSupport: () => true,
+            getSnapshot: () => runtimeSnapshot,
+          },
+          rows: {
+            getSnapshot: () => rowSnapshot,
+            resolveById: () => ({ status: "not-loaded" }),
+          },
+        },
+        rowModel,
+      } as never),
+    })
+    selection.syncSelectionSnapshotFromRuntime()
+    await nextTick()
+
+    rowSnapshot = {
+      ...rowSnapshot,
+      revision: 2,
+      viewportRange: { start: 50_000, end: 50_020 },
+    }
+    for (const listener of listeners) listener()
+
+    expect(getRow).not.toHaveBeenCalled()
   })
 })

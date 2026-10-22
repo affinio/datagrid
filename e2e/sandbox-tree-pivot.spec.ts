@@ -87,7 +87,7 @@ async function pivotColumnsCount(page: Page): Promise<number> {
 }
 
 function firstTreeGroupBodyCell(page: Page): Locator {
-  return page.locator(".grid-stage:visible .grid-row.row--group .grid-cell:not(.grid-cell--index)").first()
+  return page.locator(".grid-stage:visible .grid-row.row--group .grid-cell:not(.grid-cell--index):not(.grid-cell--row-selection)").first()
 }
 
 async function dispatchMouseDownOnly(page: Page, target: Locator): Promise<void> {

@@ -694,10 +694,11 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
   const dispatchViewportRange = (
     range: DataGridViewportRange,
     coalesceScope: DataGridWorkerViewportCoalesceScope,
+    publishCachedRange = false,
   ): number => {
     const normalizedRequestedRange = normalizeRequestedRange(range)
     const syncRequestedViewportSnapshot = (): void => {
-      if (coalesceScope !== "user" || isSameRange(snapshot.viewportRange, normalizedRequestedRange)) {
+      if (!publishCachedRange || coalesceScope !== "user" || isSameRange(snapshot.viewportRange, normalizedRequestedRange)) {
         return
       }
       snapshot = {
@@ -962,7 +963,7 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       return rows
     },
     setViewportRange(range: DataGridViewportRange) {
-      dispatchViewportRange(range, "user")
+      dispatchViewportRange(range, "user", true)
     },
     setPagination(pagination: DataGridPaginationInput | null) {
       dispatchCommand({ type: "set-pagination", pagination })

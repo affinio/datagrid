@@ -6,6 +6,7 @@ import {
 import type {
   DataGridColumnSnapshot,
   DataGridRowId,
+  DataGridRowModel,
   DataGridRowModelSnapshot,
   DataGridRowNode,
   DataGridSelectionSnapshot,
@@ -69,7 +70,15 @@ function readSelectionCellValue<TRow>(
     const customValue = readSelectionCell(rowNode, column.key)
     if (typeof customValue !== "undefined") return customValue
   }
-  const resolved = api.cells.resolveValue({ rowId: rowNode.rowId, columnKey: column.key, purpose: "computed" })
+  const resolveValue = api.cells?.resolveValue
+  if (typeof resolveValue !== "function") {
+    const valueGetter = (column.column as { valueGetter?: (row: unknown) => unknown }).valueGetter
+    if (typeof valueGetter === "function") return valueGetter(rowNode.data)
+    const data = rowNode.data as Record<string, unknown> | undefined
+    const field = (column.column as { field?: string }).field ?? column.key
+    return data?.[field]
+  }
+  const resolved = resolveValue({ rowId: rowNode.rowId, columnKey: column.key, purpose: "computed" })
   return resolved.status === "available" ? resolved.computedValue : undefined
 }
 
@@ -113,6 +122,8 @@ export function useDataGridAppSelection<TRow>(
   const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
   const selectionAnchor = ref<GridSelectionPointLike<DataGridRowId> | null>(null)
   const rowVersion = ref(0)
+  let observedRowModel: DataGridRowModel<TRow> | null = null
+  let pendingReconcileSnapshot: DataGridSelectionSnapshot | null = null
 
   const syncSelectionState = (snapshot: DataGridSelectionSnapshot | null): void => {
     const runtime = options.resolveRuntime?.() ?? null
@@ -121,7 +132,7 @@ export function useDataGridAppSelection<TRow>(
     const currentSnapshot = snapshot && rowSnapshot && columnSnapshot
       ? {
           ...snapshot,
-          projectionRevision: rowSnapshot.revision ?? null,
+          projectionRevision: buildDataGridSelectionProjectionIdentity(rowSnapshot)?.revision ?? null,
           columnRevision: columnSnapshot.orderRevision,
         }
       : snapshot
@@ -144,11 +155,13 @@ export function useDataGridAppSelection<TRow>(
 
   const selectionService: NonNullable<NonNullable<UseDataGridRuntimeOptions<TRow>["services"]>["selection"]> = {
     name: "selection",
-    getSelectionSnapshot: () => selectionSnapshot.value,
+    getSelectionSnapshot: () => selectionSnapshot.value ?? pendingReconcileSnapshot,
     setSelectionSnapshot: snapshot => {
+      pendingReconcileSnapshot = null
       syncSelectionState(snapshot)
     },
     clearSelection: () => {
+      pendingReconcileSnapshot = null
       syncSelectionState(null)
     },
   }
@@ -159,11 +172,41 @@ export function useDataGridAppSelection<TRow>(
 
   const syncSelectionSnapshotFromRuntime = (): void => {
     const runtime = options.resolveRuntime?.() ?? null
-    syncSelectionState(
-      runtime?.api.selection.hasSupport()
-        ? runtime.api.selection.getSnapshot()
-        : null,
-    )
+    if (!runtime?.api.selection.hasSupport()) {
+      syncSelectionState(null)
+      return
+    }
+    let snapshot = runtime.api.selection.getSnapshot()
+    const rowModel = runtime.rowModel ?? observedRowModel
+    if (!snapshot && runtime.api.selection.getSnapshotStatus?.() === "stale") {
+      const candidate = selectionSnapshot.value ?? pendingReconcileSnapshot
+      snapshot = reconcileSingleCellSelection(candidate, rowModel)
+      if (snapshot) {
+        pendingReconcileSnapshot = null
+        runtime.api.selection.setSnapshot(snapshot)
+      } else if (hasStableSingleCellAnchor(candidate)) {
+        pendingReconcileSnapshot = candidate
+        return
+      }
+    } else if (snapshot) {
+      pendingReconcileSnapshot = null
+    }
+    syncSelectionState(snapshot)
+  }
+
+  const hasStableSingleCellAnchor = (snapshot: DataGridSelectionSnapshot | null): snapshot is DataGridSelectionSnapshot => {
+    if (!snapshot || snapshot.ranges.length !== 1) return false
+    const range = snapshot.ranges[0]
+    return !!range
+      && range.startRow === range.endRow
+      && range.startCol === range.endCol
+      && normalizeRowId(range.anchor.rowId) != null
+  }
+
+  const hasMaterializationPlaceholderAnchor = (snapshot: DataGridSelectionSnapshot | null): boolean => {
+    const rowId = normalizeRowId(snapshot?.ranges[0]?.anchor.rowId)
+    return typeof rowId === "string"
+      && (/^__datagrid_placeholder__:\d+$/.test(rowId) || /^__affino_datagrid_data_source_loading__:\d+$/.test(rowId))
   }
 
   const markCurrentSelectionProjectionStale = (reason: string): void => {
@@ -179,22 +222,119 @@ export function useDataGridAppSelection<TRow>(
     }
   }
 
+  const reconcileSingleCellSelection = (
+    snapshot: DataGridSelectionSnapshot | null,
+    rowModel: DataGridRowModel<TRow> | null,
+  ): DataGridSelectionSnapshot | null => {
+    if (!snapshot || snapshot.ranges.length !== 1) return null
+    const range = snapshot.ranges[0]
+    if (!range || range.startRow !== range.endRow || range.startCol !== range.endCol) {
+      return null
+    }
+    const anchorRowId = normalizeRowId(range.anchor.rowId)
+    const readRowAt = (index: number): DataGridRowNode<TRow> | null => (
+      rowModel?.getRow(index) ?? options.resolveSelectionRowAtIndex?.(index) ?? null
+    )
+    let rowIndex = range.anchor.rowIndex
+    let currentRow: DataGridRowNode<TRow> | null = null
+    if (anchorRowId != null) {
+      const resolution = options.resolveRuntime?.()?.api.rows?.resolveById?.(anchorRowId)
+      const identityRow = resolution?.status === "loaded"
+        ? resolution.row
+        : rowModel?.getRowById?.(anchorRowId)
+      const identityIndex = identityRow?.displayIndex
+      if (
+        Number.isFinite(identityIndex)
+        && normalizeRowId(readRowAt(identityIndex as number)?.rowId) === anchorRowId
+      ) {
+        rowIndex = identityIndex as number
+        currentRow = readRowAt(rowIndex)
+      }
+    } else {
+      currentRow = readRowAt(rowIndex)
+    }
+    if (
+      !currentRow
+      && typeof anchorRowId === "string"
+      && (/^__datagrid_placeholder__:\d+$/.test(anchorRowId) || /^__affino_datagrid_data_source_loading__:\d+$/.test(anchorRowId))
+    ) {
+      const materializedRow = readRowAt(rowIndex)
+      if (materializedRow && (materializedRow as { __placeholder?: boolean }).__placeholder !== true) {
+        currentRow = materializedRow
+      }
+    }
+    const currentRowId = normalizeRowId(currentRow?.rowId)
+    if (!currentRow || currentRowId == null) return null
+    const rebasePoint = (point: typeof range.anchor) => ({ ...point, rowIndex, rowId: currentRowId })
+    const nextRange = {
+      ...range,
+      startRowId: currentRowId,
+      endRowId: currentRowId,
+      anchor: rebasePoint(range.anchor),
+      focus: rebasePoint(range.focus),
+    }
+    const activeCell = snapshot.activeCell
+      ? { ...snapshot.activeCell, rowIndex, rowId: currentRowId }
+      : null
+    return {
+      ...snapshot,
+      ranges: [nextRange],
+      activeCell,
+      projectionRevision: buildDataGridSelectionProjectionIdentity(
+        rowModel?.getSnapshot() ?? options.resolveRuntime?.()?.api.rows?.getSnapshot?.(),
+      )?.revision ?? null,
+    }
+  }
+
   watch(
     () => options.resolveRuntime?.()?.rowModel ?? null,
     (rowModel, _previous, onCleanup) => {
       if (!rowModel) {
+        observedRowModel = null
         return
       }
+      observedRowModel = rowModel
       let lastVersionKey = resolveRowModelVersionKey(rowModel.getSnapshot())
       let lastProjectionKey = buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.projectionKey ?? null
       const unsubscribe = rowModel.subscribe(() => {
         const nextSnapshot = rowModel.getSnapshot()
         const nextProjectionKey = buildDataGridSelectionProjectionIdentity(nextSnapshot)?.projectionKey ?? null
+        const nextVersionKey = resolveRowModelVersionKey(nextSnapshot)
+        const rowModelChanged = nextVersionKey !== lastVersionKey
         if (lastProjectionKey != null && nextProjectionKey != null && nextProjectionKey !== lastProjectionKey) {
-          markCurrentSelectionProjectionStale("projection-changed")
+          const candidate = selectionSnapshot.value ?? pendingReconcileSnapshot
+          const reconciled = reconcileSingleCellSelection(candidate, rowModel)
+          if (reconciled) {
+            pendingReconcileSnapshot = null
+            syncSelectionState(reconciled)
+            if (options.resolveRuntime?.()?.api.selection.hasSupport()) {
+              options.resolveRuntime?.()?.api.selection.setSnapshot(reconciled)
+            }
+          } else {
+            if (hasStableSingleCellAnchor(candidate)) {
+              pendingReconcileSnapshot = candidate
+            } else {
+              markCurrentSelectionProjectionStale("projection-changed")
+            }
+          }
+        } else if (rowModelChanged && (pendingReconcileSnapshot || hasMaterializationPlaceholderAnchor(selectionSnapshot.value))) {
+          // Viewport updates are frequent for sparse/worker models. Only retry
+          // a pending anchor or a recognized placeholder being materialized;
+          // probing arbitrary selections here can turn one scroll into O(N)
+          // individual datasource requests.
+          const candidate = pendingReconcileSnapshot ?? selectionSnapshot.value
+          const reconciled = reconcileSingleCellSelection(candidate, rowModel)
+          if (reconciled) {
+            pendingReconcileSnapshot = null
+            syncSelectionState(reconciled)
+            if (options.resolveRuntime?.()?.api.selection.hasSupport()) {
+              options.resolveRuntime?.()?.api.selection.setSnapshot(reconciled)
+            }
+          } else if (hasStableSingleCellAnchor(candidate)) {
+            pendingReconcileSnapshot = candidate
+          }
         }
         lastProjectionKey = nextProjectionKey
-        const nextVersionKey = resolveRowModelVersionKey(nextSnapshot)
         if (nextVersionKey === lastVersionKey) {
           return
         }

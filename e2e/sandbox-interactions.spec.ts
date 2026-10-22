@@ -413,6 +413,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("root group rows stick under the header across pinned and center panes", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 })
     const ariaHiddenFocusWarnings: string[] = []
     page.on("console", message => {
       if (message.type() === "warning" && message.text().includes("Blocked aria-hidden")) {
@@ -505,6 +506,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("collapsing a scrolled root group returns the viewport to its beginning", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 })
     await gotoSandboxRoute(page, "/vue/shell/grouped-grid?pinnedProfile=wide-pinned")
     const stage = page.locator(".grid-stage:visible").first()
     const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
@@ -610,13 +612,14 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
   })
 
   test("horizontal virtualization keeps arrow navigation and reveals adjacent cells", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 })
     await gotoSandboxRoute(page, "/vue/shell/grouped-grid")
     await page.locator("select").nth(1).selectOption("128")
 
     const stage = page.locator(".grid-stage:visible").first()
     const horizontalOwner = stage.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
     const verticalOwner = stage.locator(".grid-body-shared-vertical-scroll-shell")
-    const sourceCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="start"]').first()
+    const sourceCell = stage.locator('.datagrid-stage__cell[data-row-index="1"][data-column-key="start"]').first()
     await expect(sourceCell).toBeVisible({ timeout: 20_000 })
     await sourceCell.click()
     const sourceSignature = await cellSignature(sourceCell)
@@ -624,9 +627,8 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await horizontalOwner.evaluate(element => { element.scrollLeft = 4000 })
     await expect(sourceCell).toHaveCount(0)
     await expect(verticalOwner).toBeFocused()
-
     await page.keyboard.press("ArrowLeft")
-    const leftCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="amount"]').first()
+    const leftCell = stage.locator('.datagrid-stage__cell[data-row-index="1"][data-column-key="id"]').first()
     await expect(leftCell).toBeFocused()
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(leftCell))
     await expect.poll(() => horizontalOwner.evaluate(element => element.scrollLeft)).toBeLessThan(1000)
@@ -636,7 +638,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(verticalOwner).toBeFocused()
 
     await page.keyboard.press("ArrowRight")
-    const rightCell = stage.locator('.datagrid-stage__cell[data-row-index="0"][data-column-key="start"]').first()
+    const rightCell = stage.locator('.datagrid-stage__cell[data-row-index="1"][data-column-key="start"]').first()
     await expect(rightCell).toBeFocused()
     await expect.poll(async () => selectionAnchorSignature(page)).toBe(sourceSignature)
     await expect.poll(() => horizontalOwner.evaluate(element => element.scrollLeft)).toBeLessThan(1000)
@@ -1128,9 +1130,11 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(placeholderAmountCell).toBeVisible({ timeout: 20_000 })
     await expect(stage).not.toHaveClass(/grid-stage--scrolling/)
 
-    await dispatchElementDoubleClick(placeholderAmountCell)
+    await placeholderAmountCell.click()
+    await expect.poll(async () => selectionAnchorSignature(page)).toBe(await cellSignature(placeholderAmountCell))
+    await page.keyboard.press("F2")
+    await expect(placeholderAmountCell.locator("input.cell-editor-input").first()).toBeVisible({ timeout: 20_000 })
     const editor = placeholderAmountCell.locator("input.cell-editor-input").first()
-    await expect(editor).toBeVisible({ timeout: 20_000 })
     await editor.fill("4321")
     await editor.blur()
 

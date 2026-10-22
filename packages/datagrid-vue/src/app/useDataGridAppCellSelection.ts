@@ -456,6 +456,20 @@ export function useDataGridAppCellSelection<TRow>(
       return false
     }
     const rowIndex = resolveRowIndex(rowOffset)
+    const row = options.runtime.getBodyRowAtIndex(rowIndex)
+    const currentRowId = normalizeRowId(row?.rowId)
+    const stalePointAtCell = options.selectionSnapshot.value?.ranges.some(range => (
+      range.startRow === rowIndex
+      && range.endRow === rowIndex
+      && range.startCol === columnIndex
+      && range.endCol === columnIndex
+      && normalizeRowId(range.anchor.rowId) != null
+      && currentRowId != null
+      && normalizeRowId(range.anchor.rowId) !== currentRowId
+    )) === true
+    if (stalePointAtCell) {
+      return false
+    }
     return ranges.some(range => (
       rowIndex >= range.startRow
       && rowIndex <= range.endRow
@@ -470,7 +484,18 @@ export function useDataGridAppCellSelection<TRow>(
       return false
     }
     const rowIndex = resolveRowIndex(rowOffset)
-    return rowIndex === anchor.rowIndex && columnIndex === anchor.columnIndex
+    if (rowIndex !== anchor.rowIndex || columnIndex !== anchor.columnIndex) {
+      return false
+    }
+    const snapshot = options.selectionSnapshot.value
+    const activeIndex = snapshot?.activeRangeIndex ?? 0
+    const snapshotAnchor = snapshot?.ranges[activeIndex]?.anchor ?? snapshot?.ranges[0]?.anchor
+    const anchorRowId = normalizeRowId(snapshotAnchor?.rowId ?? options.selectionAnchor.value?.rowId)
+    if (anchorRowId == null) {
+      return true
+    }
+    const currentRowId = normalizeRowId(options.runtime.getBodyRowAtIndex(rowIndex)?.rowId)
+    return currentRowId == null || currentRowId === anchorRowId
   }
 
   const shouldHighlightSelectedCell = (rowOffset: number, columnIndex: number): boolean => {
