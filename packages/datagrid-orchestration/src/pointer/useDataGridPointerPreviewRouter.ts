@@ -56,7 +56,27 @@ export function useDataGridPointerPreviewRouter<
   function resolveFillAxis(
     dragStartPointer: DataGridPointerPreviewCoordinates | null,
     pointer: DataGridPointerPreviewCoordinates,
+    baseRange: TRange,
+    coord: TCoord,
   ): DataGridPointerPreviewFillAxis | undefined {
+    const rowStart = Math.min(baseRange.startRow, baseRange.endRow)
+    const rowEnd = Math.max(baseRange.startRow, baseRange.endRow)
+    const columnStart = Math.min(baseRange.startColumn, baseRange.endColumn)
+    const columnEnd = Math.max(baseRange.startColumn, baseRange.endColumn)
+    const rowOutsideBase = coord.rowIndex < rowStart || coord.rowIndex > rowEnd
+    const columnOutsideBase = coord.columnIndex < columnStart || coord.columnIndex > columnEnd
+
+    // The fill handle starts at the selection corner, while the target is
+    // resolved at the cell center. Use the target's grid axis when it extends
+    // only one dimension; handle-to-center distance can otherwise bias a short
+    // vertical drag into the neighbouring column toward a horizontal fill.
+    if (rowOutsideBase && !columnOutsideBase) {
+      return "vertical"
+    }
+    if (columnOutsideBase && !rowOutsideBase) {
+      return "horizontal"
+    }
+
     if (!dragStartPointer) {
       return undefined
     }
@@ -91,7 +111,7 @@ export function useDataGridPointerPreviewRouter<
     if (!coord) {
       return
     }
-    const preview = options.buildExtendedRange(baseRange, coord, resolveFillAxis(dragStartPointer, pointer))
+    const preview = options.buildExtendedRange(baseRange, coord, resolveFillAxis(dragStartPointer, pointer, baseRange, coord))
     if (!preview) {
       return
     }

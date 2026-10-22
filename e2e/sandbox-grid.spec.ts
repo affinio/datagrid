@@ -1424,7 +1424,7 @@ test.describe("sandbox touch scroll contracts", () => {
     await expect(stage).toHaveClass(/grid-stage--fill-dragging/)
     await expect(page.locator(".grid-selection-overlay__segment--fill-preview").first()).toBeVisible()
 
-    await dispatchTouchEndAt(fillHandle, targetCell)
+    await dispatchTouchEndAtWindow(page, targetCell)
     await expect(stage).not.toHaveClass(/grid-stage--fill-dragging/)
     expect(await viewportScrollTop(viewport)).toBe(beforeTop)
   })
@@ -2092,6 +2092,30 @@ async function dispatchTouchEndAt(
       force: 0.7,
     })
     element.dispatchEvent(new TouchEvent("touchend", {
+      bubbles: true,
+      cancelable: true,
+      touches: [],
+      targetTouches: [],
+      changedTouches: [touch],
+    }))
+  }, point)
+}
+
+async function dispatchTouchEndAtWindow(page: Page, target: Locator): Promise<void> {
+  await target.scrollIntoViewIfNeeded()
+  const point = await elementCenter(target)
+  await page.evaluate(nextPoint => {
+    const target = document.elementFromPoint(nextPoint.x, nextPoint.y) ?? document.body
+    const touch = new Touch({
+      identifier: 1,
+      target,
+      clientX: nextPoint.x,
+      clientY: nextPoint.y,
+      radiusX: 6,
+      radiusY: 6,
+      force: 0.7,
+    })
+    window.dispatchEvent(new TouchEvent("touchend", {
       bubbles: true,
       cancelable: true,
       touches: [],
