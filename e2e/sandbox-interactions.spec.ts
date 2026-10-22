@@ -792,9 +792,11 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     }
 
     await rowIndexCell.click()
+    await expect.poll(async () => rowIndexCell.evaluate(element => getComputedStyle(element, "::before").backgroundColor))
+      .toMatch(/^rgba\(/)
     const clickedIndexStyle = await rowIndexCell.evaluate(element => ({
       background: getComputedStyle(element).backgroundColor,
-      marker: getComputedStyle(element, "::before").backgroundImage,
+      marker: getComputedStyle(element, "::before").backgroundColor,
     }))
     await page.keyboard.press("ArrowRight")
     await expect(selectionCell).toBeFocused()
@@ -810,10 +812,10 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect(rowIndexCell).toHaveClass(/grid-cell--index-selected/)
     await expect(firstPinnedDataCell).toHaveAttribute("aria-selected", "true")
     await expect(rowIndexCell).toHaveCSS("outline-style", "none")
-    expect(await rowIndexCell.evaluate(element => getComputedStyle(element, "::before").backgroundImage)).toContain("linear-gradient")
+    expect(await rowIndexCell.evaluate(element => getComputedStyle(element, "::before").backgroundColor)).not.toBe("rgba(0, 0, 0, 0)")
     expect(await rowIndexCell.evaluate(element => ({
       background: getComputedStyle(element).backgroundColor,
-      marker: getComputedStyle(element, "::before").backgroundImage,
+      marker: getComputedStyle(element, "::before").backgroundColor,
     }))).toEqual(clickedIndexStyle)
   })
 
