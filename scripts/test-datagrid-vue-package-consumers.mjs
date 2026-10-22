@@ -10,6 +10,7 @@ const fixtureRoot = mkdtempSync(join(tmpdir(), "affino-datagrid-vue-packed-consu
 try {
   const tarballs = {
     core: packPackage("datagrid-core"),
+    exportXlsx: packPackage("export-xlsx"),
     formulaEngine: packPackage("datagrid-formula-engine"),
     theme: packPackage("datagrid-theme"),
     orchestration: packPackage("datagrid-orchestration"),
@@ -45,6 +46,7 @@ function runFixture(name, tarballs, withGantt) {
     type: "module",
     dependencies: {
       "@affino/datagrid-core": `file:${tarballs.core}`,
+      "@affino/export-xlsx": `file:${tarballs.exportXlsx}`,
       "@affino/datagrid-formula-engine": `file:${tarballs.formulaEngine}`,
       "@affino/datagrid-theme": `file:${tarballs.theme}`,
       "@affino/datagrid-orchestration": `file:${tarballs.orchestration}`,
