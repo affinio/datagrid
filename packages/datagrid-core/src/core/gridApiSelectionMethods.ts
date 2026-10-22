@@ -1,6 +1,7 @@
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type { DataGridSelectionSummarySnapshot } from "../selection/selectionSummary"
 import type {
+  DataGridColumnModel,
   DataGridRowModel,
 } from "../models/index.js"
 import {
@@ -12,6 +13,7 @@ import type { DataGridChangeContext, DataGridSelectionSummaryApiOptions } from "
 export interface DataGridApiSelectionMethods<TRow = unknown> {
   hasSelectionSupport: () => boolean
   getSelectionSnapshot: () => DataGridSelectionSnapshot | null
+  getSelectionSnapshotStatus: () => "current" | "stale" | "untracked" | "empty" | "unsupported"
   setSelectionSnapshot: (snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext) => void
   clearSelection: (context?: DataGridChangeContext) => void
   summarizeSelection: (options?: DataGridSelectionSummaryApiOptions<TRow>) => DataGridSelectionSummarySnapshot | null
@@ -20,6 +22,7 @@ export interface DataGridApiSelectionMethods<TRow = unknown> {
 
 export interface CreateDataGridApiSelectionMethodsInput<TRow = unknown> {
   rowModel: DataGridRowModel<TRow>
+  columnModel: DataGridColumnModel
   getSelectionCapability: () => DataGridSelectionCapability | null
   onChanged?: (snapshot: DataGridSelectionSnapshot | null, context?: DataGridChangeContext) => void
   summarize: (
@@ -31,7 +34,23 @@ export interface CreateDataGridApiSelectionMethodsInput<TRow = unknown> {
 export function createDataGridApiSelectionMethods<TRow = unknown>(
   input: CreateDataGridApiSelectionMethodsInput<TRow>,
 ): DataGridApiSelectionMethods<TRow> {
-  const { rowModel, getSelectionCapability, summarize, onChanged } = input
+  const { rowModel, columnModel, getSelectionCapability, summarize, onChanged } = input
+
+  const currentPositionRevisions = () => ({
+    projectionRevision: rowModel.getSnapshot().revision ?? null,
+    columnRevision: columnModel.getSnapshot().orderRevision,
+  })
+  const getSnapshotStatus = (): "current" | "stale" | "untracked" | "empty" | "unsupported" => {
+    const capability = getSelectionCapability()
+    if (!capability) return "unsupported"
+    const snapshot = capability.getSelectionSnapshot()
+    if (!snapshot) return "empty"
+    if (snapshot.projectionRevision === undefined || snapshot.columnRevision === undefined) return "untracked"
+    const current = currentPositionRevisions()
+    return snapshot.projectionRevision === current.projectionRevision && snapshot.columnRevision === current.columnRevision
+      ? "current"
+      : "stale"
+  }
 
   return {
     hasSelectionSupport() {
@@ -42,13 +61,17 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
       if (!selectionCapability) {
         return null
       }
+      if (getSnapshotStatus() === "stale") return null
       return selectionCapability.getSelectionSnapshot()
+    },
+    getSelectionSnapshotStatus() {
+      return getSnapshotStatus()
     },
     setSelectionSnapshot(snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext) {
       const selection = assertSelectionCapability(getSelectionCapability())
       const previous = selection.getSelectionSnapshot()
       if (previous && JSON.stringify(previous) === JSON.stringify(snapshot)) return
-      selection.setSelectionSnapshot(snapshot)
+      selection.setSelectionSnapshot({ ...snapshot, ...currentPositionRevisions() })
       onChanged?.(selection.getSelectionSnapshot(), context)
     },
     clearSelection(context?: DataGridChangeContext) {
@@ -59,6 +82,7 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
       if (JSON.stringify(previous) !== JSON.stringify(next)) onChanged?.(next, context)
     },
     summarizeSelection(options: DataGridSelectionSummaryApiOptions<TRow> = {}) {
+      if (getSnapshotStatus() === "stale") return null
       const selectionCapability = getSelectionCapability()
       if (!selectionCapability) {
         return null
@@ -70,6 +94,7 @@ export function createDataGridApiSelectionMethods<TRow = unknown>(
       return summarize(selectionSnapshot, options)
     },
     getRangeRowData() {
+      if (getSnapshotStatus() === "stale") return []
       const selectionSnapshot = getSelectionCapability()?.getSelectionSnapshot() ?? null
       const materialRanges = selectionSnapshot?.ranges.filter(range => (
         range.startRow !== range.endRow || range.startCol !== range.endCol

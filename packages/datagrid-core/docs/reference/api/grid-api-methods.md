@@ -23,6 +23,8 @@ effects, ordering rules, capability requirements, and failure behavior, use the
 | `pivot` | [Pivot](methods/pivot.md) |
 | `data` | [Datasource controls](methods/datasource.md) |
 | `state`, `events`, `plugins` | [State and events](methods/state-events.md) |
+| `read` | [Read views](methods/read.md) |
+| `cells` | [Cell values](methods/cells.md) |
 | `lifecycle`, `capabilities`, `compute`, `policy`, `diagnostics`, `meta` | [Runtime and diagnostics](methods/runtime.md) |
 
 ## Lifecycle
@@ -45,6 +47,13 @@ api.stop(): Promise<void>
 api.dispose(): Promise<void>
 ```
 
+## Read views
+
+```ts
+api.read.captureView(options: DataGridCaptureReadViewOptions<TRow>): DataGridReadView<TRow>
+api.cells.resolveValue(input: { rowId: DataGridRowId; columnKey: string; purpose: DataGridCellValuePurpose }): DataGridCellValueResolution<TRow>
+```
+
 `start()` initializes the registered services before starting them; call `init()` directly only when initialization must happen separately. `dispose()` is
 terminal: use it when the runtime will not be reused. `whenIdle()` resolves
 when the API's guarded exclusive-operation queue is empty; it is not a universal
@@ -61,6 +70,7 @@ api.rows.getCount(): number
 api.rows.get(index: number): DataGridRowNode<TRow> | undefined
 api.rows.getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
 api.rows.getById(rowId: DataGridRowId): DataGridRowNode<TRow> | undefined
+api.rows.resolveById(rowId: DataGridRowId): DataGridRowResolveResult<TRow>
 api.rows.getProjectedRows(): TRow[]
 
 api.rows.hasDataMutationSupport(): boolean
@@ -226,6 +236,8 @@ api.view.measureRowHeight(): void
 api.view.getEffectiveRowHeight(): number
 api.view.setRowHeightOverride(rowIndex: number, height: number | null): void
 api.view.getRowHeightOverride(rowIndex: number): number | null
+api.view.setRowHeightOverrideById(rowId: DataGridRowId, height: number | null): void
+api.view.getRowHeightOverrideById(rowId: DataGridRowId): number | null
 api.view.getRowHeightVersion(): number
 api.view.getRowHeightOverridesSnapshot?(): ReadonlyMap<number, number>
 api.view.getLastRowHeightMutation?(): {
@@ -252,6 +264,7 @@ Viewport targets are semantic (`rowId`, `rowIndex`, `columnKey`, or
 ```ts
 api.selection.hasSupport(): boolean
 api.selection.getSnapshot(): DataGridSelectionSnapshot | null
+api.selection.getSnapshotStatus(): "current" | "stale" | "untracked" | "empty" | "unsupported"
 api.selection.setSnapshot(snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext): void
 api.selection.clear(context?: DataGridChangeContext): void
 api.selection.summarize(options?: DataGridSelectionSummaryApiOptions<TRow>): DataGridSelectionSummarySnapshot | null
@@ -259,6 +272,7 @@ api.selection.getRangeRowData(): TRow[]
 
 api.rowSelection.hasSupport(): boolean
 api.rowSelection.getSnapshot(): DataGridRowSelectionSnapshot | null
+api.rowSelection.getScopeStatus(): "current" | "stale" | "unscoped" | "not-applicable" | "unsupported"
 api.rowSelection.setSnapshot(snapshot: DataGridRowSelectionSnapshot, context?: DataGridChangeContext): void
 api.rowSelection.clear(context?: DataGridChangeContext): void
 api.rowSelection.getFocusedRow(): DataGridRowId | null
@@ -342,7 +356,8 @@ implicitly recompute rows. `diagnostics.getAll()` is read-only.
 ```ts
 api.state.get(options?: DataGridGetStateOptions): DataGridUnifiedState<TRow>
 api.state.migrate(state: unknown, options?: DataGridMigrateStateOptions): DataGridUnifiedState<TRow> | null
-api.state.set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): void
+api.state.validate(state: unknown, options?: DataGridSetStateOptions): DataGridStateRestoreValidation
+api.state.set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): DataGridStateRestoreReport
 
 api.events.on<K extends keyof DataGridApiEventMap<TRow>>(
   event: K,

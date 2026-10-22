@@ -55,6 +55,17 @@ selection, and the updated anchor/extent interaction snapshot. When the
 previous anchor no longer exists in the resolved projection, the operation
 falls back to selecting the target row.
 
+For API row-selection snapshots, `mode: "all"` is bound to a
+`current-projection` scope containing the row-model revision and dataset
+version at the time `api.rowSelection.setSnapshot()` is called. Check
+`getScopeStatus()` before acting on an all-selection. A changed revision or
+dataset version reports `stale`; `getSnapshot()` returns `null`, row
+membership returns false, and selected-row-data reads return an empty array
+until the host explicitly re-establishes the all-selection. `getSelectedRows()`
+returns explicit IDs only and is empty in all-mode. This scope is local to the
+current projection; it is not a server-side query token for future remote
+bulk operations.
+
 ## Pointer selection sessions
 
 Use `beginDataGridRowSelectionSession` to capture the base selection,

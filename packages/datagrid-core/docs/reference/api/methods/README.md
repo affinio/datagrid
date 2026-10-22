@@ -15,6 +15,8 @@ The method pages describe the stable root API. Lower-level helpers and model con
 - [State and events](state-events.md) — migration, restore, events, plugins, and operation context.
 - [Runtime and diagnostics](runtime.md) — lifecycle, capabilities, compute mode, schema, diagnostics, projection policy.
 - [Datasource controls](datasource.md) — backpressure operations and their asynchronous behavior.
+- [Read views](read.md) — synchronous cross-namespace snapshots, revisions, and row ownership.
+- [Cell values](cells.md) — source, computed/accessor, formatted display values, and write-target hints.
 
 ## Reading a method contract
 
@@ -24,3 +26,17 @@ The method pages describe the stable root API. Lower-level helpers and model con
 4. Subscribe to the documented event when the host needs notification; read a fresh snapshot for current state.
 
 The API facade validates capabilities and delegates to the bound models. It does not create a DOM, wait for a UI render, fetch missing data unless a datasource contract explicitly does so, or infer product policy.
+
+## Result policy exceptions
+
+There is no single fallback for every unsupported operation; follow the individual method contract:
+
+- Row data mutations generally throw when their required capability is missing. `rows.insertDataAt`, `insertDataBefore`, and `insertDataAfter` also throw when the corresponding insert capability is missing; `false` is a model-level outcome such as an unavailable target or rejected insertion.
+- `columns.insertBefore` and `insertAfter` return `false` when the target key is absent or the insertion list is empty. Invalid column definitions still follow column-model validation and can throw. These operations do not use a row-model capability.
+- `columns.getHistogram` returns an empty list when histogram capability is unavailable.
+- Viewport commands such as `scrollToRow` and `scrollToCell` are requests to an optional viewport service and silently do nothing when that service method is absent. `setViewportPosition` can opt into a capability error with `{ strict: true }`.
+- `view.activateCell` always returns a structured result; missing adapter support is reported as `status: "failed"`.
+
+These return values are not interchangeable: `false` or an empty list may be a supported no-result outcome, while a viewport request may only have been forwarded. Do not infer that a requested adapter action completed unless the specific method reports completion.
+
+For new methods, use this result policy: throw a capability error when the model cannot perform the operation; return a documented structured unavailable result when a valid target is absent; make an already-satisfied operation a no-op without a revision/event; and throw a validation error for malformed input. Adapter requests must be named and documented as requests, not reported as completed mutations.

@@ -82,8 +82,11 @@ export {
   type DataGridChangeContext,
   type DataGridApiTransactionNamespace,
   type DataGridApiRowsNamespace,
+  type DataGridRowResolveResult,
   type DataGridApiDataNamespace,
   type DataGridApiColumnsNamespace,
+  type DataGridApiReadNamespace,
+  type DataGridApiCellsNamespace,
   type DataGridApiViewNamespace,
   type DataGridApiCapabilities,
   type DataGridApiComputeNamespace,
@@ -127,16 +130,40 @@ export {
   type DataGridMigrateStateOptions,
   type DataGridSetStateDataSourceOptions,
   type DataGridSetStateOptions,
+  type DataGridStateRestoreValidation,
+  type DataGridStateRestoreReport,
+  type DataGridStateRestoreFailureReport,
   type DataGridUnifiedRowsState,
   type DataGridUnifiedColumnState,
   type DataGridUnifiedViewState,
   type DataGridUnifiedState,
+  type DataGridCaptureReadViewOptions,
+  type DataGridReadView,
+  type DataGridReadViewPart,
+  type DataGridReadViewPartName,
+  type DataGridReadViewRow,
+  type DataGridReadViewRows,
+  type DataGridReadCoverage,
+  type DataGridReadCompleteness,
+  type DataGridReadViewComputed,
+  type DataGridReadViewSelection,
+  type DataGridCellValuePurpose,
+  type DataGridCellValueResolution,
+  type DataGridCellValueSnapshot,
+  type DataGridApiCellValueMethods,
   type DataGridPivotLayoutColumnState,
   type DataGridPivotLayoutSnapshot,
   type DataGridPivotLayoutImportOptions,
   type DataGridPivotInteropSnapshot,
   type DataGridSelectionSummaryApiOptions,
 } from "./core/gridApi.js"
+
+export {
+  DataGridTransactionBatchCommitError,
+  type DataGridTransactionBatchCommitFailure,
+} from "./core/transactionService.js"
+
+export { DataGridStateRestoreError } from "./core/gridApiContracts.js"
 
 export {
   type DataGridSelectionSnapshot,
@@ -188,6 +215,7 @@ export {
   setDataGridRowFocused,
   setDataGridRowSelected,
   type DataGridRowSelectionSnapshot,
+  type DataGridRowSelectionScope,
 } from "./selection/rowSelection.js"
 
 export {

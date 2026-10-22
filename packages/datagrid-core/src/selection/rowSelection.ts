@@ -5,6 +5,13 @@ export interface DataGridRowSelectionSnapshot {
   selectedRows: DataGridRowId[]
   mode?: "explicit" | "all"
   excludedRows?: DataGridRowId[]
+  scope?: DataGridRowSelectionScope
+}
+
+export interface DataGridRowSelectionScope {
+  readonly kind: "current-projection"
+  readonly queryRevision: number | null
+  readonly datasetVersion: string | number | null
 }
 
 function isDataGridRowId(value: unknown): value is DataGridRowId {
@@ -28,11 +35,20 @@ export function normalizeDataGridRowSelectionSnapshot(
   const selectedRows = normalizeDataGridRowIds(snapshot.selectedRows)
   const mode = snapshot.mode === "all" ? "all" : "explicit"
   const excludedRows = mode === "all" ? normalizeDataGridRowIds(snapshot.excludedRows) : []
+  const scope = mode === "all" && snapshot.scope?.kind === "current-projection"
+    ? Object.freeze({
+        kind: "current-projection" as const,
+        queryRevision: typeof snapshot.scope.queryRevision === "number" ? snapshot.scope.queryRevision : null,
+        datasetVersion: typeof snapshot.scope.datasetVersion === "string" || typeof snapshot.scope.datasetVersion === "number"
+          ? snapshot.scope.datasetVersion
+          : null,
+      })
+    : undefined
 
   return {
     focusedRow: isDataGridRowId(snapshot.focusedRow) ? snapshot.focusedRow : null,
     selectedRows,
-    ...(mode === "all" ? { mode, excludedRows } : {}),
+    ...(mode === "all" ? { mode, excludedRows, ...(scope ? { scope } : {}) } : {}),
   }
 }
 
@@ -66,6 +82,9 @@ export function dataGridRowSelectionSnapshotsEqual(
   if ((normalizedLeft.mode ?? "explicit") !== (normalizedRight.mode ?? "explicit")) {
     return false
   }
+  if (normalizedLeft.scope?.kind !== normalizedRight.scope?.kind
+      || normalizedLeft.scope?.queryRevision !== normalizedRight.scope?.queryRevision
+      || normalizedLeft.scope?.datasetVersion !== normalizedRight.scope?.datasetVersion) return false
   if (normalizedLeft.selectedRows.length !== normalizedRight.selectedRows.length) {
     return false
   }
@@ -91,7 +110,7 @@ export function setDataGridRowFocused(
   return {
     focusedRow: rowId,
     selectedRows: [...normalized.selectedRows],
-    ...(normalized.mode === "all" ? { mode: "all" as const, excludedRows: [...(normalized.excludedRows ?? [])] } : {}),
+    ...(normalized.mode === "all" ? { mode: "all" as const, excludedRows: [...(normalized.excludedRows ?? [])], ...(normalized.scope ? { scope: normalized.scope } : {}) } : {}),
   }
 }
 
@@ -127,6 +146,7 @@ export function setDataGridRowSelected(
       selectedRows: [],
       mode: "all",
       excludedRows,
+      ...(normalized.scope ? { scope: normalized.scope } : {}),
     }
   }
   const nextSelectedRows = normalized.selectedRows.filter(candidate => candidate !== rowId)
@@ -148,6 +168,7 @@ export function selectAllDataGridRows(
     selectedRows: [],
     mode: "all",
     excludedRows: [],
+    ...(normalized.scope ? { scope: normalized.scope } : {}),
   }
 }
 
@@ -178,6 +199,7 @@ export function selectDataGridRows(
       selectedRows: [],
       mode: "all",
       excludedRows: (normalized.excludedRows ?? []).filter(rowId => !selected.has(getDataGridRowIdSignature(rowId))),
+      ...(normalized.scope ? { scope: normalized.scope } : {}),
     }
   }
   const nextSelectedRows = [...normalized.selectedRows]
@@ -215,6 +237,7 @@ export function deselectDataGridRows(
         { focusedRow: normalized.focusedRow, selectedRows: normalized.excludedRows ?? [] },
         blockedRows,
       ).selectedRows,
+      ...(normalized.scope ? { scope: normalized.scope } : {}),
     }
   }
   return {
@@ -247,6 +270,7 @@ export function reconcileDataGridRowSelectionSnapshot(
       selectedRows: [],
       mode: "all",
       excludedRows: (normalized.excludedRows ?? []).filter(rowId => allowed.has(rowId)),
+      ...(normalized.scope ? { scope: normalized.scope } : {}),
     }
   }
   return {

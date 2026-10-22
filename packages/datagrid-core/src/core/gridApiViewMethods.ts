@@ -50,6 +50,8 @@ export interface DataGridApiViewMethods {
   getEffectiveRowHeight: () => number
   setRowHeightOverride: (rowIndex: number, height: number | null) => void
   getRowHeightOverride: (rowIndex: number) => number | null
+  setRowHeightOverrideById: (rowId: DataGridRowId, height: number | null) => void
+  getRowHeightOverrideById: (rowId: DataGridRowId) => number | null
   getRowHeightVersion: () => number
   getRowHeightOverridesSnapshot: () => ReadonlyMap<number, number>
   getLastRowHeightMutation: () => {
@@ -83,6 +85,8 @@ export function createDataGridApiViewMethods<TRow = unknown>(
 ): DataGridApiViewMethods {
   const { rowModel, getViewportService, cellRefreshQueue } = input
   const rowHeightOverrideFallback = new Map<number, number>()
+  const rowHeightOverrideById = new Map<DataGridRowId, number>()
+  let rowHeightIdentityVersion = 0
   let lastRowHeightMutationFallback: {
     version: number
     kind: "set" | "clear" | "clear-all"
@@ -233,12 +237,23 @@ export function createDataGridApiViewMethods<TRow = unknown>(
       }
       return rowHeightOverrideFallback.get(normalizedIndex) ?? null
     },
+    setRowHeightOverrideById(rowId: DataGridRowId, height: number | null) {
+      const previous = rowHeightOverrideById.get(rowId) ?? null
+      const next = height == null ? null : normalizeRowHeight(height)
+      if (height != null && next == null || previous === next) return
+      if (next == null) rowHeightOverrideById.delete(rowId)
+      else rowHeightOverrideById.set(rowId, next)
+      rowHeightIdentityVersion += 1
+    },
+    getRowHeightOverrideById(rowId: DataGridRowId) {
+      return rowHeightOverrideById.get(rowId) ?? null
+    },
     getRowHeightVersion() {
       const viewportService = getViewportService()
       if (typeof viewportService?.getRowHeightVersion === "function") {
-        return viewportService.getRowHeightVersion()
+        return viewportService.getRowHeightVersion() + rowHeightIdentityVersion
       }
-      return rowHeightOverrideFallback.size
+      return rowHeightOverrideFallback.size + rowHeightIdentityVersion
     },
     getRowHeightOverridesSnapshot() {
       const viewportService = getViewportService()
@@ -256,11 +271,13 @@ export function createDataGridApiViewMethods<TRow = unknown>(
     },
     clearRowHeightOverrides() {
       rowHeightOverrideFallback.clear()
+      rowHeightOverrideById.clear()
+      rowHeightIdentityVersion += 1
       const viewportService = getViewportService()
       viewportService?.clearRowHeightOverrides?.()
       lastRowHeightMutationFallback = {
         version: typeof viewportService?.getRowHeightVersion === "function"
-          ? viewportService.getRowHeightVersion()
+          ? viewportService.getRowHeightVersion() + rowHeightIdentityVersion
           : rowHeightOverrideFallback.size,
         kind: "clear-all",
         rowIndex: null,

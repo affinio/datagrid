@@ -13,6 +13,7 @@ import type { DataGridChangeContext } from "./gridApiContracts"
 export interface DataGridApiRowSelectionMethods<TRow = unknown> {
   hasRowSelectionSupport: () => boolean
   getRowSelectionSnapshot: () => DataGridRowSelectionSnapshot | null
+  getRowSelectionScopeStatus: () => "current" | "stale" | "unscoped" | "not-applicable" | "unsupported"
   setRowSelectionSnapshot: (snapshot: DataGridRowSelectionSnapshot, context?: DataGridChangeContext) => void
   clearRowSelection: (context?: DataGridChangeContext) => void
   getFocusedRow: () => string | number | null
@@ -38,6 +39,22 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
   const { rowModel, getRowSelectionCapability, onChanged } = input
 
   const rowIdSignature = (rowId: DataGridRowId): string => `${typeof rowId}:${String(rowId)}`
+  const currentScope = () => ({
+    kind: "current-projection" as const,
+    queryRevision: rowModel.getSnapshot().revision ?? null,
+    datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
+  })
+  const getScopeStatus = (): "current" | "stale" | "unscoped" | "not-applicable" | "unsupported" => {
+    const capability = getRowSelectionCapability()
+    if (!capability) return "unsupported"
+    const snapshot = capability.getRowSelectionSnapshot()
+    if (snapshot?.mode !== "all") return "not-applicable"
+    if (!snapshot.scope) return "unscoped"
+    const current = currentScope()
+    return snapshot.scope.queryRevision === current.queryRevision && snapshot.scope.datasetVersion === current.datasetVersion
+      ? "current"
+      : "stale"
+  }
   const mutate = (operation: (capability: DataGridRowSelectionCapability) => void, context?: DataGridChangeContext): void => {
     const capability = assertRowSelectionCapability(getRowSelectionCapability())
     const previous = capability.getRowSelectionSnapshot()
@@ -51,10 +68,15 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
       return getRowSelectionCapability() !== null
     },
     getRowSelectionSnapshot() {
-      return getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null
+      const snapshot = getRowSelectionCapability()?.getRowSelectionSnapshot() ?? null
+      return snapshot?.mode === "all" && getScopeStatus() === "stale" ? null : snapshot
+    },
+    getRowSelectionScopeStatus() {
+      return getScopeStatus()
     },
     setRowSelectionSnapshot(snapshot, context) {
-      mutate(capability => capability.setRowSelectionSnapshot(snapshot), context)
+      const normalized = snapshot.mode === "all" ? { ...snapshot, scope: currentScope() } : snapshot
+      mutate(capability => capability.setRowSelectionSnapshot(normalized), context)
     },
     clearRowSelection(context) {
       mutate(capability => capability.clearRowSelection(), context)
@@ -69,6 +91,7 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
       return getRowSelectionCapability()?.getSelectedRows() ?? []
     },
     isRowSelected(rowId) {
+      if (getScopeStatus() === "stale" || getScopeStatus() === "unscoped") return false
       return getRowSelectionCapability()?.isRowSelected(rowId) ?? false
     },
     setRowSelected(rowId, selected, context) {
@@ -90,6 +113,7 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
       if (!snapshot) {
         return []
       }
+      if (snapshot.mode === "all" && getScopeStatus() !== "current") return []
 
       const rows: TRow[] = []
       if (snapshot.mode === "all") {

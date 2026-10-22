@@ -4,7 +4,7 @@ This reference describes Core's rectangular cell-selection state. It complements
 
 ## Model
 
-`DataGridSelectionSnapshot` stores zero or more rectangular ranges, the active range index, and an optional active cell. Each range contains inclusive row/column index bounds, anchor and focus points, and endpoint row IDs when known. Indexes address the current logical row and column order; they are not persistent identity. Use row IDs and column keys at application boundaries, then resolve them against the current projection before creating or applying a snapshot.
+`DataGridSelectionSnapshot` stores zero or more rectangular ranges, the active range index, an optional active cell, and the `projectionRevision` and `columnRevision` used to interpret positional coordinates. Each range contains inclusive row/column index bounds, anchor and focus points, and endpoint row IDs when known. Indexes address the current logical row and visible column order; they are not persistent identity. Use row IDs and column keys at application boundaries, then resolve them against the current projection before creating or applying a snapshot.
 
 ```ts
 import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
@@ -27,7 +27,7 @@ const selection: DataGridSelectionSnapshot = {
 api.selection.setSnapshot(selection, { origin: "order-inspector" })
 ```
 
-`api.selection` is optional at runtime. Check `api.selection.hasSupport()` before exposing selection controls. `getSnapshot()` returns `null` when selection is empty or unsupported; `clear()` removes the current ranges. The full method contract is in the [API method reference](../../api/grid-api-methods.md#selection).
+`api.selection` is optional at runtime. Check `api.selection.hasSupport()` before exposing selection controls. `setSnapshot()` stamps the current row projection and visible-column order revisions. A later row projection or visible-column order change makes the positional snapshot stale: `getSnapshotStatus()` reports `stale`, `getSnapshot()` returns `null`, and summaries/range-row reads return no result. Width-only changes do not invalidate coordinates. Legacy snapshots installed outside the API are reported as `untracked` until rewritten through `setSnapshot()`. `clear()` removes the current ranges. The full method contract is in the [API method reference](../../api/grid-api-methods.md#selection).
 
 Multiple disjoint rectangles can be represented by `ranges`; `activeRangeIndex` identifies the range that keyboard or renderer behavior treats as active. The Core API stores and applies this state, but it does not decide how a click, drag, Shift key, or keyboard command changes the ranges.
 

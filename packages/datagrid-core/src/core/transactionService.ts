@@ -76,6 +76,34 @@ export interface DataGridTransactionHistoryEvent {
   transactions: readonly DataGridTransactionEventEntry[]
 }
 
+export interface DataGridTransactionBatchCommitFailure {
+  readonly batchId: string | null
+  readonly committedId: string
+  readonly direction: "apply" | "redo"
+  readonly failedTransactionId: string
+  readonly appliedTransactionIds: readonly string[]
+  readonly compensatedTransactionIds: readonly string[]
+  readonly compensationFailures: readonly Readonly<{ transactionId: string; error: unknown }>[]
+  readonly cause: unknown
+}
+
+/** Rejected batch execution with explicit compensation results. */
+export class DataGridTransactionBatchCommitError extends Error {
+  readonly report: DataGridTransactionBatchCommitFailure
+
+  constructor(report: DataGridTransactionBatchCommitFailure) {
+    super(`[DataGridTransaction] ${report.direction} failed for transaction "${report.failedTransactionId}".`)
+    this.name = "DataGridTransactionBatchCommitError"
+    this.report = Object.freeze({
+      ...report,
+      appliedTransactionIds: Object.freeze([...report.appliedTransactionIds]),
+      compensatedTransactionIds: Object.freeze([...report.compensatedTransactionIds]),
+      compensationFailures: Object.freeze(report.compensationFailures.map(failure => Object.freeze({ ...failure }))),
+    })
+    ;(this as Error & { cause?: unknown }).cause = report.cause
+  }
+}
+
 export interface DataGridTransactionServiceHooks {
   onApplied?(event: DataGridTransactionAppliedEvent): void
   onRolledBack?(event: DataGridTransactionRolledBackEvent): void
@@ -496,17 +524,33 @@ export function createDataGridTransactionService(
     direction: "apply" | "redo",
   ): Promise<void> {
     const appliedTransactions: DataGridNormalizedTransaction[] = []
-    try {
-      for (const transaction of committedBatch.transactions) {
+    for (const transaction of committedBatch.transactions) {
+      try {
         await applyOneTransaction(transaction, direction, committedBatch.batchId)
         appliedTransactions.push(transaction)
+      } catch (cause) {
+        const compensatedTransactionIds: string[] = []
+        const compensationFailures: Array<{ transactionId: string; error: unknown }> = []
+        for (let index = appliedTransactions.length - 1; index >= 0; index -= 1) {
+          const applied = appliedTransactions[index] as DataGridNormalizedTransaction
+          try {
+            await rollbackOneTransaction(applied, "rollback", committedBatch.batchId)
+            compensatedTransactionIds.push(applied.id)
+          } catch (error) {
+            compensationFailures.push({ transactionId: applied.id, error })
+          }
+        }
+        throw new DataGridTransactionBatchCommitError({
+          batchId: committedBatch.batchId,
+          committedId: committedBatch.committedId,
+          direction,
+          failedTransactionId: transaction.id,
+          appliedTransactionIds: appliedTransactions.map(entry => entry.id),
+          compensatedTransactionIds,
+          compensationFailures,
+          cause,
+        })
       }
-    } catch (error) {
-      for (let index = appliedTransactions.length - 1; index >= 0; index -= 1) {
-        const transaction = appliedTransactions[index] as DataGridNormalizedTransaction
-        await rollbackOneTransaction(transaction, "rollback", committedBatch.batchId)
-      }
-      throw error
     }
   }
 

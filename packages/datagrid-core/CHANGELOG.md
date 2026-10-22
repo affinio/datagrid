@@ -1,5 +1,16 @@
 # @affino/datagrid-core
 
+## 0.13.0
+
+### Added
+
+- Added synchronous read views with projection coverage, snapshot-bound cell value resolution, and structured row ID resolution.
+- Added scoped selection revisions, stable-ID row heights, state restore validation/reports, and transaction batch failure details.
+
+### Changed
+
+- Defined column replacement, datasource flush, selection scope, and formula lifecycle contracts.
+
 ## 0.12.0
 
 ### Added

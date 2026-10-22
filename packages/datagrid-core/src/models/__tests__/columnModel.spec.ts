@@ -17,6 +17,31 @@ describe("createDataGridColumnModel", () => {
     model.dispose()
   })
 
+  it("returns the same immutable snapshot for one revision and advances revision on change", () => {
+    const model = createDataGridColumnModel({ columns: [{ key: "a", label: "A" }] })
+    const first = model.getSnapshot()
+    expect(model.getSnapshot()).toBe(first)
+    model.setColumnVisibility("a", false)
+    const second = model.getSnapshot()
+    expect(second).not.toBe(first)
+    expect(second.revision).toBeGreaterThan(first.revision)
+    expect(model.getSnapshot()).toBe(second)
+    model.dispose()
+  })
+
+  it("advances the order revision only when visible column coordinates can change", () => {
+    const model = createDataGridColumnModel({ columns: [{ key: "a" }, { key: "b" }] })
+    const first = model.getSnapshot()
+    model.setColumnWidth("a", 150)
+    expect(model.getSnapshot().orderRevision).toBe(first.orderRevision)
+    model.setColumnVisibility("b", false)
+    expect(model.getSnapshot().orderRevision).toBeGreaterThan(first.orderRevision)
+    const afterVisibility = model.getSnapshot().orderRevision
+    model.setColumnOrder(["b", "a"])
+    expect(model.getSnapshot().orderRevision).toBeGreaterThan(afterVisibility)
+    model.dispose()
+  })
+
   it("applies order/visibility/pin/width mutations", () => {
     const model = createDataGridColumnModel({
       columns: [
@@ -361,5 +386,37 @@ describe("createDataGridColumnModel", () => {
     expect(() => createDataGridColumnModel({
       columns: [{ key: "owner" }, { key: "owner" }],
     })).toThrowError(/duplicate column key/i)
+  })
+
+  it("replaces schema by key and resets runtime column state for retained keys", () => {
+    const model = createDataGridColumnModel({
+      columns: [
+        { key: "a", initialState: { visible: false, width: 160, pin: "left" } },
+        { key: "b", initialState: { width: 120 } },
+      ],
+    })
+    model.setColumnWidth("a", 180)
+    model.setColumnOrder(["b", "a"])
+
+    model.setColumns([
+      { key: "a", label: "Renamed A" },
+      { key: "c", label: "C" },
+    ])
+
+    const snapshot = model.getSnapshot()
+    expect(snapshot.order).toEqual(["a", "c"])
+    expect(snapshot.byKey.a).toMatchObject({ visible: true, width: null, pin: "none" })
+    expect(snapshot.byKey.a?.column.label).toBe("Renamed A")
+    expect(snapshot.byKey.b).toBeUndefined()
+    model.dispose()
+  })
+
+  it("ignores unknown and duplicate order keys while appending omitted keys", () => {
+    const model = createDataGridColumnModel({ columns: [{ key: "a" }, { key: "b" }, { key: "c" }] })
+    model.setColumnOrder(["missing", "c", "c"])
+    expect(model.getSnapshot().order).toEqual(["c", "a", "b"])
+    model.setColumnZoneOrder("center", ["a", "missing", "a"])
+    expect(model.getSnapshot().zoneOrder.center).toEqual(["a", "c", "b"])
+    model.dispose()
   })
 })

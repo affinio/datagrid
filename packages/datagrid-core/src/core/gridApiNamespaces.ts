@@ -2,6 +2,8 @@ import type {
   DataGridApi,
   DataGridApiColumnsNamespace,
   DataGridApiRowsNamespace,
+  DataGridApiReadNamespace,
+  DataGridApiCellsNamespace,
 } from "./gridApiContracts"
 
 export interface DataGridApiMethodSet<TRow = unknown> {
@@ -19,12 +21,14 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   importPivotLayout: DataGridApi<TRow>["pivot"]["importLayout"]
   hasSelectionSupport: DataGridApi<TRow>["selection"]["hasSupport"]
   getSelectionSnapshot: DataGridApi<TRow>["selection"]["getSnapshot"]
+  getSelectionSnapshotStatus: DataGridApi<TRow>["selection"]["getSnapshotStatus"]
   setSelectionSnapshot: DataGridApi<TRow>["selection"]["setSnapshot"]
   clearSelection: DataGridApi<TRow>["selection"]["clear"]
   summarizeSelection: DataGridApi<TRow>["selection"]["summarize"]
   getRangeRowData: DataGridApi<TRow>["selection"]["getRangeRowData"]
   hasRowSelectionSupport: DataGridApi<TRow>["rowSelection"]["hasSupport"]
   getRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["getSnapshot"]
+  getRowSelectionScopeStatus: DataGridApi<TRow>["rowSelection"]["getScopeStatus"]
   setRowSelectionSnapshot: DataGridApi<TRow>["rowSelection"]["setSnapshot"]
   clearRowSelection: DataGridApi<TRow>["rowSelection"]["clear"]
   getFocusedRow: DataGridApi<TRow>["rowSelection"]["getFocusedRow"]
@@ -60,6 +64,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getRowCount: DataGridApi<TRow>["rows"]["getCount"]
   getRow: DataGridApi<TRow>["rows"]["get"]
   getRowById: DataGridApi<TRow>["rows"]["getById"]
+  resolveRowById: DataGridApi<TRow>["rows"]["resolveById"]
   getRowsInRange: DataGridApi<TRow>["rows"]["getRange"]
   getProjectedRows: DataGridApi<TRow>["rows"]["getProjectedRows"]
   hasDataMutationSupport: DataGridApi<TRow>["rows"]["hasDataMutationSupport"]
@@ -120,6 +125,8 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   resumeBackpressure: DataGridApi<TRow>["data"]["resume"]
   flushBackpressure: DataGridApi<TRow>["data"]["flush"]
   getColumnModelSnapshot: DataGridApi<TRow>["columns"]["getSnapshot"]
+  captureReadView: DataGridApi<TRow>["read"]["captureView"]
+  resolveCellValue: DataGridApi<TRow>["cells"]["resolveValue"]
   getColumn: DataGridApi<TRow>["columns"]["get"]
   setColumns: DataGridApi<TRow>["columns"]["setAll"]
   insertColumnsAt: DataGridApi<TRow>["columns"]["insertAt"]
@@ -144,6 +151,8 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   getEffectiveRowHeight: DataGridApi<TRow>["view"]["getEffectiveRowHeight"]
   setRowHeightOverride: DataGridApi<TRow>["view"]["setRowHeightOverride"]
   getRowHeightOverride: DataGridApi<TRow>["view"]["getRowHeightOverride"]
+  setRowHeightOverrideById: DataGridApi<TRow>["view"]["setRowHeightOverrideById"]
+  getRowHeightOverrideById: DataGridApi<TRow>["view"]["getRowHeightOverrideById"]
   getRowHeightVersion: DataGridApi<TRow>["view"]["getRowHeightVersion"]
   getRowHeightOverridesSnapshot: NonNullable<DataGridApi<TRow>["view"]["getRowHeightOverridesSnapshot"]>
   getLastRowHeightMutation: NonNullable<DataGridApi<TRow>["view"]["getLastRowHeightMutation"]>
@@ -174,6 +183,7 @@ export interface DataGridApiMethodSet<TRow = unknown> {
   clearPlugins: DataGridApi<TRow>["plugins"]["clear"]
   getUnifiedState: DataGridApi<TRow>["state"]["get"]
   migrateUnifiedState: DataGridApi<TRow>["state"]["migrate"]
+  validateUnifiedState: DataGridApi<TRow>["state"]["validate"]
   setUnifiedState: DataGridApi<TRow>["state"]["set"]
   onApiEvent: DataGridApi<TRow>["events"]["on"]
 }
@@ -186,6 +196,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     getCount: methodSet.getRowCount,
     get: methodSet.getRow,
     getById: methodSet.getRowById,
+    resolveById: methodSet.resolveRowById,
     getRange: methodSet.getRowsInRange,
     getProjectedRows: methodSet.getProjectedRows,
     hasDataMutationSupport: methodSet.hasDataMutationSupport,
@@ -258,6 +269,13 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     getHistogram: methodSet.getColumnHistogram,
   }
 
+  const read: DataGridApiReadNamespace<TRow> = {
+    captureView: methodSet.captureReadView,
+  }
+  const cells: DataGridApiCellsNamespace = {
+    resolveValue: methodSet.resolveCellValue,
+  }
+
   return {
     lifecycle: methodSet.lifecycle,
     capabilities: methodSet.capabilities,
@@ -276,6 +294,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     selection: {
       hasSupport: methodSet.hasSelectionSupport,
       getSnapshot: methodSet.getSelectionSnapshot,
+      getSnapshotStatus: methodSet.getSelectionSnapshotStatus,
       setSnapshot: methodSet.setSelectionSnapshot,
       clear: methodSet.clearSelection,
       summarize: methodSet.summarizeSelection,
@@ -284,6 +303,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     rowSelection: {
       hasSupport: methodSet.hasRowSelectionSupport,
       getSnapshot: methodSet.getRowSelectionSnapshot,
+      getScopeStatus: methodSet.getRowSelectionScopeStatus,
       setSnapshot: methodSet.setRowSelectionSnapshot,
       clear: methodSet.clearRowSelection,
       getFocusedRow: methodSet.getFocusedRow,
@@ -328,6 +348,8 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       flush: methodSet.flushBackpressure,
     },
     columns,
+    read,
+    cells,
     view: {
       setViewportRange: methodSet.setViewportRange,
       getViewportPosition: methodSet.getViewportPosition,
@@ -342,6 +364,8 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
       getEffectiveRowHeight: methodSet.getEffectiveRowHeight,
       setRowHeightOverride: methodSet.setRowHeightOverride,
       getRowHeightOverride: methodSet.getRowHeightOverride,
+      setRowHeightOverrideById: methodSet.setRowHeightOverrideById,
+      getRowHeightOverrideById: methodSet.getRowHeightOverrideById,
       getRowHeightVersion: methodSet.getRowHeightVersion,
       getRowHeightOverridesSnapshot: methodSet.getRowHeightOverridesSnapshot,
       getLastRowHeightMutation: methodSet.getLastRowHeightMutation,
@@ -386,6 +410,7 @@ export function createDataGridApiFromMethodSet<TRow = unknown>(
     state: {
       get: methodSet.getUnifiedState,
       migrate: methodSet.migrateUnifiedState,
+      validate: methodSet.validateUnifiedState,
       set: methodSet.setUnifiedState,
     },
     events: {

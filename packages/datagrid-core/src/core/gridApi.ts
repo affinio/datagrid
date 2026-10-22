@@ -32,6 +32,8 @@ import {
 } from "./gridApiNamespaces"
 import { createDataGridApiPivotMethods } from "./gridApiPivotMethods"
 import { createDataGridApiRowsMethods } from "./gridApiRowsMethods"
+import { createDataGridApiReadMethods } from "./gridApiReadMethods"
+import { createDataGridApiCellValueMethods } from "./gridApiCellValueMethods"
 import { createDataGridApiRowSelectionMethods } from "./gridApiRowSelectionMethods"
 import { createDataGridApiColumnSelectionMethods } from "./gridApiColumnSelectionMethods"
 import { createDataGridApiSelectionMethods } from "./gridApiSelectionMethods"
@@ -56,6 +58,7 @@ export type {
   DataGridApiColumnSelectionNamespace,
   DataGridApiTransactionNamespace,
   DataGridApiRowsNamespace,
+  DataGridRowResolveResult,
   DataGridApiDataNamespace,
   DataGridApiColumnsNamespace,
   DataGridApiViewNamespace,
@@ -91,13 +94,39 @@ export type {
   DataGridMigrateStateOptions,
   DataGridSetStateDataSourceOptions,
   DataGridSetStateOptions,
+  DataGridStateRestoreValidation,
+  DataGridStateRestoreReport,
+  DataGridStateRestoreFailureReport,
   DataGridUnifiedRowsState,
   DataGridUnifiedColumnState,
   DataGridUnifiedViewState,
   DataGridUnifiedState,
   DataGridApi,
+  DataGridApiReadNamespace,
+  DataGridApiCellsNamespace,
   DataGridSelectionSummaryApiOptions,
 } from "./gridApiContracts"
+
+export type {
+  DataGridCellValuePurpose,
+  DataGridCellValueResolution,
+  DataGridCellValueSnapshot,
+  DataGridApiCellValueMethods,
+} from "./gridApiCellValueMethods"
+
+export type {
+  DataGridApiReadMethods,
+  DataGridCaptureReadViewOptions,
+  DataGridReadView,
+  DataGridReadViewPart,
+  DataGridReadViewPartName,
+  DataGridReadViewRow,
+  DataGridReadViewRows,
+  DataGridReadCoverage,
+  DataGridReadCompleteness,
+  DataGridReadViewComputed,
+  DataGridReadViewSelection,
+} from "./gridApiReadMethods"
 
 export type {
   DataGridCellRefreshOptions,
@@ -306,6 +335,7 @@ export function createDataGridApi<TRow = unknown>(
   })
   const selectionMethods = createDataGridApiSelectionMethods<TRow>({
     rowModel,
+    columnModel,
     getSelectionCapability,
     onChanged: (snapshot, context) => eventsRuntime.emitSelectionChanged(snapshot, context),
     summarize: (selectionSnapshot, options) =>
@@ -363,6 +393,14 @@ export function createDataGridApi<TRow = unknown>(
     getApiVersion: () => DATAGRID_PUBLIC_PACKAGE_VERSION,
     getProtocolVersion: () => DATAGRID_PUBLIC_PROTOCOL_VERSION,
   })
+  const readMethods = createDataGridApiReadMethods({
+    rowModel,
+    columnModel,
+    getCellSelection: getSelectionCapability,
+    getRowSelection: getRowSelectionCapability,
+    getColumnSelection: getColumnSelectionCapability,
+  })
+  const cellValueMethods = createDataGridApiCellValueMethods({ rowModel, columnModel })
   const pluginsRuntime = createDataGridApiPluginsRuntime<TRow>({
     events: eventsRuntime.namespace,
     initialPlugins,
@@ -388,6 +426,8 @@ export function createDataGridApi<TRow = unknown>(
     ...computeMethods,
     ...diagnosticsMethods,
     ...metaMethods,
+    ...readMethods,
+    resolveCellValue: cellValueMethods.resolveValue,
     ...policyMethods,
     ...transactionMethods,
     ...selectionMethods,
@@ -410,13 +450,15 @@ export function createDataGridApi<TRow = unknown>(
       runGuardedSync("compute.switchMode", () => computeMethods.switchComputeMode(mode)),
     setUnifiedState: (state, setStateOptions) =>
       runGuardedSync("state.set", () => {
-        eventsRuntime.emitStateImportBegin(state)
         try {
-          stateMethods.setUnifiedState(state, setStateOptions)
+          eventsRuntime.emitStateImportBegin(state)
+          return stateMethods.setUnifiedState(state, setStateOptions)
         } finally {
           eventsRuntime.emitStateImportEnd(state)
         }
       }),
+    validateUnifiedState: (state, setStateOptions) =>
+      runGuardedSync("state.validate", () => stateMethods.validateUnifiedState(state, setStateOptions)),
     batchRows: (fn) =>
       runGuardedSync("rows.batch", () =>
         eventsRuntime.runBatched(() => rowsMethods.batch(fn))),

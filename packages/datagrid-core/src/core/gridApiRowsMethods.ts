@@ -23,7 +23,7 @@ import type {
   DataGridSortState,
   DataGridViewportRange,
 } from "../models/index.js"
-import type { DataGridApplyEditsOptions } from "./gridApiContracts.js"
+import type { DataGridApplyEditsOptions, DataGridRowResolveResult } from "./gridApiContracts.js"
 import {
   assertPatchCapability,
   assertExternalUpdateCapability,
@@ -51,6 +51,7 @@ export interface DataGridApiRowsMethods<TRow = unknown> {
   getRowCount: () => number
   getRow: (index: number) => ReturnType<DataGridRowModel<TRow>["getRow"]>
   getRowById: (rowId: DataGridRowId) => ReturnType<NonNullable<DataGridRowModel<TRow>["getRowById"]>>
+  resolveRowById: (rowId: DataGridRowId) => DataGridRowResolveResult<TRow>
   getRowsInRange: (range: DataGridViewportRange) => ReturnType<DataGridRowModel<TRow>["getRowsInRange"]>
   getProjectedRows: () => TRow[]
   getPaginationSnapshot: () => ReturnType<DataGridRowModel<TRow>["getSnapshot"]>["pagination"]
@@ -174,6 +175,36 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
     },
     getRowById(rowId: DataGridRowId) {
       return rowModel.getRowById?.(rowId)
+    },
+    resolveRowById(rowId: DataGridRowId) {
+      if (typeof rowModel.getRowById !== "function") {
+        return Object.freeze({ status: "unsupported" as const })
+      }
+      const row = rowModel.getRowById(rowId)
+      const projection = rowModel.resolveRowProjection?.(rowId)
+      if (projection?.status === "filtered-out") {
+        return Object.freeze({ status: "filtered-out" as const, ...(row ? { row } : {}) })
+      }
+      if (projection?.status === "ancestor-collapsed") {
+        return Object.freeze({ status: "ancestor-collapsed" as const, ...(row ? { row } : {}) })
+      }
+      if (row) return Object.freeze({ status: "loaded" as const, row })
+      if (rowModel.kind === "server") {
+        const count = rowModel.getRowCount()
+        const intervals = rowModel.getLoadedRowIntervals?.({ start: 0, end: Math.max(0, count - 1) })
+        const sorted = [...(intervals ?? [])]
+          .map(interval => ({ start: Math.max(0, Math.trunc(interval.start)), end: Math.min(count - 1, Math.trunc(interval.end)) }))
+          .filter(interval => interval.end >= interval.start)
+          .sort((left, right) => left.start - right.start)
+        let coveredThrough = -1
+        for (const interval of sorted) {
+          if (interval.start > coveredThrough + 1) break
+          coveredThrough = Math.max(coveredThrough, interval.end)
+        }
+        const complete = count === 0 || (intervals !== undefined && coveredThrough >= count - 1)
+        return Object.freeze({ status: complete ? "not-found" as const : "not-loaded" as const })
+      }
+      return Object.freeze({ status: "not-found" as const })
     },
     getRowsInRange(range: DataGridViewportRange) {
       return rowModel.getRowsInRange(range)

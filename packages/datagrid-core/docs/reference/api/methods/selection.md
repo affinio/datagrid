@@ -5,22 +5,24 @@ The selection namespaces represent different things. `selection` stores cell rec
 | Namespace / method | Contract |
 | --- | --- |
 | `selection.hasSupport()` | Reports whether the runtime has a cell/range selection service. |
-| `selection.getSnapshot()` | Returns the current rectangular selection snapshot, or `null` when empty or unsupported. |
-| `selection.setSnapshot(snapshot, context?)` | Replaces cell/range state. Snapshot indexes refer to the projection/order represented by the snapshot; adapters must reconcile indexes when projection changes. |
+| `selection.getSnapshot()` | Returns the current positional selection, or `null` when empty, unsupported, or stale. |
+| `selection.getSnapshotStatus()` | Distinguishes `current`, `stale`, `untracked`, `empty`, and `unsupported` snapshots. |
+| `selection.setSnapshot(snapshot, context?)` | Replaces cell/range state and stamps the current row projection and visible-column order revisions. |
 | `selection.clear(context?)` | Clears cell/range selection. |
 | `selection.summarize(options?)` | Aggregates selected cell values over the current model scope. Returns `null` when unsupported or when no usable range exists. A result can report whether coverage is loaded/visible and partial; it does not fetch missing rows. |
 | `selection.getRangeRowData()` | Resolves leaf row data touched by material ranges in current projected order, de-duplicates overlaps, and returns a new array. A single-cell focus range is not a material range. |
 | `rowSelection.hasSupport()` | Reports whether row selection is backed by a selection service. |
-| `rowSelection.getSnapshot()` | Returns selected-row and focused-row state, or `null` when empty or unsupported. |
-| `rowSelection.setSnapshot(snapshot, context?)` | Replaces the row-selection state. The model may support explicit IDs or an all-selection mode with exclusions; use the snapshot type rather than assuming every selection is a literal ID list. |
+| `rowSelection.getSnapshot()` | Returns selected-row and focused-row state, or `null` when empty, unsupported, or stale all-selection. |
+| `rowSelection.getScopeStatus()` | Reports `current`, `stale`, `unscoped`, `not-applicable`, or `unsupported` for all-selection scope. |
+| `rowSelection.setSnapshot(snapshot, context?)` | Replaces the row-selection state. `mode: "all"` is bound to the current projection revision and dataset version; use the snapshot type rather than assuming every selection is a literal ID list. |
 | `rowSelection.clear(context?)` | Clears both selected records and focused row. |
 | `rowSelection.getFocusedRow()` / `setFocusedRow(rowId, context?)` | Reads or changes the logical focused row without changing the selected-row set. Pass `null` to clear focus. |
 | `rowSelection.getSelectedRows()` | Returns the explicit selected IDs held by the snapshot. It does not expand an all-selection snapshot into every row ID; inspect the snapshot mode and exclusions when that distinction matters. |
-| `rowSelection.isSelected(rowId)` | Tests one row ID against explicit/all-with-exclusions selection state. |
+| `rowSelection.isSelected(rowId)` | Tests one row ID against explicit/all-with-exclusions selection state; stale or unscoped all-selection returns false. |
 | `rowSelection.setSelected(rowId, selected, context?)` | Sets one row's membership without replacing unrelated selected IDs. |
 | `rowSelection.selectRows(rowIds, context?)` / `deselectRows(rowIds, context?)` | Adds or removes a set of IDs. Repeating an operation that leaves the set unchanged does not create a new selection revision/event. |
 | `rowSelection.clearSelectedRows(context?)` | Clears selected records while retaining focused-row state. |
-| `rowSelection.getSelectedRowData()` | Resolves selected leaf data against the current projection in display order, without duplicates. It returns only locally projected data and does not load missing rows. All-selection exclusions are honored. |
+| `rowSelection.getSelectedRowData()` | Resolves selected leaf data against the current projection in display order, without duplicates. It returns only locally projected data and does not load missing rows. Current all-selection exclusions are honored; stale/unscoped all-selection returns an empty array. |
 | `columnSelection.hasSupport()` | Reports whether the Core selection service implements the column-selection callbacks. |
 | `columnSelection.getSnapshot()` | Returns an immutable selected-key snapshot, or `null` when empty or unsupported. |
 | `columnSelection.setSnapshot(snapshot, context?)` | Replaces the selected-key set. Duplicate and empty keys are discarded; equality is set-based, so order-only changes are no-ops. |

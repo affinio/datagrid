@@ -158,6 +158,8 @@ export interface DataGridColumnSnapshot {
 }
 
 export interface DataGridColumnModelSnapshot {
+  revision: number
+  orderRevision: number
   columns: readonly DataGridColumnSnapshot[]
   order: readonly string[]
   zoneOrder: Readonly<Record<DataGridColumnZone, readonly string[]>>
@@ -509,6 +511,8 @@ export function createDataGridColumnModel(
   }
   let snapshotDirty = true
   let snapshotCache: DataGridColumnModelSnapshot | null = null
+  let revision = 0
+  let orderRevision = 0
   let batchDepth = 0
   let emitPending = false
 
@@ -557,6 +561,8 @@ export function createDataGridColumnModel(
     })
 
     snapshotCache = Object.freeze({
+      revision,
+      orderRevision,
       columns: Object.freeze(columns),
       order: Object.freeze([...order]),
       zoneOrder: frozenZoneOrder,
@@ -570,7 +576,9 @@ export function createDataGridColumnModel(
     return snapshotCache
   }
 
-  function markSnapshotDirty() {
+  function markSnapshotDirty(orderChanged = false) {
+    revision += 1
+    if (orderChanged) orderRevision += 1
     snapshotDirty = true
     snapshotCache = null
   }
@@ -670,7 +678,7 @@ export function createDataGridColumnModel(
       order.push(key)
       zoneOrder[resolveZoneForPin(state.pin)].push(key)
     })
-    markSnapshotDirty()
+    markSnapshotDirty(true)
     emitOrQueue()
   }
 
@@ -736,7 +744,7 @@ export function createDataGridColumnModel(
 
       order = nextOrder
       syncZoneOrderFromState()
-      markSnapshotDirty()
+      markSnapshotDirty(true)
       emitOrQueue()
     },
     setColumnZoneOrder(zone: DataGridColumnZone, keys: readonly string[]) {
@@ -782,7 +790,7 @@ export function createDataGridColumnModel(
         ...zoneOrder,
         [zone]: nextOrder,
       }
-      markSnapshotDirty()
+      markSnapshotDirty(true)
       emitOrQueue()
     },
     setColumnVisibility(key: string, visible: boolean) {
@@ -795,7 +803,7 @@ export function createDataGridColumnModel(
         ...state.state,
         visible,
       })
-      markSnapshotDirty()
+      markSnapshotDirty(true)
       emitOrQueue()
     },
     setColumnWidth(key: string, width: number | null) {
@@ -836,7 +844,7 @@ export function createDataGridColumnModel(
       } else {
         zoneOrder[nextZone].push(key)
       }
-      markSnapshotDirty()
+      markSnapshotDirty(true)
       emitOrQueue()
     },
     subscribe(listener: DataGridColumnModelListener) {

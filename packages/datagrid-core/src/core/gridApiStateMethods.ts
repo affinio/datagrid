@@ -32,13 +32,16 @@ import type {
   DataGridSetStateOptions,
   DataGridUnifiedState,
 } from "./gridApiContracts"
+import { DataGridStateRestoreError } from "./gridApiContracts"
+import type { DataGridStateRestoreReport, DataGridStateRestoreValidation } from "./gridApiContracts"
 import type { DataGridSelectionSnapshot } from "../selection/snapshot"
 import type { DataGridViewportPositionSnapshot } from "./gridApiViewContracts"
 
 export interface DataGridApiStateMethods<TRow = unknown> {
   getUnifiedState: (options?: DataGridGetStateOptions) => DataGridUnifiedState<TRow>
   migrateUnifiedState: (state: unknown, options?: DataGridMigrateStateOptions) => DataGridUnifiedState<TRow> | null
-  setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => void
+  validateUnifiedState: (state: unknown, options?: DataGridSetStateOptions) => DataGridStateRestoreValidation
+  setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => DataGridStateRestoreReport
 }
 
 export interface CreateDataGridApiStateMethodsInput<TRow = unknown> {
@@ -243,6 +246,34 @@ export function createDataGridApiStateMethods<TRow = unknown>(
   }
 
   return {
+    validateUnifiedState(state: unknown, options: DataGridSetStateOptions = {}) {
+      const migrated = migrateUnifiedState(state)
+      const issues: Array<{ section: string; reason: string }> = []
+      if (!migrated) issues.push({ section: "state", reason: "invalid-or-unsupported-version" })
+      if (migrated?.transaction) issues.push({ section: "transaction", reason: "restore-not-supported" })
+      if (options.strict && options.applySelection !== false) {
+        if (migrated?.selection && !getSelectionCapability()) issues.push({ section: "selection", reason: "capability-unavailable" })
+        if (migrated?.rowSelection && !getRowSelectionCapability()) issues.push({ section: "rowSelection", reason: "capability-unavailable" })
+        if (migrated?.columnSelection && !getColumnSelectionCapability()) issues.push({ section: "columnSelection", reason: "capability-unavailable" })
+      }
+      const candidates = ["rows", "columns", "selection", "viewport", "viewportPosition"]
+      const enabled: Record<string, boolean> = {
+        rows: options.applyRows !== false && Boolean(migrated?.rows?.snapshot),
+        columns: options.applyColumns !== false && Boolean(migrated?.columns),
+        selection: options.applySelection !== false && Boolean(migrated?.selection || migrated?.rowSelection || migrated?.columnSelection),
+        viewport: options.applyViewport !== false && Boolean(migrated?.rows?.snapshot?.viewportRange),
+        viewportPosition: options.applyViewport !== false && options.applyViewportPosition !== false && Boolean(migrated?.view?.viewportPosition),
+      }
+      return Object.freeze({
+        valid: issues.length === 0,
+        applicableSections: Object.freeze(candidates.filter(section => enabled[section])),
+        skippedSections: Object.freeze([
+          ...candidates.filter(section => !enabled[section]),
+          ...(migrated?.transaction ? ["transaction"] : []),
+        ]),
+        issues: Object.freeze(issues.map(issue => Object.freeze(issue))),
+      })
+    },
     getUnifiedState(options: DataGridGetStateOptions = {}) {
       const rowSnapshot = rowModel.getSnapshot()
       const columnSnapshot = columnModel.getSnapshot()
@@ -283,10 +314,30 @@ export function createDataGridApiStateMethods<TRow = unknown>(
       return migrateUnifiedState(state, options)
     },
     setUnifiedState(state: DataGridUnifiedState<TRow>, options: DataGridSetStateOptions = {}) {
-      const migratedState = migrateUnifiedState(state, { strict: options.strict })
-      if (!migratedState) {
-        return
+      const validation = this.validateUnifiedState(state, options)
+      if (options.strict && !validation.valid) {
+        const issue = validation.issues[0]
+        const cause = new Error(issue?.section === "transaction"
+          ? "[DataGridApi] Transaction state restore is not supported by current facade."
+          : issue?.reason === "capability-unavailable"
+            ? `[DataGridApi] Cannot restore ${issue.section} state without ${issue.section} capability.`
+            : issue ? `${issue.section}: ${issue.reason}` : "State validation failed.")
+        throw new DataGridStateRestoreError(cause.message, {
+          status: "failed",
+          appliedSections: [],
+          skippedSections: [...validation.skippedSections],
+          failedSection: issue?.section ?? "state",
+          rollback: "not-requested",
+        }, cause)
       }
+      const migratedState = migrateUnifiedState(state, { strict: false })
+      if (!migratedState) {
+        return Object.freeze({ status: "applied", appliedSections: Object.freeze([]), skippedSections: Object.freeze(["state"]), rollback: "not-needed" })
+      }
+      const appliedSections: string[] = []
+      const skippedSections: string[] = [...(migratedState.transaction ? ["transaction"] : [])]
+      let activeSection = "preflight"
+      let rollbackStatus: "not-requested" | "complete" | "partial" = "not-requested"
 
       const rollbackState = options.atomic
         ? (() => {
@@ -349,6 +400,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
 
       try {
         const rowSnapshot = migratedState.rows?.snapshot
+        activeSection = "rows"
         if (rowSnapshot && options.applyRows !== false) {
           const dataSourceResetViewportRange = normalizeViewportRange(dataSourceOptions?.resetViewportRange)
           if (options.applyViewport !== false && dataSourceResetViewportRange) {
@@ -380,8 +432,10 @@ export function createDataGridApiStateMethods<TRow = unknown>(
               setViewportRange(viewportRange)
             }
           }
-        }
+          appliedSections.push("rows")
+        } else skippedSections.push("rows")
 
+        activeSection = "columns"
         if (options.applyColumns !== false && migratedState.columns) {
           const order = Array.isArray(migratedState.columns.order) ? migratedState.columns.order : []
           if (order.length > 0) {
@@ -407,13 +461,19 @@ export function createDataGridApiStateMethods<TRow = unknown>(
             columnModel.setColumnZoneOrder("center", Array.isArray(zoneOrder.center) ? zoneOrder.center : [])
             columnModel.setColumnZoneOrder("pinnedRight", Array.isArray(zoneOrder.pinnedRight) ? zoneOrder.pinnedRight : [])
           }
-        }
+          appliedSections.push("columns")
+        } else skippedSections.push("columns")
 
+        activeSection = "selection"
         if (options.applySelection !== false) {
           const selectionCapability = getSelectionCapability()
           if (selectionCapability) {
             if (migratedState.selection) {
-              selectionCapability.setSelectionSnapshot(cloneSerializable(migratedState.selection))
+              selectionCapability.setSelectionSnapshot({
+                ...cloneSerializable(migratedState.selection),
+                projectionRevision: rowModel.getSnapshot().revision ?? null,
+                columnRevision: columnModel.getSnapshot().orderRevision,
+              })
               onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
             } else {
               selectionCapability.clearSelection()
@@ -426,7 +486,17 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           const rowSelectionCapability = getRowSelectionCapability()
           if (rowSelectionCapability) {
             if (migratedState.rowSelection) {
-              rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(migratedState.rowSelection))
+              const rowSelection = cloneSerializable(migratedState.rowSelection)
+              rowSelectionCapability.setRowSelectionSnapshot(rowSelection.mode === "all"
+                ? {
+                    ...rowSelection,
+                    scope: {
+                      kind: "current-projection",
+                      queryRevision: rowModel.getSnapshot().revision ?? null,
+                      datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
+                    },
+                  }
+                : rowSelection)
               onRowSelectionChanged?.(rowSelectionCapability.getRowSelectionSnapshot())
             } else {
               rowSelectionCapability.clearRowSelection()
@@ -450,16 +520,25 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           } else if (options.strict && migratedState.columnSelection) {
             throw new Error("[DataGridApi] Cannot restore columnSelection state without columnSelection capability.")
           }
-        }
+          if (migratedState.selection || migratedState.rowSelection || migratedState.columnSelection) appliedSections.push("selection")
+          else skippedSections.push("selection")
+        } else skippedSections.push("selection")
 
+        activeSection = "viewport"
         if (options.applyViewport !== false && options.applyViewportPosition !== false) {
           const viewportPosition = normalizeViewportPosition(migratedState.view?.viewportPosition)
           if (viewportPosition) {
             setViewportPosition(viewportPosition, { strict: options.strict })
           }
-        }
+          if (migratedState.view?.viewportPosition) appliedSections.push("viewportPosition")
+          else skippedSections.push("viewportPosition")
+        } else skippedSections.push("viewportPosition")
+        if (options.applyViewport !== false && rowSnapshot?.viewportRange) appliedSections.push("viewport")
+        else skippedSections.push("viewport")
 
+        activeSection = "events"
         onStateImported?.(cloneSerializable(migratedState))
+        return Object.freeze({ status: "applied", appliedSections: Object.freeze([...appliedSections]), skippedSections: Object.freeze([...skippedSections]), rollback: "not-needed" })
       } catch (error) {
         if (rollbackState) {
           try {
@@ -505,7 +584,11 @@ export function createDataGridApiStateMethods<TRow = unknown>(
               const selectionCapability = getSelectionCapability()
               if (selectionCapability) {
                 if (rollbackState.selection) {
-                  selectionCapability.setSelectionSnapshot(cloneSerializable(rollbackState.selection))
+                  selectionCapability.setSelectionSnapshot({
+                    ...cloneSerializable(rollbackState.selection),
+                    projectionRevision: rowModel.getSnapshot().revision ?? null,
+                    columnRevision: columnModel.getSnapshot().orderRevision,
+                  })
                 } else {
                   selectionCapability.clearSelection()
                 }
@@ -514,7 +597,17 @@ export function createDataGridApiStateMethods<TRow = unknown>(
               const rowSelectionCapability = getRowSelectionCapability()
               if (rowSelectionCapability) {
                 if (rollbackState.rowSelection) {
-                  rowSelectionCapability.setRowSelectionSnapshot(cloneSerializable(rollbackState.rowSelection))
+                  const rowSelection = cloneSerializable(rollbackState.rowSelection)
+                  rowSelectionCapability.setRowSelectionSnapshot(rowSelection.mode === "all"
+                    ? {
+                        ...rowSelection,
+                        scope: {
+                          kind: "current-projection",
+                          queryRevision: rowModel.getSnapshot().revision ?? null,
+                          datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
+                        },
+                      }
+                    : rowSelection)
                 } else {
                   rowSelectionCapability.clearRowSelection()
                 }
@@ -540,13 +633,16 @@ export function createDataGridApiStateMethods<TRow = unknown>(
               }
             }
           } catch (rollbackError) {
-            const combinedError = new Error("[DataGridApi] State import and rollback failed.")
-            const errorWithCause = combinedError as Error & { cause?: unknown }
-            errorWithCause.cause = { error, rollbackError }
-            throw combinedError
+            rollbackStatus = "partial"
+            throw new DataGridStateRestoreError("[DataGridApi] State import and rollback failed.", {
+              status: "failed", appliedSections, skippedSections, failedSection: activeSection, rollback: rollbackStatus,
+            }, { error, rollbackError })
           }
+          rollbackStatus = "complete"
         }
-        throw error
+        throw new DataGridStateRestoreError(error instanceof Error ? error.message : String(error), {
+          status: "failed", appliedSections, skippedSections, failedSection: activeSection, rollback: rollbackStatus,
+        }, error)
       } finally {
         if (pausedByStateImport) {
           backpressureCapability?.resumeBackpressure()

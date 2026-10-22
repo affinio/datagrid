@@ -11,9 +11,10 @@ These methods are exposed by `api.rows`. Reads address the active row model. A r
 | `get(index)` | Returns the projected node at a zero-based index, or `undefined` outside the current projection. Sorting, filtering, grouping, tree expansion, pivoting, and pagination can change what an index identifies. |
 | `getRange({ start, end })` | Reads an inclusive viewport range from the current projection. This is a model read and does not scroll or materialize DOM. |
 | `getById(rowId)` | Looks up a locally available source row by stable ID. It does not search the projected index, expand groups, load missing rows, or reveal the result. It returns `undefined` when lookup is unsupported or the row is unavailable. |
+| `resolveById(rowId)` | Returns an explicit `loaded` result with the row, `filtered-out`, `ancestor-collapsed`, `not-loaded`, `not-found`, or `unsupported`. It does not fetch or reveal a row. Use it when missing and unavailable must be distinguished. |
 | `getProjectedRows()` | Returns a new array of leaf row data in projected order. Group/header nodes are excluded; row objects themselves are not cloned. |
 
-Use `get(index)` for rendering the current view, `getById` for an identity lookup, and `getProjectedRows()` when a consumer explicitly needs leaf data in display order. Do not persist row indexes as identity.
+Use `get(index)` for rendering the current view, `getById` for a best-effort identity lookup, `resolveById` for a structured identity lookup, and `getProjectedRows()` when a consumer explicitly needs leaf data in display order. A server row model without stable-ID lookup returns `unsupported`; when lookup is supported but the row is absent from incomplete loaded intervals it returns `not-loaded`. Do not persist row indexes as identity.
 
 ## Source-data mutations
 
@@ -27,7 +28,7 @@ Use `get(index)` for rendering the current view, `getById` for an identity looku
 | `replaceData(rows)` | Uses the model's dedicated replacement operation when available; otherwise it follows the source replacement path used by `setData`. |
 | `appendData(rows)` / `prependData(rows)` | Add rows at the end or beginning of source order. Projection rules may place them elsewhere in the visible result. |
 | `insertDataAt(index, rows)` | Inserts at the source-order position supported by the model; client model indexes are clamped to source bounds. Its index is not a displayed projection index. |
-| `insertDataBefore(rowId, rows)` / `insertDataAfter(rowId, rows)` | Inserts relative to a stable source row identity. Returns `false` when the row target or insertion capability is unavailable. |
+| `insertDataBefore(rowId, rows)` / `insertDataAfter(rowId, rows)` | Inserts relative to a stable source row identity. Throws when the corresponding insertion capability is missing; returns the model's boolean result, including `false` when the target or insertion is unavailable. |
 | `removeData(rowIds)` | Removes matching source rows by stable ID and returns `true` only if at least one row was removed. Missing and duplicate IDs are ignored. It is a direct mutation, not generic transaction history. |
 
 Unsupported mutation methods throw a capability error. A successful client-model mutation updates its projection synchronously. Removing rows clears matching focused/selected row IDs when row-selection support is available; consumers should still treat the resulting `rows:changed` snapshot as authoritative.

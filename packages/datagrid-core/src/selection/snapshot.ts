@@ -20,6 +20,10 @@ export interface GridSelectionSnapshot<TRowKey = unknown> {
   ranges: GridSelectionSnapshotRange<TRowKey>[]
   activeRangeIndex: number
   activeCell: GridSelectionPoint<TRowKey> | null
+  /** Row projection revision used to interpret positional range coordinates. */
+  projectionRevision?: number | null
+  /** Column order revision used to interpret positional range coordinates. */
+  columnRevision?: number | null
 }
 
 export type DataGridSelectionSnapshotRange<TRowKey = unknown> = GridSelectionSnapshotRange<TRowKey>

@@ -67,10 +67,15 @@ import type {
   DataGridSelectionSummarySnapshot,
 } from "../selection/selectionSummary"
 import type {
+  DataGridCaptureReadViewOptions,
+  DataGridReadView,
+} from "./gridApiReadMethods"
+import type {
   DataGridCellRefreshOptions,
   DataGridCellRefreshRange,
   DataGridCellsRefreshListener,
 } from "./gridApiCellRefresh"
+import type { DataGridCellValuePurpose, DataGridCellValueResolution, DataGridCellValueSnapshot } from "./gridApiCellValueMethods"
 import type { DataGridCore } from "./gridCore"
 import type {
   DataGridActivateCellOptions,
@@ -126,6 +131,7 @@ export interface DataGridApiSelectionNamespace<TRow = unknown> {
   hasSupport(): boolean
   /** Returns the current cell/range selection snapshot, or null when empty/unsupported. */
   getSnapshot(): DataGridSelectionSnapshot | null
+  getSnapshotStatus(): "current" | "stale" | "untracked" | "empty" | "unsupported"
   /** Replaces the current cell/range selection snapshot. */
   setSnapshot(snapshot: DataGridSelectionSnapshot, context?: DataGridChangeContext): void
   /** Clears the current cell/range selection. */
@@ -147,6 +153,7 @@ export interface DataGridApiRowSelectionNamespace<TRow = unknown> {
   hasSupport(): boolean
   /** Returns the current row-selection snapshot, or null when empty/unsupported. */
   getSnapshot(): DataGridRowSelectionSnapshot | null
+  getScopeStatus(): "current" | "stale" | "unscoped" | "not-applicable" | "unsupported"
   /** Replaces the current row-selection snapshot. */
   setSnapshot(snapshot: DataGridRowSelectionSnapshot, context?: DataGridChangeContext): void
   /** Clears focused and selected row state. */
@@ -222,6 +229,8 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   get(index: number): DataGridRowNode<TRow> | undefined
   /** Returns a locally available source row node by stable row id. */
   getById(rowId: DataGridRowId): DataGridRowNode<TRow> | undefined
+  /** Resolves stable row identity and reports source/projection availability explicitly. */
+  resolveById(rowId: DataGridRowId): DataGridRowResolveResult<TRow>
   /** Returns projected row nodes in the inclusive index range. */
   getRange(range: DataGridViewportRange): readonly DataGridRowNode<TRow>[]
   /**
@@ -352,6 +361,14 @@ export interface DataGridApiRowsNamespace<TRow = unknown> {
   batchMutations<TResult>(fn: () => TResult): TResult
 }
 
+export type DataGridRowResolveResult<TRow = unknown> =
+  | Readonly<{ status: "loaded"; row: DataGridRowNode<TRow> }>
+  | Readonly<{ status: "filtered-out"; row?: DataGridRowNode<TRow> }>
+  | Readonly<{ status: "ancestor-collapsed"; row?: DataGridRowNode<TRow> }>
+  | Readonly<{ status: "not-loaded" }>
+  | Readonly<{ status: "not-found" }>
+  | Readonly<{ status: "unsupported" }>
+
 export interface DataGridApiDataNamespace {
   /** Returns true when data-source backpressure controls are supported. */
   hasBackpressureControlSupport(): boolean
@@ -420,6 +437,10 @@ export interface DataGridApiViewNamespace {
   setRowHeightOverride(rowIndex: number, height: number | null): void
   /** Returns a per-row height override, or null when none is set. */
   getRowHeightOverride(rowIndex: number): number | null
+  /** Sets or clears a logical row height override that follows rowId across projection changes. */
+  setRowHeightOverrideById(rowId: DataGridRowId, height: number | null): void
+  /** Returns a logical row height override by stable rowId. */
+  getRowHeightOverrideById(rowId: DataGridRowId): number | null
   /** Returns the row-height state revision. */
   getRowHeightVersion(): number
   /** Returns all row-height overrides when the adapter exposes them. */
@@ -616,6 +637,44 @@ export interface DataGridSetStateOptions {
   strict?: boolean
 }
 
+export interface DataGridStateRestoreValidation {
+  readonly valid: boolean
+  readonly applicableSections: readonly string[]
+  readonly skippedSections: readonly string[]
+  readonly issues: readonly { readonly section: string; readonly reason: string }[]
+}
+
+export interface DataGridStateRestoreReport {
+  readonly status: "applied"
+  readonly appliedSections: readonly string[]
+  readonly skippedSections: readonly string[]
+  readonly rollback: "not-needed"
+}
+
+export interface DataGridStateRestoreFailureReport {
+  readonly status: "failed"
+  readonly appliedSections: readonly string[]
+  readonly skippedSections: readonly string[]
+  readonly failedSection: string
+  readonly rollback: "not-requested" | "complete" | "partial"
+}
+
+export class DataGridStateRestoreError extends Error {
+  readonly report: DataGridStateRestoreFailureReport
+  readonly cause: unknown
+
+  constructor(message: string, report: DataGridStateRestoreFailureReport, cause: unknown) {
+    super(message)
+    this.name = "DataGridStateRestoreError"
+    this.report = Object.freeze({
+      ...report,
+      appliedSections: Object.freeze([...report.appliedSections]),
+      skippedSections: Object.freeze([...report.skippedSections]),
+    })
+    this.cause = cause
+  }
+}
+
 export interface DataGridSetStateDataSourceOptions {
   atomic?: boolean
   resetViewportRange?: DataGridViewportRange | null
@@ -631,7 +690,8 @@ export interface DataGridApiStateNamespace<TRow = unknown> {
   /** Migrates and validates unknown state into the current unified state shape. */
   migrate(state: unknown, options?: DataGridMigrateStateOptions): DataGridUnifiedState<TRow> | null
   /** Imports unified grid state through public model boundaries. */
-  set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): void
+  validate(state: unknown, options?: DataGridSetStateOptions): DataGridStateRestoreValidation
+  set(state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions): DataGridStateRestoreReport
 }
 
 export interface DataGridApiRowsChangedEvent<TRow = unknown> {
@@ -801,6 +861,21 @@ export interface DataGridApiCapabilities {
   readonly viewportPosition: boolean
 }
 
+export interface DataGridApiReadNamespace<TRow = unknown> {
+  /** Captures requested Core snapshots synchronously in one JavaScript turn. */
+  captureView(options: DataGridCaptureReadViewOptions<TRow>): DataGridReadView<TRow>
+}
+
+export interface DataGridApiCellsNamespace<TRow = unknown> {
+  /** Resolves source, computed/accessor, and formatted display values for a logical cell. */
+  resolveValue(input: {
+    rowId: DataGridRowId
+    columnKey: string
+    purpose: DataGridCellValuePurpose
+    snapshot?: DataGridCellValueSnapshot<TRow>
+  }): DataGridCellValueResolution
+}
+
 export interface DataGridApi<TRow = unknown> {
   readonly lifecycle: DataGridApiLifecycleNamespace
   readonly capabilities: DataGridApiCapabilities
@@ -812,6 +887,8 @@ export interface DataGridApi<TRow = unknown> {
   readonly rows: DataGridApiRowsNamespace<TRow>
   readonly data: DataGridApiDataNamespace
   readonly columns: DataGridApiColumnsNamespace
+  readonly read: DataGridApiReadNamespace<TRow>
+  readonly cells: DataGridApiCellsNamespace<TRow>
   readonly view: DataGridApiViewNamespace
   readonly compute: DataGridApiComputeNamespace
   readonly diagnostics: DataGridApiDiagnosticsNamespace

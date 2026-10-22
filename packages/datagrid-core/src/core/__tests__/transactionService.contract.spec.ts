@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  DataGridTransactionBatchCommitError,
   createDataGridTransactionService,
   type DataGridTransactionCommand,
   type DataGridTransactionExecutionContext,
@@ -160,6 +161,117 @@ describe("transaction service contracts", () => {
       "undo:tx-1:0:0",
       "redo:tx-1:0:1",
       "redo:tx-2:0:2",
+    ])
+  })
+
+  it("discards queued transactions without executing them when a batch is rolled back", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const service = createDataGridTransactionService({
+      execute: createCounterExecutor(state, events),
+    })
+
+    const batchId = service.beginBatch("discard")
+    await expect(service.applyTransaction({
+      id: "tx-discarded",
+      commands: [{ type: "set", payload: { key: "score", value: 1 }, rollbackPayload: { key: "score", value: 0 } }],
+    })).resolves.toBe("tx-discarded")
+
+    expect(state.score).toBe(0)
+    expect(service.getSnapshot().pendingBatch?.size).toBe(1)
+    expect(service.rollbackBatch(batchId)).toEqual(["tx-discarded"])
+    expect(service.getSnapshot().pendingBatch).toBeNull()
+    expect(service.getSnapshot().undoDepth).toBe(0)
+    expect(state.score).toBe(0)
+    expect(events).toEqual([])
+  })
+
+  it("compensates earlier transactions and clears a batch when commit fails", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const rolledBack: Array<readonly string[]> = []
+    const service = createDataGridTransactionService({
+      execute: createCounterExecutor(state, events, 2),
+      onRolledBack(event) {
+        rolledBack.push(event.transactionIds)
+      },
+    })
+
+    const batchId = service.beginBatch("failing batch")
+    await service.applyTransaction({
+      id: "tx-first",
+      commands: [{ type: "set", payload: { key: "score", value: 1 }, rollbackPayload: { key: "score", value: 0 } }],
+    })
+    await service.applyTransaction({
+      id: "tx-fails",
+      commands: [{ type: "set", payload: { key: "score", value: 2 }, rollbackPayload: { key: "score", value: 1 } }],
+    })
+
+    await expect(service.commitBatch(batchId)).rejects.toThrow(/apply failed/i)
+
+    expect(state.score).toBe(0)
+    expect(service.getSnapshot().pendingBatch).toBeNull()
+    expect(service.getSnapshot().undoDepth).toBe(0)
+    expect(rolledBack).toEqual([["tx-first", "tx-fails"]])
+    expect(events).toEqual([
+      "apply:tx-first:0:1",
+      "apply:tx-fails:0:2",
+      "rollback:tx-first:0:0",
+    ])
+    expect(() => service.beginBatch("replacement batch")).not.toThrow()
+  })
+
+  it("reports structured batch failure details and continues compensation after a rollback failure", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const events: string[] = []
+    const service = createDataGridTransactionService({
+      async execute(command, context) {
+        const payload = command.payload as CounterPayload
+        events.push(`${context.direction}:${context.transactionId}`)
+        if (context.direction === "apply" && context.transactionId === "tx-fails") {
+          throw new Error("apply rejected")
+        }
+        if (context.direction === "rollback" && context.transactionId === "tx-second") {
+          throw new Error("rollback rejected")
+        }
+        state[payload.key] = payload.value
+      },
+    })
+    const batchId = service.beginBatch("partial compensation")
+    for (const [id, value] of [["tx-first", 1], ["tx-second", 2], ["tx-fails", 3]] as const) {
+      await service.applyTransaction({
+        id,
+        commands: [{
+          type: "set",
+          payload: { key: "score", value },
+          rollbackPayload: { key: "score", value: value - 1 },
+        }],
+      })
+    }
+
+    let failure: unknown
+    try {
+      await service.commitBatch(batchId)
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(DataGridTransactionBatchCommitError)
+    const report = (failure as DataGridTransactionBatchCommitError).report
+    expect(report).toMatchObject({
+      batchId,
+      direction: "apply",
+      failedTransactionId: "tx-fails",
+      appliedTransactionIds: ["tx-first", "tx-second"],
+      compensatedTransactionIds: ["tx-first"],
+    })
+    expect(report.compensationFailures.map(entry => entry.transactionId)).toEqual(["tx-second"])
+    expect(report.cause).toBeInstanceOf(Error)
+    expect(events).toEqual([
+      "apply:tx-first",
+      "apply:tx-second",
+      "apply:tx-fails",
+      "rollback:tx-second",
+      "rollback:tx-first",
     ])
   })
 

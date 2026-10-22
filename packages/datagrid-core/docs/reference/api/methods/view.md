@@ -26,12 +26,13 @@ Use `scrollToCell` for a viewport request when no selection/focus transition is 
 | `getEffectiveRowHeight()` | Returns the effective height or `0` when the viewport service cannot report one. |
 | `setRowHeightOverride(rowIndex, height)` | Sets a positive integer override for a non-negative row index. Finite heights are truncated and clamped to at least `1`; pass `null` to clear that index. Invalid indexes and non-finite heights are ignored. |
 | `getRowHeightOverride(rowIndex)` | Returns an override or `null`. Reads from the viewport service first, then the API's fallback override map. |
+| `setRowHeightOverrideById(rowId, height)` / `getRowHeightOverrideById(rowId)` | Sets or reads an application-owned override by stable row ID. It follows the row across sort, filter, grouping, and viewport changes. Hidden/collapsed rows retain the override; removal does not implicitly clear it, so clear a permanently retired ID with `setRowHeightOverrideById(rowId, null)`. |
 | `getRowHeightVersion()` | Returns the viewport service revision when available, otherwise a fallback revision derived from the local override map. |
 | `getRowHeightOverridesSnapshot()` | Returns the service's override map or the fallback map. Treat the result as read-only; do not mutate it. |
 | `getLastRowHeightMutation()` | Returns the latest set/clear/clear-all mutation metadata, or `null` when no mutation has been recorded. |
 | `clearRowHeightOverrides()` | Clears all overrides from the local fallback and asks the viewport service to clear its state. |
 
-Row-height overrides are index-based view state. Reconcile them when projection order or row identity changes; do not persist an index as a row ID. The revision and last-mutation methods primarily support adapter synchronization and diagnostics.
+Index overrides are positional view state for virtualizer measurements. ID overrides are application-owned preferences and remain associated with the ID through projection changes. `getEffectiveRowHeight()` reports the shared base/estimated height, not an individual variable row's resolved height. Fixed rows render a per-ID override as their height; auto rows use it as a minimum floor while content measurement may make the row taller. The revision and last-mutation methods primarily support adapter synchronization and diagnostics.
 
 ## Refresh and rendered-cell invalidation
 

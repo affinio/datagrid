@@ -37,6 +37,8 @@ export {
 
 export {
   createDataGridTransactionService,
+  DataGridTransactionBatchCommitError,
+  type DataGridTransactionBatchCommitFailure,
   type DataGridTransactionAffectedRange,
   type DataGridTransactionCommand,
   type DataGridTransactionMeta,

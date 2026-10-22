@@ -16,6 +16,7 @@ import { createDataGridTransactionService } from "../transactionService"
 import { createDataGridApi as createDataGridApiFromPublic } from "../../public"
 import { createDataGridApi } from "../gridApi"
 import { createDataGridCore } from "../gridCore"
+import { DataGridStateRestoreError } from "../gridApiContracts"
 
 describe("data grid api facade contracts", () => {
   const waitForCellRefreshFrame = async (): Promise<void> => {
@@ -29,6 +30,168 @@ describe("data grid api facade contracts", () => {
   it("fails fast when required model services are missing", () => {
     const core = createDataGridCore()
     expect(() => createDataGridApi({ core })).toThrow(/rowModel/)
+  })
+
+  it("captures immutable cross-namespace read views and honors row cloning", () => {
+    const sourceRow = { id: "r1", amount: 42 }
+    const rowModel = createAdvancedClientRowModel({
+      rows: [{ row: sourceRow, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "amount", label: "Amount" }, { key: "other", label: "Other" }] })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+
+    const view = api.read.captureView({
+      include: ["rows", "columns", "computed", "selection"],
+      cloneRow: row => ({ ...row }),
+    })
+    expect(view.rows?.status).toBe("available")
+    expect(view.rows?.value.projection).toHaveLength(1)
+    expect(view.rows?.value.coverage).toEqual({
+      scope: "current-projection",
+      completeness: "complete",
+      queryRevision: rowModel.getSnapshot().revision,
+      datasetVersion: null,
+      totalRowCount: 1,
+      loadedRowCount: 1,
+      missingIntervals: [],
+    })
+    expect(view.rows?.value.projection[0]?.data).not.toBe(sourceRow)
+    expect(Object.isFrozen(view.rows?.value.projection)).toBe(true)
+    expect(Object.isFrozen(view.rows?.value.projection[0]?.data)).toBe(true)
+    expect(view.columns?.revision).toBe(columnModel.getSnapshot().revision)
+    expect(view.computed?.status).toBe("available")
+    expect(view.selection?.status).toBe("unsupported")
+    expect(sourceRow.amount).toBe(42)
+    expect(Object.isFrozen(view)).toBe(true)
+  })
+
+  it("resolves source, accessor, and display values without confusing them with write targets", () => {
+    const rowModel = createAdvancedClientRowModel({
+      rows: [{ row: { id: "r1", amount: 1250, displayAmount: 7 }, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [
+      { key: "amount", field: "amount", label: "Amount", cellType: "currency" },
+      { key: "virtual", field: "displayAmount", accessor: row => Number(row.amount) / 100, label: "Virtual" },
+    ] })
+    const core = createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } })
+    const api = createDataGridApi({ core })
+
+    expect(api.cells.resolveValue({ rowId: "r1", columnKey: "amount", purpose: "source" })).toMatchObject({
+      status: "available", sourceValue: 1250, computedValue: 1250, value: 1250,
+      writeTarget: { kind: "row-patch", key: "amount" },
+    })
+    expect(api.cells.resolveValue({ rowId: "r1", columnKey: "virtual", purpose: "computed" })).toMatchObject({
+      status: "available", sourceValue: 7, computedValue: 12.5, value: 12.5, writeTarget: null,
+    })
+    const display = api.cells.resolveValue({ rowId: "r1", columnKey: "amount", purpose: "display" })
+    expect(display).toMatchObject({ status: "available", formattedValue: "1250", displayValue: "1250", value: "1250" })
+    expect(api.cells.resolveValue({ rowId: "missing", columnKey: "amount", purpose: "source" })).toEqual({
+      status: "unavailable", reason: "row-not-found",
+    })
+  })
+
+  it("resolves cell values exclusively from supplied row and column snapshots", () => {
+    const sourceRow = { id: "r1", amount: 42 }
+    const rowModel = createAdvancedClientRowModel({
+      rows: [{ row: sourceRow, rowId: "r1", originalIndex: 0 }],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "amount", field: "amount" }] })
+    const core = createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } })
+    const api = createDataGridApi({ core })
+    const captured = api.read.captureView({ include: ["rows", "columns"], cloneRow: row => ({ ...row }) })
+    const row = captured.rows?.status === "available" ? captured.rows.value.projection[0] : undefined
+    const column = captured.columns?.status === "available" ? captured.columns.value.byKey.amount : undefined
+    expect(row).toBeDefined()
+    expect(column).toBeDefined()
+
+    sourceRow.amount = 99
+    columnModel.setColumns([{ key: "amount", field: "id" }])
+    const resolved = api.cells.resolveValue({
+      rowId: "r1",
+      columnKey: "amount",
+      purpose: "computed",
+      snapshot: { row: row!, column: column! },
+    })
+
+    expect(resolved).toMatchObject({ status: "available", sourceValue: 42, computedValue: 42, value: 42 })
+  })
+
+  it("distinguishes loaded, filtered, missing, and unsupported row ID lookups", () => {
+    const rowModel = createAdvancedClientRowModel({
+      rows: [
+        { row: { id: "r1", status: "visible" }, rowId: "r1", originalIndex: 0 },
+        { row: { id: "r2", status: "hidden" }, rowId: "r2", originalIndex: 1 },
+      ],
+    })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "status" }] })
+    const core = createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } })
+    const api = createDataGridApi({ core })
+
+    expect(api.rows.resolveById("r1").status).toBe("loaded")
+    api.rows.setFilterModel({ columnFilters: { status: { kind: "valueSet", tokens: ["string:visible"] } } })
+    expect(api.rows.resolveById("r2").status).toBe("filtered-out")
+    expect(api.rows.resolveById("missing").status).toBe("not-found")
+
+    const serverModel = createDataSourceBackedRowModel({
+      initialTotal: 1,
+      dataSource: { pull: async () => ({ rows: [], total: 1 }) },
+    })
+    const unsupportedCore = createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: serverModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [] }) },
+    } })
+    expect(createDataGridApi({ core: unsupportedCore }).rows.resolveById("r1").status).toBe("unsupported")
+    serverModel.dispose()
+  })
+
+  it("reports unloaded datasource rows as partial coverage with missing intervals", () => {
+    const rowModel = createDataSourceBackedRowModel({
+      dataSource: { pull: async () => ({ rows: [], total: 3 }) },
+      resolveRowId: row => row.id,
+      initialTotal: 3,
+    })
+    const columnModel = createDataGridColumnModel({ columns: [] })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const view = api.read.captureView({ include: ["rows"] })
+
+    expect(view.rows?.status).toBe("available")
+    expect(view.rows?.value.coverage).toMatchObject({
+      scope: "current-projection",
+      completeness: "partial",
+      totalRowCount: 3,
+      loadedRowCount: 0,
+      missingIntervals: [{ start: 0, end: 2 }],
+    })
+    delete (rowModel as { getLoadedRowIntervals?: DataGridRowModel<{ id: number }>["getLoadedRowIntervals"] }).getLoadedRowIntervals
+    const unknownCoverageView = api.read.captureView({ include: ["rows"] })
+    expect(unknownCoverageView.rows?.status).toBe("available")
+    expect(unknownCoverageView.rows?.value.coverage).toMatchObject({
+      completeness: "unknown",
+      loadedRowCount: null,
+      missingIntervals: null,
+    })
+    rowModel.dispose()
   })
 
   it("exposes namespaced API only (no legacy unscoped methods)", () => {
@@ -48,6 +211,7 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core }) as unknown as Record<string, unknown>
     expect(typeof api.rows).toBe("object")
     expect(typeof api.columns).toBe("object")
+    expect(typeof api.read).toBe("object")
     expect(typeof api.view).toBe("object")
     expect(typeof api.pivot).toBe("object")
     expect(typeof api.selection).toBe("object")
@@ -358,6 +522,28 @@ describe("data grid api facade contracts", () => {
     const api = createDataGridApi({ core })
 
     expect(api.view.getEffectiveRowHeight()).toBe(44)
+    api.view.setRowHeightOverrideById(1, 52)
+    expect(api.view.getRowHeightOverrideById(1)).toBe(52)
+    expect(api.view.getRowHeightVersion()).toBeGreaterThan(0)
+    api.view.setRowHeightOverrideById(1, null)
+    expect(api.view.getRowHeightOverrideById(1)).toBeNull()
+  })
+
+  it("validates state imports and reports applied and skipped sections", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }] })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "id", label: "ID" }] })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } }) })
+    const saved = api.state.get()
+    expect(api.state.validate(saved).valid).toBe(true)
+    expect(api.state.validate({ version: 99 }).valid).toBe(false)
+    const report = api.state.set(saved, { applyRows: false })
+    expect(report.status).toBe("applied")
+    expect(report.appliedSections).toContain("columns")
+    expect(report.skippedSections).toContain("rows")
+    expect(report.rollback).toBe("not-needed")
   })
 
   it("routes explicit group expansion APIs through row model service", () => {
@@ -787,6 +973,11 @@ describe("data grid api facade contracts", () => {
     expect((api.rows.get(0)?.row as { total?: number })?.total).toBe(30)
     expect((api.rows.get(0)?.row as { grand?: number })?.grand).toBe(31)
     expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBe(60)
+    api.rows.registerFormulaFunction("double", {
+      arity: 1,
+      compute: args => Number(args[0] ?? 0) * 3,
+    })
+    expect((api.rows.get(0)?.row as { doubled?: number })?.doubled).toBe(90)
     expect(() => api.rows.unregisterFormulaFunction("DOUBLE")).toThrow(/Unknown function/i)
     expect(api.rows.getFormulaFunctionNames()).toEqual(["DOUBLE"])
     expect(api.rows.unregisterFormulaField("doubled")).toBe(true)
@@ -1152,6 +1343,26 @@ describe("data grid api facade contracts", () => {
     expect(api.columns.getSnapshot().order).toEqual(["prefix", "id", "owner", "score", "tail"])
     expect(api.columns.get("tail")?.width).toBe(180)
     expect(api.columns.get("id")?.width).toBe(90)
+  })
+
+  it("returns false for column insertion with a missing target or no normalized columns", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [] })
+    const columnModel = createDataGridColumnModel({
+      columns: [{ key: "id", label: "ID" }],
+    })
+    const core = createDataGridCore({
+      services: {
+        rowModel: { name: "rowModel", model: rowModel },
+        columnModel: { name: "columnModel", model: columnModel },
+      },
+    })
+    const api = createDataGridApi({ core })
+    const before = api.columns.getSnapshot()
+
+    expect(api.columns.insertBefore("missing", [{ key: "prefix", label: "Prefix" }])).toBe(false)
+    expect(api.columns.insertAfter("missing", [{ key: "suffix", label: "Suffix" }])).toBe(false)
+    expect(api.columns.insertBefore("id", [])).toBe(false)
+    expect(api.columns.getSnapshot()).toBe(before)
   })
 
   it("rejects duplicate rowId across rows mutation entrypoints", () => {
@@ -1559,15 +1770,15 @@ describe("data grid api facade contracts", () => {
     expect(api.diagnostics.getAll().backpressure?.paused).toBe(true)
     expect(api.diagnostics.getAll().backpressure?.hasPendingPull).toBe(true)
 
-    expect(api.data.resume()).toBe(true)
-    expect(api.data.resume()).toBe(false)
+    const flushPromise = api.data.flush()
     await Promise.resolve()
     expect(pullCalls).toBe(1)
     expect(api.diagnostics.getAll().backpressure?.paused).toBe(false)
 
     pullGates[0]?.resolve()
-    await api.data.flush()
+    await flushPromise
     expect(api.diagnostics.getAll().backpressure?.inFlight).toBe(false)
+    expect(api.diagnostics.getAll().backpressure?.paused).toBe(true)
   })
 
   it("reports data namespace as unsupported when row model lacks backpressure controls", async () => {
@@ -2093,7 +2304,7 @@ describe("data grid api facade contracts", () => {
 
   it("delegates selection APIs when selection capability is implemented", () => {
     const rowModel = createAdvancedClientRowModel()
-    const columnModel = createDataGridColumnModel()
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "amount", label: "Amount" }, { key: "other", label: "Other" }] })
     let selectionSnapshot: DataGridSelectionSnapshot | null = null
     let clearCount = 0
 
@@ -2126,7 +2337,22 @@ describe("data grid api facade contracts", () => {
 
     api.selection.setSnapshot(snapshot)
     expect(api.selection.hasSupport()).toBe(true)
-    expect(api.selection.getSnapshot()).toBe(snapshot)
+    expect(api.selection.getSnapshot()).toMatchObject({
+      ...snapshot,
+      projectionRevision: rowModel.getSnapshot().revision,
+      columnRevision: columnModel.getSnapshot().orderRevision,
+    })
+    expect(api.selection.getSnapshotStatus()).toBe("current")
+
+    api.columns.setWidth("amount", 180)
+    expect(api.selection.getSnapshotStatus()).toBe("current")
+    api.columns.setOrder(["other", "amount"])
+    expect(api.selection.getSnapshotStatus()).toBe("stale")
+    api.selection.setSnapshot(snapshot)
+
+    api.rows.setSortModel([{ key: "amount", direction: "asc" }])
+    expect(api.selection.getSnapshotStatus()).toBe("stale")
+    expect(api.selection.getSnapshot()).toBeNull()
 
     api.selection.clear()
     expect(clearCount).toBe(1)
@@ -2273,7 +2499,7 @@ describe("data grid api facade contracts", () => {
     const columnModel = createDataGridColumnModel({
       columns: [{ key: "score", label: "Score" }],
     })
-    const rowSelectionSnapshot: DataGridRowSelectionSnapshot = {
+    let rowSelectionSnapshot: DataGridRowSelectionSnapshot = {
       focusedRow: null,
       selectedRows: [],
       mode: "all",
@@ -2288,7 +2514,7 @@ describe("data grid api facade contracts", () => {
           getRowSelectionSnapshot() {
             return rowSelectionSnapshot
           },
-          setRowSelectionSnapshot() {},
+          setRowSelectionSnapshot(snapshot) { rowSelectionSnapshot = snapshot },
           clearRowSelection() {},
           getFocusedRow() {
             return null
@@ -2309,9 +2535,13 @@ describe("data grid api facade contracts", () => {
     })
     const api = createDataGridApi({ core })
 
+    api.rowSelection.setSnapshot(rowSelectionSnapshot)
+    expect(api.rowSelection.getScopeStatus()).toBe("current")
+    expect(api.rowSelection.getSelectedRowData()).toEqual([rowA, rowC])
     api.rows.setSortModel([{ key: "score", direction: "desc" }])
-
-    expect(api.rowSelection.getSelectedRowData()).toEqual([rowC, rowA])
+    expect(api.rowSelection.getScopeStatus()).toBe("stale")
+    expect(api.rowSelection.getSnapshot()).toBeNull()
+    expect(api.rowSelection.getSelectedRowData()).toEqual([])
   })
 
   it("resolves material range row data in projected order and de-duplicates overlaps", () => {
@@ -2673,7 +2903,12 @@ describe("data grid api facade contracts", () => {
       })),
     )
 
-    expect(selectionRoundtrip).toEqual(expectedSelection)
+    expect(selectionRoundtrip).toMatchObject({
+      ranges: expectedSelection?.ranges,
+      activeRangeIndex: expectedSelection?.activeRangeIndex,
+      activeCell: expectedSelection?.activeCell,
+    })
+    expect(api.selection.getSnapshotStatus()).toBe("current")
   })
 
   it("exposes transaction capability checks and fails loudly for missing methods", async () => {
@@ -2761,8 +2996,18 @@ describe("data grid api facade contracts", () => {
       throw new Error("column restore failed")
     })
     importState.columns.order = ["owner"]
+    const imports: string[] = []
+    api.events.on("state:import:begin", () => imports.push("begin"))
+    api.events.on("state:import:end", () => imports.push("end"))
 
-    expect(() => api.state.set(importState)).toThrow("column restore failed")
+    let restoreError: unknown
+    try { api.state.set(importState) } catch (error) { restoreError = error }
+    expect(restoreError).toBeInstanceOf(DataGridStateRestoreError)
+    expect((restoreError as DataGridStateRestoreError).message).toContain("column restore failed")
+    expect((restoreError as DataGridStateRestoreError).report).toMatchObject({
+      status: "failed", failedSection: "columns", appliedSections: ["rows"], rollback: "not-requested",
+    })
+    expect(imports).toEqual(["begin", "end"])
     expect(api.rows.getSnapshot().sortModel).toEqual([{ key: "id", direction: "desc" }])
   })
 
@@ -2796,7 +3041,10 @@ describe("data grid api facade contracts", () => {
       throw new Error("column restore failed")
     })
 
-    expect(() => api.state.set(importState, { atomic: true })).toThrow("column restore failed")
+    let restoreError: unknown
+    try { api.state.set(importState, { atomic: true }) } catch (error) { restoreError = error }
+    expect(restoreError).toBeInstanceOf(DataGridStateRestoreError)
+    expect((restoreError as DataGridStateRestoreError).report.rollback).toBe("complete")
     expect(api.rows.getSnapshot().sortModel).toEqual([])
   })
 
@@ -2849,6 +3097,22 @@ describe("data grid api facade contracts", () => {
     unsubs.forEach(unsubscribe => unsubscribe())
 
     expect(events.slice(0, 3)).toEqual(["rows", "selection", "projection"])
+  })
+
+  it("propagates listener errors synchronously and stops the current event dispatch", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }] })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "id", label: "ID" }] })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } }) })
+    const called: string[] = []
+    api.events.on("rows:changed", () => { called.push("first"); throw new Error("listener failed") })
+    api.events.on("rows:changed", () => { called.push("second") })
+
+    expect(() => api.rows.setSortModel([{ key: "id", direction: "asc" }])).toThrow("listener failed")
+    expect(called).toEqual(["first"])
+    expect(api.rows.getSnapshot().sortModel).toEqual([{ key: "id", direction: "asc" }])
   })
 
   it("supports state migration hook with strict and non-strict behavior", () => {
@@ -3096,7 +3360,12 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getSnapshot().viewportRange).toEqual(saved.rows.snapshot.viewportRange)
     expect(api.rows.getAggregationModel()).toEqual(saved.rows.aggregationModel)
     expect(api.columns.getSnapshot().order).toEqual(saved.columns.order)
-    expect(api.selection.getSnapshot()).toEqual(saved.selection)
+    expect(api.selection.getSnapshot()).toMatchObject({
+      ranges: saved.selection?.ranges,
+      activeRangeIndex: saved.selection?.activeRangeIndex,
+      activeCell: saved.selection?.activeCell,
+    })
+    expect(api.selection.getSnapshotStatus()).toBe("current")
 
     api.rows.setSortModel([{ key: "id", direction: "desc" }])
     api.columns.setOrder(["status", "owner", "id"])
@@ -3268,8 +3537,15 @@ describe("data grid api facade contracts", () => {
 
     api.state.set(state)
 
-    expect(selectionDuringViewportRestore).toEqual(selectionBeforeRestore)
-    expect(api.selection.getSnapshot()).toEqual(selectionBeforeRestore)
+    expect(selectionDuringViewportRestore).toMatchObject({
+      ranges: selectionBeforeRestore.ranges,
+      activeCell: selectionBeforeRestore.activeCell,
+    })
+    expect(api.selection.getSnapshot()).toMatchObject({
+      ranges: selectionBeforeRestore.ranges,
+      activeCell: selectionBeforeRestore.activeCell,
+    })
+    expect(api.selection.getSnapshotStatus()).toBe("current")
   })
 
   it("fails strict viewport position state restore when capability is missing", () => {
