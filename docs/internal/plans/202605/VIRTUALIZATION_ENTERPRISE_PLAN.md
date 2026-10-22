@@ -72,7 +72,7 @@ Current execution state:
 - Objective: add an automated browser detector that fails when the rendered viewport has visible blank gaps during scroll.
 - Affected packages/files:
   - `e2e/sandbox-grid.spec.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-sandbox/src/components/VueGridCard.vue`
   - `packages/datagrid-sandbox/src/components/VueServerDataSourceGridCard.vue`
 - Expected behavior change: no user-facing behavior change unless the slice exposes a real blanking bug; e2e should detect empty viewport bands, missing row coverage, and duplicated visual rows.
@@ -90,7 +90,7 @@ Current execution state:
 - Objective: fix any blank viewport failures found by Slice 3 without changing the public virtualization API.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
   - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts`
   - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts`
 - Expected behavior change: fast scroll should keep the viewport covered by either real rows or placeholders under normal local-data conditions.
@@ -184,7 +184,7 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
   - `packages/datagrid-orchestration/src/cells/useDataGridCellVisibilityScroller.ts`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: active cell, DOM focus target, and keyboard navigation remain predictable across virtual remounts.
@@ -221,8 +221,8 @@ Current execution state:
 - Objective: define and test editor behavior when an edited cell is virtualized out and later remounted.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: edit commit, cancel, blur, and remount behavior are deterministic; virtualization unmount commits the draft once without forcing focus or scroll restoration.
 - Tests added/covered:
@@ -299,8 +299,8 @@ Current execution state:
 - Affected packages/files:
   - `docs/reference/datagrid-headless-a11y-contract.md`
   - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: virtualized DOM exposes stable row/column counts and row/column indexes where supported.
 - Tests added/covered:

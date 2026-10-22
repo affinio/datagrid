@@ -4,7 +4,7 @@ Status: public integration guide.
 
 Use this layer when the application needs Vue runtime ownership without rebuilding the framework-independent core. It is a complete adapter surface for custom renderers, datasource-backed models, selectors, overlays, and runtime integration.
 
-For ordinary application grids, use `@affino/datagrid-vue-app` instead.
+For ordinary application grids, use `@affino/datagrid-vue` instead.
 
 ## Entrypoints
 

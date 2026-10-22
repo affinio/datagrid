@@ -26,7 +26,7 @@ const FACADES = [
   {
     id: "vue-public",
     label: "@affino/datagrid-vue",
-    sourceFile: path.join(workspaceRoot, "packages", "datagrid-vue", "src", "public.ts"),
+    sourceFile: path.join(workspaceRoot, "packages", "datagrid-vue", "src", "unified.ts"),
     importSpecifiers: ["@affino/datagrid-vue"],
     requiredSymbols: [
       "useDataGridRuntime",
@@ -35,6 +35,7 @@ const FACADES = [
       "createDataGridSelectionSummary",
       "createInMemoryDataGridSettingsAdapter",
       "evaluateDataGridAdvancedFilterExpression",
+      "DataGrid",
     ],
   },
   {
@@ -48,13 +49,6 @@ const FACADES = [
       "resolveDataGridHeaderScrollSyncLeft",
       "createDataGridViewportController",
     ],
-  },
-  {
-    id: "vue-app",
-    label: "@affino/datagrid-vue-app",
-    sourceFile: path.join(workspaceRoot, "packages", "datagrid-vue-app", "src", "index.ts"),
-    importSpecifiers: ["@affino/datagrid-vue-app"],
-    requiredSymbols: ["DataGrid"],
   },
   {
     id: "laravel-facade",
@@ -72,36 +66,16 @@ const FACADES = [
       "evaluateDataGridAdvancedFilterExpression",
     ],
   },
-  {
-    id: "laravel-app",
-    label: "@affino/datagrid-laravel-app",
-    sourceFile: path.join(workspaceRoot, "packages", "datagrid-laravel-app", "src", "index.ts"),
-    importSpecifiers: ["@affino/datagrid-laravel-app"],
-    requiredSymbols: [
-      "createDataGridRuntime",
-      "buildDataGridColumnLayers",
-      "resolveDataGridLayerTrackTemplate",
-      "useDataGridColumnLayoutOrchestration",
-      "useDataGridManagedWheelScroll",
-      "resolveDataGridHeaderLayerViewportGeometry",
-      "resolveDataGridHeaderScrollSyncLeft",
-      "evaluateDataGridAdvancedFilterExpression",
-    ],
-  },
 ]
 
 const DEMO_SCOPES = [
   {
     id: "demo-vue",
-    root: path.join(workspaceRoot, "packages", "datagrid-vue-app", "src"),
+    root: path.join(workspaceRoot, "packages", "datagrid-showcase", "src"),
   },
   {
     id: "demo-laravel",
     root: path.join(workspaceRoot, "packages", "datagrid-laravel", "resources", "js"),
-  },
-  {
-    id: "demo-laravel-app",
-    root: path.join(workspaceRoot, "packages", "datagrid-laravel-app", "src"),
   },
 ]
 

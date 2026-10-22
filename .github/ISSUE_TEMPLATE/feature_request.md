@@ -16,7 +16,7 @@ What is the smallest useful change?
 
 ## Affected Package / Area
 
-Examples: `@affino/datagrid-vue-app`, `@affino/datagrid-vue`, `@affino/datagrid-core`, server datasource docs, sandbox demo.
+Examples: `@affino/datagrid-vue`, `@affino/datagrid-core`, server datasource docs, sandbox demo.
 
 ## API Tier
 

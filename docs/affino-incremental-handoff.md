@@ -8,7 +8,7 @@ belong to its separate source repository.
 The release candidates are `@affino/datagrid-core` 0.9.0,
 `@affino/datagrid-orchestration` 0.7.0, `@affino/datagrid-worker` 0.7.0,
 `@affino/datagrid-gantt` 0.2.0, `@affino/datagrid-vue` 0.9.0, and
-`@affino/datagrid-vue-app` 0.12.0. They have not been published to npm. After
+`@affino/datagrid-vue` 0.12.0. They have not been published to npm. After
 building, the local tarballs are:
 
 - `artifacts/incremental/affino-datagrid-core-0.9.0.tgz`

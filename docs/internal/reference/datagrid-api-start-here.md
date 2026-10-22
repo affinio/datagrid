@@ -9,14 +9,14 @@ This guide explains the stable Affino DataGrid API path for external engineers w
 Start with the app component:
 
 ```ts
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 ```
 
 Use lower-level packages only when your integration needs lower-level ownership:
 
 | Need | Use | Why |
 | --- | --- | --- |
-| Normal Vue app grid | `DataGrid` from `@affino/datagrid-vue-app` | App-facing component with built-in renderer and UX. |
+| Normal Vue app grid | `DataGrid` from `@affino/datagrid-vue` | App-facing component with built-in renderer and UX. |
 | Runtime/headless ownership | `@affino/datagrid-vue` | Vue runtime, row-model factories, context/selectors, and adapter-level integration. |
 | Platform/core integration | `@affino/datagrid-core` | Core row model, state, event, and `DataGridApi` contracts. |
 | Custom renderer, adapter, or interaction plumbing | `/advanced` entrypoints | Power-user APIs for low-level integration work. |
@@ -25,7 +25,7 @@ Use lower-level packages only when your integration needs lower-level ownership:
 
 Stable means semver-safe. It does not mean every stable export is part of the first-use path.
 
-- Beginner app path: `@affino/datagrid-vue-app`
+- Beginner app path: `@affino/datagrid-vue`
 - Stable runtime path: `@affino/datagrid-vue` or `@affino/datagrid-vue/stable`
 - Stable core path: `@affino/datagrid-core`
 - Power-user path: `@affino/datagrid-vue/advanced/*` or `@affino/datagrid-core/advanced`
@@ -39,7 +39,7 @@ Use this subset first. It covers most app integrations without requiring direct 
 
 | Task | API |
 | --- | --- |
-| Render a Vue grid | `DataGrid` from `@affino/datagrid-vue-app` |
+| Render a Vue grid | `DataGrid` from `@affino/datagrid-vue` |
 | Provide local data | `rows` prop |
 | Define columns | `columns` prop with `key`, `label`, and optional `initialState` |
 | Enable virtualization | `virtualization` prop |
@@ -54,7 +54,7 @@ Use this subset first. It covers most app integrations without requiring direct 
 
 ## Package Roles
 
-### `@affino/datagrid-vue-app`
+### `@affino/datagrid-vue`
 
 Use this for normal Vue applications. It owns the app-facing component and built-in UX.
 
@@ -145,7 +145,7 @@ Start with:
 Minimal frontend package path:
 
 ```bash
-pnpm add @affino/datagrid-vue-app @affino/datagrid-vue @affino/datagrid-server-adapters
+pnpm add @affino/datagrid-vue @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 Minimal frontend setup:
@@ -173,7 +173,7 @@ Then pass `rowModel` to `DataGrid`:
 
 ## Where To Go Next
 
-- [Package map](../../datagrid-package-map.md) - package roles, tiers, install paths, and community/enterprise status.
+- [Package map](../../datagrid-package-map.md) - package roles, tiers, install paths, and package ownership and support status.
 - [Vue stable entrypoint](../../reference/datagrid-vue-stable-entrypoint.md) - stable Vue runtime entrypoints.
 - [Grid API](../../datagrid-grid-api.md) - full `DataGridApi` reference.
 - [Versioned public protocol](./datagrid-versioned-public-protocol.md) - semver, deprecation, codemod, and deep-import rules.

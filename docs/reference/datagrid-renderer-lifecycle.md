@@ -1,6 +1,6 @@
 # DataGrid Renderer Lifecycle
 
-Scope: `@affino/datagrid-vue-app` column `cellRenderer` and `groupCellRenderer` callbacks.
+Scope: `@affino/datagrid-vue` column `cellRenderer` and `groupCellRenderer` callbacks.
 
 ## Ownership
 
@@ -64,7 +64,7 @@ Scope: `@affino/datagrid-vue-app` column `cellRenderer` and `groupCellRenderer` 
 
 ## Validation
 
-Focused package coverage lives in `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts` and covers:
+Focused package coverage lives in `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts` and covers:
 
 - focusable renderer children with grid-owned cell semantics
 - `interactive.activate(...)` routing through `cellInteraction`
@@ -75,5 +75,5 @@ Focused package coverage lives in `packages/datagrid-vue-app/src/__tests__/DataG
 Run:
 
 ```bash
-pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts
+pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts
 ```

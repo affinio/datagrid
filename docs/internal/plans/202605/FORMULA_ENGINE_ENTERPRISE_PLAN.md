@@ -19,7 +19,7 @@ Current execution state:
 - Objective: document supported formula surfaces and limitations separately for row-model formulas, spreadsheet/workbook formulas, enterprise formula packs, worker-owned row models, and server-backed grids.
 - Affected packages/files:
   - `docs/datagrid-formula-engine-guide.md`
-  - `docs/datagrid-formula-engine-community-vs-enterprise.md`
+  - `docs/datagrid-formula-engine-package-ownership.md`
   - `docs/audits/FORMULA_ENGINE_ENTERPRISE_AUDIT.md`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: no runtime behavior change; users get a clear contract for supported syntax, row-model guarantees, workbook guarantees, unsupported async formulas, explicit-recompute volatile behavior, and unsupported server-backed formula evaluation.
@@ -166,7 +166,7 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-core/src/models/compute/*`
   - `packages/datagrid-formula-engine/src/graph/*`
-  - `packages/datagrid-vue-app-enterprise/src/dataGridFormulaRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/src/dataGridFormulaRuntime.ts`
   - Formula benchmark scripts
 - Expected behavior change: diagnostics have production-safe defaults, bounded row-level cause capture, and measurable enabled-versus-disabled overhead.
 - Tests to add/update:
@@ -218,18 +218,18 @@ Current execution state:
 - Status: Completed.
 - Objective: verify enterprise formula packs, runtime config, worker runtime, diagnostics, and `formulaHeavy` performance presets compose without changing community formula semantics.
 - Affected packages/files:
-  - `packages/datagrid-formula-engine-enterprise/src/index.ts`
-  - `packages/datagrid-formula-engine-enterprise/src/formulaPacks.ts`
-  - `packages/datagrid-vue-app-enterprise/src/DataGrid.ts`
-  - `packages/datagrid-vue-app-enterprise/src/dataGridFormulaRuntime.ts`
-  - `packages/datagrid-vue-app-enterprise/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-formula-engine/src/index.ts`
+  - `packages/datagrid-formula-engine/src/formulaPacks.ts`
+  - `packages/datagrid-vue/src/app-layer/src/DataGrid.ts`
+  - `packages/datagrid-vue/src/app-layer/src/dataGridFormulaRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/src/__tests__/DataGrid.contract.spec.ts`
 - Expected behavior change: enterprise wrapper behavior becomes contract-covered; community formula engine output remains unchanged under enterprise packs/config.
 - Tests to add/update:
   - Formula pack registration and conflict behavior.
   - Worker runtime config wiring.
   - Formula-heavy performance preset wiring.
   - Diagnostics display does not trigger broad recompute.
-- Validation command: `pnpm --filter @affino/datagrid-vue-app-enterprise exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts`
+- Validation command: `pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts`
 - Risk level: Medium
 - Suggested commit message: `test(datagrid-enterprise): cover formula runtime wiring`
 

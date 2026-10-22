@@ -36,13 +36,13 @@ Import path for protocol/runtime/viewport power-user APIs:
 Source: `packages/datagrid-vue/src/public.ts`
 
 Declarative component layer:
-- `@affino/datagrid-vue-app`
+- `@affino/datagrid-vue`
 
 ## Quick Start (Recommended: Declarative Component)
 
 ```ts
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC" },

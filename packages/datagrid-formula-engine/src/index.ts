@@ -120,3 +120,12 @@ export {
   snapshotDataGridFormulaGraph,
   snapshotDataGridFormulaExecutionPlan,
 } from "./graph/index.js"
+
+export {
+  DATAGRID_FINANCE_FORMULA_FUNCTIONS,
+  DATAGRID_FORMULA_PACKS,
+  listDataGridFormulaPackNames,
+  mergeDataGridFormulaFunctionRegistries,
+  resolveDataGridFormulaFunctions,
+} from "./formulaPacks.js"
+export type { DataGridFormulaPackName } from "./formulaPacks.js"

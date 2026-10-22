@@ -62,18 +62,18 @@ Interaction and stage:
 - `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts`
 - `packages/datagrid-vue/src/app/dataGridMouseEventGuards.ts`
 - `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageScrollSync.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageRowIndex.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFillAction.ts`
-- `packages/datagrid-vue-app/src/gestures/dataGridTouchPanGuard.ts`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageScrollSync.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowIndex.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFillAction.ts`
+- `packages/datagrid-vue/src/app-layer/gestures/dataGridTouchPanGuard.ts`
 
 Orchestration package:
 
@@ -113,9 +113,9 @@ Tests:
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridViewportBlurHandler.contract.spec.ts`
 - `packages/datagrid-orchestration/src/__tests__/useDataGridManagedTouchScroll.contract.spec.ts`
 - `packages/datagrid-orchestration/src/__tests__/useDataGridManagedWheelScroll.contract.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStagePointerInteractions.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStagePointerInteractions.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 
 ## Strengths
 

@@ -9,9 +9,9 @@ Scope read before this audit:
 - `docs/internal/reference/datagrid-product-report.ru.md`
 - `docs/datagrid-feature-catalog.md`
 - `README.md`
-- `docs/datagrid-vue-app-community-vs-enterprise.md`
-- `docs/datagrid-formula-engine-community-vs-enterprise.md`
-- `docs/datagrid-pivot-community-vs-enterprise.md`
+- `docs/datagrid-vue-app-package-ownership.md`
+- `docs/datagrid-formula-engine-package-ownership.md`
+- `docs/datagrid-pivot-package-ownership.md`
 
 Market references checked:
 

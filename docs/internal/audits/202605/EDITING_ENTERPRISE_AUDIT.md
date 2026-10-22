@@ -59,11 +59,11 @@ Vue app editing, clipboard, keyboard, and history:
 
 Vue app stage and editors:
 
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageCellIo.ts`
-- `packages/datagrid-vue-app/src/overlays/DataGridCellComboboxEditor.vue`
-- `packages/datagrid-vue-app/src/overlays/DataGridFilterableCombobox.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageCellIo.ts`
+- `packages/datagrid-vue/src/app-layer/overlays/DataGridCellComboboxEditor.vue`
+- `packages/datagrid-vue/src/app-layer/overlays/DataGridFilterableCombobox.vue`
 - `packages/datagrid-spreadsheet-vue-app/src/DataGridSpreadsheetFormulaEditor.vue`
 
 Orchestration reference slices:
@@ -75,8 +75,8 @@ Orchestration reference slices:
 Tests and benchmarks sampled:
 
 - `packages/datagrid-vue/src/app/__tests__/*`
-- `packages/datagrid-vue-app/src/stage/__tests__/*`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/*`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 - `packages/datagrid-core/src/cells/__tests__/runtime.spec.ts`
 - `packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts`
 - `packages/datagrid-core/src/models/__tests__/clientRowModel.spec.ts`

@@ -3,15 +3,15 @@
 Status: public feature guide.
 
 Use formulas when a displayed or computed value depends on other row fields.
-The community formula package provides parsing and evaluation; DataGrid row
+The formula package provides parsing and evaluation; DataGrid row
 models provide registration, dependency tracking, and recomputation.
 
 ## Package boundaries
 
 - `@affino/datagrid-formula-engine` — parser, compiler, functions, diagnostics.
 - `@affino/datagrid-core` — formula fields on client row models and `api.rows`.
-- `@affino/datagrid-vue-app` — UI integration and editors owned by the app layer.
-- [Community vs enterprise](./datagrid-formula-engine-community-vs-enterprise.md) — additive package boundaries.
+- `@affino/datagrid-vue` — UI integration and editors owned by the app layer.
+- [Formula package ownership](./datagrid-formula-engine-package-ownership.md) — implementation boundaries.
 
 Server-backed grids do not get server formula evaluation automatically. Formula
 values are client/model-owned unless the host implements a separate backend

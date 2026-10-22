@@ -34,9 +34,9 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: expose table-stage headers as semantic column headers with stable indexes, sort state, and menu relationships without changing column APIs.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-  - `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+  - `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
 - Expected behavior change: leaf header cells now expose `role="columnheader"`, one-based `aria-colindex`, `aria-sort` for sortable columns, and contextual header/menu/resize/filter labels.
 - Tests to add/update:
@@ -51,11 +51,11 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: document and enforce one normal-mode focus invariant across viewport, body cells, row-index cells, pinned panes, editors, and context menus.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageViewportKeyboard.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageViewportKeyboard.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
 - Expected behavior change: keyboard tabbing reaches one normal-mode stage owner. A focused row index wins over cell focus, a visible selection anchor cell wins over viewport fallback, and the body viewport is tabbable only when no visible focus target exists.
 - Tests to add/update:
@@ -71,12 +71,12 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: decide whether the app stage uses container focus plus `aria-activedescendant` or continues with roving DOM focus, then wire stable ids consistently for the approved model.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/dataGridTableStageA11y.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/dataGridTableStageA11y.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
 - Expected behavior change: header and body cells now expose deterministic sanitized ids. Center, pinned-left, and pinned-right body ids are stable across virtualized remounts. App-stage `aria-activedescendant` remains absent because the approved mounted-stage model is still roving DOM focus.
 - Tests to add/update:
@@ -93,10 +93,10 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: define screen-reader semantics for grouped/tree projections, datasource placeholders, and split pinned DOM panes before adding attributes that could imply the wrong reading order.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
   - `docs/server-datasource/ux-contract.md`
 - Expected behavior change: the mounted stage keeps `role="grid"` for the current model; grouped rows expose expansion state and group label context, placeholder rows expose row disabled/context metadata, and center/pinned panes receive the same row semantics through shared render APIs.
@@ -113,11 +113,11 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: ensure editors, checkbox cells, custom interactive renderers, filter comboboxes, menu controls, and resize controls expose contextual names and state.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/overlays/DataGridFilterableCombobox.vue`
-  - `packages/datagrid-vue-app/src/overlays/DataGridCellComboboxEditor.vue`
-  - `packages/datagrid-vue-app/src/overlays/DataGridColumnMenu.vue`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridFilterableCombobox.vue`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridCellComboboxEditor.vue`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridColumnMenu.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
 - Expected behavior change: active inline text, date/datetime, and select editors expose contextual accessible names with column and row context while preserving invalid and pending state. Existing checkbox and custom interactive cell role/state coverage remains under the shared cell interaction contract.
 - Tests to add/update:
@@ -134,9 +134,9 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
-  - `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-  - `packages/datagrid-vue-app/src/stage/*`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/*`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `docs/datagrid-accessibility.md`
 - Expected behavior change: copy, cut, paste, clear, edit commit/cancel/failure, fill, range move, undo/redo, sort/filter, and row-model loading/error outcomes update the documented polite grid status region without per-cell live updates.
 - Tests to add/update:

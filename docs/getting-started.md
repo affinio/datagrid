@@ -2,10 +2,10 @@
 
 Status: public onboarding guide.
 
-For a normal Vue application, install the app package:
+For a normal Vue application, install the unified Vue package:
 
 ```bash
-pnpm add @affino/datagrid-vue-app
+pnpm add @affino/datagrid-vue
 ```
 
 The package supports Vue `^3.3.0`.
@@ -14,7 +14,7 @@ The package supports Vue `^3.3.0`.
 
 ```vue
 <script setup lang="ts">
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 type Order = {
   id: string

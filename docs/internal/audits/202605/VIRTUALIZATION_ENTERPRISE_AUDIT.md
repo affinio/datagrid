@@ -67,12 +67,12 @@ Vue and app stage:
 - `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts`
 - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
 - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts`
-- `packages/datagrid-vue-app/src/config/dataGridVirtualization.ts`
-- `packages/datagrid-vue-app/src/dataGridVirtualization.ts`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/config/dataGridVirtualization.ts`
+- `packages/datagrid-vue/src/app-layer/dataGridVirtualization.ts`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
 
 Orchestration, sandbox, tests, and benchmarks:
 

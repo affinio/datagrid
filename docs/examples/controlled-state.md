@@ -5,7 +5,7 @@ Use unified `state` when the host owns saved views, URL state, or persistence. D
 ```vue
 <script setup lang="ts">
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 import type { DataGridUnifiedState } from "@affino/datagrid-core"
 
 const rows = [

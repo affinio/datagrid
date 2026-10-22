@@ -92,8 +92,8 @@ Current execution state:
   - `packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppIntentHistory.contract.spec.ts`
   - `packages/datagrid-vue/src/app/index.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageHistory.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageHistory.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
   - `docs/datagrid-history.md`
 - Expected behavior change: supported built-in client undo/redo actions restore captured selection/focus context after data replay without changing public history props or external adapters.
 - Tests added/covered:

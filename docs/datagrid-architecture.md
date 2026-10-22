@@ -1,7 +1,7 @@
 # DataGrid Architecture and Package Boundaries
 
 Status: maintained public documentation.
-Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datagrid-vue`, `@affino/datagrid-vue-app`
+Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, unified `@affino/datagrid-vue`, and the temporary `@affino/datagrid-vue` compatibility facade.
 
 ## Goals
 
@@ -15,15 +15,16 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datag
 | --- | --- | --- |
 | `@affino/datagrid-core` | types, settings adapter contract, runtime signals, viewport controllers, virtualization math, selection geometry/contracts | Vue refs/watchers, SFC rendering concerns, Pinia store details |
 | `@affino/datagrid-orchestration` | reusable pointer, fill, range move, header resize, keyboard, context menu, viewport blur, scroll, and telemetry lifecycles | row-model mutation policy, SFC rendering, app-specific history/server fill decisions |
-| `@affino/datagrid-vue` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics, adapter materialization from canonical runtime windows | canonical virtualization math, duplicate coordinate conversion logic, core business invariants |
-| `@affino/datagrid-vue-app` | mounted table stage, DOM event binding, native body viewport, viewport materialization, header/pinned pane wiring, overlays, focus surfaces, editors, sandbox-shaped UX composition | core viewport range/clamp math, model mutation primitives, stable public core API ownership |
+| `@affino/datagrid-vue/headless` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics, adapter materialization from canonical runtime windows | canonical virtualization math, duplicate coordinate conversion logic, core business invariants |
+| `@affino/datagrid-vue` app entries | mounted table stage, DOM event binding, native body viewport, viewport materialization, header/pinned pane wiring, overlays, focus surfaces, editors, product UX composition | core viewport range/clamp math, model mutation primitives, stable public core API ownership |
 
 ## Dependency Direction
 
 - `datagrid-core` has no dependency on Vue.
 - `datagrid-orchestration` is framework-light shared interaction infrastructure.
-- `datagrid-vue` depends on `datagrid-core` and consumes core contracts.
-- `datagrid-vue-app` composes `datagrid-vue` app hooks and orchestration-backed behavior into the mounted stage.
+- `datagrid-vue` depends on `datagrid-core` and consumes core contracts; its `/headless` subpath stays separate from the ready-made renderer.
+- The `datagrid-vue` app entries compose headless hooks and orchestration-backed behavior into the mounted stage.
+- `datagrid-vue` publishes the app component at its root and the lower-level Vue integration at `/headless`.
 - Adapter boundary normalizes host input before runtime; core row-node and column contracts stay canonical.
 
 ## Stable Public API
@@ -67,16 +68,16 @@ The mounted stage has one owner per active gesture. `packages/datagrid-vue/src/a
 
 | Area | Owner |
 | --- | --- |
-| Native body scroll | `@affino/datagrid-vue-app` stage viewport runtime, backed by `@affino/datagrid-vue` app viewport sync |
+| Native body scroll | `@affino/datagrid-vue` stage viewport runtime, backed by `@affino/datagrid-vue` app viewport sync |
 | Canonical viewport math, virtualization range, overscan, clamp | `@affino/datagrid-core` viewport services |
-| DOM scroll sampling, rAF viewport commits, render-window materialization | `@affino/datagrid-vue` app viewport sync and `@affino/datagrid-vue-app` table stage |
+| DOM scroll sampling, rAF viewport commits, render-window materialization | `@affino/datagrid-vue` app viewport sync and `@affino/datagrid-vue` table stage |
 | Drag selection, fill, range move app state | `@affino/datagrid-vue` app interaction controller |
 | Shared interaction lifecycle helpers | `@affino/datagrid-orchestration` |
 | Column resize lifecycle | `@affino/datagrid-orchestration` with `@affino/datagrid-vue` app wrapper |
 | Row resize lifecycle | `@affino/datagrid-vue` app row sizing |
-| DOM binding, panes, overlays, editor/focus surfaces | `@affino/datagrid-vue-app` table stage |
+| DOM binding, panes, overlays, editor/focus surfaces | `@affino/datagrid-vue` table stage |
 | Keyboard command routing | `@affino/datagrid-orchestration` command router, wired by `@affino/datagrid-vue` |
-| Context menu routing | `@affino/datagrid-orchestration` router and `@affino/datagrid-vue-app` stage handlers |
+| Context menu routing | `@affino/datagrid-orchestration` router and `@affino/datagrid-vue` stage handlers |
 
 Boundary rules:
 
@@ -98,10 +99,10 @@ Selection has separate logical state machines for committed row selection, cell 
 | Row-selection anchor, extent, modifier rules, and preview/commit transitions | `@affino/datagrid-core` row-selection interaction model |
 | Active pointer drag-session lifecycle and exclusive gesture lease | `@affino/datagrid-orchestration` |
 | DOM event normalization and lifecycle subscriptions | `@affino/datagrid-vue` adapters |
-| Row-header policy, checkbox controls, focus surfaces, and selection materialization | `@affino/datagrid-vue-app` table stage |
+| Row-header policy, checkbox controls, focus surfaces, and selection materialization | `@affino/datagrid-vue` table stage |
 | Business policy and actions over selected records | Consumer application |
 | Pointer gesture arbitration, row-selection preview routing, fill, range-move, edit handoff | `@affino/datagrid-vue` app interaction controller with orchestration lifecycle helpers |
-| DOM focus restore, selected cell classes, overlays, handles, editor mount points | `@affino/datagrid-vue-app` table stage |
+| DOM focus restore, selected cell classes, overlays, handles, editor mount points | `@affino/datagrid-vue` table stage |
 | Clipboard source ranges and local mutation planning | `@affino/datagrid-vue` app clipboard wiring with orchestration clipboard helpers |
 
 The app integration keeps existing cell-range row-header behavior as the

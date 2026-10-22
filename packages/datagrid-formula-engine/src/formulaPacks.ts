@@ -8,7 +8,7 @@ import {
   type DataGridFormulaValue,
 } from "@affino/datagrid-formula-engine"
 
-export type DataGridEnterpriseFormulaPackName = "finance"
+export type DataGridFormulaPackName = "finance"
 
 type DataGridFormulaFunctionRegistryEntry =
   | DataGridFormulaFunctionDefinition
@@ -82,16 +82,16 @@ export const DATAGRID_FINANCE_FORMULA_FUNCTIONS = Object.freeze({
   },
 }) satisfies Readonly<Record<string, DataGridFormulaFunctionDefinition>>
 
-export const DATAGRID_ENTERPRISE_FORMULA_PACKS = Object.freeze({
+export const DATAGRID_FORMULA_PACKS = Object.freeze({
   finance: DATAGRID_FINANCE_FORMULA_FUNCTIONS,
-}) satisfies Readonly<Record<DataGridEnterpriseFormulaPackName, DataGridFormulaFunctionRegistry>>
+}) satisfies Readonly<Record<DataGridFormulaPackName, DataGridFormulaFunctionRegistry>>
 
-const DATAGRID_ENTERPRISE_FORMULA_PACK_NAMES = Object.freeze(
-  Object.keys(DATAGRID_ENTERPRISE_FORMULA_PACKS) as DataGridEnterpriseFormulaPackName[],
+const DATAGRID_FORMULA_PACK_NAMES = Object.freeze(
+  Object.keys(DATAGRID_FORMULA_PACKS) as DataGridFormulaPackName[],
 )
 
-export function listDataGridEnterpriseFormulaPackNames(): readonly DataGridEnterpriseFormulaPackName[] {
-  return DATAGRID_ENTERPRISE_FORMULA_PACK_NAMES
+export function listDataGridFormulaPackNames(): readonly DataGridFormulaPackName[] {
+  return DATAGRID_FORMULA_PACK_NAMES
 }
 
 export function mergeDataGridFormulaFunctionRegistries(
@@ -109,14 +109,14 @@ export function mergeDataGridFormulaFunctionRegistries(
   return Object.freeze(merged)
 }
 
-export function resolveDataGridEnterpriseFormulaFunctions(
-  packNames: readonly DataGridEnterpriseFormulaPackName[] | null | undefined = DATAGRID_ENTERPRISE_FORMULA_PACK_NAMES,
+export function resolveDataGridFormulaFunctions(
+  packNames: readonly DataGridFormulaPackName[] | null | undefined = DATAGRID_FORMULA_PACK_NAMES,
 ): DataGridFormulaFunctionRegistry {
   if (!packNames || packNames.length === 0) {
     return Object.freeze({})
   }
 
   return mergeDataGridFormulaFunctionRegistries(
-    ...packNames.map(packName => DATAGRID_ENTERPRISE_FORMULA_PACKS[packName]),
+    ...packNames.map(packName => DATAGRID_FORMULA_PACKS[packName]),
   )
 }

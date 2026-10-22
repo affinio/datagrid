@@ -8,8 +8,7 @@ Use the highest-level package that owns the behavior you are changing:
 
 | Area | Package / path | Ownership |
 | --- | --- | --- |
-| App-facing Vue grid | `packages/datagrid-vue-app` | Ready `<DataGrid />` UX, app props, default renderer, stage composition. |
-| Vue runtime and adapter | `packages/datagrid-vue` | Vue bindings, runtime ownership, datasource row models, advanced renderer/adapter hooks. |
+| App-facing Vue grid and adapter | `packages/datagrid-vue` | Ready `<DataGrid />` UX in `src/app-layer`; headless Vue bindings and runtime ownership under `/headless`. |
 | Deterministic core | `packages/datagrid-core` | Row models, state, events, selection, transactions, `DataGridApi`, pure runtime contracts. |
 | Server datasource adapters | `packages/datagrid-server-adapters`, `packages/datagrid-server-client` | HTTP datasource integration, transport helpers, polling/live-update behavior. |
 | Worker runtime | `packages/datagrid-worker` | Worker-owned row model protocols and parity behavior. |
@@ -22,11 +21,11 @@ Do not move behavior across core, Vue adapter, app layer, sandbox, or backend bo
 
 Affino uses stable, advanced, and internal API tiers.
 
-- Stable APIs are semver-safe public surfaces. Examples: `@affino/datagrid-vue-app`, `@affino/datagrid-vue`, `@affino/datagrid-vue/stable`, `@affino/datagrid-core`.
+- Stable APIs are semver-safe public surfaces. Examples: `@affino/datagrid-vue`, `@affino/datagrid-vue`, `@affino/datagrid-vue/stable`, `@affino/datagrid-core`.
 - Advanced APIs are supported power-user surfaces for custom renderers, adapters, worker/runtime ownership, or integration plumbing. Examples: `@affino/datagrid-vue/advanced/*`, `@affino/datagrid-core/advanced`, `@affino/datagrid-orchestration`.
 - Internal APIs are unsafe implementation details. Do not use or promote `./internal` paths in docs, examples, or app code.
 
-Stable does not always mean beginner-facing. Normal Vue apps should start with `@affino/datagrid-vue-app`; lower-level packages are for runtime ownership and platform integration.
+Stable does not always mean beginner-facing. Normal Vue apps should start with `@affino/datagrid-vue`; lower-level packages are for runtime ownership and platform integration.
 
 ## Setup
 
@@ -59,7 +58,7 @@ Prefer the smallest package-level command that proves your change before running
 | Docs only | Link/path check where practical, plus `git diff --check`. |
 | Package exports or public types | Relevant package build/type-check, `pnpm run quality:api:datagrid:inventory`, and `pnpm run quality:api:datagrid:report` when declaration output changes. |
 | Core runtime behavior | Focused `@affino/datagrid-core` unit/contract tests, then broader DataGrid tests if shared contracts changed. |
-| Vue app or adapter behavior | Relevant `@affino/datagrid-vue` / `@affino/datagrid-vue-app` type-check and tests. Use sandbox e2e for browser-visible behavior. |
+| Vue app or adapter behavior | Relevant `@affino/datagrid-vue` / `@affino/datagrid-vue` type-check and tests. Use sandbox e2e for browser-visible behavior. |
 | Server datasource behavior | Focused server datasource adapter/client tests and sandbox server datasource e2e smoke where applicable. |
 | Sandbox/demo changes | `pnpm --filter @affino/datagrid-sandbox type-check` and a focused Playwright route smoke. |
 | Performance-sensitive changes | Focused unit/contract tests first, then the smallest relevant benchmark or performance gate. |

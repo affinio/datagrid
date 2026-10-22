@@ -38,5 +38,5 @@ Use this skill for Vue/DataGrid integration slices that affect user workflows, a
 ## Validation
 
 - Prefer targeted Vitest contract tests for changed composables/components.
-- Run package-level type-check for `@affino/datagrid-vue-app` or `@affino/datagrid-vue` as appropriate.
+- Run package-level type-check for `@affino/datagrid-vue`.
 - For visual/touch behavior, note any required manual browser/device verification.

@@ -51,15 +51,15 @@ Vue app selection and interaction:
 
 Stage and orchestration:
 
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRowSelection.ts`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageVisualSelection.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageOverlays.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRowSelection.ts`
 - `packages/datagrid-orchestration/src/navigation/useDataGridCellNavigation.ts`
 - `packages/datagrid-orchestration/src/navigation/useDataGridKeyboardCommandRouter.ts`
 - `packages/datagrid-orchestration/src/pointer/useDataGridCellPointerDownRouter.ts`
@@ -81,9 +81,9 @@ Tests and benchmarks sampled:
 - `packages/datagrid-vue/src/composables/__tests__/*Clipboard*.spec.ts`
 - `packages/datagrid-vue/src/composables/__tests__/*Fill*.spec.ts`
 - `packages/datagrid-orchestration/src/__tests__/*Selection*.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/*Selection*.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/*Pointer*.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/*Selection*.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/*Pointer*.spec.ts`
 - `e2e/sandbox-interactions.spec.ts`
 - `scripts/bench-datagrid-interactions.mjs`
 - `scripts/bench-datagrid-enterprise-workloads.mjs`

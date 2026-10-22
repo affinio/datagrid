@@ -14,7 +14,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `packages/datagrid-core/src/selection/snapshot.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
 - Expected behavior change: no runtime behavior change; maintainers should have a single source of truth for ownership, transitions, invalidation rules, and blocked states.
 - Tests to add/update:
   - No code tests required for the documentation slice.
@@ -33,9 +33,9 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
   - `packages/datagrid-vue/src/app/__tests__/*Selection*.spec.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageFocusRuntime.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageFocusRuntime.spec.ts`
 - Expected behavior change: active cell and focus restoration should become predictable when selection changes, editing starts or ends, and focus temporarily leaves the grid.
 - Tests to add/update:
   - Contract tests for keyboard selection move, pointer selection, edit commit, edit cancel, blur, and restore.
@@ -116,7 +116,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `packages/datagrid-core/src/selection/virtualSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
   - `packages/datagrid-orchestration/src/clipboard/*`
   - `packages/datagrid-orchestration/src/fill/useDataGridFillHandleStart.ts`
   - `packages/datagrid-orchestration/src/selection/useDataGridRangeMoveLifecycle.ts`
@@ -138,11 +138,11 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Objective: prove selection continuity across scroll-out/scroll-in remounts, pinned panes, horizontal virtualization, and server placeholder replacement.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppActiveCellViewport.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageVisualSelection.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageOverlays.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
   - `e2e/sandbox-interactions.spec.ts`
   - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: active cell, selected cell classes, overlays, fill handle, and editor/focus state should remain correct when rows or columns remount.
@@ -160,12 +160,12 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Status: Completed on 2026-05-18. Additive multi-range rendering now has an explicit contract: all selected rendered cells stay highlighted, while active overlay lanes, pinned seam overlays, fill handle placement, range-move edge hover, clipboard target, and keyboard extension are owned by the active range. Unit coverage locks active-range-only overlay lanes across left, center, right, and pinned-bottom panes, verifies inactive additive ranges do not expose active edge affordances, proves additive cell classes stay mapped to projected pinned/reordered visible column indexes when hidden columns are omitted, and covers additive full-row/full-column parity for row-index and column-header selected states. Browser coverage proves Ctrl-additive selected cells, the active anchor, and the fill handle remount correctly after horizontal virtualization.
 - Objective: make multi-range rendering semantics explicit for active range overlays, inactive range classes, fill handles, pinned panes, hidden/reordered columns, and header/row selection parity.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageVisualSelection.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageOverlays.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
   - `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppRowSelection.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/*Selection*.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/*Selection*.spec.ts`
   - `packages/datagrid-vue/src/app/__tests__/*Selection*.spec.ts`
 - Expected behavior change: all selected ranges should have documented visual treatment, while the active range owns active border/fill-handle behavior unless explicitly changed.
 - Tests to add/update:
@@ -206,9 +206,9 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Affected packages/files:
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
   - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `e2e/sandbox-grid.spec.ts`
   - `e2e/sandbox-interactions.spec.ts`
@@ -247,10 +247,10 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Status: Completed on 2026-05-18. Rendered-cell additive selection predicates now use a row-bucketed lookup for sparse/many-range selection snapshots, indexing ranges up to a bounded row-entry budget and keeping tall/overflow ranges in a fallback list. Unit coverage now locks many additive ranges plus an overflow range, and the interaction benchmark includes a `multi-range-lookup-proxy` scenario with p95/p99 budget wiring in package scripts, harness, and perf-contract checks.
 - Objective: keep rendered-cell selection checks bounded when many additive ranges are present.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageVisualSelection.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/*Selection*.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageVisualSelection.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageOverlays.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/*Selection*.spec.ts`
   - `scripts/bench-datagrid-interactions.mjs`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: rendered selection lookup should remain proportional to the rendered window with a documented range-count budget or an indexed lookup path.
@@ -269,10 +269,10 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
 - Affected packages/files:
   - `docs/reference/datagrid-headless-a11y-contract.md`
   - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRowSelection.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRowSelection.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 - Expected behavior change: keyboard-only users and assistive technologies should receive stable active/selected/disabled/placeholder state across virtualized rendering.
 - Tests to add/update:
   - Component tests for aria-selected, aria-activedescendant or equivalent active-cell state, row-selection checked states, and placeholder disabled state.
@@ -291,7 +291,7 @@ This plan converts `docs/audits/SELECTION_ENTERPRISE_AUDIT.md` into small, separ
   - `scripts/bench-datagrid-interactions.mjs`
   - `scripts/bench-datagrid-enterprise-workloads.mjs`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
-  - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts`
+  - `packages/datagrid-vue/src/app-layer/perf/dataGridPerfTrace.ts`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: no runtime behavior change; validation should warn or fail when selection work exceeds documented enterprise budgets.
 - Tests to add/update:

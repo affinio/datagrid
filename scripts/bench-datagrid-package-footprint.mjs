@@ -12,8 +12,8 @@ const packageProfiles = [
   ["core:plain", "packages/datagrid-core", "dist/src/index.js"],
   ["core:advanced", "packages/datagrid-core", "dist/src/advanced.js"],
   ["vue:plain", "packages/datagrid-vue", "dist/index.js"],
+  ["vue:headless", "packages/datagrid-vue", "dist/headless/index.js"],
   ["vue:advanced", "packages/datagrid-vue", "dist/advanced.js"],
-  ["vue-app:plain", "packages/datagrid-vue-app", "dist/index.js"],
   ["pivot", "packages/datagrid-pivot", "dist/index.js"],
   ["worker", "packages/datagrid-worker", "dist/index.js"],
 ]

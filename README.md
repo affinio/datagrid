@@ -2,7 +2,7 @@
 
 Affino DataGrid is a Vue-first DataGrid for data-heavy products. It combines a ready app component, deterministic runtime contracts, virtualized rendering, spreadsheet-like editing, analytics projections, and backend-owned datasource support.
 
-For normal Vue applications, start with `@affino/datagrid-vue-app` and its `<DataGrid />` component. Drop to `@affino/datagrid-vue` or `@affino/datagrid-core` only when you need runtime ownership, custom rendering, or platform-level integration.
+For normal Vue applications, start with `@affino/datagrid-vue` and its `<DataGrid />` component. Use `@affino/datagrid-vue/headless` or `@affino/datagrid-core` when you need custom rendering or runtime ownership.
 
 ## When To Use Affino DataGrid
 
@@ -24,14 +24,14 @@ For a tiny static table, a simple HTML table or lightweight UI component is usua
 Install the app-facing Vue package:
 
 ```bash
-pnpm add @affino/datagrid-vue-app
+pnpm add @affino/datagrid-vue
 ```
 
 Use `DataGrid` with local rows and columns:
 
 ```vue
 <script setup lang="ts">
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = [
   { rowId: "svc-1", service: "Billing API", owner: "Payments", status: "Healthy" },
@@ -57,7 +57,7 @@ This gives you a virtualized grid with the app-layer renderer and the stable com
 
 | Need | Start with | Why |
 | --- | --- | --- |
-| Normal Vue app grid | `@affino/datagrid-vue-app` | App-facing `<DataGrid />` component and built-in UX. |
+| Normal Vue app grid | `@affino/datagrid-vue` | App-facing `<DataGrid />` component and built-in UX. |
 | Vue runtime or custom renderer ownership | `@affino/datagrid-vue` | Stable Vue adapter and headless runtime primitives. |
 | Core model/API/platform integration | `@affino/datagrid-core` | Deterministic model, row, state, event, and `DataGridApi` contracts. |
 | Backend-owned rows over Affino HTTP shape | `@affino/datagrid-server-adapters` | App-facing datasource factory for server-backed grids. |
@@ -67,7 +67,7 @@ This gives you a virtualized grid with the app-layer renderer and the stable com
 | Formula APIs | `@affino/datagrid-formula-engine` | Formula parsing, diagnostics, graph, and runtime contracts. |
 | Pivot contracts/helpers | `@affino/datagrid-pivot` | Pivot spec normalization, cloning, layout, and drilldown contracts. |
 
-Do not install a generic `@affino/datagrid` package for the primary Vue path; the app-facing package in this repository is `@affino/datagrid-vue-app`.
+Do not install a generic `@affino/datagrid` package for the primary Vue path; the app-facing package in this repository is `@affino/datagrid-vue`.
 
 ## Mental Model
 
@@ -102,7 +102,7 @@ Use the server datasource path when your backend owns query shape, filtering, so
 For the recommended Affino HTTP endpoint shape, install:
 
 ```bash
-pnpm add @affino/datagrid-vue-app @affino/datagrid-vue @affino/datagrid-server-adapters
+pnpm add @affino/datagrid-vue @affino/datagrid-server-adapters
 ```
 
 The minimal read-only backend milestone is one endpoint:
@@ -140,12 +140,12 @@ Affino DataGrid keeps public API tiers explicit.
 
 | Tier | Use when | Entrypoints |
 | --- | --- | --- |
-| Starter app path | You want a production Vue component quickly. | `@affino/datagrid-vue-app` |
+| Starter app path | You want a production Vue component quickly. | `@affino/datagrid-vue` |
 | Stable runtime/API | You need semver-safe runtime, model, state, event, or adapter integration. | `@affino/datagrid-vue`, `@affino/datagrid-vue/stable`, `@affino/datagrid-core` |
 | Advanced / power-user | You are building custom renderers, adapter plumbing, viewport integration, or low-level interaction flows. | `@affino/datagrid-vue/advanced/*`, `@affino/datagrid-core/advanced` |
 | Internal | You are working inside Affino packages. | `./internal` subpaths only where documented |
 
-Stable means semver-safe. It does not mean every stable export is part of the beginner path. App teams should start with `@affino/datagrid-vue-app`; custom runtime work should start with `@affino/datagrid-vue`; platform-level contracts live in `@affino/datagrid-core`.
+Stable means semver-safe. It does not mean every stable export is part of the beginner path. App teams should start with `@affino/datagrid-vue`; custom runtime work should start with `@affino/datagrid-vue`; platform-level contracts live in `@affino/datagrid-core`.
 
 ## Docs Map
 
@@ -210,7 +210,7 @@ This repository contains DataGrid packages and supporting infrastructure, includ
 
 - `@affino/datagrid-core`
 - `@affino/datagrid-vue`
-- `@affino/datagrid-vue-app`
+- `@affino/datagrid-vue`
 - `@affino/datagrid-server-adapters`
 - `@affino/datagrid-server-client`
 - `@affino/datagrid-worker`

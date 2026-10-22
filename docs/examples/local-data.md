@@ -4,7 +4,7 @@ Use the app layer for local rows. Keep values raw and put display concerns in `p
 
 ```vue
 <script setup lang="ts">
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = [
   { rowId: "svc-1", service: "Billing API", owner: "Payments", revenue: 1200.5 },

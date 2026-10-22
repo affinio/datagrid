@@ -4,7 +4,7 @@ Mark only user-editable columns as editable. Give rows stable ids; if the field 
 
 ```vue
 <script setup lang="ts">
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = [
   { id: "r-1", sku: "A-100", month: 1, amount: 120 },

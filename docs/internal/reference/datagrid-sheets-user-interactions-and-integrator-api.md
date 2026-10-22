@@ -50,7 +50,7 @@ The canonical Vue UI path is intentionally split across the app package, Vue com
 
 | Interaction area | Primary owner | Boundary rule |
 | --- | --- | --- |
-| Body scroll and viewport sampling | `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` and `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` | Body viewport remains the native scroll surface; linked panes/header route into the body viewport and must not become competing scroll owners. |
+| Body scroll and viewport sampling | `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts` and `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` | Body viewport remains the native scroll surface; linked panes/header route into the body viewport and must not become competing scroll owners. |
 | Core viewport math and IO | `packages/datagrid-core/src/viewport/*` | Core owns deterministic viewport math, scroll IO services, virtualization ranges, and sync contracts; Vue code consumes these contracts instead of duplicating math. |
 | Cell selection and drag selection | `packages/datagrid-vue/src/app/useDataGridAppCellSelection.ts` and `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` | The app interaction controller starts and previews pointer selection; selection snapshots are applied through the app selection adapter/runtime API. |
 | Fill handle and fill lifecycle | `packages/datagrid-orchestration/src/fill/*` with app wiring in `useDataGridAppInteractionController.ts` | Orchestration owns start/stop lifecycle semantics; the app controller owns row/materialization checks, fill commit, history, and server fill handoff. |
@@ -58,10 +58,10 @@ The canonical Vue UI path is intentionally split across the app package, Vue com
 | Column resize | `packages/datagrid-orchestration/src/headers/useDataGridHeaderResizeOrchestration.ts` and `packages/datagrid-vue/src/app/useDataGridAppHeaderResize.ts` | Header resize stops competing fill/drag selection before taking owner; stage scroll sync only forwards pointer movement while resize is active. |
 | Row resize | `packages/datagrid-vue/src/app/useDataGridAppRowSizing.ts` | Row sizing owns row-resize state, row-height overrides, and resize listeners; it must remain visible in active-owner diagnostics. |
 | Keyboard commands | `packages/datagrid-orchestration/src/navigation/useDataGridKeyboardCommandRouter.ts` | The command router owns copy/paste/cut/clear, undo/redo, select all, context menu, and range-move cancel routing; cell navigation/edit starts remain app-controller responsibilities. |
-| Focus restoration | `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`, `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`, and orchestration focus helpers | Focus changes should use `preventScroll` when preserving viewport position matters and must not steal focus during active scroll, active editor, fill, or range-move ownership. |
+| Focus restoration | `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`, `packages/datagrid-vue/src/app/dataGridFocusRestore.ts`, and orchestration focus helpers | Focus changes should use `preventScroll` when preserving viewport position matters and must not steal focus during active scroll, active editor, fill, or range-move ownership. |
 | Inline editing lifecycle | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` and stage cell-rendering/editor handlers | Active inline editors commit before selected-cell range move or fill-handle drag claims the gesture. Scroll-active touch/desktop edit starts remain suppressed at the stage boundary. |
 | Context menu | `packages/datagrid-orchestration/src/contextMenu/useDataGridViewportContextMenuRouter.ts` and stage context-menu handlers | Context menu routing may adjust selection before opening, but it must not open or mutate selection during active drag/fill/range/resize interactions. |
-| Inline editing | `packages/datagrid-vue-app/src/stage/useDataGridTableStageCellIo.ts`, `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`, and `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts` | Editing owns draft/commit/cancel while active; pointer selection commits the previous editor before selecting a new cell. |
+| Inline editing | `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageCellIo.ts`, `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`, and `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts` | Editing owns draft/commit/cancel while active; pointer selection commits the previous editor before selecting a new cell. |
 
 Active interaction diagnostics use `packages/datagrid-vue/src/app/dataGridInteractionOwner.ts` as the current owner snapshot contract for drag selection, fill, range move, column resize, and row resize. The snapshot is internal diagnostic state, not a public integrator API.
 
@@ -75,7 +75,7 @@ Selection state is a coordinated app-stage contract, not a single object owned b
 | Active cell | Core snapshot shape, applied by `packages/datagrid-vue/src/app/useDataGridAppSelection.ts` | Click, keyboard navigation, drag start, paste target, and edit target update active cell with the committed selection snapshot. A missing or stale active cell must not be inferred from DOM focus alone. |
 | Selection anchor | `packages/datagrid-vue/src/app/useDataGridAppSelection.ts` and `useDataGridAppCellSelection.ts` | Shift extension uses the app anchor. Replacing the selection resets the anchor; additive selection commits a separate range and preserves the active range according to the app selection transition. |
 | Row selection | `packages/datagrid-core/src/selection/rowSelection.ts`, `packages/datagrid-vue/src/app/useDataGridAppRowSelection.ts`, and stage row-selection UI | Row selection is separate from cell-range selection. Checkbox and row-index interactions update row-selection state and focused row; they must not silently rewrite cell ranges unless the interaction contract explicitly says it selects a row range. |
-| DOM focus | `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts` and `packages/datagrid-vue/src/app/dataGridFocusRestore.ts` | Focus follows the active cell when a rendered focus target exists. Restoration uses `preventScroll` when viewport position must be preserved and must not steal focus from an active editor, fill gesture, range move, resize, context menu, or native scroll. |
+| DOM focus | `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts` and `packages/datagrid-vue/src/app/dataGridFocusRestore.ts` | Focus follows the active cell when a rendered focus target exists. Restoration uses `preventScroll` when viewport position must be preserved and must not steal focus from an active editor, fill gesture, range move, resize, context menu, or native scroll. |
 | Inline editing | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` and stage editor handlers | Editing owns draft, commit, cancel, and editor focus while active. Pointer selection, fill, and range move commit or cancel the previous editor before they claim the next interaction. |
 | Pending clipboard ranges | `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts` | Copy/cut ranges are retained as committed selection metadata for local materialized rows. Unloaded, placeholder, or stale virtual ranges must be blocked or delegated by the server-backed operation contract. |
 | Fill preview | `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` with `packages/datagrid-orchestration/src/fill/*` | Fill preview is a transient interaction state owned by the active fill gesture. It is cleared on commit, cancel, projection invalidation, or competing owner start. |
@@ -186,12 +186,12 @@ await api.start()
 
 ### Recommended Vue app integration
 
-For the canonical Vue UI path, use `DataGrid` from `@affino/datagrid-vue-app`.
+For the canonical Vue UI path, use `DataGrid` from `@affino/datagrid-vue`.
 No extra prop is required to enable the fill handle in base table mode.
 
 ```vue
 <script setup lang="ts">
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = [
   { id: 1, sku: "A-100", month: 1, amount: 120 },

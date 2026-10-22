@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "trackedPackageCount": 6,
+  "trackedPackageCount": 5,
   "packages": [
     {
       "packageName": "@affino/datagrid-core",
       "packageDir": "packages/datagrid-core",
-      "version": "0.9.0",
+      "version": "0.12.0",
       "exportCount": 17,
       "unclassifiedExports": [],
       "wildcardExports": [],
@@ -243,30 +243,30 @@
     {
       "packageName": "@affino/datagrid-vue",
       "packageDir": "packages/datagrid-vue",
-      "version": "0.10.3",
-      "exportCount": 13,
+      "version": "0.14.0",
+      "exportCount": 22,
       "unclassifiedExports": [],
       "wildcardExports": [],
       "missingSourceFiles": [],
       "exports": [
         {
           "subpath": ".",
-          "tier": "stable-alias",
+          "tier": "stable",
           "types": "./dist/index.d.ts",
           "import": "./dist/index.js",
-          "sourceFile": "src/index.ts",
+          "sourceFile": "src/unified.ts",
           "sourceExists": true,
           "wildcard": false,
           "exportDeclarationCount": 1,
           "exportDeclarations": [
-            "export * from \"./stable\" "
+            "export * from \"./app-layer/index\" export * from \"./stable\" export { default } from \"./app-layer/index\" "
           ]
         },
         {
           "subpath": "./advanced",
           "tier": "advanced",
-          "types": "./dist/advanced.d.ts",
-          "import": "./dist/advanced.js",
+          "types": "./dist/headless/advanced.d.ts",
+          "import": "./dist/headless/advanced.js",
           "sourceFile": "src/advanced.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -276,10 +276,23 @@
           ]
         },
         {
+          "subpath": "./advanced-filter",
+          "tier": "stable-feature",
+          "types": "./dist/app/advanced-filter.d.ts",
+          "import": "./dist/advanced-filter.js",
+          "sourceFile": "src/app-layer/advanced-filter.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { default as DataGridAdvancedFilterPopover } from \"./overlays/DataGridAdvancedFilterPopover.vue\" export type { DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, } from \"./config/dataGridAdvancedFilter\""
+          ]
+        },
+        {
           "subpath": "./advanced/clipboard",
           "tier": "advanced",
-          "types": "./dist/advanced/clipboard.d.ts",
-          "import": "./dist/advanced/clipboard.js",
+          "types": "./dist/headless/advanced/clipboard.d.ts",
+          "import": "./dist/headless/advanced/clipboard.js",
           "sourceFile": "src/advanced/clipboard.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -291,8 +304,8 @@
         {
           "subpath": "./advanced/editing",
           "tier": "advanced",
-          "types": "./dist/advanced/editing.d.ts",
-          "import": "./dist/advanced/editing.js",
+          "types": "./dist/headless/advanced/editing.d.ts",
+          "import": "./dist/headless/advanced/editing.js",
           "sourceFile": "src/advanced/editing.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -304,8 +317,8 @@
         {
           "subpath": "./advanced/filtering",
           "tier": "advanced",
-          "types": "./dist/advanced/filtering.d.ts",
-          "import": "./dist/advanced/filtering.js",
+          "types": "./dist/headless/advanced/filtering.d.ts",
+          "import": "./dist/headless/advanced/filtering.js",
           "sourceFile": "src/advanced/filtering.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -317,8 +330,8 @@
         {
           "subpath": "./advanced/history",
           "tier": "advanced",
-          "types": "./dist/advanced/history.d.ts",
-          "import": "./dist/advanced/history.js",
+          "types": "./dist/headless/advanced/history.d.ts",
+          "import": "./dist/headless/advanced/history.js",
           "sourceFile": "src/advanced/history.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -330,8 +343,8 @@
         {
           "subpath": "./advanced/layout",
           "tier": "advanced",
-          "types": "./dist/advanced/layout.d.ts",
-          "import": "./dist/advanced/layout.js",
+          "types": "./dist/headless/advanced/layout.d.ts",
+          "import": "./dist/headless/advanced/layout.js",
           "sourceFile": "src/advanced/layout.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -343,8 +356,8 @@
         {
           "subpath": "./advanced/pointer",
           "tier": "advanced",
-          "types": "./dist/advanced/pointer.d.ts",
-          "import": "./dist/advanced/pointer.js",
+          "types": "./dist/headless/advanced/pointer.d.ts",
+          "import": "./dist/headless/advanced/pointer.js",
           "sourceFile": "src/advanced/pointer.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -356,8 +369,8 @@
         {
           "subpath": "./advanced/selection",
           "tier": "advanced",
-          "types": "./dist/advanced/selection.d.ts",
-          "import": "./dist/advanced/selection.js",
+          "types": "./dist/headless/advanced/selection.d.ts",
+          "import": "./dist/headless/advanced/selection.js",
           "sourceFile": "src/advanced/selection.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -367,10 +380,23 @@
           ]
         },
         {
+          "subpath": "./aggregations",
+          "tier": "stable-feature",
+          "types": "./dist/app/aggregations.d.ts",
+          "import": "./dist/aggregations.js",
+          "sourceFile": "src/app-layer/aggregations.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { default as DataGridAggregationsPopover } from \"./overlays/DataGridAggregationsPopover.vue\" export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from \"./config/dataGridAggregations\""
+          ]
+        },
+        {
           "subpath": "./app",
           "tier": "advanced",
-          "types": "./dist/app/index.d.ts",
-          "import": "./dist/app/index.js",
+          "types": "./dist/headless/app/index.d.ts",
+          "import": "./dist/headless/app/index.js",
           "sourceFile": "src/app/index.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -382,8 +408,8 @@
         {
           "subpath": "./app/worker",
           "tier": "advanced",
-          "types": "./dist/app/worker.d.ts",
-          "import": "./dist/app/worker.js",
+          "types": "./dist/headless/app/worker.d.ts",
+          "import": "./dist/headless/app/worker.js",
           "sourceFile": "src/app/worker.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -393,10 +419,103 @@
           ]
         },
         {
+          "subpath": "./find-replace",
+          "tier": "stable-feature",
+          "types": "./dist/app/find-replace.d.ts",
+          "import": "./dist/find-replace.js",
+          "sourceFile": "src/app-layer/find-replace.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { default as DataGridFindReplacePopover } from \"./overlays/DataGridFindReplacePopover.vue\" export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from \"./config/dataGridFindReplace\" "
+          ]
+        },
+        {
+          "subpath": "./gantt",
+          "tier": "stable-feature",
+          "types": "./dist/app/gantt.d.ts",
+          "import": "./dist/gantt.js",
+          "sourceFile": "src/app-layer/gantt.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 3,
+          "exportDeclarations": [
+            "export const DataGridWithGantt = DataGridWithGanttImpl as typeof DataGrid export { DataGridWithGantt as DataGrid }",
+            "export { DataGridGanttStage }",
+            "export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\""
+          ]
+        },
+        {
+          "subpath": "./headless",
+          "tier": "stable",
+          "types": "./dist/headless/index.d.ts",
+          "import": "./dist/headless/index.js",
+          "sourceFile": "src/index.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export * from \"./stable\" "
+          ]
+        },
+        {
+          "subpath": "./headless/app",
+          "tier": "advanced",
+          "types": "./dist/headless/app/index.d.ts",
+          "import": "./dist/headless/app/index.js",
+          "sourceFile": "src/app/index.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export type { DataGridAppAdvancedFilterClauseDraft, DataGridAppAdvancedFilterClauseJoin, DataGridAppAdvancedFilterClausePatch, DataGridAppAdvancedFilterColumnOption, } from \"./advancedFilterPanel.types\" export type { DataGridAppApplyColumnLayoutPayload, DataGridAppColumnLayoutDraftColumn, DataGridAppColumnLayoutPanelItem, DataGridAppColumnLayoutVisibilityPatch, } from \"./columnLayoutPanel.types\" export { useDataGridAppModeMeta, type UseDataGridAppModeMetaOptions, type UseDataGridAppModeMetaResult, } from \"./useDataGridAppModeMeta\" export { createDataGridAppRowHeightMetrics, type DataGridAppRowHeightMutation, type DataGridAppRowHeightMetrics, type DataGridAppRowHeightMetricsOptions, } from \"./dataGridRowHeightMetrics\" export { restoreDataGridFocus, type RestoreDataGridFocusOptions, } from \"./dataGridFocusRestore\" export { useDataGridAppClipboard, type DataGridAppPasteOptions, type DataGridAppPendingClipboardEdge, type DataGridAppPendingClipboardOperation, type DataGridAppServerClipboardOperations, type UseDataGridAppClipboardOptions, type UseDataGridAppClipboardResult, } from \"./useDataGridAppClipboard\" export { useDataGridAppFill, type UseDataGridAppFillOptions, type UseDataGridAppFillResult, } from \"./useDataGridAppFill\" export { useDataGridAppInteractionController, type UseDataGridAppInteractionControllerOptions, type UseDataGridAppInteractionControllerResult, } from \"./useDataGridAppInteractionController\" export { useDataGridAppViewportLifecycle, type UseDataGridAppViewportLifecycleOptions, } from \"./useDataGridAppViewportLifecycle\" export { useDataGridAppRowPresentation, type UseDataGridAppRowPresentationOptions, type UseDataGridAppRowPresentationResult, } from \"./useDataGridAppRowPresentation\" export { useDataGridAppRuntimeSync, type UseDataGridAppRuntimeSyncOptions, } from \"./useDataGridAppRuntimeSync\" export { useDataGridAppAdvancedFilterBuilder, type UseDataGridAppAdvancedFilterBuilderResult, } from \"./useDataGridAppAdvancedFilterBuilder\" export { useDataGridAppColumnLayoutPanel, type UseDataGridAppColumnLayoutPanelResult, } from \"./useDataGridAppColumnLayoutPanel\" export { useDataGridAppCellSelection, type DataGridAppCellCoord, type DataGridAppSelectionAnchorLike, type UseDataGridAppCellSelectionOptions, type UseDataGridAppCellSelectionResult, } from \"./useDataGridAppCellSelection\" export { useDataGridAppDiagnosticsPanel, type UseDataGridAppDiagnosticsPanelResult, } from \"./useDataGridAppDiagnosticsPanel\" export { useDataGridAppActiveCellViewport, type UseDataGridAppActiveCellViewportOptions, type UseDataGridAppActiveCellViewportResult, } from \"./useDataGridAppActiveCellViewport\" export { useDataGridAppHeaderResize, type UseDataGridAppHeaderResizeOptions, type UseDataGridAppHeaderResizeResult, } from \"./useDataGridAppHeaderResize\" export { useDataGridAppInlineEditing, type UseDataGridAppInlineEditingOptions, type UseDataGridAppInlineEditingResult, } from \"./useDataGridAppInlineEditing\" export { createDataGridAppHistoryOperationPayload, useDataGridAppIntentHistory, type DataGridAppHistorySnapshotBudget, type DataGridAppHistorySnapshotBudgetResult, type DataGridAppHistoryOperationKind, type DataGridAppHistoryOperationPayload, type DataGridAppHistoryOperationScope, type DataGridAppHistoryRestorationCell, type DataGridAppHistoryRestorationState, type DataGridAppRowSnapshot, type UseDataGridAppIntentHistoryOptions, type UseDataGridAppIntentHistoryResult, } from \"./useDataGridAppIntentHistory\" export { useDataGridAppControls, type DataGridAppMode, type DataGridAppPivotViewMode, type DataGridAppRowHeightMode, type DataGridAppRowRenderMode, type DataGridAppSortModel, type UseDataGridAppControlsOptions, type UseDataGridAppControlsResult, } from \"./useDataGridAppControls\" export { useDataGridAppSelection, type UseDataGridAppSelectionOptions, type UseDataGridAppSelectionResult, } from \"./useDataGridAppSelection\" export { useDataGridAppRowSelection, type UseDataGridAppRowSelectionOptions, type UseDataGridAppRowSelectionResult, } from \"./useDataGridAppRowSelection\" export { useDataGridAppRowSizing, type UseDataGridAppRowSizingOptions, type UseDataGridAppRowSizingResult, } from \"./useDataGridAppRowSizing\" export { useDataGridAppViewport, type UseDataGridAppViewportOptions, type UseDataGridAppViewportResult, } from \"./useDataGridAppViewport\" "
+          ]
+        },
+        {
+          "subpath": "./headless/app/worker",
+          "tier": "advanced",
+          "types": "./dist/headless/app/worker.d.ts",
+          "import": "./dist/headless/app/worker.js",
+          "sourceFile": "src/app/worker.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { useDataGridAppRuntime, type DataGridAppRuntimeMode, type UseDataGridAppRuntimeOptions, type UseDataGridAppRuntimeResult, } from \"./useDataGridAppRuntime\""
+          ]
+        },
+        {
+          "subpath": "./internal",
+          "tier": "internal",
+          "types": "./dist/app/internal.d.ts",
+          "import": "./dist/internal.js",
+          "sourceFile": "src/app-layer/internal.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { dataGridAppRootElementKey } from \"./dataGridAppContext\" export { buildDataGridChromePaneModel, buildDataGridChromeRenderModel, } from \"@affino/datagrid-chrome\" export { readDataGridOverlayThemeVars } from \"./overlays/dataGridOverlayThemeVars\" export { default as DataGridDefaultRenderer } from \"./host/DataGridDefaultRenderer\" export { default as DataGridGanttStage } from \"./gantt/DataGridGanttStage.vue\" export { dataGridGanttStageKey } from \"./gantt/dataGridGanttStageContext\" export { default as DataGridModuleHost } from \"./host/DataGridModuleHost\" export { default as DataGridAdvancedFilterPopover } from \"./overlays/DataGridAdvancedFilterPopover.vue\" export { default as DataGridFindReplacePopover } from \"./overlays/DataGridFindReplacePopover.vue\" export { default as DataGridTableStage } from \"./stage/DataGridTableStage.vue\" export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export { resolveDataGridFormulaRowModelOptions } from \"./config/dataGridFormulaOptions\" export { createDataGridTableStageContext, createDataGridTableStageContextFromProps, dataGridTableStageContextKey, provideDataGridTableStageContext, useDataGridTableStageCellsSection, useDataGridTableStageColumnsSection, useDataGridTableStageContext, useDataGridTableStageEditingSection, useDataGridTableStageInteractionSection, useDataGridTableStageLayoutSection, useDataGridTableStageMode, useDataGridTableStageRowHeightMode, useDataGridTableStageRowsSection, useDataGridTableStageSection, useDataGridTableStageSelectionSection, useDataGridTableStageViewportSection, } from \"./stage/dataGridTableStageContext\" export type { AnyDataGridTableStageContext, DataGridTableStageContextSource, DataGridTableStageSectionKey, } from \"./stage/dataGridTableStageContext\" export { useDataGridAppRowModel } from \"./useDataGridAppRowModel\" export { useDataGridTableStageBindings } from \"./stage/useDataGridTableStageBindings\" export { useDataGridTableStageRuntime } from \"./stage/useDataGridTableStageRuntime\" export { resolveDataGridChrome } from \"./config/dataGridChrome\" export { resolveDataGridColumnReorder } from \"./config/dataGridColumnReorder\" export { resolveDataGridRowReorder } from \"./config/dataGridRowReorder\" export type { DataGridAppInspectorPanel, DataGridAppToolbarModule, } from \"./host/DataGridModuleHost\" export type { DataGridBuiltInToolbarItem, DataGridToolbarActionOptions, DataGridToolbarAlignment, DataGridToolbarItemPlacement, DataGridToolbarLayoutOptions, DataGridToolbarLayoutProp, } from \"./config/dataGridToolbarLayout\" export { DATA_GRID_HIERARCHY_COLUMN_ID, type DataGridColumnId, type GroupingPresentationOptions, type HierarchyColumnOptions, } from \"./config/dataGridGroupingPresentation\" export type { DataGridColumnReorderOptions, DataGridColumnReorderProp, } from \"./config/dataGridColumnReorder\" export type { DataGridChromeDensity, DataGridChromeOptions, DataGridChromeProp, DataGridResolvedChromeOptions, DataGridToolbarPlacement, } from \"./config/dataGridChrome\" export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from \"./config/dataGridRowReorder\" export type { BuildDataGridChromePaneModelInput, BuildDataGridChromeRenderModelInput, DataGridChromeBand, DataGridChromeLine, DataGridChromePaneModel, DataGridChromeRenderModel, DataGridChromeRowBand, DataGridChromeRowMetric, DataGridChromeVisibleRange, } from \"@affino/datagrid-chrome\" export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridAppFormulaRuntimeOptions, ResolveDataGridFormulaRowModelOptionsInput, } from \"./config/dataGridFormulaOptions\" export type { DataGridElementRefHandler, DataGridPendingEdge, DataGridTableMode, DataGridTableRow, DataGridTableStageCustomOverlay, DataGridTableStageSectionedProps, DataGridTableStageProps, UseDataGridTableStageBindingsOptions, } from \"./stage/dataGridTableStage.types\" export type { DataGridAppViewMode, DataGridGanttBarFrame, DataGridGanttBarLayout, DataGridGanttCriticalTaskNode, DataGridGanttDependencyPath, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttHorizontalAlign, DataGridGanttOptions, DataGridGanttProp, DataGridGanttRowEditPatch, DataGridGanttTimelineState, DataGridGanttZoomLevel, DataGridResolvedGanttOptions, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt\" export type { UseDataGridAppRowModelOptions, UseDataGridAppRowModelResult, } from \"./useDataGridAppRowModel\" "
+          ]
+        },
+        {
+          "subpath": "./quick-filter",
+          "tier": "stable-feature",
+          "types": "./dist/app/quick-filter.d.ts",
+          "import": "./dist/quick-filter.js",
+          "sourceFile": "src/app-layer/quick-filter.ts",
+          "sourceExists": true,
+          "wildcard": false,
+          "exportDeclarationCount": 1,
+          "exportDeclarations": [
+            "export { default as DataGridQuickFilterInput } from \"./host/DataGridQuickFilterInput\" export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from \"./config/dataGridQuickFilter\" "
+          ]
+        },
+        {
           "subpath": "./stable",
           "tier": "stable",
-          "types": "./dist/stable.d.ts",
-          "import": "./dist/stable.js",
+          "types": "./dist/headless/stable.d.ts",
+          "import": "./dist/headless/stable.js",
           "sourceFile": "src/stable.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -408,8 +527,8 @@
         {
           "subpath": "./worker",
           "tier": "advanced",
-          "types": "./dist/worker.d.ts",
-          "import": "./dist/worker.js",
+          "types": "./dist/headless/worker.d.ts",
+          "import": "./dist/headless/worker.js",
           "sourceFile": "src/worker.ts",
           "sourceExists": true,
           "wildcard": false,
@@ -421,113 +540,9 @@
       ]
     },
     {
-      "packageName": "@affino/datagrid-vue-app",
-      "packageDir": "packages/datagrid-vue-app",
-      "version": "0.16.0",
-      "exportCount": 7,
-      "unclassifiedExports": [],
-      "wildcardExports": [],
-      "missingSourceFiles": [],
-      "exports": [
-        {
-          "subpath": ".",
-          "tier": "stable",
-          "types": "./dist/index.d.ts",
-          "import": "./dist/index.js",
-          "sourceFile": "src/index.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export const DataGrid = DataGridComponent export { default as DataGridModuleHost } from \"./host/DataGridModuleHost\" export { defineDataGridColumns } from \"./config/dataGridFormulaOptions\" export { defineDataGridColumnMenu } from \"./overlays/dataGridColumnMenu\" export { defineDataGridCellClassResolver, defineDataGridCellStyleResolver, defineDataGridComponent, defineDataGridFilterCellReader, defineDataGridFilterCellStyleReader, defineDataGridSelectionCellReader, defineDataGridStructuralRowActionHandler, useDataGridRef, } from \"./DataGrid\" export type { DataGridCellClassResolver, DataGridCellStyleResolver, DataGridComponent, DataGridComponentFor, DataGridCellEditEvent, DataGridRowsEditedEvent, DataGridCaptureFocusAnchorOptions, DataGridExposed, DataGridExposedRuntime, DataGridFilterCellReader, DataGridFilterCellStyleReader, DataGridFocusAnchor, DataGridInstance, DataGridProps, DataGridRestoreFocusAnchorOptions, DataGridSelectionCellReader, DataGridServerSelectionSummaryOptions, } from \"./DataGrid\" export type { DataGridStructuralRowActionContext, DataGridStructuralRowActionHandler, DataGridStructuralRowActionId, } from \"./dataGridStructuralRowActions\" export type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmptyStateReason, DataGridEmptyStateRenderer, } from \"./config/dataGridEmptyState\" export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridDefinedColumns, DataGridDeclarativeFormulaOptions, } from \"./config/dataGridFormulaOptions\" export type { DataGridAuthoredRendererPolicy } from \"./config/dataGridRendererPolicy\" export type { DataGridAppColumnFilterOptions, DataGridAppFilterValueNormalizationContext, } from \"./config/dataGridFilterNormalization\" export { normalizeDataGridAppFilterModel, normalizeDataGridAppUnifiedStateFilters, } from \"./config/dataGridFilterNormalization\" export type { DataGridAppToolbarModule, } from \"./host/DataGridModuleHost\" export type { DataGridChromeDensity, DataGridChromeOptions, DataGridChromeProp, DataGridResolvedChromeOptions, DataGridToolbarPlacement, } from \"./config/dataGridChrome\" export type { DataGridLayoutMode, DataGridResolvedLayoutOptions, } from \"./config/dataGridLayout\" export type { DataGridPlaceholderRowCreateParams, DataGridPlaceholderRowFactory, DataGridPlaceholderRowMaterializeTrigger, DataGridPlaceholderRowsOptions, DataGridPlaceholderRowsPolicy, DataGridPlaceholderRowsProp, } from \"./config/dataGridPlaceholderRows\" export type { DataGridCellEditablePredicate, DataGridCellEditablePredicateContext, } from \"./dataGridEditability\" export type { DataGridHistoryController, DataGridHistoryControlsMode, DataGridHistoryOptions, DataGridHistoryProp, DataGridHistoryShortcutsMode, DataGridServerHistoryProp, } from \"./dataGridHistory\" export type { DataGridTableStageHistoryAdapter, } from \"./stage/useDataGridTableStageHistory\" export type { DataGridTableStageCustomOverlay, } from \"./stage/dataGridTableStage.types\" export type { DataGridThemePreset, DataGridThemeProp, } from \"./theme/dataGridTheme\" export type { DataGridAdvancedFilterLabels, DataGridAdvancedFilterOperatorLabelKey, DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, DataGridResolvedAdvancedFilterLabels, } from \"./config/dataGridAdvancedFilter\" export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from \"./config/dataGridQuickFilter\" export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from \"./config/dataGridFindReplace\" export type { DataGridGridLinesHeaderMode, DataGridGridLinesOptions, DataGridGridLinesPreset, DataGridGridLinesProp, } from \"./config/dataGridGridLines\" export type { DataGridSavedViewSnapshot, DataGridSavedViewStorageLike, } from \"./config/dataGridSavedView\" export type { DataGridPersistenceChangeEvent, DataGridStatePersistenceOptions, DataGridStatePersistenceProp, DataGridStatePersistenceStorage, } from \"./config/dataGridStatePersistence\" export type { DataGridColumnLayoutLabels, DataGridColumnLayoutOptions, DataGridColumnLayoutProp, DataGridResolvedColumnLayoutLabels, } from \"./config/dataGridColumnLayout\" export type { DataGridColumnReorderOptions, DataGridColumnReorderProp, } from \"./config/dataGridColumnReorder\" export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from \"./config/dataGridRowReorder\" export type { DataGridResolvedRowSelectionOptions, DataGridRowSelectionOptions, DataGridRowSelectionProp, } from \"./config/dataGridRowSelection\" export { clearDataGridSavedViewInStorage, migrateDataGridSavedView, parseDataGridSavedView, readDataGridSavedViewFromStorage, serializeDataGridSavedView, writeDataGridSavedViewToStorage, } from \"./config/dataGridSavedView\" export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from \"./config/dataGridAggregations\" export type { DataGridColumnMenuActionKey, DataGridColumnMenuActionOption, DataGridColumnMenuActionOptions, DataGridColumnMenuColumnOptions, DataGridColumnMenuColumnInputOptions, DataGridColumnMenuCustomLeafItem, DataGridColumnMenuCustomItem, DataGridColumnMenuCustomItemContext, DataGridColumnMenuCustomItemPlacement, DataGridColumnMenuCustomSubmenuItem, DataGridColumnMenuDisabledReasons, DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels, DataGridColumnMenuLabels, DataGridColumnMenuInputProp, DataGridColumnMenuOptions, DataGridColumnMenuProp, DataGridColumnMenuTriggerMode, DataGridDefinedColumnMenu, } from \"./overlays/dataGridColumnMenu\" export type { DataGridCellMenuActionKey, DataGridCellMenuActionOption, DataGridCellMenuActionOptions, DataGridCellMenuColumnOptions, DataGridCellMenuCustomItem, DataGridCellMenuCustomItemContext, DataGridCellMenuCustomItemPlacement, DataGridCellMenuCustomLeafItem, DataGridCellMenuCustomSubmenuItem, DataGridCellMenuDisabledReasons, DataGridCellMenuItemKey, DataGridCellMenuItemLabels, DataGridCellMenuOptions, DataGridCellMenuProp, DataGridRowIndexMenuActionKey, DataGridRowIndexMenuActionOption, DataGridRowIndexMenuActionOptions, DataGridRowIndexMenuDisabledReasons, DataGridRowIndexMenuItemKey, DataGridRowIndexMenuItemLabels, DataGridRowIndexMenuOptions, DataGridRowIndexMenuProp, } from \"./overlays/dataGridContextMenu\" export type { DataGridGroupByProp, DataGridPaginationProp, } from \"./config/dataGridPublicProps\" export type { DataGridAppViewMode } from \"./config/dataGridAppView\" export type { DataGridVirtualizationOptions, DataGridVirtualizationProp, } from \"./config/dataGridVirtualization\" export { default } from \"./DataGrid\" "
-          ]
-        },
-        {
-          "subpath": "./advanced-filter",
-          "tier": "stable-feature",
-          "types": "./dist/advanced-filter.d.ts",
-          "import": "./dist/advanced-filter.js",
-          "sourceFile": "src/advanced-filter.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export { default as DataGridAdvancedFilterPopover } from \"./overlays/DataGridAdvancedFilterPopover.vue\" export type { DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, } from \"./config/dataGridAdvancedFilter\""
-          ]
-        },
-        {
-          "subpath": "./aggregations",
-          "tier": "stable-feature",
-          "types": "./dist/aggregations.d.ts",
-          "import": "./dist/aggregations.js",
-          "sourceFile": "src/aggregations.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export { default as DataGridAggregationsPopover } from \"./overlays/DataGridAggregationsPopover.vue\" export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from \"./config/dataGridAggregations\""
-          ]
-        },
-        {
-          "subpath": "./find-replace",
-          "tier": "stable-feature",
-          "types": "./dist/find-replace.d.ts",
-          "import": "./dist/find-replace.js",
-          "sourceFile": "src/find-replace.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export { default as DataGridFindReplacePopover } from \"./overlays/DataGridFindReplacePopover.vue\" export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from \"./config/dataGridFindReplace\" "
-          ]
-        },
-        {
-          "subpath": "./gantt",
-          "tier": "stable-feature",
-          "types": "./dist/gantt.d.ts",
-          "import": "./dist/gantt.js",
-          "sourceFile": "src/gantt.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 3,
-          "exportDeclarations": [
-            "export const DataGridWithGantt = DataGridWithGanttImpl as typeof DataGrid export { DataGridWithGantt as DataGrid }",
-            "export { DataGridGanttStage }",
-            "export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export type { DataGridAppViewMode, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttOptions, DataGridGanttProp, DataGridGanttZoomLevel, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt.types\""
-          ]
-        },
-        {
-          "subpath": "./internal",
-          "tier": "internal",
-          "types": "./dist/internal.d.ts",
-          "import": "./dist/internal.js",
-          "sourceFile": "src/internal.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export { dataGridAppRootElementKey } from \"./dataGridAppContext\" export { buildDataGridChromePaneModel, buildDataGridChromeRenderModel, } from \"@affino/datagrid-chrome\" export { readDataGridOverlayThemeVars } from \"./overlays/dataGridOverlayThemeVars\" export { default as DataGridDefaultRenderer } from \"./host/DataGridDefaultRenderer\" export { default as DataGridGanttStage } from \"./gantt/DataGridGanttStage.vue\" export { dataGridGanttStageKey } from \"./gantt/dataGridGanttStageContext\" export { default as DataGridModuleHost } from \"./host/DataGridModuleHost\" export { default as DataGridAdvancedFilterPopover } from \"./overlays/DataGridAdvancedFilterPopover.vue\" export { default as DataGridFindReplacePopover } from \"./overlays/DataGridFindReplacePopover.vue\" export { default as DataGridTableStage } from \"./stage/DataGridTableStage.vue\" export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from \"./gantt/dataGridGantt\" export { resolveDataGridFormulaRowModelOptions } from \"./config/dataGridFormulaOptions\" export { createDataGridTableStageContext, createDataGridTableStageContextFromProps, dataGridTableStageContextKey, provideDataGridTableStageContext, useDataGridTableStageCellsSection, useDataGridTableStageColumnsSection, useDataGridTableStageContext, useDataGridTableStageEditingSection, useDataGridTableStageInteractionSection, useDataGridTableStageLayoutSection, useDataGridTableStageMode, useDataGridTableStageRowHeightMode, useDataGridTableStageRowsSection, useDataGridTableStageSection, useDataGridTableStageSelectionSection, useDataGridTableStageViewportSection, } from \"./stage/dataGridTableStageContext\" export type { AnyDataGridTableStageContext, DataGridTableStageContextSource, DataGridTableStageSectionKey, } from \"./stage/dataGridTableStageContext\" export { useDataGridAppRowModel } from \"./useDataGridAppRowModel\" export { useDataGridTableStageBindings } from \"./stage/useDataGridTableStageBindings\" export { useDataGridTableStageRuntime } from \"./stage/useDataGridTableStageRuntime\" export { resolveDataGridChrome } from \"./config/dataGridChrome\" export { resolveDataGridColumnReorder } from \"./config/dataGridColumnReorder\" export { resolveDataGridRowReorder } from \"./config/dataGridRowReorder\" export type { DataGridAppInspectorPanel, DataGridAppToolbarModule, } from \"./host/DataGridModuleHost\" export type { DataGridColumnReorderOptions, DataGridColumnReorderProp, } from \"./config/dataGridColumnReorder\" export type { DataGridChromeDensity, DataGridChromeOptions, DataGridChromeProp, DataGridResolvedChromeOptions, DataGridToolbarPlacement, } from \"./config/dataGridChrome\" export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from \"./config/dataGridRowReorder\" export type { BuildDataGridChromePaneModelInput, BuildDataGridChromeRenderModelInput, DataGridChromeBand, DataGridChromeLine, DataGridChromePaneModel, DataGridChromeRenderModel, DataGridChromeRowBand, DataGridChromeRowMetric, DataGridChromeVisibleRange, } from \"@affino/datagrid-chrome\" export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridAppEnterpriseFormulaRuntimeOptions, ResolveDataGridFormulaRowModelOptionsInput, } from \"./config/dataGridFormulaOptions\" export type { DataGridElementRefHandler, DataGridPendingEdge, DataGridTableMode, DataGridTableRow, DataGridTableStageCustomOverlay, DataGridTableStageSectionedProps, DataGridTableStageProps, UseDataGridTableStageBindingsOptions, } from \"./stage/dataGridTableStage.types\" export type { DataGridAppViewMode, DataGridGanttBarFrame, DataGridGanttBarLayout, DataGridGanttCriticalTaskNode, DataGridGanttDependencyPath, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttHorizontalAlign, DataGridGanttOptions, DataGridGanttProp, DataGridGanttRowEditPatch, DataGridGanttTimelineState, DataGridGanttZoomLevel, DataGridResolvedGanttOptions, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from \"./gantt/dataGridGantt\" export type { UseDataGridAppRowModelOptions, UseDataGridAppRowModelResult, } from \"./useDataGridAppRowModel\" "
-          ]
-        },
-        {
-          "subpath": "./quick-filter",
-          "tier": "stable-feature",
-          "types": "./dist/quick-filter.d.ts",
-          "import": "./dist/quick-filter.js",
-          "sourceFile": "src/quick-filter.ts",
-          "sourceExists": true,
-          "wildcard": false,
-          "exportDeclarationCount": 1,
-          "exportDeclarations": [
-            "export { default as DataGridQuickFilterInput } from \"./host/DataGridQuickFilterInput\" export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from \"./config/dataGridQuickFilter\" "
-          ]
-        }
-      ]
-    },
-    {
       "packageName": "@affino/datagrid-orchestration",
       "packageDir": "packages/datagrid-orchestration",
-      "version": "0.7.1",
+      "version": "0.8.0",
       "exportCount": 1,
       "unclassifiedExports": [],
       "wildcardExports": [],

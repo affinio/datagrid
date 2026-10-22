@@ -9,8 +9,8 @@ This document is the current-state accessibility contract for the Affino DataGri
 - `packages/datagrid-core/src/a11y/headlessA11yStateMachine.ts` owns deterministic headless focus, keyboard, and ARIA state.
 - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts` maps headless grid/cell ARIA state to DOM-ready attributes.
 - `packages/datagrid-orchestration/src/accessibility/useDataGridA11yCellIds.ts` owns stable cell/header id and one-based ARIA index helpers.
-- `packages/datagrid-vue-app/src/stage/*` owns the mounted virtualized stage, pinned panes, row index cells, editors, overlays, and focus restoration.
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts` owns app-level status regions rendered around the stage.
+- `packages/datagrid-vue/src/app-layer/stage/*` owns the mounted virtualized stage, pinned panes, row index cells, editors, overlays, and focus restoration.
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts` owns app-level status regions rendered around the stage.
 
 ## Implemented Stage Contract
 
@@ -44,7 +44,7 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
 - app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes.
 
-This stage contract is covered by component tests in `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`, mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`, and the focused large-grid A11Y browser benchmark `pnpm run bench:datagrid:enterprise:a11y:browser:assert`.
+This stage contract is covered by component tests in `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`, mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`, and the focused large-grid A11Y browser benchmark `pnpm run bench:datagrid:enterprise:a11y:browser:assert`.
 
 ## Focus Model
 

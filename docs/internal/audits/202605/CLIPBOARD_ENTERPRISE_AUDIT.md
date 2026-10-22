@@ -58,12 +58,12 @@ Clipboard and interaction implementation:
 - `packages/datagrid-orchestration/src/clipboard/useDataGridCopyRangeHelpers.ts`
 - `packages/datagrid-orchestration/src/internal/browserClipboard.ts`
 - `packages/datagrid-orchestration/src/internal/dataGridRangeMutationKernel.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageRowState.ts`
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-- `packages/datagrid-vue-app/src/overlays/dataGridContextMenu.ts`
-- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowState.ts`
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+- `packages/datagrid-vue/src/app-layer/overlays/dataGridContextMenu.ts`
+- `packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts`
 
 Virtualization and server-related support:
 
@@ -78,9 +78,9 @@ Tests and benchmarks sampled:
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridKeyboardCommandRouter.contract.spec.ts`
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridContextMenuActionRouter.contract.spec.ts`
 - `packages/datagrid-vue/src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellState.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/ensureDataGridAppStyles.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellState.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/ensureDataGridAppStyles.contract.spec.ts`
 - `e2e/sandbox-interactions.spec.ts`
 - `scripts/bench-datagrid-enterprise-workloads.mjs`
 - `scripts/bench-datagrid-interactions.mjs`

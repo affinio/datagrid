@@ -2,9 +2,9 @@
 
 This folder contains planning and maintenance material. It is useful for maintainers, but it is not the primary package integration path.
 
-Last stale-doc sweep: `2026-05-20`.
+Last reviewed: `2026-10-21`.
 
-Scope of this sweep excludes `docs/internal/audits/202605/` and `docs/internal/plans/202605/`; those enterprise audit/plan folders are treated as their own current status track.
+The 2026-05 enterprise audits and plans are historical records. The former package split was retired and its usable features now ship through the ordinary Vue and formula-engine packages.
 
 ## Sections
 
@@ -18,12 +18,11 @@ Scope of this sweep excludes `docs/internal/audits/202605/` and `docs/internal/p
 
 | Priority | Open item | Current state | File |
 | --- | --- | --- | --- |
-| P0 | Server datasource enterprise gaps: offline mutation replay, general hierarchical projection, and some unloaded-row operations. | Polling and WebSocket transports, retry/backoff, cache invalidation, placeholders, edit/fill/history, and delegated copy/paste/fill/range-move paths exist. The demo backend supports only single-level `region` grouping; offline replay, arbitrary tree/pivot projection, SSE, server summaries, and series fill remain unsupported or host-owned. | [server-data-source-checklist.md](./checklists/server-data-source-checklist.md) |
-| P0 | Open-core monetization boundary is not release-complete. | Enterprise app, diagnostics, formula-engine enterprise, commercial checks, and license UX exist; `datagrid-worker-enterprise`, `datagrid-pivot-enterprise`, publish policy, and independent enterprise release flow remain open. | [datagrid-open-core-monetization-pipeline.md](./pipelines/datagrid-open-core-monetization-pipeline.md) |
+| P0 | Server datasource gaps: offline mutation replay, general hierarchical projection, and some unloaded-row operations. | Polling and WebSocket transports, retry/backoff, cache invalidation, placeholders, edit/fill/history, and delegated copy/paste/fill/range-move paths exist. The demo backend supports only single-level `region` grouping; offline replay, arbitrary tree/pivot projection, SSE, server summaries, and series fill remain unsupported or host-owned. | [server-data-source-checklist.md](./checklists/server-data-source-checklist.md) |
 | P1 | Spreadsheet structural formula model is still not fully token/reference-owned. | Sheet/workbook runtime has compiled references and sheet-qualified refs, but row/column structural rewrites still render updated `rawInput` eagerly in several paths. | [datagrid-spreadsheet-token-reference-transition-todo.md](./todos/datagrid-spreadsheet-token-reference-transition-todo.md) |
 | P1 | Pivot/tree performance maturity is partially closed, not done. | Pivot/tree assert benches and CI gates exist; deeper tree data-structure optimization, broader pivot patch tiers, and memory-budget discipline remain. | [datagrid-pivot-tree-performance-plan.md](./plans/datagrid-pivot-tree-performance-plan.md) |
 | P1 | Modular kernel host contracts remain future architecture work. | Formula, pivot, diagnostics, tree, and server packages/boundaries exist in pieces; host-registration contracts are still not the core ownership model. | [datagrid-v2-modular-kernel-plan.md](./plans/datagrid-v2-modular-kernel-plan.md) |
-| P1 | Server-side row model lacks hierarchical stores/block cache policy. | `createDataSourceBackedRowModel` is production-shaped for flat pulls and invalidation; SSRM v2-style hierarchical stores remain an enterprise candidate. | [datagrid-ag-architecture-acceptance-checklist.md](./checklists/datagrid-ag-architecture-acceptance-checklist.md) |
+| P1 | Server-side row model lacks hierarchical stores/block cache policy. | `createDataSourceBackedRowModel` is production-shaped for flat pulls and invalidation; SSRM v2-style hierarchical stores remain future scaling work. | [datagrid-ag-architecture-acceptance-checklist.md](./checklists/datagrid-ag-architecture-acceptance-checklist.md) |
 | P2 | Broader selection facade documentation and high-level DOM/render decoupling remain incomplete. | The row-ID model, projection range rules, row-header gestures, and app integration now have a public [row-selection reference](../reference/datagrid-row-selection-model.md); cell-selection facade guarantees and framework-neutral render materialization remain follow-up work. | [datagrid-architecture-debt-checklist.md](./checklists/datagrid-architecture-debt-checklist.md) |
 | P2 | Pull/server row-model parity cleanup remains. | Shared serialization helpers exist; snapshot builder, group expansion/pagination mutators, and viewport cache invalidation helpers are not fully unified. | [datagrid-refactor-perfectionist-pipeline.md](./pipelines/datagrid-refactor-perfectionist-pipeline.md) |
 | P2 | Worker-owned row model still has real-worker expansion work. | Worker-owned protocol, frame/pressure benches, and parity checks exist; non-viewport query endpoints and heavier pure-stage migration remain. | [datagrid-worker-compute-pipeline.md](./pipelines/datagrid-worker-compute-pipeline.md) |

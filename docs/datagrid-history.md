@@ -2,7 +2,7 @@
 
 Status: maintained public documentation.
 
-This document describes the public history contract exposed by `@affino/datagrid-vue-app`.
+This document describes the public history contract exposed by `@affino/datagrid-vue`.
 
 ## Public prop
 
@@ -70,7 +70,7 @@ All built-in history paths follow these invariants:
 - Server stack undo/redo is scoped by workspace, table, and user and/or session.
 - Legacy operation-id replay routes are diagnostics/manual replay paths, not normal UX stack navigation.
 
-Core transaction batches provide lower-level grouping for package internals. App-level intent grouping is the public behavior exposed by `@affino/datagrid-vue-app`.
+Core transaction batches provide lower-level grouping for package internals. App-level intent grouping is the public behavior exposed by `@affino/datagrid-vue`.
 
 ## Persistence And Recovery
 
@@ -181,7 +181,7 @@ Access it through:
 ```vue
 <script setup lang="ts">
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const gridRef = ref<{
   getHistory?: () => {

@@ -58,7 +58,7 @@ Goal: identify what is truly missing vs what is already in core/adapter/app, the
 - Group projection and aggregate patching: `packages/datagrid-core/src/models/groupProjectionController.ts`, `packages/datagrid-core/src/models/clientRowProjectionAggregateStage.ts`
 - Unified state API: `packages/datagrid-core/src/core/gridApiStateMethods.ts`, `packages/datagrid-core/src/core/gridApiContracts.ts`
 - Runtime transactions: `packages/datagrid-core/src/core/gridApiTransactionMethods.ts`
-- Current app runtime/table host: `packages/datagrid-vue-app/src/DataGrid.ts`, `DataGridRuntimeHost.ts`, `DataGridDefaultRenderer.ts`, `DataGridTableStage.vue`
+- Current app runtime/table host: `packages/datagrid-vue/src/app-layer/DataGrid.ts`, `DataGridRuntimeHost.ts`, `DataGridDefaultRenderer.ts`, `DataGridTableStage.vue`
 - Runtime default viewport fallback wiring: `packages/datagrid-orchestration/src/createDataGridRuntime.ts`
 - Quick filter helper scope: `packages/datagrid-orchestration/src/useDataGridQuickFilterActions.ts`
 

@@ -8,18 +8,18 @@ Scope: `@affino/datagrid-orchestration`
 
 The package root export is classified as `advanced-adapter-internal`.
 
-The root remains a package export for existing adapter and framework integration code, but it is not an app-facing stable API. Its compatibility promise is narrower than the stable roots of `@affino/datagrid-core`, `@affino/datagrid-vue`, and `@affino/datagrid-vue-app`.
+The root remains a package export for existing adapter and framework integration code, but it is not an app-facing stable API. Its compatibility promise is narrower than the stable roots of `@affino/datagrid-core`, `@affino/datagrid-vue`, and `@affino/datagrid-vue`.
 
 ## Intended Consumers
 
-- Affino-maintained adapters and app packages, including `@affino/datagrid-vue` and `@affino/datagrid-vue-app`.
+- Affino-maintained adapters and app packages, including `@affino/datagrid-vue` and `@affino/datagrid-vue`.
 - Vetted advanced adapter authors who are building framework bindings and can track low-level interaction lifecycle changes.
 
 External product and app integrations should prefer:
 
 - `@affino/datagrid-core` for stable framework-agnostic model, datasource, and API contracts.
 - `@affino/datagrid-vue` or `@affino/datagrid-vue/stable` for Vue adapter integration.
-- `@affino/datagrid-vue-app` for mounted app/component integration.
+- `@affino/datagrid-vue` for mounted app/component integration.
 - `DataGridApi`, `api.plugins`, documented Vue props/events, and app-level renderer hooks for extensibility.
 
 ## Contract Rules

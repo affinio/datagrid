@@ -1,7 +1,7 @@
 # DataGrid styling
 
 This guide covers the built-in `DataGrid` renderer from
-`@affino/datagrid-vue-app`.
+`@affino/datagrid-vue`.
 
 ## Start with the built-in choices
 

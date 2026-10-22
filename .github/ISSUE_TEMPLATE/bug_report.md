@@ -12,7 +12,7 @@ What happened?
 
 ## Affected Package / Area
 
-Examples: `@affino/datagrid-vue-app`, `@affino/datagrid-vue`, `@affino/datagrid-core`, server datasource, sandbox demo.
+Examples: `@affino/datagrid-vue`, `@affino/datagrid-core`, server datasource, sandbox demo.
 
 ## Version / Environment
 

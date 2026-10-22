@@ -25,6 +25,7 @@ Completed in Phase 1:
 - Header scroll sync cleanup: header scroll-left feedback now routes through `useDataGridStageViewportRuntime.ts`; the legacy header wheel path and DOM `data-*` skip flag were removed.
 - Coarse-pointer detection: `DataGridTableStage.vue` and `useDataGridAppViewport.ts` track coarse pointers and use that state for touch-first behavior.
 - Touch-generated mouse guards: cell mousedown, row/column resize, autosize double-click, row index drag, fill-handle drag, fill-handle double-click, and stage header drag paths now ignore touch-generated mouse events unless explicitly routed through a supported handle path.
+- Fill-axis resolution: when a drag extends only one grid axis, target row/column coordinates take precedence over pointer-pixel distance. This avoids the fill-handle corner-to-cell-center offset turning a short vertical drag into a horizontal no-op.
 - Touch tap edit guard: touch-generated clicks on select/date affordance zones route to normal cell selection instead of opening inline edit from a single tap; desktop affordance clicks still open edit.
 - Touch long-press prep: touch-generated `contextmenu` events no longer open the desktop grid context menu, leaving long press available for the future touch selection model.
 - Prevent-default cleanup: row resize handle clicks stop row-index selection without unconditionally preventing the click default.
@@ -84,11 +85,11 @@ Interaction audit closure:
 
 ## Current Architecture Summary
 
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, keeps vertical wheel/overscroll and body horizontal wheel native on real scroll owners, wires horizontal linked-wheel fallback only for non-scroll surfaces, owns header scroll-left feedback, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
-- `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; visible renderer output is preserved during touch scroll.
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue` composes header, center body viewport, pinned panes, pinned-bottom viewport, canvas chrome, overlays, fill action menu, focus, row hover, selection, fill, and range move state.
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue` owns the center scrollable viewport DOM and binds `@scroll`, `@wheel`, cell mousedown/click/move, cell double-click, and fill-handle mouse events. Cell double-click now prevents default only after inline edit is allowed.
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts` bridges the stage viewport to app scroll/runtime state, keeps vertical wheel/overscroll and body horizontal wheel native on real scroll owners, wires horizontal linked-wheel fallback only for non-scroll surfaces, owns header scroll-left feedback, batches body scroll refs through rAF, exposes body scroll active/idle state, records opt-in scroll perf telemetry, and coordinates scroll-triggered canvas chrome redraws inside the stage scroll frame.
+- `packages/datagrid-vue/src/app-layer/perf/dataGridPerfTrace.ts` stores opt-in perf samples behind `?dgPerfTrace=1` / localStorage and now includes the stage scroll-frame budget scope.
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts` resolves editor modes, select/date display values, and authored cell/group renderer calls; visible renderer output is preserved during touch scroll.
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` is the main Vue app virtualization path. It reads `scrollTop` / `scrollLeft` on scroll, syncs header `scrollLeft`, batches viewport commits in `requestAnimationFrame`, computes visible row and column windows, and assigns `displayRows`.
 - `packages/datagrid-core/src/viewport/dataGridViewportScrollIo.ts` is a lower-level viewport controller path with rAF scroll sync, drift correction, heavy-update thresholds, and resize observer integration.
 - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts` plus `packages/datagrid-core/src/virtualization/dynamicOverscan.ts` provide adaptive vertical overscan in the core viewport path.
@@ -97,26 +98,26 @@ Interaction audit closure:
 
 ## Exact Files Reviewed
 
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageScrollSync.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageChromeCanvas.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageChromeModel.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageRowIndex.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFillAction.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStagePlaceholderRows.ts`
-- `packages/datagrid-vue-app/src/gestures/dataGridTouchPanGuard.ts`
-- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts`
-- `packages/datagrid-vue-app/src/config/dataGridVirtualization.ts`
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-- `packages/datagrid-vue-app/src/gantt/DataGridGanttStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageScrollSync.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeModel.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowIndex.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFillAction.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStagePlaceholderRows.ts`
+- `packages/datagrid-vue/src/app-layer/gestures/dataGridTouchPanGuard.ts`
+- `packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts`
+- `packages/datagrid-vue/src/app-layer/config/dataGridVirtualization.ts`
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+- `packages/datagrid-vue/src/app-layer/gantt/DataGridGanttStage.vue`
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
 - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
 - `packages/datagrid-vue/src/app/useDataGridAppViewportLifecycle.ts`
@@ -162,9 +163,9 @@ None found that makes desktop scrolling unusable or prevents incremental mobile 
 #### 1. Native touch panning was disabled on the main grid viewport
 
 Files/functions:
-- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts` selectors `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, `.grid-header-viewport`, `.datagrid-gantt-timeline__viewport`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` shared vertical body scroll shell
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` vertical wheel/touch ownership
+- `packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts` selectors `.grid-body-shared-vertical-scroll-shell`, `.grid-body-viewport`, `.grid-header-viewport`, `.datagrid-gantt-timeline__viewport`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue` shared vertical body scroll shell
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts` vertical wheel/touch ownership
 
 Problem:
 - This was the original highest-risk mobile issue: the body viewport used to rely on JavaScript touch panning instead of browser-native scroll.
@@ -182,7 +183,7 @@ Recommended fix:
 #### 2. Touch gestures compete with cell selection and range move
 
 Files/functions:
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
 - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` `handleCellMouseDown`
 - `packages/datagrid-orchestration/src/pointer/useDataGridCellPointerDownRouter.ts` `dispatchCellPointerDown`
 
@@ -213,7 +214,7 @@ Recommended fix:
 
 Files/functions:
 - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts` `handleCellMouseDown`, `activatePendingRangeMove`
-- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts` `isNearRangeMoveSelectionEdge`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts` `isNearRangeMoveSelectionEdge`
 - `packages/datagrid-orchestration/src/selection/useDataGridRangeMoveStart.ts`
 
 Problem:
@@ -229,7 +230,7 @@ Recommended fix:
 #### 4. Vue app vertical overscan needed touch and velocity adaptation
 
 Files/functions:
-- `packages/datagrid-vue-app/src/config/dataGridVirtualization.ts` `resolveDataGridVirtualization`
+- `packages/datagrid-vue/src/app-layer/config/dataGridVirtualization.ts` `resolveDataGridVirtualization`
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` `rowOverscan`, `resolveViewportRangeFromSnapshot`
 - `packages/datagrid-core/src/viewport/dataGridViewportVirtualization.ts` `createDataGridViewportVirtualization`
 
@@ -249,9 +250,9 @@ Recommended fix:
 #### 5. Scroll handlers still do synchronous DOM writes and reactive updates during the scroll event
 
 Files/functions:
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts` `handleCenterViewportScroll`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts` `handleCenterViewportScroll`
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts` `handleViewportScroll`, `commitViewportSnapshot`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageChromeCanvas.ts` `flushGridChromeRedraw`, `scheduleGridChromeRedraw`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts` `flushGridChromeRedraw`, `scheduleGridChromeRedraw`
 
 Problem:
 - The app viewport correctly batches the main visible row commit through rAF.
@@ -302,9 +303,9 @@ Recommended fix:
 #### 7. Hover and range-move hover work can update while pointer movement is active
 
 Files/functions:
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue` `setHoveredRow`, `clearHoveredRow`
-- `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts` `handleCellMouseMove`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue` `setHoveredRow`, `clearHoveredRow`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts` `handleCellMouseMove`
 
 Problem:
 - Rows use `@mouseenter` for hover state.
@@ -325,7 +326,7 @@ Files/functions:
 - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollIdleGate.ts`
 - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollPerfTelemetry.ts`
 - `packages/datagrid-vue/src/app/useDataGridAppViewport.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
 
 Problem:
 - The repo already has a scroll idle gate and scroll perf telemetry helper.
@@ -345,7 +346,7 @@ Recommended fix:
 #### 9. Fill, resize, and row resize hit targets are too small for touch
 
 Files/functions:
-- `packages/datagrid-vue-app/src/theme/ensureDataGridAppStyles.ts` `.cell-fill-handle`, `.col-resize`, `.row-resize-handle`
+- `packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts` `.cell-fill-handle`, `.col-resize`, `.row-resize-handle`
 - `packages/datagrid-orchestration/src/headers/useDataGridHeaderResizeOrchestration.ts`
 - `packages/datagrid-orchestration/src/fill/useDataGridFillHandleStart.ts`
 
@@ -367,8 +368,8 @@ Recommended fix:
 
 Files/functions:
 - `packages/datagrid-orchestration/src/scrolling/useDataGridManagedWheelScroll.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
 
 Problem:
 - Managed wheel calls `preventDefault()` when it owns a wheel gesture.
@@ -389,8 +390,8 @@ Recommended fix:
 #### 11. Header, pinned pane, and canvas chrome sync are stable but need scroll-time budget limits
 
 Files/functions:
-- `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageChromeCanvas.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts`
 - `packages/datagrid-orchestration/src/scrolling/useDataGridLinkedPaneScrollSync.ts`
 
 Problem:
@@ -425,7 +426,7 @@ Recommended follow-up:
 Files/functions:
 - `e2e/sandbox-grid.spec.ts`
 - `e2e/sandbox-interactions.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/dataGridTouchPanGuard.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/dataGridTouchPanGuard.spec.ts`
 - `packages/datagrid-orchestration/src/__tests__/useDataGridManagedTouchScroll.contract.spec.ts`
 
 What is good:

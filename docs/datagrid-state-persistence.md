@@ -46,7 +46,7 @@ Provide both `load` and `save`; callbacks receive the captured key, so they shou
 not read a mutable current-user variable after awaiting a request.
 
 ```ts
-import type { DataGridStatePersistenceOptions } from '@affino/datagrid-vue-app'
+import type { DataGridStatePersistenceOptions } from '@affino/datagrid-vue'
 
 const persistence: DataGridStatePersistenceOptions = {
   key: 'orders:v1:user-42',

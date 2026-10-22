@@ -29,7 +29,7 @@ Current DataGrid package families include:
 
 - `@affino/datagrid-core`
 - `@affino/datagrid-vue`
-- `@affino/datagrid-vue-app`
+- `@affino/datagrid-vue`
 - `@affino/datagrid-server-adapters`
 - `@affino/datagrid-server-client`
 - `@affino/datagrid-worker`

@@ -8,7 +8,7 @@ This document defines the stable, semver-safe entrypoints for common `@affino/da
 
 - Primary: `@affino/datagrid-vue`
 - Explicit alias: `@affino/datagrid-vue/stable`
-- Declarative app layer: `@affino/datagrid-vue-app`
+- Declarative app layer: `@affino/datagrid-vue`
 
 `@affino/datagrid-vue` and `@affino/datagrid-vue/stable` are contract-equivalent.
 
@@ -51,7 +51,7 @@ Advanced hooks are available only via:
 
 ```ts
 import { ref } from "vue"
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 
 const rows = ref([
   { rowId: "1", service: "edge-gateway", owner: "NOC" },
@@ -84,7 +84,7 @@ The same app-layer path is also the supported additive toolbar extension path: `
 import {
   DataGrid,
   type DataGridAppToolbarModule,
-} from "@affino/datagrid-vue-app"
+} from "@affino/datagrid-vue"
 ```
 
 Prefer `toolbarModules` when you want to append actions to the built-in toolbar.
@@ -96,7 +96,7 @@ Use the default slot only when you need full runtime-renderer ownership.
 import { useDataGridRuntime } from "@affino/datagrid-vue"
 ```
 
-Use `useDataGridRuntime` for headless runtime ownership. Build interaction/UI behavior with `@affino/datagrid-vue-app` or `@affino/datagrid-vue/advanced` hooks.
+Use `useDataGridRuntime` for headless runtime ownership. Build interaction/UI behavior with `@affino/datagrid-vue` or `@affino/datagrid-vue/advanced` hooks.
 
 ## Contract Guard
 

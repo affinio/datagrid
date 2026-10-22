@@ -12,22 +12,22 @@ Source package: `packages/datagrid-core`
 
 | Entrypoint | Tier | Declaration | Files in declaration graph |
 | --- | --- | --- | ---: |
-| `.` | stable | `packages/datagrid-core/dist/src/index.d.ts` | 116 |
-| `./advanced` | advanced | `packages/datagrid-core/dist/src/advanced.d.ts` | 122 |
+| `.` | stable | `packages/datagrid-core/dist/src/index.d.ts` | 125 |
+| `./advanced` | advanced | `packages/datagrid-core/dist/src/advanced.d.ts` | 125 |
 | `./advanced-client-row-model` | advanced | `packages/datagrid-core/dist/src/advanced-client-row-model.d.ts` | 29 |
 | `./client-row-projection` | advanced | `packages/datagrid-core/dist/src/client-row-projection.d.ts` | 15 |
-| `./client-row-projection/aggregate` | advanced | `packages/datagrid-core/dist/src/client-row-projection/aggregate.d.ts` | 12 |
+| `./client-row-projection/aggregate` | advanced | `packages/datagrid-core/dist/src/client-row-projection/aggregate.d.ts` | 14 |
 | `./client-row-projection/basic` | advanced | `packages/datagrid-core/dist/src/client-row-projection/basic.d.ts` | 10 |
 | `./client-row-projection/comparator-registry` | advanced | `packages/datagrid-core/dist/src/client-row-projection/comparator-registry.d.ts` | 7 |
 | `./client-row-projection/filter` | advanced | `packages/datagrid-core/dist/src/client-row-projection/filter.d.ts` | 10 |
-| `./client-row-projection/group` | advanced | `packages/datagrid-core/dist/src/client-row-projection/group.d.ts` | 12 |
-| `./client-row-projection/model` | advanced | `packages/datagrid-core/dist/src/client-row-projection/model.d.ts` | 117 |
+| `./client-row-projection/group` | advanced | `packages/datagrid-core/dist/src/client-row-projection/group.d.ts` | 14 |
+| `./client-row-projection/model` | advanced | `packages/datagrid-core/dist/src/client-row-projection/model.d.ts` | 126 |
 | `./client-row-projection/pagination` | advanced | `packages/datagrid-core/dist/src/client-row-projection/pagination.d.ts` | 10 |
 | `./client-row-projection/pivot` | advanced | `packages/datagrid-core/dist/src/client-row-projection/pivot.d.ts` | 9 |
 | `./client-row-projection/sort` | advanced | `packages/datagrid-core/dist/src/client-row-projection/sort.d.ts` | 10 |
 | `./client-row-projection/sort-cache` | advanced | `packages/datagrid-core/dist/src/client-row-projection/sort-cache.d.ts` | 2 |
 | `./client-row-projection/visible` | advanced | `packages/datagrid-core/dist/src/client-row-projection/visible.d.ts` | 10 |
-| `./client-row-store` | stable | `packages/datagrid-core/dist/src/client-row-store.d.ts` | 116 |
+| `./client-row-store` | stable | `packages/datagrid-core/dist/src/client-row-store.d.ts` | 125 |
 | `./internal` | internal | `packages/datagrid-core/dist/src/internal.d.ts` | 9 |
 
 ### .
@@ -36,7 +36,7 @@ Entrypoint exports:
 
 - `export * from "./public.js"`
 
-Declaration graph hash: `aa536357fffb10020915b53f708cd50e4b1dcfb0a509a16dff3a0339d929c38d`
+Declaration graph hash: `dd3061a0be2bf48624129914fc329dcc05298abbb8af4fdc058b0c3127cbaf19`
 
 ### ./advanced
 
@@ -56,7 +56,7 @@ Entrypoint exports:
 - `export { createDataSourceBackedRowModel, createDataGridAggregationRegistry, createDataGridComparatorRegistry, compareDataGridValues, type CreateDataSourceBackedRowModelOptions, type DataSourceBackedRowModel, type DataGridExternalRowUpdate, type DataGridExternalRowUpdateOptions, type DataGridDataSource, type DataGridDataSourceBackpressureDiagnostics, type DataGridDataSourceColumnHistogramRequest, type DataGridDataSourceSelectionSummaryColumn, type DataGridDataSourceSelectionSummaryRange, type DataGridDataSourceSelectionSummaryRequest, type DataGridDataSourceSelectionSummaryResult, type DataGridDataSourceInvalidation, type DataGridDataSourceCellRange, type DataGridDataSourceClipboardFormat, type DataGridDataSourceOperationKind, type DataGridDataSourceOperationRejection, type DataGridDataSourceOperationRequest, type DataGridDataSourceOperationResult, type DataGridDataSourceOperationStatus, type DataGridDataSourcePaginationPullContext, type DataGridDataSourcePullPriority, type DataGridDataSourcePivotPullContext, type DataGridDataSourcePullReason, type DataGridDataSourcePullRequest, type DataGridDataSourcePullResult, type DataGridServerPivotRowIdInput, type DataGridServerPivotRowRole, type DataGridComparatorNullsPolicy, type DataGridComparatorPolicy, type DataGridComparatorPolicyKind, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, type DataGridAggregationDefinition, type DataGridAggregationRegistry, type DataGridAggregationRegistryInput, type DataGridDataSourceTreePullContext, type DataGridDataSourceTreePullOperation, type DataGridDataSourceTreePullScope, type DataGridDataSourcePushEvent, type DataGridDataSourcePushInvalidateEvent, type DataGridDataSourcePushListener, type DataGridDataSourcePushRemoveEvent, type DataGridDataSourcePushUpsertEvent, type DataGridDataSourceRowEntry, createDataGridServerPivotRowId, } from "./models/index.js"`
 - `export { transformDataGridPublicProtocolSource, type DataGridCodemodResult, } from "./protocol/index.js"`
 
-Declaration graph hash: `8f74209fcf4515d5868d502df538679ad70c405b3e40eec8dd65f9e6613d275a`
+Declaration graph hash: `8f162f84e7c2d1aecb46abbb1614a69669ad4363cdd157718cf809e211f09c5d`
 
 ### ./advanced-client-row-model
 
@@ -64,7 +64,7 @@ Entrypoint exports:
 
 - `export { createAdvancedClientRowModel, type ClientRowModel as AdvancedClientRowModel, type CreateAdvancedClientRowModelOptions, type DataGridClientRowPatch, type DataGridClientRowPatchOptions, type DataGridClientRowReorderInput, type DataGridClientRowModelDerivedCacheDiagnostics, } from "./models/clientRowModel.js"`
 
-Declaration graph hash: `0019c15f33c83ca6fdcbcfb90aa0010a5f7f37c968822defae38b9dff1b6d2ee`
+Declaration graph hash: `47b7284dfa18e0ce4382a364492abd002b1a8cb3002c4d550490f70fe21c398c`
 
 ### ./client-row-projection
 
@@ -75,7 +75,7 @@ Entrypoint exports:
 - `export { createClientRowProjectionEngine, type CreateClientRowProjectionEngineOptions, type DataGridClientProjectionEngine, type DataGridClientProjectionFinalizeMeta, type DataGridClientProjectionRecomputeOptions, type DataGridClientProjectionRequestOptions, type DataGridClientProjectionStageHandlers, type DataGridClientProjectionStage, type DataGridClientProjectionFilterStageResult, type DataGridClientProjectionFilterStageContext, type DataGridClientProjectionGroupStageContext, type DataGridClientProjectionStageContext, } from "./models/projection/clientRowProjectionEngine.js"`
 - `export { createClientRowProjectionOrchestrator, type DataGridClientRowProjectionOrchestrator, type DataGridClientProjectionStagePlan, } from "./models/projection/clientRowProjectionOrchestrator.js"`
 
-Declaration graph hash: `b451b73ad4d9ea04be94ac572c5c92d875b4c443b8559bacea016d016f67df43`
+Declaration graph hash: `6225d7f65097d3d57161b87d5f1998e8251c19b20332457988b3215f47ef05bf`
 
 ### ./client-row-projection/aggregate
 
@@ -83,7 +83,7 @@ Entrypoint exports:
 
 - `export { runAggregateProjectionStage, type AggregateProjectionEngine, type RunAggregateProjectionStageParams, type RunAggregateProjectionStageResult, } from "../models/projection/clientRowProjectionAggregateStage.js"`
 
-Declaration graph hash: `0b642191f05fde094854624d39ad6c14aa8bda1b041d37d16366af1f024d1a73`
+Declaration graph hash: `f42277515397d5b25d7c4cda3fb399deb2357298aaeb95644c5caf9f0670260d`
 
 ### ./client-row-projection/basic
 
@@ -91,7 +91,7 @@ Entrypoint exports:
 
 - `export { runFilterProjectionStage, runSortProjectionStage, runPaginateProjectionStage, runVisibleProjectionStage, type SortValueCacheEntry, type SortValueCounters, type RunFilterProjectionStageParams, type RunFilterProjectionStageResult, type RunSortProjectionStageParams, type RunSortProjectionStageResult, type RunPaginateProjectionStageParams, type RunPaginateProjectionStageResult, type RunVisibleProjectionStageParams, type RunVisibleProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `1ed2dd85ee7b1348f06c8bdf50be66a8c7ab06d4099225e1f20b257e36ae2dca`
+Declaration graph hash: `94c5ba7ffec50478995bba3ef5b700972e21c07cbb28bad6ad9d0525480b6963`
 
 ### ./client-row-projection/comparator-registry
 
@@ -99,7 +99,7 @@ Entrypoint exports:
 
 - `export { createDataGridComparatorRegistry, type DataGridComparator, type DataGridComparatorContext, type DataGridComparatorDefinition, type DataGridComparatorRegistry, type DataGridComparatorRegistryInput, } from "../models/comparator/comparatorRegistry.js"`
 
-Declaration graph hash: `d10f00a66ee80327c4096953116b82eb1522353448e275f3b649f236e72de32a`
+Declaration graph hash: `81e8d01163748ed1137ad7562be5aed2262f4e28641c99a400cd83a78672a40d`
 
 ### ./client-row-projection/filter
 
@@ -107,7 +107,7 @@ Entrypoint exports:
 
 - `export { runFilterProjectionStage, type RunFilterProjectionStageParams, type RunFilterProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `77084a4a4b4e044713320c7caef73cbdbdb59bac56249d9b0d0f8be238ec7604`
+Declaration graph hash: `753cbbd27624273249a85625ce60222b7c173501dba527563519dacdb0262882`
 
 ### ./client-row-projection/group
 
@@ -115,7 +115,7 @@ Entrypoint exports:
 
 - `export { runGroupProjectionStage, type GroupProjectionAggregationEngine, type RunGroupProjectionStageParams, type RunGroupProjectionStageResult, } from "../models/projection/clientRowProjectionGroupStage.js"`
 
-Declaration graph hash: `d2a33e398a0df08f7f9d846837de47405c30238d3d8f2bf37fc4a967922c934f`
+Declaration graph hash: `ab2591d6a664ca3a12089a0a6c6bd5b8a1dbcdae83b12897b4a9223f03fd5568`
 
 ### ./client-row-projection/model
 
@@ -126,7 +126,7 @@ Entrypoint exports:
 - `export interface ClientRowProjectionModelSnapshot<T> { readonly revision: number`
 - `export interface CreateClientRowProjectionModelOptions<T> extends CreateClientRowStoreOptions<T> { initialSortModel?: readonly DataGridSortState[]`
 
-Declaration graph hash: `7d6ec3688f640f4c6f07493798497d5d66e7d4f0c53315ae3743653fe2c7bc02`
+Declaration graph hash: `efe68032920731bd07193e2cc208226004b4ce2cb347f418283f10bfdd32c3ec`
 
 ### ./client-row-projection/pagination
 
@@ -134,7 +134,7 @@ Entrypoint exports:
 
 - `export { runPaginateProjectionStage, type RunPaginateProjectionStageParams, type RunPaginateProjectionStageResult, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `3f432526278bdbf47d56ffbf9e9b9217baaabc96bcc813b5329d4407735c0fc8`
+Declaration graph hash: `c526c31945950f7a5f2c49fed23b2a0e7e32179933fc830b9986e5c9e4aeb59b`
 
 ### ./client-row-projection/pivot
 
@@ -142,7 +142,7 @@ Entrypoint exports:
 
 - `export { runPivotProjectionStage, type RunPivotProjectionStageParams, type RunPivotProjectionStageResult, } from "../models/projection/clientRowProjectionPivotStage.js"`
 
-Declaration graph hash: `413d6e1eaba1d37c9bfebe8624b45b6fd2054ede8154dd9a08dfce03d34077b8`
+Declaration graph hash: `2d9ab0e3f3f40e4f65d46bf3aa6ff8158d9b2bf1e153257ab1df92ad30189c8b`
 
 ### ./client-row-projection/sort
 
@@ -150,7 +150,7 @@ Entrypoint exports:
 
 - `export { runFlatSortProjectionStage, runSortProjectionStage, type SortValueCacheEntry, type SortValueCounters, type RunSortProjectionStageParams, type RunSortProjectionStageResult, type RunFlatSortProjectionStageParams, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `ed92d02fa2bc7cadb49979154b734d57ee34ec9a52639003837e1f9509d4cc57`
+Declaration graph hash: `5e91392f01cb88ce1fca2514497d21908582bbe22dc2a77a8949d7f09dca5d11`
 
 ### ./client-row-projection/sort-cache
 
@@ -166,7 +166,7 @@ Entrypoint exports:
 
 - `export { runFlatVisibleProjectionStage, runVisibleProjectionStage, type RunVisibleProjectionStageParams, type RunVisibleProjectionStageResult, type RunFlatVisibleProjectionStageParams, } from "../models/projection/clientRowProjectionBasicStages.js"`
 
-Declaration graph hash: `2e592dee50cea804139029330cb84b3197ca53aa598ab205b17a661bd7fedf19`
+Declaration graph hash: `795a7998834600513a29f28ec27d59f45c21499b4b0f6a06304f50d36b113c6b`
 
 ### ./client-row-store
 
@@ -178,7 +178,7 @@ Entrypoint exports:
 - `export interface CreateClientRowStoreOptions<T> { rows?: readonly DataGridRowNodeInput<T>[]`
 - `export type ClientRowStoreListener<T> = (snapshot: ClientRowStoreSnapshot<T>) => void`
 
-Declaration graph hash: `cb690b63714fa4df2b365222515fad860d787cec25a043547435385771400122`
+Declaration graph hash: `3eadeaa39730b7d93798a6085c9e85fa3e789d4b788db9737082c190480c8b73`
 
 ### ./internal
 
@@ -189,7 +189,7 @@ Entrypoint exports:
 - `export { resolveFirstColumnIndexAfterOffset, resolveFirstColumnIndexAfterPrefixOffset, resolveLastColumnIndexBeforeOffset, resolveLastColumnIndexBeforePrefixOffset, } from "./virtualization/columnSizing.js"`
 - `export { resolveUniformRowIndexAtOffset, resolveUniformRowOffset, } from "./virtualization/verticalGeometry.js"`
 
-Declaration graph hash: `a3a4098dc55160d4da6cd9dc6a7839f2c72099fdbcc891f84f749b9732bceed6`
+Declaration graph hash: `aecfc0c686cf87aa3b157ff2af5376d86afb5b39a1014803e951cf73a891d2ae`
 
 ## @affino/datagrid-vue
 
@@ -197,27 +197,36 @@ Source package: `packages/datagrid-vue`
 
 | Entrypoint | Tier | Declaration | Files in declaration graph |
 | --- | --- | --- | ---: |
-| `.` | stable-alias | `packages/datagrid-vue/dist/index.d.ts` | 21 |
-| `./advanced` | advanced | `packages/datagrid-vue/dist/advanced.d.ts` | 86 |
-| `./advanced/clipboard` | advanced | `packages/datagrid-vue/dist/advanced/clipboard.d.ts` | 5 |
-| `./advanced/editing` | advanced | `packages/datagrid-vue/dist/advanced/editing.d.ts` | 22 |
-| `./advanced/filtering` | advanced | `packages/datagrid-vue/dist/advanced/filtering.d.ts` | 16 |
-| `./advanced/history` | advanced | `packages/datagrid-vue/dist/advanced/history.d.ts` | 3 |
-| `./advanced/layout` | advanced | `packages/datagrid-vue/dist/advanced/layout.d.ts` | 14 |
-| `./advanced/pointer` | advanced | `packages/datagrid-vue/dist/advanced/pointer.d.ts` | 12 |
-| `./advanced/selection` | advanced | `packages/datagrid-vue/dist/advanced/selection.d.ts` | 12 |
-| `./app` | advanced | `packages/datagrid-vue/dist/app/index.d.ts` | 114 |
-| `./app/worker` | advanced | `packages/datagrid-vue/dist/app/worker.d.ts` | 4 |
-| `./stable` | stable | `packages/datagrid-vue/dist/stable.d.ts` | 20 |
-| `./worker` | advanced | `packages/datagrid-vue/dist/worker.d.ts` | 1 |
+| `.` | stable | `packages/datagrid-vue/dist/index.d.ts` | 60 |
+| `./advanced` | advanced | `packages/datagrid-vue/dist/headless/advanced.d.ts` | 86 |
+| `./advanced-filter` | stable-feature | `packages/datagrid-vue/dist/app/advanced-filter.d.ts` | 3 |
+| `./advanced/clipboard` | advanced | `packages/datagrid-vue/dist/headless/advanced/clipboard.d.ts` | 5 |
+| `./advanced/editing` | advanced | `packages/datagrid-vue/dist/headless/advanced/editing.d.ts` | 22 |
+| `./advanced/filtering` | advanced | `packages/datagrid-vue/dist/headless/advanced/filtering.d.ts` | 16 |
+| `./advanced/history` | advanced | `packages/datagrid-vue/dist/headless/advanced/history.d.ts` | 3 |
+| `./advanced/layout` | advanced | `packages/datagrid-vue/dist/headless/advanced/layout.d.ts` | 14 |
+| `./advanced/pointer` | advanced | `packages/datagrid-vue/dist/headless/advanced/pointer.d.ts` | 12 |
+| `./advanced/selection` | advanced | `packages/datagrid-vue/dist/headless/advanced/selection.d.ts` | 12 |
+| `./aggregations` | stable-feature | `packages/datagrid-vue/dist/app/aggregations.d.ts` | 3 |
+| `./app` | advanced | `packages/datagrid-vue/dist/headless/app/index.d.ts` | 114 |
+| `./app/worker` | advanced | `packages/datagrid-vue/dist/headless/app/worker.d.ts` | 4 |
+| `./find-replace` | stable-feature | `packages/datagrid-vue/dist/app/find-replace.d.ts` | 3 |
+| `./gantt` | stable-feature | `packages/datagrid-vue/dist/app/gantt.d.ts` | 42 |
+| `./headless` | stable | `packages/datagrid-vue/dist/headless/index.d.ts` | 21 |
+| `./headless/app` | advanced | `packages/datagrid-vue/dist/headless/app/index.d.ts` | 114 |
+| `./headless/app/worker` | advanced | `packages/datagrid-vue/dist/headless/app/worker.d.ts` | 4 |
+| `./internal` | internal | `packages/datagrid-vue/dist/app/internal.d.ts` | 47 |
+| `./quick-filter` | stable-feature | `packages/datagrid-vue/dist/app/quick-filter.d.ts` | 3 |
+| `./stable` | stable | `packages/datagrid-vue/dist/headless/stable.d.ts` | 20 |
+| `./worker` | advanced | `packages/datagrid-vue/dist/headless/worker.d.ts` | 1 |
 
 ### .
 
 Entrypoint exports:
 
-- `export * from "./stable"`
+- `export * from "./app/index.js" export * from "./headless/index.js" export { default } from "./app/index.js"`
 
-Declaration graph hash: `084274689e317a4226b629a1e12146b7ddf4028faba7350531379bc89fcd9a7c`
+Declaration graph hash: `650a1d38fdcde229e8f345325990cf5c6ab5c62605e32780a272c335b0a59a4a`
 
 ### ./advanced
 
@@ -225,7 +234,16 @@ Entrypoint exports:
 
 - `export * from "./advanced/index"`
 
-Declaration graph hash: `dd2b61253ab9931d0760ee28e1f989829ae27cfcff97b9a19b2912ea8d74db86`
+Declaration graph hash: `883c058b89c4640a5f0a0525f4b66975ea57fc271fd52ccbbcaf939a1fa22a6b`
+
+### ./advanced-filter
+
+Entrypoint exports:
+
+- `export type { DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, } from "./config/dataGridAdvancedFilter"`
+- `export { default as DataGridAdvancedFilterPopover } from "./overlays/DataGridAdvancedFilterPopover.vue"`
+
+Declaration graph hash: `94d0897e6798f78599a6cab76f11c4956ef58ebf70dbb72306f16d7bab62d4fc`
 
 ### ./advanced/clipboard
 
@@ -236,7 +254,7 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridClipboardValuePolicy"`
 - `export * from "../composables/useDataGridCopyRangeHelpers"`
 
-Declaration graph hash: `0a6404b942c794469042a9c778083e1a94543113aed926a58f201b942eb96056`
+Declaration graph hash: `4dfedb3286da2265f1d360b2e29adefcd3f86898df50ee244d546090b04a5194`
 
 ### ./advanced/editing
 
@@ -264,7 +282,7 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridTabTargetResolver"`
 - `export type { DataGridFillBehavior, DataGridFillBehaviorRange, ResolveDataGridFillBehaviorOptions, } from "../composables/dataGridFillBehavior"`
 
-Declaration graph hash: `60e4476308a78fcb2d1f4edfc1b077bbd6be60d9bebfe8e97980a93e1171a426`
+Declaration graph hash: `c1f907eb3b80abac25fa9756cb202199c6692711871ae96df1deebab35187a3e`
 
 ### ./advanced/filtering
 
@@ -286,7 +304,7 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridHeaderSortOrchestration"`
 - `export * from "../composables/useDataGridQuickFilterActions"`
 
-Declaration graph hash: `4777727ca35a9dc83303891e5313880e7890c0eb6cc4593d1a8d92f8b128a513`
+Declaration graph hash: `46e6e4ab82b643fe81c2d7037671a44a512e48b927c8cf50b4cba69e0e8214e1`
 
 ### ./advanced/history
 
@@ -295,7 +313,7 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridHistoryActionRunner"`
 - `export * from "../composables/useDataGridIntentHistory"`
 
-Declaration graph hash: `80b87f471978e3f19e04c8edea812388e850196852b474a88534594992c779b0`
+Declaration graph hash: `293ca18fb1ffe0c76bf2a9b184f05c008ef9acb55af795675a778d9457e4e15b`
 
 ### ./advanced/layout
 
@@ -317,7 +335,7 @@ Entrypoint exports:
 - `export type { DataGridImperativeRowUpdatePayload, DataGridVirtualWindowSnapshot, } from "@affino/datagrid-core/advanced"`
 - `export { createDataGridViewportController, } from "@affino/datagrid-core/advanced"`
 
-Declaration graph hash: `318ad53a8712a5db75ab4d8ba0bc5601644e6d11eebdc5e845d12fda41ff2d30`
+Declaration graph hash: `3e933c2acf4fb558fd4f68f8a5e485e4955cbe0916532ddbebfb12bcd12d83fb`
 
 ### ./advanced/pointer
 
@@ -335,7 +353,7 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridPointerModifierPolicy"`
 - `export * from "../composables/useDataGridPointerPreviewRouter"`
 
-Declaration graph hash: `b286ad14364f03c68e4909280a8763b6ac92fbe3816a0c004d42a7887cad4826`
+Declaration graph hash: `3c556e14654b104eff4502a266e560559e9eabad27666018c66aec241fa46cae`
 
 ### ./advanced/selection
 
@@ -354,7 +372,16 @@ Entrypoint exports:
 - `export * from "../composables/useDataGridVirtualRangeMetrics"`
 - `export { createGridSelectionContextFromFlattenedRows, createGridSelectionRange, applyGroupSelectionPolicy, type GridSelectionContext, type GridSelectionPointLike, type GridSelectionRange, type GridSelectionFlattenedRow, } from "@affino/datagrid-core/advanced"`
 
-Declaration graph hash: `4b6c431cecb8ed3c7bf35ec01d5483080ee316968c15c323bf784d532cfb01bc`
+Declaration graph hash: `9e7864ab04c34aa6615d5525fdd81531dde1a0d8c1090f7974a7bc538c4d9723`
+
+### ./aggregations
+
+Entrypoint exports:
+
+- `export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from "./config/dataGridAggregations"`
+- `export { default as DataGridAggregationsPopover } from "./overlays/DataGridAggregationsPopover.vue"`
+
+Declaration graph hash: `bd4bcb3594afdecb00b19b8575c8df18220064e9254971cdba735b39666928b0`
 
 ### ./app
 
@@ -385,7 +412,7 @@ Entrypoint exports:
 - `export { useDataGridAppViewport, type UseDataGridAppViewportOptions, type UseDataGridAppViewportResult, } from "./useDataGridAppViewport"`
 - `export { useDataGridAppViewportLifecycle, type UseDataGridAppViewportLifecycleOptions, } from "./useDataGridAppViewportLifecycle"`
 
-Declaration graph hash: `edd9055333be3509193a776fd85cd447076ebe3460571315ffa279658a4ecfbf`
+Declaration graph hash: `aefcbdaae531bf77fdc1b63dd07029e2cbce5dcc1711d5f914986b283cf385f5`
 
 ### ./app/worker
 
@@ -393,102 +420,7 @@ Entrypoint exports:
 
 - `export { useDataGridAppRuntime, type DataGridAppRuntimeMode, type UseDataGridAppRuntimeOptions, type UseDataGridAppRuntimeResult, } from "./useDataGridAppRuntime"`
 
-Declaration graph hash: `4e85fb63ca53a8b473d00395e1c9ddab299b2e36501d00b636391888ab4f5972`
-
-### ./stable
-
-Entrypoint exports:
-
-- `export * from "./public"`
-
-Declaration graph hash: `0ee19e0264118ca86764abf291c1ceaccb048c7cd3f3897ff6dbbf338e659ab1`
-
-### ./worker
-
-Entrypoint exports:
-
-- `export type { DataGridWorkerComputeRequest, DataGridWorkerComputeResult, DataGridWorkerProtocolHeader, DataGridWorkerComputeRequestMessage, DataGridWorkerComputeAckMessage, DataGridWorkerProtocolMessage, DataGridWorkerMessageEvent, DataGridWorkerMessageSource, DataGridWorkerMessageTarget, DataGridWorkerDispatchStrategy, DataGridWorkerPostMessageTransportStats, DataGridWorkerPostMessageTransport, CreateDataGridWorkerPostMessageTransportOptions, CreateDataGridWorkerMessageHostOptions, DataGridWorkerMessageHost, DataGridWorkerRowModelProtocolHeader, DataGridWorkerViewportCoalesceScope, DataGridWorkerRowModelCommand, DataGridWorkerRowModelCommandMessage, DataGridWorkerRowModelUpdatePayload, DataGridWorkerRowModelUpdateMessage, DataGridWorkerRowModelProtocolMessage, CreateDataGridWorkerOwnedRowModelHostOptions, DataGridWorkerOwnedRowModelHost, DataGridWorkerOwnedRowModel, CreateDataGridWorkerOwnedRowModelOptions, } from "@affino/datagrid-worker"`
-- `export { DATAGRID_WORKER_PROTOCOL_CHANNEL, DATAGRID_WORKER_PROTOCOL_VERSION, DATAGRID_WORKER_ROW_MODEL_PROTOCOL_CHANNEL, DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION, createDataGridWorkerComputeRequestMessage, createDataGridWorkerComputeAckMessage, createDataGridWorkerComputeErrorAckMessage, createDataGridWorkerRowModelCommandMessage, createDataGridWorkerRowModelUpdateMessage, isDataGridWorkerComputeRequestMessage, isDataGridWorkerComputeAckMessage, isDataGridWorkerRowModelCommandMessage, isDataGridWorkerRowModelUpdateMessage, createDataGridWorkerPostMessageTransport, createDataGridWorkerMessageHost, createDataGridWorkerOwnedRowModelHost, createDataGridWorkerOwnedRowModel, } from "@affino/datagrid-worker"`
-
-Declaration graph hash: `46a4ec316794dee9286055033b7b235ae6559fe7ab3162ef9fba92d5098f4392`
-
-## @affino/datagrid-vue-app
-
-Source package: `packages/datagrid-vue-app`
-
-| Entrypoint | Tier | Declaration | Files in declaration graph |
-| --- | --- | --- | ---: |
-| `.` | stable | `packages/datagrid-vue-app/dist/index.d.ts` | 34 |
-| `./advanced-filter` | stable-feature | `packages/datagrid-vue-app/dist/advanced-filter.d.ts` | 3 |
-| `./aggregations` | stable-feature | `packages/datagrid-vue-app/dist/aggregations.d.ts` | 3 |
-| `./find-replace` | stable-feature | `packages/datagrid-vue-app/dist/find-replace.d.ts` | 3 |
-| `./gantt` | stable-feature | `packages/datagrid-vue-app/dist/gantt.d.ts` | 38 |
-| `./internal` | internal | `packages/datagrid-vue-app/dist/internal.d.ts` | 41 |
-| `./quick-filter` | stable-feature | `packages/datagrid-vue-app/dist/quick-filter.d.ts` | 3 |
-
-### .
-
-Entrypoint exports:
-
-- `export declare const DataGrid: import("./DataGrid").DataGridComponent`
-- `export type { DataGridAdvancedFilterLabels, DataGridAdvancedFilterOperatorLabelKey, DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, DataGridResolvedAdvancedFilterLabels, } from "./config/dataGridAdvancedFilter"`
-- `export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from "./config/dataGridAggregations"`
-- `export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridDefinedColumns, DataGridDeclarativeFormulaOptions, } from "./config/dataGridFormulaOptions"`
-- `export type { DataGridAppColumnFilterOptions, DataGridAppFilterValueNormalizationContext, } from "./config/dataGridFilterNormalization"`
-- `export type { DataGridAppToolbarModule, } from "./host/DataGridModuleHost"`
-- `export type { DataGridAppViewMode } from "./config/dataGridAppView"`
-- `export type { DataGridAuthoredRendererPolicy } from "./config/dataGridRendererPolicy"`
-- `export type { DataGridCellClassResolver, DataGridCellStyleResolver, DataGridComponent, DataGridComponentFor, DataGridCellEditEvent, DataGridRowsEditedEvent, DataGridCaptureFocusAnchorOptions, DataGridExposed, DataGridExposedRuntime, DataGridFilterCellReader, DataGridFilterCellStyleReader, DataGridFocusAnchor, DataGridInstance, DataGridProps, DataGridRestoreFocusAnchorOptions, DataGridSelectionCellReader, DataGridServerSelectionSummaryOptions, } from "./DataGrid"`
-- `export type { DataGridCellEditablePredicate, DataGridCellEditablePredicateContext, } from "./dataGridEditability"`
-- `export type { DataGridCellMenuActionKey, DataGridCellMenuActionOption, DataGridCellMenuActionOptions, DataGridCellMenuColumnOptions, DataGridCellMenuCustomItem, DataGridCellMenuCustomItemContext, DataGridCellMenuCustomItemPlacement, DataGridCellMenuCustomLeafItem, DataGridCellMenuCustomSubmenuItem, DataGridCellMenuDisabledReasons, DataGridCellMenuItemKey, DataGridCellMenuItemLabels, DataGridCellMenuOptions, DataGridCellMenuProp, DataGridRowIndexMenuActionKey, DataGridRowIndexMenuActionOption, DataGridRowIndexMenuActionOptions, DataGridRowIndexMenuDisabledReasons, DataGridRowIndexMenuItemKey, DataGridRowIndexMenuItemLabels, DataGridRowIndexMenuOptions, DataGridRowIndexMenuProp, } from "./overlays/dataGridContextMenu"`
-- `export type { DataGridChromeDensity, DataGridChromeOptions, DataGridChromeProp, DataGridResolvedChromeOptions, DataGridToolbarPlacement, } from "./config/dataGridChrome"`
-- `export type { DataGridColumnLayoutLabels, DataGridColumnLayoutOptions, DataGridColumnLayoutProp, DataGridResolvedColumnLayoutLabels, } from "./config/dataGridColumnLayout"`
-- `export type { DataGridColumnMenuActionKey, DataGridColumnMenuActionOption, DataGridColumnMenuActionOptions, DataGridColumnMenuColumnOptions, DataGridColumnMenuColumnInputOptions, DataGridColumnMenuCustomLeafItem, DataGridColumnMenuCustomItem, DataGridColumnMenuCustomItemContext, DataGridColumnMenuCustomItemPlacement, DataGridColumnMenuCustomSubmenuItem, DataGridColumnMenuDisabledReasons, DataGridColumnMenuItemKey, DataGridColumnMenuItemLabels, DataGridColumnMenuLabels, DataGridColumnMenuInputProp, DataGridColumnMenuOptions, DataGridColumnMenuProp, DataGridColumnMenuTriggerMode, DataGridDefinedColumnMenu, } from "./overlays/dataGridColumnMenu"`
-- `export type { DataGridColumnReorderOptions, DataGridColumnReorderProp, } from "./config/dataGridColumnReorder"`
-- `export type { DataGridEmptyStateAlignment, DataGridEmptyStateProps, DataGridEmptyStateReason, DataGridEmptyStateRenderer, } from "./config/dataGridEmptyState"`
-- `export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from "./config/dataGridFindReplace"`
-- `export type { DataGridGridLinesHeaderMode, DataGridGridLinesOptions, DataGridGridLinesPreset, DataGridGridLinesProp, } from "./config/dataGridGridLines"`
-- `export type { DataGridGroupByProp, DataGridPaginationProp, } from "./config/dataGridPublicProps"`
-- `export type { DataGridHistoryController, DataGridHistoryControlsMode, DataGridHistoryOptions, DataGridHistoryProp, DataGridHistoryShortcutsMode, DataGridServerHistoryProp, } from "./dataGridHistory"`
-- `export type { DataGridLayoutMode, DataGridResolvedLayoutOptions, } from "./config/dataGridLayout"`
-- `export type { DataGridPersistenceChangeEvent, DataGridStatePersistenceOptions, DataGridStatePersistenceProp, DataGridStatePersistenceStorage, } from "./config/dataGridStatePersistence"`
-- `export type { DataGridPlaceholderRowCreateParams, DataGridPlaceholderRowFactory, DataGridPlaceholderRowMaterializeTrigger, DataGridPlaceholderRowsOptions, DataGridPlaceholderRowsPolicy, DataGridPlaceholderRowsProp, } from "./config/dataGridPlaceholderRows"`
-- `export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from "./config/dataGridQuickFilter"`
-- `export type { DataGridResolvedRowSelectionOptions, DataGridRowSelectionOptions, DataGridRowSelectionProp, } from "./config/dataGridRowSelection"`
-- `export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from "./config/dataGridRowReorder"`
-- `export type { DataGridSavedViewSnapshot, DataGridSavedViewStorageLike, } from "./config/dataGridSavedView"`
-- `export type { DataGridStructuralRowActionContext, DataGridStructuralRowActionHandler, DataGridStructuralRowActionId, } from "./dataGridStructuralRowActions"`
-- `export type { DataGridTableStageCustomOverlay, } from "./stage/dataGridTableStage.types"`
-- `export type { DataGridTableStageHistoryAdapter, } from "./stage/useDataGridTableStageHistory"`
-- `export type { DataGridThemePreset, DataGridThemeProp, } from "./theme/dataGridTheme"`
-- `export type { DataGridVirtualizationOptions, DataGridVirtualizationProp, } from "./config/dataGridVirtualization"`
-- `export { clearDataGridSavedViewInStorage, migrateDataGridSavedView, parseDataGridSavedView, readDataGridSavedViewFromStorage, serializeDataGridSavedView, writeDataGridSavedViewToStorage, } from "./config/dataGridSavedView"`
-- `export { default as DataGridModuleHost } from "./host/DataGridModuleHost"`
-- `export { default } from "./DataGrid"`
-- `export { defineDataGridCellClassResolver, defineDataGridCellStyleResolver, defineDataGridComponent, defineDataGridFilterCellReader, defineDataGridFilterCellStyleReader, defineDataGridSelectionCellReader, defineDataGridStructuralRowActionHandler, useDataGridRef, } from "./DataGrid"`
-- `export { defineDataGridColumnMenu } from "./overlays/dataGridColumnMenu"`
-- `export { defineDataGridColumns } from "./config/dataGridFormulaOptions"`
-- `export { normalizeDataGridAppFilterModel, normalizeDataGridAppUnifiedStateFilters, } from "./config/dataGridFilterNormalization"`
-
-Declaration graph hash: `9fca0e28b46a2c5d3436e729375bee296e6f5a50ac1f9f6ca88855ec7a077b4f`
-
-### ./advanced-filter
-
-Entrypoint exports:
-
-- `export type { DataGridAdvancedFilterOptions, DataGridAdvancedFilterProp, } from "./config/dataGridAdvancedFilter"`
-- `export { default as DataGridAdvancedFilterPopover } from "./overlays/DataGridAdvancedFilterPopover.vue"`
-
-Declaration graph hash: `fa06da101ce9825038a8f6c76377b3daef333f912b8ad886da29af17f71c24c0`
-
-### ./aggregations
-
-Entrypoint exports:
-
-- `export type { DataGridAggregationsOptions, DataGridAggregationsProp, } from "./config/dataGridAggregations"`
-- `export { default as DataGridAggregationsPopover } from "./overlays/DataGridAggregationsPopover.vue"`
-
-Declaration graph hash: `ff86d84db3d889fe0fe159719f33d99af1dc90f7656fd1df2be3e6d0d67b4a29`
+Declaration graph hash: `5086b0a9d609c2162b1f00a9596991c9a2e4729dd9e0508ee49c355ddee7b24f`
 
 ### ./find-replace
 
@@ -497,7 +429,7 @@ Entrypoint exports:
 - `export type { DataGridFindReplaceOptions, DataGridFindReplaceProp, } from "./config/dataGridFindReplace"`
 - `export { default as DataGridFindReplacePopover } from "./overlays/DataGridFindReplacePopover.vue"`
 
-Declaration graph hash: `b5d44d1aaebd5f2def6e4a53ab390f701d58486e9c283444b75b8bdd3309f92b`
+Declaration graph hash: `c038e76a972c1b42c79a31593136ca6ac55bc5b6640b54dba0071b733485448d`
 
 ### ./gantt
 
@@ -509,7 +441,54 @@ Entrypoint exports:
 - `export { DataGridWithGantt as DataGrid }`
 - `export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from "./gantt/dataGridGantt"`
 
-Declaration graph hash: `0d114a496654640d1830cb5a8e1d23c8bb4e1ee2f8b918848546c7e3e6d1ffb9`
+Declaration graph hash: `5be484d8e65e8f2b725ba5baa4f94d324c56fde703c4fe94e48bbc8dfc261dda`
+
+### ./headless
+
+Entrypoint exports:
+
+- `export * from "./stable"`
+
+Declaration graph hash: `bbd7bb79c7889ea8582bb7440c0ef248bc91dd8d75d2906c57552e77fc991b9a`
+
+### ./headless/app
+
+Entrypoint exports:
+
+- `export type { DataGridAppAdvancedFilterClauseDraft, DataGridAppAdvancedFilterClauseJoin, DataGridAppAdvancedFilterClausePatch, DataGridAppAdvancedFilterColumnOption, } from "./advancedFilterPanel.types"`
+- `export type { DataGridAppApplyColumnLayoutPayload, DataGridAppColumnLayoutDraftColumn, DataGridAppColumnLayoutPanelItem, DataGridAppColumnLayoutVisibilityPatch, } from "./columnLayoutPanel.types"`
+- `export { createDataGridAppHistoryOperationPayload, useDataGridAppIntentHistory, type DataGridAppHistorySnapshotBudget, type DataGridAppHistorySnapshotBudgetResult, type DataGridAppHistoryOperationKind, type DataGridAppHistoryOperationPayload, type DataGridAppHistoryOperationScope, type DataGridAppHistoryRestorationCell, type DataGridAppHistoryRestorationState, type DataGridAppRowSnapshot, type UseDataGridAppIntentHistoryOptions, type UseDataGridAppIntentHistoryResult, } from "./useDataGridAppIntentHistory"`
+- `export { createDataGridAppRowHeightMetrics, type DataGridAppRowHeightMutation, type DataGridAppRowHeightMetrics, type DataGridAppRowHeightMetricsOptions, } from "./dataGridRowHeightMetrics"`
+- `export { restoreDataGridFocus, type RestoreDataGridFocusOptions, } from "./dataGridFocusRestore"`
+- `export { useDataGridAppActiveCellViewport, type UseDataGridAppActiveCellViewportOptions, type UseDataGridAppActiveCellViewportResult, } from "./useDataGridAppActiveCellViewport"`
+- `export { useDataGridAppAdvancedFilterBuilder, type UseDataGridAppAdvancedFilterBuilderResult, } from "./useDataGridAppAdvancedFilterBuilder"`
+- `export { useDataGridAppCellSelection, type DataGridAppCellCoord, type DataGridAppSelectionAnchorLike, type UseDataGridAppCellSelectionOptions, type UseDataGridAppCellSelectionResult, } from "./useDataGridAppCellSelection"`
+- `export { useDataGridAppClipboard, type DataGridAppPasteOptions, type DataGridAppPendingClipboardEdge, type DataGridAppPendingClipboardOperation, type DataGridAppServerClipboardOperations, type UseDataGridAppClipboardOptions, type UseDataGridAppClipboardResult, } from "./useDataGridAppClipboard"`
+- `export { useDataGridAppColumnLayoutPanel, type UseDataGridAppColumnLayoutPanelResult, } from "./useDataGridAppColumnLayoutPanel"`
+- `export { useDataGridAppControls, type DataGridAppMode, type DataGridAppPivotViewMode, type DataGridAppRowHeightMode, type DataGridAppRowRenderMode, type DataGridAppSortModel, type UseDataGridAppControlsOptions, type UseDataGridAppControlsResult, } from "./useDataGridAppControls"`
+- `export { useDataGridAppDiagnosticsPanel, type UseDataGridAppDiagnosticsPanelResult, } from "./useDataGridAppDiagnosticsPanel"`
+- `export { useDataGridAppFill, type UseDataGridAppFillOptions, type UseDataGridAppFillResult, } from "./useDataGridAppFill"`
+- `export { useDataGridAppHeaderResize, type UseDataGridAppHeaderResizeOptions, type UseDataGridAppHeaderResizeResult, } from "./useDataGridAppHeaderResize"`
+- `export { useDataGridAppInlineEditing, type UseDataGridAppInlineEditingOptions, type UseDataGridAppInlineEditingResult, } from "./useDataGridAppInlineEditing"`
+- `export { useDataGridAppInteractionController, type UseDataGridAppInteractionControllerOptions, type UseDataGridAppInteractionControllerResult, } from "./useDataGridAppInteractionController"`
+- `export { useDataGridAppModeMeta, type UseDataGridAppModeMetaOptions, type UseDataGridAppModeMetaResult, } from "./useDataGridAppModeMeta"`
+- `export { useDataGridAppRowPresentation, type UseDataGridAppRowPresentationOptions, type UseDataGridAppRowPresentationResult, } from "./useDataGridAppRowPresentation"`
+- `export { useDataGridAppRowSelection, type UseDataGridAppRowSelectionOptions, type UseDataGridAppRowSelectionResult, } from "./useDataGridAppRowSelection"`
+- `export { useDataGridAppRowSizing, type UseDataGridAppRowSizingOptions, type UseDataGridAppRowSizingResult, } from "./useDataGridAppRowSizing"`
+- `export { useDataGridAppRuntimeSync, type UseDataGridAppRuntimeSyncOptions, } from "./useDataGridAppRuntimeSync"`
+- `export { useDataGridAppSelection, type UseDataGridAppSelectionOptions, type UseDataGridAppSelectionResult, } from "./useDataGridAppSelection"`
+- `export { useDataGridAppViewport, type UseDataGridAppViewportOptions, type UseDataGridAppViewportResult, } from "./useDataGridAppViewport"`
+- `export { useDataGridAppViewportLifecycle, type UseDataGridAppViewportLifecycleOptions, } from "./useDataGridAppViewportLifecycle"`
+
+Declaration graph hash: `aefcbdaae531bf77fdc1b63dd07029e2cbce5dcc1711d5f914986b283cf385f5`
+
+### ./headless/app/worker
+
+Entrypoint exports:
+
+- `export { useDataGridAppRuntime, type DataGridAppRuntimeMode, type UseDataGridAppRuntimeOptions, type UseDataGridAppRuntimeResult, } from "./useDataGridAppRuntime"`
+
+Declaration graph hash: `5086b0a9d609c2162b1f00a9596991c9a2e4729dd9e0508ee49c355ddee7b24f`
 
 ### ./internal
 
@@ -520,11 +499,13 @@ Entrypoint exports:
 - `export type { DataGridAppClientRowModelOptions, DataGridAppCellRenderer, DataGridAppCellRendererContext, DataGridAppGroupCellRenderer, DataGridAppGroupCellRendererContext, DataGridAppCellRendererInteractiveContext, DataGridAppRowSurfaceContext, DataGridAppRowSurfaceKind, DataGridAppColumnInput, DataGridAppEnterpriseFormulaRuntimeOptions, ResolveDataGridFormulaRowModelOptionsInput, } from "./config/dataGridFormulaOptions"`
 - `export type { DataGridAppInspectorPanel, DataGridAppToolbarModule, } from "./host/DataGridModuleHost"`
 - `export type { DataGridAppViewMode, DataGridGanttBarFrame, DataGridGanttBarLayout, DataGridGanttCriticalTaskNode, DataGridGanttDependencyPath, DataGridGanttDependencyRef, DataGridGanttDependencyType, DataGridGanttHorizontalAlign, DataGridGanttOptions, DataGridGanttProp, DataGridGanttRowEditPatch, DataGridGanttTimelineState, DataGridGanttZoomLevel, DataGridResolvedGanttOptions, DataGridResolvedWorkingCalendar, DataGridTimelineHorizontalAlign, DataGridTimelineLine, DataGridTimelineModel, DataGridTimelineRange, DataGridTimelineRenderModels, DataGridTimelineSegment, DataGridTimelineSpan, DataGridTimelineViewport, DataGridWorkingCalendar, BuildDataGridTimelineRenderModelsInput, ResolveDataGridTimelineRangeInput, } from "./gantt/dataGridGantt"`
+- `export type { DataGridBuiltInToolbarItem, DataGridToolbarActionOptions, DataGridToolbarAlignment, DataGridToolbarItemPlacement, DataGridToolbarLayoutOptions, DataGridToolbarLayoutProp, } from "./config/dataGridToolbarLayout"`
 - `export type { DataGridChromeDensity, DataGridChromeOptions, DataGridChromeProp, DataGridResolvedChromeOptions, DataGridToolbarPlacement, } from "./config/dataGridChrome"`
 - `export type { DataGridColumnReorderOptions, DataGridColumnReorderProp, } from "./config/dataGridColumnReorder"`
 - `export type { DataGridElementRefHandler, DataGridPendingEdge, DataGridTableMode, DataGridTableRow, DataGridTableStageCustomOverlay, DataGridTableStageSectionedProps, DataGridTableStageProps, UseDataGridTableStageBindingsOptions, } from "./stage/dataGridTableStage.types"`
 - `export type { DataGridRowReorderOptions, DataGridRowReorderProp, } from "./config/dataGridRowReorder"`
 - `export type { UseDataGridAppRowModelOptions, UseDataGridAppRowModelResult, } from "./useDataGridAppRowModel"`
+- `export { DATA_GRID_HIERARCHY_COLUMN_ID, type DataGridColumnId, type GroupingPresentationOptions, type HierarchyColumnOptions, } from "./config/dataGridGroupingPresentation"`
 - `export { buildDataGridChromePaneModel, buildDataGridChromeRenderModel, } from "@affino/datagrid-chrome"`
 - `export { buildDataGridTimelineRenderModels, normalizeDataGridGanttOptions, resolveDataGridTimelineRange, } from "./gantt/dataGridGantt"`
 - `export { createDataGridTableStageContext, createDataGridTableStageContextFromProps, dataGridTableStageContextKey, provideDataGridTableStageContext, useDataGridTableStageCellsSection, useDataGridTableStageColumnsSection, useDataGridTableStageContext, useDataGridTableStageEditingSection, useDataGridTableStageInteractionSection, useDataGridTableStageLayoutSection, useDataGridTableStageMode, useDataGridTableStageRowHeightMode, useDataGridTableStageRowsSection, useDataGridTableStageSection, useDataGridTableStageSelectionSection, useDataGridTableStageViewportSection, } from "./stage/dataGridTableStageContext"`
@@ -545,7 +526,7 @@ Entrypoint exports:
 - `export { useDataGridTableStageBindings } from "./stage/useDataGridTableStageBindings"`
 - `export { useDataGridTableStageRuntime } from "./stage/useDataGridTableStageRuntime"`
 
-Declaration graph hash: `163c9590a5d11cda25433c8a04b7c5f02754f3158763176c5b39983625d70d65`
+Declaration graph hash: `7595ea0c89fed7614802a1af10df9bae189da1f5112335ac53fc6f3a5abff218`
 
 ### ./quick-filter
 
@@ -554,7 +535,24 @@ Entrypoint exports:
 - `export type { DataGridQuickFilterApplyMode, DataGridQuickFilterOptions, DataGridQuickFilterProp, DataGridResolvedQuickFilterOptions, } from "./config/dataGridQuickFilter"`
 - `export { default as DataGridQuickFilterInput } from "./host/DataGridQuickFilterInput"`
 
-Declaration graph hash: `a51e267f34cb581264cd563eff94a5650e5c630b2f6d514eea7c05a5d29d8593`
+Declaration graph hash: `7583a03ca4e0a51a77e23f703ab79c4abe8128570c6f544aebad33e2bb269879`
+
+### ./stable
+
+Entrypoint exports:
+
+- `export * from "./public"`
+
+Declaration graph hash: `f85c589c64b9e273273ecf53c1e5334df8b8b73da06f57145d94c073ef88b631`
+
+### ./worker
+
+Entrypoint exports:
+
+- `export type { DataGridWorkerComputeRequest, DataGridWorkerComputeResult, DataGridWorkerProtocolHeader, DataGridWorkerComputeRequestMessage, DataGridWorkerComputeAckMessage, DataGridWorkerProtocolMessage, DataGridWorkerMessageEvent, DataGridWorkerMessageSource, DataGridWorkerMessageTarget, DataGridWorkerDispatchStrategy, DataGridWorkerPostMessageTransportStats, DataGridWorkerPostMessageTransport, CreateDataGridWorkerPostMessageTransportOptions, CreateDataGridWorkerMessageHostOptions, DataGridWorkerMessageHost, DataGridWorkerRowModelProtocolHeader, DataGridWorkerViewportCoalesceScope, DataGridWorkerRowModelCommand, DataGridWorkerRowModelCommandMessage, DataGridWorkerRowModelUpdatePayload, DataGridWorkerRowModelUpdateMessage, DataGridWorkerRowModelProtocolMessage, CreateDataGridWorkerOwnedRowModelHostOptions, DataGridWorkerOwnedRowModelHost, DataGridWorkerOwnedRowModel, CreateDataGridWorkerOwnedRowModelOptions, } from "@affino/datagrid-worker"`
+- `export { DATAGRID_WORKER_PROTOCOL_CHANNEL, DATAGRID_WORKER_PROTOCOL_VERSION, DATAGRID_WORKER_ROW_MODEL_PROTOCOL_CHANNEL, DATAGRID_WORKER_ROW_MODEL_PROTOCOL_VERSION, createDataGridWorkerComputeRequestMessage, createDataGridWorkerComputeAckMessage, createDataGridWorkerComputeErrorAckMessage, createDataGridWorkerRowModelCommandMessage, createDataGridWorkerRowModelUpdateMessage, isDataGridWorkerComputeRequestMessage, isDataGridWorkerComputeAckMessage, isDataGridWorkerRowModelCommandMessage, isDataGridWorkerRowModelUpdateMessage, createDataGridWorkerPostMessageTransport, createDataGridWorkerMessageHost, createDataGridWorkerOwnedRowModelHost, createDataGridWorkerOwnedRowModel, } from "@affino/datagrid-worker"`
+
+Declaration graph hash: `cf238eaf850a6339c1aa29d5d09c479a56cb402b4d5735475e20c129fceb6dd4`
 
 ## @affino/datagrid-orchestration
 
@@ -562,7 +560,7 @@ Source package: `packages/datagrid-orchestration`
 
 | Entrypoint | Tier | Declaration | Files in declaration graph |
 | --- | --- | --- | ---: |
-| `.` | advanced-adapter-internal | `packages/datagrid-orchestration/dist/src/index.d.ts` | 112 |
+| `.` | advanced-adapter-internal | `packages/datagrid-orchestration/dist/src/index.d.ts` | 113 |
 
 ### .
 
@@ -587,7 +585,7 @@ Entrypoint exports:
 - `export * from "./selection"`
 - `export * from "./viewport"`
 
-Declaration graph hash: `5aff788179797e024fdff096403bf490ce185f72c40e898bb868d770ffa0f17d`
+Declaration graph hash: `0d304c9785fc46b9cccc8b7424fdcc76b2acb9f33a414d16f2c2cae737f94b18`
 
 ## @affino/datagrid-server-adapters
 

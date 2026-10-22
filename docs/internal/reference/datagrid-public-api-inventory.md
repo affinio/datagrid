@@ -23,8 +23,7 @@ The API report reads emitted declarations from package `dist` folders. Run the r
 | Package | Export paths | Current tier decision | Remaining risk |
 | --- | --- | --- | --- |
 | `@affino/datagrid-core` | `.`, `./advanced`, `./internal` | Root is stable, `advanced` is power-user, and `internal` is unsafe. Source-shaped wildcard exports are blocked. | New deep-import requirements must be added through an approved tiered entrypoint instead of `./*`. |
-| `@affino/datagrid-vue` | `.`, `./stable`, `./app`, `./app/worker`, `./advanced/*`, `./worker` | Root and `./stable` are contract-equivalent stable entrypoints; app, worker, and advanced subpaths are advanced integration surfaces. | Keep root/stable equivalence and low-level advanced-hook exclusions covered by `entrypointTiers.contract.spec.ts`. |
-| `@affino/datagrid-vue-app` | `.`, feature subpaths, `./internal` | Root and feature subpaths are app-facing stable surfaces; `./internal` is unsafe/internal. | Props, exposed Vue ref helpers, services, startup order, and renderer hooks need a public-vs-advanced table. |
+| `@affino/datagrid-vue` | `.`, `./headless`, `./stable`, app feature subpaths, `./advanced/*`, `./worker`, `./internal` | Root is the ready component surface; `/headless` and `/stable` expose adapter contracts; advanced and worker paths are power-user entries; app feature paths are stable features; `./internal` remains unsafe/internal. | Preserve headless/app separation in tarball checks and keep app props, exposed refs, services, and renderer hooks documented. |
 | `@affino/datagrid-orchestration` | `.` | Root is advanced adapter-internal. It is exported for adapter/framework integration, not app-level stable API. | Future stable ecosystem needs require a public API proposal, tiered entrypoint, and migration notes before export-map changes. |
 | `@affino/datagrid-server-adapters` | `.` | Stable backend adapter surface. | Compatibility notes should stay aligned with server datasource protocol changes. |
 | `@affino/datagrid-server-client` | `.` | Stable backend client helper surface. | Live update, retry, and consistency-token changes need migration notes when public behavior changes. |
@@ -34,7 +33,7 @@ The API report reads emitted declarations from package `dist` folders. Run the r
 - Any new package export path must be classified in `scripts/check-datagrid-public-api-inventory.mjs`.
 - Any changed source entrypoint or export declaration must refresh `docs/quality/datagrid-public-api-inventory.json` with `node ./scripts/check-datagrid-public-api-inventory.mjs --write-baseline` after review.
 - Public API movement between stable, advanced, and internal tiers requires migration notes in `docs/internal/reference/datagrid-legacy-migration-guide.md` or the domain-specific guide.
-- `@affino/datagrid-vue-app` `DataGrid` row selection is a stable app-facing prop surface: `rowSelection` accepts `boolean | { enabled?: boolean; columnWidth?: number }`, where `columnWidth` configures the synthetic row-selection checkbox column width without making the system column user-resizable.
+- `@affino/datagrid-vue` `DataGrid` row selection is a stable app-facing prop surface: `rowSelection` accepts `boolean | { enabled?: boolean; columnWidth?: number }`, where `columnWidth` configures the synthetic row-selection checkbox column width without making the system column user-resizable.
 - The generated inventory is an export-map and source-entrypoint snapshot.
 - The generated API report is the declaration-level gate. Public type changes must refresh `docs/quality/datagrid-api-report.json` with `node ./scripts/check-datagrid-api-report.mjs --write-baseline` after semver review.
 

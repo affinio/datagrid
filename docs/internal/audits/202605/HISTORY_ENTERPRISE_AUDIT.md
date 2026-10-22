@@ -35,9 +35,9 @@ Current enterprise readiness is **7/10**. A realistic target is **9/10** after a
 - `packages/datagrid-orchestration/src/history/useDataGridIntentHistory.ts` adapts the core transaction service into intent history by storing before/after snapshots as transaction payload and rollback payload.
 - `packages/datagrid-vue/src/composables/useDataGridIntentHistory.ts` wraps orchestration history in Vue refs.
 - `packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts` captures full or partial row snapshots and replays them through `rows.applyEdits(...)` or `rows.setData(...)`.
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageHistory.ts` chooses between an external history adapter and the built-in intent history.
-- `packages/datagrid-vue-app/src/dataGridHistory.ts` defines public `history` prop normalization, shortcut modes, toolbar modes, and the exposed controller contract.
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts` wires built-in toolbar controls, window/grid shortcuts, external adapters, and server datasource stack history.
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageHistory.ts` chooses between an external history adapter and the built-in intent history.
+- `packages/datagrid-vue/src/app-layer/dataGridHistory.ts` defines public `history` prop normalization, shortcut modes, toolbar modes, and the exposed controller contract.
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts` wires built-in toolbar controls, window/grid shortcuts, external adapters, and server datasource stack history.
 - `packages/datagrid-server-adapters/src/index.ts` exposes server datasource edit/fill/history methods, maintains cached history status, posts scoped stack undo/redo/status requests, applies row snapshots or invalidations, and updates dataset versions.
 - `backend/app/features/server_demo/history.py` and `backend/packages/affino_grid_backend/affino_grid_backend/history/base.py` implement server-side operation replay from persisted cell events.
 - `backend/app/features/server_demo/edits.py` and `backend/app/features/server_demo/fill.py` record edit/fill operations, cell events, redo-branch invalidation, and change-feed events.
@@ -78,12 +78,12 @@ Core and Vue history:
 
 Vue app and server datasource adapters:
 
-- `packages/datagrid-vue-app/src/dataGridHistory.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageHistory.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridTableStageHistory.spec.ts`
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-- `packages/datagrid-vue-app/src/host/DataGridHistoryToolbarButton.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/dataGridHistory.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageHistory.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridTableStageHistory.spec.ts`
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+- `packages/datagrid-vue/src/app-layer/host/DataGridHistoryToolbarButton.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 - `packages/datagrid-server-adapters/src/index.ts`
 - `packages/datagrid-server-adapters/src/index.spec.ts`
 - `packages/datagrid-server-client/src/client.ts`

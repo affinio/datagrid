@@ -75,8 +75,8 @@ The table stage exposes screen-reader-relevant grid metadata on the rendered vir
 - Vue adapter DOM mapping:
   - `packages/datagrid-vue/src/adapters/__tests__/a11yAttributesAdapter.contract.spec.ts`
 - Stage selection accessibility:
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellState.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellState.spec.ts`
 - Virtualized stage accessibility:
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `e2e/sandbox-interactions.spec.ts`

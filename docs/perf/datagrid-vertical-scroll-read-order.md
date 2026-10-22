@@ -1,6 +1,6 @@
 # Vertical scroll read ordering
 
-Scope: `@affino/datagrid-vue-app`, `useDataGridStageViewportRuntime`.
+Scope: `@affino/datagrid-vue`, `useDataGridStageViewportRuntime`.
 
 The shared vertical scroll handler previously wrote the inherited pane offset
 (`--datagrid-body-scroll-top`) and then read DOM scroll offsets again through

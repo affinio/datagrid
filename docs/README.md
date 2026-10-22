@@ -9,6 +9,7 @@ This is the public documentation for the DataGrid repository. Choose one entry p
 - [Styling](./datagrid-styling.md) - themes, surfaces, and toolbar placement.
 - [Theme token reference](./reference/datagrid-theme-tokens.md) - complete token-to-CSS-variable catalog.
 - [Vue adapter guide](./vue-adapter.md) - headless Vue runtime, custom renderers, row models, and adapter ownership.
+- [Vue package migration](./vue-package-migration.md) - unified Vue entry points and temporary compatibility imports.
 - [Core API guide](./core-api.md) - framework-independent row models, `DataGridApi`, lifecycle, state, events, and projection semantics.
 - [Core factories reference](./reference/datagrid-core-factories-reference.md) - core runtime assembly and constructor options.
 - [Core row-selection model](./reference/datagrid-row-selection-model.md) - committed selection, intent, and session primitives.
@@ -24,6 +25,7 @@ The app guide is the primary user experience. The Vue and core guides are comple
 ## Integration guides
 
 - [Server datasource quick start](./server-datasource/quick-start.md)
+- [Laravel package migration](./laravel-package-migration.md)
 - [Server datasource protocol](./server-datasource/reference/protocol.md)
 - [Server datasource frontend adapter](./server-datasource/reference/frontend-adapter.md)
 - [Saved table preferences](./datagrid-state-persistence.md) - automatic local/async persistence and reset.
@@ -54,7 +56,7 @@ The app guide is the primary user experience. The Vue and core guides are comple
 - [Vue stable entrypoint](./reference/datagrid-vue-stable-entrypoint.md)
 - [Vue advanced entrypoint](./reference/datagrid-vue-advanced-entrypoint.md)
 - [Plugin capability model](./reference/datagrid-plugin-capability-model.md)
-- [Community vs enterprise](./datagrid-vue-app-community-vs-enterprise.md)
+- [Vue app package ownership](./datagrid-vue-app-package-ownership.md)
 
 ## Specialized folders
 

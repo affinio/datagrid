@@ -144,8 +144,8 @@ Current execution state:
 - Objective: expose pending, failure, retry, cancellation, and rollback semantics for async `applyClipboardEdits` and datasource-backed paste operations.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppClipboard.ts`
-  - `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
-  - `packages/datagrid-vue-app/src/stage/*`
+  - `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/*`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts`
   - `docs/datagrid-clipboard.md`
 - Expected behavior change: async paste failures no longer look like silent no-ops; app state exposes pending and rejected paste status, duplicate paste while pending is blocked, and successful history is recorded only after commit.
@@ -179,8 +179,8 @@ Current execution state:
 - Status: Partially completed on 2026-05-20. App-level contract coverage now verifies pending clipboard ranges remain stable across viewport remount offsets and clipboard fallback status reaches a polite grid live region. Playwright coverage now verifies copied and cut clipboard outlines after vertical/horizontal remounts and right-pinned remounts, plus coarse-pointer long-press selection with keyboard copy/paste while body touch pan remains scroll-first. Materialized and browser clipboard benchmark asserts gate copy creation, TSV parser cost, paste payload creation, paste patch application, total paste latency, and Chromium clipboard read/write round-trip latency; real-device mobile gates remain planned.
 - Objective: add focused validation for pending clipboard outlines across virtualization remounts, live-region/status feedback, touch/mobile clipboard affordances, and large materialized copy/paste budgets.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/*`
-  - `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/*`
+  - `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
   - `e2e/sandbox-interactions.spec.ts`
   - `scripts/bench-datagrid-enterprise-workloads.mjs`
   - `scripts/bench-datagrid-interactions.mjs`

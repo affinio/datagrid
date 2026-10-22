@@ -5,7 +5,7 @@ This plan converts `docs/audits/EDITING_ENTERPRISE_AUDIT.md` into small, separab
 Current execution state:
 
 - Slices 1-9 are implemented as of 2026-05-18. The Editing enterprise track is closed for the planned scope.
-- The canonical app-stage editing path is `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts` plus `packages/datagrid-vue-app/src/stage/*` rendering and bindings.
+- The canonical app-stage editing path is `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts` plus `packages/datagrid-vue/src/app-layer/stage/*` rendering and bindings.
 - `datagrid-orchestration` editing helpers are reference/shared utilities, not the current mounted table-stage owner.
 - Client row editing and datasource-backed editing must stay on the same `rows.applyEdits` / `commitEdits` boundary.
 - History, server datasource, rendering, selection, and virtualization enterprise tracks are closed as of 2026-05-18. Editing slices should reuse their focus, history, datasource, remount, and render-lightening contracts instead of duplicating ownership.
@@ -33,8 +33,8 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/overlays/DataGridFilterableCombobox.vue`
-  - Relevant contract tests under `packages/datagrid-vue/src/app/__tests__` and `packages/datagrid-vue-app/src/__tests__`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridFilterableCombobox.vue`
+  - Relevant contract tests under `packages/datagrid-vue/src/app/__tests__` and `packages/datagrid-vue/src/app-layer/__tests__`
 - Expected behavior change: while IME composition is active, editing keystrokes update composition only; grid edit commit/cancel/navigation starts after composition ends.
 - Tests to add/update:
   - Enter/Tab/Escape do not commit/cancel/navigate during composition.
@@ -51,8 +51,8 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-core/src/cells/runtime.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
   - Relevant core, Vue, and app tests
 - Expected behavior change: invalid number/date/datetime/select drafts produce deterministic validation state and block commit.
 - Tests to add/update:
@@ -71,7 +71,7 @@ Current execution state:
   - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
   - `packages/datagrid-server-adapters/src/index.ts`
-  - `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
   - Relevant datasource and app tests
 - Expected behavior change: datasource commit rejections do not look like successful inline edits; rejected commits surface stable state and successful history is not recorded.
 - Tests to add/update:
@@ -88,8 +88,8 @@ Current execution state:
 - Objective: define and enforce what happens when an active editor blurs, scrolls out, unmounts, remounts, is replaced by a placeholder, or is invalidated by projection/cache changes.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInlineEditing.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
   - `e2e/sandbox-interactions.spec.ts`
   - `docs/datagrid-editing.md`
 - Expected behavior change: editor blur/unmount/remount behavior is documented and routed through the same inline edit state owner across virtualized body rows, pinned panes, placeholder materialization, and datasource refresh.
@@ -124,9 +124,9 @@ Current execution state:
 - Status: Completed on 2026-05-18.
 - Objective: harden async select editors with abort/error/pending semantics and commit-time selected-value validation.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/overlays/DataGridCellComboboxEditor.vue`
-  - `packages/datagrid-vue-app/src/overlays/DataGridFilterableCombobox.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridCellComboboxEditor.vue`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridFilterableCombobox.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
   - Relevant Vue app tests
 - Expected behavior change: stale option loads cannot update newer editor context, load failures are observable through invalid state, pending state is accessible, and load-error commits are blocked.
 - Tests to add/update:
@@ -144,7 +144,7 @@ Current execution state:
 - Affected packages/files:
   - `packages/datagrid-core/src/cells/runtime.ts`
   - `packages/datagrid-core/src/spreadsheet/formulaEditorModel.ts`
-  - `packages/datagrid-vue-app/src/stage/*`
+  - `packages/datagrid-vue/src/app-layer/stage/*`
   - `docs/datagrid-editing.md`
   - `docs/datagrid-formula-engine-guide.md`
 - Expected behavior change: formula cell editing has an explicit capability boundary: table-stage DataGrid formula cells remain basic text commit only unless a host integrates a richer editor.
@@ -160,8 +160,8 @@ Current execution state:
 - Status: Completed on 2026-05-18.
 - Objective: add focused validation for editor a11y state, rapid keyboard editing, pinned panes, touch scroll protection, and edit mount/commit frame cost.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/*`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/*`
   - `e2e/sandbox-interactions.spec.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `docs/perf/datagrid-performance-gates.md`

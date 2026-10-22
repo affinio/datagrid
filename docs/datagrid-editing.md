@@ -6,7 +6,7 @@ This document defines the enterprise editing contract for the mounted DataGrid a
 
 - `datagrid-core` owns cell type parsing/formatting, draft validation helpers, row patch APIs, and datasource-backed optimistic commit/rollback.
 - `datagrid-vue` owns the canonical app inline edit state machine in `useDataGridAppInlineEditing.ts`.
-- `datagrid-vue-app` owns rendered editor DOM, focus surfaces, combobox overlays, pinned/body pane materialization, and stage event binding.
+- `datagrid-vue` app layer owns rendered editor DOM, focus surfaces, combobox overlays, pinned/body pane materialization, and stage event binding.
 - Server-backed editing stays on `rows.applyEdits` and datasource `commitEdits`; server history remains the undo/redo owner for server datasource grids.
 
 `datagrid-orchestration` editing helpers remain reusable/reference utilities. They are not the current mounted table-stage editing owner.
@@ -66,6 +66,8 @@ If an active rendered editor leaves the mounted row/column window, the stage com
 ## Accessibility
 
 Rendered editors expose native input semantics. Invalid or rejected drafts expose `aria-invalid`; pending commits expose `aria-busy` where the native control supports it. Async select editors expose combobox/listbox roles and loading state.
+
+Inline editor carets follow the editor text color, including in light and dark themes. The selection-handle border color is independent and does not style text carets. A teleported select list copies theme variables from its local editor context whenever it opens, so custom grid themes and direct table-stage integrations also retain their dropdown background, text, and font. Inline lists inherit their surrounding theme directly.
 
 ## Unsupported Or Basic Scope
 

@@ -1,6 +1,6 @@
 # `@affino/datagrid-formula-engine`
 
-Community formula engine package for Affino DataGrid.
+Formula engine package for Affino DataGrid.
 
 ## Purpose
 
@@ -8,31 +8,35 @@ This package establishes a dedicated formula-engine boundary without forcing a r
 
 Current state:
 
-- community-safe formula parsing / analysis / compile APIs live here
+- formula parsing / analysis / compile APIs live here
 - graph / execution-plan APIs live here
+- reusable formula function packs, including finance helpers, live here
 - low-level row-model integration still lives in `@affino/datagrid-core`
 
-## Community surface
+## Public surface
 
-The package intentionally exposes the base formula-engine surface:
+The package exposes:
 
 - parse / diagnose / explain
 - compile formula field definitions and artifacts
 - formula value utilities
 - formula graph and execution-plan builders
 - formula-related type contracts
+- `DATAGRID_FINANCE_FORMULA_FUNCTIONS` and `DATAGRID_FORMULA_PACKS`
+- `listDataGridFormulaPackNames()` and `resolveDataGridFormulaFunctions()`
 
-## Planned enterprise surface
+The Vue app can enable packs with the `formulaPacks` prop. User-provided
+functions override built-in pack functions with the same name.
 
-These are reserved as future enterprise candidates and are intentionally not split into public package entrypoints yet:
+## Runtime ownership
 
-- premium worker-owned formula runtime
-- advanced fused / vector execution tiers
-- formula profiler / diagnostics UI
-- collaboration / snapshot / audit tooling around formula execution
-- premium performance policies and high-scale runtime orchestration
+`@affino/datagrid-vue` owns UI-facing formula runtime settings and diagnostics.
+`@affino/datagrid-core` owns row-model formula registration, recomputation, and
+runtime snapshots. Async formulas and server-side evaluation are not provided
+by this package.
 
 ## Boundary rule
 
-Use `@affino/datagrid-formula-engine` for formula APIs.
-Keep grid row-model orchestration and snapshot integration in `@affino/datagrid-core` until the next extraction phase.
+Use `@affino/datagrid-formula-engine` for formula language, function-pack, and
+planning APIs. Keep row-model orchestration and snapshot integration in
+`@affino/datagrid-core`.

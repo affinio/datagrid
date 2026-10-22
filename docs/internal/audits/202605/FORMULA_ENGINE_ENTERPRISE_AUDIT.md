@@ -24,8 +24,8 @@ Implementation update, 2026-05-20:
 - Row-model formulas are integrated in `packages/datagrid-core/src/models/formula` and `packages/datagrid-core/src/models/compute`.
 - Spreadsheet formulas live in `packages/datagrid-core/src/spreadsheet` and reuse the same formula parser/compiler, but have their own sheet/workbook scheduler.
 - Worker-owned compute integration lives in `packages/datagrid-worker` and mirrors formula registration, execution plans, and diagnostics.
-- Enterprise package boundaries are additive. `packages/datagrid-formula-engine-enterprise/src/index.ts` re-exports the community formula engine, exposes formula packs, and defines runtime config flags such as `computeMode` and `formulaColumnCacheMaxColumns`.
-- The Vue enterprise wrapper wires formula runtime, formula packs, diagnostics, and performance presets through `packages/datagrid-vue-app-enterprise`.
+- Enterprise package boundaries are additive. `packages/datagrid-formula-engine/src/index.ts` re-exports the community formula engine, exposes formula packs, and defines runtime config flags such as `computeMode` and `formulaColumnCacheMaxColumns`.
+- The Vue enterprise wrapper wires formula runtime, formula packs, diagnostics, and performance presets through `packages/datagrid-vue/src/app-layer`.
 
 The row-model formula runtime is graph-first: formulas compile to nodes, `createDataGridFormulaExecutionPlan` builds topological levels and strongly connected components, then dirty propagation executes only affected row/node pairs when patches or context invalidations occur.
 
@@ -39,7 +39,7 @@ Docs:
 - `docs/README.md`
 - `docs/datagrid-architecture.md`
 - `docs/datagrid-formula-engine-guide.md`
-- `docs/datagrid-formula-engine-community-vs-enterprise.md`
+- `docs/datagrid-formula-engine-package-ownership.md`
 - `docs/perf/benchmarks-formula-engine.md`
 - `docs/perf/datagrid-performance-gates.md`
 
@@ -89,12 +89,12 @@ Vue, worker, enterprise, and benchmarks:
 - `packages/datagrid-worker/src/workerOwnedRowModel.ts`
 - `packages/datagrid-worker/src/__tests__/workerOwnedRowModel.spec.ts`
 - `packages/datagrid-worker/src/__tests__/workerParity.spec.ts`
-- `packages/datagrid-formula-engine-enterprise/src/index.ts`
-- `packages/datagrid-formula-engine-enterprise/src/formulaPacks.ts`
-- `packages/datagrid-vue-app-enterprise/src/DataGrid.ts`
-- `packages/datagrid-vue-app-enterprise/src/dataGridFormulaRuntime.ts`
-- `packages/datagrid-vue-app-enterprise/src/dataGridPerformance.ts`
-- `packages/datagrid-vue-app-enterprise/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-formula-engine/src/index.ts`
+- `packages/datagrid-formula-engine/src/formulaPacks.ts`
+- `packages/datagrid-vue/src/app-layer/src/DataGrid.ts`
+- `packages/datagrid-vue/src/app-layer/src/dataGridFormulaRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/src/dataGridPerformance.ts`
+- `packages/datagrid-vue/src/app-layer/src/__tests__/DataGrid.contract.spec.ts`
 - `scripts/bench-datagrid-formula-engine.mjs`
 - `scripts/bench-datagrid-formula-engine-worker.mjs`
 - `scripts/bench-datagrid-formula-parser.mjs`

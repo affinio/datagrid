@@ -124,9 +124,9 @@ It does not restore `projection`, projection memory stats, performance timing, s
 ### What is persisted today
 
 - `api.state.get()` persists `rows.snapshot` wholesale.
-- App controlled state emits `api.state.get()` through `update:state` in `packages/datagrid-vue-app/src/useDataGridAppControlledState.ts`.
-- Declarative `statePersistence` writes `api.state.get(options.getOptions)` directly to storage in `packages/datagrid-vue-app/src/DataGrid.ts`.
-- Saved views store `DataGridUnifiedState` plus `viewMode` in `packages/datagrid-vue-app/src/config/dataGridSavedView.ts`; only `transaction` is sanitized to `null`.
+- App controlled state emits `api.state.get()` through `update:state` in `packages/datagrid-vue/src/app-layer/useDataGridAppControlledState.ts`.
+- Declarative `statePersistence` writes `api.state.get(options.getOptions)` directly to storage in `packages/datagrid-vue/src/app-layer/DataGrid.ts`.
+- Saved views store `DataGridUnifiedState` plus `viewMode` in `packages/datagrid-vue/src/app-layer/config/dataGridSavedView.ts`; only `transaction` is sanitized to `null`.
 
 ### What is diagnostics/telemetry only
 
@@ -157,11 +157,11 @@ Current `DataGridUnifiedState` is mixed. It is a model-centric persisted/exporte
 - `packages/datagrid-core/src/models/__tests__/columnModel.spec.ts`
 - `packages/datagrid-core/src/models/serverBackedRowModel.ts`
 - `packages/datagrid-core/src/models/dataSourceBackedRowModel.ts`
-- `packages/datagrid-vue-app/src/DataGrid.ts`
-- `packages/datagrid-vue-app/src/useDataGridAppControlledState.ts`
-- `packages/datagrid-vue-app/src/config/dataGridSavedView.ts`
-- `packages/datagrid-vue-app/src/config/dataGridStatePersistence.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/DataGrid.ts`
+- `packages/datagrid-vue/src/app-layer/useDataGridAppControlledState.ts`
+- `packages/datagrid-vue/src/app-layer/config/dataGridSavedView.ts`
+- `packages/datagrid-vue/src/app-layer/config/dataGridStatePersistence.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 
 ## 6. Current Risks
 

@@ -36,8 +36,8 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: reduce avoidable main-thread work in body scroll handling and isolate vertical-scroll, smooth-scroll, horizontal-scroll, and combined browser scenarios behind a focused hard gate.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageViewportRuntime.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageViewportRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
   - `package.json`
   - `docs/perf/datagrid-performance-gates.md`
   - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
@@ -72,8 +72,8 @@ Current execution state:
 - Status: Completed on 2026-05-20.
 - Objective: reduce avoidable synchronous runtime work in the column-menu sort path before deeper projection/edit/context-menu cleanup.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/overlays/DataGridColumnMenu.vue`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/overlays/DataGridColumnMenu.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `docs/perf/datagrid-browser-performance-next-slices.md`
   - `docs/audits/PERFORMANCE_ENTERPRISE_AUDIT.md`
 - Expected behavior change: large column-menu value histograms stay deferred longer after menu open and are canceled/invalidated when a sort action closes the menu before the histogram starts.
@@ -218,7 +218,7 @@ Current execution state:
 - Objective: keep 100k-row quick-filter typing within comfortable latency budgets.
 - Affected packages/files:
   - `packages/datagrid-core/src/filtering/*`
-  - `packages/datagrid-vue-app/src/features/quick-filter/*`
+  - `packages/datagrid-vue/src/app-layer/features/quick-filter/*`
   - `scripts/bench-datagrid-quick-filter.mjs`
 - Expected behavior change: quick-filter query changes are hard-gated for 100k rows with one and five searchable columns.
 - Tests to add/update:
@@ -234,7 +234,7 @@ Current execution state:
 - Affected packages/files:
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `packages/datagrid-vue/src/app/*viewport*`
-  - `packages/datagrid-vue-app/src/stage/*`
+  - `packages/datagrid-vue/src/app-layer/stage/*`
 - Expected behavior change: wide-table horizontal scroll and pinned pane sync are covered by explicit 1k and 10k browser-frame scenarios.
 - Tests to add/update:
   - 1k and 10k column browser-frame matrix with pinned left/right columns and custom renderer variants.
@@ -247,7 +247,7 @@ Current execution state:
 - Status: Completed.
 - Objective: make custom renderer duration and mount/unmount churn first-class gates.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
   - `docs/reference/datagrid-renderer-lifecycle.md`
 - Expected behavior change: custom renderer hot paths are measurable and bounded by renderer-duration and churn gates.

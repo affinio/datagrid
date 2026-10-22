@@ -26,7 +26,7 @@ Affino DataGrid хорошо подходит, если у вас:
 
 ### Готовый Vue-компонент
 
-Для большинства приложений основной вход - `@affino/datagrid-vue-app`. Он дает декларативный компонент `DataGrid`: передаете строки, колонки и настройки, получаете виртуализированную таблицу с selection, keyboard navigation, сортировкой, фильтрацией, resizing и встроенным UI-поведением.
+Для большинства приложений основной вход - `@affino/datagrid-vue`. Он дает декларативный компонент `DataGrid`: передаете строки, колонки и настройки, получаете виртуализированную таблицу с selection, keyboard navigation, сортировкой, фильтрацией, resizing и встроенным UI-поведением.
 
 Это снижает цену входа: не нужно вручную собирать scroll sync, overlay alignment, focus restore, resize handles, clipboard flow и визуальное состояние ячеек.
 
@@ -105,7 +105,7 @@ Affino DataGrid закрывает много привычных сценари�
 | Обычная таблица, небольшой или средний объем | `main-thread` |
 | Много интерактивных edits, patch storms, активные sort/filter/group | `worker-owned` |
 | Большой удаленный датасет, backend-owned query/filter/pivot | `server-side` / data-source row model |
-| Нужен быстрый Vue-start | `@affino/datagrid-vue-app` |
+| Нужен быстрый Vue-start | `@affino/datagrid-vue` |
 | Нужна своя оболочка или renderer | `@affino/datagrid-vue` + `@affino/datagrid-core` |
 
 ## Сильные стороны
@@ -145,5 +145,5 @@ Affino DataGrid можно описывать так:
 
 ## Рекомендуемый следующий шаг
 
-Для оценки продукта стоит начинать с `@affino/datagrid-vue-app` и собрать реальный экран на своих данных: 10-20 колонок, сортировка, фильтр, resize, selection, paste и сохранение состояния. Если после этого упираетесь в объем данных или latency, переходите к worker-owned или server-side режиму по documented path, а не через локальные workarounds.
+Для оценки продукта стоит начинать с `@affino/datagrid-vue` и собрать реальный экран на своих данных: 10-20 колонок, сортировка, фильтр, resize, selection, paste и сохранение состояния. Если после этого упираетесь в объем данных или latency, переходите к worker-owned или server-side режиму по documented path, а не через локальные workarounds.
 

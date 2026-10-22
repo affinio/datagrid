@@ -20,11 +20,11 @@ This page explains the labels used in the documentation. The feature catalog des
 
 | Area | Status | Practical guidance |
 | --- | --- | --- |
-| Vue application grid with local data | Implemented | Start with [`@affino/datagrid-vue-app`](./getting-started.md). |
+| Vue application grid with local data | Implemented | Start with [`@affino/datagrid-vue`](./getting-started.md). |
 | Headless core row models and `DataGridApi` | Implemented | Use the [core guide](./core-api.md) and [method reference](./reference/datagrid-grid-api-methods.md). |
 | Vue adapter and custom hosts | Implemented | Use the [Vue adapter guide](./vue-adapter.md); advanced render and orchestration entrypoints are separately labeled. |
 | Row and cell selection | Implemented | Cell-range behavior remains the row-header default. Opt into row-ID selection, click modifiers, Shift keyboard ranges, and drag preview/commit with `rowHeader.action: "select-records"`; see the [row-selection reference](./reference/datagrid-row-selection-model.md). |
-| Column-group headers and top/body/bottom row pinning | Implemented | Core models and the Vue app stage support these contracts, including cross-pane group headers and separate pinned-row surfaces. See [column state](../packages/datagrid-vue-app/README.md#column-state) and the [virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md). |
+| Column-group headers and top/body/bottom row pinning | Implemented | Core models and the Vue app stage support these contracts, including cross-pane group headers and separate pinned-row surfaces. See [column state](../packages/datagrid-vue/README.component.md#column-state) and the [virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md). |
 | Row and column virtualization | Implemented | The standard Vue app path supports virtual rows; opt into column virtualization for wide tables. Browser scale and mode limits are in the [virtualization support matrix](./reference/datagrid-virtualization-support-matrix.md). |
 | Touch/mobile interactions | Partial | Native touch scrolling and explicit interaction handles have browser coverage. Real-device validation and hardware threshold review remain open; see the [mobile touch audit](./internal/audits/202605/MOBILE_TOUCH_SCROLL_AUDIT.md). |
 | Server datasource pull, editing, fill, history, invalidation, polling, and WebSocket updates | Implemented | Use the [server datasource guide](./server-datasource/quick-start.md). The demo backend supports region grouping only; arbitrary server tree/pivot projections and offline mutation replay are not supported. |

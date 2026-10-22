@@ -1,6 +1,6 @@
 # DataGrid Event Matrix
 
-Scope: public and integration event surfaces across `@affino/datagrid-core`, `@affino/datagrid-vue`, and `@affino/datagrid-vue-app`.
+Scope: public and integration event surfaces across `@affino/datagrid-core`, `@affino/datagrid-vue`, and `@affino/datagrid-vue`.
 
 ## Preferred Integration Path
 
@@ -16,9 +16,9 @@ Scope: public and integration event surfaces across `@affino/datagrid-core`, `@a
 | --- | --- | --- | --- | --- | --- |
 | `api.events` | `rows:changed`, `columns:changed`, `projection:recomputed`, `selection:changed`, `row-selection:changed`, `pivot:changed`, `transaction:changed`, `viewport:changed`, `state:import:begin`, `state:imported`, `state:import:end`, `error` | `@affino/datagrid-core` typed event map | Deterministic in-process ordering; reentrant emissions are queued FIFO | Listener exceptions are not swallowed; integration listeners must isolate their own failures | Stable runtime observation, headless integrations, diagnostics, plugin input |
 | `api.plugins.onEvent` | Same event names as `api.events` | `@affino/datagrid-core` typed event map | Delivered from the core event stream after plugin registration | Plugin handler failures are isolated from core event dispatch and other plugins | Stable public plugin observation |
-| `DataGrid` emits | `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, `update:*`, `toolbar-modules-change`, `ready` | `@affino/datagrid-vue-app` component facade | Mirrors runtime host events and controlled-prop snapshots in component lifecycle order | Vue listener behavior applies; handler failures are host-owned | Component consumers and controlled Vue props |
+| `DataGrid` emits | `cell-change`, `cell-edit`, `selection-change`, `row-selection-change`, `update:*`, `toolbar-modules-change`, `ready` | `@affino/datagrid-vue` component facade | Mirrors runtime host events and controlled-prop snapshots in component lifecycle order | Vue listener behavior applies; handler failures are host-owned | Component consumers and controlled Vue props |
 | `createGrid` feature bus | String event names chosen by local features | Local Vue feature | Synchronous registration-order delivery | Handler exceptions propagate and stop the current local emit | Local feature coordination only |
-| Internal runtime host | `cell-change`, `selection-change`, `row-selection-change` | `@affino/datagrid-vue-app` runtime host | Bridges selected `api.events` into app component emits | Internal component boundary | Do not consume directly outside package internals |
+| Internal runtime host | `cell-change`, `selection-change`, `row-selection-change` | `@affino/datagrid-vue` runtime host | Bridges selected `api.events` into app component emits | Internal component boundary | Do not consume directly outside package internals |
 
 ## Core API Event Ordering
 
@@ -81,12 +81,12 @@ Focused coverage lives in:
 
 - `packages/datagrid-core/src/core/__tests__/gridApi.contract.spec.ts`
 - `packages/datagrid-vue/src/grid/__tests__/eventBus.contract.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 
 Run:
 
 ```bash
 pnpm --filter @affino/datagrid-core test:contracts
 pnpm --filter @affino/datagrid-vue test:contracts
-pnpm --filter @affino/datagrid-vue-app exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts
+pnpm --filter @affino/datagrid-vue exec vitest run --config vitest.config.ts src/__tests__/DataGrid.contract.spec.ts
 ```

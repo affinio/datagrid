@@ -10,8 +10,8 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppHeaderResize.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppRowSizing.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageScrollSync.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageScrollSync.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppRowSizing.contract.spec.ts`
 - Expected behavior change: no intentional user-facing behavior change; drag selection, fill, range move, column resize, row resize, and touch pan should expose mutually exclusive active-owner state for tests and diagnostics.
@@ -50,7 +50,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - `packages/datagrid-orchestration/src/pointer/useDataGridGlobalPointerLifecycle.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridGlobalPointerLifecycle.contract.spec.ts`
   - `packages/datagrid-vue/src/app/__tests__/useDataGridAppInteractionController.contract.spec.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
 - Expected behavior change: active drag/fill/range/resize state is cleared consistently when the pointer lifecycle is interrupted; normal desktop mouse interactions remain unchanged.
 - Tests to add/update:
   - Cancellation tests for each active owner.
@@ -85,10 +85,10 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Affected packages/files:
   - `docs/internal/reference/datagrid-sheets-user-interactions-and-integrator-api.md`
   - `packages/datagrid-vue/src/app/dataGridMouseEventGuards.ts`
-  - `packages/datagrid-vue-app/src/stage/dataGridMouseEventGuards.ts`
-  - `packages/datagrid-vue-app/src/gestures/dataGridTouchPanGuard.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/__tests__/dataGridTouchPanGuard.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/dataGridMouseEventGuards.ts`
+  - `packages/datagrid-vue/src/app-layer/gestures/dataGridTouchPanGuard.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/dataGridTouchPanGuard.spec.ts`
   - `packages/datagrid-vue/src/app/__tests__/dataGridMouseEventGuards.spec.ts`
 - Expected behavior change: no broad behavior change; event cancellation remains feature-specific but follows a documented matrix for native scroll, text editing, context menu, keyboard commands, selection, fill, range move, resize, and touch handles.
 - Tests to add/update:
@@ -104,11 +104,11 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Objective: lock the current touch-mode behavior so future interaction work does not regress native scroll priority or explicit-handle workflows.
 - Affected packages/files:
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
   - `e2e/sandbox-grid.spec.ts`
 - Expected behavior change: no intentional behavior change; one-finger body scroll remains native, touch cell-body drag stays scroll-first, and selection extension, range move, fill, and resize remain explicit-handle workflows.
 - Tests to add/update:
@@ -146,11 +146,11 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 
 - Objective: define one active-cell/focus owner across selection, scroll, context menu, inline edit, and virtual remounts.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
   - `packages/datagrid-orchestration/src/viewport/useDataGridViewportBlurHandler.ts`
   - `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageFocusRuntime.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageFocusRuntime.spec.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridViewportBlurHandler.contract.spec.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridInlineEditorFocus.contract.spec.ts`
 - Expected behavior change: focus restoration uses predictable fallbacks and does not steal focus during active scroll, edit, menu, fill, range move, or virtualization remount.
@@ -168,10 +168,10 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Objective: make inline editing transitions deterministic when scroll, virtualization, context menus, and active interactions occur.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/useDataGridTableStageCellIo.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageCellIo.ts`
   - `packages/datagrid-orchestration/src/editing/useDataGridInlineEditorFocus.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridTableStageCellIo.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridTableStageCellIo.spec.ts`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: edit commit, cancel, blur, remount, and scroll-active suppression become tested and deterministic.
 - Tests to add/update:
@@ -191,7 +191,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
   - `packages/datagrid-orchestration/src/pointer/useDataGridGlobalPointerLifecycle.ts`
   - `packages/datagrid-orchestration/src/pointer/useDataGridPointerAutoScroll.ts`
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
   - `packages/datagrid-vue/src/composables/__tests__/useDataGridPointerAutoScroll.contract.spec.ts`
   - `docs/perf/datagrid-performance-gates.md`
 - Expected behavior change: previews are either rAF-applied in the main path or covered by a documented frame budget proving direct updates are acceptable.
@@ -230,10 +230,10 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Objective: add optional diagnostics for active owner transitions, cancellation reasons, preview timing, auto-scroll timing, prevent-default counts, and focus fallback reasons.
 - Affected packages/files:
   - `packages/datagrid-vue/src/app/useDataGridAppInteractionController.ts`
-  - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts`
+  - `packages/datagrid-vue/src/app-layer/perf/dataGridPerfTrace.ts`
   - `packages/datagrid-orchestration/src/scrolling/useDataGridScrollPerfTelemetry.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStagePointerInteractions.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStagePointerInteractions.ts`
   - `packages/datagrid-sandbox/src/components/VueGridCard.vue`
 - Expected behavior change: optional diagnostics become available behind existing trace/debug mechanisms; normal production behavior and public API remain unchanged unless a public diagnostics API is approved separately.
 - Tests to add/update:
@@ -251,7 +251,7 @@ This plan converts `docs/audits/INTERACTION_ORCHESTRATION_AUDIT.md` into small, 
 - Affected packages/files:
   - `docs/perf/datagrid-performance-gates.md`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
-  - `packages/datagrid-vue-app/src/perf/dataGridPerfTrace.ts`
+  - `packages/datagrid-vue/src/app-layer/perf/dataGridPerfTrace.ts`
   - `e2e/sandbox-interactions.spec.ts`
 - Expected behavior change: validation reports warn or fail when pointer preview, auto-scroll, focus restoration, or scroll-sync drift exceeds documented budgets under controlled scenarios.
 - Tests to add/update:

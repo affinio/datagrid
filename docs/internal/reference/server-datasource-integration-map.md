@@ -37,7 +37,7 @@ Use the deeper protocol and consistency docs after the read-only grid renders.
 - [Frontend template](../../server-datasource/templates/frontend-template.md) - Vue host app template.
 - [Adapter package README](../../../packages/datagrid-server-adapters/README.md) - public adapter package docs.
 - [Vue row model package README](../../../packages/datagrid-vue/README.md) - row model/runtime layer.
-- [Vue app package README](../../../packages/datagrid-vue-app/README.md) - `<DataGrid />` app component.
+- [Vue app package README](../../../packages/datagrid-vue/README.component.md) - `<DataGrid />` app component.
 - [Package map](../../datagrid-package-map.md) - package roles and install paths.
 - [Documentation index](../../README.md) - choose the app, Vue, or core integration layer.
 

@@ -4,11 +4,11 @@ This guide explains how the Formula Engine works, why it is designed this way, a
 
 Canonical package boundary:
 
-- community API: `@affino/datagrid-formula-engine`
+- formula API: `@affino/datagrid-formula-engine`
 - grid/runtime integration: `@affino/datagrid-core`
-- enterprise boundary doc: [datagrid-formula-engine-community-vs-enterprise.md](../../datagrid-formula-engine-community-vs-enterprise.md)
+- package ownership: [datagrid-formula-engine-package-ownership.md](../../datagrid-formula-engine-package-ownership.md)
 
-## Enterprise Support Contract
+## Formula Support Contract
 
 Formula support is split by surface:
 

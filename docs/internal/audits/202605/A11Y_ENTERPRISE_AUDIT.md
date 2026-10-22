@@ -17,7 +17,7 @@ Target: **9/10** after wiring the existing headless contract into the virtualize
 - `packages/datagrid-core/src/a11y/headlessA11yStateMachine.ts` owns a deterministic headless accessibility state machine for focus, keyboard commands, roving tabindex, and ARIA state.
 - `packages/datagrid-vue/src/adapters/a11yAttributesAdapter.ts` maps headless grid/cell ARIA state to DOM-ready attributes.
 - `packages/datagrid-orchestration/src/accessibility/useDataGridA11yCellIds.ts` builds stable cell/header ids and 1-based ARIA row/column indexes.
-- `packages/datagrid-vue-app/src/stage/*` owns the rendered DataGrid stage, virtualized rows/cells, baseline body ARIA roles/counts/indexes, pinned panes, editors, overlays, keyboard routing, and focus restoration.
+- `packages/datagrid-vue/src/app-layer/stage/*` owns the rendered DataGrid stage, virtualized rows/cells, baseline body ARIA roles/counts/indexes, pinned panes, editors, overlays, keyboard routing, and focus restoration.
 - Keyboard navigation and clipboard/edit/fill shortcuts are implemented through `datagrid-orchestration` and `datagrid-vue` interaction controllers rather than the headless a11y state machine.
 
 This layering is compatible with the project architecture, but the headless a11y path and rendered stage path are not yet one integrated accessibility contract.
@@ -51,29 +51,29 @@ Core / Vue / orchestration:
 
 Rendered stage / app layer:
 
-- `packages/datagrid-vue-app/src/stage/DataGridTableStage.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageHeader.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageOverlayLayer.vue`
-- `packages/datagrid-vue-app/src/stage/DataGridTableStageFillActionMenu.vue`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellState.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageFocusRuntime.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageViewportKeyboard.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageRowIndex.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRowSelection.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridTableStageRuntime.ts`
-- `packages/datagrid-vue-app/src/overlays/DataGridFilterableCombobox.vue`
-- `packages/datagrid-vue-app/src/overlays/DataGridCellComboboxEditor.vue`
-- `packages/datagrid-vue-app/src/host/DataGridDefaultRenderer.ts`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStage.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageOverlayLayer.vue`
+- `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageFillActionMenu.vue`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellState.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageFocusRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageViewportKeyboard.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowIndex.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRowSelection.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridTableStageRuntime.ts`
+- `packages/datagrid-vue/src/app-layer/overlays/DataGridFilterableCombobox.vue`
+- `packages/datagrid-vue/src/app-layer/overlays/DataGridCellComboboxEditor.vue`
+- `packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts`
 
 Tests searched/reviewed:
 
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellState.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/useDataGridTableStageRowSelection.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellState.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/useDataGridTableStageRowSelection.spec.ts`
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridCellNavigation.contract.spec.ts`
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridKeyboardCommandRouter.contract.spec.ts`
 - `packages/datagrid-vue/src/composables/__tests__/useDataGridInlineEditorKeyRouter.contract.spec.ts`

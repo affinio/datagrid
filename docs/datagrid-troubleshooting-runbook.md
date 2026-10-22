@@ -39,7 +39,7 @@ Checks:
 
 Relevant regression:
 - `packages/datagrid-vue/src/app/__tests__/useDataGridAppViewport.contract.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
 - `e2e/sandbox-grid.spec.ts` (`column flex resize does not move the pinned pane boundary or overflow the sandbox route`)
 
 ## Symptom: Horizontal virtualization not deterministic
@@ -53,6 +53,19 @@ Relevant tests:
 - `packages/datagrid-core/src/viewport/__tests__/horizontalUpdate.contract.spec.ts`
 - `packages/datagrid-core/src/viewport/__tests__/horizontalVirtualization.stress.contract.spec.ts`
 
+## Symptom: A short pause on the first scroll
+
+Checks:
+- Separate cold page initialization from scroll work; compare the first and subsequent scrolls with the same viewport and CPU settings.
+- Synchronous authored cell/group renderer resolution does not subscribe to deferred-renderer queue revisions. Scroll start therefore avoids an extra queue-driven invalidation; pane updates for hover, sticky rows, or other state can still render cells.
+- Only the opt-in `rendererPolicy.mode: "defer"` path invalidates queue consumers on scroll start and schedules renderer release at idle. Viewport changes, editing, selection, and row data retain their existing update paths.
+- The viewport DOM adapter owns the `grid-stage--scrolling` class, including restoration after Vue patches other root classes. Keep that CSS-only state out of the stage template's reactive class binding.
+- This removes one source of cold-scroll work; a browser trace is still needed for intermittent pauses caused by layout, initial data work, or other render dependencies.
+
+Relevant regression:
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellRendering.spec.ts` (default/synchronous renderer effects stay unchanged across scroll start and idle; deferred rendering still resumes at idle).
+- [First-scroll diagnostic and reproduction](./perf/datagrid-first-scroll.md).
+
 ## Symptom: Header drifts from body near the end of horizontal scrolling
 
 Checks:
@@ -64,9 +77,9 @@ Checks:
 - Group header labels read the mirrored header scroll offset directly from its browser scroll event; pane widths remain measured through the resize observer. This avoids adding a second animation-frame delay before a clipped group label appears at its visible edge.
 
 Relevant test:
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageViewportRuntime.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
 - `e2e/sandbox-interactions.spec.ts` (`keyboard navigation across virtualized headers scrolls without focus retry churn`)
 
 ## Symptom: The final header column has no right divider
@@ -77,7 +90,7 @@ Checks:
 - Pivot/group headers still render their internal dividers through CSS; canvas paints only the outer right edge.
 
 Relevant test:
-- `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`
 
 ## Symptom: The grid frame disappears at rounded corners or outside content shows through
 
@@ -87,7 +100,7 @@ Checks:
 - Integrated stages intentionally remove their border and radius when they join another surface. Gantt table stages keep only the outer left frame at the table/timeline seam.
 
 Relevant test:
-- `packages/datagrid-vue-app/src/__tests__/ensureDataGridAppStyles.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/ensureDataGridAppStyles.contract.spec.ts`
 
 ## Symptom: Pinned canvas chrome keeps the previous theme
 

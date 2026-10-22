@@ -20,8 +20,8 @@ Current execution state:
 - Status: Completed. Center-pane diagnostics now avoid body/value sampling when no diagnostics callback is provided, and regression coverage proves disabled diagnostics do not add custom renderer calls.
 - Objective: remove avoidable diagnostics sampling from normal rendering.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
   - `docs/audits/RENDERING_PIPELINE_AUDIT.md`
 - Expected behavior change: no public behavior change; diagnostic payloads remain available when the callback is provided.
 - Tests added/covered:
@@ -50,10 +50,10 @@ Current execution state:
 - Status: Completed. `dgPerfTrace=1` now records stage render-window composition samples plus custom `cellRenderer`/`groupCellRenderer` invocation duration samples, and the enterprise browser-frame benchmark extracts render telemetry aggregates from vertical diagnostics runs.
 - Objective: add opt-in render telemetry behind existing perf tracing for renderer invocation counts, DOM node counts, and render-window composition.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
-  - `packages/datagrid-vue-app/src/stage/dataGridPerfTrace.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/dataGridPerfTrace.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: `dgPerfTrace=1` can observe render counts without adding default production overhead.
 - Tests added/covered:
@@ -69,9 +69,9 @@ Current execution state:
 - Status: Completed. `cellRenderer` and `groupCellRenderer` calls now fall back to the resolved display value when authored renderer code throws, while preserving the surrounding cell wrapper, selection/focus ownership, and placeholder surface semantics; perf traces mark failed renderer samples with `rendererError: 1`.
 - Objective: isolate public renderer failures with a safe fallback path that preserves cell text, selection/focus state, and placeholder semantics.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridCellContentRenderer.ts`
-  - `packages/datagrid-vue-app/src/stage/__tests__/useDataGridStageCellRendering.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridCellContentRenderer.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageCellRendering.spec.ts`
 - Expected behavior change: a throwing custom renderer does not break the whole grid render tree.
 - Tests added/covered:
   - Renderer throw fallback for leaf and group rows.
@@ -86,9 +86,9 @@ Current execution state:
 - Status: Completed. In touch mode during active body viewport scroll, custom `cellRenderer` and `groupCellRenderer` work is bypassed in favor of resolved display values; editor predicates, placeholder display fallback, cell shell ARIA, selection/focus ownership, and overlays remain outside the degraded renderer path.
 - Objective: make scroll-active lightweight rendering explicit for expensive custom renderers without hiding editors, active cell/focus, selection affordances, placeholders, or a11y labels.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStageCenterPane.vue`
-  - `packages/datagrid-vue-app/src/stage/DataGridTableStagePinnedPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStageCenterPane.vue`
+  - `packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue`
   - `docs/audits/MOBILE_TOUCH_SCROLL_AUDIT.md`
 - Expected behavior change: expensive authored renderers can be bypassed during active touch scroll according to a documented policy.
 - Tests added/covered:
@@ -122,9 +122,9 @@ Current execution state:
 - Status: Completed. `dgPerfTrace=1` now records `chromeDraw` samples for redraw mode, draw duration, pane count, line counts, and band counts, plus `overlayCompute` samples for overlay kind, surface, pane, segment count, lane count, and visible window size. The enterprise browser-frame benchmark extracts these into `chromeTelemetry` and `overlayTelemetry`.
 - Objective: measure chrome draw duration, redraw mode, overlay compute duration, and overlay segment counts.
 - Affected packages/files:
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageChromeCanvas.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageOverlays.ts`
-  - `packages/datagrid-vue-app/src/stage/dataGridPerfTrace.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageOverlays.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/dataGridPerfTrace.ts`
   - `scripts/bench-datagrid-enterprise-browser-frames.mjs`
 - Expected behavior change: perf tracing exposes chrome and overlay work that shares the scroll frame.
 - Tests added/covered:

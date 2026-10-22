@@ -90,9 +90,9 @@ Current execution state:
 - Objective: document and test custom renderer lifecycle, focus, keyboard, selection, editing, a11y, remount, async, cleanup, and performance expectations.
 - Affected packages/files:
   - `docs/reference/datagrid-renderer-lifecycle.md`
-  - `packages/datagrid-vue-app/src/config/dataGridFormulaOptions.ts`
-  - `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-  - `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
+  - `packages/datagrid-vue/src/app-layer/config/dataGridFormulaOptions.ts`
+  - `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+  - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
   - `packages/datagrid-vue-app/README.md`
 - Expected behavior change: custom renderer semantics become explicit; runtime changes only if tests reveal current contract gaps.
 - Tests to add/update:
@@ -112,7 +112,7 @@ Current execution state:
   - `docs/reference/datagrid-event-matrix.md`
   - `docs/datagrid-grid-api.md`
   - `packages/datagrid-core/src/core/gridApiContracts.ts`
-  - `packages/datagrid-vue-app/src/DataGrid.ts`
+  - `packages/datagrid-vue/src/app-layer/DataGrid.ts`
   - `packages/datagrid-vue/src/grid/createGrid.ts`
 - Expected behavior change: event semantics become predictable; runtime changes only if ordering gaps are found.
 - Tests to add/update:

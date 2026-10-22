@@ -6,7 +6,7 @@ This matrix documents current virtualization support for the Vue app-stage rende
 
 ## Public Configuration
 
-`@affino/datagrid-vue-app` defaults to `renderMode="virtualization"`.
+`@affino/datagrid-vue` defaults to `renderMode="virtualization"`.
 
 | Input | Row virtualization | Column virtualization | Notes |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ This matrix documents current virtualization support for the Vue app-stage rende
 | Area | Status | Owner | Validation |
 | --- | --- | --- | --- |
 | Canonical range math, clamp, overscan primitives | Supported | `@affino/datagrid-core` | Core viewport and virtualization contract suites. |
-| DOM scroll sampling, rAF commits, retained render windows | Supported | `@affino/datagrid-vue` + `@affino/datagrid-vue-app` | App viewport contract tests and browser blank-viewport detectors. |
+| DOM scroll sampling, rAF commits, retained render windows | Supported | `@affino/datagrid-vue` + `@affino/datagrid-vue` | App viewport contract tests and browser blank-viewport detectors. |
 | Core/app boundary | Partial | Core owns canonical math; Vue app owns materialization | The boundary is documented, but the Vue app still has a substantial render-window path that must stay aligned with core invariants. |
 
 ## Feature Matrix

@@ -34,7 +34,20 @@ const trackedPackages = [
   {
     packageDir: "packages/datagrid-vue",
     tiers: {
-      ".": "stable-alias",
+      ".": "stable",
+      "./headless": "stable",
+      "./headless/app": "advanced",
+      "./headless/app/worker": "advanced",
+      "./headless/advanced": "advanced",
+      "./headless/advanced/layout": "advanced",
+      "./headless/advanced/pointer": "advanced",
+      "./headless/advanced/selection": "advanced",
+      "./headless/advanced/editing": "advanced",
+      "./headless/advanced/clipboard": "advanced",
+      "./headless/advanced/filtering": "advanced",
+      "./headless/advanced/history": "advanced",
+      "./headless/stable": "stable",
+      "./headless/worker": "advanced",
       "./stable": "stable",
       "./app": "advanced",
       "./app/worker": "advanced",
@@ -47,12 +60,6 @@ const trackedPackages = [
       "./advanced/filtering": "advanced",
       "./advanced/history": "advanced",
       "./worker": "advanced",
-    },
-  },
-  {
-    packageDir: "packages/datagrid-vue-app",
-    tiers: {
-      ".": "stable",
       "./gantt": "stable-feature",
       "./aggregations": "stable-feature",
       "./advanced-filter": "stable-feature",
@@ -101,6 +108,35 @@ function normalizeExportTarget(target) {
 function sourceFileForTypes(packageDir, subpath, typesPath) {
   if (!typesPath) {
     return null
+  }
+  if (packageDir === "packages/datagrid-vue") {
+    const vueEntrypoints = {
+      ".": "src/unified.ts",
+      "./headless": "src/index.ts",
+      "./headless/app": "src/app/index.ts",
+      "./headless/app/worker": "src/app/worker.ts",
+      "./headless/stable": "src/stable.ts",
+      "./headless/worker": "src/worker.ts",
+      "./headless/advanced": "src/advanced.ts",
+      "./stable": "src/stable.ts",
+      "./app": "src/app/index.ts",
+      "./app/worker": "src/app/worker.ts",
+      "./advanced": "src/advanced.ts",
+      "./worker": "src/worker.ts",
+      "./gantt": "src/app-layer/gantt.ts",
+      "./aggregations": "src/app-layer/aggregations.ts",
+      "./advanced-filter": "src/app-layer/advanced-filter.ts",
+      "./quick-filter": "src/app-layer/quick-filter.ts",
+      "./find-replace": "src/app-layer/find-replace.ts",
+      "./internal": "src/app-layer/internal.ts",
+    }
+    if (vueEntrypoints[subpath]) return vueEntrypoints[subpath]
+    if (subpath.startsWith("./headless/advanced/")) {
+      return `src/advanced/${subpath.slice("./headless/advanced/".length)}.ts`
+    }
+    if (subpath.startsWith("./advanced/")) {
+      return `src/advanced/${subpath.slice("./advanced/".length)}.ts`
+    }
   }
   if (subpath === "./*") {
     return "src/*.ts"

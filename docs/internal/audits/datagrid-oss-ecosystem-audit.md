@@ -230,7 +230,7 @@ External contributors may avoid touching anything if they cannot tell community 
 | ---: | --- | --- | --- | --- |
 | 1 | Contributor guide | Create `CONTRIBUTING.md` with setup, package boundaries, validation tiers, API review rules, docs expectations, and commit style. | Very high | Docs-only, no API risk. |
 | 2 | Root README trust pass | Add product positioning, package choice, quick start, semver stability summary, contributor link, docs link. | Very high | Align with existing adoption/readme audits. |
-| 3 | Package map | Create `docs/datagrid-package-map.md` covering package purpose, tier, audience, import path, community/enterprise status. | High | Should resolve `@affino/datagrid` ambiguity. |
+| 3 | Package map | Create `docs/datagrid-package-map.md` covering package purpose, tier, audience, import path, package ownership and support status. | High | Should resolve `@affino/datagrid` ambiguity. |
 | 4 | Public API stability page | Create `docs/datagrid-api-stability.md` summarizing stable/advanced/internal, semver, deprecations, codemods, deep import rules. | High | Keep protocol doc as detailed reference. |
 | 5 | GitHub community files | Add issue templates, PR template, `SECURITY.md`, `CODE_OF_CONDUCT.md`. | High | Standard OSS trust signals. |
 | 6 | External migration notes | Create `docs/datagrid-version-migration.md` for package users; move `.tmp/ui-table` history lower or internal. | Medium-high | Keep existing migration guide for historical context. |

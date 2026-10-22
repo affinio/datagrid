@@ -1,11 +1,11 @@
-# App layer: `@affino/datagrid-vue-app`
+# App layer: `@affino/datagrid-vue`
 
 Status: public user guide.
 
-This is the recommended and self-contained entry point for most users. It exposes the declarative `DataGrid` component with a built-in renderer and product-facing interaction model.
+This is the recommended and self-contained entry point for most users. It exposes the declarative `DataGrid` component with a built-in renderer and product-facing interaction model. The previous `@affino/datagrid-vue` package remains as a temporary reexport facade.
 
 ```ts
-import { DataGrid } from "@affino/datagrid-vue-app"
+import { DataGrid } from "@affino/datagrid-vue"
 ```
 
 ## Data and columns
@@ -50,7 +50,7 @@ surrounding application controls the page background. The table stage paints
 its own surface. When toolbar modules are placed outside the grid, pass the
 same `theme` and `chrome` values to `DataGridModuleHost`.
 
-The app package also provides opt-in subpaths for `quick-filter`, `advanced-filter` (the UI is labeled **Filter**), `find-replace`, `aggregations`, and `gantt`. Ordinary tables should import from the package root; Gantt usage should import `DataGrid` from `@affino/datagrid-vue-app/gantt`.
+The app package also provides opt-in subpaths for `quick-filter`, `advanced-filter` (the UI is labeled **Filter**), `find-replace`, `aggregations`, and `gantt`. Ordinary tables should import from the package root; Gantt usage should import `DataGrid` from `@affino/datagrid-vue/gantt`.
 
 ## State and refs
 

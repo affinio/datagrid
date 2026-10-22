@@ -22,7 +22,7 @@ The target blockers are closed for this audit. Future ecosystem features such as
 - Internal core facade: `@affino/datagrid-core/internal` exports explicitly unsafe row/viewport normalization helpers through `packages/datagrid-core/src/internal.ts`.
 - Vue adapter facade: `@affino/datagrid-vue` re-exports common core types/helpers, runtime composables, settings/context helpers, overlay/context-menu helpers, `createGrid`, `useAffinoGrid`, and selectors from `packages/datagrid-vue/src/public.ts`.
 - Vue advanced facade: `@affino/datagrid-vue/advanced` delegates to domain advanced modules through `packages/datagrid-vue/src/advanced.ts` and the package export map.
-- App facade: `@affino/datagrid-vue-app` exports the `DataGrid` component, app prop/types, renderer contexts, menus, toolbar modules, saved-view helpers, history types, Gantt types, and configuration helpers from `packages/datagrid-vue-app/src/index.ts`.
+- App facade: `@affino/datagrid-vue-app` exports the `DataGrid` component, app prop/types, renderer contexts, menus, toolbar modules, saved-view helpers, history types, Gantt types, and configuration helpers from `packages/datagrid-vue/src/app-layer/index.ts`.
 - Orchestration package: `@affino/datagrid-orchestration` publicly exports domain primitives for accessibility, scrolling, navigation, cells, pointer, clipboard, fill, grouping, headers, editing, history, selection, rows, viewport, runtime, and contracts from `packages/datagrid-orchestration/src/index.ts`.
 - Datasource integration: core owns the `DataGridDataSource` protocol; `@affino/datagrid-server-adapters` maps DataGrid pull/filter/sort/group requests to server query shapes; `@affino/datagrid-server-client` owns HTTP/change-feed helpers.
 
@@ -58,12 +58,12 @@ The target blockers are closed for this audit. Future ecosystem features such as
 - `packages/datagrid-vue/src/grid/types.ts`
 - `packages/datagrid-vue/src/composables/useAffinoGrid.ts`
 - `packages/datagrid-vue-app/package.json`
-- `packages/datagrid-vue-app/src/DataGrid.ts`
-- `packages/datagrid-vue-app/src/index.ts`
-- `packages/datagrid-vue-app/src/config/dataGridFormulaOptions.ts`
-- `packages/datagrid-vue-app/src/stage/useDataGridStageCellRendering.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGrid.contract.spec.ts`
-- `packages/datagrid-vue-app/src/__tests__/DataGridTableStage.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/DataGrid.ts`
+- `packages/datagrid-vue/src/app-layer/index.ts`
+- `packages/datagrid-vue/src/app-layer/config/dataGridFormulaOptions.ts`
+- `packages/datagrid-vue/src/app-layer/stage/useDataGridStageCellRendering.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
 - `packages/datagrid-orchestration/package.json`
 - `packages/datagrid-orchestration/src/index.ts`
 - `packages/datagrid-plugins/src/types.ts`
@@ -80,7 +80,7 @@ The target blockers are closed for this audit. Future ecosystem features such as
 - Public protocol rules exist. `docs/internal/reference/datagrid-versioned-public-protocol.md` defines stable, advanced, and internal tiers, semver rules, forbidden deep imports, deprecation windows, and a public-protocol codemod.
 - API contracts have tests. `packages/datagrid-core/src/protocol/__tests__/entrypointTiers.contract.spec.ts` verifies stable vs advanced vs internal exports; `packages/datagrid-core/src/core/__tests__/gridApi.contract.spec.ts` covers the API facade and plugin namespace.
 - Datasource API is strong. `docs/reference/datagrid-data-source-api.md` defines pull, abort-first cancellation, push events, invalidation, backpressure diagnostics, and histogram requests.
-- App-level Vue API is production-shaped. `packages/datagrid-vue-app/src/DataGrid.ts` exposes controlled props, `rowModel`, `services`, state/saved-view APIs, virtualization/pagination options, menus, history, row selection, renderer hooks, toolbar modules, and typed component events.
+- App-level Vue API is production-shaped. `packages/datagrid-vue/src/app-layer/DataGrid.ts` exposes controlled props, `rowModel`, `services`, state/saved-view APIs, virtualization/pagination options, menus, history, row selection, renderer hooks, toolbar modules, and typed component events.
 - Renderer extension is practical. `DataGridAppCellRendererContext` and `DataGridAppGroupCellRendererContext` expose row/column/value/surface/interactive context, and component tests cover custom cell renderers, grouped row renderers, and `interactive.activate`.
 - Typing is generally strong. Public contracts use generics, typed snapshots, discriminated row nodes, typed event maps, typed datasource request/result shapes, and helper functions such as `defineDataGridColumns`.
 - Migration support is real. The migration guide documents flat-to-namespaced API movement, state restore, import migration, validation commands, and the public-protocol codemod.

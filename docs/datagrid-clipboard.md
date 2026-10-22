@@ -6,7 +6,7 @@ This document defines the enterprise clipboard contract for the mounted DataGrid
 
 - `datagrid-orchestration` owns the reusable clipboard bridge: copy payload creation, browser clipboard read/write, in-memory fallback, copied-range flash state, and basic clipboard matrix parsing.
 - `datagrid-vue` owns the canonical app clipboard state machine in `useDataGridAppClipboard.ts`: copy, cut, paste, paste-special values, pending ranges, selection normalization, validation, history capture, and local mutation safety checks.
-- `datagrid-vue-app` owns rendered keyboard/context-menu bindings, pending clipboard outlines, row-index clipboard actions, placeholder row materialization, pinned/body pane rendering, and status surfaces.
+- `datagrid-vue` app layer owns rendered keyboard/context-menu bindings, pending clipboard outlines, row-index clipboard actions, placeholder row materialization, pinned/body pane rendering, and status surfaces.
 - `datagrid-core` owns virtual-selection operation decisions and cell draft validation helpers consumed by the app clipboard path.
 - Server-backed clipboard work must stay aligned with datasource revisions, projection identity, invalidation, and server history. Unloaded virtual clipboard operations are currently blocked unless a future server delegate is approved and configured.
 
