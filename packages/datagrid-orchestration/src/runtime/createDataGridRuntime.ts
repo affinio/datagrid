@@ -71,6 +71,7 @@ function normalizeScrollOffset(value: unknown): number {
 export function createDataGridRuntime<TRow = unknown>(
   options: CreateDataGridRuntimeOptions<TRow>,
 ): DataGridRuntime<TRow> {
+  const ownsRowModel = options.rowModel == null
   const rowModel = options.rowModel ?? createAdvancedClientRowModel<TRow>({
     ...(options.clientRowModelOptions ?? {}),
     rows: options.rows ?? [],
@@ -327,10 +328,18 @@ export function createDataGridRuntime<TRow = unknown>(
     rowModel: {
       name: "rowModel",
       model: rowModel as DataGridRowModel<unknown>,
+      dispose() {
+        if (ownsRowModel) {
+          rowModel.dispose()
+        }
+      },
     },
     columnModel: {
       name: "columnModel",
       model: columnModel,
+      dispose() {
+        columnModel.dispose()
+      },
     },
     viewport: options.services?.viewport ?? defaultViewportService,
     ...options.services,

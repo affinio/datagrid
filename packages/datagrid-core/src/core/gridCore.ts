@@ -239,7 +239,10 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
       if (!handler) {
         continue
       }
-      await handler(context)
+      const result = handler(context)
+      if (result && typeof (result as Promise<void>).then === "function") {
+        await result
+      }
     }
   }
 
@@ -253,7 +256,10 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
       if (!handler) {
         continue
       }
-      await handler(context)
+      const result = handler(context)
+      if (result && typeof (result as Promise<void>).then === "function") {
+        await result
+      }
     }
   }
 
