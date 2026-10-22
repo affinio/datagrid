@@ -2,7 +2,6 @@ import { computed, ref, watch, type Ref } from "vue"
 import {
   buildDataGridSelectionProjectionIdentity,
   markDataGridVirtualSelectionProjectionStale,
-  resolveDataGridSelectionCellValue,
 } from "@affino/datagrid-core"
 import type {
   DataGridColumnSnapshot,
@@ -58,6 +57,7 @@ function formatAggregateNumber(value: number | null): string {
 }
 
 function readSelectionCellValue<TRow>(
+  api: UseDataGridRuntimeResult<TRow>["api"],
   rowNode: DataGridRowNode<TRow>,
   column: DataGridColumnSnapshot | undefined,
   readSelectionCell?: (row: DataGridRowNode<TRow>, columnKey: string) => unknown,
@@ -65,18 +65,12 @@ function readSelectionCellValue<TRow>(
   if (!column) {
     return undefined
   }
-  return resolveDataGridSelectionCellValue({
-    rowNode,
-    columnKey: column.key,
-    readSelectionCell,
-    valueGetter: typeof column.column.valueGetter === "function"
-      ? currentRowNode => column.column.valueGetter?.(currentRowNode.data)
-      : undefined,
-    accessor: typeof column.column.accessor === "function"
-      ? rowData => column.column.accessor?.(rowData)
-      : undefined,
-    field: typeof column.column.field === "string" ? column.column.field : undefined,
-  })
+  if (readSelectionCell) {
+    const customValue = readSelectionCell(rowNode, column.key)
+    if (typeof customValue !== "undefined") return customValue
+  }
+  const resolved = api.cells.resolveValue({ rowId: rowNode.rowId, columnKey: column.key, purpose: "computed" })
+  return resolved.status === "available" ? resolved.computedValue : undefined
 }
 
 function resolveRowModelVersionKey<TRow>(snapshot: DataGridRowModelSnapshot<TRow>): string {
@@ -121,13 +115,23 @@ export function useDataGridAppSelection<TRow>(
   const rowVersion = ref(0)
 
   const syncSelectionState = (snapshot: DataGridSelectionSnapshot | null): void => {
-    selectionSnapshot.value = snapshot
-    if (!snapshot || snapshot.ranges.length === 0) {
+    const runtime = options.resolveRuntime?.() ?? null
+    const rowSnapshot = runtime?.api.rows?.getSnapshot?.()
+    const columnSnapshot = runtime?.api.columns?.getSnapshot?.()
+    const currentSnapshot = snapshot && rowSnapshot && columnSnapshot
+      ? {
+          ...snapshot,
+          projectionRevision: rowSnapshot.revision ?? null,
+          columnRevision: columnSnapshot.orderRevision,
+        }
+      : snapshot
+    selectionSnapshot.value = currentSnapshot
+    if (!currentSnapshot || currentSnapshot.ranges.length === 0) {
       selectionAnchor.value = null
       return
     }
-    const activeIndex = snapshot.activeRangeIndex ?? 0
-    const activeRange = snapshot.ranges[activeIndex] ?? snapshot.ranges[0] ?? null
+    const activeIndex = currentSnapshot.activeRangeIndex ?? 0
+    const activeRange = currentSnapshot.ranges[activeIndex] ?? currentSnapshot.ranges[0] ?? null
     const anchor = activeRange?.anchor ?? null
     selectionAnchor.value = anchor
       ? {
@@ -337,7 +341,7 @@ export function useDataGridAppSelection<TRow>(
           }
 
           loadedSelectedCellCount += 1
-          const rawValue = readSelectionCellValue(rowNode, column, options.readSelectionCell)
+          const rawValue = readSelectionCellValue(runtime.api, rowNode, column, options.readSelectionCell)
           const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
           if (!Number.isFinite(numericValue)) {
             continue

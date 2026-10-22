@@ -37,14 +37,14 @@ export function useDataGridAppRowSizing<TRow>(
   const minRowHeight = options.minRowHeight ?? 24
   const rowHeightRenderRevision = ref(0)
   const measuringRowKey = ref<string | null>(null)
-  const rowResizeState = ref<{ rowKey: string; startY: number; startBase: number } | null>(null)
+  const rowResizeState = ref<{ rowIndex: number; rowId: DataGridRowNode<TRow>["rowId"] | null; startY: number; startBase: number } | null>(null)
   const isRowResizing = computed(() => rowResizeState.value !== null)
   const interactionOwnerSnapshot = computed(() => resolveDataGridAppInteractionOwnerSnapshot({
     rowResize: isRowResizing.value,
   }))
   const suppressNextRowIndexClick = ref(false)
   const autoMeasuredRowIndexes = new Set<number>()
-  const manualAutoRowHeightFloors = new Map<number, number>()
+  const manualAutoRowHeightFloors = new Map<string, number>()
 
   const shouldUseFixedRowHeight = (): boolean => {
     return options.rowHeightMode.value === "fixed"
@@ -57,25 +57,35 @@ export function useDataGridAppRowSizing<TRow>(
     return `row-${options.viewportRowStart.value + rowOffset}`
   }
 
-  const resolveFixedRowHeightPx = (rowIndex: number): number => {
-    const override = options.runtime.api.view.getRowHeightOverride(rowIndex)
+  const resolveHeightIdentity = (rowId: DataGridRowNode<TRow>["rowId"] | null | undefined, rowIndex: number): string => {
+    return rowId != null ? `id:${typeof rowId}:${String(rowId)}` : `index:${rowIndex}`
+  }
+
+  const resolveOverride = (row: DataGridRowNode<TRow>, rowIndex: number): number | null => {
+    return row.rowId != null
+      ? options.runtime.api.view.getRowHeightOverrideById(row.rowId) ?? options.runtime.api.view.getRowHeightOverride(rowIndex)
+      : options.runtime.api.view.getRowHeightOverride(rowIndex)
+  }
+
+  const resolveFixedRowHeightPx = (rowIndex: number, row?: DataGridRowNode<TRow>): number => {
+    const override = row ? resolveOverride(row, rowIndex) : options.runtime.api.view.getRowHeightOverride(rowIndex)
     return override ?? options.normalizedBaseRowHeight.value
   }
 
-  const resolveAutoRowHeightFloorPx = (rowIndex: number): number => {
+  const resolveAutoRowHeightFloorPx = (rowIndex: number, row?: DataGridRowNode<TRow>): number => {
     return Math.max(
       minRowHeight,
       options.normalizedBaseRowHeight.value,
-      manualAutoRowHeightFloors.get(rowIndex) ?? 0,
+      manualAutoRowHeightFloors.get(resolveHeightIdentity(row?.rowId, rowIndex)) ?? 0,
     )
   }
 
-  const resolveRowHeightPx = (rowIndex: number): number => {
+  const resolveRowHeightPx = (rowIndex: number, row?: DataGridRowNode<TRow>): number => {
     if (shouldUseFixedRowHeight()) {
-      return resolveFixedRowHeightPx(rowIndex)
+      return resolveFixedRowHeightPx(rowIndex, row)
     }
-    const override = options.runtime.api.view.getRowHeightOverride(rowIndex)
-    return Math.max(resolveAutoRowHeightFloorPx(rowIndex), override ?? 0)
+    const override = row ? resolveOverride(row, rowIndex) : options.runtime.api.view.getRowHeightOverride(rowIndex)
+    return Math.max(resolveAutoRowHeightFloorPx(rowIndex, row), override ?? 0)
   }
 
   const rowStyle = (row: DataGridRowNode<TRow>, rowOffset: number): Record<string, string> => {
@@ -83,14 +93,14 @@ export function useDataGridAppRowSizing<TRow>(
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (!shouldUseFixedRowHeight()) {
       return {
-        minHeight: `${resolveRowHeightPx(rowIndex)}px`,
+        minHeight: `${resolveRowHeightPx(rowIndex, row)}px`,
       }
     }
     const rowKey = resolveRenderedRowKey(row, rowOffset)
     if (measuringRowKey.value === rowKey) {
       return {}
     }
-    const px = `${resolveRowHeightPx(rowIndex)}px`
+    const px = `${resolveRowHeightPx(rowIndex, row)}px`
     return {
       height: px,
       minHeight: px,
@@ -106,7 +116,8 @@ export function useDataGridAppRowSizing<TRow>(
       return false
     }
     for (const rowIndex of autoMeasuredRowIndexes) {
-      if (manualAutoRowHeightFloors.has(rowIndex)) {
+      const row = options.runtime.api.rows.get(rowIndex)
+      if (manualAutoRowHeightFloors.has(resolveHeightIdentity(row?.rowId, rowIndex))) {
         continue
       }
       options.runtime.api.view.setRowHeightOverride(rowIndex, null)
@@ -153,8 +164,10 @@ export function useDataGridAppRowSizing<TRow>(
 
     let changed = false
     for (const [rowIndex, measuredHeight] of measuredHeightByRowIndex) {
-      const nextHeight = Math.max(measuredHeight, resolveAutoRowHeightFloorPx(rowIndex))
-      const nextOverride = nextHeight === options.normalizedBaseRowHeight.value && !manualAutoRowHeightFloors.has(rowIndex)
+      const row = options.runtime.api.rows.get(rowIndex)
+      const heightIdentity = resolveHeightIdentity(row?.rowId, rowIndex)
+      const nextHeight = Math.max(measuredHeight, resolveAutoRowHeightFloorPx(rowIndex, row ?? undefined))
+      const nextOverride = nextHeight === options.normalizedBaseRowHeight.value && !manualAutoRowHeightFloors.has(heightIdentity)
         ? null
         : nextHeight
       const previousOverride = options.runtime.api.view.getRowHeightOverride(rowIndex)
@@ -204,13 +217,14 @@ export function useDataGridAppRowSizing<TRow>(
     }
     const delta = event.clientY - state.startY
     const nextHeight = Math.max(minRowHeight, Math.round(state.startBase + delta))
-    const rowIndex = Number.parseInt(state.rowKey, 10)
+    const rowIndex = state.rowIndex
     if (Number.isFinite(rowIndex)) {
       if (options.rowHeightMode.value === "auto") {
-        manualAutoRowHeightFloors.set(rowIndex, nextHeight)
+        manualAutoRowHeightFloors.set(resolveHeightIdentity(state.rowId, rowIndex), nextHeight)
         autoMeasuredRowIndexes.add(rowIndex)
       }
-      options.runtime.api.view.setRowHeightOverride(rowIndex, nextHeight)
+      if (state.rowId != null) options.runtime.api.view.setRowHeightOverrideById(state.rowId, nextHeight)
+      else options.runtime.api.view.setRowHeightOverride(rowIndex, nextHeight)
       rowHeightRenderRevision.value += 1
       options.syncViewport?.()
     }
@@ -223,18 +237,18 @@ export function useDataGridAppRowSizing<TRow>(
     stopRowResize()
   }
 
-  const startRowResize = (event: MouseEvent, _row: DataGridRowNode<TRow>, rowOffset: number): void => {
+  const startRowResize = (event: MouseEvent, row: DataGridRowNode<TRow>, rowOffset: number): void => {
     if (options.mode.value !== "base" || shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
     event.preventDefault()
     suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
-    const rowKey = String(rowIndex)
     rowResizeState.value = {
-      rowKey,
+      rowIndex,
+      rowId: row.rowId ?? null,
       startY: event.clientY,
-      startBase: resolveRowHeightPx(rowIndex),
+      startBase: resolveRowHeightPx(rowIndex, row),
     }
     if (typeof window !== "undefined") {
       window.addEventListener("mousemove", onRowResizeMove)
@@ -250,7 +264,8 @@ export function useDataGridAppRowSizing<TRow>(
     suppressNextRowIndexClick.value = true
     const rowIndex = options.viewportRowStart.value + rowOffset
     if (options.rowHeightMode.value === "auto") {
-      manualAutoRowHeightFloors.delete(rowIndex)
+      manualAutoRowHeightFloors.delete(resolveHeightIdentity(row.rowId, rowIndex))
+      if (row.rowId != null) options.runtime.api.view.setRowHeightOverrideById(row.rowId, null)
       void nextTick(() => {
         measureVisibleRowHeights()
         options.syncViewport?.()
@@ -262,7 +277,9 @@ export function useDataGridAppRowSizing<TRow>(
     const rowElement = (event.currentTarget as HTMLElement | null)?.closest(".grid-row") as HTMLElement | null
     void nextTick(() => {
       const measured = rowElement ? Math.round(rowElement.getBoundingClientRect().height) : options.normalizedBaseRowHeight.value
-      options.runtime.api.view.setRowHeightOverride(rowIndex, Math.max(minRowHeight, measured))
+      const height = Math.max(minRowHeight, measured)
+      if (row.rowId != null) options.runtime.api.view.setRowHeightOverrideById(row.rowId, height)
+      else options.runtime.api.view.setRowHeightOverride(rowIndex, height)
       rowHeightRenderRevision.value += 1
       measuringRowKey.value = null
       options.syncViewport?.()

@@ -145,10 +145,25 @@ function readFieldPath(row: unknown, field: string): unknown {
   return value
 }
 
-function resolveColumnValue<TRow>(row: TRow, column: DataGridColumnSnapshot): unknown {
+function resolveColumnValue<TRow>(
+  row: TRow,
+  column: DataGridColumnSnapshot,
+  api?: DataGridApi<TRow>,
+  rowId?: string | number,
+  rowSnapshot?: { rowId: string | number; kind: "leaf" | "group"; data: TRow },
+): unknown {
   const metadata = getColumnMetadata<TRow>(column)
   const exportValue = metadata.export?.value?.({ row, column })
   if (typeof exportValue !== "undefined") return exportValue
+  if (api?.cells && rowId !== undefined) {
+    const resolved = api.cells.resolveValue({
+      rowId,
+      columnKey: column.key,
+      purpose: "computed",
+      ...(rowSnapshot ? { snapshot: { row: rowSnapshot, column } } : {}),
+    })
+    if (resolved.status === "available") return resolved.computedValue
+  }
   if (metadata.valueGetter) return metadata.valueGetter(row)
   if (metadata.accessor) return metadata.accessor(row)
   // DataGrid columns commonly use `key` as their data accessor. Requiring an
@@ -200,14 +215,14 @@ function toWorksheetCell<TRow>(value: unknown, column: DataGridColumnSnapshot): 
   if (type === "text") return { type: "string", value: typeof value === "string" ? value : String(value), style }
   if (type === "date" || type === "datetime") {
     const date = value instanceof Date ? value : typeof value === "string" ? new Date(value) : null
-    return date && Number.isFinite(date.getTime()) ? { type: "date", value: date, style } : { type: "string", value: String(value) }
+    return date && Number.isFinite(date.getTime()) ? { type: "date", value: new Date(date.getTime()), style } : { type: "string", value: String(value) }
   }
   if ((type === "number" || type === "currency" || type === "percent") && typeof value === "number" && Number.isFinite(value)) {
     return { type: "number", value, style }
   }
   if (typeof value === "boolean") return { type: "boolean", value }
   if (typeof value === "number" && Number.isFinite(value)) return { type: "number", value, style }
-  if (value instanceof Date && Number.isFinite(value.getTime())) return { type: "date", value }
+  if (value instanceof Date && Number.isFinite(value.getTime())) return { type: "date", value: new Date(value.getTime()) }
   if (typeof value === "bigint") return { type: "string", value: value.toString() }
   if (typeof value === "string") return { type: "string", value }
   try {
@@ -272,8 +287,6 @@ function excelSubtotalFunction(op: string): number | null {
   }
 }
 
-const yieldToBrowser = () => new Promise<void>(resolve => setTimeout(resolve, 0))
-
 export async function exportDataGridXlsx<TRow>(
   api: DataGridApi<TRow>,
   options: ExportDataGridXlsxOptions = {},
@@ -283,20 +296,36 @@ export async function exportDataGridXlsx<TRow>(
   if (options.rows && options.rows !== "current-view") {
     return { status: "unsupported", code: "incomplete-data", message: "Only the current projected view can be exported in this version." }
   }
-  const initialSnapshot = api.rows.getSnapshot()
+  const captured = api.read?.captureView?.({ include: ["rows", "columns", "computed"] })
+  const capturedRows = captured?.rows?.status === "available" ? captured.rows.value : null
+  const capturedColumns = captured?.columns?.status === "available" ? captured.columns.value : null
+  const initialSnapshot = capturedRows?.snapshot ?? api.rows.getSnapshot()
   if (initialSnapshot.loading || initialSnapshot.initialLoading) {
     return { status: "unsupported", code: "incomplete-data", message: "The grid is still loading; partial exports are refused." }
+  }
+  if (capturedRows && capturedRows.coverage.completeness !== "complete") {
+    return { status: "unsupported", code: "incomplete-data", message: "The current projection is not fully loaded; partial exports are refused." }
   }
   if (initialSnapshot.pivotModel) {
     return { status: "unsupported", code: "pivot-view", message: "Pivot exports are not supported yet." }
   }
-  const columnSnapshot = api.columns.getSnapshot()
+  const columnSnapshot = capturedColumns ?? api.columns.getSnapshot()
   const columns = options.columns === "all" ? columnSnapshot.columns : columnSnapshot.visibleColumns
   const columnsAtStart = columnSnapshot.columns
-  const formulaFields = options.formulas === "excel" ? api.rows.getFormulaFields() : []
+  const capturedComputed = captured?.computed?.status === "available" ? captured.computed.value : null
+  const liveAggregationModel = api.rows.getAggregationModel?.() ?? null
+  const capturedAggregation = liveAggregationModel
+    ? {
+        basis: liveAggregationModel.basis,
+        columns: liveAggregationModel.columns.map(column => ({ key: column.key, field: column.field, op: column.op })),
+      }
+    : null
+  const formulaFields = options.formulas === "excel"
+    ? capturedComputed?.formulas ?? api.rows.getFormulaFields()
+    : []
   const formulasByField = new Map(formulaFields.map(field => [field.field.toLocaleLowerCase("en-US"), field.formula]))
   const columnIndexes = new Map(columns.map((column, index) => [column.key.toLocaleLowerCase("en-US"), index]))
-  const rowCount = api.rows.getCount()
+  const rowCount = capturedRows?.projection.length ?? api.rows.getCount()
   const outputRows: WorksheetRow[] = []
   const rowOutlineLevels: number[] = []
   const groupRows: Array<{ outputIndex: number; level: number; aggregates: Record<string, unknown> }> = []
@@ -316,10 +345,9 @@ export async function exportDataGridXlsx<TRow>(
     warnings.add("Tree outline exports include expanded projected rows; descendants hidden by collapsed nodes are omitted.")
   }
   let activeGroupDepth = 0
-  for (let start = 0; start < rowCount; start += 256) {
-    if (signal?.aborted) return { status: "cancelled" }
-    for (let index = start; index < Math.min(rowCount, start + 256); index += 1) {
-      const node = api.rows.get(index)
+  for (let index = 0; index < rowCount; index += 1) {
+      if (signal?.aborted) return { status: "cancelled" }
+      const node = capturedRows?.projection[index] ?? api.rows.get(index)
       if (!node || (node as typeof node & { __placeholder?: boolean }).__placeholder === true) {
         return { status: "unsupported", code: "incomplete-data", message: `Row ${index} is not loaded; partial server exports are refused.` }
       }
@@ -339,7 +367,7 @@ export async function exportDataGridXlsx<TRow>(
             return toWorksheetCell<TRow>(aggregateValues[column.key], column)
           }
           if (isSourceParentRow) {
-            const value = resolveColumnValue(node.data, column)
+            const value = resolveColumnValue(node.data, column, api, node.rowId, node)
             const cell = toWorksheetCell<TRow>(value, column)
             const hierarchyIndex = resolveGroupLabelColumnIndex<TRow>(columns, "parent")
             if (columnIndex === hierarchyIndex && cell) {
@@ -376,7 +404,7 @@ export async function exportDataGridXlsx<TRow>(
             formulaTranslationFailure = "Formula '" + column.key + "' cannot be exported: " + message
             return null
           }
-          const value = resolveColumnValue(node.data, column)
+          const value = resolveColumnValue(node.data, column, api, node.rowId, node)
           const metadata = getColumnMetadata<TRow>(column)
           const numberFormat = resolveExcelNumberFormat<TRow>(column)
           const exportStyle = metadata.export?.style
@@ -385,7 +413,7 @@ export async function exportDataGridXlsx<TRow>(
             : undefined
           return { type: "formula" as const, value: excelFormula, cachedValue: excelCachedValue(value), style }
         }
-        const value = resolveColumnValue(node.data, column)
+        const value = resolveColumnValue(node.data, column, api, node.rowId, node)
         if ((typeof value === "object" && value !== null) && !(value instanceof Date)) warnings.add(`Column '${column.key}' contains object values; they were serialized as JSON text.`)
         const cell = toWorksheetCell<TRow>(value, column)
         if (columnIndex === hierarchyColumnIndex && cell && activeGroupDepth > 0) {
@@ -397,14 +425,10 @@ export async function exportDataGridXlsx<TRow>(
         return { status: "unsupported", code: "formula-translation", message: formulaTranslationFailure }
       }
       rowOutlineLevels.push(outlineLevelForRow(activeGroupDepth))
-    }
-    options.onProgress?.({ phase: "preparing", completedRows: Math.min(rowCount, start + 256), totalRows: rowCount })
-    if (start + 256 < rowCount) await yieldToBrowser()
   }
   if (options.formulas === "excel" && groupRows.length > 0) {
-    const aggregationModel = api.rows.getAggregationModel()
-    const aggregationByKey = new Map((aggregationModel?.columns ?? []).map(column => [column.key, column]))
-    const canDeriveFromCurrentRows = aggregationModel?.basis !== "source"
+    const aggregationByKey = new Map((capturedAggregation?.columns ?? []).map(column => [column.key, column]))
+    const canDeriveFromCurrentRows = capturedAggregation?.basis !== "source"
     const nextGroupBoundaryByOutputIndex = new Map<number, number>()
     const closestGroupByLevel = new Map<number, number>()
     for (let groupIndex = groupRows.length - 1; groupIndex >= 0; groupIndex -= 1) {
@@ -457,6 +481,7 @@ export async function exportDataGridXlsx<TRow>(
     }
   }
   if (signal?.aborted) return { status: "cancelled" }
+  options.onProgress?.({ phase: "preparing", completedRows: rowCount, totalRows: rowCount })
   if (api.rows.getSnapshot().revision !== initialSnapshot.revision
       || !columnsMatchSnapshot(columnsAtStart, api.columns.getSnapshot().columns)) {
     return { status: "error", code: "snapshot-changed", message: "Grid data or columns changed while the export snapshot was being prepared." }

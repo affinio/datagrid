@@ -82,6 +82,63 @@ describe("exportDataGridXlsx", () => {
     expect(worker.terminated).toBe(true)
   })
 
+  it("prepares detached XLSX values before notifying that preparation is complete", async () => {
+    const worker = new FakeWorker()
+    useWorker(worker)
+    const sourceRows = Array.from({ length: 300 }, (_, index) => ({ id: `r${index}`, amount: 3 }))
+    const columns = [
+      { key: "id", visible: true, width: 80, column: { key: "id", label: "ID", field: "id" } },
+      { key: "amount", visible: true, width: 120, column: { key: "amount", label: "Amount", field: "amount", dataType: "number" } },
+    ]
+    const api = makeApi({
+      rows: {
+        getSnapshot: () => ({ revision: 1, loading: false, initialLoading: false, groupBy: null, pivotModel: null }),
+        getCount: () => sourceRows.length,
+        get: (index: number) => ({ kind: "leaf", rowId: sourceRows[index]?.id, data: sourceRows[index] }),
+        getAggregationModel: () => null,
+        getFormulaFields: () => [],
+      },
+      columns: { getSnapshot: () => ({ revision: 1, columns, visibleColumns: columns }) },
+      read: {
+        captureView: () => {
+          const projection = sourceRows.map((row, index) => ({
+            kind: "leaf" as const,
+            rowId: row.id,
+            data: row,
+            displayIndex: index,
+          }))
+          return {
+            rows: { status: "available", revision: 1, value: {
+              snapshot: { revision: 1, loading: false, initialLoading: false, groupBy: null, pivotModel: null },
+              projection,
+              coverage: { completeness: "complete" },
+            } },
+            columns: { status: "available", revision: 1, value: { revision: 1, columns, visibleColumns: columns } },
+            computed: { status: "available", revision: 1, value: { formulas: [] } },
+          }
+        },
+      },
+      cells: {
+        resolveValue: ({ rowId, snapshot }: { rowId: string; snapshot?: { row: { data: { id: string; amount: number } } } }) => ({
+          status: "available",
+          rowId,
+          sourceValue: snapshot?.row.data.amount,
+          computedValue: snapshot?.row.data.amount,
+        }),
+      },
+    })
+
+    const result = await exportDataGridXlsx(api, {
+      onProgress: progress => {
+        if (progress.phase === "preparing" && progress.completedRows === 300) sourceRows[299]!.amount = 99
+      },
+    })
+
+    expect(result).toMatchObject({ status: "success", rowCount: 300 })
+    const workbook = worker.payload as { sheets: Array<{ rows: Array<Array<{ value: unknown }>> }> }
+    expect(workbook.sheets[0]?.rows[300]?.[1]?.value).toBe(3)
+  })
+
   it("uses the column key as the default accessor when no field is declared", async () => {
     const worker = new FakeWorker()
     useWorker(worker)
@@ -255,6 +312,35 @@ describe("exportDataGridXlsx", () => {
       getCount: () => 2,
       get: (index: number) => index === 0 ? { kind: "leaf", data: { id: "1", amount: 1 } } : undefined,
     } })
+    await expect(exportDataGridXlsx(api)).resolves.toMatchObject({ status: "unsupported", code: "incomplete-data" })
+  })
+
+  it("uses captured coverage to refuse datasource views with unloaded intervals", async () => {
+    const api = makeApi({
+      read: {
+        captureView: vi.fn(() => ({
+          rows: {
+            status: "available",
+            revision: 1,
+            value: {
+              snapshot: { revision: 1, loading: false, initialLoading: false, groupBy: null, pivotModel: null },
+              projection: [],
+              coverage: {
+                scope: "current-projection",
+                completeness: "partial",
+                queryRevision: 1,
+                datasetVersion: "server-v1",
+                totalRowCount: 2,
+                loadedRowCount: 1,
+                missingIntervals: [{ start: 1, end: 1 }],
+              },
+            },
+          },
+          columns: { status: "unsupported", revision: null },
+          computed: { status: "unsupported", revision: null },
+        })),
+      },
+    })
     await expect(exportDataGridXlsx(api)).resolves.toMatchObject({ status: "unsupported", code: "incomplete-data" })
   })
 

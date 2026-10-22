@@ -70,6 +70,12 @@ Out of the box (through this package):
 - Worker-owned row model support for off-main-thread compute path.
 - Server/data-source row model contracts for backend pull/push flows.
 
+Cell-range coordinates are bound to the active row projection and visible
+column order. The Vue app layer stamps those revisions for its selection
+service and clears stale positional ranges when rows change. Record selection
+uses row IDs; `mode: "all"` is scoped to the current projection and becomes
+stale after a projection revision change.
+
 ## Performance snapshot (how to read it)
 
 Representative pressure benchmark trend from `artifacts/performance/worker-pressure-matrix-scaled`:
@@ -311,6 +317,16 @@ runtime.setPivotModel(null)
 
 When pivot is active, runtime automatically reconciles `snapshot.pivotColumns` into the column model
 so adapters render pivot columns without manual `setColumns` wiring. Base columns remain the source of truth.
+
+### Framework independent reads and cell values
+
+The Core API exposed by `runtime.api` provides `read.captureView()` for one synchronous, revision-labelled capture of requested row, column, computed, and selection snapshots. Inspect current-projection coverage before exporting or processing datasource-backed rows. Use `cells.resolveValue({ rowId, columnKey, purpose })` when a workflow needs source, accessor/computed, or formatted display values for a logical cell. Pass `snapshot: { row, column }` from a captured view when resolving values across an asynchronous operation; the resolver then uses only those captured inputs. Inline editing and selection summaries use the computed/accessor purpose. XLSX export resolves and detaches worksheet cell values before handing the matrix to the worker, honors explicit export-value callbacks first, and refuses incomplete or pivot projections. Its `preparing` progress callback fires after matrix preparation; the export does not require a row-cloning callback. These methods are framework independent; Vue owns editor drafts and DOM focus.
+
+State imports use `runtime.api.state.validate()` for preflight diagnostics and
+`runtime.api.state.set()` for an applied/skipped section report. Failures include
+the failed section and rollback status. The app's manual row resizing stores
+overrides by stable row ID; index overrides remain reserved for virtualizer
+measurements.
 
 ## Managed wheel scroll (advanced)
 

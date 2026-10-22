@@ -1414,6 +1414,14 @@ const DataGridRuntimeComponent = defineComponent({
     } = useDataGridAppRowSelection<unknown>({
       resolveRuntime: () => dataGridRef.value,
     })
+    watch(dataGridRef, (grid, _previous, onCleanup) => {
+      if (!grid) return
+      const unsubscribe = grid.api.events.on("rows:changed", () => {
+        syncSelectionSnapshotFromRuntime()
+        syncRowSelectionSnapshotFromRuntime()
+      })
+      onCleanup(unsubscribe)
+    }, { flush: "post" })
     const { selectionService: columnSelectionService } = useDataGridAppColumnSelection()
     const resolvedRowSelectionService = computed<DataGridSelectionService>(() => {
       return showRowSelection.value ? rowSelectionService : createDisabledRowSelectionService()

@@ -8,9 +8,14 @@ type DemoRow = Record<string, unknown>
 function createRuntime() {
   return {
     api: {
+      rows: {
+        get: vi.fn(() => null),
+      },
       view: {
         getRowHeightOverride: vi.fn<(rowIndex: number) => number | null>(() => null),
         setRowHeightOverride: vi.fn(),
+        getRowHeightOverrideById: vi.fn<(rowId: string | number) => number | null>(() => null),
+        setRowHeightOverrideById: vi.fn(),
         measureRowHeight: vi.fn(),
       },
     },
@@ -42,6 +47,22 @@ describe("useDataGridAppRowSizing contract", () => {
       height: "42px",
       minHeight: "42px",
     })
+  })
+
+  it("uses stable row ID overrides ahead of projection-index measurements", () => {
+    const runtime = createRuntime()
+    runtime.api.view.getRowHeightOverrideById.mockReturnValue(52)
+    runtime.api.view.getRowHeightOverride.mockReturnValue(42)
+    const sizing = useDataGridAppRowSizing<DemoRow>({
+      mode: ref("tree"),
+      rowHeightMode: ref("fixed"),
+      normalizedBaseRowHeight: ref(31),
+      viewportRowStart: ref(12),
+      runtime: runtime as never,
+    })
+
+    expect(sizing.rowStyle(createRow("stable-row"), 0)).toEqual({ height: "52px", minHeight: "52px" })
+    expect(runtime.api.view.getRowHeightOverrideById).toHaveBeenCalledWith("stable-row")
   })
 
   it("applies the base row height as an auto-mode floor", () => {
@@ -83,7 +104,7 @@ describe("useDataGridAppRowSizing contract", () => {
     expect(rowHeightMode.value).toBe("auto")
     expect(sizing.isRowResizing.value).toBe(false)
     expect(sizing.interactionOwnerSnapshot.value.activeOwners).toEqual([])
-    expect(runtime.api.view.setRowHeightOverride).toHaveBeenCalledWith(0, 61)
+    expect(runtime.api.view.setRowHeightOverrideById).toHaveBeenCalledWith("row-1", 61)
   })
 
   it("ignores touch-generated row resize mousedown events", () => {

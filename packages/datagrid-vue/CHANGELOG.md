@@ -10,6 +10,17 @@
 
 - Removed the separate enterprise Vue app, diagnostics, and formula extension packages after migrating their supported functionality to the ordinary Vue and formula-engine packages.
 
+## 0.15.0
+
+### Added
+
+- Integrated Core read views, cell value resolution, restore reports, and stable-ID row sizing into Vue workflows.
+- Prepared detached XLSX cell values before worker serialization.
+
+### Fixed
+
+- Reconciled stale selection snapshots when row projections change.
+
 ## 0.12.0
 
 ### Added

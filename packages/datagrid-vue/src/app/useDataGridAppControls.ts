@@ -364,16 +364,22 @@ export function useDataGridAppControls<TRow, TPivotLayoutId extends string = str
         stateOutputText.value = "State migration failed"
         return
       }
-      runtime.api.state.set(migrated, {
+      const restoreOptions = {
         applyColumns: true,
         applySelection: true,
         applyViewport: true,
         strict: false,
-      })
-      stateOutputText.value = "State applied"
+      } as const
+      const validation = runtime.api.state.validate(migrated, restoreOptions)
+      const restoreReport = runtime.api.state.set(migrated, restoreOptions)
+      const skipped = [...restoreReport.skippedSections]
+      if (validation.issues.length > 0) skipped.push(...validation.issues.map(issue => issue.section))
+      stateOutputText.value = skipped.length > 0
+        ? `State applied; skipped: ${[...new Set(skipped)].join(", ")}`
+        : "State applied"
       scheduleViewportSync()
-    } catch {
-      stateOutputText.value = "Invalid state JSON"
+    } catch (error) {
+      stateOutputText.value = error instanceof Error ? error.message : "State restore failed"
     }
   }
 

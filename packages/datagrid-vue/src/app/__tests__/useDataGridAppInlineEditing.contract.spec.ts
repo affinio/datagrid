@@ -452,6 +452,19 @@ describe("useDataGridAppInlineEditing contract", () => {
     expect(api.editingCellRejectedReason.value).toBe("conflict")
   })
 
+  it("keeps the editor open and refuses to overwrite a cell changed during editing", () => {
+    const harness = createHarness()
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.updateEditingCellValue("Grace")
+    ;(harness.rows[0] as unknown as { data: DemoRow }).data.owner = "External"
+
+    harness.api.commitInlineEdit()
+
+    expect(harness.applyEdits).not.toHaveBeenCalled()
+    expect(harness.api.editingCell.value).toEqual({ rowId: "r1", columnKey: "owner" })
+    expect(harness.api.editingCellRejectedReason.value).toBe("external-update-conflict")
+  })
+
   it("commits without restoring selection or focus when the next cell already owns pointer focus", () => {
     const harness = createHarness()
 
