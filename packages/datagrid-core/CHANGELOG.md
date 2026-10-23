@@ -1,5 +1,15 @@
 # @affino/datagrid-core
 
+## 0.14.0
+
+### Added
+
+- Exported viewport virtualization constants and frame-budget types from the advanced entry point.
+
+### Fixed
+
+- Kept positional selection current across viewport-only row-model revisions and preserved row-height overrides by row ID across projection changes.
+
 ## 0.13.0
 
 ### Added

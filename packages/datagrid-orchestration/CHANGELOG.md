@@ -1,5 +1,11 @@
 # @affino/datagrid-orchestration
 
+## 0.8.1
+
+### Fixed
+
+- Disposed runtime-owned row and column models with the orchestration runtime, releasing their subscriptions and resources.
+
 ## 0.8.0
 
 ### Added

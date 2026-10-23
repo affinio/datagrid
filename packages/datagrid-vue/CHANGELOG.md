@@ -1,6 +1,6 @@
 # @affino/datagrid-vue
 
-## Unreleased
+## 0.16.0
 
 ### Added
 
@@ -9,6 +9,14 @@
 ### Removed
 
 - Removed the separate enterprise Vue app, diagnostics, and formula extension packages after migrating their supported functionality to the ordinary Vue and formula-engine packages.
+
+### Fixed
+
+- Preserved cell-selection anchors across projection changes and committed edits made on materialized placeholder rows.
+
+### Validation
+
+- Vue package type-checks, contract tests, consumer checks, and production build passed.
 
 ## 0.15.0
 

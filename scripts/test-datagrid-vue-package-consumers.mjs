@@ -53,7 +53,7 @@ function runFixture(name, tarballs, withGantt) {
       "@affino/datagrid-worker": `file:${tarballs.worker}`,
       "@affino/datagrid-gantt": `file:${tarballs.gantt}`,
       "@affino/datagrid-vue": `file:${tarballs.vue}`,
-      vue: "3.5.22",
+      vue: "3.5.44",
     },
     devDependencies: { typescript: "7.0.2" },
   }, null, 2))
