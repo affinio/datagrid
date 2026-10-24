@@ -20,7 +20,7 @@ import type {
   TreeProjectionResult,
 } from "../tree/treeProjectionRuntime.js"
 import { createEmptyTreeDataDiagnostics } from "../clientRowModelHelpers.js"
-import { alwaysMatchesFilter, normalizeLeafRow, normalizeText, readRowField, shouldUseFilteredRowsForTreeSort } from "./clientRowProjectionPrimitives.js"
+import { alwaysMatchesFilter, normalizeLeafRow, normalizeText, shouldUseFilteredRowsForTreeSort } from "./clientRowProjectionPrimitives.js"
 import { buildGroupRowIndexByRowId, enforceCacheCap, patchProjectedRowsByIdentity, remapRowsByIdentity } from "../clientRowRuntimeUtils.js"
 
 export interface GroupProjectionAggregationEngine<T> {
@@ -46,6 +46,7 @@ export interface RunGroupProjectionStageParams<T> {
   groupBy: DataGridGroupBySpec | null
   filterModel: DataGridFilterSnapshot | null
   sourceRows: readonly DataGridRowNode<T>[]
+  readProjectionRowField: (row: DataGridRowNode<T>, key: string, field?: string) => unknown
   sortedRowsProjection: readonly DataGridRowNode<T>[]
   filteredRowsProjection: readonly DataGridRowNode<T>[]
   previousGroupedRowsProjection: readonly DataGridRowNode<T>[]
@@ -256,7 +257,7 @@ export function runGroupProjectionStage<T>(
         groupBy: params.groupBy,
         expansionSnapshot: params.expansionSnapshot,
         expansionToggledKeys: params.expansionToggledKeys,
-        readRowField: (row, key, field) => readRowField(row, key, field),
+        readRowField: params.readProjectionRowField,
         normalizeText,
         normalizeLeafRow,
         groupValueCache: shouldCacheGroupValues && maxGroupValueCacheSize > 0

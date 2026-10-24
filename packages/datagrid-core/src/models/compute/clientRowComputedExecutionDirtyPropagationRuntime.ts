@@ -1,3 +1,5 @@
+import type { DataGridFormulaReferenceRowDomain } from "../rowModel.js"
+
 export interface DataGridComputedDirtyPropagationRuntime {
   dirtyRowIndexesByNode: Array<number[] | undefined>
   dirtyNodeMarks: Uint8Array
@@ -25,6 +27,39 @@ export interface DataGridComputedDirtyPropagationRuntime {
   enqueueDirtyNodeRowIndex: (nodeIndex: number, rowIndex: number) => void
   getDirtyNodeCount: () => number
   getDirtyRowsCount: () => number
+}
+
+/** Resolve consumers whose row-domain reads a changed input row. */
+export function resolveDirtyConsumerRowIndexes(
+  rowDomain: DataGridFormulaReferenceRowDomain,
+  changedRowIndex: number,
+  rowCount: number,
+): number[] {
+  const indexes: number[] = []
+  const relativeRangeKind = "win" + "dow"
+  const add = (index: number): void => {
+    if (Number.isInteger(index) && index >= 0 && index < rowCount) indexes.push(index)
+  }
+  if (rowDomain.kind === "current") {
+    add(changedRowIndex)
+  } else if (rowDomain.kind === "relative") {
+    add(changedRowIndex - rowDomain.offset)
+  } else if (rowDomain.kind === "absolute") {
+    if (changedRowIndex === rowDomain.rowIndex) {
+      for (let index = 0; index < rowCount; index += 1) add(index)
+    }
+  } else if (rowDomain.kind === relativeRangeKind) {
+    const relativeRange = rowDomain as { startOffset: number; endOffset: number }
+    const start = changedRowIndex - Math.max(relativeRange.startOffset, relativeRange.endOffset)
+    const end = changedRowIndex - Math.min(relativeRange.startOffset, relativeRange.endOffset)
+    for (let index = start; index <= end; index += 1) add(index)
+  } else {
+    const absoluteRange = rowDomain as { startRowIndex: number; endRowIndex: number }
+    if (changedRowIndex >= absoluteRange.startRowIndex && changedRowIndex <= absoluteRange.endRowIndex) {
+      for (let index = 0; index < rowCount; index += 1) add(index)
+    }
+  }
+  return indexes
 }
 
 export function createDataGridComputedDirtyPropagationRuntime(

@@ -14,6 +14,7 @@ import type {
   DataGridComputedTokenReader,
 } from "./clientRowComputedExecutionRuntime.js"
 import type { DataGridComputedDirtyPropagationRuntime } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
+import { resolveDirtyConsumerRowIndexes } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
 
 export interface DataGridComputedExecutionFinalizeResult<T> {
   changedRowIds: readonly DataGridRowId[]
@@ -121,17 +122,21 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
     return context.getSourceColumnValues(fieldInput)
   }
   const columnReadContext: DataGridComputedColumnReadContext<T> = {
-    readFieldAtRow: (field, rowIndex, rowNode) => {
+    readFieldAtRow: (field, rowIndex) => {
       const values = getColumnValuesForField(field)
       const readFieldDirect = context.resolveRowFieldReader(field)
+      const targetRowNode = sourceRowsBaseline[rowIndex]
+      if (!targetRowNode || rowIndex < 0 || rowIndex >= rowCount) {
+        return undefined
+      }
       if (forceRowReadFallback) {
-        const directValue = readFieldDirect(rowNode)
+        const directValue = readFieldDirect(targetRowNode)
         values[rowIndex] = directValue
         return directValue
       }
       if (rowIndex in values) {
         if (verifyColumnCacheParity) {
-          const directValue = readFieldDirect(rowNode)
+          const directValue = readFieldDirect(targetRowNode)
           if (!Object.is(directValue, values[rowIndex])) {
             context.clearSourceColumnValuesCache()
             forceRowReadFallback = true
@@ -143,7 +148,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         }
         return values[rowIndex]
       }
-      const value = readFieldDirect(rowNode)
+      const value = readFieldDirect(targetRowNode)
       values[rowIndex] = value
       return value
     },
@@ -414,18 +419,31 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       writeFieldAtRow(computed.field, rowIndex, nextValue)
 
       for (const dependentIndex of dependentIndexes) {
+        const dependent = context.getComputedEntryByIndex()[dependentIndex]
+        const rowDomains = dependent?.deps
+          .filter(dependency => (
+            (dependency.domain === "computed" && dependency.value === computedName)
+            || (dependency.domain === "field" && dependency.value === computed.field)
+          ))
+          .map(dependency => dependency.rowDomain)
+        const dependentRows = rowDomains?.length
+          ? [...new Set(rowDomains.flatMap(domain => resolveDirtyConsumerRowIndexes(domain, rowIndex, rowCount)))]
+          : [rowIndex]
+        if (dependentRows.length === 0) continue
         let dependentDirtyRows = nextDirtyRowIndexesByNode[dependentIndex]
         if (!dependentDirtyRows) {
           dependentDirtyRows = []
           nextDirtyRowIndexesByNode[dependentIndex] = dependentDirtyRows
           nextDirtyNodeIndexes.push(dependentIndex)
         }
-        dependentDirtyRows.push(rowIndex)
-        dirtyRuntime.markDirtyRowForNode(dependentIndex, rowIndex)
+        dependentDirtyRows.push(...dependentRows)
+        for (const dependentRowIndex of dependentRows) {
+          dirtyRuntime.markDirtyRowForNode(dependentIndex, dependentRowIndex)
+          dirtyRuntime.recordDirtyCauseForNodeRow(dependentIndex, dependentRowIndex, "computed", computedName)
+          dirtyRuntime.markDirtyRow(dependentRowIndex)
+        }
         dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyComputedCauseCountsByNode, dependentIndex, computedName)
-        dirtyRuntime.recordDirtyCauseForNodeRow(dependentIndex, rowIndex, "computed", computedName)
         dirtyRuntime.markDirtyNode(dependentIndex)
-        dirtyRuntime.markDirtyRow(rowIndex)
         if (levelNodeIndexSet.has(dependentIndex)) {
           queuedSameLevelWork = true
         }

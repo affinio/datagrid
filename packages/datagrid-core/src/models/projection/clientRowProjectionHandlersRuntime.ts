@@ -216,6 +216,7 @@ export function createClientRowProjectionHandlersRuntime<T>(
       groupBy: context.getGroupBy(),
       filterModel: context.getFilterModel(),
       sourceRows: context.getSourceRows(),
+      readProjectionRowField: context.readRowField,
       sortedRowsProjection: context.runtimeState.sortedRowsProjection,
       filteredRowsProjection: context.runtimeState.filteredRowsProjection,
       previousGroupedRowsProjection: context.runtimeState.groupedRowsProjection,

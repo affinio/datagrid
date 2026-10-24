@@ -248,6 +248,9 @@ export function createClientRowComputedSnapshotRuntime<T>(
           ? previousIndexById.get(rowId)
           : undefined
         if (typeof previousIndex !== "number" || !(previousIndex in values)) {
+          if (typeof previousIndex !== "number") {
+            fieldChanged = true
+          }
           continue
         }
         nextValues[nextIndex] = values[previousIndex]
@@ -262,6 +265,9 @@ export function createClientRowComputedSnapshotRuntime<T>(
         changed = true
         continue
       }
+      // Row identity is part of overlay materialization. A same-position
+      // replacement can leave a hole for the new row while preserving both
+      // array length and every surviving row's index.
       if (fieldChanged || nextValues.length !== values.length) {
         snapshotState.overlayValuesByField.set(field, nextValues)
         changed = true

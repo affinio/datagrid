@@ -163,7 +163,10 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         return
       }
       const staleStagesBeforeRequest = new Set<DataGridClientProjectionStage>(context.getStaleStages())
-      const patchProjection = runClientRowPatchProjection<T>({
+      // Never carry a completed pivot delta into a later projection cycle.
+      // The invalidated pivot stage rebuilds from the current source rows.
+      context.setPendingPivotValuePatch(null)
+      runClientRowPatchProjection<T>({
         changedRowIds: patchResult.changedRowIds,
         changedUpdatesById: patchResult.changedUpdatesById,
         previousRowsById: patchResult.previousRowsById,
@@ -190,7 +193,6 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         patchTreeProjectionCacheRowsByIdentity: context.patchTreeProjectionCacheRowsByIdentity,
         recomputeWithExecutionPlan: context.recomputeWithExecutionPlan,
       })
-      context.setPendingPivotValuePatch(patchProjection.pendingPivotValuePatch)
       projectionCommitted = true
       if (options.emit !== false) {
         context.emit()

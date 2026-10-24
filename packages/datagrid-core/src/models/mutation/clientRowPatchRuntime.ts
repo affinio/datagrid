@@ -10,16 +10,13 @@ import type {
 } from "../rowModel.js"
 import type { DataGridProjectionPolicy } from "../projection/projectionPolicy.js"
 import type { DataGridClientProjectionStage } from "../projection/clientRowProjectionEngine.js"
-import type { DataGridPivotIncrementalPatchRow } from "../pivot/pivotRuntime.js"
 import {
   analyzeRowPatchChangeSet,
   buildPatchProjectionExecutionPlan,
   collectAggregationModelFields,
   collectFilterModelFields,
   collectGroupByFields,
-  collectPivotAxisFields,
   collectPivotModelFields,
-  collectPivotValueFields,
   collectSortModelFields,
   collectTreeDataDependencyFields,
   type DataGridPatchChangeSet,
@@ -176,13 +173,9 @@ export interface RunClientRowPatchProjectionInput<T> {
   ) => void
 }
 
-export interface RunClientRowPatchProjectionResult<T> {
-  pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null
-}
-
 export function runClientRowPatchProjection<T>(
   input: RunClientRowPatchProjectionInput<T>,
-): RunClientRowPatchProjectionResult<T> {
+): void {
   const filterActive = hasActiveFilterModel(input.filterModel)
   const sortActive = input.sortModel.length > 0
   const groupActive = Boolean(input.treeData) || Boolean(input.groupBy) || Boolean(input.pivotModel)
@@ -235,42 +228,25 @@ export function runClientRowPatchProjection<T>(
       }
     : changeSet
 
-  let pendingPivotValuePatch: readonly DataGridPivotIncrementalPatchRow<T>[] | null = null
-  if (input.pivotModel && input.recomputePolicy.group) {
-    const pivotAxisFields = collectPivotAxisFields(input.pivotModel)
-    const pivotValueFields = collectPivotValueFields(input.pivotModel)
-    const affectsPivotAxis = pivotAxisFields.size > 0
-      && input.projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotAxisFields)
-    const affectsPivotValues = pivotValueFields.size === 0
-      ? false
-      : input.projectionPolicy.dependencyGraph.affectsAny(effectiveChangeSet.affectedFields, pivotValueFields)
-    const canTryIncrementalPivotPatch =
-      (affectsPivotValues || affectsPivotAxis) &&
-      !effectiveChangeSet.stageImpact.affectsFilter &&
-      !effectiveChangeSet.stageImpact.affectsSort &&
-      !input.staleStagesBeforeRequest.has("group") &&
-      !input.staleStagesBeforeRequest.has("pivot")
-    if (canTryIncrementalPivotPatch) {
-      const changedRows: DataGridPivotIncrementalPatchRow<T>[] = []
-      for (const changedRowId of input.changedRowIds) {
-        const previousRow = input.previousRowsById.get(changedRowId)
-        const nextRow = input.nextRowsById.get(changedRowId)
-        if (!previousRow || !nextRow || previousRow.kind !== "leaf" || nextRow.kind !== "leaf") {
-          continue
-        }
-        changedRows.push({
-          previousRow,
-          nextRow,
-        })
+  const recomputeTreeAggregates = Boolean(input.treeData)
+    && input.recomputePolicy.group
+    && changeSet.stageImpact.affectsAggregation
+    && !changeSet.stageImpact.affectsGroup
+  const projectionChangeSet = recomputeTreeAggregates
+    ? {
+        ...effectiveChangeSet,
+        stageImpact: {
+          ...effectiveChangeSet.stageImpact,
+          affectsGroup: true,
+        },
       }
-      if (changedRows.length > 0) {
-        pendingPivotValuePatch = changedRows
-      }
-    }
+    : effectiveChangeSet
+  if (recomputeTreeAggregates) {
+    input.invalidateTreeProjectionCaches()
   }
 
   const projectionExecutionPlan = buildPatchProjectionExecutionPlan({
-    changeSet: effectiveChangeSet,
+    changeSet: projectionChangeSet,
     recomputePolicy: input.recomputePolicy,
     staleStages: input.staleStagesBeforeRequest,
     allStages: input.allStages,
@@ -279,8 +255,4 @@ export function runClientRowPatchProjection<T>(
   input.recomputeWithExecutionPlan(projectionExecutionPlan, {
     patchChangedRowCount: input.changedRowIds.length,
   })
-
-  return {
-    pendingPivotValuePatch,
-  }
 }

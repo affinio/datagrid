@@ -164,6 +164,9 @@ function buildPivotProjectionRows<T>(
     })),
   }, {
     aggregationRegistry: options.aggregationRegistry,
+    readRowField: options.readRowField
+      ? (rowNode, key, field) => options.readRowField?.(rowNode, key, field ?? key)
+      : undefined,
   })
   const canUseIncrementalPivotAggregation = pivotAggregationEngine.isIncrementalAggregationSupported()
   const rowFieldResolvers: DataGridPivotFieldResolver<T>[] = pivotModel.rows

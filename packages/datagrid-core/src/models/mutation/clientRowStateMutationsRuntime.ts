@@ -288,7 +288,10 @@ export function createClientRowStateMutationsRuntime<T>(
       context.bumpGroupRevision()
       context.setProjectionInvalidation(["pivotChanged"])
       try {
-        context.recomputeFromStage("pivot")
+        // Pivot mode changes the group-stage input contract (pivot uses the
+        // filtered rows directly; the regular projection uses sorted/grouped
+        // rows). Rebuild from that boundary when entering or leaving pivot.
+        context.recomputeFromStage("group")
       } catch (error) {
         context.setPivotModel(currentPivotModel)
         context.resetPivotColumns()

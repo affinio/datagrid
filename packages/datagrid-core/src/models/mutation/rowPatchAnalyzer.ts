@@ -306,6 +306,11 @@ export function analyzeRowPatchChangeSet<T>(
       ? true
       : input.dependencyGraph.affectsAny(affectedFields, input.sortFields)
   )
+  const affectsAggregation = input.aggregationActive && (
+    input.aggregationFields.size === 0
+      ? true
+      : input.dependencyGraph.affectsAny(affectedFields, input.aggregationFields)
+  )
   const affectsGroup = input.groupActive && (
     input.hasTreeData
       ? (
@@ -319,12 +324,6 @@ export function analyzeRowPatchChangeSet<T>(
             : input.dependencyGraph.affectsAny(affectedFields, input.groupFields)
       )
   )
-  const affectsAggregation = input.aggregationActive && (
-    input.aggregationFields.size === 0
-      ? true
-      : input.dependencyGraph.affectsAny(affectedFields, input.aggregationFields)
-  )
-
   const clearSortValueCache = input.sortActive && affectsSort && input.sortFields.size === 0
   const evictSortValueRowIds = input.sortActive && affectsSort && input.sortFields.size > 0
     ? changedRowIds

@@ -11,7 +11,7 @@ import type {
 import type { DataGridCompiledFormulaField } from "../formula/formulaEngine.js"
 import type { DataGridFormulaRuntimeErrorsCollector } from "./clientRowFormulaDiagnosticsRuntime.js"
 import type { DataGridFormulaExecutionPlan } from "@affino/datagrid-formula-engine"
-import { createDataGridComputedDirtyPropagationRuntime } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
+import { createDataGridComputedDirtyPropagationRuntime, resolveDirtyConsumerRowIndexes } from "./clientRowComputedExecutionDirtyPropagationRuntime.js"
 import { createDataGridComputedExecutionExecutorRuntime } from "./clientRowComputedExecutionExecutorRuntime.js"
 import { createComputedExecutionDiagnostics } from "./clientRowComputedExecutionDiagnosticsRuntime.js"
 
@@ -21,6 +21,7 @@ export interface DataGridResolvedComputedDependency {
   token: DataGridComputedDependencyToken
   domain: ComputedDependencyDomain
   value: string
+  rowDomain: import("../rowModel.js").DataGridFormulaReferenceRowDomain
 }
 
 export interface DataGridRegisteredComputedField<T> {
@@ -258,7 +259,7 @@ export function createClientRowComputedExecutionRuntime<T>(
       }
 
       let selected = false
-      const seenRootIndexes = new Set<number>()
+      const seenRootIndexes = new Set<string>()
 
       if (hasExplicitChangedContexts) {
         for (const contextKey of normalizedChangedContextKeys) {
@@ -268,8 +269,9 @@ export function createClientRowComputedExecutionRuntime<T>(
           }
           selected = true
           for (const nodeIndex of rootIndexesForContext) {
-            if (!seenRootIndexes.has(nodeIndex)) {
-              seenRootIndexes.add(nodeIndex)
+            const key = `${nodeIndex}:${rowIndex}`
+            if (!seenRootIndexes.has(key)) {
+              seenRootIndexes.add(key)
               dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
             }
             dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyContextCauseCountsByNode, nodeIndex, contextKey)
@@ -317,12 +319,27 @@ export function createClientRowComputedExecutionRuntime<T>(
       for (const field of normalizedChangedFields) {
         const rootIndexesForField = context.resolveComputedRootIndexesForField(field)
         for (const nodeIndex of rootIndexesForField) {
-          if (!seenRootIndexes.has(nodeIndex)) {
-            seenRootIndexes.add(nodeIndex)
-              dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, rowIndex)
+          const root = context.getComputedEntryByIndex()[nodeIndex]
+          const matchingDomains = root?.deps
+            .filter(dependency => (
+              dependency.domain === "field"
+              && (dependency.value === field
+                || dependency.value.startsWith(`${field}.`)
+                || field.startsWith(`${dependency.value}.`))
+            ))
+            .map(dependency => dependency.rowDomain)
+          const consumerIndexes = matchingDomains?.length
+            ? [...new Set(matchingDomains.flatMap(domain => resolveDirtyConsumerRowIndexes(domain, rowIndex, rowCount)))]
+            : [rowIndex]
+          for (const consumerRowIndex of consumerIndexes) {
+            const key = `${nodeIndex}:${consumerRowIndex}`
+            if (!seenRootIndexes.has(key)) {
+              seenRootIndexes.add(key)
+              dirtyRuntime.enqueueDirtyNodeRowIndex(nodeIndex, consumerRowIndex)
+            }
+            dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyFieldCauseCountsByNode, nodeIndex, field)
+            dirtyRuntime.recordDirtyCauseForNodeRow(nodeIndex, consumerRowIndex, "field", field)
           }
-          dirtyRuntime.incrementCauseCount(dirtyRuntime.dirtyFieldCauseCountsByNode, nodeIndex, field)
-          dirtyRuntime.recordDirtyCauseForNodeRow(nodeIndex, rowIndex, "field", field)
         }
       }
       if (selected) {
