@@ -287,6 +287,10 @@ function excelSubtotalFunction(op: string): number | null {
   }
 }
 
+function yieldToMainThread(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0))
+}
+
 export async function exportDataGridXlsx<TRow>(
   api: DataGridApi<TRow>,
   options: ExportDataGridXlsxOptions = {},
@@ -324,8 +328,14 @@ export async function exportDataGridXlsx<TRow>(
     ? capturedComputed?.formulas ?? api.rows.getFormulaFields()
     : []
   const formulasByField = new Map(formulaFields.map(field => [field.field.toLocaleLowerCase("en-US"), field.formula]))
+  const formulaByColumn = options.formulas === "excel"
+    ? columns.map(column => formulasByField.get(column.key.toLocaleLowerCase("en-US")))
+    : null
   const columnIndexes = new Map(columns.map((column, index) => [column.key.toLocaleLowerCase("en-US"), index]))
   const rowCount = capturedRows?.projection.length ?? api.rows.getCount()
+  const maxCellsPerTask = 4096
+  const shouldYieldDuringPreparation = rowCount * columns.length > maxCellsPerTask
+  const rowsPerPreparationChunk = Math.max(1, Math.floor(maxCellsPerTask / Math.max(1, columns.length)))
   const outputRows: WorksheetRow[] = []
   const rowOutlineLevels: number[] = []
   const groupRows: Array<{ outputIndex: number; level: number; aggregates: Record<string, unknown> }> = []
@@ -387,6 +397,13 @@ export async function exportDataGridXlsx<TRow>(
         groupRows.push({ outputIndex: outputRows.length, level, aggregates: aggregateValues })
         outputRows.push(groupCells)
         rowOutlineLevels.push(level)
+        if (shouldYieldDuringPreparation
+          && (index + 1) < rowCount
+          && (index + 1) % rowsPerPreparationChunk === 0) {
+          options.onProgress?.({ phase: "preparing", completedRows: index + 1, totalRows: rowCount })
+          await yieldToMainThread()
+          if (signal?.aborted) return { status: "cancelled" }
+        }
         continue
       }
 
@@ -394,7 +411,7 @@ export async function exportDataGridXlsx<TRow>(
       const worksheetRowNumber = outputRows.length + 1
       let formulaTranslationFailure: string | null = null
       outputRows.push(columns.map((column, columnIndex) => {
-        const formula = formulasByField.get(column.key.toLocaleLowerCase("en-US"))
+        const formula = formulaByColumn?.[columnIndex]
         if (formula && options.formulas === "excel") {
           let excelFormula: string
           try {
@@ -425,6 +442,13 @@ export async function exportDataGridXlsx<TRow>(
         return { status: "unsupported", code: "formula-translation", message: formulaTranslationFailure }
       }
       rowOutlineLevels.push(outlineLevelForRow(activeGroupDepth))
+      if (shouldYieldDuringPreparation
+        && (index + 1) < rowCount
+        && (index + 1) % rowsPerPreparationChunk === 0) {
+        options.onProgress?.({ phase: "preparing", completedRows: index + 1, totalRows: rowCount })
+        await yieldToMainThread()
+        if (signal?.aborted) return { status: "cancelled" }
+      }
   }
   if (options.formulas === "excel" && groupRows.length > 0) {
     const aggregationByKey = new Map((capturedAggregation?.columns ?? []).map(column => [column.key, column]))

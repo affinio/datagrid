@@ -123,17 +123,19 @@ function buildProjectionMemoryDiagnostics<T>(
   state: DataGridClientRowRuntimeState<T>,
   sourceRowIndexSize: number,
   pivotColumnCount: number,
+  groupBuckets: number,
 ): DataGridProjectionMemoryDiagnostics {
   const bytesPerEntry = 32
   return {
     rowIndexBytes: sourceRowIndexSize * bytesPerEntry,
     sortBufferBytes: state.sortedRowsProjection.length * bytesPerEntry,
-    groupBuckets: countGroupBuckets(state.groupedRowsProjection),
+    groupBuckets,
     pivotCells: state.pivotedRowsProjection.length * pivotColumnCount,
   }
 }
 
 export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeStateStore<T> {
+  const groupBucketCountByProjection = new WeakMap<object, number>()
   const state: DataGridClientRowRuntimeState<T> = {
     rows: [],
     filteredRowsProjection: [],
@@ -203,7 +205,13 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
       const lastStageTimes = cloneStageTimes(state.lastStageTimes)
       const rowCounts = buildProjectionRowCounts(state, sourceRowCount)
       const totalTime = sumStageTimes(lastStageTimes)
-      const memory = buildProjectionMemoryDiagnostics(state, sourceRowIndexSize, pivotColumnCount)
+      const groupedRowsProjection = state.groupedRowsProjection
+      let groupBuckets = groupBucketCountByProjection.get(groupedRowsProjection)
+      if (groupBuckets === undefined) {
+        groupBuckets = countGroupBuckets(groupedRowsProjection)
+        groupBucketCountByProjection.set(groupedRowsProjection, groupBuckets)
+      }
+      const memory = buildProjectionMemoryDiagnostics(state, sourceRowIndexSize, pivotColumnCount, groupBuckets)
       return {
         version: state.projectionCycleVersion,
         cycleVersion: state.projectionCycleVersion,

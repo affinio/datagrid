@@ -90,6 +90,6 @@ Field registries are model state. Register related definitions before depending 
 | Method | Contract |
 | --- | --- |
 | `batch(fn)` | Runs `fn` while public API event delivery is batched, returns the callback result, and propagates callback errors. It does not promise one model recomputation or one transaction entry. |
-| `batchMutations(fn)` | Runs synchronous source mutations inside a model batch when supported, coalescing projection recomputation. It is not an asynchronous transaction; do not return a Promise expecting later mutations to join the batch. |
+| `batchMutations(fn)` | Coalesces compatible patch and structural mutation projection work in supported client models. Projection-dependent reads inside the callback flush pending work; different patch recompute policies form separate segments. It is not an asynchronous transaction; do not return a Promise expecting later mutations to join the batch. |
 
-Use `batch` to group notifications. Use `batchMutations` when a supported client row model should recompute once for several synchronous data mutations. Use `api.transaction` when undo/redo history is required.
+Use `batch` to group notifications. Use `batchMutations` when a supported client row model should coalesce several synchronous patches and structural mutations. A projection read inside the callback makes pending changes observable immediately and therefore ends the current coalescing segment. Use `api.transaction` when undo/redo history is required.

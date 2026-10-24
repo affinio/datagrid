@@ -1,4 +1,4 @@
-import { createAdvancedClientRowModel } from "../packages/datagrid-core/dist/src/index.js"
+import { createAdvancedClientRowModel } from "../packages/datagrid-core/dist/src/advanced.js"
 
 const sizes = (process.env.BENCH_ROW_SIZES ?? "1000,10000,50000").split(",").map(Number)
 const samples = Number(process.env.BENCH_SAMPLES ?? 25)

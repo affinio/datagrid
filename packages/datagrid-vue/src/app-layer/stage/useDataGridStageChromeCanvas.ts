@@ -516,9 +516,7 @@ export function useDataGridStageChromeCanvas(
         headerViewport.style.width = synchronizedWidth
       }
       options.headerViewportClientWidth.value = viewportClientWidth
-      if (headerViewport.scrollLeft !== viewport.scrollLeft) {
-        headerViewport.scrollLeft = viewport.scrollLeft
-      }
+      headerViewport.scrollLeft = options.bodyViewportScrollLeft.value
     } else {
       options.headerViewportClientWidth.value = headerViewport?.clientWidth ?? viewportClientWidth
     }

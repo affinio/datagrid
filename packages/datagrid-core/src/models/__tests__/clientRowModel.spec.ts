@@ -2166,6 +2166,63 @@ describe("createAdvancedClientRowModel", () => {
     sequential.dispose()
   })
 
+  it("coalesces projection recompute and model notification for patches in a mutation batch", () => {
+    const rows = [
+      createRowNode({ id: "r1", score: 3 }),
+      createRowNode({ id: "r2", score: 1 }),
+      createRowNode({ id: "r3", score: 2 }),
+    ]
+    const model = createAdvancedClientRowModel({
+      rows,
+      initialSortModel: [{ key: "score", direction: "asc" }],
+    })
+    let notifications = 0
+    const unsubscribe = model.subscribe(() => { notifications += 1 })
+    const beforeRecompute = model.getSnapshot().projection?.recomputeVersion ?? 0
+    const patchOptions = { recomputeFilter: true, recomputeSort: true, recomputeGroup: true }
+
+    model.batchMutations(() => {
+      model.patchRows([{ rowId: "r1", data: { score: 20 } }], patchOptions)
+      model.patchRows([{ rowId: "r2", data: { score: 0 } }], patchOptions)
+    })
+
+    expect(model.getSnapshot().projection?.recomputeVersion).toBe(beforeRecompute + 1)
+    expect(notifications).toBe(1)
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
+
+    unsubscribe()
+    model.dispose()
+  })
+
+  it("flushes a pending patch projection before reads inside a mutation batch", () => {
+    const model = createAdvancedClientRowModel({
+      rows: [
+        createRowNode({ id: "r1", score: 3 }),
+        createRowNode({ id: "r2", score: 1 }),
+        createRowNode({ id: "r3", score: 2 }),
+      ],
+      initialSortModel: [{ key: "score", direction: "asc" }],
+    })
+    const beforeRecompute = model.getSnapshot().projection?.recomputeVersion ?? 0
+    const patchOptions = { recomputeFilter: true, recomputeSort: true, recomputeGroup: true }
+    let notifications = 0
+    const unsubscribe = model.subscribe(() => { notifications += 1 })
+
+    model.batchMutations(() => {
+      model.patchRows([{ rowId: "r1", data: { score: 0 } }], patchOptions)
+      expect(model.getRowsInRange({ start: 0, end: 0 }).map(row => String(row.rowId))).toEqual(["r1"])
+
+      model.patchRows([{ rowId: "r2", data: { score: 4 } }], patchOptions)
+    })
+
+    expect(model.getRowsInRange({ start: 0, end: 10 }).map(row => String(row.rowId))).toEqual(["r1", "r3", "r2"])
+    expect(model.getSnapshot().projection?.recomputeVersion).toBe(beforeRecompute + 2)
+    expect(notifications).toBe(2)
+
+    unsubscribe()
+    model.dispose()
+  })
+
   it("builds per-column histogram from filtered projection and can ignore self filter", () => {
     const model = createAdvancedClientRowModel({
       rows: [

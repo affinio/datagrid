@@ -2,6 +2,32 @@ import { describe, expect, it } from "vitest"
 import { useDataGridAppRowSelection } from "../useDataGridAppRowSelection"
 
 describe("useDataGridAppRowSelection contract", () => {
+  it("does not scan projected rows when record selection is empty", () => {
+    let rowReads = 0
+    const selection = useDataGridAppRowSelection({
+      resolveRuntime: () => ({
+        api: {
+          rows: {
+            getCount: () => {
+              rowReads += 1
+              return 10
+            },
+            get: () => {
+              rowReads += 1
+              return { rowId: "row" }
+            },
+          },
+          rowSelection: { hasSupport: () => true },
+        },
+      } as never),
+    })
+
+    selection.reconcileRowSelectionFromRuntime()
+
+    expect(rowReads).toBe(0)
+    expect(selection.rowSelectionSnapshot.value).toBeNull()
+  })
+
   it("syncs the snapshot from the current runtime bulk-selection state", () => {
     const selectedRows = new Set<string>()
     let focusedRow: string | null = null

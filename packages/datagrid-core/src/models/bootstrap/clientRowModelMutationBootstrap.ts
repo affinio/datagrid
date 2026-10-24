@@ -221,6 +221,8 @@ export function createClientRowModelMutationBootstrap<T>(
   const patchHostRuntime = createClientRowPatchHostRuntime<T>({
     ensureActive: options.ensureActive,
     emit: options.emit,
+    isMutationBatchActive: () => mutationHostRuntime.isBatchingMutations(),
+    deferMutationBatchCommit: commit => mutationHostRuntime.deferBatchCommit(commit),
     setPendingPivotValuePatch: (patch) => {
       options.treePivotIntegrationRuntime.setPendingPivotValuePatch(patch)
     },

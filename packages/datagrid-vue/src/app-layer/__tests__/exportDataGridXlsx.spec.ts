@@ -139,6 +139,34 @@ describe("exportDataGridXlsx", () => {
     expect(workbook.sheets[0]?.rows[300]?.[1]?.value).toBe(3)
   })
 
+  it("yields during large preparation and observes cancellation between chunks", async () => {
+    const controller = new AbortController()
+    const sourceRows = Array.from({ length: 5000 }, (_, index) => ({ id: `r${index}`, amount: index }))
+    const api = makeApi({
+      rows: {
+        getSnapshot: () => ({ revision: 1, loading: false, initialLoading: false, groupBy: null, pivotModel: null }),
+        getCount: () => sourceRows.length,
+        get: (index: number) => ({ kind: "leaf", rowId: sourceRows[index]?.id, data: sourceRows[index] }),
+        getAggregationModel: () => null,
+        getFormulaFields: () => [],
+      },
+    })
+    const progress: number[] = []
+
+    const result = await exportDataGridXlsx(api, {
+      signal: controller.signal,
+      onProgress: update => {
+        if (update.phase === "preparing" && update.completedRows < update.totalRows) {
+          progress.push(update.completedRows)
+          controller.abort()
+        }
+      },
+    })
+
+    expect(result).toEqual({ status: "cancelled" })
+    expect(progress).toEqual([2048])
+  })
+
   it("uses the column key as the default accessor when no field is declared", async () => {
     const worker = new FakeWorker()
     useWorker(worker)

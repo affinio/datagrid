@@ -152,8 +152,11 @@ throw rather than returning a support boolean.
 
 `rows.batch` batches public event delivery and preserves the callback result;
 it does not promise one row-model recomputation or one transaction-history
-entry. `rows.batchMutations` additionally coalesces synchronous recomputation
-for supported client row models. Use `transaction.beginBatch`/`commitBatch`
+entry. `rows.batchMutations` additionally coalesces compatible patch and
+structural mutation projection work in supported client models. A
+projection-dependent read inside the callback flushes pending work, so
+subsequent reads observe prior writes. Patches with different recompute
+policies form separate work segments. Use `transaction.beginBatch`/`commitBatch`
 for generic transaction history.
 
 Computed and formula registrations can be removed by name. Unknown names return
@@ -385,9 +388,12 @@ is surfaced. `dataSource.atomic` pauses backpressure while the import runs but
 does not make datasource or adapter operations universally reversible.
 
 `rows.batch()` coalesces the facade event cycle. Use `rows.batchMutations()`
-when a supported client row model should also coalesce synchronous row mutation
-recomputation. The callback is synchronous; failures propagate after pending
-source mutations are finalized.
+when a supported client row model should also coalesce compatible synchronous
+patch and structural mutation projection work. Projection-dependent reads
+inside the callback are consistency barriers and may cause an early recompute.
+Different patch recompute policies also split the work into separate segments.
+The callback is synchronous; failures propagate after pending source mutations
+are finalized.
 
 Public event names are `rows:changed`, `columns:changed`,
 `projection:recomputed`, `selection:changed`, `row-selection:changed`,

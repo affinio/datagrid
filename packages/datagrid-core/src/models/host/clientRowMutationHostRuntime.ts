@@ -30,6 +30,9 @@ export interface CreateClientRowMutationHostRuntimeOptions<T> {
 
 export interface ClientRowMutationHostRuntime<T> {
   batchMutations<TResult>(fn: () => TResult): TResult
+  isBatchingMutations(): boolean
+  deferBatchCommit(commit: (discard: boolean) => void): boolean
+  flushBatchCommit(): void
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
   appendRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
   prependRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
@@ -66,6 +69,9 @@ export function createClientRowMutationHostRuntime<T>(
 
   return {
     batchMutations: fn => rowsMutationsRuntime.batchMutations(fn),
+    isBatchingMutations: () => rowsMutationsRuntime.isBatchingMutations(),
+    deferBatchCommit: commit => rowsMutationsRuntime.deferBatchCommit(commit),
+    flushBatchCommit: () => rowsMutationsRuntime.flushBatchCommit(),
     setRows: (nextRows) => rowsMutationsRuntime.setRows(nextRows),
     appendRows: rows => rowsMutationsRuntime.appendRows(rows),
     prependRows: rows => rowsMutationsRuntime.prependRows(rows),

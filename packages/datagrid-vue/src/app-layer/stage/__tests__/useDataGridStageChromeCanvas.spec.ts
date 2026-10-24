@@ -187,7 +187,20 @@ describe("useDataGridStageChromeCanvas", () => {
     Object.defineProperty(bodyViewport, "clientHeight", { configurable: true, value: 400 })
     bodyShell.append(bodyViewport)
     bodyViewport.scrollLeft = 375
-    headerViewport.scrollLeft = 360
+    let headerScrollLeft = 360
+    let headerScrollLeftReads = 0
+    let headerScrollLeftWrites = 0
+    Object.defineProperty(headerViewport, "scrollLeft", {
+      configurable: true,
+      get() {
+        headerScrollLeftReads += 1
+        return headerScrollLeft
+      },
+      set(value: number) {
+        headerScrollLeftWrites += 1
+        headerScrollLeft = value
+      },
+    })
 
     const api = createChromeCanvasApi(false, {
       stageRoot,
@@ -199,7 +212,9 @@ describe("useDataGridStageChromeCanvas", () => {
     api.syncBodyViewportMetrics()
 
     expect(headerViewport.style.width).toBe("625px")
-    expect(headerViewport.scrollLeft).toBe(375)
+    expect(headerScrollLeft).toBe(375)
+    expect(headerScrollLeftReads).toBe(0)
+    expect(headerScrollLeftWrites).toBe(1)
   })
 
   it("records merged chrome redraw sources when a pending full redraw is flushed", () => {

@@ -101,6 +101,8 @@ export function createDataGridApiReadMethods<TRow>(
   return {
     captureReadView(options) {
       const include = new Set(options.include)
+      const cloneContext = new WeakMap<object, unknown>()
+      const cloneCapturedValue = <T>(value: T): T => cloneFreezeStructure(value, cloneContext)
       const view: {
         rows?: DataGridReadView<TRow>["rows"]
         columns?: DataGridReadView<TRow>["columns"]
@@ -146,7 +148,7 @@ export function createDataGridApiReadMethods<TRow>(
         }
         const projection = nodes.map((node) => {
           const data = options.cloneRow
-            ? cloneFreezeStructure(options.cloneRow(node.data))
+            ? cloneCapturedValue(options.cloneRow(node.data))
             : node.data
           return Object.freeze({
             kind: node.kind,
@@ -157,15 +159,15 @@ export function createDataGridApiReadMethods<TRow>(
             sourceIndex: node.sourceIndex,
             originalIndex: node.originalIndex,
             displayIndex: node.displayIndex,
-            state: cloneFreezeStructure(node.state),
-            ...(node.groupMeta ? { groupMeta: cloneFreezeStructure(node.groupMeta) } : {}),
+            state: cloneCapturedValue(node.state),
+            ...(node.groupMeta ? { groupMeta: cloneCapturedValue(node.groupMeta) } : {}),
           })
         })
         view.rows = Object.freeze({
           status: "available",
           revision: typeof snapshot.revision === "number" ? snapshot.revision : null,
           value: Object.freeze({
-            snapshot: cloneFreezeStructure(snapshot),
+            snapshot: cloneCapturedValue(snapshot),
             projection: Object.freeze(projection),
             coverage: Object.freeze({
               scope: "current-projection" as const,
@@ -185,7 +187,7 @@ export function createDataGridApiReadMethods<TRow>(
         view.columns = Object.freeze({
           status: "available",
           revision: snapshot.revision,
-          value: cloneFreezeStructure(snapshot),
+          value: cloneCapturedValue(snapshot),
         })
       }
 
@@ -198,8 +200,8 @@ export function createDataGridApiReadMethods<TRow>(
             status: "available",
             revision: typeof rowRevision === "number" ? rowRevision : null,
             value: Object.freeze({
-              fields: cloneFreezeStructure(typeof getFields === "function" ? getFields.call(input.rowModel) : []),
-              formulas: cloneFreezeStructure(typeof getFormulas === "function" ? getFormulas.call(input.rowModel) : []),
+              fields: cloneCapturedValue(typeof getFields === "function" ? getFields.call(input.rowModel) : []),
+              formulas: cloneCapturedValue(typeof getFormulas === "function" ? getFormulas.call(input.rowModel) : []),
             }),
           })
         } else {

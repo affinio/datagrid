@@ -64,7 +64,7 @@ export function resolveDirtyConsumerRowIndexes(
 
 export function createDataGridComputedDirtyPropagationRuntime(
   nodeCount: number,
-  rowCount: number,
+  _rowCount: number,
   options: {
     captureCauseCounts?: boolean
     captureRowCauseKeys?: boolean
@@ -83,7 +83,7 @@ export function createDataGridComputedDirtyPropagationRuntime(
   const dirtyRowSeenByNode = new Array<Set<number> | undefined>(nodeCount)
   const dirtyRowCountByNode = new Uint32Array(nodeCount)
   const evaluationCountByNode = new Uint32Array(nodeCount)
-  const dirtyRowMarks = new Uint8Array(rowCount)
+  const dirtyRowMarks = new Set<number>()
   let dirtyRowsCount = 0
 
   const incrementCauseCount = (
@@ -141,10 +141,10 @@ export function createDataGridComputedDirtyPropagationRuntime(
   }
 
   const markDirtyRow = (rowIndex: number): void => {
-    if (dirtyRowMarks[rowIndex] !== 0) {
+    if (dirtyRowMarks.has(rowIndex)) {
       return
     }
-    dirtyRowMarks[rowIndex] = 1
+    dirtyRowMarks.add(rowIndex)
     dirtyRowsCount += 1
   }
 

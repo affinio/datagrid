@@ -68,6 +68,9 @@ if (result.status === "success") {
 ```
 
 The writer runs in a separate worker chunk and starts only when an export is requested.
+Large workbook preparation yields between bounded row chunks. The programmatic
+`onProgress` callback reports intermediate `preparing` progress, and its
+`AbortSignal` is checked at each yield before writing begins.
 
 ## Built-in app capabilities
 

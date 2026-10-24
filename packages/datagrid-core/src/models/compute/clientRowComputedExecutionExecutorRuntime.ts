@@ -86,8 +86,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   } = options
 
   let nextSourceRows: DataGridRowNode<T>[] | null = null
-  const changedRowMarks = new Uint8Array(rowCount)
-  const touchedRowMarks = new Uint8Array(rowCount)
+  const changedRowMarks = new Set<number>()
+  const touchedRowMarks = new Set<number>()
   const changedRowIndexes: number[] = []
   let touchedRowsCount = 0
   const computedPatchByRowIndex = new Map<number, Record<string, unknown>>()
@@ -97,8 +97,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   const nextRowByIndex = captureRowPatchMaps
     ? new Map<number, DataGridRowNode<T>>()
     : null
-  const workingRowByIndex = new Array<DataGridRowNode<T> | undefined>(rowCount)
-  const nodeVisitMarks = new Int32Array(rowCount)
+  const workingRowByIndex = new Map<number, DataGridRowNode<T>>()
+  const nodeVisitMarks = new Map<number, number>()
   let nodeVisitEpoch = 0
   const recomputedFormulaFieldNames = new Set<string>()
   const touchedComputedFields = new Set<string>()
@@ -160,7 +160,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   const nextNodeVisitEpoch = (): number => {
     nodeVisitEpoch += 1
     if (nodeVisitEpoch >= 2_000_000_000) {
-      nodeVisitMarks.fill(0)
+      nodeVisitMarks.clear()
       nodeVisitEpoch = 1
     }
     return nodeVisitEpoch
@@ -197,14 +197,14 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
   const levelPatchByRowIndex = new Map<number, Record<string, unknown>>()
   const levelPatchedRowIndexes: number[] = []
   const nextDirtyNodeIndexes: number[] = []
-  const levelDirtyRowMarks = new Int32Array(rowCount)
-  const levelDirtyRowBatchIndexByRow = new Int32Array(rowCount)
+  const levelDirtyRowMarks = new Map<number, number>()
+  const levelDirtyRowBatchIndexByRow = new Map<number, number>()
   let levelDirtyRowEpoch = 0
 
   const nextLevelDirtyRowEpoch = (): number => {
     levelDirtyRowEpoch += 1
     if (levelDirtyRowEpoch >= 2_000_000_000) {
-      levelDirtyRowMarks.fill(0)
+      levelDirtyRowMarks.clear()
       levelDirtyRowEpoch = 1
     }
     return levelDirtyRowEpoch
@@ -244,7 +244,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       if (!sourceRow || !context.isRecord(sourceRow.data)) {
         continue
       }
-      const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
+      const workingRowNode = workingRowByIndex.get(rowIndex) ?? sourceRow
       batchRowIndexes.push(rowIndex)
       batchRowNodes.push(workingRowNode)
       batchContexts.push({
@@ -461,8 +461,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
 
     evaluatedAtLeastOnce = true
     for (const rowIndex of batchRowIndexes) {
-      if (touchedRowMarks[rowIndex] === 0) {
-        touchedRowMarks[rowIndex] = 1
+      if (!touchedRowMarks.has(rowIndex)) {
+        touchedRowMarks.add(rowIndex)
         touchedRowsCount += 1
       }
     }
@@ -596,10 +596,10 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
           continue
         }
-        if (levelDirtyRowMarks[rowIndex] === levelEpoch) {
+        if (levelDirtyRowMarks.get(rowIndex) === levelEpoch) {
           continue
         }
-        levelDirtyRowMarks[rowIndex] = levelEpoch
+        levelDirtyRowMarks.set(rowIndex, levelEpoch)
         levelDirtyRowIndexes.push(rowIndex)
       }
     }
@@ -614,7 +614,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       if (typeof rowIndex !== "number") {
         continue
       }
-      levelDirtyRowBatchIndexByRow[rowIndex] = Math.trunc(index / vectorBatchSize)
+      levelDirtyRowBatchIndexByRow.set(rowIndex, Math.trunc(index / vectorBatchSize))
     }
 
     const nodeDirtyRowIndexesByBatchPosition = new Array<Array<number[] | undefined> | undefined>(levelNodeIndexes.length)
@@ -630,14 +630,14 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         if (typeof rowIndex !== "number" || rowIndex < 0 || rowIndex >= rowCount) {
           continue
         }
-        if (levelDirtyRowMarks[rowIndex] !== levelEpoch) {
+        if (levelDirtyRowMarks.get(rowIndex) !== levelEpoch) {
           continue
         }
-        if (nodeVisitMarks[rowIndex] === visitEpoch) {
+        if (nodeVisitMarks.get(rowIndex) === visitEpoch) {
           continue
         }
-        nodeVisitMarks[rowIndex] = visitEpoch
-        const batchIndex = levelDirtyRowBatchIndexByRow[rowIndex]
+        nodeVisitMarks.set(rowIndex, visitEpoch)
+        const batchIndex = levelDirtyRowBatchIndexByRow.get(rowIndex)
         if (typeof batchIndex !== "number" || batchIndex < 0) {
           continue
         }
@@ -829,7 +829,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
       if (!sourceRow) {
         continue
       }
-      const workingRowNode = workingRowByIndex[rowIndex] ?? sourceRow
+      const workingRowNode = workingRowByIndex.get(rowIndex) ?? sourceRow
       const nextData = applyRowDataPatch(
         workingRowNode.data,
         levelPatch as Partial<T>,
@@ -843,7 +843,7 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         data: nextData,
         row: nextData,
       }
-      workingRowByIndex[rowIndex] = nextRowNode
+      workingRowByIndex.set(rowIndex, nextRowNode)
       if (!nextSourceRows) {
         nextSourceRows = sourceRowsBaseline.slice()
       }
@@ -854,8 +854,8 @@ export function createDataGridComputedExecutionExecutorRuntime<T>(options: {
         }
         nextRowByIndex.set(rowIndex, nextRowNode)
       }
-      if (changedRowMarks[rowIndex] === 0) {
-        changedRowMarks[rowIndex] = 1
+      if (!changedRowMarks.has(rowIndex)) {
+        changedRowMarks.add(rowIndex)
         changedRowIndexes.push(rowIndex)
       }
       levelPatchByRowIndex.delete(rowIndex)

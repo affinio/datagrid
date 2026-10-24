@@ -39,6 +39,9 @@ export interface ClientRowRowsMutationsRuntimeReorderInput {
 
 export interface ClientRowRowsMutationsRuntime<T> {
   batchMutations<TResult>(fn: () => TResult): TResult
+  isBatchingMutations(): boolean
+  deferBatchCommit(commit: (discard: boolean) => void): boolean
+  flushBatchCommit(): void
   setRows: (nextRows: readonly DataGridRowNodeInput<T>[]) => void
   appendRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
   prependRows: (rows: readonly DataGridRowNodeInput<T>[]) => void
@@ -54,6 +57,7 @@ export function createClientRowRowsMutationsRuntime<T>(
 ): ClientRowRowsMutationsRuntime<T> {
   let mutationBatchDepth = 0
   let pendingMutation = false
+  let pendingBatchCommit: ((discard: boolean) => void) | null = null
   let batchBaseline: { rows: DataGridRowNode<T>[]; versions: Map<DataGridRowId, number> } | null = null
 
   const finalizeMutation = (baseline?: { rows: DataGridRowNode<T>[]; versions: Map<DataGridRowId, number> }): void => {
@@ -137,12 +141,44 @@ export function createClientRowRowsMutationsRuntime<T>(
         return fn()
       } finally {
         mutationBatchDepth = Math.max(0, mutationBatchDepth - 1)
-        if (mutationBatchDepth === 0 && pendingMutation) {
+        if (mutationBatchDepth === 0) {
+          const hadStructuralMutation = pendingMutation
+          const batchCommit = pendingBatchCommit
           pendingMutation = false
+          pendingBatchCommit = null
           const baseline = batchBaseline
           batchBaseline = null
-          finalizeMutation(baseline ?? undefined)
+          try {
+            if (hadStructuralMutation) {
+              finalizeMutation(baseline ?? undefined)
+            }
+          } finally {
+            batchCommit?.(hadStructuralMutation)
+          }
         }
+      }
+    },
+    isBatchingMutations: () => mutationBatchDepth > 0,
+    deferBatchCommit(commit) {
+      if (mutationBatchDepth === 0) return false
+      pendingBatchCommit = commit
+      return true
+    },
+    flushBatchCommit() {
+      if (mutationBatchDepth === 0 || (!pendingMutation && !pendingBatchCommit)) return
+      const commit = pendingBatchCommit
+      pendingBatchCommit = null
+      if (!pendingMutation) {
+        commit?.(false)
+        return
+      }
+      pendingMutation = false
+      const baseline = batchBaseline
+      batchBaseline = null
+      try {
+        finalizeMutation(baseline ?? undefined)
+      } finally {
+        commit?.(true)
       }
     },
     setRows(nextRows: readonly DataGridRowNodeInput<T>[]) {

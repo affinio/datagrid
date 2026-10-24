@@ -31,6 +31,8 @@ export interface CreateClientRowPatchHostRuntimeOptions<T>
   extends ClientRowPatchComputedMergeRuntimeContext<T> {
   ensureActive: () => void
   emit: () => void
+  isMutationBatchActive?: () => boolean
+  deferMutationBatchCommit?: (commit: (discard: boolean) => void) => boolean
   setPendingPivotValuePatch: (patch: readonly DataGridPivotIncrementalPatchRow<T>[] | null) => void
   isDataGridRowId: (value: unknown) => value is DataGridRowId
   applyRowDataPatch: (current: T, patch: Partial<T>) => T
@@ -254,6 +256,8 @@ export function createClientRowPatchHostRuntime<T>(
     createClientRowPatchCoordinatorRuntime<T>({
       ensureActive: options.ensureActive,
       emit: options.emit,
+      isMutationBatchActive: options.isMutationBatchActive,
+      deferMutationBatchCommit: options.deferMutationBatchCommit,
       setPendingPivotValuePatch: options.setPendingPivotValuePatch,
       isDataGridRowId: options.isDataGridRowId,
       applyRowDataPatch: options.applyRowDataPatch,

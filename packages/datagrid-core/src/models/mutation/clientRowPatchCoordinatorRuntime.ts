@@ -38,6 +38,8 @@ export interface DataGridClientRowPatchCoordinatorOptions {
 export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   ensureActive: () => void
   emit: () => void
+  isMutationBatchActive?: () => boolean
+  deferMutationBatchCommit?: (commit: (discard: boolean) => void) => boolean
 
   setPendingPivotValuePatch: (patch: readonly DataGridPivotIncrementalPatchRow<T>[] | null) => void
 
@@ -98,6 +100,87 @@ export interface DataGridClientRowPatchCoordinatorRuntime<T> {
 export function createClientRowPatchCoordinatorRuntime<T>(
   context: DataGridClientRowPatchCoordinatorRuntimeContext<T>,
 ): DataGridClientRowPatchCoordinatorRuntime<T> {
+  interface DeferredPatchProjection {
+    policyKey: string
+    sourceRows: DataGridRowNode<T>[]
+    rowBaselineByIndex: Map<number, DataGridRowNode<T>>
+    rowVersionBaseline: Map<DataGridRowId, number | undefined>
+    changedRowIds: Set<DataGridRowId>
+    requestedStages: Set<DataGridClientProjectionStage>
+    blockedStages: Set<DataGridClientProjectionStage>
+    shouldEmit: boolean
+  }
+
+  let deferredPatchProjection: DeferredPatchProjection | null = null
+
+  const flushDeferredPatchProjection = (discard: boolean): void => {
+    const pending = deferredPatchProjection
+    deferredPatchProjection = null
+    if (!pending || discard) return
+
+    if (pending.requestedStages.size > 0 || pending.blockedStages.size > 0) {
+      const requested = new Set(pending.requestedStages)
+      const blocked = new Set([...pending.blockedStages].filter(stage => !requested.has(stage)))
+      const allStages = context.getAllStages()
+      try {
+        context.recomputeWithExecutionPlan({
+          requestedStages: allStages.filter(stage => requested.has(stage)),
+          blockedStages: allStages.filter(stage => blocked.has(stage)),
+        }, { patchChangedRowCount: pending.changedRowIds.size })
+      } catch (error) {
+        for (const [index, row] of pending.rowBaselineByIndex) {
+          pending.sourceRows[index] = row
+        }
+        context.setSourceRows(pending.sourceRows)
+        const rowVersionIndex = context.getRowVersionById()
+        for (const [rowId, version] of pending.rowVersionBaseline) {
+          if (version === undefined) rowVersionIndex.delete(rowId)
+          else rowVersionIndex.set(rowId, version)
+        }
+        context.clearSortValueCache()
+        context.invalidateTreeProjectionCaches()
+        context.setPendingPivotValuePatch(null)
+        try {
+          context.refreshProjection?.()
+        } catch (rollbackError) {
+          throw Object.assign(new Error("[DataGridRows] batched patch failed and projection recovery was incomplete."), {
+            errors: [error, rollbackError],
+          })
+        }
+        throw error
+      }
+    }
+    if (pending.shouldEmit) context.emit()
+  }
+
+  const ensureDeferredPatchProjection = (
+    sourceRows: DataGridRowNode<T>[],
+    policyKey: string,
+  ): DeferredPatchProjection => {
+    if (!deferredPatchProjection) {
+      deferredPatchProjection = {
+        policyKey,
+        sourceRows,
+        rowBaselineByIndex: new Map(),
+        rowVersionBaseline: new Map(),
+        changedRowIds: new Set(),
+        requestedStages: new Set(),
+        blockedStages: new Set(),
+        shouldEmit: false,
+      }
+    }
+    return deferredPatchProjection
+  }
+
+  const deferPatchProjection = (
+    pending: DeferredPatchProjection,
+    plan: DataGridPatchProjectionExecutionPlan,
+  ): void => {
+    for (const stage of plan.requestedStages) pending.requestedStages.add(stage)
+    for (const stage of plan.blockedStages) pending.blockedStages.add(stage)
+    context.deferMutationBatchCommit?.(flushDeferredPatchProjection)
+  }
+
   return {
     patchRows(
       updates: readonly DataGridClientRowPatchLike<T>[],
@@ -116,8 +199,23 @@ export function createClientRowPatchCoordinatorRuntime<T>(
       if (updatesById.size === 0) {
         return
       }
-      const sourceRowsBefore = context.getSourceRows().slice() as DataGridRowNode<T>[]
-      const rowVersionsBefore = new Map(context.getRowVersionById())
+      const isBatchingMutations = context.isMutationBatchActive?.() === true
+      const recomputePolicyKey = `${options.recomputeFilter === true}:${options.recomputeSort === true}:${options.recomputeGroup === true}`
+      if (isBatchingMutations && deferredPatchProjection
+        && deferredPatchProjection.policyKey !== recomputePolicyKey) {
+        flushDeferredPatchProjection(false)
+      }
+      const sourceRowsBefore = context.getSourceRows() as DataGridRowNode<T>[]
+      const sourceRowsBeforeByIndex = new Map<number, DataGridRowNode<T>>()
+      for (const rowId of updatesById.keys()) {
+        const index = context.getSourceRowIndexById().get(rowId)
+        const row = typeof index === "number" ? sourceRowsBefore[index] : undefined
+        if (typeof index === "number" && row) {
+          sourceRowsBeforeByIndex.set(index, row)
+        }
+      }
+      const rowVersionIndex = context.getRowVersionById()
+      let rowVersionsBefore: Map<DataGridRowId, number | undefined> | null = null
       let projectionCommitted = false
       try {
       let patchResult = applyClientRowPatchUpdates<T>({
@@ -148,6 +246,27 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         invalidationReasons.push("groupChanged")
       }
       context.setProjectionInvalidation(invalidationReasons)
+      const pendingBatchProjection = isBatchingMutations
+        ? ensureDeferredPatchProjection(sourceRowsBefore, recomputePolicyKey)
+        : null
+      rowVersionsBefore = new Map()
+      for (const rowId of patchResult.changedRowIds) {
+        const previousVersion = rowVersionIndex.get(rowId)
+        rowVersionsBefore.set(rowId, previousVersion)
+        if (pendingBatchProjection) {
+          const index = context.getSourceRowIndexById().get(rowId)
+          if (typeof index === "number") {
+            const previousRow = sourceRowsBeforeByIndex.get(index) ?? sourceRowsBefore[index]
+            if (previousRow && !pendingBatchProjection.rowBaselineByIndex.has(index)) {
+              pendingBatchProjection.rowBaselineByIndex.set(index, previousRow)
+            }
+          }
+          if (!pendingBatchProjection.rowVersionBaseline.has(rowId)) {
+            pendingBatchProjection.rowVersionBaseline.set(rowId, previousVersion)
+          }
+          pendingBatchProjection.changedRowIds.add(rowId)
+        }
+      }
       bumpRowVersions(context.getRowVersionById(), patchResult.changedRowIds)
       context.bumpRowRevision()
       if (context.tryApplyFlatProjectionPatch?.(
@@ -157,7 +276,10 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         options,
       )) {
         projectionCommitted = true
-        if (options.emit !== false) {
+        if (pendingBatchProjection) {
+          pendingBatchProjection.shouldEmit ||= options.emit !== false
+          context.deferMutationBatchCommit?.(flushDeferredPatchProjection)
+        } else if (options.emit !== false) {
           context.emit()
         }
         return
@@ -191,10 +313,19 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         evictSortValueCacheRows: context.evictSortValueCacheRows,
         invalidateTreeProjectionCaches: context.invalidateTreeProjectionCaches,
         patchTreeProjectionCacheRowsByIdentity: context.patchTreeProjectionCacheRowsByIdentity,
-        recomputeWithExecutionPlan: context.recomputeWithExecutionPlan,
+        recomputeWithExecutionPlan: (executionPlan, requestOptions) => {
+          if (pendingBatchProjection) {
+            deferPatchProjection(pendingBatchProjection, executionPlan)
+            return
+          }
+          context.recomputeWithExecutionPlan(executionPlan, requestOptions)
+        },
       })
       projectionCommitted = true
-      if (options.emit !== false) {
+      if (pendingBatchProjection) {
+        pendingBatchProjection.shouldEmit ||= options.emit !== false
+        context.deferMutationBatchCommit?.(flushDeferredPatchProjection)
+      } else if (options.emit !== false) {
         context.emit()
       }
       } catch (error) {
@@ -203,8 +334,16 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         // from the last coherent projection; event errors after a successful
         // recompute are intentionally outside this rollback block below.
         if (!projectionCommitted) {
+          for (const [index, row] of sourceRowsBeforeByIndex) {
+            sourceRowsBefore[index] = row
+          }
           context.setSourceRows(sourceRowsBefore)
-          context.restoreRowVersionIndex?.(rowVersionsBefore)
+          if (rowVersionsBefore) {
+            for (const [rowId, version] of rowVersionsBefore) {
+              if (version === undefined) rowVersionIndex.delete(rowId)
+              else rowVersionIndex.set(rowId, version)
+            }
+          }
           context.clearSortValueCache()
           context.invalidateTreeProjectionCaches()
           context.setPendingPivotValuePatch(null)

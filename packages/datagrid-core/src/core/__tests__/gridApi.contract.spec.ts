@@ -2195,6 +2195,37 @@ describe("data grid api facade contracts", () => {
     expect(api.rows.getSnapshot().revision).toBe(beforeRevision + 1)
   })
 
+  it("coalesces repeated rows.patch calls in rows.batchMutations", () => {
+    const rowModel = createAdvancedClientRowModel({
+      rows: [
+        { row: { id: "r1", score: 3 }, rowId: "r1", originalIndex: 0 },
+        { row: { id: "r2", score: 1 }, rowId: "r2", originalIndex: 1 },
+        { row: { id: "r3", score: 2 }, rowId: "r3", originalIndex: 2 },
+      ],
+      initialSortModel: [{ key: "score", direction: "asc" }],
+    })
+    const api = createDataGridApi({
+      core: createDataGridCore({
+        services: {
+          rowModel: { name: "rowModel", model: rowModel },
+          columnModel: { name: "columnModel", model: createDataGridColumnModel() },
+        },
+      }),
+    })
+    const beforeRecompute = rowModel.getSnapshot().projection?.recomputeVersion ?? 0
+    let projectionEvents = 0
+    api.events.on("projection:recomputed", () => { projectionEvents += 1 })
+
+    api.rows.batchMutations(() => {
+      api.rows.patch([{ rowId: "r1", data: { score: 20 } }], { recomputeSort: true })
+      api.rows.patch([{ rowId: "r2", data: { score: 0 } }], { recomputeSort: true })
+    })
+
+    expect(rowModel.getSnapshot().projection?.recomputeVersion).toBe(beforeRecompute + 1)
+    expect(projectionEvents).toBe(1)
+    expect(api.rows.getRange({ start: 0, end: 2 }).map(row => String(row.rowId))).toEqual(["r2", "r3", "r1"])
+  })
+
   it("registers plugins from constructor/options and dispatches facade events", () => {
     const rowModel = createAdvancedClientRowModel({
       rows: [{ row: { id: "r1", score: 1 }, rowId: "r1", originalIndex: 0 }],

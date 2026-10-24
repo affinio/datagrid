@@ -591,12 +591,14 @@ export function createAdvancedClientRowModel<T>(
   const {
     snapshotHostRuntime,
   } = snapshotBootstrap
+  let flushMutationBatchReadBarrier = () => {}
   const calculationSnapshotFacadeRuntime = createClientRowCalculationSnapshotFacadeRuntime<T>({
     ensureActive,
     snapshotHostRuntime,
   })
 
   function getSnapshot(): DataGridRowModelSnapshot<T> {
+    flushMutationBatchReadBarrier()
     return snapshotHostRuntime.getSnapshot()
   }
 
@@ -665,6 +667,7 @@ export function createAdvancedClientRowModel<T>(
     mutationHostRuntime,
     patchHostRuntime,
   } = mutationBootstrap
+  flushMutationBatchReadBarrier = () => mutationHostRuntime.flushBatchCommit()
   const rowAccessHostRuntime = createClientRowAccessHostRuntime<T>({
     ensureActive,
     getMaterializedSourceRows,
@@ -849,6 +852,7 @@ export function createAdvancedClientRowModel<T>(
       return rowAccessHostRuntime.getFormulaStructureRevision()
     },
     getRowCount() {
+      flushMutationBatchReadBarrier()
       return rowAccessHostRuntime.getRowCount()
     },
     getRowById(rowId: DataGridRowId) {
@@ -867,6 +871,7 @@ export function createAdvancedClientRowModel<T>(
     },
     resolveRowProjection(rowId: DataGridRowId): DataGridRowProjectionResolution {
       ensureActive()
+      flushMutationBatchReadBarrier()
       const sourceIndex = getSourceRowIndexById().get(rowId)
       if (typeof sourceIndex !== "number") {
         return { status: "not-found", collapsedGroupKeys: [] }
@@ -901,9 +906,11 @@ export function createAdvancedClientRowModel<T>(
       return { status: "filtered-out", collapsedGroupKeys: [] }
     },
     getRow(index: number) {
+      flushMutationBatchReadBarrier()
       return rowAccessHostRuntime.getRow(index)
     },
     getRowsInRange(range: DataGridViewportRange) {
+      flushMutationBatchReadBarrier()
       return rowAccessHostRuntime.getRowsInRange(range)
     },
     batchMutations<TResult>(fn: () => TResult) {
@@ -1054,6 +1061,7 @@ export function createAdvancedClientRowModel<T>(
       return clonePivotSpec(viewStateRuntime.getPivotModel())
     },
     getPivotCellDrilldown(input: DataGridPivotCellDrilldownInput) {
+      flushMutationBatchReadBarrier()
       return pivotDrilldownHostRuntime.getPivotCellDrilldown(input)
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
@@ -1063,6 +1071,7 @@ export function createAdvancedClientRowModel<T>(
       return cloneAggregationModel(viewStateRuntime.getAggregationModel())
     },
     getColumnHistogram(columnId: string, histogramOptions?: DataGridColumnHistogramOptions) {
+      flushMutationBatchReadBarrier()
       return getColumnHistogramRuntime().getColumnHistogram(columnId, histogramOptions)
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {

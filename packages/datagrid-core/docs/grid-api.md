@@ -57,7 +57,7 @@ The API keeps cell/range, record, and whole-column selection in separate namespa
 | Apply an external or streaming update | `api.rows.patch(...)` or `applyExternalUpdates(...)` | External data path; projection recompute is controlled by options |
 | Recompute the current view | `api.view.reapply()` | Projection refresh without replacing source rows |
 | Coalesce public event delivery | `api.rows.batch(callback)` | One facade event cycle; not necessarily one recompute or history item |
-| Coalesce synchronous client-model mutations and recompute once | `api.rows.batchMutations(callback)` | Supported client row models only |
+| Coalesce compatible row mutations and recompute once | `api.rows.batchMutations(callback)` | Supported client row models; compatible patches and structural mutations coalesce until batch completion. Projection reads inside the callback flush pending work to preserve read-after-write behavior |
 | Record a reversible operation | `api.transaction.apply(...)` | Uses transaction history when the transaction capability is bound |
 
 These operations are not interchangeable. The method reference documents row-model capability differences and exact recompute behavior.

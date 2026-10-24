@@ -70,6 +70,32 @@ describe("clientRowRuntimeStateStore", () => {
     })
   })
 
+  it("reuses group bucket diagnostics while the projection array is unchanged", () => {
+    const store = createClientRowRuntimeStateStore<{ id: number }>()
+    let kindReads = 0
+    const groupRow = Object.defineProperty({ id: 1 }, "kind", {
+      get() {
+        kindReads += 1
+        return "group"
+      },
+    }) as never
+    const dataRow = Object.defineProperty({ id: 2 }, "kind", {
+      get() {
+        kindReads += 1
+        return "data"
+      },
+    }) as never
+    store.state.groupedRowsProjection = [groupRow, dataRow]
+
+    expect(store.getProjectionDiagnostics(() => [], 2, 2, 0).memory?.groupBuckets).toBe(1)
+    expect(store.getProjectionDiagnostics(() => [], 2, 2, 0).memory?.groupBuckets).toBe(1)
+    expect(kindReads).toBe(2)
+
+    store.state.groupedRowsProjection = [dataRow]
+    expect(store.getProjectionDiagnostics(() => [], 2, 2, 0).memory?.groupBuckets).toBe(0)
+    expect(kindReads).toBe(3)
+  })
+
   it("captures recompute tracing details in diagnostics", () => {
     const store = createClientRowRuntimeStateStore<{ id: number }>()
     store.setProjectionInvalidation(["filterChanged"])

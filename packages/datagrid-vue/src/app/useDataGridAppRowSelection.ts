@@ -99,6 +99,9 @@ export function useDataGridAppRowSelection<TRow>(
       syncSnapshot(null)
       return
     }
+    if (rowSelectionSnapshot.value === null) {
+      return
+    }
     const rowCount = runtime.api.rows.getCount()
     const allowedRowIds: DataGridRowId[] = []
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
