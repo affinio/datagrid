@@ -14,6 +14,21 @@ for shadow tokens. Presets provide defaults for all tokens.
 when configuring a grid; a custom property set on an ancestor can be overridden
 by the grid's resolved inline token value.
 
+### Live theme changes and canvas chrome
+
+The grid refreshes its canvas palette when its `theme` prop changes or when the
+document root's `data-theme` or `class` attribute changes. This includes the
+default document-inheriting theme and configured document dark-mode classes.
+The refresh invalidates cached canvas colors and redraws the chrome without
+resetting grid state.
+
+Changing CSS variables directly (for example, mutating an inline style,
+changing an unrelated ancestor class, replacing a stylesheet, or calling
+`applyGridTheme()` outside the grid's `theme` prop flow) is not a supported live
+canvas invalidation signal. Use the `theme` prop or the observed document-root
+theme attributes for runtime changes. A style config with
+`inheritThemeFromDocument: false` remains fixed when the document theme changes.
+
 Example:
 
 ```vue
