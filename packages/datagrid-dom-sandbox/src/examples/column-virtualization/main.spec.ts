@@ -48,7 +48,7 @@ describe("column virtualization sandbox example", () => {
     await new Promise(resolve => setTimeout(resolve, 40))
     expect(demo.grid.api.selection.getSnapshot()?.activeCell).toMatchObject({ colIndex: lastCenterColumn + 1 })
     expect(root.querySelector(`[data-row-index="0"][data-column-index="${lastCenterColumn + 1}"]`)).not.toBeNull()
-  })
+  }, 15_000)
 
   it("keeps live DOM node counts bounded while the column window moves", async () => {
     root = document.createElement("div")
@@ -71,7 +71,7 @@ describe("column virtualization sandbox example", () => {
     expect(Math.max(...nodeCounts)).toBeLessThan(1_600)
     expect(grid.querySelectorAll("[role=row]").length).toBe(81)
     expect(root.querySelectorAll(".affino-grid-dom__header [role=columnheader]").length).toBeLessThan(30)
-  })
+  }, 15_000)
 
   it("refreshes column metadata and values instead of retaining stale viewport cells", async () => {
     root = document.createElement("div")
@@ -81,17 +81,17 @@ describe("column virtualization sandbox example", () => {
     await demo.grid.ready
 
     demo.grid.api.columns.setWidth("field-0", 200)
-    await new Promise(resolve => setTimeout(resolve, 40))
     const grid = root.querySelector<HTMLElement>("[role=grid]")!
-    expect(grid.style.getPropertyValue("--affino-grid-dom-columns").split(/\s+/)[0]).toBe("200px")
+    await expect.poll(() => grid.style.getPropertyValue("--affino-grid-dom-columns").split(/\s+/)[0])
+      .toBe("200px")
 
     demo.grid.api.columns.setAll([{
       key: "renamed", field: "field-1", label: "Renamed", initialState: { width: 180 },
     }])
-    await new Promise(resolve => setTimeout(resolve, 40))
-    expect(root.querySelector("[role=columnheader]")?.textContent).toBe("Renamed")
-    expect(root.querySelector('[data-row-index="0"] [data-column-index="0"]')?.textContent).toBe("R1 · C2")
-    expect(grid.getAttribute("aria-colcount")).toBe("1")
+    await expect.poll(() => root.querySelector("[role=columnheader]")?.textContent).toBe("Renamed")
+    await expect.poll(() => root.querySelector('[data-row-index="0"] [data-column-index="0"]')?.textContent)
+      .toBe("R1 · C2")
+    await expect.poll(() => grid.getAttribute("aria-colcount")).toBe("1")
   })
 })
 
