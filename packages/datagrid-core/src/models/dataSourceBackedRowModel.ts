@@ -1104,7 +1104,27 @@ export function createDataSourceBackedRowModel<T = unknown>(
     requestCounter = requestId
     const controller = new AbortController()
     const rangeCacheToken = rangeCache.beginLoad(requestRange)
-    const requestPromise = (async () => {
+    let resolveRequestPromise!: () => void
+    let rejectRequestPromise!: (error: unknown) => void
+    const requestPromise = new Promise<void>((resolve, reject) => {
+      resolveRequestPromise = resolve
+      rejectRequestPromise = reject
+    })
+    // Publish the lane before invoking user datasource code. Pull remains
+    // synchronous up to its first await, preserving existing request timing.
+    writeLaneInFlight(priority, {
+      requestId,
+      controller,
+      key: requestKey,
+      stateKey: requestStateKey,
+      range: requestRange,
+      promise: requestPromise,
+      priority,
+      reason,
+      affectsLoading: options?.affectsLoading !== false,
+      rangeCacheToken,
+    })
+    const requestExecution = (async () => {
       let settledStatus: "completed" | "failed" | "dropped" = "completed"
       let settledError: Error | undefined
       signals.emit("pullStarted", {
@@ -1259,19 +1279,7 @@ export function createDataSourceBackedRowModel<T = unknown>(
         emit()
       }
     })()
-
-    writeLaneInFlight(priority, {
-      requestId,
-      controller,
-      key: requestKey,
-      stateKey: requestStateKey,
-      range: requestRange,
-      promise: requestPromise,
-      priority,
-      reason,
-      affectsLoading: options?.affectsLoading !== false,
-      rangeCacheToken,
-    })
+    void requestExecution.then(resolveRequestPromise, rejectRequestPromise)
 
     return requestPromise
   }

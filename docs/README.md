@@ -10,6 +10,7 @@ This is the public documentation for the DataGrid repository. Choose one entry p
 - [Theme token reference](./reference/datagrid-theme-tokens.md) - complete token-to-CSS-variable catalog.
 - [Vue adapter guide](./vue-adapter.md) - headless Vue runtime, custom renderers, row models, and adapter ownership.
 - [Vue package migration](./vue-package-migration.md) - unified Vue entry points and temporary compatibility imports.
+- [Vanilla DOM adapter](./vanilla-dom-adapter.md) - framework-independent adapter status and getting started.
 - [Core engine documentation](../packages/datagrid-core/docs/README.md) - maintained beside the package: architecture, integration guide, API references, and framework-independent examples.
 - [Package map](./datagrid-package-map.md) - package roles and when to move between layers.
 - [Feature catalog](./datagrid-feature-catalog.md) - capability matrix and runtime modes.

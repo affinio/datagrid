@@ -121,6 +121,62 @@ importers:
         specifier: workspace:*
         version: link:../projection-engine
 
+  packages/datagrid-dom:
+    dependencies:
+      '@affino/datagrid-chrome':
+        specifier: workspace:*
+        version: link:../datagrid-chrome
+      '@affino/datagrid-core':
+        specifier: workspace:*
+        version: link:../datagrid-core
+      '@affino/datagrid-gantt':
+        specifier: workspace:*
+        version: link:../datagrid-gantt
+      '@affino/datagrid-orchestration':
+        specifier: workspace:*
+        version: link:../datagrid-orchestration
+      '@affino/menu-core':
+        specifier: 1.2.0
+        version: 1.2.0
+      '@affino/overlay-host':
+        specifier: 1.1.0
+        version: 1.1.0
+    devDependencies:
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:^
+        version: link:../datagrid-formula-engine
+      '@affino/export-xlsx':
+        specifier: workspace:^
+        version: link:../export-xlsx
+
+  packages/datagrid-dom-sandbox:
+    dependencies:
+      '@affino/datagrid-core':
+        specifier: workspace:*
+        version: link:../datagrid-core
+      '@affino/datagrid-dom':
+        specifier: workspace:*
+        version: link:../datagrid-dom
+      '@affino/datagrid-formula-engine':
+        specifier: workspace:*
+        version: link:../datagrid-formula-engine
+      '@affino/export-xlsx':
+        specifier: workspace:*
+        version: link:../export-xlsx
+    devDependencies:
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 7.3.2
+        version: 7.3.2(@types/node@25.3.1)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.1)(jiti@2.6.1)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.46.0)
+
   packages/datagrid-format:
     devDependencies:
       vitest:
@@ -179,6 +235,9 @@ importers:
       '@affino/datagrid-core':
         specifier: workspace:*
         version: link:../datagrid-core
+      '@affino/datagrid-dom':
+        specifier: workspace:*
+        version: link:../datagrid-dom
       '@affino/datagrid-formula-engine':
         specifier: workspace:*
         version: link:../datagrid-formula-engine

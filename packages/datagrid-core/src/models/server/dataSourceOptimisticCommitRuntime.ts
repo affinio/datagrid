@@ -26,6 +26,7 @@ export function createDataSourceOptimisticCommitRuntime<T>(
 ): (transaction: DataSourceOptimisticEditTransaction<T>) => Promise<void> {
   return async transaction => {
     let optimisticMutationSettled = false
+    let serverConfirmed = false
     const settle = (status: "committed" | "rejected" | "failed", error?: Error): void => {
       if (optimisticMutationSettled) return
       optimisticMutationSettled = true
@@ -45,6 +46,7 @@ export function createDataSourceOptimisticCommitRuntime<T>(
       }))
 
       if (options.isDisposed()) return
+      serverConfirmed = true
       const rejectedRowIds = new Set<DataGridRowId>((result.rejected ?? []).map(entry => entry.rowId))
       if (rejectedRowIds.size > 0) {
         console.error("[DataGridDataSource] commitEdits returned rejected rows.", result.rejected)
@@ -78,13 +80,30 @@ export function createDataSourceOptimisticCommitRuntime<T>(
       }
     } catch (commitError) {
       if (options.isDisposed()) return
-      console.error("[DataGridDataSource] commitEdits failed.", commitError)
+      console.error(
+        serverConfirmed
+          ? "[DataGridDataSource] commit was confirmed but local publication or reconciliation failed."
+          : "[DataGridDataSource] commitEdits failed.",
+        commitError,
+      )
       const error = commitError instanceof Error ? commitError : new Error(String(commitError))
       options.setError(error)
-      options.rollbackTransaction(transaction)
-      settle("failed", error)
-      options.bumpRevision()
-      options.emit()
+      if (!serverConfirmed) {
+        options.rollbackTransaction(transaction)
+        settle("failed", error)
+        options.bumpRevision()
+        options.emit()
+      } else {
+        // The external write is irreversible at this point. Reconcile from
+        // the authoritative source instead of restoring a stale local base.
+        try {
+          await options.refreshVisibleRows()
+        } catch (refreshError) {
+          throw Object.assign(new Error("[DataGridDataSource] server accepted the write but local reconciliation failed."), {
+            errors: [error, refreshError],
+          })
+        }
+      }
       throw error
     }
   }

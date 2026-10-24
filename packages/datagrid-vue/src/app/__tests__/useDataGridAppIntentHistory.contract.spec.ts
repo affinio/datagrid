@@ -106,6 +106,32 @@ function createHistoryHarness(
 }
 
 describe("useDataGridAppIntentHistory contract", () => {
+  it("compensates row replay when interaction restoration fails", async () => {
+    let failRestoration = true
+    const harness = createHistoryHarness([
+      { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },
+    ], {
+      captureRestorationState: () => ({ activeCell: { rowIndex: 0, columnIndex: 0 } }),
+      applyRestorationState: () => {
+        if (failRestoration) throw new Error("restore-focus")
+      },
+    })
+    const before = harness.history.captureRowsSnapshotByIds(["r1"])
+    harness.setRowData("r1", { a: "A1-edited" })
+    const after = harness.history.captureRowsSnapshotByIds(["r1"])
+    await harness.history.recordIntentTransaction({ intent: "edit", label: "Edit" }, before, after)
+
+    await expect(harness.history.runHistoryAction("undo")).rejects.toThrow("undo failed")
+    expect(harness.rows()[0]?.data.a).toBe("A1-edited")
+    expect(harness.history.canUndo.value).toBe(true)
+    expect(harness.history.canRedo.value).toBe(false)
+
+    failRestoration = false
+    await harness.history.runHistoryAction("undo")
+    await harness.history.runHistoryAction("redo")
+    expect(harness.rows()[0]?.data.a).toBe("A1-edited")
+  })
+
   it("replays inline edit snapshots without duplicating the patch", async () => {
     const harness = createHistoryHarness([
       { rowId: "r1", data: { a: "A1", b: "B1", c: "C1" } },

@@ -311,6 +311,7 @@ export function createDataGridTransactionService(
   let lastCommittedId: string | null = null
   let pendingBatch: DataGridPendingBatch | null = null
   let activeAction: string | null = null
+  let lifecycleRevision = 0
 
   function ensureActive() {
     if (disposed) {
@@ -391,7 +392,12 @@ export function createDataGridTransactionService(
     command: DataGridTransactionCommand,
     context: DataGridTransactionExecutionContext,
   ): Promise<void> {
+    ensureActive()
+    const expectedLifecycleRevision = lifecycleRevision
     await execute(command, context)
+    if (disposed || lifecycleRevision !== expectedLifecycleRevision) {
+      throw new Error("DataGridTransactionService was disposed while an operation was in progress")
+    }
   }
 
   async function rollbackAppliedCommands(
@@ -456,6 +462,7 @@ export function createDataGridTransactionService(
         })
         appliedCommandIndexes.push(commandIndex)
       } catch (error) {
+        if (disposed) throw error
         try {
           await rollbackAppliedCommands(transaction, appliedCommandIndexes, batchId)
         } catch (rollbackError) {
@@ -525,6 +532,7 @@ export function createDataGridTransactionService(
   ): Promise<void> {
     const appliedTransactions: DataGridNormalizedTransaction[] = []
     for (const transaction of committedBatch.transactions) {
+      ensureActive()
       try {
         await applyOneTransaction(transaction, direction, committedBatch.batchId)
         appliedTransactions.push(transaction)
@@ -674,6 +682,7 @@ export function createDataGridTransactionService(
         try {
           await applyCommittedBatch(committedBatch, "apply")
         } catch (error) {
+          if (disposed) throw error
           bumpRevision()
           options.onRolledBack?.({
             committedId: committedBatch.committedId,
@@ -685,6 +694,7 @@ export function createDataGridTransactionService(
           throw error
         }
 
+        ensureActive()
         pushUndoBatch(committedBatch)
         redoStack.length = 0
         lastCommittedId = committedBatch.committedId
@@ -729,6 +739,7 @@ export function createDataGridTransactionService(
         try {
           await applyCommittedBatch(committedBatch, "apply")
         } catch (error) {
+          if (disposed) throw error
           options.onRolledBack?.({
             committedId: committedBatch.committedId,
             batchId: committedBatch.batchId,
@@ -739,6 +750,7 @@ export function createDataGridTransactionService(
           throw error
         }
 
+        ensureActive()
         pushUndoBatch(committedBatch)
         redoStack.length = 0
         lastCommittedId = committedBatch.committedId
@@ -766,6 +778,7 @@ export function createDataGridTransactionService(
           return null
         }
         await rollbackCommittedBatch(committedBatch, "undo")
+        ensureActive()
         undoStack.pop()
         redoStack.push(committedBatch)
         lastCommittedId = committedBatch.committedId
@@ -787,6 +800,7 @@ export function createDataGridTransactionService(
           return null
         }
         await applyCommittedBatch(committedBatch, "redo")
+        ensureActive()
         redoStack.pop()
         pushUndoBatch(committedBatch)
         lastCommittedId = committedBatch.committedId
@@ -814,6 +828,7 @@ export function createDataGridTransactionService(
         return
       }
       disposed = true
+      lifecycleRevision += 1
       listeners.clear()
       undoStack.length = 0
       redoStack.length = 0

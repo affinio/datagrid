@@ -223,6 +223,15 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
   const services = resolveServices(options.services)
   const startupOrder = resolveStartupOrder(options.startupOrder)
   let state: DataGridCoreLifecycleState = "idle"
+  const initializedServices = new Set<DataGridCoreServiceName>()
+  const startedServices = new Set<DataGridCoreServiceName>()
+  let initInFlight: Promise<void> | null = null
+  let startInFlight: Promise<void> | null = null
+  let disposeInFlight: Promise<void> | null = null
+  const readState = (): DataGridCoreLifecycleState => state
+  const errorWithErrors = (message: string, errors: readonly unknown[]): Error => {
+    return Object.assign(new Error(message), { errors: [...errors] })
+  }
 
   const context: DataGridCoreServiceContext = {
     get state() {
@@ -238,6 +247,11 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
     order: readonly DataGridCoreServiceName[],
   ): Promise<void> {
     for (const name of order) {
+      if (readState() === "disposed") {
+        throw new Error("[DataGridCore] lifecycle operation cancelled because the core was disposed.")
+      }
+      const completed = method === "init" ? initializedServices : startedServices
+      if (completed.has(name)) continue
       const service = services[name]
       const handler = (service as DataGridCoreService)[method]
       if (!handler) {
@@ -247,6 +261,10 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
       if (result && typeof (result as Promise<void>).then === "function") {
         await result
       }
+      if (readState() === "disposed") {
+        throw new Error("[DataGridCore] lifecycle operation cancelled because the core was disposed.")
+      }
+      completed.add(name)
     }
   }
 
@@ -254,57 +272,99 @@ export function createDataGridCore(options: CreateDataGridCoreOptions = {}): Dat
     method: "stop" | "dispose",
     order: readonly DataGridCoreServiceName[],
   ): Promise<void> {
+    const errors: unknown[] = []
     for (let index = order.length - 1; index >= 0; index -= 1) {
       const service = services[order[index] as DataGridCoreServiceName]
       const handler = (service as DataGridCoreService)[method]
       if (!handler) {
         continue
       }
-      const result = handler(context)
-      if (result && typeof (result as Promise<void>).then === "function") {
-        await result
+      try {
+        const result = handler(context)
+        if (result && typeof (result as Promise<void>).then === "function") {
+          await result
+        }
+      } catch (error) {
+        errors.push(error)
       }
+    }
+    if (errors.length > 0) {
+      throw errorWithErrors(`[DataGridCore] one or more ${method} handlers failed.`, errors)
     }
   }
 
-  async function initCore(): Promise<void> {
+  function initCore(): Promise<void> {
     if (state === "disposed") {
       throw new Error("[DataGridCore] cannot init disposed core.")
     }
     if (state === "initialized" || state === "started" || state === "stopped") {
-      return
+      return Promise.resolve()
     }
-    await runInOrder("init", startupOrder)
-    state = "initialized"
+    if (initInFlight) return initInFlight
+    const operation = (async () => {
+      await runInOrder("init", startupOrder)
+      if (readState() !== "disposed") state = "initialized"
+    })()
+    initInFlight = operation
+    void operation.then(
+      () => { if (initInFlight === operation) initInFlight = null },
+      () => { if (initInFlight === operation) initInFlight = null },
+    )
+    return operation
   }
 
-  async function startCore(): Promise<void> {
+  function startCore(): Promise<void> {
     if (state === "disposed") {
       throw new Error("[DataGridCore] cannot start disposed core.")
     }
     if (state === "started") {
-      return
+      return Promise.resolve()
     }
-    await initCore()
-    await runInOrder("start", startupOrder)
-    state = "started"
+    if (startInFlight) return startInFlight
+    const operation = (async () => {
+      await initCore()
+      if (readState() === "disposed") throw new Error("[DataGridCore] cannot start disposed core.")
+      await runInOrder("start", startupOrder)
+      if (readState() !== "disposed") state = "started"
+    })()
+    startInFlight = operation
+    void operation.then(
+      () => { if (startInFlight === operation) startInFlight = null },
+      () => { if (startInFlight === operation) startInFlight = null },
+    )
+    return operation
   }
 
   async function stopCore(): Promise<void> {
     if (state === "disposed" || state === "idle" || state === "stopped") {
       return
     }
-    await runInReverseOrder("stop", startupOrder)
-    state = "stopped"
+    try {
+      await runInReverseOrder("stop", startupOrder.filter(name => startedServices.has(name)))
+    } finally {
+      startedServices.clear()
+      if (readState() !== "disposed") state = "stopped"
+    }
   }
 
-  async function disposeCore(): Promise<void> {
-    if (state === "disposed") {
-      return
-    }
-    await stopCore()
-    await runInReverseOrder("dispose", startupOrder)
+  function disposeCore(): Promise<void> {
+    if (disposeInFlight) return disposeInFlight
+    if (state === "disposed") return Promise.resolve()
+    const wasStarted = startedServices.size > 0
+    // Mark terminal before awaiting startup so its continuation cannot start
+    // another service or restore an earlier lifecycle state.
     state = "disposed"
+    const operation = (async () => {
+      const errors: unknown[] = []
+      if (wasStarted) {
+        try { await runInReverseOrder("stop", startupOrder.filter(name => startedServices.has(name))) } catch (error) { errors.push(error) }
+      }
+      startedServices.clear()
+      try { await runInReverseOrder("dispose", startupOrder) } catch (error) { errors.push(error) }
+      if (errors.length > 0) throw errorWithErrors("[DataGridCore] disposal completed with cleanup failures.", errors)
+    })()
+    disposeInFlight = operation
+    return disposeInFlight
   }
 
   return {

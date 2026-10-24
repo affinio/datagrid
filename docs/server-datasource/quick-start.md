@@ -102,6 +102,12 @@ const datasource = createAffinoDatasource<AuctionRow>({
 const rowModel = createDataSourceBackedRowModel<AuctionRow>({
   dataSource: datasource,
   initialTotal: 0,
+  prefetch: {
+    enabled: true,
+    triggerViewportFactor: 0.8,
+    windowViewportFactor: 3,
+    directionalBias: "scroll-direction",
+  },
 })
 
 const columns = [
@@ -133,8 +139,11 @@ onBeforeUnmount(() => {
 With this minimal contract, the grid can:
 
 - pull viewport rows from the backend
+- keep a directional background buffer ahead of the viewport for continuous scrolling
 - send sort model changes to `POST /api/{tableId}/pull`
 - send filter model changes to `POST /api/{tableId}/pull`
+
+Prefetch is opt-in on `createDataSourceBackedRowModel`. Enable it for virtualized grids when the datasource has non-trivial latency; tune the window and batch limits to the backend's request cost and expected scroll speed. A column window is materialized locally from the configured columns and does not issue datasource pulls.
 
 The reference backend implementation is in:
 

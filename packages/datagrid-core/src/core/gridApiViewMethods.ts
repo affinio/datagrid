@@ -34,6 +34,7 @@ export interface DataGridApiCellRefreshQueue {
 }
 
 export interface DataGridApiViewMethods {
+  canSetViewportPosition: () => boolean
   setViewportRange: (range: DataGridViewportRange) => void
   getViewportPosition: () => DataGridViewportPositionSnapshot | null
   setViewportPosition: (
@@ -167,6 +168,9 @@ export function createDataGridApiViewMethods<TRow = unknown>(
   }
 
   return {
+    canSetViewportPosition() {
+      return typeof getViewportService()?.setViewportPosition === "function"
+    },
     setViewportRange(range: DataGridViewportRange) {
       rowModel.setViewportRange(range)
       getViewportService()?.setViewportRange?.(range)
@@ -275,6 +279,7 @@ export function createDataGridApiViewMethods<TRow = unknown>(
       }
     },
     getRowHeightOverride(rowIndex: number) {
+      refreshProjectedRowHeightOverrides()
       const normalizedIndex = normalizeRowIndex(rowIndex)
       if (normalizedIndex == null) {
         return null

@@ -661,6 +661,28 @@ export function validateDataGridCellDraftValue<TRow = unknown>(
   ) {
     return { valid: false, value, reason: `invalid-${resolvedType.id}` }
   }
+  const constraints = options.column.constraints
+  if (constraints) {
+    const compare = (left: unknown, right: unknown): number | null => {
+      if (left instanceof Date) {
+        const leftTime = left.getTime()
+        const rightTime = right instanceof Date ? right.getTime()
+          : typeof right === "number" ? right
+            : typeof right === "string" ? Date.parse(right)
+              : Number.NaN
+        return Number.isFinite(leftTime) && Number.isFinite(rightTime) ? Math.sign(leftTime - rightTime) : null
+      }
+      if (typeof left === "number" && typeof right === "number" && Number.isFinite(left) && Number.isFinite(right)) {
+        return Math.sign(left - right)
+      }
+      if (typeof left === "string" && typeof right === "string") return left < right ? -1 : left > right ? 1 : 0
+      return null
+    }
+    const minimum = constraints.min == null ? null : compare(value, constraints.min)
+    if (minimum != null && minimum < 0) return { valid: false, value, reason: "below-minimum" }
+    const maximum = constraints.max == null ? null : compare(value, constraints.max)
+    if (maximum != null && maximum > 0) return { valid: false, value, reason: "above-maximum" }
+  }
   if (
     (resolvedType.id === "date" || resolvedType.id === "datetime")
     && isInvalidParsedFallback(options.draft, value)

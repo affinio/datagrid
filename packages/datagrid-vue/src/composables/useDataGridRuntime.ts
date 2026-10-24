@@ -146,7 +146,7 @@ export interface UseDataGridRuntimeResult<TRow = unknown> extends DataGridVueRun
   ) => DataGridUnifiedState<TRow> | null
   setUnifiedState: (state: DataGridUnifiedState<TRow>, options?: DataGridSetStateOptions) => void
   start: () => Promise<void>
-  stop: () => void
+  stop: () => Promise<void>
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
   /**
    * Sync rows for a body-relative viewport range.
@@ -542,22 +542,24 @@ export function useDataGridRuntime<TRow = unknown>(
 
   if (shouldAutoStart) {
     onMounted(() => {
-      void runtime.start()
+      void runtime.start().catch(error => {
+        if (!runtime.isDisposed()) console.error("[DataGridVue] runtime startup failed.", error)
+      })
     })
   }
 
-  function stop() {
-    if (runtime.isDisposed()) {
-      return
-    }
+  function stop(): Promise<void> {
+    if (runtime.isDisposed()) return runtime.stop()
     unsubscribeColumns()
     unsubscribeVirtualWindow()
     unsubscribeRowPartition()
-    runtime.stop()
+    return runtime.stop()
   }
 
   onBeforeUnmount(() => {
-    stop()
+    void stop().catch(error => {
+      console.error("[DataGridVue] runtime disposal failed.", error)
+    })
   })
 
   function reapplyView() {

@@ -498,7 +498,7 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
         }
         affectedIds.add(update.rowId)
       }
-      capability.patchRows(updates, {
+      const patchResult = capability.patchRows(updates, {
         recomputeSort: shouldReapply,
         recomputeFilter: shouldReapply,
         recomputeGroup: shouldReapply,
@@ -525,6 +525,12 @@ export function createDataGridApiRowsMethods<TRow = unknown>(
           if (Object.keys(patch as object).length > 0) edits.push({ rowId, oldData: oldData as TRow, newData: row.data, patch })
         }
         if (edits.length > 0) onRowsEdited({ source: options?.source ?? "application", edits })
+      }
+      if (patchResult && typeof (patchResult as Promise<void>).then === "function") {
+        return Promise.resolve(patchResult).then(() => {
+          assertNotAborted(options?.signal, "rows.applyEdits")
+          publish()
+        })
       }
       publish()
       return

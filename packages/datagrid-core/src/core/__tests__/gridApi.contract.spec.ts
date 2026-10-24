@@ -99,6 +99,25 @@ describe("data grid api facade contracts", () => {
     })
   })
 
+  it("resolves computed overlay values from the live client row model", () => {
+    const rowModel = createAdvancedClientRowModel({
+      rows: [{ row: { id: "r1", amount: 1 }, rowId: "r1", originalIndex: 0 }],
+    })
+    rowModel.registerComputedField?.({
+      name: "double",
+      deps: ["field:amount"],
+      compute: context => Number((context.row as { amount: number }).amount) * 2,
+    })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "double" }] }) },
+    } }) })
+    expect(api.rows.get(0)?.row).toMatchObject({ double: 2 })
+    expect(api.cells.resolveValue({ rowId: "r1", columnKey: "double", purpose: "computed" })).toMatchObject({
+      status: "available", sourceValue: undefined, computedValue: 2, value: 2,
+    })
+  })
+
   it("resolves cell values exclusively from supplied row and column snapshots", () => {
     const sourceRow = { id: "r1", amount: 42 }
     const rowModel = createAdvancedClientRowModel({
@@ -553,6 +572,32 @@ describe("data grid api facade contracts", () => {
     expect(api.view.getRowHeightOverridesSnapshot()).toEqual(new Map([[0, 52]]))
   })
 
+  it("resolves row-height overrides by current row identity without depending on a prior snapshot read", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", order: 1 }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", order: 2 }, rowId: "b", originalIndex: 1 },
+    ] })
+    const heights = new Map<number, number>()
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "order" }] }) },
+      viewport: {
+        name: "viewport",
+        getRowHeightOverride: (index: number) => heights.get(index) ?? null,
+        setRowHeightOverride: (index: number, height: number | null) => {
+          if (height == null) heights.delete(index)
+          else heights.set(index, height)
+        },
+        getRowHeightOverridesSnapshot: () => new Map(heights),
+        getRowHeightVersion: () => 1,
+      },
+    } }) })
+    api.view.setRowHeightOverrideById("a", 60)
+    rowModel.setSortModel([{ key: "order", direction: "desc" }])
+    expect(api.view.getRowHeightOverride(0)).toBeNull()
+    expect(api.view.getRowHeightOverride(1)).toBe(60)
+  })
+
   it("validates state imports and reports applied and skipped sections", () => {
     const rowModel = createAdvancedClientRowModel({ rows: [{ row: { id: 1 }, rowId: 1, originalIndex: 0 }] })
     const columnModel = createDataGridColumnModel({ columns: [{ key: "id", label: "ID" }] })
@@ -894,6 +939,32 @@ describe("data grid api facade contracts", () => {
     expect(events).toHaveLength(3)
     expect(events[2]?.edits.map(edit => edit.rowId)).toEqual(["a"])
     expect(events[2]?.edits[0]?.patch).toEqual({ count: 8 })
+  })
+
+  it("waits for asynchronous row patches before publishing applyEdits completion", async () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", amount: 1 }, rowId: "a", originalIndex: 0 },
+    ] })
+    const originalPatchRows = rowModel.patchRows.bind(rowModel)
+    let resolvePatch!: () => void
+    const gate = new Promise<void>(resolve => { resolvePatch = resolve })
+    rowModel.patchRows = async (updates, options) => {
+      await gate
+      originalPatchRows(updates, options)
+    }
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "amount" }] }) },
+    } }) })
+    const onEdited = vi.fn()
+    api.events.on("rows:edited", onEdited)
+    const applying = api.rows.applyEdits([{ rowId: "a", data: { amount: 2 } }])
+    expect(applying).toBeInstanceOf(Promise)
+    expect(onEdited).not.toHaveBeenCalled()
+    resolvePatch()
+    await applying
+    expect(onEdited).toHaveBeenCalledTimes(1)
+    expect(api.rows.getById("a")?.data).toMatchObject({ amount: 2 })
   })
 
   it("keeps direct row mutations outside generic transaction history", async () => {
@@ -2460,10 +2531,67 @@ describe("data grid api facade contracts", () => {
     api.rows.applyEdits([{ rowId: "a", data: { amount: 3 } }])
     expect(api.rowSelection.getScopeStatus()).toBe("current")
     expect(api.rowSelection.getSnapshot()?.mode).toBe("all")
+    const savedState = api.state.get()
+    api.state.set(savedState)
+    expect(api.rowSelection.getScopeStatus()).toBe("current")
+    expect(api.rowSelection.getSnapshot()?.mode).toBe("all")
 
     api.rows.setFilterModel({ columnFilters: { amount: { kind: "valueSet", tokens: ["number:3"] } } })
     expect(api.rowSelection.getScopeStatus()).toBe("stale")
     expect(api.rowSelection.getSnapshot()).toBeNull()
+  })
+
+  it("rebases an explicit row-selection intent after current-projection all-selection becomes stale", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", value: 1 }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", value: 2 }, rowId: "b", originalIndex: 1 },
+    ] })
+    let selected: DataGridRowSelectionSnapshot | null = null
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "value" }] }) },
+      selection: {
+        name: "selection",
+        getRowSelectionSnapshot: () => selected,
+        setRowSelectionSnapshot: snapshot => { selected = snapshot },
+        clearRowSelection: () => { selected = null },
+        getFocusedRow: () => selected?.focusedRow ?? null,
+        setFocusedRow: () => {},
+        getSelectedRows: () => selected?.selectedRows ?? [],
+        isRowSelected: rowId => selected?.selectedRows.includes(rowId) ?? false,
+        setRowSelected: () => {}, selectRows: () => {}, deselectRows: () => {}, clearSelectedRows: () => {},
+      },
+    } }) })
+    api.rowSelection.setSnapshot({ focusedRow: null, selectedRows: [], mode: "all", excludedRows: [] })
+    rowModel.setSortModel([{ key: "value", direction: "desc" }])
+    expect(api.rowSelection.getScopeStatus()).toBe("stale")
+    api.rowSelection.setSelected("b", true)
+    expect(api.rowSelection.getSnapshot()).toMatchObject({ selectedRows: ["b"] })
+    expect(api.rowSelection.isSelected("b")).toBe(true)
+  })
+
+  it("captures stale positional selections as unavailable rather than current", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", value: 1 }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", value: 2 }, rowId: "b", originalIndex: 1 },
+    ] })
+    let selected: DataGridSelectionSnapshot | null = null
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "value" }] }) },
+      selection: {
+        name: "selection",
+        getSelectionSnapshot: () => selected,
+        setSelectionSnapshot: snapshot => { selected = snapshot },
+        clearSelection: () => { selected = null },
+      },
+    } }) })
+    api.selection.setSnapshot({ ranges: [{ start: { rowIndex: 0, columnIndex: 0 }, end: { rowIndex: 0, columnIndex: 0 } }] } as DataGridSelectionSnapshot)
+    rowModel.setSortModel([{ key: "value", direction: "desc" }])
+    expect(api.selection.getSnapshot()).toBeNull()
+    const captured = api.read.captureView({ include: ["rows", "selection"] })
+    expect(captured.selection?.status).toBe("available")
+    expect(captured.selection?.value.cells).toBeNull()
   })
 
   it("resolves selected row data through the current projected row order", () => {
@@ -3165,7 +3293,36 @@ describe("data grid api facade contracts", () => {
     api.rows.setSortModel([{ key: "owner", direction: "asc" }])
     unsubs.forEach(unsubscribe => unsubscribe())
 
-    expect(events.slice(0, 3)).toEqual(["rows", "selection", "projection"])
+    expect(events.slice(0, 3)).toEqual(["rows", "projection", "selection"])
+  })
+
+  it("publishes monotonic projection revisions under reentrant row-model mutations", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", value: 1 }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", value: 2 }, rowId: "b", originalIndex: 1 },
+    ] })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: createDataGridColumnModel({ columns: [{ key: "value" }] }) },
+    } }) })
+    let nested = false
+    const transitions: Array<[number, number]> = []
+    api.events.on("rows:changed", () => {
+      if (nested) return
+      nested = true
+      api.rows.setSortModel([{ key: "value", direction: "desc" }])
+    })
+    api.events.on("projection:recomputed", event => transitions.push([event.previousVersion, event.nextVersion]))
+
+    api.rows.patch([{ rowId: "a", data: { value: 3 } }], { recomputeSort: true })
+
+    expect(transitions.length).toBeGreaterThanOrEqual(1)
+    for (let index = 0; index < transitions.length; index += 1) {
+      const [previous, next] = transitions[index]!
+      expect(next).toBeGreaterThanOrEqual(previous)
+      if (index > 0) expect(previous).toBe(transitions[index - 1]![1])
+    }
+    expect(transitions[transitions.length - 1]?.[1]).toBe(rowModel.getSnapshot().projection?.recomputeVersion)
   })
 
   it("propagates listener errors synchronously and stops the current event dispatch", () => {
@@ -3679,6 +3836,33 @@ describe("data grid api facade contracts", () => {
 
     expect(() => api.state.set(importState, { strict: true })).toThrow(/Transaction state restore/)
     expect(api.rows.getSnapshot().sortModel).toEqual([])
+  })
+
+  it("preflights unavailable viewport position before applying earlier strict restore sections", () => {
+    const rowModel = createAdvancedClientRowModel({ rows: [
+      { row: { id: "a", owner: "A" }, rowId: "a", originalIndex: 0 },
+      { row: { id: "b", owner: "B" }, rowId: "b", originalIndex: 1 },
+    ] })
+    const columnModel = createDataGridColumnModel({ columns: [{ key: "owner" }, { key: "id" }] })
+    const api = createDataGridApi({ core: createDataGridCore({ services: {
+      rowModel: { name: "rowModel", model: rowModel },
+      columnModel: { name: "columnModel", model: columnModel },
+    } }) })
+    const state = api.state.get({ includeViewportPosition: true })
+    state.rows.snapshot.sortModel = [{ key: "owner", direction: "desc" }]
+    state.columns.order = ["id", "owner"]
+    state.view = { viewportPosition: {
+      version: 1,
+      range: { start: 0, end: 0 },
+      anchor: { rowId: "a", rowIndex: 0, columnKey: "owner", columnIndex: 0 },
+      scroll: { top: 10, left: 0 },
+    } }
+    const validation = api.state.validate(state, { strict: true })
+    expect(validation.valid).toBe(false)
+    expect(validation.issues).toContainEqual(expect.objectContaining({ section: "viewportPosition" }))
+    expect(() => api.state.set(state, { strict: true })).toThrow(/setViewportPosition/)
+    expect(api.rows.getSnapshot().sortModel).toEqual([])
+    expect(columnModel.getSnapshot().order).toEqual(["owner", "id"])
   })
 
   it("roundtrips serializable column style filters through unified state", () => {

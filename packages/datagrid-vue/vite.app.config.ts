@@ -5,6 +5,9 @@ import { defineConfig } from "vite"
 const appSource = resolve(__dirname, "src/app-layer")
 
 export default defineConfig({
+  // Library assets (including the XLSX worker) must resolve relative to the
+  // published package chunks, not the consuming application's domain root.
+  base: "./",
   plugins: [vue()],
   build: {
     outDir: resolve(__dirname, "dist"),

@@ -17,15 +17,26 @@ export function useDataGridFillSelectionLifecycle<TRange = { startRow: number; e
   options: UseDataGridFillSelectionLifecycleOptions<TRange>,
 ): UseDataGridFillSelectionLifecycleResult {
   function stopFillSelection(applyPreview: boolean) {
-    if (applyPreview) {
-      options.applyFillPreview()
+    const errors: unknown[] = []
+    const runCleanup = (cleanup: () => void): void => {
+      try { cleanup() } catch (error) { errors.push(error) }
     }
-    options.setFillDragging(false)
-    options.clearFillDragStartPointer()
-    options.clearFillPointer()
-    options.clearFillBaseRange()
-    options.clearFillPreviewRange()
-    options.stopAutoScrollFrameIfIdle()
+    try {
+      if (applyPreview) options.applyFillPreview()
+    } catch (error) {
+      errors.push(error)
+    } finally {
+      runCleanup(() => options.setFillDragging(false))
+      runCleanup(options.clearFillDragStartPointer)
+      runCleanup(options.clearFillPointer)
+      runCleanup(options.clearFillBaseRange)
+      runCleanup(options.clearFillPreviewRange)
+      runCleanup(options.stopAutoScrollFrameIfIdle)
+    }
+    if (errors.length > 0) {
+      if (errors.length === 1) throw errors[0]
+      throw Object.assign(new Error("[DataGridFill] finalization completed with errors."), { errors })
+    }
   }
 
   return {

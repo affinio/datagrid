@@ -93,6 +93,11 @@ describe("data grid cell engine", () => {
     })).toMatchObject({ valid: true, value: 42 })
 
     expect(validateDataGridCellDraftValue({
+      column: { key: "amount", cellType: "number", constraints: { min: 0, max: 10 } },
+      draft: "500",
+    })).toMatchObject({ valid: false, reason: "above-maximum", value: 500 })
+
+    expect(validateDataGridCellDraftValue({
       column: { key: "amount", cellType: "number" },
       draft: "nope",
     })).toMatchObject({ valid: false, reason: "invalid-number" })

@@ -92,6 +92,54 @@ export interface ClientRowStateMutationsRuntime<T> {
 export function createClientRowStateMutationsRuntime<T>(
   context: ClientRowStateMutationsRuntimeContext<T>,
 ): ClientRowStateMutationsRuntime<T> {
+  const captureExpansionState = () => {
+    const store = context.getActiveExpansionStateStore()
+    return { store, expandedByDefault: store.expandedByDefault, toggledKeys: [...store.toggledKeys] }
+  }
+  const restoreExpansionState = (snapshot: ReturnType<typeof captureExpansionState>): void => {
+    snapshot.store.setExpandedByDefault(snapshot.expandedByDefault)
+    snapshot.store.toggledKeys.clear()
+    for (const key of snapshot.toggledKeys) snapshot.store.toggledKeys.add(key)
+  }
+  const restoreProjectionAndRethrow = (stage: DataGridClientProjectionStage, error: unknown): never => {
+    try {
+      context.recomputeFromStage(stage)
+    } catch (recoveryError) {
+      throw Object.assign(new Error("[DataGridProjection] state change failed and previous projection recovery was incomplete."), {
+        errors: [error, recoveryError],
+      })
+    }
+    throw error
+  }
+  const applyExpansionMutation = (mutate: () => boolean): void => {
+    const previousExpansion = captureExpansionState()
+    if (!mutate()) return
+    context.bumpGroupRevision()
+    context.setProjectionInvalidation(["groupExpansionChanged"])
+    try {
+      context.recomputeFromStage("group")
+    } catch (error) {
+      restoreExpansionState(previousExpansion)
+      context.bumpGroupRevision()
+      context.setProjectionInvalidation(["groupExpansionChanged"])
+      restoreProjectionAndRethrow("group", error)
+    }
+    context.emit()
+  }
+  const applyPaginationMutation = (nextPagination: DataGridPaginationInput): void => {
+    const current = context.getPaginationInput()
+    if (nextPagination.pageSize === current.pageSize && nextPagination.currentPage === current.currentPage) return
+    context.setPaginationInput(nextPagination)
+    context.setProjectionInvalidation(["paginationChanged"])
+    try {
+      context.recomputeFromStage("paginate")
+    } catch (error) {
+      context.setPaginationInput(current)
+      context.setProjectionInvalidation(["paginationChanged"])
+      restoreProjectionAndRethrow("paginate", error)
+    }
+    context.emit()
+  }
   return {
     setViewportRange(range: DataGridViewportRange) {
       context.ensureActive()
@@ -106,47 +154,18 @@ export function createClientRowStateMutationsRuntime<T>(
     setPagination(nextPagination: DataGridPaginationInput | null) {
       context.ensureActive()
       const normalized = normalizePaginationInput(nextPagination)
-      const current = context.getPaginationInput()
-      if (
-        normalized.pageSize === current.pageSize &&
-        normalized.currentPage === current.currentPage
-      ) {
-        return
-      }
-      context.setPaginationInput(normalized)
-      context.setProjectionInvalidation(["paginationChanged"])
-      context.recomputeFromStage("paginate")
-      context.emit()
+      applyPaginationMutation(normalized)
     },
     setPageSize(pageSize: number | null) {
       context.ensureActive()
       const normalizedPageSize = normalizePaginationInput({ pageSize: pageSize ?? 0, currentPage: 0 }).pageSize
-      const current = context.getPaginationInput()
-      if (normalizedPageSize === current.pageSize) {
-        return
-      }
-      context.setPaginationInput({
-        pageSize: normalizedPageSize,
-        currentPage: 0,
-      })
-      context.setProjectionInvalidation(["paginationChanged"])
-      context.recomputeFromStage("paginate")
-      context.emit()
+      applyPaginationMutation({ pageSize: normalizedPageSize, currentPage: 0 })
     },
     setCurrentPage(page: number) {
       context.ensureActive()
       const current = context.getPaginationInput()
-      const normalizedPage = normalizePaginationInput({ pageSize: current.pageSize, currentPage: page }).currentPage
-      if (normalizedPage === current.currentPage) {
-        return
-      }
-      context.setPaginationInput({
-        ...current,
-        currentPage: normalizedPage,
-      })
-      context.setProjectionInvalidation(["paginationChanged"])
-      context.recomputeFromStage("paginate")
-      context.emit()
+      const normalized = normalizePaginationInput({ pageSize: current.pageSize, currentPage: page })
+      applyPaginationMutation(normalized)
     },
     setSortModel(nextSortModel: readonly DataGridSortState[]) {
       context.ensureActive()
@@ -158,7 +177,14 @@ export function createClientRowStateMutationsRuntime<T>(
       context.setSortModel(normalizedSortModel)
       context.bumpSortRevision()
       context.setProjectionInvalidation(["sortChanged"])
-      context.recomputeFromStage("sort")
+      try {
+        context.recomputeFromStage("sort")
+      } catch (error) {
+        context.setSortModel(currentSortModel)
+        context.bumpSortRevision()
+        context.setProjectionInvalidation(["sortChanged"])
+        restoreProjectionAndRethrow("sort", error)
+      }
       context.emit()
     },
     setFilterModel(nextFilterModel: DataGridFilterSnapshot | null) {
@@ -171,7 +197,14 @@ export function createClientRowStateMutationsRuntime<T>(
       context.setFilterModel(normalizedFilterModel)
       context.bumpFilterRevision()
       context.setProjectionInvalidation(["filterChanged"])
-      context.recomputeFromStage("filter")
+      try {
+        context.recomputeFromStage("filter")
+      } catch (error) {
+        context.setFilterModel(currentFilterModel)
+        context.bumpFilterRevision()
+        context.setProjectionInvalidation(["filterChanged"])
+        restoreProjectionAndRethrow("filter", error)
+      }
       context.emit()
     },
     setSortAndFilterModel(input: DataGridSortAndFilterModelInput) {
@@ -201,7 +234,16 @@ export function createClientRowStateMutationsRuntime<T>(
         invalidationReasons.push("sortChanged")
       }
       context.setProjectionInvalidation(invalidationReasons)
-      context.recomputeFromStage(filterChanged ? "filter" : "sort")
+      try {
+        context.recomputeFromStage(filterChanged ? "filter" : "sort")
+      } catch (error) {
+        context.setSortModel(currentSortModel)
+        context.setFilterModel(currentFilterModel)
+        if (filterChanged) context.bumpFilterRevision()
+        if (sortChanged) context.bumpSortRevision()
+        context.setProjectionInvalidation(invalidationReasons)
+        restoreProjectionAndRethrow(filterChanged ? "filter" : "sort", error)
+      }
       context.emit()
     },
     setGroupBy(nextGroupBy: DataGridGroupBySpec | null) {
@@ -214,12 +256,21 @@ export function createClientRowStateMutationsRuntime<T>(
       if (isSameGroupBySpec(currentGroupBy, normalized)) {
         return
       }
+      const previousExpansion = captureExpansionState()
       context.setGroupBy(normalized)
       context.setExpansionExpandedByDefault(Boolean(normalized?.expandedByDefault))
       context.clearToggledGroupKeys()
       context.bumpGroupRevision()
       context.setProjectionInvalidation(["groupChanged"])
-      context.recomputeFromStage("group")
+      try {
+        context.recomputeFromStage("group")
+      } catch (error) {
+        context.setGroupBy(currentGroupBy)
+        restoreExpansionState(previousExpansion)
+        context.bumpGroupRevision()
+        context.setProjectionInvalidation(["groupChanged"])
+        restoreProjectionAndRethrow("group", error)
+      }
       context.emit()
     },
     setPivotModel(nextPivotModel: DataGridPivotSpec | null) {
@@ -229,13 +280,23 @@ export function createClientRowStateMutationsRuntime<T>(
       if (isSamePivotSpec(currentPivotModel, normalized)) {
         return
       }
+      const previousExpansion = captureExpansionState()
       context.setPivotModel(normalized)
       context.resetPivotColumns()
       context.setPivotExpansionExpandedByDefault(true)
       context.clearToggledPivotGroupKeys()
       context.bumpGroupRevision()
       context.setProjectionInvalidation(["pivotChanged"])
-      context.recomputeFromStage("pivot")
+      try {
+        context.recomputeFromStage("pivot")
+      } catch (error) {
+        context.setPivotModel(currentPivotModel)
+        context.resetPivotColumns()
+        restoreExpansionState(previousExpansion)
+        context.bumpGroupRevision()
+        context.setProjectionInvalidation(["pivotChanged"])
+        restoreProjectionAndRethrow("pivot", error)
+      }
       context.emit()
     },
     setAggregationModel(nextAggregationModel: DataGridAggregationModel<T> | null) {
@@ -247,23 +308,23 @@ export function createClientRowStateMutationsRuntime<T>(
       }
       context.setAggregationModel(normalized)
       context.setProjectionInvalidation(["aggregationChanged"])
-      if (context.isTreeDataEnabled()) {
-        context.invalidateTreeProjectionCaches()
-        context.recomputeFromStage("group")
-      } else {
-        context.recomputeFromStage("aggregate")
+      try {
+        if (context.isTreeDataEnabled()) {
+          context.invalidateTreeProjectionCaches()
+          context.recomputeFromStage("group")
+        } else {
+          context.recomputeFromStage("aggregate")
+        }
+      } catch (error) {
+        context.setAggregationModel(currentAggregationModel)
+        context.setProjectionInvalidation(["aggregationChanged"])
+        restoreProjectionAndRethrow(context.isTreeDataEnabled() ? "group" : "aggregate", error)
       }
       context.emit()
     },
     setGroupExpansion(expansion: DataGridGroupExpansionSnapshot | null) {
       context.ensureActive()
-      if (!context.applyGroupExpansion(expansion)) {
-        return
-      }
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => context.applyGroupExpansion(expansion))
     },
     toggleGroup(groupKey: string) {
       context.ensureActive()
@@ -272,13 +333,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       const expansionState = context.getActiveExpansionStateStore()
-      if (!toggleGroupExpansionKey(expansionState.toggledKeys, groupKey)) {
-        return
-      }
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => toggleGroupExpansionKey(expansionState.toggledKeys, groupKey))
     },
     expandGroup(groupKey: string) {
       context.ensureActive()
@@ -287,13 +342,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       const expansionState = context.getActiveExpansionStateStore()
-      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, true)) {
-        return
-      }
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, true))
     },
     collapseGroup(groupKey: string) {
       context.ensureActive()
@@ -302,13 +351,7 @@ export function createClientRowStateMutationsRuntime<T>(
         return
       }
       const expansionState = context.getActiveExpansionStateStore()
-      if (!setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, false)) {
-        return
-      }
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => setGroupExpansionKey(expansionState.toggledKeys, groupKey, expansionState.expandedByDefault, false))
     },
     expandAllGroups() {
       context.ensureActive()
@@ -320,12 +363,11 @@ export function createClientRowStateMutationsRuntime<T>(
       if (expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
         return
       }
-      expansionState.setExpandedByDefault(true)
-      expansionState.toggledKeys.clear()
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => {
+        expansionState.setExpandedByDefault(true)
+        expansionState.toggledKeys.clear()
+        return true
+      })
     },
     collapseAllGroups() {
       context.ensureActive()
@@ -337,12 +379,11 @@ export function createClientRowStateMutationsRuntime<T>(
       if (!expansionState.expandedByDefault && expansionState.toggledKeys.size === 0) {
         return
       }
-      expansionState.setExpandedByDefault(false)
-      expansionState.toggledKeys.clear()
-      context.bumpGroupRevision()
-      context.setProjectionInvalidation(["groupExpansionChanged"])
-      context.recomputeFromStage("group")
-      context.emit()
+      applyExpansionMutation(() => {
+        expansionState.setExpandedByDefault(false)
+        expansionState.toggledKeys.clear()
+        return true
+      })
     },
   }
 }

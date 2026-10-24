@@ -21,11 +21,13 @@ export function createGrid<TRow = unknown>(options: CreateGridOptions<TRow>): Gr
   const featureCleanups = new Map<string, GridFeatureCleanup>()
   const eventBus = createGridEventBus()
 
-  const runFeatureCleanups = (): void => {
+  const runFeatureCleanups = (): unknown[] => {
+    const errors: unknown[] = []
     for (const cleanup of featureCleanups.values()) {
-      cleanup()
+      try { cleanup() } catch (error) { errors.push(error) }
     }
     featureCleanups.clear()
+    return errors
   }
 
   const gridContext: GridContext<TRow> = {
@@ -110,15 +112,19 @@ export function createGrid<TRow = unknown>(options: CreateGridOptions<TRow>): Gr
   }) as GridFeatureAccessor<GridFeatureMap>
 
   const runtimeStop = runtime.stop.bind(runtime)
-  runtime.stop = () => {
-    runFeatureCleanups()
+  runtime.stop = async () => {
+    const errors = runFeatureCleanups()
     eventBus.clear()
-    runtimeStop()
+    try { await runtimeStop() } catch (error) { errors.push(error) }
+    if (errors.length > 0) {
+      throw Object.assign(new Error("[DataGridVue] grid cleanup completed with failures."), { errors })
+    }
   }
 
   onBeforeUnmount(() => {
-    runFeatureCleanups()
+    const errors = runFeatureCleanups()
     eventBus.clear()
+    if (errors.length > 0) console.error("[DataGridVue] feature cleanup failed during unmount.", errors)
   })
 
   const grid: GridInstance<TRow, GridFeatureMap> = {

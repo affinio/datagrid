@@ -130,6 +130,11 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     if (batchedPayloads.size === 0 && batchedErrors.length === 0) {
       return
     }
+    // Detach this flush before invoking user listeners. If one throws, the
+    // remainder belongs to the failed batch and must not leak into a later one.
+    const payloads = new Map(batchedPayloads)
+    const errors = batchedErrors.splice(0)
+    batchedPayloads.clear()
 
     const orderedEvents: readonly (keyof DataGridApiEventMap<TRow>)[] = [
       "state:import:begin",
@@ -140,6 +145,7 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
       "pivot:changed",
       "selection:changed",
       "row-selection:changed",
+      "column-selection:changed",
       "transaction:changed",
       "viewport:changed",
       "state:imported",
@@ -147,19 +153,18 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
     ]
 
     for (const event of orderedEvents) {
-      const payload = batchedPayloads.get(event)
+      const payload = payloads.get(event)
       if (typeof payload === "undefined") {
         continue
       }
-      batchedPayloads.delete(event)
       if (event === "rows:edited" && (payload as DataGridApiEventMap<TRow>["rows:edited"]).edits.length === 0) {
         continue
       }
       emit(event, payload as DataGridApiEventMap<TRow>[typeof event])
     }
 
-    while (batchedErrors.length > 0) {
-      const nextError = batchedErrors.shift()
+    while (errors.length > 0) {
+      const nextError = errors.shift()
       if (!nextError) {
         continue
       }
@@ -221,6 +226,35 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
           next.payload as DataGridApiEventMap<TRow>[typeof next.event],
         )
       }
+    } catch (error) {
+      // Nested emissions queued behind the failing listener have no valid
+      // ordering guarantee after the dispatch aborts.
+      emitQueue.length = 0
+      throw error
+    } finally {
+      emitting = false
+    }
+  }
+
+  const emitSequence = (events: Array<{ event: keyof DataGridApiEventMap<TRow>; payload: unknown }>): void => {
+    if (batchDepth > 0) {
+      for (const entry of events) {
+        emit(entry.event, entry.payload as DataGridApiEventMap<TRow>[typeof entry.event])
+      }
+      return
+    }
+    emitQueue.push(...events)
+    if (emitting) return
+    emitting = true
+    try {
+      while (emitQueue.length > 0) {
+        const next = emitQueue.shift()
+        if (!next) continue
+        dispatchQueuedEvent(next.event, next.payload as DataGridApiEventMap<TRow>[typeof next.event])
+      }
+    } catch (error) {
+      emitQueue.length = 0
+      throw error
     } finally {
       emitting = false
     }
@@ -235,40 +269,59 @@ export function createDataGridApiEventsRuntime<TRow = unknown>(
   let lastViewportSignature = serializeStable(normalizeViewportRange(initialSnapshot.viewportRange))
 
   const unsubscribeRowModel = input.rowModel.subscribe((snapshot) => {
-    emit("rows:changed", { snapshot })
-
     const nextProjectionVersion = resolveProjectionVersion(snapshot)
-    if (nextProjectionVersion !== lastProjectionVersion) {
-      emit("projection:recomputed", {
-        snapshot,
-        previousVersion: lastProjectionVersion,
-        nextVersion: nextProjectionVersion,
-        staleStages: snapshot.projection?.staleStages ?? [],
-      })
-      lastProjectionVersion = nextProjectionVersion
-    }
+    const projectionChanged = nextProjectionVersion !== lastProjectionVersion
+    const previousProjectionVersion = lastProjectionVersion
+    if (projectionChanged) lastProjectionVersion = nextProjectionVersion
 
     const nextPivotSignature = serializeStable({
       pivotModel: snapshot.pivotModel ?? null,
       pivotColumns: normalizePivotColumns(snapshot.pivotColumns),
     })
-    if (nextPivotSignature !== lastPivotSignature) {
-      emit("pivot:changed", {
-        pivotModel: snapshot.pivotModel ?? null,
-        pivotColumns: normalizePivotColumns(snapshot.pivotColumns),
-      })
-      lastPivotSignature = nextPivotSignature
-    }
+    const pivotChanged = nextPivotSignature !== lastPivotSignature
+    if (pivotChanged) lastPivotSignature = nextPivotSignature
 
     const nextViewportRange = normalizeViewportRange(snapshot.viewportRange)
     const nextViewportSignature = serializeStable(nextViewportRange)
-    if (nextViewportSignature !== lastViewportSignature) {
-      emit("viewport:changed", {
-        range: nextViewportRange,
-        snapshot,
+    const viewportChanged = nextViewportSignature !== lastViewportSignature
+    if (viewportChanged) lastViewportSignature = nextViewportSignature
+
+    const notifications: Array<{ event: keyof DataGridApiEventMap<TRow>; payload: unknown }> = [
+      { event: "rows:changed", payload: { snapshot } },
+    ]
+
+    if (projectionChanged) {
+      notifications.push({
+        event: "projection:recomputed",
+        payload: {
+          snapshot,
+          previousVersion: previousProjectionVersion,
+          nextVersion: nextProjectionVersion,
+          staleStages: snapshot.projection?.staleStages ?? [],
+        },
       })
-      lastViewportSignature = nextViewportSignature
     }
+
+    if (pivotChanged) {
+      notifications.push({
+        event: "pivot:changed",
+        payload: {
+          pivotModel: snapshot.pivotModel ?? null,
+          pivotColumns: normalizePivotColumns(snapshot.pivotColumns),
+        },
+      })
+    }
+
+    if (viewportChanged) {
+      notifications.push({
+        event: "viewport:changed",
+        payload: {
+          range: nextViewportRange,
+          snapshot,
+        },
+      })
+    }
+    emitSequence(notifications)
   })
 
   const unsubscribeColumnModel = input.columnModel.subscribe((snapshot) => {

@@ -535,6 +535,22 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
         const rowOffset = rowIndex - normalized.startRow
         const columnOffset = columnIndex - normalized.startColumn
         const value = matrix[rowOffset % matrixHeight]?.[columnOffset % matrixWidth] ?? ""
+        const valueResolution = options.runtime.api.cells?.resolveValue?.({
+          rowId: row.rowId,
+          columnKey,
+          purpose: "source",
+        })
+        const writeTarget = valueResolution?.status === "available"
+          ? valueResolution.writeTarget
+          : typeof column.column?.valueSetter === "function"
+            || typeof column.column?.accessor === "function"
+            || typeof column.column?.valueGetter === "function"
+            ? null
+            : { kind: "row-patch" as const, key: typeof column.column?.field === "string" && column.column.field.length > 0 ? column.column.field : columnKey }
+        if (writeTarget?.kind !== "row-patch") {
+          summary.blockedCells += 1
+          continue
+        }
         const validation = validateDataGridCellDraftValue({
           column: column.column ?? { key: column.key },
           row: row.data,
@@ -545,7 +561,7 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
           continue
         }
         const current = editsByRowId.get(row.rowId) ?? {}
-        current[columnKey] = validation.value
+        current[writeTarget.key] = validation.value
         editsByRowId.set(row.rowId, current)
         summary.appliedCells += 1
       }
@@ -561,6 +577,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
   }
 
   const customApplyClipboardEdits = options.applyClipboardEdits
+
+  const resolveProjectionRevision = (): number | null => {
+    const snapshot = options.runtime.api.rows.getSnapshot?.()
+    return snapshot?.projection?.recomputeVersion ?? snapshot?.projection?.version ?? null
+  }
+
+  const resolveColumnOrderRevision = (): number | null => options.runtime.api.columns?.getSnapshot?.().orderRevision ?? null
 
   const applyClipboardEdits = customApplyClipboardEdits ?? (async (
     range: DataGridCopyRange,
@@ -583,8 +606,13 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
     const afterSnapshot = beforeSnapshot != null
       ? buildAfterEditSnapshot(beforeSnapshot, updates)
       : null
+    const beforeProjectionRevision = resolveProjectionRevision()
+    const beforeColumnOrderRevision = resolveColumnOrderRevision()
     await options.runtime.api.rows.applyEdits(updates, { source: "grid" })
-    options.applySelectionRange(normalized)
+    const afterProjectionRevision = resolveProjectionRevision()
+    if (beforeProjectionRevision === afterProjectionRevision
+      && beforeColumnOrderRevision === resolveColumnOrderRevision()) options.applySelectionRange(normalized)
+    else options.clearCellSelection()
     if (beforeSnapshot != null) {
       options.recordEditTransaction(
         beforeSnapshot,

@@ -46,7 +46,7 @@ export type DataGridPatchCapability<TRow = unknown> = {
   patchRows: (
     updates: readonly DataGridClientRowPatch<TRow>[],
     options?: DataGridClientRowPatchOptions,
-  ) => void
+  ) => void | Promise<void>
 }
 
 export type DataGridExternalUpdateCapability<TRow = unknown> = {

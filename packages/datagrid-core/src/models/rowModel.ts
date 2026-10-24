@@ -456,6 +456,8 @@ export interface DataGridRowModel<T = unknown> {
   getRowCount(): number
   getRow(index: number): DataGridRowNode<T> | undefined
   getRowById?(rowId: DataGridRowId): DataGridRowNode<T> | undefined
+  /** Returns a row with the model's current computed overlay, when supported. */
+  getEffectiveRowById?(rowId: DataGridRowId): DataGridRowNode<T> | undefined
   resolveRowProjection?(rowId: DataGridRowId): DataGridRowProjectionResolution
   getRowsInRange(range: DataGridViewportRange): readonly DataGridRowNode<T>[]
   getLoadedRowIntervals?(range: DataGridViewportRange): readonly DataGridViewportRange[]

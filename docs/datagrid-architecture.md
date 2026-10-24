@@ -1,7 +1,7 @@
 # DataGrid Architecture and Package Boundaries
 
 Status: maintained public documentation.
-Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, unified `@affino/datagrid-vue`, and the temporary `@affino/datagrid-vue` compatibility facade.
+Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, `@affino/datagrid-dom`, unified `@affino/datagrid-vue`, and the temporary `@affino/datagrid-vue` compatibility facade.
 
 ## Goals
 
@@ -15,6 +15,7 @@ Scope: `@affino/datagrid-core`, `@affino/datagrid-orchestration`, unified `@affi
 | --- | --- | --- |
 | `@affino/datagrid-core` | types, settings adapter contract, runtime signals, viewport controllers, virtualization math, selection geometry/contracts | Vue refs/watchers, SFC rendering concerns, Pinia store details |
 | `@affino/datagrid-orchestration` | reusable pointer, fill, range move, header resize, keyboard, context menu, viewport blur, scroll, and telemetry lifecycles | row-model mutation policy, SFC rendering, app-specific history/server fill decisions |
+| `@affino/datagrid-dom` | framework-independent DOM rendering, browser lifecycle, DOM materialization, and optional app-shell composition | canonical state or rules owned by Core; framework runtime dependencies |
 | `@affino/datagrid-vue/headless` | Vue composables, app-controller wiring, adapter lifecycle (`init/sync/teardown/diagnostics`), Pinia settings bridge, app-level interaction diagnostics, adapter materialization from canonical runtime windows | canonical virtualization math, duplicate coordinate conversion logic, core business invariants |
 | `@affino/datagrid-vue` app entries | mounted table stage, DOM event binding, native body viewport, viewport materialization, header/pinned pane wiring, overlays, focus surfaces, editors, product UX composition | core viewport range/clamp math, model mutation primitives, stable public core API ownership |
 
@@ -61,6 +62,8 @@ sequenceDiagram
 
 - `datagrid-core` has no dependency on Vue.
 - `datagrid-orchestration` is framework-light shared interaction infrastructure.
+- `datagrid-dom` depends at runtime on Core and orchestration; the theme package is optional and never imported automatically.
+- `mountDataGrid` is the lower-level renderer API; `mountDataGridShell` composes shared Core operations with a small DOM toolbar and keeps shell UI state out of Core.
 - `datagrid-vue` depends on `datagrid-core` and consumes core contracts; its `/headless` subpath stays separate from the ready-made renderer.
 - The `datagrid-vue` app entries compose headless hooks and orchestration-backed behavior into the mounted stage.
 - `datagrid-vue` publishes the app component at its root and the lower-level Vue integration at `/headless`.
@@ -70,6 +73,7 @@ sequenceDiagram
 
 - Core stable surface: `packages/datagrid-core/src/public.ts`
 - Vue stable surface: `packages/datagrid-vue/src/public.ts`
+- DOM adapter and shell stable surface: `packages/datagrid-dom/src/index.ts`
 - Orchestration root: advanced adapter-internal surface documented in `docs/internal/reference/datagrid-orchestration-public-contract.md`; it is not an app-facing stable API.
 - Rule: stable app consumers import only stable package roots. Advanced adapter consumers may use documented advanced entrypoints, including the orchestration root, when they accept that tier's compatibility contract.
 - Formula-free source-row consumers may import `@affino/datagrid-core/client-row-store`; it owns row identity, source mutations, and subscriptions only. Projection and formula execution remain separate opt-in layers.

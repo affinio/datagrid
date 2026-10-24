@@ -389,7 +389,8 @@ export function createClientRowComputedExecutionRuntime<T>(
         }
       }
     }
-    context.withRuntimeErrorsCollector(executorRuntime.formulaRuntimeErrorsCollector, () => {
+    try {
+      context.withRuntimeErrorsCollector(executorRuntime.formulaRuntimeErrorsCollector, () => {
       for (const level of levelsToRun) {
         const levelNodeIndexSet = new Set(level)
         const iterativeNodeIndexes = level.filter((nodeIndex) => {
@@ -439,7 +440,14 @@ export function createClientRowComputedExecutionRuntime<T>(
           }
         }
       }
-    })
+      })
+    } catch (error) {
+      // Column values are written speculatively while the pass runs. If any
+      // user computation escapes, none of those writes represent a committed
+      // pass, so the next attempt must rebuild them from the source rows.
+      context.clearSourceColumnValuesCache()
+      throw error
+    }
     const executionResult = executorRuntime.finalize()
     if (executionResult.nextSourceRows && executionResult.changedRowIds.length > 0) {
       context.setSourceRows(executionResult.nextSourceRows)

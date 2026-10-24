@@ -337,8 +337,23 @@ export function useDataGridAppIntentHistory<TRow>(
   const intentHistory = useDataGridIntentHistory<DataGridAppRowSnapshot<TRow>>({
     captureSnapshot: captureRowsSnapshot,
     applySnapshot: async snapshot => {
+      const beforeSnapshot = snapshot.kind === "partial"
+        ? captureRowsSnapshotByIds(snapshot.rows.map(entry => entry.rowId))
+        : captureRowsSnapshot()
       await applyRowsSnapshot(snapshot)
-      await applySnapshotRestoration(snapshot)
+      try {
+        await applySnapshotRestoration(snapshot)
+      } catch (error) {
+        // Restore the data baseline before propagating a UI-state failure so
+        // the executor does not leave its history stack describing another
+        // row state. This is best-effort compensation; retain both failures.
+        try { await applyRowsSnapshot(beforeSnapshot) } catch (rollbackError) {
+          throw Object.assign(new Error("[DataGridHistory] restoration failed and row-state compensation was incomplete."), {
+            errors: [error, rollbackError],
+          })
+        }
+        throw error
+      }
     },
     maxHistoryDepth: options.maxHistoryDepth,
   })

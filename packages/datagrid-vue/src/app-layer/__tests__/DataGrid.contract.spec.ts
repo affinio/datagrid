@@ -873,6 +873,38 @@ async function dragMoveSelectedBodyCell(
 }
 
 describe("DataGrid app facade contract", () => {
+  it("resolves activateCell selection against the latest projection after asynchronous reveal", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [{ rowId: "a", name: "A" }, { rowId: "b", name: "B" }],
+        columns: [{ key: "name", field: "name" }],
+      },
+    })
+    try {
+      for (let index = 0; index < 4; index += 1) {
+        await nextTick()
+        await flushPromises()
+      }
+      const api = (wrapper.vm as unknown as DataGridInstance<{ rowId: string; name: string }>).getApi()
+      if (!api) throw new Error("DataGrid API did not mount")
+      const activation = api.view.activateCell(
+        { rowId: "a", columnKey: "name" },
+        { selection: "replace", focus: false },
+      )
+      api.rows.setSortModel([{ key: "name", direction: "desc" }])
+      const result = await activation
+      await nextTick()
+
+      expect(result.status).toBe("activated")
+      expect(api.rows.get(0)?.rowId).toBe("b")
+      expect(api.selection.getSnapshot()?.activeCell).toMatchObject({ rowId: "a", rowIndex: 1 })
+    } finally {
+      wrapper.unmount()
+      document.body.replaceChildren()
+    }
+  })
+
   it("exposes diagnostics, formula runtime, and performance options on the standard facade", () => {
     const publicProps = Object.keys((DataGrid as unknown as { props?: Record<string, unknown> }).props ?? {})
 

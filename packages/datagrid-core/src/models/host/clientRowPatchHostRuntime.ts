@@ -37,6 +37,8 @@ export interface CreateClientRowPatchHostRuntimeOptions<T>
   getSourceRows: () => readonly DataGridRowNode<T>[]
   setSourceRows: (rows: readonly DataGridRowNode<T>[]) => void
   getRowVersionById: () => Map<DataGridRowId, number>
+  restoreRowVersionIndex?: (index: Map<DataGridRowId, number>) => void
+  refreshProjection?: () => void
   bumpRowRevision: () => void
   setProjectionInvalidation: (reasons: readonly DataGridProjectionInvalidationReason[]) => void
   getFilterModel: () => DataGridFilterSnapshot | null
@@ -259,6 +261,8 @@ export function createClientRowPatchHostRuntime<T>(
       getSourceRowIndexById: options.getSourceRowIndexById,
       setSourceRows: options.setSourceRows,
       getRowVersionById: options.getRowVersionById,
+      restoreRowVersionIndex: options.restoreRowVersionIndex,
+      refreshProjection: options.refreshProjection,
       bumpRowRevision: options.bumpRowRevision,
       setProjectionInvalidation: options.setProjectionInvalidation,
       applyComputedFieldsToPatchResult: patchComputedMergeRuntime.applyComputedFieldsToPatchResult,

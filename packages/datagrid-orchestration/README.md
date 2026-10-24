@@ -58,13 +58,16 @@ Single source of truth for platform capabilities:
 `createDataGridRuntime(options)` returns the row model, column model, Core, and
 API without automatically starting Core. The caller owns the returned runtime
 and must `await runtime.core.dispose()` when finished. Core disposal stops a
-started runtime, disposes services in reverse startup order, and safely ignores
-subsequent disposal calls. The runtime owns and disposes the default row model
+started runtime and attempts every applicable cleanup in reverse startup order.
+Repeated disposal calls share the same completion, including a cleanup error.
+The runtime owns and disposes the default row model
 and its column model. A caller-supplied `rowModel` remains caller-owned and
 must be disposed by that caller. The runtime factory itself creates no
 subscriptions that require a second cleanup handle. The higher-level
-`createDataGridRuntimeService` owns subscriptions and exposes `stop()`; stopping
-it removes those subscriptions and disposes its Core.
+`useDataGridRuntimeService` owns subscriptions and exposes `stop(): Promise<void>`.
+Await it when teardown completion matters. It removes subscriptions, disposes
+API plugins and Core, and rejects after attempting all cleanup if any disposer
+fails. The runtime remains terminal after that failure.
 
 ## Design rules
 

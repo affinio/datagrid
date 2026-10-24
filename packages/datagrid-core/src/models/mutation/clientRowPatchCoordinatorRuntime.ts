@@ -48,6 +48,8 @@ export interface DataGridClientRowPatchCoordinatorRuntimeContext<T> {
   getSourceRowIndexById: () => ReadonlyMap<DataGridRowId, number>
   setSourceRows: (rows: readonly DataGridRowNode<T>[]) => void
   getRowVersionById: () => Map<DataGridRowId, number>
+  restoreRowVersionIndex?: (index: Map<DataGridRowId, number>) => void
+  refreshProjection?: () => void
 
   bumpRowRevision: () => void
   setProjectionInvalidation: (reasons: readonly DataGridProjectionInvalidationReason[]) => void
@@ -114,6 +116,10 @@ export function createClientRowPatchCoordinatorRuntime<T>(
       if (updatesById.size === 0) {
         return
       }
+      const sourceRowsBefore = context.getSourceRows().slice() as DataGridRowNode<T>[]
+      const rowVersionsBefore = new Map(context.getRowVersionById())
+      let projectionCommitted = false
+      try {
       let patchResult = applyClientRowPatchUpdates<T>({
         sourceRows: context.getSourceRows(),
         sourceRowIndexById: context.getSourceRowIndexById(),
@@ -150,6 +156,7 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         patchResult.changedUpdatesById,
         options,
       )) {
+        projectionCommitted = true
         if (options.emit !== false) {
           context.emit()
         }
@@ -184,8 +191,30 @@ export function createClientRowPatchCoordinatorRuntime<T>(
         recomputeWithExecutionPlan: context.recomputeWithExecutionPlan,
       })
       context.setPendingPivotValuePatch(patchProjection.pendingPivotValuePatch)
+      projectionCommitted = true
       if (options.emit !== false) {
         context.emit()
+      }
+      } catch (error) {
+        // Recompute callbacks run after base rows and row-version metadata may
+        // have been staged. Restore those inputs so a later refresh starts
+        // from the last coherent projection; event errors after a successful
+        // recompute are intentionally outside this rollback block below.
+        if (!projectionCommitted) {
+          context.setSourceRows(sourceRowsBefore)
+          context.restoreRowVersionIndex?.(rowVersionsBefore)
+          context.clearSortValueCache()
+          context.invalidateTreeProjectionCaches()
+          context.setPendingPivotValuePatch(null)
+          try {
+            context.refreshProjection?.()
+          } catch (rollbackError) {
+            throw Object.assign(new Error("[DataGridRows] patch failed and projection recovery was incomplete."), {
+              errors: [error, rollbackError],
+            })
+          }
+        }
+        throw error
       }
     },
   }

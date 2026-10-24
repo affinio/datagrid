@@ -26,7 +26,7 @@ describe("useDataGridRuntimeService contract", () => {
     expect(runtime.api.rows.getById("r2")).toBeUndefined()
   })
 
-  it("exposes canonical virtualWindow snapshot and updates it on range/row/column changes", () => {
+  it("exposes canonical virtualWindow snapshot and updates it on range/row/column changes", async () => {
     const runtime = useDataGridRuntimeService<Row>({
       rows: [
         { rowId: "r1", name: "alpha" },
@@ -82,25 +82,63 @@ describe("useDataGridRuntimeService contract", () => {
 
     expect(snapshots.length).toBeGreaterThan(0)
     unsubscribe()
-    runtime.stop()
+    await runtime.stop()
     expect(runtime.isDisposed()).toBe(true)
   })
 
-  it("syncs pivot runtime columns into column model and removes them when pivot is cleared", () => {
+  it("routes stop through API disposal and preserves its completion", async () => {
+    let pluginDisposals = 0
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [{ rowId: "r1", name: "alpha" }],
+      columns: [{ key: "name" }],
+      plugins: [{ id: "resource", onDispose: () => { pluginDisposals += 1 } }],
+    })
+    await runtime.start()
+    const stopping = runtime.stop()
+    expect(runtime.stop()).toBe(stopping)
+    await stopping
+    expect(pluginDisposals).toBe(1)
+    expect(runtime.api.plugins.has("resource")).toBe(false)
+    expect(runtime.isDisposed()).toBe(true)
+  })
+
+  it("attempts cleanup after one service disposer rejects and reports stop failure", async () => {
+    const disposed: string[] = []
+    const runtime = useDataGridRuntimeService<Row>({
+      rows: [{ rowId: "r1", name: "alpha" }],
+      columns: [{ key: "name" }],
+      services: {
+        event: { name: "event", dispose: () => { disposed.push("event") } },
+        viewport: { name: "viewport", dispose: () => { disposed.push("viewport"); throw new Error("viewport-cleanup") } },
+      },
+    })
+    await runtime.start()
+    await expect(runtime.stop()).rejects.toThrow(/cleanup failures/)
+    expect(disposed).toEqual(["viewport", "event"])
+    expect(runtime.isDisposed()).toBe(true)
+  })
+
+  it("syncs pivot runtime columns into column model and removes them when pivot is cleared", async () => {
     const runtime = useDataGridRuntimeService<{
       rowId: string
       team: string
       year: number
       revenue: number
+      note: string
     }>({
       rows: [
-        { rowId: "r1", team: "A", year: 2024, revenue: 10 },
-        { rowId: "r2", team: "A", year: 2025, revenue: 20 },
+        { rowId: "r1", team: "A", year: 2024, revenue: 10, note: "first" },
+        { rowId: "r2", team: "A", year: 2025, revenue: 20, note: "second" },
       ],
-      columns: [{ key: "team", label: "Team", initialState: { width: 180 } }],
+      columns: [
+        { key: "team", field: "team", label: "Team", initialState: { width: 180 } },
+        { key: "year", field: "year", label: "Year" },
+        { key: "revenue", field: "revenue", label: "Revenue" },
+        { key: "note", field: "note", label: "Note", initialState: { visible: false } },
+      ],
     })
 
-    expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["team"])
+    expect(runtime.getColumnSnapshot().visibleColumns.map(column => column.key)).toEqual(["team", "year", "revenue"])
 
     runtime.api.pivot.setModel({
       rows: ["team"],
@@ -114,16 +152,35 @@ describe("useDataGridRuntimeService contract", () => {
       .filter(key => key.startsWith("pivot|"))
     expect(pivotKeys.length).toBe(2)
     expect(withPivot.columns.find(column => column.key === "team")?.width).toBe(180)
+    expect(withPivot.visibleColumns.map(column => column.key)).toEqual(["team", ...pivotKeys])
+    expect(withPivot.columns.find(column => column.key === "year")?.visible).toBe(false)
+    expect(withPivot.columns.find(column => column.key === "revenue")?.visible).toBe(false)
 
     runtime.api.pivot.setModel(null)
     const afterClear = runtime.getColumnSnapshot()
-    expect(afterClear.columns.map(column => column.key)).toEqual(["team"])
+    expect(afterClear.columns.map(column => column.key)).toEqual(["team", "year", "revenue", "note"])
+    expect(afterClear.visibleColumns.map(column => column.key)).toEqual(["team", "year", "revenue"])
     expect(afterClear.columns.find(column => column.key === "team")?.width).toBe(180)
 
-    runtime.stop()
+    runtime.api.columns.setAll([
+      { key: "customName", field: "team", label: "Name" },
+      { key: "year", field: "year", label: "Year" },
+      { key: "revenue", field: "revenue", label: "Revenue" },
+      { key: "note", field: "note", label: "Note", initialState: { visible: false } },
+    ])
+    runtime.api.pivot.setModel({
+      rows: ["team"],
+      columns: ["year"],
+      values: [{ field: "revenue", agg: "sum" }],
+    })
+    expect(runtime.getColumnSnapshot().columns.some(column => column.key === "customName")).toBe(true)
+    runtime.api.pivot.setModel(null)
+    expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["customName", "year", "revenue", "note"])
+
+    await runtime.stop()
   })
 
-  it("forwards client row model compute options when runtime creates client model internally", () => {
+  it("forwards client row model compute options when runtime creates client model internally", async () => {
     const dispatchedKinds: string[] = []
     const runtime = useDataGridRuntimeService<{
       rowId: string
@@ -162,10 +219,10 @@ describe("useDataGridRuntimeService contract", () => {
     expect((diagnostics?.dispatchCount ?? 0) > 0).toBe(true)
     expect(dispatchedKinds.length).toBeGreaterThan(0)
 
-    runtime.stop()
+    await runtime.stop()
   })
 
-  it("keeps worker mode responsive when column metadata is cyclic", () => {
+  it("keeps worker mode responsive when column metadata is cyclic", async () => {
     const meta: Record<string, unknown> = {
       section: "ops",
     }
@@ -194,10 +251,10 @@ describe("useDataGridRuntimeService contract", () => {
 
     expect(runtime.getColumnSnapshot().columns.map(column => column.key)).toEqual(["name"])
 
-    runtime.stop()
+    await runtime.stop()
   })
 
-  it("passes api plugins through runtime constructor options", () => {
+  it("passes api plugins through runtime constructor options", async () => {
     const pluginEvents: string[] = []
     const runtime = useDataGridRuntimeService<Row>({
       rows: [{ rowId: "r1", name: "alpha" }],
@@ -215,10 +272,10 @@ describe("useDataGridRuntimeService contract", () => {
     expect(runtime.api.plugins.has("runtime-service-plugin")).toBe(true)
     runtime.api.rows.setSortModel([{ key: "name", direction: "asc" }])
     expect(pluginEvents.some(event => event === "rows:changed")).toBe(true)
-    runtime.stop()
+    await runtime.stop()
   })
 
-  it("uses matching viewport anchor indexes before row id scans", () => {
+  it("uses matching viewport anchor indexes before row id scans", async () => {
     const runtime = useDataGridRuntimeService<Row>({
       rows: Array.from({ length: 100 }, (_, index) => ({
         rowId: `r${index}`,
@@ -247,10 +304,10 @@ describe("useDataGridRuntimeService contract", () => {
       colEnd: 1,
     })
 
-    runtime.stop()
+    await runtime.stop()
   })
 
-  it("roundtrips semantic viewport position through runtime service", () => {
+  it("roundtrips semantic viewport position through runtime service", async () => {
     const runtime = useDataGridRuntimeService<Row>({
       rows: [
         { rowId: "r1", name: "alpha" },
@@ -297,6 +354,6 @@ describe("useDataGridRuntimeService contract", () => {
       colStart: 1,
     })
 
-    runtime.stop()
+    await runtime.stop()
   })
 })

@@ -411,6 +411,15 @@ describe("createDataGridColumnModel", () => {
     model.dispose()
   })
 
+  it("keeps the live schema unchanged when a replacement schema is invalid", () => {
+    const model = createDataGridColumnModel({ columns: [{ key: "name" }, { key: "amount" }] })
+    const before = model.getSnapshot()
+    expect(() => model.setColumns([{ key: "broken" }, { key: "broken" }])).toThrow(/duplicate column key/i)
+    expect(model.getSnapshot()).toBe(before)
+    expect(model.getColumn("broken")).toBeUndefined()
+    model.dispose()
+  })
+
   it("ignores unknown and duplicate order keys while appending omitted keys", () => {
     const model = createDataGridColumnModel({ columns: [{ key: "a" }, { key: "b" }, { key: "c" }] })
     model.setColumnOrder(["missing", "c", "c"])

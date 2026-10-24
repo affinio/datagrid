@@ -96,14 +96,44 @@ export function createDataGridApiRowSelectionMethods<TRow = unknown>(
       return getRowSelectionCapability()?.isRowSelected(rowId) ?? false
     },
     setRowSelected(rowId, selected, context) {
+      if (getScopeStatus() === "stale") {
+        const current = getRowSelectionCapability()?.getRowSelectionSnapshot()
+        if (current?.mode === "all") {
+          mutate(capability => capability.setRowSelectionSnapshot({
+            focusedRow: current.focusedRow,
+            selectedRows: selected ? [rowId] : [],
+          }), context)
+          return
+        }
+      }
       mutate(capability => capability.setRowSelected(rowId, selected), context)
     },
     selectRows(rowIds, context) {
       const rowIdsSnapshot = [...rowIds]
+      if (getScopeStatus() === "stale") {
+        const current = getRowSelectionCapability()?.getRowSelectionSnapshot()
+        if (current?.mode === "all") {
+          mutate(capability => capability.setRowSelectionSnapshot({
+            focusedRow: current.focusedRow,
+            selectedRows: rowIdsSnapshot,
+          }), context)
+          return
+        }
+      }
       mutate(capability => capability.selectRows(rowIdsSnapshot), context)
     },
     deselectRows(rowIds, context) {
       const rowIdsSnapshot = [...rowIds]
+      if (getScopeStatus() === "stale") {
+        const current = getRowSelectionCapability()?.getRowSelectionSnapshot()
+        if (current?.mode === "all") {
+          mutate(capability => capability.setRowSelectionSnapshot({
+            focusedRow: current.focusedRow,
+            selectedRows: [],
+          }), context)
+          return
+        }
+      }
       mutate(capability => capability.deselectRows(rowIdsSnapshot), context)
     },
     clearSelectedRows(context) {

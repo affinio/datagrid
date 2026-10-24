@@ -24,6 +24,8 @@ The package ships its own runtime table-stage styles, so the default renderer do
 
 Enable the built-in toolbar action with `xlsxExport`. This prepares a workbook from the logical row model, so virtualization does not limit the exported rows:
 
+The package includes its XLSX worker; consuming applications do not need to copy a worker file into their public assets.
+
 ```vue
 <DataGrid
   :rows="orders"

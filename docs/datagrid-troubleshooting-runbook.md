@@ -25,6 +25,10 @@ Relevant tests:
 Checks:
 - Confirm runtime receives canonical `pin` only.
 - Confirm host column pin fields are normalized to canonical `pin` before reaching core.
+- In the DOM adapter, each body row must span the full horizontal content width; otherwise sticky pinned cells stop at the row's viewport-sized containing block while the header pane remains fixed.
+- Keep the grid frame on the outer viewport so its right and bottom edges do not scroll with the body cells.
+- Keep center-pane fill/range overlays below sticky cells; render pinned-pane overlay segments in their own layer so they do not bleed across a pinned boundary.
+- Run `packages/datagrid-dom-sandbox/scripts/check-scroll-sync.mjs` to verify pinned body/header positions and the fixed viewport frame while scrolling.
 
 Relevant tests:
 - `packages/datagrid-core/src/columns/__tests__/pinning.spec.ts`
@@ -77,6 +81,17 @@ Relevant regressions:
 - `packages/datagrid-vue/src/app/__tests__/useDataGridAppSelection.contract.spec.ts` (sparse viewport updates do not scan rows; placeholder anchors still rebind).
 - `packages/datagrid-worker/src/__tests__/workerOwnedRowModel.spec.ts` (cached subrange reads do not publish an update).
 - `e2e/sandbox-grid.spec.ts` (`vue worker grid keeps viewport covered across long scroll jumps`, `stays covered during a rapid scroll burst`, and `reaches the last logical row beyond native scroll height`).
+
+## Symptom: Sparse datasource leaves placeholders at the start of the viewport
+
+Checks:
+- Sparse datasource demand must cover the rendered row pool, including its overscan. At dataset index 0, leading overscan is clamped to the rows that exist before the visible offset, so loading still starts at row 0.
+- Core publishes the row pool as a half-open range; adapters that render inclusive indexes must convert its end before requesting rows. A mismatch can leave the final rendered row as a placeholder when prefetch is disabled.
+- For continuous scrolling across datasource latency, enable `createDataSourceBackedRowModel({ prefetch: { enabled: true, directionalBias: "scroll-direction" } })`; tune the lookahead window and batch bounds to request cost. Without it, scroll demand remains reactive and fast movement can outrun the network.
+- Column virtualization uses the Core viewport snapshot, which retains pinned columns and materializes the overscanned scrollable window with spacer widths.
+
+Relevant regression:
+- `packages/datagrid-dom-sandbox/src/examples/server-row-model/main.spec.ts` (`loads viewport rows and routes filter changes through the datasource`).
 
 ## Symptom: Header drifts from body near the end of horizontal scrolling
 

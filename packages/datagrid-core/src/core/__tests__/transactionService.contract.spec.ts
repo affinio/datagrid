@@ -353,6 +353,33 @@ describe("transaction service contracts", () => {
     expect(events).toEqual(["apply:tx-1:0:1"])
   })
 
+  it("does not resume queued commands or publish history after dispose during async apply", async () => {
+    const deferred = createDeferred()
+    const calls: string[] = []
+    let first = true
+    const service = createDataGridTransactionService({
+      execute: async (_command, context) => {
+        calls.push(`${context.direction}:${context.commandIndex}`)
+        if (first) {
+          first = false
+          await deferred.promise
+        }
+      },
+    })
+    const applying = service.applyTransaction({
+      id: "dispose-in-flight",
+      commands: [
+        { type: "first", payload: {}, rollbackPayload: {} },
+        { type: "second", payload: {}, rollbackPayload: {} },
+      ],
+    })
+    service.dispose()
+    deferred.resolve()
+    await expect(applying).rejects.toThrow()
+    expect(calls).toEqual(["apply:0"])
+    expect(service.getSnapshot().undoDepth).toBe(0)
+  })
+
   it("rejects concurrent undo and redo while an async undo is in flight", async () => {
     const state: Record<string, number> = { score: 0 }
     const events: string[] = []

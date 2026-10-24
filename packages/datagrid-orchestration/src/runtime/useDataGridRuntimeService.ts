@@ -70,7 +70,7 @@ export interface UseDataGridRuntimeServiceResult<TRow = unknown> extends DataGri
   scrollToColumn: (target: DataGridViewportColumnTarget) => void
   scrollToCell: (target: DataGridViewportCellTarget) => void
   start: () => Promise<void>
-  stop: () => void
+  stop: () => Promise<void>
   syncRowsInRange: (range: DataGridViewportRange) => readonly DataGridRowNode<TRow>[]
   isStarted: () => boolean
   isDisposed: () => boolean
@@ -336,16 +336,20 @@ function buildColumnStateByKey(snapshot: DataGridColumnModelSnapshot): Map<strin
 function applyPersistedColumnState(
   column: DataGridColumnInput,
   state: ColumnStateSnapshot | undefined,
+  visibleOverride?: boolean,
 ): DataGridColumnInput {
-  if (!state) {
+  if (!state && visibleOverride === undefined) {
     return column
   }
   return {
     ...column,
     initialState: {
-      visible: state.visible,
-      pin: state.pin,
-      width: state.width,
+      ...(state ? {
+        visible: state.visible,
+        pin: state.pin,
+        width: state.width,
+      } : {}),
+      ...(visibleOverride !== undefined ? { visible: visibleOverride } : {}),
     },
   }
 }
@@ -354,6 +358,8 @@ function buildEffectiveColumns(
   baseColumns: readonly DataGridColumnInput[],
   pivotColumns: readonly DataGridPivotColumn[],
   stateByKey: ReadonlyMap<string, ColumnStateSnapshot>,
+  pivotRowFields: readonly string[] | null,
+  restoredVisibility: ReadonlyMap<string, boolean> | null,
 ): DataGridColumnInput[] {
   const seen = new Set<string>()
   const effective: DataGridColumnInput[] = []
@@ -367,7 +373,18 @@ function buildEffectiveColumns(
       continue
     }
     seen.add(normalized.key)
-    effective.push(applyPersistedColumnState(normalized, stateByKey.get(normalized.key)))
+    const state = stateByKey.get(normalized.key)
+    let visibleOverride: boolean | undefined
+    if (pivotRowFields) {
+      const field = typeof normalized.field === "string" && normalized.field.length > 0
+        ? normalized.field
+        : normalized.key
+      const isRowDimension = pivotRowFields.includes(normalized.key) || pivotRowFields.includes(field)
+      if (!isRowDimension) visibleOverride = false
+    } else if (restoredVisibility?.has(normalized.key)) {
+      visibleOverride = restoredVisibility.get(normalized.key)
+    }
+    effective.push(applyPersistedColumnState(normalized, state, visibleOverride))
   }
 
   for (const pivotColumn of pivotColumns) {
@@ -394,6 +411,9 @@ export function useDataGridRuntimeService<TRow = unknown>(
 
   let started = false
   let disposed = false
+  let pivotVisibilityRestore: Map<string, boolean> | null = null
+  let pivotColumnsActive = false
+  let syncingPivotColumns = false
   const virtualWindowListeners = new Set<(snapshot: DataGridRuntimeVirtualWindowSnapshot | null) => void>()
 
   const resolveVirtualWindowFromViewportService = (): DataGridRuntimeVirtualWindowSnapshot | null => {
@@ -500,19 +520,54 @@ export function useDataGridRuntimeService<TRow = unknown>(
   const syncColumnsFromRowPivot = (force = false): void => {
     const rowSnapshot = rowModel.getSnapshot()
     const pivotColumns = rowSnapshot.pivotColumns ?? []
-    const signature = `${serializeBaseColumnsSignature(baseColumns)}::${serializePivotColumnsSignature(pivotColumns)}`
+    const pivotRowFields = rowSnapshot.pivotModel?.rows ?? null
+    const isPivotActive = pivotRowFields !== null
+    if (isPivotActive && !pivotColumnsActive) {
+      pivotVisibilityRestore = new Map(
+        columnModel.getSnapshot().columns.map(column => [column.key, column.visible]),
+      )
+    }
+    const restoreVisibility = !isPivotActive && pivotColumnsActive ? pivotVisibilityRestore : null
+    const signature = `${serializeBaseColumnsSignature(baseColumns)}::${serializePivotColumnsSignature(pivotColumns)}::${pivotRowFields?.join("\u0000") ?? ""}`
     if (!force && signature === lastColumnsSyncSignature) {
+      pivotColumnsActive = isPivotActive
       return
     }
     const stateByKey = buildColumnStateByKey(columnModel.getSnapshot())
-    const effectiveColumns = buildEffectiveColumns(baseColumns, pivotColumns, stateByKey)
-    columnModel.setColumns(effectiveColumns)
+    const effectiveColumns = buildEffectiveColumns(baseColumns, pivotColumns, stateByKey, pivotRowFields, restoreVisibility)
+    syncingPivotColumns = true
+    try {
+      columnModel.setColumns(effectiveColumns)
+    } finally {
+      syncingPivotColumns = false
+    }
     lastColumnsSyncSignature = signature
+    pivotColumnsActive = isPivotActive
+    if (!isPivotActive) pivotVisibilityRestore = null
   }
 
   const unsubscribeRowModel = rowModel.subscribe(() => {
     syncColumnsFromRowPivot()
     recomputeVirtualWindow()
+  })
+  const unsubscribeColumnSchema = columnModel.subscribe(snapshot => {
+    if (disposed || syncingPivotColumns) return
+    const generatedPivotKeys = new Set((rowModel.getSnapshot().pivotColumns ?? []).map(column => column.id))
+    const nextBaseColumns = snapshot.columns
+      .filter(column => !generatedPivotKeys.has(column.key))
+      .map(({ column, visible, pin, width }) => ({
+        ...cloneColumnInput(column as DataGridColumnInput),
+        initialState: { visible, pin, width },
+      }))
+    // Column order, pinning, width and visibility are runtime state. They must
+    // not be mistaken for a replacement of the source schema: feeding those
+    // changes back through setColumns() resets user-driven zone ordering.
+    if (serializeBaseColumnsSignature(nextBaseColumns) === serializeBaseColumnsSignature(baseColumns)) {
+      return
+    }
+    baseColumns = nextBaseColumns
+    lastColumnsSyncSignature = ""
+    syncColumnsFromRowPivot(true)
   })
   const unsubscribeColumnModelForWindow = columnModel.subscribe(() => {
     recomputeVirtualWindow()
@@ -570,21 +625,26 @@ export function useDataGridRuntimeService<TRow = unknown>(
       return
     }
     await api.start()
+    if (disposed || api.lifecycle.state === "disposed") {
+      throw new Error("[DataGridRuntime] startup completed after disposal.")
+    }
     started = true
     recomputeVirtualWindow()
   }
 
-  function stop() {
-    if (disposed) {
-      return
-    }
+  let stopCompletion: Promise<void> | null = null
+  function stop(): Promise<void> {
+    if (stopCompletion) return stopCompletion
+    if (disposed) return Promise.resolve()
     unsubscribeRowModel()
+    unsubscribeColumnSchema()
     unsubscribeColumnModelForWindow()
     unsubscribeStateImportForWindow()
     virtualWindowListeners.clear()
-    void core.dispose()
     started = false
     disposed = true
+    stopCompletion = api.dispose()
+    return stopCompletion
   }
 
   function setViewportRange(range: DataGridViewportRange) {

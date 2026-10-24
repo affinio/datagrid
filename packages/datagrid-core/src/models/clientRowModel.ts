@@ -859,6 +859,12 @@ export function createAdvancedClientRowModel<T>(
       }
       return getBaseSourceRows()[sourceIndex]
     },
+    getEffectiveRowById(rowId: DataGridRowId) {
+      ensureActive()
+      const sourceIndex = getSourceRowIndexById().get(rowId)
+      if (typeof sourceIndex !== "number") return undefined
+      return materializeBaseRowAtIndex(sourceIndex) ?? undefined
+    },
     resolveRowProjection(rowId: DataGridRowId): DataGridRowProjectionResolution {
       ensureActive()
       const sourceIndex = getSourceRowIndexById().get(rowId)

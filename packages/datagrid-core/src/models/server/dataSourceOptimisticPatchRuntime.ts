@@ -63,12 +63,22 @@ export function createDataSourceOptimisticPatchRuntime<T>(
         baselinesByRowId,
       }
       options.mutationEngine.register(transaction)
-      options.onMutationStarted(transaction)
+      // Queue the registered mutation before publishing callbacks: either
+      // callback may throw synchronously, but cannot strand an unsent edit.
+      const commitPromise = options.mutationEngine.enqueueCommit(() => options.processCommit(transaction))
+      const notificationErrors: unknown[] = []
+      try { options.onMutationStarted(transaction) } catch (error) { notificationErrors.push(error) }
       if (changed) {
-        options.bumpRevision()
-        options.emit()
+        try { options.bumpRevision() } catch (error) { notificationErrors.push(error) }
+        try { options.emit() } catch (error) { notificationErrors.push(error) }
       }
-      return options.mutationEngine.enqueueCommit(() => options.processCommit(transaction))
+      if (notificationErrors.length === 0) return commitPromise
+      const combineErrors = (message: string, errors: readonly unknown[]): Error =>
+        Object.assign(new Error(message), { errors: [...errors] })
+      return commitPromise.then(
+        () => { throw combineErrors("[DataGridDataSource] optimistic edit was queued but publication failed.", notificationErrors) },
+        commitError => { throw combineErrors("[DataGridDataSource] optimistic edit publication and commit failed.", [...notificationErrors, commitError]) },
+      )
     },
   }
 }

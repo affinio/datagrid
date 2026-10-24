@@ -60,6 +60,7 @@ export interface CreateDataGridApiStateMethodsInput<TRow = unknown> {
     position: DataGridViewportPositionSnapshot,
     options?: DataGridSetStateOptions,
   ) => void
+  canSetViewportPosition?: () => boolean
   onSelectionChanged?: (snapshot: DataGridSelectionSnapshot | null) => void
   onRowSelectionChanged?: (snapshot: DataGridRowSelectionSnapshot | null) => void
   onColumnSelectionChanged?: (snapshot: DataGridColumnSelectionSnapshot | null) => void
@@ -212,6 +213,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
     setViewportRange,
     getViewportPosition,
     setViewportPosition,
+    canSetViewportPosition,
     onSelectionChanged,
     onRowSelectionChanged,
     onColumnSelectionChanged,
@@ -264,6 +266,9 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         selection: options.applySelection !== false && Boolean(migrated?.selection || migrated?.rowSelection || migrated?.columnSelection),
         viewport: options.applyViewport !== false && Boolean(migrated?.rows?.snapshot?.viewportRange),
         viewportPosition: options.applyViewport !== false && options.applyViewportPosition !== false && Boolean(migrated?.view?.viewportPosition),
+      }
+      if (options.strict && enabled.viewportPosition && canSetViewportPosition?.() === false) {
+        issues.push({ section: "viewportPosition", reason: "setViewportPosition-capability-unavailable" })
       }
       return Object.freeze({
         valid: issues.length === 0,
@@ -320,8 +325,8 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         const issue = validation.issues[0]
         const cause = new Error(issue?.section === "transaction"
           ? "[DataGridApi] Transaction state restore is not supported by current facade."
-          : issue?.reason === "capability-unavailable"
-            ? `[DataGridApi] Cannot restore ${issue.section} state without ${issue.section} capability.`
+          : issue?.reason.includes("capability-unavailable")
+            ? `[DataGridApi] Cannot restore ${issue.section} state without ${issue.section === "viewportPosition" ? "setViewportPosition" : issue.section} capability.`
             : issue ? `${issue.section}: ${issue.reason}` : "State validation failed.")
         throw new DataGridStateRestoreError(cause.message, {
           status: "failed",
@@ -493,7 +498,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
                     ...rowSelection,
                     scope: {
                       kind: "current-projection",
-                      queryRevision: rowModel.getSnapshot().revision ?? null,
+                      queryRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
                       datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
                     },
                   }
@@ -604,7 +609,7 @@ export function createDataGridApiStateMethods<TRow = unknown>(
                         ...rowSelection,
                         scope: {
                           kind: "current-projection",
-                          queryRevision: rowModel.getSnapshot().revision ?? null,
+                          queryRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
                           datasetVersion: rowModel.getSnapshot().datasetVersion ?? null,
                         },
                       }

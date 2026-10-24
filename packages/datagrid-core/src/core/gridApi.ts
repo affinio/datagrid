@@ -367,6 +367,7 @@ export function createDataGridApi<TRow = unknown>(
     setViewportRange: viewMethods.setViewportRange,
     getViewportPosition: viewMethods.getViewportPosition,
     setViewportPosition: viewMethods.setViewportPosition,
+    canSetViewportPosition: viewMethods.canSetViewportPosition,
     onSelectionChanged: snapshot => eventsRuntime.emitSelectionChanged(snapshot),
     onRowSelectionChanged: snapshot => eventsRuntime.emitRowSelectionChanged(snapshot),
     onColumnSelectionChanged: snapshot => eventsRuntime.emitColumnSelectionChanged(snapshot),
@@ -396,15 +397,40 @@ export function createDataGridApi<TRow = unknown>(
   const readMethods = createDataGridApiReadMethods({
     rowModel,
     columnModel,
-    getCellSelection: getSelectionCapability,
-    getRowSelection: getRowSelectionCapability,
-    getColumnSelection: getColumnSelectionCapability,
+    getCellSelection: () => getSelectionCapability()
+      ? { getSelectionSnapshot: selectionMethods.getSelectionSnapshot }
+      : null,
+    getRowSelection: () => getRowSelectionCapability()
+      ? { getRowSelectionSnapshot: rowSelectionMethods.getRowSelectionSnapshot }
+      : null,
+    getColumnSelection: () => getColumnSelectionCapability()
+      ? { getColumnSelectionSnapshot: columnSelectionMethods.getColumnSelectionSnapshot }
+      : null,
   })
   const cellValueMethods = createDataGridApiCellValueMethods({ rowModel, columnModel })
   const pluginsRuntime = createDataGridApiPluginsRuntime<TRow>({
     events: eventsRuntime.namespace,
     initialPlugins,
   })
+  let apiDisposePromise: Promise<void> | null = null
+  const disposeApi = (): Promise<void> => {
+    if (apiDisposePromise) return apiDisposePromise
+    apiDisposePromise = (async () => {
+      const errors: unknown[] = []
+      for (const cleanup of [
+        () => pluginsRuntime.dispose(),
+        () => cellRefreshRegistry.dispose(),
+        () => eventsRuntime.dispose(),
+      ]) {
+        try { cleanup() } catch (error) { errors.push(error) }
+      }
+      try { await dispose() } catch (error) { errors.push(error) }
+      if (errors.length > 0) {
+        throw Object.assign(new Error("[DataGridApi] disposal completed with cleanup failures."), { errors })
+      }
+    })()
+    return apiDisposePromise
+  }
 
   const methodSet: DataGridApiMethodSet<TRow> = {
     lifecycle: lifecycleRuntime.namespace,
@@ -412,12 +438,7 @@ export function createDataGridApi<TRow = unknown>(
     init,
     start,
     stop,
-    dispose() {
-      pluginsRuntime.dispose()
-      cellRefreshRegistry.dispose()
-      eventsRuntime.dispose()
-      return dispose()
-    },
+    dispose: disposeApi,
     ...rowsMethods,
     ...dataMethods,
     ...viewMethods,
@@ -450,11 +471,30 @@ export function createDataGridApi<TRow = unknown>(
       runGuardedSync("compute.switchMode", () => computeMethods.switchComputeMode(mode)),
     setUnifiedState: (state, setStateOptions) =>
       runGuardedSync("state.set", () => {
+        let primaryError: unknown
         try {
           eventsRuntime.emitStateImportBegin(state)
           return stateMethods.setUnifiedState(state, setStateOptions)
+        } catch (error) {
+          primaryError = error
+          throw error
         } finally {
-          eventsRuntime.emitStateImportEnd(state)
+          try {
+            eventsRuntime.emitStateImportEnd(state)
+          } catch (notificationError) {
+            if (primaryError === undefined) throw notificationError
+            if (primaryError && typeof primaryError === "object") {
+              try {
+                Object.defineProperty(primaryError, "notificationError", {
+                  configurable: true,
+                  enumerable: false,
+                  value: notificationError,
+                })
+              } catch {
+                // Preserve the primary restore failure even for frozen errors.
+              }
+            }
+          }
         }
       }),
     validateUnifiedState: (state, setStateOptions) =>

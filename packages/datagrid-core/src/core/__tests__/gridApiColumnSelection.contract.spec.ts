@@ -74,6 +74,14 @@ describe("DataGridApi column selection contracts", () => {
     expect(columnModel.getSnapshot().columns.find(column => column.key === "status")?.visible).toBe(false)
   })
 
+  it("flushes column-selection changes emitted inside a row batch", () => {
+    const { api } = createHarness()
+    const events: Array<readonly string[]> = []
+    api.events.on("column-selection:changed", event => events.push(event.snapshot?.selectedColumnKeys ?? []))
+    api.rows.batch(() => api.columnSelection.setSelected("status", true))
+    expect(events).toEqual([["status"]])
+  })
+
   it("captures, restores, and migrates column selection in unified state", () => {
     const { api, getStoredSnapshot } = createHarness()
     api.columnSelection.selectColumns(["status", "owner"])

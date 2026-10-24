@@ -78,7 +78,19 @@ export function createClientRowFormulaComputeModule<T>(
     registerComputedField(definition) {
       options.ensureActive()
       options.registerComputedFieldInternal(definition)
-      void options.recomputeComputedFieldsAndRefresh()
+      try {
+        options.recomputeComputedFieldsAndRefresh()
+      } catch (error) {
+        // Registration is not published unless its initial materialization
+        // succeeds. The registry's unregister path rebuilds the plan and
+        // removes the definition before callers retry.
+        const name = typeof definition?.name === "string" ? definition.name.trim() : ""
+        if (name) {
+          const removed = options.unregisterComputedFieldInternal(name, "computed")
+          if (removed) options.onFormulaStructureChanged?.()
+        }
+        throw error
+      }
     },
     unregisterComputedField(name) {
       options.ensureActive()

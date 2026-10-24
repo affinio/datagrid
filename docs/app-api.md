@@ -287,6 +287,8 @@ represent an O(changed rows) delta; use the explicit row API above for that.
 
 `xlsx-export` prepares a single-sheet workbook from the current logical view. It is independent of the rendered virtual window. `current-view` means the current page after filtering, sorting, and expansion. Visible columns are included by default; set `columns: "all"` to include hidden columns.
 
+The Vue package includes the XLSX serialization worker and resolves it from the package build. Consuming applications do not need to copy the worker into their `public` directory.
+
 ```vue
 <DataGrid
   :rows="orders"

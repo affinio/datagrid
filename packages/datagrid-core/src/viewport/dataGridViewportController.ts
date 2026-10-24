@@ -1648,11 +1648,14 @@ export function createDataGridViewportController<TRow = unknown>(
 					const activeRowModel = modelBridge.getActiveRowModel()
 					const modelSnapshot = activeRowModel.getSnapshot()
 					const modelRange = modelSnapshot.viewportRange
+					const requestedModelRange = typeof activeRowModel.getSparseRowModelDiagnostics === "function"
+						? virtualizationResult.renderRange
+						: virtualizationResult.visibleRange
 					if (
-						modelRange.start !== virtualizationResult.visibleRange.start ||
-						modelRange.end !== virtualizationResult.visibleRange.end
+						modelRange.start !== requestedModelRange.start ||
+						modelRange.end !== requestedModelRange.end
 					) {
-						activeRowModel.setViewportRange(virtualizationResult.visibleRange)
+						activeRowModel.setViewportRange(requestedModelRange)
 					}
 					const pendingVerticalScrollWrite = virtualizationResult.pendingScrollWrite
 					const pendingHorizontalScrollWrite = horizontalPrepared.pendingScrollWrite

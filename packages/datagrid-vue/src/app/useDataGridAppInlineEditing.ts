@@ -156,6 +156,17 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
     return (row.data as Record<string, unknown>)[field]
   }
 
+  const resolveEditorWriteKey = (row: DataGridRowNode<TRow>, column: DataGridColumnSnapshot): string | null => {
+    const resolved = options.runtime.api.cells?.resolveValue?.({ rowId: row.rowId, columnKey: column.key, purpose: "source" })
+    if (resolved?.status === "available") {
+      return resolved.writeTarget?.kind === "row-patch" ? resolved.writeTarget.key : null
+    }
+    if (typeof column.column.valueSetter === "function" || typeof column.column.accessor === "function" || typeof column.column.valueGetter === "function") {
+      return null
+    }
+    return typeof column.column.field === "string" && column.column.field.length > 0 ? column.column.field : column.key
+  }
+
   const padDateEditorPart = (value: number): string => String(value).padStart(2, "0")
 
   const formatLocalDateTimeDraft = (date: Date): string => {
@@ -521,8 +532,17 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       return
     }
     const parsedValue = validation.value
+    const writeKey = columnSnapshot && rowNode && rowNode.kind !== "group"
+      ? resolveEditorWriteKey(rowNode, columnSnapshot)
+      : currentEditingCell.columnKey
+    if (!writeKey) {
+      editingCellRejectedReason.value = "unsupported-cell-write-target"
+      reportInlineEditStatus("Edit rejected: this cell does not have a writable row field")
+      focusInlineEditor()
+      return
+    }
     const afterSnapshot = typeof beforeSnapshot !== "undefined"
-      ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, currentEditingCell.columnKey, parsedValue)
+      ? buildAfterSnapshotFromEdit(beforeSnapshot, resolvedRowId, writeKey, parsedValue)
       : undefined
     clearInlineEdit()
     editingCellPending.value = true
@@ -532,10 +552,10 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
         {
           rowId: resolvedRowId,
           data: {
-            [currentEditingCell.columnKey]: parsedValue,
+            [writeKey]: parsedValue,
           } as Partial<TRow>,
           previousData: {
-            [currentEditingCell.columnKey]: oldValue,
+            [writeKey]: oldValue,
           } as Partial<TRow>,
         },
       ], { source: "grid" }))
@@ -543,38 +563,46 @@ export function useDataGridAppInlineEditing<TRow, TSnapshot>(
       commitPromise = Promise.reject(error)
     }
     suppressNextBlurCommit.value = false
-    if (target !== "none") {
-      focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {
-        restoreViewportFocus: target === "next"
-          || target === "previous"
-          || target === "below"
-          || target === "above",
-      })
-    }
     void commitPromise
       .then(() => {
         editingCellPending.value = false
         const rowNumber = Math.max(0, rowIndex) + 1
         reportInlineEditStatus(`Edited ${resolveColumnLabel(currentEditingCell.columnKey)}, row ${rowNumber}`)
-        options.onCellEdit?.({
-          rowId: resolvedRowId,
-          columnKey: currentEditingCell.columnKey,
-          oldValue,
-          newValue: parsedValue,
-          patch: {
-            rowId: resolvedRowId,
-            data: {
-              [currentEditingCell.columnKey]: parsedValue,
-            } as Partial<TRow>,
-          },
-        })
         options.recordEditTransaction(beforeSnapshot, afterSnapshot, "Cell edit")
+        try {
+          options.onCellEdit?.({
+            rowId: resolvedRowId,
+            columnKey: currentEditingCell.columnKey,
+            oldValue,
+            newValue: parsedValue,
+            patch: {
+              rowId: resolvedRowId,
+              data: { [writeKey]: parsedValue } as Partial<TRow>,
+            },
+          })
+        } catch {
+          // An application callback must not turn a committed edit into a
+          // rejected commit or prevent its history entry from being recorded.
+        }
       })
       .catch(error => {
         editingCellPending.value = false
         editingCellRejectedReason.value = error instanceof Error ? error.message : "edit-commit-failed"
         reportInlineEditStatus(`Edit failed: ${editingCellRejectedReason.value}`)
       })
+    if (target !== "none") {
+      try {
+        focusAfterInlineEdit(resolvedRowId, currentEditingCell.columnKey, target, {
+          restoreViewportFocus: target === "next"
+            || target === "previous"
+            || target === "below"
+            || target === "above",
+        })
+      } catch {
+        // Navigation is post-commit presentation work. The write settlement
+        // handler above remains responsible for pending state and history.
+      }
+    }
   }
 
   const cancelInlineEdit = (): void => {

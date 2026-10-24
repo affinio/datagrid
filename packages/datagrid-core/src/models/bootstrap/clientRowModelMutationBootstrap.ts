@@ -237,6 +237,8 @@ export function createClientRowModelMutationBootstrap<T>(
     getBaseSourceRows: options.getBaseSourceRows,
     getMaterializedSourceRowAtIndex: options.materializeBaseRowAtIndex,
     getSourceRowIndexById: options.getSourceRowIndexById,
+    restoreRowVersionIndex: index => options.rowVersionRuntime.setIndex(index),
+    refreshProjection: () => options.computeHostRuntime.refresh(),
     preparePatchedBaseRows: (rows, changedRowIds) => {
       options.setBaseSourceRows(rows as DataGridRowNode<T>[])
       options.refreshMaterializedSourceRows(changedRowIds)

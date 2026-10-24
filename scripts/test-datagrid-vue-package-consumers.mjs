@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const workspace = resolve(fileURLToPath(new URL("..", import.meta.url)))
@@ -120,7 +120,48 @@ function runFixture(name, tarballs, withGantt) {
     const bundler = resolve(workspace, "node_modules/esbuild/bin/esbuild")
     run(bundler, ["runtime.mjs", "--bundle", "--platform=node", "--format=esm", "--packages=bundle", "--loader:.css=empty", "--outfile=runtime.bundle.mjs"], fixture)
     run(process.execPath, ["runtime.bundle.mjs"], fixture)
+    runViteWorkerAssetConsumer(fixture)
   }
+}
+
+function runViteWorkerAssetConsumer(fixture) {
+  const modules = join(fixture, "node_modules")
+  mkdirSync(join(modules, "@vitejs"), { recursive: true })
+  symlinkSync(resolve(workspace, "node_modules/vite"), join(modules, "vite"), "dir")
+  symlinkSync(resolve(workspace, "node_modules/@vitejs/plugin-vue"), join(modules, "@vitejs/plugin-vue"), "dir")
+  writeFileSync(join(fixture, "index.html"), '<html><body><script type="module" src="/src/worker-entry.js"></script></body></html>\n')
+  writeFileSync(join(fixture, "src/worker-entry.js"), [
+    'import { exportDataGridXlsx } from "@affino/datagrid-vue"',
+    "window.__exportDataGridXlsx = exportDataGridXlsx",
+    "",
+  ].join("\n"))
+  writeFileSync(join(fixture, "vite.config.mjs"), [
+    'import { defineConfig } from "vite"',
+    'import vue from "@vitejs/plugin-vue"',
+    "export default defineConfig({ plugins: [vue()] })",
+    "",
+  ].join("\n"))
+  run(process.execPath, [resolve(workspace, "node_modules/vite/bin/vite.js"), "build", "--config", "vite.config.mjs"], fixture)
+
+  const outputFiles = collectFiles(join(fixture, "dist"))
+  const emittedWorker = outputFiles.find(filename => /xlsxExport\.worker[^/]*\.js$/.test(filename))
+  if (!emittedWorker) {
+    throw new Error("Vite consumer build did not emit the XLSX worker from the packed Vue package")
+  }
+  const workerName = basename(emittedWorker)
+  const referencedByApp = outputFiles.some(filename => filename.endsWith(".js")
+    && filename !== emittedWorker
+    && readFileSync(filename, "utf8").includes(workerName))
+  if (!referencedByApp) {
+    throw new Error("Vite consumer build emitted the XLSX worker without a matching app reference")
+  }
+}
+
+function collectFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name)
+    return entry.isDirectory() ? collectFiles(path) : [path]
+  })
 }
 
 function run(command, args, cwd) {

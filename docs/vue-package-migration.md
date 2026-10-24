@@ -36,7 +36,7 @@ The former `@affino/datagrid-vue-app` package directory, source wrappers, build 
 
 The Vue tarball consumer script packs the actual package and dependencies, installs them in temporary consumer projects outside the package source tree, and checks root, headless, and Gantt imports, type resolution, import without browser globals, and isolation of the headless graph. The Laravel tarball check remains independent and confirms Laravel does not acquire a Vue runtime dependency.
 
-`createDataGridRuntime` returns `{ rowModel, columnModel, core, api }`, does not start Core automatically, and has no attached Vue lifecycle. Callers must `await runtime.core.dispose()`. Core disposal stops a started runtime and is idempotent. It disposes the default row model and runtime-created column model; a supplied `options.rowModel` remains caller-owned and must be disposed by its owner. The Vue runtime service removes its subscriptions and disposes Core in `stop()`.
+`createDataGridRuntime` returns `{ rowModel, columnModel, core, api }`, does not start Core automatically, and has no attached Vue lifecycle. Callers must `await runtime.core.dispose()`. Core disposal stops a started runtime and attempts all service cleanup; repeated calls share the same completion. It disposes the default row model and runtime-created column model; a supplied `options.rowModel` remains caller-owned and must be disposed by its owner. The Vue runtime service removes its subscriptions and exposes `stop(): Promise<void>`; await it to observe teardown completion or cleanup failure.
 
 ## Deferred orchestration work
 

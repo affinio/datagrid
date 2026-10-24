@@ -45,6 +45,8 @@ function createClipboardHarness(options: {
   serverClipboardOperations?: DataGridAppServerClipboardOperations
   rowNodes?: readonly (DemoRowNode | null)[]
   visibleColumns?: readonly unknown[]
+  resolveCellValue?: () => unknown
+  getProjectionRevision?: () => number
   viewportRowStart?: number
 } = {}) {
   const rows = ref<DemoRow[]>([
@@ -79,6 +81,7 @@ function createClipboardHarness(options: {
           get: (rowIndex: number) => {
             return rowNodes[rowIndex] ?? null
           },
+          getSnapshot: () => ({ projection: { recomputeVersion: options.getProjectionRevision?.() ?? 1 } }),
           applyEdits: (updates: Array<{ rowId: string; data: Partial<DemoRow> }>) => {
             if (options.applyRowsEdits) {
               return options.applyRowsEdits(updates)
@@ -89,6 +92,7 @@ function createClipboardHarness(options: {
             })
           },
         },
+        ...(options.resolveCellValue ? { cells: { resolveValue: options.resolveCellValue } } : {}),
       },
     } as never,
     totalRows: ref(rows.value.length),
@@ -189,6 +193,43 @@ function createVirtualClipboardSelectionSnapshot(options: {
 }
 
 describe("useDataGridAppClipboard contract", () => {
+  it("writes presentation columns through the resolver's row-patch target", async () => {
+    const { clipboard, rows } = createClipboardHarness({
+      visibleColumns: [{ key: "display", column: { key: "display", field: "a" } }],
+      resolveCellValue: () => ({
+        status: "available",
+        rowId: "r1",
+        columnKey: "display",
+        sourceValue: "A1",
+        computedValue: "A1",
+        formattedValue: "A1",
+        displayValue: "A1",
+        value: "A1",
+        writeTarget: { kind: "row-patch", key: "a" },
+      }),
+    })
+
+    await expect(clipboard.applyClipboardEdits({
+      startRow: 0, endRow: 0, startColumn: 0, endColumn: 0,
+    }, [["Updated"]])).resolves.toBe(1)
+    expect(rows.value[0]).toMatchObject({ a: "Updated" })
+    expect(rows.value[0]).not.toHaveProperty("display")
+  })
+
+  it("clears positional selection when paste changes projection revision", async () => {
+    let projectionRevision = 1
+    const { clipboard, applySelectionRange, clearCellSelection } = createClipboardHarness({
+      getProjectionRevision: () => projectionRevision,
+      applyRowsEdits: () => { projectionRevision += 1 },
+    })
+
+    await expect(clipboard.applyClipboardEdits({
+      startRow: 0, endRow: 0, startColumn: 0, endColumn: 0,
+    }, [["Updated"]])).resolves.toBe(1)
+    expect(clearCellSelection).toHaveBeenCalledTimes(1)
+    expect(applySelectionRange).not.toHaveBeenCalled()
+  })
+
   it("copies a fully loaded selection unchanged", async () => {
     const { clipboard, lastAction } = createClipboardHarness()
 

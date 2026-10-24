@@ -24,7 +24,7 @@ export type DataGridCellValueResolution =
     }>
   | Readonly<{
       status: "unavailable"
-      reason: "row-not-found" | "row-not-loaded" | "group-row" | "column-not-found"
+      reason: "row-not-found" | "row-not-loaded" | "group-row" | "column-not-found" | "computed-value-unavailable"
     }>
 
 export interface DataGridApiCellValueMethods<TRow = unknown> {
@@ -49,25 +49,37 @@ export function createDataGridApiCellValueMethods<TRow>(input: {
       if (snapshot && snapshot.row.rowId !== rowId) {
         return Object.freeze({ status: "unavailable", reason: "row-not-found" })
       }
-      const row = snapshot ? snapshot.row : input.rowModel.getRowById?.(rowId)
-      if (!row) {
+      const sourceRow = snapshot ? snapshot.row : input.rowModel.getRowById?.(rowId)
+      if (!sourceRow) {
         return Object.freeze({
           status: "unavailable",
           reason: input.rowModel.kind === "server" ? "row-not-loaded" : "row-not-found",
         })
       }
-      if (row.kind === "group") return Object.freeze({ status: "unavailable", reason: "group-row" })
+      if (sourceRow.kind === "group") return Object.freeze({ status: "unavailable", reason: "group-row" })
+
+      const effectiveRow = snapshot
+        ? snapshot.row
+        : purpose === "source" ? undefined : input.rowModel.getEffectiveRowById?.(rowId)
 
       const field = typeof column.column.field === "string" && column.column.field.length > 0
         ? column.column.field
         : columnKey
-      const sourceValue = readPath(row.data, field)
+      const hasColumnComputedAccessor = typeof column.column.accessor === "function"
+        || typeof column.column.valueGetter === "function"
+      if (purpose !== "source" && !snapshot && !effectiveRow && !hasColumnComputedAccessor) {
+        const computedFields = input.rowModel.getComputedFields?.() ?? []
+        const formulaFields = input.rowModel.getFormulaFields?.() ?? []
+        const hasComputedOverlay = [...computedFields, ...formulaFields].some(definition => definition.name === field || definition.name === columnKey)
+        if (hasComputedOverlay) return Object.freeze({ status: "unavailable", reason: "computed-value-unavailable" })
+      }
+      const sourceValue = readPath(sourceRow.data, field)
       const computedValue = typeof column.column.accessor === "function"
-        ? column.column.accessor(row.data)
+        ? column.column.accessor(sourceRow.data)
         : typeof column.column.valueGetter === "function"
-          ? column.column.valueGetter(row.data)
-          : sourceValue
-      const rendered = buildDataGridCellRenderModel({ column: column.column, row: row.data, value: computedValue })
+          ? column.column.valueGetter(sourceRow.data)
+          : readPath((effectiveRow ?? sourceRow).data, field)
+      const rendered = buildDataGridCellRenderModel({ column: column.column, row: (effectiveRow ?? sourceRow).data, value: computedValue })
       const value = purpose === "source"
         ? sourceValue
         : purpose === "computed"

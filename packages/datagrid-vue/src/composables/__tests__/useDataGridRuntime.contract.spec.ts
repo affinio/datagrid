@@ -90,6 +90,25 @@ function createMessageChannelPair(): { main: MemoryMessageEndpoint; worker: Memo
 }
 
 describe("useDataGridRuntime contract", () => {
+  it("disposes API plugins when the Vue runtime unmounts", async () => {
+    let pluginDisposals = 0
+    const host = defineComponent({
+      setup() {
+        useDataGridRuntime<RuntimeRow>({
+          rows: [{ rowId: "r1", name: "Ada" }],
+          columns: COLUMNS,
+          plugins: [{ id: "resource", onDispose: () => { pluginDisposals += 1 } }],
+        })
+        return () => h("div")
+      },
+    })
+    const wrapper = mount(host)
+    await flushRuntimeTasks()
+    wrapper.unmount()
+    await flushRuntimeTasks()
+    expect(pluginDisposals).toBe(1)
+  })
+
   it("auto-starts lifecycle, syncs rows and disposes on unmount", async () => {
     const rows = ref<RuntimeRow[]>([
       { rowId: "r1", name: "Alpha", tested_at: 100 },
@@ -286,7 +305,7 @@ describe("useDataGridRuntime contract", () => {
     expect(runtime!.api.lifecycle.state).toBe("started")
     expect(runtime!.api.rows.getCount()).toBe(1)
 
-    runtime!.stop()
+    await runtime!.stop()
     await flushRuntimeTasks()
     expect(runtime!.api.lifecycle.state).toBe("disposed")
 

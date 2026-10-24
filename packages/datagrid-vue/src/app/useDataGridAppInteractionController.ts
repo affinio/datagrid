@@ -428,6 +428,15 @@ export function useDataGridAppInteractionController<
 >(
   options: UseDataGridAppInteractionControllerOptions<TRow, TSnapshot>,
 ): UseDataGridAppInteractionControllerResult<TRow> {
+  const reportFillFailure = (label: string, error: unknown): void => {
+    const message = `${label}: ${error instanceof Error ? error.message : String(error)}`
+    try {
+      options.reportFillWarning?.(message)
+    } catch (reportError) {
+      console.error("[DataGridVue] fill failure reporting also failed.", { error, reportError })
+    }
+  }
+
   const resolveRowIndex = (row: DataGridRowNode<TRow>, rowOffset: number): number => {
     return Number.isFinite(row.displayIndex)
       ? Math.max(0, Math.trunc(row.displayIndex))
@@ -2307,7 +2316,9 @@ export function useDataGridAppInteractionController<
       if (!baseRange || !previewRange) {
         return
       }
-    void applyCommittedFillRange(baseRange, previewRange)
+    void applyCommittedFillRange(baseRange, previewRange).catch((error: unknown) => {
+      reportFillFailure("fill commit failed", error)
+    })
     },
     setFillDragging: value => {
       isFillDragging.value = value
@@ -3249,10 +3260,13 @@ export function useDataGridAppInteractionController<
               restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
             })
             .catch((caught: unknown) => {
-              options.reportFillWarning?.(`server fill commit failed: ${caught instanceof Error ? caught.message : String(caught)}`)
+              reportFillFailure("server fill commit failed", caught)
             })
             .finally(() => {
               clearFillPreviewState(normalizedFillBaseRange, previewRange)
+            })
+            .catch((caught: unknown) => {
+              reportFillFailure("server fill cleanup failed", caught)
             })
           return
         }
@@ -3274,10 +3288,10 @@ export function useDataGridAppInteractionController<
           restoreActiveCellFocus(restoredCoord ?? preferredFocusCoord)
         })
         .catch((caught: unknown) => {
-          options.reportFillWarning?.(`fill commit failed: ${caught instanceof Error ? caught.message : String(caught)}`)
+          reportFillFailure("fill commit failed", caught)
         })
     }).catch((caught: unknown) => {
-      options.reportFillWarning?.(`server fill boundary failed: ${caught instanceof Error ? caught.message : String(caught)}`)
+      reportFillFailure("server fill boundary failed", caught)
     })
   }
 

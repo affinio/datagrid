@@ -4084,7 +4084,7 @@ export default defineComponent({
       if (isInteractionActive.value || stageHostRef.value?.querySelector(".cell-editor-input")) {
         return { status: "cancelled", reason: "interaction-active" }
       }
-      const visibleColumnIndex = stageVisibleColumns.value.findIndex(column => column.key === target.columnKey)
+      let visibleColumnIndex = stageVisibleColumns.value.findIndex(column => column.key === target.columnKey)
       if (visibleColumnIndex < 0) {
         const columnExists = props.runtime.api.columns.get(target.columnKey) != null
         return { status: "unavailable", reason: columnExists ? "column-hidden" : "column-not-found" }
@@ -4133,6 +4133,30 @@ export default defineComponent({
       if (isInteractionActive.value || stageHostRef.value?.querySelector(".cell-editor-input")) {
         return { status: "cancelled", reason: "interaction-active" }
       }
+      const currentRowIndex = props.runtime.resolveBodyRowIndexById(target.rowId)
+      const currentColumnIndex = stageVisibleColumns.value.findIndex(column => column.key === target.columnKey)
+      if (currentRowIndex < 0) {
+        const resolution = props.runtime.api.rows.resolveById(target.rowId)
+        return { status: "unavailable", reason: resolution.status === "not-loaded" ? "row-not-loaded" : "row-filtered-out" }
+      }
+      if (currentColumnIndex < 0) {
+        return { status: "unavailable", reason: props.runtime.api.columns.get(target.columnKey) ? "column-hidden" : "column-not-found" }
+      }
+      if (currentRowIndex !== rowIndex || currentColumnIndex !== visibleColumnIndex) {
+        rowIndex = currentRowIndex
+        visibleColumnIndex = currentColumnIndex
+        await revealCellInComfortZone(rowIndex, visibleColumnIndex, { focus: false })
+        await nextTick()
+        const reRevealCancelled = isCancelled()
+        if (reRevealCancelled) return reRevealCancelled
+      } else {
+        rowIndex = currentRowIndex
+        visibleColumnIndex = currentColumnIndex
+      }
+      const commitRow = props.runtime.getBodyRowAtIndex(rowIndex)
+      if (!commitRow || commitRow.kind === "group" || commitRow.rowId !== target.rowId) {
+        return { status: "unavailable", reason: "row-filtered-out" }
+      }
       const cell = Array.from(stageHostRef.value?.querySelectorAll<HTMLElement>(
         '.grid-cell[data-row-id][data-column-key]:not([aria-hidden="true"])',
       ) ?? []).find(element => element.dataset.rowId === String(target.rowId)
@@ -4140,6 +4164,10 @@ export default defineComponent({
       if (!cell) return { status: "unavailable", reason: "row-not-loaded" }
       const beforeCommitCancelled = isCancelled()
       if (beforeCommitCancelled) return beforeCommitCancelled
+      if (props.runtime.resolveBodyRowIndexById(target.rowId) !== rowIndex
+        || stageVisibleColumns.value[visibleColumnIndex]?.key !== target.columnKey) {
+        return { status: "cancelled", reason: "superseded" }
+      }
       if (options.focus === true) cell.focus({ preventScroll: true })
       if (options.selection === "replace") {
         props.runtime.api.selection.setSnapshot(buildSingleCellSelectionSnapshot({

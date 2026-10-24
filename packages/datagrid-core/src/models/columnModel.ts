@@ -644,9 +644,9 @@ export function createDataGridColumnModel(
   }
 
   function setColumnsValue(columns: readonly DataGridColumnInput[]) {
-    columnsByKey.clear()
-    order = []
-    zoneOrder = {
+    const nextColumnsByKey = new Map<string, MutableColumnState>()
+    const nextOrder: string[] = []
+    const nextZoneOrder: Record<DataGridColumnZone, string[]> = {
       pinnedLeft: [],
       center: [],
       pinnedRight: [],
@@ -671,13 +671,17 @@ export function createDataGridColumnModel(
           : { ...column, key } as DataGridColumnDef,
       )
       const state = resolveInitialColumnState(column, normalizedColumn)
-      columnsByKey.set(key, {
+      nextColumnsByKey.set(key, {
         column: normalizedColumn,
         state,
       })
-      order.push(key)
-      zoneOrder[resolveZoneForPin(state.pin)].push(key)
+      nextOrder.push(key)
+      nextZoneOrder[resolveZoneForPin(state.pin)].push(key)
     })
+    columnsByKey.clear()
+    for (const [key, value] of nextColumnsByKey) columnsByKey.set(key, value)
+    order = nextOrder
+    zoneOrder = nextZoneOrder
     markSnapshotDirty(true)
     emitOrQueue()
   }

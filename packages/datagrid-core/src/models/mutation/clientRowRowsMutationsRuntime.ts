@@ -54,14 +54,36 @@ export function createClientRowRowsMutationsRuntime<T>(
 ): ClientRowRowsMutationsRuntime<T> {
   let mutationBatchDepth = 0
   let pendingMutation = false
+  let batchBaseline: { rows: DataGridRowNode<T>[]; versions: Map<DataGridRowId, number> } | null = null
 
-  const finalizeMutation = (): void => {
-    context.applyComputedFields?.()
-    context.bumpRowRevision()
-    context.resetGroupByIncrementalAggregationState()
-    context.invalidateTreeProjectionCaches()
-    context.setProjectionInvalidation(["rowsChanged"])
-    context.recomputeFromProjectionEntryStage()
+  const finalizeMutation = (baseline?: { rows: DataGridRowNode<T>[]; versions: Map<DataGridRowId, number> }): void => {
+    try {
+      context.applyComputedFields?.()
+      context.bumpRowRevision()
+      context.resetGroupByIncrementalAggregationState()
+      context.invalidateTreeProjectionCaches()
+      context.setProjectionInvalidation(["rowsChanged"])
+      context.recomputeFromProjectionEntryStage()
+    } catch (error) {
+      if (baseline) {
+        context.setSourceRows(baseline.rows)
+        context.setRowVersionById(baseline.versions)
+        context.pruneSortCacheRows(baseline.rows)
+        context.resetGroupByIncrementalAggregationState()
+        context.invalidateTreeProjectionCaches()
+        context.setProjectionInvalidation(["rowsChanged"])
+        try {
+          context.recomputeFromProjectionEntryStage()
+        } catch (rollbackError) {
+          throw Object.assign(new Error("[DataGridRows] mutation failed and projection recovery was incomplete."), {
+            errors: [error, rollbackError],
+          })
+        }
+      }
+      throw error
+    }
+    // Notification failure is post-commit: keep the successfully materialized
+    // source/projection pair in place.
     context.emit()
   }
 
@@ -75,6 +97,11 @@ export function createClientRowRowsMutationsRuntime<T>(
         `[DataGridRows] Duplicate rowId detected (${duplicateRowIds.map(value => String(value)).join(", ")}).`,
       )
     }
+    const baseline = {
+      rows: context.getSourceRows().slice() as DataGridRowNode<T>[],
+      versions: new Map(context.getRowVersionById()),
+    }
+    if (mutationBatchDepth > 0 && !batchBaseline) batchBaseline = baseline
     context.setRowVersionById(
       context.rebuildRowVersionIndex(context.getRowVersionById(), nextSourceRows),
     )
@@ -84,7 +111,7 @@ export function createClientRowRowsMutationsRuntime<T>(
       pendingMutation = true
       return
     }
-    finalizeMutation()
+    finalizeMutation(baseline)
   }
 
   const insertRowsAt = (index: number, rows: readonly DataGridRowNodeInput<T>[]): boolean => {
@@ -112,7 +139,9 @@ export function createClientRowRowsMutationsRuntime<T>(
         mutationBatchDepth = Math.max(0, mutationBatchDepth - 1)
         if (mutationBatchDepth === 0 && pendingMutation) {
           pendingMutation = false
-          finalizeMutation()
+          const baseline = batchBaseline
+          batchBaseline = null
+          finalizeMutation(baseline ?? undefined)
         }
       }
     },

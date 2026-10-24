@@ -63,6 +63,60 @@ function createHarness() {
 }
 
 describe("useDataGridAppInlineEditing contract", () => {
+  it("writes presentation-column edits to the resolved source field", async () => {
+    const rows = [
+      { rowId: "r1", kind: "data", data: { owner: "Ada", status: "open", amount: 10 } },
+    ] as unknown as DataGridRowNode<DemoRow>[]
+    const applyEdits = vi.fn((edits: ReadonlyArray<{ rowId: string | number; data: Partial<DemoRow> }>) => {
+      const edit = edits[0]
+      const row = rows.find(candidate => candidate.rowId === edit?.rowId)
+      if (row && row.kind !== "group" && edit) row.data = { ...row.data, ...edit.data }
+    })
+    const recordEditTransaction = vi.fn()
+    const api = useDataGridAppInlineEditing<DemoRow, readonly DemoRow[]>({
+      mode: ref("base"),
+      bodyViewportRef: ref(null),
+      visibleColumns: ref([{ key: "display", column: { key: "display", field: "owner" } }] as unknown as readonly DataGridColumnSnapshot[]),
+      totalRows: ref(1),
+      runtime: {
+        api: {
+          rows: { get: (index: number) => rows[index] ?? null, applyEdits },
+          cells: {
+            resolveValue: () => ({
+              status: "available",
+              rowId: "r1",
+              columnKey: "display",
+              sourceValue: "Ada",
+              computedValue: "Ada",
+              formattedValue: "Ada",
+              displayValue: "Ada",
+              value: "Ada",
+              writeTarget: { kind: "row-patch", key: "owner" },
+            }),
+          },
+        },
+      } as never,
+      readCell: () => "Ada",
+      resolveRowIndexById: () => 0,
+      applyCellSelection: vi.fn(),
+      ensureActiveCellVisible: vi.fn(),
+      isCellEditable: () => true,
+      captureRowsSnapshot: () => rows.map(row => row.kind === "group" ? {} as DemoRow : { ...row.data }),
+      recordEditTransaction,
+    })
+    api.startInlineEdit(rows[0]!, "display")
+    api.editingCellValue.value = "Grace"
+    api.commitInlineEdit("none")
+    await nextTick()
+    await Promise.resolve()
+
+    expect(applyEdits).toHaveBeenCalledWith([
+      { rowId: "r1", data: { owner: "Grace" }, previousData: { owner: "Ada" } },
+    ], { source: "grid" })
+    expect(rows[0]?.data).toMatchObject({ owner: "Grace" })
+    expect(rows[0]?.data).not.toHaveProperty("display")
+  })
+
   it("commits Tab to the next editable cell instead of leaving the grid", async () => {
     const harness = createHarness()
     harness.api.startInlineEdit(harness.rows[0]!, "owner")
@@ -310,6 +364,21 @@ describe("useDataGridAppInlineEditing contract", () => {
     expect(harness.applyEdits).not.toHaveBeenCalled()
     expect(harness.api.editingCellValidationMessage.value).toBe("invalid-number")
     expect(harness.api.editingCell.value).toEqual({ rowId: "r1", columnKey: "amount" })
+  })
+
+  it("keeps a committed edit pending/history consistent when focus selection throws", async () => {
+    const harness = createHarness()
+    harness.applyCellSelection.mockImplementationOnce(() => { throw new Error("selection-listener") })
+    harness.api.startInlineEdit(harness.rows[0]!, "owner")
+    harness.api.editingCellValue.value = "Grace"
+
+    expect(() => harness.api.commitInlineEdit()).not.toThrow()
+    await Promise.resolve()
+    await nextTick()
+
+    expect(harness.rows[0]?.data.owner).toBe("Grace")
+    expect(harness.api.editingCellPending.value).toBe(false)
+    expect(harness.recordEditTransaction).toHaveBeenCalledTimes(1)
   })
 
   it("swallows NotAllowedError when date editor showPicker requires a user gesture", async () => {

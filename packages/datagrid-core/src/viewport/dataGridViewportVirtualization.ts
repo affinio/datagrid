@@ -1,5 +1,6 @@
 import { createAxisVirtualizer, type AxisVirtualizerState } from "../virtualization/axisVirtualizer"
 import { createVerticalAxisStrategy } from "../virtualization/verticalVirtualizer"
+import { resolveUniformRowIndexAtOffset } from "../virtualization/verticalGeometry"
 import { createVerticalOverscanController } from "../virtualization/dynamicOverscan"
 import {
   clampScrollOffset,
@@ -52,6 +53,7 @@ export interface DataGridViewportVirtualizationResult {
   scrollTop: number
   lastScrollTopSample: number
   pendingScrollTop: number | null
+  renderRange: VisibleRangePayload
   visibleRange: VisibleRangePayload
   syncedScrollTop: number | null
   timestamp: number
@@ -641,9 +643,23 @@ export function createDataGridViewportVirtualization(
       nextScrollTop = lastScrollTopSample
     }
 
+    // The virtual pool is clamped at the dataset edges. At the beginning of
+    // the list some requested leading overscan rows do not exist, so subtract
+    // only the leading rows actually present before the viewport. Otherwise
+    // the datasource starts fetching at e.g. row 3 while rows 0–2 are still
+    // rendered as placeholders in the pool.
+    const firstViewportRow = resolveUniformRowIndexAtOffset(
+      verticalState.offset,
+      totalRows,
+      resolvedRowHeight,
+    )
+    const effectiveLeadingOverscan = Math.min(
+      Math.max(0, verticalState.overscanLeading),
+      Math.max(0, firstViewportRow - verticalState.startIndex),
+    )
     const visibleStartIndex = Math.max(
       verticalState.startIndex,
-      Math.min(verticalState.endIndex, verticalState.startIndex + Math.max(0, verticalState.overscanLeading)),
+      Math.min(verticalState.endIndex, verticalState.startIndex + effectiveLeadingOverscan),
     )
     const visibleEndIndex = Math.min(
       verticalState.endIndex,
@@ -682,6 +698,10 @@ export function createDataGridViewportVirtualization(
       scrollTop: prepared.scrollTop,
       lastScrollTopSample: prepared.lastScrollTopSample,
       pendingScrollTop: prepared.pendingScrollTop,
+      renderRange: {
+        start: prepared.state.startIndex,
+        end: Math.max(prepared.state.startIndex, prepared.state.endIndex - 1),
+      },
       visibleRange: prepared.visibleRange,
       syncedScrollTop: prepared.syncedScrollTop,
       timestamp: prepared.timestamp,

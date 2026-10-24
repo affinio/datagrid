@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.16.1
+
+### Fixed
+
+- Released against `@affino/datagrid-formula-engine@0.1.3`, which contains the formula-pack exports used by the Vue app. The Vue build and packed-consumer check now build that dependency before consuming its generated artifacts.
+- Emitted the XLSX worker URL relative to the package chunk and included worker asset, removing the requirement for consuming applications to copy the worker into their public assets directory.
+
+### Validation
+
+- Vue production build, formula-engine build, and packed-consumer checks pass.
+
 ## 0.16.0
 
 ### Added
