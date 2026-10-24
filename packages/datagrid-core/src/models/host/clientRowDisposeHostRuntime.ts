@@ -12,6 +12,8 @@ export interface CreateClientRowDisposeHostRuntimeOptions<T> {
   clearSourceColumnValuesCache: () => void
   runtimeState: DataGridClientRowRuntimeState<T>
   materializationRuntime: { clearMaterializedSourceRowsCache(): void }
+  computedSnapshotRuntime: { clear(): void }
+  calculationSnapshotRuntime: { clear(): void }
   resetPivotColumns: () => void
   rowVersionRuntime: { clear(): void }
   projectionIntegrationHostRuntime: {
@@ -75,6 +77,8 @@ export function createClientRowDisposeHostRuntime<T>(
       options.clearSourceColumnValuesCache()
       clearClientRowProjectionArrays(options.runtimeState)
       options.materializationRuntime.clearMaterializedSourceRowsCache()
+      options.computedSnapshotRuntime.clear()
+      options.calculationSnapshotRuntime.clear()
       options.resetPivotColumns()
       options.rowVersionRuntime.clear()
       options.projectionIntegrationHostRuntime.resetGroupByIncrementalAggregationState()

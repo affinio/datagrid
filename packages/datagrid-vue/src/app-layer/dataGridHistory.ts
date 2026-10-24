@@ -19,6 +19,8 @@ export interface DataGridHistoryOptions {
 
 export type DataGridHistoryProp = boolean | DataGridHistoryOptions
 
+const DEFAULT_DATA_GRID_HISTORY_DEPTH = 100
+
 /** Controls automatic history synchronization for datasource-backed row models. */
 export type DataGridServerHistoryProp = boolean
 
@@ -95,7 +97,9 @@ export function resolveDataGridHistory(
 
   return {
     enabled: true,
-    depth: normalizePositiveInteger(options.depth),
+    depth: options.depth === Number.POSITIVE_INFINITY
+      ? options.depth
+      : normalizePositiveInteger(options.depth) ?? DEFAULT_DATA_GRID_HISTORY_DEPTH,
     shortcuts: resolveHistoryShortcuts(options.shortcuts),
     controls: resolveHistoryControls(options.controls),
     adapter: options.adapter,

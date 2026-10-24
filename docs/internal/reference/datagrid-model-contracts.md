@@ -270,7 +270,7 @@ Command invariants:
 - rollback always uses `rollbackPayload` and runs in reverse command order
 - same command sequence gives same apply/undo/redo ordering
 - history is intent-level (transaction/batch), not per-cell event stream
-- optional `maxHistoryDepth` caps undo memory growth without changing apply semantics
+- `maxHistoryDepth` defaults to 100 and caps undo memory growth without changing apply semantics; explicit `Infinity` opts into unbounded history
 
 ## Advanced Filter Contract
 

@@ -70,6 +70,7 @@ export interface CreateClientRowCalculationSnapshotRuntimeOptions<T> {
 }
 
 export interface DataGridClientRowCalculationSnapshotRuntime<T> {
+  clear(): void
   createCalculationSnapshot(): DataGridCalculationSnapshot<T>
   inspectCalculationSnapshot(
     snapshot: DataGridCalculationSnapshot<T>,
@@ -106,6 +107,7 @@ export function cloneProjectionFormulaDiagnostics(
 export function createClientRowCalculationSnapshotRuntime<T>(
   options: CreateClientRowCalculationSnapshotRuntimeOptions<T>,
 ): DataGridClientRowCalculationSnapshotRuntime<T> {
+  const MAX_CALCULATION_SNAPSHOT_HISTORY = 100
   let historyEntries: DataGridCalculationHistoryEntry<T>[] = []
   let historyIndex = -1
   let historySequence = 0
@@ -194,8 +196,16 @@ export function createClientRowCalculationSnapshotRuntime<T>(
       historyEntries = historyEntries.slice(0, historyIndex + 1)
     }
     historyEntries.push(entry)
+    if (historyEntries.length > MAX_CALCULATION_SNAPSHOT_HISTORY) {
+      historyEntries.splice(0, historyEntries.length - MAX_CALCULATION_SNAPSHOT_HISTORY)
+    }
     historyIndex = historyEntries.length - 1
     return entry
+  }
+
+  const clear = (): void => {
+    historyEntries = []
+    historyIndex = -1
   }
 
   const getCalculationSnapshotHistory = (): DataGridCalculationHistory<T> => ({
@@ -238,6 +248,7 @@ export function createClientRowCalculationSnapshotRuntime<T>(
   }
 
   return {
+    clear,
     createCalculationSnapshot,
     inspectCalculationSnapshot,
     restoreCalculationSnapshot,

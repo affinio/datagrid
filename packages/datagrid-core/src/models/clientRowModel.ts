@@ -810,6 +810,8 @@ export function createAdvancedClientRowModel<T>(
     clearSourceColumnValuesCache,
     runtimeState,
     materializationRuntime,
+    computedSnapshotRuntime,
+    calculationSnapshotRuntime: snapshotBootstrap.calculationSnapshotRuntime,
     resetPivotColumns,
     rowVersionRuntime,
     projectionIntegrationHostRuntime,

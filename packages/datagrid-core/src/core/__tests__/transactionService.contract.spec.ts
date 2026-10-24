@@ -40,6 +40,32 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void; reject
 }
 
 describe("transaction service contracts", () => {
+  it("bounds the default undo history depth", async () => {
+    const state: Record<string, number> = { score: 0 }
+    const service = createDataGridTransactionService({
+      execute: createCounterExecutor(state, []),
+    })
+
+    for (let value = 1; value <= 105; value += 1) {
+      await service.applyTransaction({
+        id: `tx-${value}`,
+        commands: [{
+          type: "set",
+          payload: { key: "score", value },
+          rollbackPayload: { key: "score", value: value - 1 },
+        }],
+      })
+    }
+
+    expect(service.getSnapshot().undoDepth).toBe(100)
+    for (let index = 0; index < 100; index += 1) {
+      await service.undo()
+    }
+    await expect(service.undo()).resolves.toBeNull()
+    expect(state.score).toBe(5)
+    service.dispose()
+  })
+
   it("applies transaction atomically and supports undo/redo hooks", async () => {
     const state: Record<string, number> = { score: 0 }
     const events: string[] = []

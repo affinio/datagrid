@@ -26,4 +26,17 @@ describe("createDataGridRuntime disposal contract", () => {
     rowModel.dispose()
     expect(disposeRowModel).toHaveBeenCalledOnce()
   })
+
+  it("clears row-height overrides when the owned runtime is disposed", async () => {
+    const runtime = createDataGridRuntime({ columns: [{ key: "name" }] })
+    const viewport = runtime.core.getService("viewport")
+    viewport.setRowHeightOverride?.(20_000, 44)
+    const overrides = viewport.getRowHeightOverridesSnapshot?.()
+
+    expect(overrides?.size).toBe(1)
+    await runtime.core.dispose()
+
+    expect(overrides?.size).toBe(0)
+    expect(viewport.getLastRowHeightMutation?.()).toBeNull()
+  })
 })

@@ -24,7 +24,8 @@ type DataGridHistoryProp = boolean | {
 ## Semantics
 
 - `enabled: false` disables history entirely.
-- `depth` limits recorded transactions/intents.
+- `depth` limits recorded transactions/intents. The default depth is 100 when history is enabled and no depth is supplied.
+- The lower-level Core transaction service also retains at most 100 undo batches by default; set a finite `maxHistoryDepth` explicitly to choose another limit. Explicit `Infinity` opts into unbounded history (`depth: Infinity` in Vue or `maxHistoryDepth: Infinity` in Core).
 - `depth` does not count every raw cell keystroke as a separate undo step.
 - `adapter` lets an application inject its own undo/redo source.
 - When `adapter` is omitted, the app facade uses its built-in intent history.

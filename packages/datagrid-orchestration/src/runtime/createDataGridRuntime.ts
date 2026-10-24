@@ -322,6 +322,10 @@ export function createDataGridRuntime<TRow = unknown>(
         nextHeight: null,
       }
     },
+    dispose() {
+      rowHeightOverrides.clear()
+      lastRowHeightMutation = null
+    },
   }
 
   const services: Partial<DataGridCoreServiceRegistry> = {

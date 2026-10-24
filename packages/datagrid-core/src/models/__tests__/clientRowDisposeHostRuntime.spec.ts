@@ -62,6 +62,8 @@ function createDisposeOptions(disposeLifecycle: () => boolean) {
     clearSourceColumnValuesCache: vi.fn(),
     runtimeState: createRuntimeState() as never,
     materializationRuntime: { clearMaterializedSourceRowsCache: vi.fn() },
+    computedSnapshotRuntime: { clear: vi.fn() },
+    calculationSnapshotRuntime: { clear: vi.fn() },
     resetPivotColumns: vi.fn(),
     rowVersionRuntime: { clear: vi.fn() },
     projectionIntegrationHostRuntime: {
@@ -106,6 +108,8 @@ describe("createClientRowDisposeHostRuntime", () => {
     runtime.dispose()
 
     expect(options.computedRegistryRef.current).toBeNull()
+    expect(options.computedSnapshotRuntime.clear).toHaveBeenCalledOnce()
+    expect(options.calculationSnapshotRuntime.clear).toHaveBeenCalledOnce()
     expect(options.formulaDiagnosticsRuntime.commitFormulaRowRecomputeDiagnostics)
       .toHaveBeenCalledWith({ rows: [] })
   })

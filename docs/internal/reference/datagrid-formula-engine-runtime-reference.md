@@ -534,6 +534,7 @@ Calculation snapshots are also first-class for undo/debug/collaboration-oriented
 - `restoreCalculationSnapshot(snapshot, { rowBindingPolicy })` restores a prior calculation snapshot
 - `inspectCalculationSnapshot(snapshot, { rowBindingPolicy })` reports whether a snapshot is strictly restorable or only reconcilable by `rowId`
 - `pushCalculationSnapshot(label)`, `undoCalculationSnapshot()`, and `redoCalculationSnapshot()` provide snapshot-stack history without cloning full materialized rows
+- The calculation snapshot history retains the most recent 100 entries; disposing the client row model clears retained history and computed overlay values. Snapshots returned to callers remain caller-owned if retained separately.
 
 `rowBindingPolicy: "strict"` requires the same ordered row identity set. `rowBindingPolicy: "reconcile"` rebinds computed overlay values by `rowId`, which makes reordered/collaborative source edits inspectable and restorable when the affected rows still exist.
 

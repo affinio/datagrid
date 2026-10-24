@@ -282,9 +282,17 @@ function createError(message: string, cause: unknown): Error {
   return error
 }
 
+const DEFAULT_TRANSACTION_HISTORY_DEPTH = 100
+
 function normalizeHistoryDepth(value: number | undefined): number {
+  if (typeof value === "undefined") {
+    return DEFAULT_TRANSACTION_HISTORY_DEPTH
+  }
+  if (value === Number.POSITIVE_INFINITY) {
+    return value
+  }
   if (!Number.isFinite(value)) {
-    return Number.POSITIVE_INFINITY
+    return DEFAULT_TRANSACTION_HISTORY_DEPTH
   }
   const normalized = Math.max(0, Math.trunc(value as number))
   return normalized
