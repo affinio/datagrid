@@ -354,9 +354,8 @@ import {
   DataGrid,
   type DataGridAppColumnInput,
   type DataGridAppViewMode,
-  type DataGridGanttOptions,
-  type DataGridGanttZoomLevel,
 } from "@affino/datagrid-vue";
+import type { DataGridGanttOptions, DataGridGanttZoomLevel } from "@affino/datagrid-vue/gantt";
 import {
   clearDataGridSavedViewInStorage,
   defineDataGridColumnMenu,
@@ -1477,7 +1476,7 @@ function buildSandboxPlaceholderRow(visualRowIndex: number): Record<string, unkn
   return row;
 }
 
-const placeholderRows = computed<DataGridPlaceholderRowsProp<Record<string, unknown>>>(() => {
+const placeholderRows = computed<DataGridPlaceholderRowsProp<unknown>>(() => {
   if (!showPlaceholderTailControls.value || !placeholderTailEnabled.value) {
     return null;
   }
@@ -2222,16 +2221,15 @@ const timesheetIsCellEditable = ({
   rowId,
   columnKey,
 }: {
-  row: TimesheetRow;
+  row: unknown;
   rowId: DataGridRowId;
   columnKey: string;
 }): boolean => {
   if (!props.timesheetShowcase) {
     return true;
   }
-  if (rowId === "timesheet-total" || row.id === "timesheet-total") {
-    return false;
-  }
+  const dataRowId = typeof row === "object" && row !== null && "id" in row ? row.id : null;
+  if (rowId === "timesheet-total" || dataRowId === "timesheet-total") return false;
   return TIMESHEET_DAY_COLUMNS.some(entry => entry.key === columnKey);
 };
 
@@ -2327,12 +2325,12 @@ const handleGroupByUpdate = (nextGroupBy: DataGridGroupBySpec | null): void => {
 };
 
 const handleColumnStateUpdate = (
-  nextState: DataGridUnifiedColumnState,
+  nextState: DataGridUnifiedColumnState | null,
 ): void => {
-  const normalizedNextState = normalizeColumnState(nextState, columns.value);
-  if (groupedLeafVisibilityRestorePending && normalizedNextState.visibility.name === false) {
-    normalizedNextState.visibility.name = true;
-  }
+  const normalizedState = normalizeColumnState(nextState, columns.value);
+  const normalizedNextState = groupedLeafVisibilityRestorePending && normalizedState.visibility.name === false
+    ? { ...normalizedState, visibility: { ...normalizedState.visibility, name: true } }
+    : normalizedState;
   if (!shouldHideUnusedPivotSourceColumns.value) {
     setColumnStateIfChanged(normalizedNextState);
     return;
@@ -2346,7 +2344,7 @@ const handleColumnStateUpdate = (
   });
 };
 
-const handleStateUpdate = (nextState: DataGridUnifiedState<unknown>): void => {
+const handleStateUpdate = (nextState: DataGridUnifiedState<unknown> | null): void => {
   stateModel.value = nextState;
 };
 
