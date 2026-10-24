@@ -212,6 +212,14 @@ View switching:
 - `table`
 - `gantt`
 
+The framework-independent DOM adapter exposes the same option through
+`mountDataGrid({ viewMode: "gantt", gantt: { ... } })`. It draws the shared
+timeline/bar/dependency models beside the existing Core row view, synchronizes
+vertical scrolling, and supports mouse drag/resize for leaf task bars when the
+row source supports patches. Escape cancels a draft; committed date edits use
+Core row patches and the DOM adapter's keyboard Undo/Redo history. Touch input
+keeps native timeline scrolling. Runtime zoom controls remain follow-up work.
+
 ## Current Enterprise Features
 
 Implemented:

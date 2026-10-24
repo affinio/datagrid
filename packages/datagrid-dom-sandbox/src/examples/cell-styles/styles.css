@@ -1,0 +1,8 @@
+.dom-cell-styles__blocked {
+  box-shadow: inset 3px 0 #d44a3f;
+  font-weight: 650;
+}
+
+.dom-cell-styles__progress {
+  background-clip: padding-box;
+}

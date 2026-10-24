@@ -1,0 +1,24 @@
+{
+  "name": "@affino/datagrid-dom-sandbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5175",
+    "build": "vite build",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-dom": "workspace:*",
+    "@affino/export-xlsx": "workspace:*",
+    "@affino/datagrid-formula-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vite": "7.3.2",
+    "vitest": "^4.0.18"
+  }
+}

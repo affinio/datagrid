@@ -1,0 +1,172 @@
+.affino-grid-dom__cell--selected {
+  color: var(--datagrid-selection-cell-text-color, inherit);
+  background-color: var(--datagrid-selection-range-bg, var(--datagrid-selection-cell-background-color, #eaf2fc));
+}
+
+.affino-grid-dom__cell--range-anchor {
+  background-color: var(--datagrid-selection-range-bg, var(--datagrid-selection-cell-background-color, #eaf2fc));
+}
+
+.affino-grid-dom__cell--range-frame {
+  --affino-grid-dom-range-border: var(--datagrid-selection-overlay-border, var(--datagrid-selection-active-border, #245ea8));
+}
+
+.affino-grid-dom__cell--range-frame:not(.affino-grid-dom__cell--pinned) {
+  position: relative;
+}
+
+.affino-grid-dom__cell--clipboard-copied:not(.affino-grid-dom__cell--pinned) {
+  position: relative;
+}
+
+.affino-grid-dom__cell--clipboard-copied::before {
+  position: absolute;
+  inset: 1px;
+  z-index: 7;
+  box-sizing: border-box;
+  border: 0 dashed var(--datagrid-selection-copied-border, var(--datagrid-selection-active-border, #245ea8));
+  border-radius: 2px;
+  content: "";
+  pointer-events: none;
+  box-shadow: 0 0 0 1px var(--datagrid-background-color, #fff),
+    0 0 0 3px var(--datagrid-selection-copied-bg, rgb(36 94 168 / 16%));
+  animation: affino-grid-dom-copy-flash 700ms steps(2, end) infinite;
+}
+
+.affino-grid-dom__cell--clipboard-copied-top::before { border-top-width: 2px; }
+.affino-grid-dom__cell--clipboard-copied-right::before { border-right-width: 2px; }
+.affino-grid-dom__cell--clipboard-copied-bottom::before { border-bottom-width: 2px; }
+.affino-grid-dom__cell--clipboard-copied-left::before { border-left-width: 2px; }
+
+@keyframes affino-grid-dom-copy-flash {
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .affino-grid-dom__cell--clipboard-copied::before { animation: none; }
+}
+
+.affino-grid-dom__cell--range-frame::after {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  border: 0 solid var(--affino-grid-dom-range-border);
+  content: "";
+  pointer-events: none;
+}
+
+.affino-grid-dom__cell--range-top::after { border-top-width: 2px; }
+.affino-grid-dom__cell--range-right::after { border-right-width: 2px; }
+.affino-grid-dom__cell--range-bottom::after { border-bottom-width: 2px; }
+.affino-grid-dom__cell--range-left::after { border-left-width: 2px; }
+
+.affino-grid-dom__fill-preview-overlay {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px solid var(--datagrid-selection-handle-border, var(--datagrid-selection-active-border, #245ea8));
+  border-radius: 1px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.affino-grid-dom__range-move-overlay {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px dashed var(--datagrid-selection-handle-border, var(--datagrid-selection-active-border, #245ea8));
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--datagrid-selection-range-bg, #eaf2fc) 22%, transparent);
+  pointer-events: none;
+}
+
+.affino-grid-dom__fill-preview-overlay[data-fill-preview-overlay="left"],
+.affino-grid-dom__fill-preview-overlay[data-fill-preview-overlay="right"],
+.affino-grid-dom__range-move-overlay[data-range-move-preview-overlay="left"],
+.affino-grid-dom__range-move-overlay[data-range-move-preview-overlay="right"] {
+  z-index: 3;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .affino-grid-dom__cell--range-move-edge { cursor: grab; }
+}
+
+.affino-grid-dom[data-range-moving="true"],
+.affino-grid-dom[data-range-moving="true"] * { cursor: grabbing !important; }
+
+.affino-grid-dom__fill-handle {
+  position: absolute;
+  z-index: 6;
+  inset-inline-end: 2px;
+  inset-block-end: 2px;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  border: 1px solid var(--datagrid-background-color, #fff);
+  border-radius: 1px;
+  padding: 0;
+  background: var(--datagrid-selection-active-border, #245ea8);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.affino-grid-dom__cell--fill-handle-host:not(.affino-grid-dom__cell--pinned) {
+  position: relative;
+  z-index: 1;
+}
+
+.affino-grid-dom__fill-action {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.affino-grid-dom__fill-action-trigger,
+.affino-grid-dom__fill-action-item {
+  border: 1px solid var(--datagrid-column-menu-border, var(--datagrid-cell-border-color, #cbd3de));
+  color: var(--datagrid-text-primary, var(--datagrid-text-color, #20242b));
+  background: var(--datagrid-column-menu-bg, var(--datagrid-background-color, #fff));
+  font: inherit;
+}
+
+.affino-grid-dom__fill-action-trigger {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px var(--datagrid-column-menu-shadow, rgb(0 0 0 / 18%));
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.affino-grid-dom__fill-action-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  display: flex;
+  flex-direction: column;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid var(--datagrid-column-menu-border, var(--datagrid-cell-border-color, #cbd3de));
+  border-radius: 6px;
+  background: var(--datagrid-column-menu-bg, var(--datagrid-background-color, #fff));
+  box-shadow: 0 8px 20px var(--datagrid-column-menu-shadow, rgb(0 0 0 / 18%));
+}
+
+.affino-grid-dom__fill-action-item {
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.affino-grid-dom__fill-action-item:hover,
+.affino-grid-dom__fill-action-item[aria-checked="true"] {
+  background: var(--datagrid-column-menu-item-hover-bg, var(--datagrid-selection-range-bg, #eaf2fc));
+}

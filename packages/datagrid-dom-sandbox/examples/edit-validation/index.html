@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <style>
+      html, body { margin: 0; min-height: 100%; }
+      body { background: #f4f6f8; }
+      #page-loading { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; gap: 12px; background: #f4f6f8; color: #52647a; font: 500 14px/1.4 system-ui, sans-serif; }
+      #page-loading__spinner { width: 20px; height: 20px; border: 2px solid #cbd3de; border-top-color: #245ea8; border-radius: 50%; animation: page-loading-spin 0.8s linear infinite; }
+      #page-loading[data-state="error"] #page-loading__spinner { display: none; }
+      @keyframes page-loading-spin { to { transform: rotate(360deg); } }
+    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f6f8" />
+    <title>Edit validation · Affino DataGrid DOM sandbox</title>
+  </head>
+  <body>
+    <div id="page-loading" role="status" aria-live="polite"><span id="page-loading__spinner" aria-hidden="true"></span><span>Loading DataGrid…</span></div>
+    <main class="page-shell" data-demo-content inert aria-hidden="true" aria-busy="true">
+      <header class="page-header">
+        <div class="page-header__eyebrow">
+          <p class="eyebrow">Example 26 · Edit validation</p>
+          <label class="example-picker">Example
+            <select data-example-picker aria-label="Choose a sandbox example">
+              <option value="/">Overview</option>
+              <option value="/examples/sorting/">02 · Sorting</option>
+              <option value="/examples/updates/">03 · Row updates</option>
+              <option value="/examples/selection/">04 · Cell selection</option>
+              <option value="/examples/range-selection/">05 · Range selection</option>
+              <option value="/examples/keyboard-navigation/">06 · Keyboard navigation</option>
+              <option value="/examples/filtering/">07 · Filtering</option>
+              <option value="/examples/pagination/">08 · Pagination</option>
+              <option value="/examples/virtualization/">09 · Row virtualization</option>
+              <option value="/examples/column-virtualization/">10 · Column virtualization</option>
+              <option value="/examples/column-resizing/">11 · Column resizing</option>
+              <option value="/examples/column-reordering/">12 · Column reordering</option>
+              <option value="/examples/column-layout/">13 · Column layout</option>
+              <option value="/examples/editing/">14 · Cell editing</option>
+              <option value="/examples/clipboard/">15 · Clipboard</option>
+              <option value="/examples/stress/">16 · Stress test</option>
+              <option value="/examples/grouping/">17 · Grouping</option>
+              <option value="/examples/tree-data/">18 · Tree data</option>
+              <option value="/examples/row-selection/">19 · Row selection</option>
+              <option value="/examples/history/">20 · Undo and redo</option>
+              <option value="/examples/formulas/">21 · Formula fields</option>
+              <option value="/examples/select-editing/">22 · Select editing</option>
+              <option value="/examples/checkbox-cells/">23 · Checkbox cells</option>
+              <option value="/examples/date-editing/">24 · Date editing</option>
+              <option value="/examples/numeric-editing/">25 · Numeric editing</option>
+              <option value="/examples/edit-validation/" selected>26 · Edit validation</option>
+            </select>
+          </label>
+        </div>
+        <h1>Edit validation</h1>
+        <p class="intro">Invalid drafts stay active until corrected or canceled, without changing row data.</p>
+      </header>
+      <section id="edit-validation-demo" class="demo-panel" aria-label="Inline validation example"></section>
+      <nav class="example-links" aria-label="Sandbox examples">
+        <a href="/examples/numeric-editing/">← Previous: numeric editing</a>
+        <a href="/">Back to overview →</a>
+      </nav>
+      <footer>Draft validation and typed values: Core · Accessible editor state: DOM adapter</footer>
+    </main>
+    <script type="module" src="/src/examplePicker.ts"></script>
+    <script type="module" src="/src/examples/edit-validation/main.ts"></script>
+  </body>
+</html>

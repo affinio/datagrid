@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <style>
+      html, body { margin: 0; min-height: 100%; }
+      body { background: #f4f6f8; }
+      #page-loading { position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; gap: 12px; background: #f4f6f8; color: #52647a; font: 500 14px/1.4 system-ui, sans-serif; }
+      #page-loading__spinner { width: 20px; height: 20px; border: 2px solid #cbd3de; border-top-color: #245ea8; border-radius: 50%; animation: page-loading-spin 0.8s linear infinite; }
+      #page-loading[data-state="error"] #page-loading__spinner { display: none; }
+      @keyframes page-loading-spin { to { transform: rotate(360deg); } }
+    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f6f8" />
+    <title>Fill handle · Affino DataGrid DOM sandbox</title>
+  </head>
+  <body>
+    <div id="page-loading" role="status" aria-live="polite">
+      <span id="page-loading__spinner" aria-hidden="true"></span>
+      <span>Loading DataGrid…</span>
+    </div>
+    <main class="page-shell" data-demo-content inert aria-hidden="true" aria-busy="true">
+      <header class="page-header">
+        <div class="page-header__eyebrow">
+          <p class="eyebrow">Example 32 · Fill handle</p>
+          <label class="example-picker">Example
+            <select data-example-picker aria-label="Choose a sandbox example">
+              <option value="/">Overview</option>
+              <option value="/examples/histogram/">31 · Value histogram</option>
+              <option value="/examples/fill-handle/" selected>32 · Fill handle</option>
+            </select>
+          </label>
+        </div>
+        <h1>Extend a cell range</h1>
+        <p class="intro">Select the first two quantities, then drag the small corner handle down to continue the series.</p>
+      </header>
+
+      <section id="fill-handle-demo" class="demo-panel" aria-label="Fill handle example"></section>
+      <nav class="example-links" aria-label="Sandbox examples">
+        <a href="/examples/histogram/">← Previous: value histogram</a>
+        <a href="/">All examples</a>
+      </nav>
+      <footer>Fill interaction and renderer: DOM adapter · Series and row edits: orchestration and Core · Framework: none</footer>
+    </main>
+    <script type="module" src="/src/examplePicker.ts"></script>
+    <script type="module" src="/src/examples/fill-handle/main.ts"></script>
+  </body>
+</html>

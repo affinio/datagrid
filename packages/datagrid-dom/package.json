@@ -1,0 +1,66 @@
+{
+  "name": "@affino/datagrid-dom",
+  "version": "0.1.0",
+  "author": "Anton Pavlov <a.pavlov@affino.dev>",
+  "type": "module",
+  "description": "Framework-independent DOM adapter for Affino DataGrid",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./xlsx": {
+      "types": "./dist/adapter/xlsx/index.d.ts",
+      "import": "./dist/adapter/xlsx/index.js"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist && mkdir -p dist/styles && cp -R src/styles/. dist/styles/ && cp src/style-entry.css dist/style.css",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm run build && vitest run --config vitest.config.ts && node scripts/check-theme-token-contract.mjs && node scripts/check-selection-frame-contract.mjs && node scripts/check-node-import.mjs"
+  },
+  "dependencies": {
+    "@affino/datagrid-chrome": "workspace:*",
+    "@affino/datagrid-core": "workspace:*",
+    "@affino/datagrid-gantt": "workspace:*",
+    "@affino/datagrid-orchestration": "workspace:*",
+    "@affino/menu-core": "1.2.0",
+    "@affino/overlay-host": "1.1.0"
+  },
+  "devDependencies": {
+    "@affino/datagrid-formula-engine": "workspace:^",
+    "@affino/export-xlsx": "workspace:^"
+  },
+  "peerDependencies": {
+    "@affino/datagrid-formula-engine": "workspace:^",
+    "@affino/datagrid-theme": "workspace:^",
+    "@affino/export-xlsx": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@affino/datagrid-theme": {
+      "optional": true
+    },
+    "@affino/export-xlsx": {
+      "optional": true
+    },
+    "@affino/datagrid-formula-engine": {
+      "optional": true
+    }
+  },
+  "license": "MIT",
+  "keywords": [
+    "datagrid",
+    "dom",
+    "adapter",
+    "framework-independent"
+  ]
+}

@@ -1,0 +1,28 @@
+.pivot-demo__actions {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pivot-demo__buttons {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.pivot-demo__actions button {
+  border: 1px solid #c8d2df;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #24364b;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pivot-demo__actions button:hover {
+  background: #eef4fb;
+}

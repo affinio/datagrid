@@ -1,0 +1,70 @@
+.affino-grid-dom-shell {
+  display: grid;
+  gap: var(--affino-grid-dom-shell-gap, 8px);
+  min-width: 0;
+}
+
+.affino-grid-dom-shell__toolbar,
+.affino-grid-dom-shell__filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.affino-grid-dom-shell__toolbar {
+  flex-wrap: wrap;
+  color: var(--datagrid-text-color, #20242b);
+  font: inherit;
+}
+
+.affino-grid-dom-shell__filter {
+  flex: 1 1 240px;
+}
+
+.affino-grid-dom-shell__quick-filter {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 32px;
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--datagrid-cell-border-color, #cbd3de);
+  border-radius: 4px;
+  color: inherit;
+  background: var(--datagrid-background-color, #fff);
+  font: inherit;
+}
+
+.affino-grid-dom-shell__toolbar button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--datagrid-toolbar-button-border-color, var(--datagrid-cell-border-color, #cbd3de));
+  border-radius: 4px;
+  color: var(--datagrid-toolbar-button-text-color, inherit);
+  background: var(--datagrid-toolbar-button-background-color, var(--datagrid-background-color, #fff));
+  font: inherit;
+  cursor: pointer;
+}
+
+.affino-grid-dom-shell__toolbar button:hover:not(:disabled) {
+  background: var(--datagrid-toolbar-button-hover-background-color, #f1f5f9);
+}
+
+.affino-grid-dom-shell__toolbar button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.affino-grid-dom-shell__status {
+  flex: 1 1 100%;
+  color: var(--datagrid-text-color, #64748b);
+  font-size: 0.875em;
+}
+
+.affino-grid-dom-shell__status:empty {
+  display: none;
+}
+
+.affino-grid-dom-shell__grid {
+  min-width: 0;
+}

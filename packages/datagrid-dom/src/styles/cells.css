@@ -1,0 +1,463 @@
+.affino-grid-dom__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  border-inline-end: 1px solid var(--datagrid-cell-border-color, #d8dde5);
+  border-block-end: 1px solid var(--datagrid-cell-border-color, #d8dde5);
+  padding: var(--datagrid-body-cell-padding-y, 0.5rem) var(--datagrid-body-cell-padding-x, 0.75rem);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.affino-grid-dom__cell--interactive { cursor: pointer; }
+.affino-grid-dom__cell--interactive[aria-disabled="true"] { cursor: not-allowed; }
+
+.affino-grid-dom__cell--data-loading {
+  color: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.affino-grid-dom__cell--data-loading:not(.affino-grid-dom__cell--pinned) {
+  position: relative;
+}
+
+.affino-grid-dom__cell--data-loading::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 12px;
+  width: min(54%, 132px);
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--datagrid-cell-border-color, #d8dde5) 62%, var(--datagrid-background-color, #fff));
+  content: "";
+  opacity: 0.72;
+  pointer-events: none;
+  transform: translateY(-50%);
+  animation: affino-grid-dom-loading-pulse 1.25s ease-in-out infinite alternate;
+}
+
+.affino-grid-dom__row-selection-cell.affino-grid-dom__cell--data-loading::after {
+  inset-inline-start: 9px;
+  width: min(48%, 18px);
+  height: 7px;
+}
+
+@keyframes affino-grid-dom-loading-pulse {
+  from { opacity: 0.45; }
+  to { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .affino-grid-dom__cell--data-loading::after { animation: none; }
+}
+
+.affino-grid-dom__cell--combobox:not(.affino-grid-dom__cell--editing) {
+  position: relative;
+  padding-inline-end: 28px;
+}
+
+.affino-grid-dom__cell--combobox:not(.affino-grid-dom__cell--editing)::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 11px;
+  width: 7px;
+  height: 7px;
+  border-inline-end: 1.5px solid var(--datagrid-text-muted, #667386);
+  border-block-end: 1.5px solid var(--datagrid-text-muted, #667386);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-58%) rotate(45deg);
+  transition: opacity 120ms ease;
+}
+
+.affino-grid-dom__cell--combobox:not(.affino-grid-dom__cell--editing):hover::after,
+.affino-grid-dom__cell--combobox.affino-grid-dom__cell--active:not(.affino-grid-dom__cell--editing)::after {
+  opacity: 0.85;
+}
+
+.affino-grid-dom__row-selection-header,
+.affino-grid-dom__row-selection-cell {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.affino-grid-dom__row-selection-header {
+  box-sizing: border-box;
+  min-height: calc(
+    1lh
+    + var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    + var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    + 2px
+  );
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__row-selection-header--spanning {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  width: var(--affino-grid-dom-row-selection-width, 36px);
+  min-height: 0;
+  pointer-events: auto;
+}
+
+.affino-grid-dom__row-selection-header-placeholder {
+  visibility: hidden;
+}
+
+.affino-grid-dom__row-selection-checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--datagrid-selection-active-border, #245ea8);
+  cursor: pointer;
+}
+
+.affino-grid-dom__cell--checkbox {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.affino-grid-dom__cell-checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--datagrid-selection-active-border, #245ea8);
+  cursor: pointer;
+}
+
+.affino-grid-dom__cell-checkbox:disabled {
+  cursor: default;
+}
+
+.affino-grid-dom__body .affino-grid-dom__row > .affino-grid-dom__cell:first-child,
+.affino-grid-dom__pinned-bottom .affino-grid-dom__row > .affino-grid-dom__cell:first-child {
+  border-inline-start: 1px solid var(--datagrid-cell-border-color, #d8dde5);
+}
+
+.affino-grid-dom--canvas-chrome-active .affino-grid-dom__body .affino-grid-dom__cell {
+  border-inline-end-color: transparent;
+  border-block-end-color: transparent;
+}
+
+.affino-grid-dom--canvas-chrome-active .affino-grid-dom__body .affino-grid-dom__row > .affino-grid-dom__cell:first-child {
+  border-inline-start-color: transparent;
+}
+
+.affino-grid-dom__header .affino-grid-dom__cell--grid-start {
+  border-inline-start: 1px solid var(--datagrid-header-border-color, var(--datagrid-cell-border-color, #d8dde5));
+}
+
+.affino-grid-dom__header .affino-grid-dom__cell {
+  border-block-start: 1px solid var(--datagrid-header-border-color, var(--datagrid-cell-border-color, #d8dde5));
+}
+
+.affino-grid-dom__header-group-row .affino-grid-dom__column-group-header {
+  border-block-start: 1px solid var(--datagrid-header-border-color, var(--datagrid-cell-border-color, #d8dde5));
+}
+
+.affino-grid-dom__header-group-row .affino-grid-dom__cell--grid-start {
+  border-inline-start: 1px solid var(--datagrid-header-border-color, var(--datagrid-cell-border-color, #d8dde5));
+}
+
+.affino-grid-dom__column-group-header {
+  justify-content: center;
+  background: color-mix(in srgb, var(--datagrid-header-background-color, #f4f6f8) 78%, var(--datagrid-background-color, #fff) 22%);
+}
+
+.affino-grid-dom__column-group-header[data-column-group-depth="0"] {
+  background: color-mix(in srgb, var(--datagrid-header-background-color, #f4f6f8) 72%, var(--datagrid-background-color, #fff) 28%);
+}
+
+.affino-grid-dom__column-group-header[data-column-group-depth="1"] {
+  background: color-mix(in srgb, var(--datagrid-header-background-color, #f4f6f8) 82%, var(--datagrid-background-color, #fff) 18%);
+}
+
+.affino-grid-dom__column-group-header--empty {
+  color: transparent;
+  border-block-end-color: transparent;
+}
+
+.affino-grid-dom__column-group-header--continuation {
+  color: transparent;
+}
+
+.affino-grid-dom__column-header--merged {
+  position: relative;
+  z-index: 5;
+  isolation: isolate;
+  overflow: visible;
+  background: transparent;
+}
+
+.affino-grid-dom__column-header--merged::before {
+  position: absolute;
+  inset-block: calc(0px - var(--affino-grid-dom-header-merge-offset)) 0;
+  inset-inline: 0;
+  z-index: -1;
+  background: var(--datagrid-header-background-color, #f4f6f8);
+  content: "";
+  pointer-events: none;
+}
+
+.affino-grid-dom__column-header-label {
+  position: relative;
+  min-width: 0;
+}
+
+.affino-grid-dom__column-header--merged .affino-grid-dom__column-header-label {
+  top: calc(0px - var(--affino-grid-dom-header-merge-center-offset));
+}
+
+.affino-grid-dom__column-header {
+  position: relative;
+  padding: var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    var(--datagrid-header-padding-x, var(--datagrid-body-cell-padding-x, 0.75rem));
+  color: var(--datagrid-header-text-color, inherit);
+  background: var(--datagrid-header-background-color, #f4f6f8);
+  border-color: var(--datagrid-header-border-color, var(--datagrid-cell-border-color, #d8dde5));
+  font-weight: 600;
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__row-selection-header {
+  padding-block: var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem));
+  padding-inline: 0;
+}
+
+.affino-grid-dom__column-header[data-sortable] {
+  cursor: pointer;
+}
+
+.affino-grid-dom__column-header[data-sort-direction] {
+  padding-inline-end: calc(var(--datagrid-header-padding-x, var(--datagrid-body-cell-padding-x, 0.75rem)) + 0.75rem);
+}
+
+.affino-grid-dom__column-header[data-sort-direction]::after {
+  position: absolute;
+  inset-inline-end: var(--datagrid-header-padding-x, var(--datagrid-body-cell-padding-x, 0.75rem));
+  color: var(--datagrid-header-text-color, inherit);
+  content: "";
+}
+
+.affino-grid-dom__column-header[data-has-column-menu] {
+  padding-inline-end: 34px;
+}
+
+.affino-grid-dom__column-header[data-has-column-menu][data-sort-direction]::after {
+  inset-inline-end: 31px;
+}
+
+.affino-grid-dom__column-menu-trigger {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 4px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.affino-grid-dom__column-menu-trigger:hover,
+.affino-grid-dom__column-menu-trigger:focus-visible {
+  background: var(--datagrid-column-menu-item-hover-bg, var(--datagrid-selection-range-bg, #eaf2fc));
+}
+
+.affino-grid-dom__column-menu-trigger:focus-visible {
+  outline: 2px solid var(--datagrid-column-menu-focus-ring, var(--datagrid-selection-active-border, #245ea8));
+  outline-offset: 1px;
+}
+
+.affino-grid-dom__column-header[data-sort-direction="asc"]::after { content: "↑"; }
+.affino-grid-dom__column-header[data-sort-direction="desc"]::after { content: "↓"; }
+
+.affino-grid-dom__resize-handle {
+  position: absolute;
+  z-index: 2;
+  inset-block: 0;
+  inset-inline-end: -3px;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.affino-grid-dom__resize-handle::after {
+  position: absolute;
+  inset-block: 25%;
+  inset-inline-start: 3px;
+  width: 1px;
+  background: transparent;
+  content: "";
+}
+
+.affino-grid-dom__resize-handle:hover::after,
+.affino-grid-dom__resize-handle:focus-visible::after {
+  background: var(--datagrid-resize-handle-hover, #8a99ac);
+}
+
+.affino-grid-dom__resize-handle:focus-visible {
+  outline: 2px solid var(--datagrid-focus-outline, #3974b8);
+  outline-offset: -1px;
+}
+
+.affino-grid-dom--column-resizing,
+.affino-grid-dom--column-resizing * {
+  cursor: col-resize !important;
+}
+
+.affino-grid-dom__column-header[draggable="true"] {
+  cursor: grab;
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__column-drag-source {
+  opacity: 0.55;
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__column-drop-before::before,
+.affino-grid-dom__column-header.affino-grid-dom__column-drop-after::before {
+  position: absolute;
+  z-index: 4;
+  inset-block: 0;
+  width: 2px;
+  background: var(--datagrid-resize-handle-hover, #3974b8);
+  content: "";
+  pointer-events: none;
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__column-drop-before::before {
+  inset-inline-start: 0;
+}
+
+.affino-grid-dom__column-header.affino-grid-dom__column-drop-after::before {
+  inset-inline-end: 0;
+}
+
+.affino-grid-dom--column-reordering,
+.affino-grid-dom--column-reordering * {
+  cursor: grabbing !important;
+}
+
+.affino-grid-dom__editor {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  appearance: none;
+  user-select: text;
+}
+
+.affino-grid-dom__editor--date {
+  height: 1lh;
+  min-height: 0;
+  max-height: 1lh;
+  line-height: inherit;
+}
+
+.affino-grid-dom__editor--combobox {
+  user-select: text;
+  cursor: text;
+}
+
+.affino-grid-dom__combobox-panel {
+  z-index: 240;
+  box-sizing: border-box;
+  display: flex;
+  max-height: 260px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--datagrid-column-menu-border, var(--datagrid-cell-border-color, #d8dde5));
+  border-radius: 8px;
+  color: var(--datagrid-text-primary, #27364a);
+  background: var(--datagrid-editor-bg, var(--datagrid-background-color, #fff));
+  box-shadow: 0 8px 18px rgb(20 32 50 / 18%);
+  font-family: var(--datagrid-font-family, system-ui, sans-serif);
+  font-size: var(--datagrid-font-size, 13px);
+  line-height: 1.2;
+}
+
+.affino-grid-dom__combobox-option {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.affino-grid-dom__combobox-option--active {
+  border-color: color-mix(in srgb, var(--datagrid-selection-active-border, #245ea8) 20%, transparent);
+  background: var(--datagrid-column-menu-item-hover-bg, #f1f5fa);
+}
+
+.affino-grid-dom__combobox-option--selected {
+  background: color-mix(in srgb, var(--datagrid-selection-active-border, #245ea8) 12%, transparent);
+}
+
+.affino-grid-dom__combobox-check {
+  width: 7px;
+  height: 11px;
+  margin-inline-end: 3px;
+  border-right: 1.5px solid var(--datagrid-selection-active-border, #245ea8);
+  border-bottom: 1.5px solid var(--datagrid-selection-active-border, #245ea8);
+  transform: rotate(40deg);
+}
+
+.affino-grid-dom__combobox-empty {
+  padding: 8px;
+  color: var(--datagrid-text-muted, #667386);
+  font-size: 0.92em;
+}
+
+.affino-grid-dom__cell--invalid {
+  z-index: 4;
+}
+
+.affino-grid-dom__cell--invalid:not(.affino-grid-dom__cell--pinned) {
+  position: relative;
+}
+
+.affino-grid-dom__cell--invalid::before {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 4px;
+  inset-inline-end: 4px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--datagrid-background-color, #fff);
+  border-radius: 50%;
+  background: #b42318;
+  content: "";
+  pointer-events: none;
+}

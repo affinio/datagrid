@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "noEmit": false,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@affino/datagrid-core": ["../datagrid-core/dist/src/index.d.ts"],
+      "@affino/datagrid-core/*": ["../datagrid-core/dist/src/*"],
+      "@affino/datagrid-chrome": ["../datagrid-chrome/dist/index.d.ts"],
+      "@affino/datagrid-chrome/*": ["../datagrid-chrome/dist/*"],
+      "@affino/datagrid-orchestration": ["../datagrid-orchestration/dist/src/index.d.ts"],
+      "@affino/datagrid-orchestration/*": ["../datagrid-orchestration/dist/src/*"],
+      "@affino/datagrid-gantt": ["../datagrid-gantt/dist/index.d.ts"],
+      "@affino/export-xlsx": ["../export-xlsx/dist/index.d.ts"],
+      "@affino/datagrid-formula-engine": ["../datagrid-formula-engine/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
+}

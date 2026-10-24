@@ -1,0 +1,119 @@
+.affino-grid-dom__row {
+  display: grid;
+  grid-template-columns: var(--affino-grid-dom-columns);
+  min-width: 100%;
+  width: 100%;
+}
+
+.affino-grid-dom__body .affino-grid-dom__row {
+  width: max(100%, var(--affino-grid-dom-content-min-width, 100%));
+  background: var(--datagrid-row-background-color, var(--datagrid-background-color, #fff));
+}
+
+.affino-grid-dom__header-center .affino-grid-dom__row {
+  width: max(100%, var(--affino-grid-dom-center-min-width, 100%));
+}
+
+.affino-grid-dom__body .affino-grid-dom__row--record-selected {
+  background: var(--datagrid-row-selected-background-color, var(--datagrid-selection-range-bg, #eaf2fc));
+}
+
+.affino-grid-dom__body .affino-grid-dom__row--data-loading {
+  background: color-mix(in srgb, var(--datagrid-header-background-color, #f4f6f8) 24%, var(--datagrid-background-color, #fff));
+}
+
+.affino-grid-dom__empty-state {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--datagrid-text-color, #354255);
+  background: var(--datagrid-background-color, #fff);
+  text-align: center;
+}
+
+.affino-grid-dom__empty-state--viewport {
+  position: sticky;
+  left: 0;
+  min-height: 100%;
+}
+
+.affino-grid-dom--row-virtualized .affino-grid-dom__body .affino-grid-dom__row {
+  height: var(--affino-grid-dom-row-height);
+  min-height: var(--affino-grid-dom-row-height);
+  max-height: var(--affino-grid-dom-row-height);
+}
+
+.affino-grid-dom--row-virtualized .affino-grid-dom__cell {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.affino-grid-dom__cell--pinned {
+  position: sticky;
+  z-index: 2;
+  background-color: var(--datagrid-row-background-color, var(--datagrid-background-color, #fff));
+}
+
+.affino-grid-dom__row--record-selected .affino-grid-dom__cell--pinned {
+  background-color: var(--datagrid-row-selected-background-color, var(--datagrid-selection-range-bg, #eaf2fc));
+}
+
+.affino-grid-dom__header .affino-grid-dom__cell--pinned {
+  position: relative;
+  z-index: 3;
+}
+
+.affino-grid-dom__virtual-spacer {
+  min-width: 1px;
+  pointer-events: none;
+}
+
+.affino-grid-dom__column-spacer {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+
+.affino-grid-dom__cell--group {
+  font-weight: 650;
+  background: var(--datagrid-header-background-color, #f4f6f8);
+}
+
+.affino-grid-dom__cell--group-aggregate {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.affino-grid-dom__group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.affino-grid-dom__group-toggle {
+  display: inline-grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--datagrid-cell-border-color, #cbd3de);
+  border-radius: 4px;
+  color: inherit;
+  background: var(--datagrid-background-color, #fff);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.affino-grid-dom__group-leaf-label {
+  display: block;
+  min-width: 0;
+}

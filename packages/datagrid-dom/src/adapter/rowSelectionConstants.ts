@@ -1,0 +1,1 @@
+export const DOM_ROW_SELECTION_COLUMN_WIDTH = 36

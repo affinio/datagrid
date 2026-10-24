@@ -1,0 +1,148 @@
+.affino-grid-dom {
+  --affino-grid-dom-header-group-row-height: calc(
+    1lh
+    + var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    + var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    + 2px
+  );
+  --affino-grid-dom-header-group-center-offset: calc(
+    0.5lh
+    + var(--datagrid-header-padding-y, var(--datagrid-body-cell-padding-y, 0.5rem))
+    + 1px
+  );
+  display: block;
+  position: relative;
+  width: 100%;
+  color: var(--datagrid-row-text-color, var(--datagrid-text-color, #20242b));
+  background: var(--datagrid-background-color, #fff);
+  font-family: var(--datagrid-font-family, inherit);
+  font-size: var(--datagrid-font-size, inherit);
+}
+
+.affino-grid-dom::after {
+  position: absolute;
+  z-index: 9;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--datagrid-cell-border-color, #d8dde5);
+  content: "";
+  pointer-events: none;
+}
+
+.affino-grid-dom:focus {
+  outline: none;
+}
+
+.affino-grid-dom--virtualized {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(420px, 70vh);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.affino-grid-dom__header-shell {
+  display: grid;
+  grid-template-columns:
+    var(--affino-grid-dom-pinned-left-width, 0px)
+    minmax(0, 1fr)
+    var(--affino-grid-dom-pinned-right-width, 0px);
+  min-width: 0;
+  width: 100%;
+}
+
+.affino-grid-dom__header-left,
+.affino-grid-dom__header-right {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.affino-grid-dom__header-left {
+  position: relative;
+}
+
+.affino-grid-dom__header-overlay-layer {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+}
+
+.affino-grid-dom__header-center {
+  min-width: 0;
+  width: var(--affino-grid-dom-viewport-width, 100%);
+  overflow: hidden;
+}
+
+.affino-grid-dom__row.affino-grid-dom__header--left {
+  grid-template-columns: var(--affino-grid-dom-left-columns, minmax(0, 1fr));
+}
+
+.affino-grid-dom__row.affino-grid-dom__header--center {
+  grid-template-columns: var(--affino-grid-dom-center-columns, minmax(0, 1fr));
+}
+
+.affino-grid-dom__row.affino-grid-dom__header--right {
+  grid-template-columns: var(--affino-grid-dom-right-columns, minmax(0, 1fr));
+}
+
+.affino-grid-dom__header-group-row {
+  box-sizing: border-box;
+  height: var(--affino-grid-dom-header-group-row-height);
+  min-height: var(--affino-grid-dom-header-group-row-height);
+}
+
+.affino-grid-dom__body {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+  position: relative;
+}
+
+.affino-grid-dom--virtualized .affino-grid-dom__body {
+  overflow: auto;
+  overscroll-behavior: contain;
+  overscroll-behavior-x: none;
+  position: relative;
+}
+
+.affino-grid-dom--has-pinned-bottom {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(420px, 70vh);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.affino-grid-dom--has-pinned-bottom .affino-grid-dom__body {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.affino-grid-dom__pinned-bottom {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 2px solid var(--datagrid-cell-border-color, #cbd3de);
+  background: var(--datagrid-background-color, #fff);
+}
+
+.affino-grid-dom__chrome-anchor {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  left: 0;
+  height: 0;
+  margin-bottom: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.affino-grid-dom__chrome-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+}
