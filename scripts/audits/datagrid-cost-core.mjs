@@ -19,9 +19,7 @@ const filter=threshold=>({columnFilters:{},advancedExpression:{kind:'condition',
 function make(n,kind,observed=false){
  const work={active:false,reads:0,readRows:new Set(),byField:{},computes:0,stages:{},events:0,facadeEvents:0,largeArrays:0,largeArraySlots:0}
  const rows=Array.from({length:n},(_,i)=>({id:i,value:i%100,spare:0,g:`g${i%10}`,h:`h${Math.floor(i/10)%10}`,year:2020+i%4,parent:i%8===0?null:i-i%8,path:Array.from({length:8},(_,d)=>`${Math.floor(i/8)}-${d}`)}))
- if(observed)for(const r of rows)for(const field of Object.keys(r)){const v=r[field];Object.defineProperty(r,field,{enumerable:true,configurable:true,get(){if(work.active){work.reads++;work.readRows.add(r.id);work.byField[field]=(work.byField[field]??0)+1}return v}})}
- // id reads inside the getters use this stable closure rather than another accessor.
- if(observed)for(let i=0;i<rows.length;i++){const r=rows[i];for(const field of Object.keys(r)){const descriptor=Object.getOwnPropertyDescriptor(r,field),v=descriptor.get();Object.defineProperty(r,field,{enumerable:true,configurable:true,get(){if(work.active){work.reads++;work.readRows.add(i);work.byField[field]=(work.byField[field]??0)+1}return v}})}}
+ if(observed)for(let i=0;i<rows.length;i++)rows[i]=new Proxy(rows[i],{get(target,key,receiver){if(work.active&&typeof key==='string'&&Object.hasOwn(target,key)){work.reads++;work.readRows.add(i);work.byField[key]=(work.byField[key]??0)+1}return Reflect.get(target,key,receiver)}})
  const computed=[]
  if(kind==='chain'||kind==='wide'||kind==='dense'){
   const count=kind==='chain'?3:kind==='wide'?32:16
