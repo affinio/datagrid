@@ -171,6 +171,20 @@ describe("datagrid-worker postMessage transport", () => {
     transport.dispose()
   })
 
+  it("rejects dispatch after disposal without posting or falling back", () => {
+    const postMessage = vi.fn()
+    const transport = createDataGridWorkerPostMessageTransport({
+      target: { postMessage },
+      requestTimeoutMs: 0,
+    })
+
+    transport.dispose()
+
+    expect(() => transport.dispatch({ kind: "refresh" })).toThrow(/transport is disposed/i)
+    expect(postMessage).not.toHaveBeenCalled()
+    expect(transport.getStats().dispatched).toBe(0)
+  })
+
   it("falls back synchronously after reaching the bounded in-flight cap", () => {
     const sent: unknown[] = []
     const transport = createDataGridWorkerPostMessageTransport({

@@ -611,6 +611,57 @@ describe("worker-owned row model", () => {
     host.dispose()
   })
 
+  it("does not coalesce patches across a row replacement", async () => {
+    const initial = buildRows(1)
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows: initial,
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    mirror.patchRows([{ rowId: 1, data: { revenue: 11 } }])
+    mirror.setRows([{ row: { id: 1, region: "AMER", revenue: 20 }, rowId: 1 }])
+    mirror.patchRows([{ rowId: 1, data: { revenue: 30 } }])
+    await flushMessages()
+
+    expect(getRowModelCommandsByType(channel.worker, "patch-rows").slice(-2).map(command => command.updates[0]?.data.revenue)).toEqual([11, 30])
+    expect((mirror.getRow(0)?.row as BenchRow).revenue).toBe(30)
+
+    mirror.dispose()
+    host.dispose()
+  })
+
+  it("keeps independent formula registrations in the same command burst", async () => {
+    const channel = createMessageChannelPair()
+    const host = createDataGridWorkerOwnedRowModelHost<BenchRow>({
+      source: channel.worker,
+      target: channel.worker,
+      rows: buildRows(1),
+    })
+    const mirror = createDataGridWorkerOwnedRowModel<BenchRow>({
+      source: channel.main,
+      target: channel.main,
+    })
+    await flushMessages()
+    mirror.registerFormulaField({ name: "revenueDouble", formula: "revenue * 2" })
+    mirror.registerFormulaField({ name: "revenueTriple", formula: "revenue * 3" })
+    await flushMessages()
+
+    expect(mirror.getFormulaFields().map(field => field.name)).toEqual(["revenueDouble", "revenueTriple"])
+    expect((mirror.getRow(0)?.row as BenchRow & { revenueDouble: number; revenueTriple: number })).toMatchObject({
+      revenueDouble: 20,
+      revenueTriple: 30,
+    })
+
+    mirror.dispose()
+    host.dispose()
+  })
+
   it("flushes large patch bursts immediately", async () => {
     const rows = buildRows(2000)
     const channel = createMessageChannelPair()

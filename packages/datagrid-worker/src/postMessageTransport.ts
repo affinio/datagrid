@@ -73,6 +73,7 @@ export function createDataGridWorkerPostMessageTransport(
   let acked = 0
   let errored = 0
   let timedOut = 0
+  let disposed = false
   const pendingById = new Map<number, PendingRequestState>()
 
   const clearPending = (requestId: number): void => {
@@ -135,6 +136,9 @@ export function createDataGridWorkerPostMessageTransport(
 
   return {
     dispatch(request) {
+      if (disposed) {
+        throw new Error("[AffinoDataGrid worker] compute transport is disposed.")
+      }
       if (pendingById.size >= MAX_INFLIGHT_COMPUTE_REQUESTS) {
         return { handled: false }
       }
@@ -153,6 +157,10 @@ export function createDataGridWorkerPostMessageTransport(
       }
     },
     dispose() {
+      if (disposed) {
+        return
+      }
+      disposed = true
       options.source?.removeEventListener("message", onMessage)
       for (const requestId of pendingById.keys()) {
         clearPending(requestId)

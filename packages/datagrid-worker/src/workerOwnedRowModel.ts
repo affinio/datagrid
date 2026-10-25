@@ -458,7 +458,6 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
       case "set-pivot-model":
       case "set-aggregation-model":
       case "set-group-expansion":
-      case "register-formula-field":
       case "refresh":
         return payload.type
       default:
@@ -629,7 +628,13 @@ export function createDataGridWorkerOwnedRowModel<T = unknown>(
     const coalesceKey = getCoalesceKey(payload)
     if (coalesceKey) {
       const existingIndex = queuedCommandIndexByKey.get(coalesceKey)
-      if (typeof existingIndex === "number" && queuedCommands[existingIndex]) {
+      // Coalesce only adjacent intents. Crossing another command can reorder
+      // mutations or replace a configuration that the intervening command uses.
+      if (
+        typeof existingIndex === "number"
+        && existingIndex === queuedCommands.length - 1
+        && queuedCommands[existingIndex]
+      ) {
         const existingCommand = queuedCommands[existingIndex]
         const mergedPayload = mergeCommandPayload(existingCommand.payload, payload)
         commandsCoalesced += 1

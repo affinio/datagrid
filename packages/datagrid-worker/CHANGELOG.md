@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.1
+
+### Fixed
+
+- Hardened worker message delivery and row-model lifecycle handling under disposal and overlapping updates.
+
+### Validation
+
+- Worker unit tests and public build passed.
+
 ## 0.7.0
 
 ### Changed
