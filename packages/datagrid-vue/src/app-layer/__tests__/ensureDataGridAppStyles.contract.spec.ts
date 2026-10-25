@@ -126,9 +126,11 @@ describe("ensureDataGridAppStyles", () => {
       : ""
 
     expect(rootRule).toContain("--datagrid-pinned-pane-separator-size: 1px")
+    expect(rootRule).toContain("--datagrid-selection-indicator-color: color-mix(in srgb, var(--datagrid-accent-strong) 58%, transparent)")
     expect(rootRule).toContain("var(--datagrid-accent-strong) 24%")
     expect(selectedIndexRule).toContain("background: var(--datagrid-selection-range-bg)")
-    expect(selectedIndexRule).toContain("box-shadow: inset 3px 0 0 var(--datagrid-accent-strong)")
+    expect(selectedIndexRule).toContain("right: var(--datagrid-column-divider-size)")
+    expect(selectedIndexRule).toContain("box-shadow: inset 3px 0 0 var(--datagrid-selection-indicator-color)")
     expect(selectedIndexRule).not.toContain("border-radius")
   })
 
@@ -197,7 +199,7 @@ describe("ensureDataGridAppStyles", () => {
     const selectedHeaderEnd = styleText.indexOf("}", selectedHeaderStart)
     const selectedHeaderRule = styleText.slice(selectedHeaderStart, selectedHeaderEnd)
     expect(selectedHeaderRule).toContain("background-color: var(--datagrid-selection-range-bg)")
-    expect(selectedHeaderRule).toContain("inset 0 3px 0 var(--datagrid-accent-strong)")
+    expect(selectedHeaderRule).toContain("inset 0 3px 0 var(--datagrid-selection-indicator-color)")
     expect(selectedHeaderRule).not.toContain("var(--datagrid-selection-border-color)")
   })
 
@@ -282,7 +284,7 @@ describe("ensureDataGridAppStyles", () => {
     expect(styleText).toContain("background: var(--datagrid-group-row-background-color, var(--datagrid-row-background-color, #fff))")
     expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell:not(:first-child)")
     expect(styleText).toContain("box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color)")
-    expect(styleText).toContain(".grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index + .grid-cell")
+    expect(styleText).not.toContain(".grid-row--sticky-top > .grid-cell--index + .grid-cell {\n  box-shadow: none")
   })
 
   it("keeps center header native-scrolled with native dividers and contained horizontal overscroll", () => {
@@ -368,6 +370,8 @@ describe("ensureDataGridAppStyles", () => {
     expect(style?.textContent).toContain(".grid-stage--scrolling .grid-cell--select")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .grid-cell--date")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .cell-fill-handle")
+    expect(styleText).toContain(".grid-stage--coarse-pointer .cell-fill-handle {\n  right: 0;\n  bottom: 0;\n  width: 28px;\n  height: 28px;")
+    expect(styleText).toContain(".grid-stage--coarse-pointer .cell-fill-handle::after {\n  content: \"\";\n  position: absolute;\n  right: 9px;\n  bottom: 9px;")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .grid-fill-action__trigger")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .row-resize-handle")
     const rowResizeRuleStart = styleText.indexOf("\n.row-resize-handle {\n")
@@ -378,6 +382,7 @@ describe("ensureDataGridAppStyles", () => {
     expect(rowResizeRule).toContain("height: 6px")
     expect(styleText).toContain(".grid-stage--coarse-pointer .row-resize-handle {\n  height: 18px;")
     expect(styleText).toContain(".row-resize-handle {\n    height: 18px;")
+    expect(styleText).not.toContain(".grid-cell--index-selected .row-resize-handle")
     expect(style?.textContent).toContain(".grid-stage--coarse-pointer .col-resize")
     expect(style?.textContent).toContain(".datagrid-app-status")
     expect(style?.textContent).toContain("clip: rect(0 0 0 0)")

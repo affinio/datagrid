@@ -51,6 +51,7 @@
           ]"
           :style="renderApi.rowIndexCellStyle(row, viewportRowOffset)"
           :data-row-id="String(row.rowId)"
+          :data-row-id-type="typeof row.rowId"
           :data-row-index="absoluteRowIndex"
           :aria-rowindex="absoluteRowIndex + 1"
           aria-colindex="1"

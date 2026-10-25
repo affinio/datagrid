@@ -94,10 +94,8 @@ function getFiniteWheelDeltaX(event: WheelEvent): number {
   return Number.isFinite(event.deltaX) ? event.deltaX : 0
 }
 
-function isHorizontalWheelGesture(event: WheelEvent): boolean {
-  const absX = Math.abs(getFiniteWheelDeltaX(event))
-  const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
-  return absX > 0 && absX >= absY
+function hasHorizontalWheelComponent(event: WheelEvent): boolean {
+  return Math.abs(getFiniteWheelDeltaX(event)) > 0.5
 }
 
 interface SharedViewportScrollEventTarget {
@@ -232,7 +230,7 @@ export function useDataGridStageViewportRuntime(
   const managedWheelScroll = useDataGridManagedWheelScroll({
     resolveBodyViewport: resolveVerticalBodyViewport,
     resolveMainViewport: resolveCenterHorizontalViewport,
-    resolveWheelAxisLockMode: () => "horizontal-preferred",
+    resolveWheelAxisLockMode: () => "off",
     setHandledScrollTop: (value: number) => {
       const verticalViewport = resolveVerticalBodyViewport()
       if (verticalViewport) {
@@ -549,7 +547,7 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleLinkedViewportWheel(event: WheelEvent): void {
-    if (!isHorizontalWheelGesture(event)) {
+    if (!hasHorizontalWheelComponent(event)) {
       managedWheelScroll.reset()
       return
     }
@@ -557,7 +555,7 @@ export function useDataGridStageViewportRuntime(
   }
 
   function handleBodyViewportWheel(event: WheelEvent): void {
-    if (!isHorizontalWheelGesture(event)) {
+    if (!hasHorizontalWheelComponent(event)) {
       managedWheelScroll.reset()
       return
     }

@@ -33,7 +33,8 @@ Before copying or cutting, the app blocks local materialized operations when the
 - stale virtual selection metadata
 - unloaded rows
 - placeholder rows that cannot be read safely
-- grouped/tree projection rows
+
+Copy may include materialized grouped/tree projection rows. The app's clipboard cell resolver serializes group labels and available aggregates; synthetic rows are never treated as writable records. Cut and paste targets that include group rows remain blocked.
 
 Current cell copy writes plain text TSV to the system clipboard when permitted and always stores the copied payload in the in-memory fallback. Row-index copy writes `application/x-affino-datagrid-rows+json` when the browser supports custom clipboard MIME types, keeps a same-session tokenized row payload in memory, and writes `text/plain` TSV plus `text/html` table fallbacks over visible copyable data columns. The row index/system columns are excluded, and raw row JSON must not be written as `text/plain`. The TSV writer quotes fields that contain tabs, newlines, or quotes and escapes embedded quotes by doubling them.
 

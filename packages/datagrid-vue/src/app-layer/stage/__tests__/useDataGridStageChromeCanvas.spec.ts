@@ -7,21 +7,21 @@ import {
   resolveDataGridPerfStore,
 } from "../../perf/dataGridPerfTrace"
 
-function createPane(width: number, height: number, includeRightEdge = false): DataGridChromePaneModel {
+function createPane(width: number, height: number, includeRightEdge = false, includeBottomEdge = false): DataGridChromePaneModel {
   return {
     width,
     height,
     bands: height > 0 ? [{ top: 0, height: 24, kind: "base" }] : [],
-    horizontalLines: height > 0 ? [{ position: 24 }] : [],
+    horizontalLines: height > 0 ? [{ position: includeBottomEdge ? height : 24 }] : [],
     verticalLines: width > 0 ? [{ position: includeRightEdge ? width : Math.max(1, width - 1) }] : [],
   }
 }
 
-function createRenderModel(includeRightEdge = false): DataGridChromeRenderModel {
+function createRenderModel(includeRightEdge = false, includeBottomEdge = false): DataGridChromeRenderModel {
   return {
-    left: createPane(80, 48, includeRightEdge),
-    center: createPane(160, 48, includeRightEdge),
-    right: createPane(90, 48, includeRightEdge),
+    left: createPane(80, 48, includeRightEdge, includeBottomEdge),
+    center: createPane(160, 48, includeRightEdge, includeBottomEdge),
+    right: createPane(90, 48, includeRightEdge, includeBottomEdge),
   }
 }
 
@@ -64,6 +64,7 @@ function createChromeCanvasApi(
   headerRightEdgeLines = false,
   canvasTargets = true,
   onRenderModelRead: () => void = () => undefined,
+  pinnedBottomOuterEdge = false,
 ) {
   const stageRoot = elements.stageRoot ?? document.createElement("div")
   document.body.append(stageRoot)
@@ -109,7 +110,7 @@ function createChromeCanvasApi(
     }),
     pinnedBottomChromeRenderModel: computed(() => {
       onRenderModelRead()
-      return createRenderModel()
+      return createRenderModel(false, pinnedBottomOuterEdge)
     }),
     hasPivotHeaderGroups: computed(() => false),
     perfTraceEnabled,
@@ -162,15 +163,37 @@ describe("useDataGridStageChromeCanvas", () => {
     })
   })
 
-  it("draws the right edge of the final header column without adding body pane edge lines", () => {
+  it("leaves the outer header edge to the stage frame", () => {
     const context = createCanvasContext()
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context)
     const api = createChromeCanvasApi(false, {}, true)
 
     api.flushGridChromeRedraw("full")
 
-    // Only the table's outer right header edge is added; body edges stay suppressed.
-    expect(context.moveTo.mock.calls.filter(([x]) => x === 89.5)).toHaveLength(1)
+    // The two remaining strokes belong to the body and pinned-bottom pane interiors.
+    expect(context.moveTo.mock.calls.filter(([x]) => x === 89.5)).toHaveLength(2)
+  })
+
+  it("aligns interior vertical dividers after the shared boundary", () => {
+    const context = createCanvasContext()
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context)
+    const api = createChromeCanvasApi()
+
+    api.flushGridChromeRedraw("full")
+
+    // Interior borders use the leading edge of the next cell; only outer pane edges are inset.
+    expect(context.moveTo.mock.calls.filter(([x]) => x === 158.5)).toHaveLength(0)
+    expect(context.moveTo.mock.calls.filter(([x]) => x === 159.5)).toHaveLength(3)
+  })
+
+  it("leaves the pinned-bottom outer boundary to the stage frame", () => {
+    const context = createCanvasContext()
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context)
+    const api = createChromeCanvasApi(false, {}, false, true, undefined, true)
+
+    api.flushGridChromeRedraw("full")
+
+    expect(context.moveTo.mock.calls.some(([, y]) => y === 47.5)).toBe(false)
   })
 
   it("sets the header scrollport width to the body width after a classic vertical scrollbar reduces it", () => {

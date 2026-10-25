@@ -59,6 +59,16 @@ export function useDataGridStageRowIndex(
   const draggedRowIndexRowId = ref<string | null>(null)
   const dragOverRowIndexRowId = ref<string | null>(null)
   const dragOverRowIndexPlacement = ref<"before" | "after" | null>(null)
+  const dataColumnBounds = computed(() => {
+    let first = -1
+    let last = -1
+    options.visibleColumns.value.forEach((column, index) => {
+      if (column.column.meta?.rowSelection === true) return
+      if (first < 0) first = index
+      last = index
+    })
+    return first < 0 ? null : { first, last }
+  })
 
   const showRowIndex = computed(() => options.rows.value.showRowIndex !== false)
   const indexColumnWidthPx = computed(() => {
@@ -188,22 +198,33 @@ export function useDataGridStageRowIndex(
   }
 
   function isFullRowSelectionIndex(rowIndex: number): boolean {
-    const dataColumnIndexes = options.visibleColumns.value
-      .map((column, index) => column.column.meta?.rowSelection === true ? -1 : index)
-      .filter(index => index >= 0)
-    if (dataColumnIndexes.length === 0) {
-      return false
-    }
-    const firstColumnIndex = dataColumnIndexes[0]!
-    const lastColumnIndex = dataColumnIndexes[dataColumnIndexes.length - 1]!
+    const columnBounds = dataColumnBounds.value
+    if (!columnBounds) return false
     const ranges = options.selectionRanges?.value
       ?? (options.selectionRange.value ? [options.selectionRange.value] : [])
-    return ranges.some(range => (
-      rowIndex >= Math.min(range.startRow, range.endRow)
-      && rowIndex <= Math.max(range.startRow, range.endRow)
-      && Math.min(range.startColumn, range.endColumn) <= firstColumnIndex
-      && Math.max(range.startColumn, range.endColumn) >= lastColumnIndex
-    ))
+    return ranges.some(range => {
+      const rangeStartColumn = Math.min(range.startColumn, range.endColumn)
+      const rangeEndColumn = Math.max(range.startColumn, range.endColumn)
+      return rowIndex >= Math.min(range.startRow, range.endRow)
+        && rowIndex <= Math.max(range.startRow, range.endRow)
+        && rangeStartColumn <= columnBounds.first
+        && rangeEndColumn >= columnBounds.last
+    })
+  }
+
+  function isSelectedRangeRowIndex(rowIndex: number): boolean {
+    const columnBounds = dataColumnBounds.value
+    if (!columnBounds) return false
+    const ranges = options.selectionRanges?.value
+      ?? (options.selectionRange.value ? [options.selectionRange.value] : [])
+    return ranges.some(range => {
+      const rangeStartColumn = Math.min(range.startColumn, range.endColumn)
+      const rangeEndColumn = Math.max(range.startColumn, range.endColumn)
+      return rowIndex >= Math.min(range.startRow, range.endRow)
+        && rowIndex <= Math.max(range.startRow, range.endRow)
+        && rangeEndColumn >= columnBounds.first
+        && rangeStartColumn <= columnBounds.last
+    })
   }
 
   function isFullRowSelectionSafe(rowOffset: number, row?: DataGridTableStageBodyRow): boolean {
@@ -308,11 +329,11 @@ export function useDataGridStageRowIndex(
       "grid-cell--index-drop-before": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "before",
       "grid-cell--index-drop-after": rowId != null && dragOverRowIndexRowId.value === rowId && dragOverRowIndexPlacement.value === "after",
     }
-    if (!isFullRowSelectionIndex(rowIndex)) {
+    if (!isSelectedRangeRowIndex(rowIndex)) {
       return classes
     }
-    const previousSelected = isFullRowSelectionIndex(rowIndex - 1)
-    const nextSelected = isFullRowSelectionIndex(rowIndex + 1)
+    const previousSelected = isSelectedRangeRowIndex(rowIndex - 1)
+    const nextSelected = isSelectedRangeRowIndex(rowIndex + 1)
     return {
       ...classes,
       "grid-cell--index-selected": true,

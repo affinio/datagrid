@@ -942,10 +942,14 @@ export function useDataGridAppClipboard<TRow, TSnapshot>(
       }
       const groupRowIndex = resolveGroupRowIndexInRange(getBodyRowAtIndex, preflightRange)
       if (groupRowIndex != null) {
-        options.setLastAction?.(
-          "Selected range includes group rows. Use leaf rows or server export.",
-        )
-        return false
+        const groupRow = getBodyRowAtIndex(groupRowIndex)
+        // Copy is read-only and the app row presentation resolver provides
+        // meaningful text for materialized group rows (labels and aggregates).
+        // Keep mutating cut and placeholder-backed groups blocked.
+        if (operation !== "copy" || isDataGridRowMissingOrPlaceholder(groupRow)) {
+          options.setLastAction?.("Selected range includes group rows. Use leaf rows or server export.")
+          return false
+        }
       }
       const missingRowIndex = resolveMissingRowIndexInRange(getBodyRowAtIndex, preflightRange)
       if (missingRowIndex != null) {

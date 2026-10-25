@@ -13,12 +13,15 @@ describe("dataGridChromeCanvasMath", () => {
     expect(resolveDeviceAlignedCanvasLineWidth(1, 2)).toBe(1)
     expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 1)).toBe(71.5)
     expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 2)).toBe(71.5)
+    expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 1, "after")).toBe(72.5)
+    expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 2, "after")).toBe(72.5)
   })
 
   it("snaps canvas strokes to physical pixels on fractional device pixel ratios", () => {
     expect(resolveDeviceAlignedCanvasLineWidth(1, 1.25)).toBeCloseTo(0.8)
     expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 1.25)).toBeCloseTo(71.6)
     expect(resolveDeviceAlignedCanvasStrokeCenter(31, 1, 1.25)).toBeCloseTo(30.8)
+    expect(resolveDeviceAlignedCanvasStrokeCenter(72, 1, 1.25, "after")).toBeCloseTo(72.4)
   })
 
   it("falls back safely for invalid ratios and widths", () => {

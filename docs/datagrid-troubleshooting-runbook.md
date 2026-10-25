@@ -109,12 +109,34 @@ Relevant test:
 - `packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts`
 - `e2e/sandbox-interactions.spec.ts` (`keyboard navigation across virtualized headers scrolls without focus retry churn`)
 
+## Symptom: Diagonal wheel scroll should move both axes
+
+The center body uses a nested horizontal scrollport and shared vertical owner. A diagonal wheel event with a horizontal component is routed through the managed wheel path so Chromium cannot consume X in the nested scrollport and drop Y. Both nonzero deltas are applied to their respective owners.
+
+Checks:
+- Mixed wheel input does not use axis locking: both X and Y deltas move their respective owners.
+- Pure vertical wheel remains native. Horizontal movement continues to synchronize the center body, header, and pinned peers through the shared viewport path.
+- Pointer/touch scrolling is independent and remains native; this wheel routing does not claim to certify physical mobile browser behavior.
+
+Relevant regressions:
+- `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageViewportRuntime.spec.ts` (X- and Y-dominant diagonal input)
+- `e2e/browser-integration-regressions.spec.ts` (real Chromium diagonal wheel input)
+
 ## Symptom: The final header column has no right divider
 
 Checks:
-- In canvas-chrome mode, header cell `border-right` is suppressed and the canvas owns column dividers.
-- Interior dividers remain at cell boundaries; the outer edge is drawn only when a modeled boundary reaches the rightmost pane edge. Do not draw edges on clipped center columns or internal pane seams.
-- Pivot/group headers still render their internal dividers through CSS; canvas paints only the outer right edge.
+- In canvas-chrome mode, the center header uses native leading borders for its interior dividers; pinned header panes use chrome canvas. Ordinary header `border-right` stays suppressed.
+- Interior dividers remain at cell boundaries; do not draw edges on clipped center columns or internal pane seams. The terminal center cell owns a trailing divider only when there is empty center-pane space after it; when it reaches the pinned-right seam, the pinned pane separator owns that boundary.
+- Canvas body and pinned-bottom interior dividers align after the shared boundary, matching the DOM chrome layer's leading border. The stage frame owns the outer right and bottom edges; pinned-bottom shell owns the seam between the scrolling body and pinned rows.
+- Pivot/group header internal dividers remain CSS-owned. Header chrome does not draw an outer right edge already supplied by the stage frame.
+
+## Symptom: The sticky group row index divider is offset
+
+Checks:
+- In canvas-chrome mode, the sticky row covers the body canvas, so the first cell after the row index owns the shared divider at its leading edge. This keeps the index cell's full fill width and aligns the line with the next cell boundary.
+
+Relevant test:
+- `packages/datagrid-vue/src/app-layer/__tests__/ensureDataGridAppStyles.contract.spec.ts` (`styles sticky group rows with group and sticky theme tokens`)
 
 Relevant test:
 - `packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageChromeCanvas.spec.ts`

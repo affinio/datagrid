@@ -239,22 +239,6 @@ function columnWidth<TRow>(column: DataGridColumnSnapshot): number | undefined {
   return undefined
 }
 
-function columnsMatchSnapshot(
-  initial: readonly DataGridColumnSnapshot[],
-  current: readonly DataGridColumnSnapshot[],
-): boolean {
-  return initial.length === current.length && initial.every((column, index) => {
-    const next = current[index]
-    return next !== undefined
-      && column.key === next.key
-      && column.visible === next.visible
-      && column.pin === next.pin
-      && column.width === next.width
-      && column.column === next.column
-      && column.state === next.state
-  })
-}
-
 function resolveGroupLabelColumnIndex<TRow>(
   columns: readonly DataGridColumnSnapshot[],
   groupField: string,
@@ -315,7 +299,7 @@ export async function exportDataGridXlsx<TRow>(
   }
   const columnSnapshot = capturedColumns ?? api.columns.getSnapshot()
   const columns = options.columns === "all" ? columnSnapshot.columns : columnSnapshot.visibleColumns
-  const columnsAtStart = columnSnapshot.columns
+  const columnRevisionAtStart = columnSnapshot.revision
   const capturedComputed = captured?.computed?.status === "available" ? captured.computed.value : null
   const liveAggregationModel = api.rows.getAggregationModel?.() ?? null
   const capturedAggregation = liveAggregationModel
@@ -507,7 +491,7 @@ export async function exportDataGridXlsx<TRow>(
   if (signal?.aborted) return { status: "cancelled" }
   options.onProgress?.({ phase: "preparing", completedRows: rowCount, totalRows: rowCount })
   if (api.rows.getSnapshot().revision !== initialSnapshot.revision
-      || !columnsMatchSnapshot(columnsAtStart, api.columns.getSnapshot().columns)) {
+      || api.columns.getSnapshot().revision !== columnRevisionAtStart) {
     return { status: "error", code: "snapshot-changed", message: "Grid data or columns changed while the export snapshot was being prepared." }
   }
   if (typeof Worker === "undefined") {

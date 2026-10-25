@@ -12,6 +12,7 @@ const DATA_GRID_APP_STYLES = `
   background: transparent;
   --datagrid-surface-elevated-color: color-mix(in srgb, var(--datagrid-background-color) 92%, white 8%);
   --datagrid-selection-border-color: color-mix(in srgb, var(--datagrid-text-color) 22%, transparent);
+  --datagrid-selection-indicator-color: color-mix(in srgb, var(--datagrid-accent-strong) 58%, transparent);
   --datagrid-selection-stroke-width: 2px;
   --datagrid-selection-range-bg: color-mix(in srgb, var(--datagrid-accent-strong) 12%, transparent);
   --datagrid-selection-anchor-bg: transparent;
@@ -1604,6 +1605,16 @@ const DATA_GRID_APP_STYLES = `
   box-shadow: inset 0 3px 0 var(--datagrid-accent-strong);
 }
 
+.grid-header-shell .grid-cell--header.grid-cell--header-selected:focus-visible {
+  box-shadow: inset 0 3px 0 var(--datagrid-selection-indicator-color);
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-viewport .grid-cell--header-terminal.grid-cell--header-selected:focus-visible {
+  box-shadow:
+    1px 0 0 var(--datagrid-header-column-divider-color),
+    inset 0 3px 0 var(--datagrid-selection-indicator-color);
+}
+
 .grid-cell::selection {
   background: transparent;
 }
@@ -1772,7 +1783,7 @@ body.datagrid-fill-drag-cursor * {
 .grid-cell--header-selected,
 .grid-cell--header-selected:hover {
   background-color: var(--datagrid-selection-range-bg) !important;
-  box-shadow: inset 0 3px 0 var(--datagrid-accent-strong);
+  box-shadow: inset 0 3px 0 var(--datagrid-selection-indicator-color);
 }
 
 .grid-stage .grid-header-shell .grid-cell--header.grid-cell--focus-axis {
@@ -1872,7 +1883,7 @@ body.datagrid-fill-drag-cursor * {
 .grid-stage--canvas-chrome .grid-header-shell .grid-header-viewport .grid-cell--header-terminal.grid-cell--header-selected {
   box-shadow:
     1px 0 0 var(--datagrid-header-column-divider-color),
-    inset 0 3px 0 var(--datagrid-accent-strong);
+    inset 0 3px 0 var(--datagrid-selection-indicator-color);
 }
 
 .grid-cell--header-group {
@@ -1996,14 +2007,6 @@ body.datagrid-fill-drag-cursor * {
   box-shadow: inset var(--datagrid-column-divider-size) 0 0 var(--datagrid-column-divider-color);
 }
 
-.grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index {
-  box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
-}
-
-.grid-stage--canvas-chrome .grid-row--sticky-top > .grid-cell--index + .grid-cell {
-  box-shadow: none;
-}
-
 @media (hover: none) and (pointer: coarse) {
   .grid-stage--canvas-chrome .grid-cell--pinned-divider-right {
     box-shadow: inset calc(-1 * var(--datagrid-column-divider-size)) 0 0 var(--datagrid-column-divider-color);
@@ -2070,9 +2073,9 @@ body.datagrid-fill-drag-cursor * {
   content: "";
   position: absolute;
   left: 0;
-  right: calc(6px + var(--datagrid-column-divider-size));
+  right: var(--datagrid-column-divider-size);
   background: var(--datagrid-selection-range-bg);
-  box-shadow: inset 3px 0 0 var(--datagrid-accent-strong);
+  box-shadow: inset 3px 0 0 var(--datagrid-selection-indicator-color);
   pointer-events: none;
   z-index: 0;
 }
@@ -2095,11 +2098,6 @@ body.datagrid-fill-drag-cursor * {
 .datagrid-stage__row-index-cell.grid-cell--index-selected-single::before {
   top: 0;
   bottom: 0;
-}
-
-.datagrid-stage__row-index-cell.grid-cell--index-selected .row-resize-handle {
-  position: relative;
-  z-index: 1;
 }
 
 .datagrid-stage__row-index-cell.grid-cell--index-reorder-source {
@@ -4096,8 +4094,8 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-stage--coarse-pointer .cell-fill-handle {
-  right: -14px;
-  bottom: -14px;
+  right: 0;
+  bottom: 0;
   width: 28px;
   height: 28px;
   border: 0;
@@ -4136,8 +4134,8 @@ body.datagrid-fill-drag-cursor * {
 
 @media (hover: none) and (pointer: coarse) {
   .cell-fill-handle {
-    right: -14px;
-    bottom: -14px;
+    right: 0;
+    bottom: 0;
     width: 28px;
     height: 28px;
     border: 0;

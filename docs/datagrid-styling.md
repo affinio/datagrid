@@ -84,13 +84,18 @@ may intentionally differ. The full token list is exported by
 for token names and their CSS custom properties.
 
 `gridFocusAxisBackgroundColor` (`--datagrid-focus-axis-bg`) tints the column
-header and row index for the body cell that owns DOM focus. Built-in light and
-dark presets supply separate values. Override this token in `theme.tokens` or
-per-variant `theme.tokenVariants` to adjust the cue without changing selection
-colors. The cue follows focus rather than hover or the selection anchor.
+header and row index for the body cell that owns DOM focus. The row-index corner
+does not receive this focus tint while a multi-cell range is active, so a range
+does not make the corner look selected. Built-in light and dark presets supply
+separate values. Override this token in `theme.tokens` or per-variant
+`theme.tokenVariants` to adjust the cue without changing selection colors. The
+cue follows focus rather than hover or the selection anchor.
 Selected index and header cells use `gridSelectionRangeBackgroundColor` for the
 fill and `gridAccentStrong` for the narrow leading strip on selected row-index
 cells. Selected or keyboard-focused column headers use a narrow top strip.
+Cell-range selection also highlights every row index and leaf-column header
+intersected by the selected ranges; these axis cues follow the selection extent,
+while `gridFocusAxisBackgroundColor` continues to identify keyboard focus.
 
 ## Toolbar placement
 

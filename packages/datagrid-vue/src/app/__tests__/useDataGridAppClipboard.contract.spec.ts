@@ -1,6 +1,6 @@
 import { ref } from "vue"
 import { describe, expect, it, vi } from "vitest"
-import type { DataGridColumnSnapshot, DataGridSelectionSnapshot } from "@affino/datagrid-core"
+import type { DataGridColumnSnapshot, DataGridRowNode, DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppIntentHistory } from "../useDataGridAppIntentHistory"
 import {
   useDataGridAppClipboard,
@@ -21,7 +21,7 @@ type DemoRowNode =
   | { rowId: string; kind: "group"; data?: Partial<DemoRow>; groupMeta: { groupKey: string }; __placeholder: true }
 
 function createClipboardHarness(options: {
-  readClipboardCell?: (row: { data: DemoRow }, columnKey: string) => string
+  readClipboardCell?: (row: DataGridRowNode<DemoRow>, columnKey: string) => string
   buildPasteSpecialMatrixFromRange?: (range: {
     startRow: number
     endRow: number
@@ -1022,19 +1022,44 @@ describe("useDataGridAppClipboard contract", () => {
     expect(lastAction.value).toBe("Selected range includes unloaded rows. Load rows or use server export.")
   })
 
-  it("blocks copy when the selected range includes grouped projection rows", async () => {
-    const { clipboard, lastAction } = createClipboardHarness({
+  it("copies materialized group rows using the clipboard cell resolver", async () => {
+    const originalClipboard = navigator.clipboard
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    const { clipboard, lastAction, selectionRange } = createClipboardHarness({
       rowNodes: [
-        { rowId: "group:status:new", kind: "group", groupMeta: { groupKey: "status:new" } },
+        {
+          rowId: "group:status:new",
+          kind: "group",
+          data: { rowId: "group:status:new", a: "Status: New", b: "", c: "" },
+          groupMeta: { groupKey: "status:new" },
+        },
         { rowId: "r1", kind: "leaf", data: { rowId: "r1", a: "A1", b: "B1", c: "C1" } },
         { rowId: "r2", kind: "leaf", data: { rowId: "r2", a: "A2", b: "B2", c: "C2" } },
       ],
+      readClipboardCell: (row, columnKey) => row.kind === "group"
+        ? String(row.data?.[columnKey as keyof DemoRow] ?? "")
+        : String(row.data[columnKey as keyof DemoRow] ?? ""),
     })
+    selectionRange.value = { startRow: 0, endRow: 2, startColumn: 0, endColumn: 0 }
 
-    const copied = await clipboard.copySelectedCells("keyboard")
+    try {
+      const copied = await clipboard.copySelectedCells("keyboard")
 
-    expect(copied).toBe(false)
-    expect(lastAction.value).toBe("Selected range includes group rows. Use leaf rows or server export.")
+      expect(copied).toBe(true)
+      expect(writeText).toHaveBeenCalledWith("Status: New\nA1\nA2")
+      expect(lastAction.value).toContain("Copied 3x1 cells")
+      expect(clipboard.pendingClipboardRange.value).toEqual({ startRow: 0, endRow: 2, startColumn: 0, endColumn: 0 })
+    } finally {
+      clipboard.clearPendingClipboardOperation(false, true)
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
   })
 
   it("blocks copy over server-backed grouped placeholder rows as group rows", async () => {

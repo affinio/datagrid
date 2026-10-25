@@ -175,6 +175,7 @@ function drawGridChromeHorizontalLines(
   pane: DataGridChromePaneModel,
   rowDividerColor: string,
   rowDividerWidth: number,
+  excludePaneBottomEdge = false,
 ): void {
   if (pane.width <= 0 || pane.height <= 0 || rowDividerWidth <= 0) {
     return
@@ -186,6 +187,9 @@ function drawGridChromeHorizontalLines(
   context.lineWidth = alignedRowDividerWidth
   context.beginPath()
   for (const line of pane.horizontalLines) {
+    if (excludePaneBottomEdge && line.position >= pane.height - 0.5) {
+      continue
+    }
     const y = resolveDeviceAlignedCanvasStrokeCenter(line.position, alignedRowDividerWidth, devicePixelRatio)
     if (y < -alignedRowDividerWidth || y > pane.height + alignedRowDividerWidth) {
       continue
@@ -270,7 +274,12 @@ function drawGridChromeVerticalLines(
     if (line.position <= 0.5 || (rightEdgeOnly && !isRightEdge) || (isRightEdge && !includeRightEdge)) {
       continue
     }
-    const x = resolveDeviceAlignedCanvasStrokeCenter(line.position, alignedColumnDividerWidth, devicePixelRatio)
+    const x = resolveDeviceAlignedCanvasStrokeCenter(
+      line.position,
+      alignedColumnDividerWidth,
+      devicePixelRatio,
+      isRightEdge ? "before" : "after",
+    )
     if (x < -alignedColumnDividerWidth || x > pane.width + alignedColumnDividerWidth) {
       continue
     }
@@ -287,12 +296,13 @@ function drawGridChromeBodyPane(
   pane: DataGridChromePaneModel,
   hideVerticalLines = false,
   stickyPlacement: StickyGroupPlacement | null = null,
+  excludePaneBottomEdge = false,
 ): void {
   if (!context) {
     return
   }
   drawGridChromeBands(style, context, pane)
-  drawGridChromeHorizontalLines(context, pane, style.rowDividerColor, style.rowDividerWidth)
+  drawGridChromeHorizontalLines(context, pane, style.rowDividerColor, style.rowDividerWidth, excludePaneBottomEdge)
   if (!hideVerticalLines) {
     drawGridChromeVerticalLines(context, pane, style.columnDividerColor, style.columnDividerWidth)
   }
@@ -343,7 +353,7 @@ function drawStickyGroupGridlines(
     context.beginPath()
     for (const line of pane.verticalLines) {
       if (line.position <= 0.5 || line.position >= pane.width - 0.5) continue
-      const x = resolveDeviceAlignedCanvasStrokeCenter(line.position, lineWidth, dpr)
+      const x = resolveDeviceAlignedCanvasStrokeCenter(line.position, lineWidth, dpr, "after")
       context.moveTo(x, top)
       context.lineTo(x, bottom)
     }
@@ -358,16 +368,15 @@ function drawGridChromeHeaderPane(
   columnDividerColor: string,
   columnDividerWidth: number,
   hasPivotHeaderGroups: ComputedRef<boolean>,
-  includeRightEdge: boolean,
 ): void {
   if (!context) {
     return
   }
   if (hasPivotHeaderGroups.value) {
-    drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth, includeRightEdge, true)
+    drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth, false, true)
     return
   }
-  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth, includeRightEdge)
+  drawGridChromeVerticalLines(context, pane, columnDividerColor, columnDividerWidth)
 }
 
 
@@ -585,67 +594,61 @@ export function useDataGridStageChromeCanvas(
     const shouldDrawBodyCenter = mode === "full" || mode === "center-scroll" || mode === "body-scroll"
     const shouldDrawBodyPinned = mode === "full" || mode === "body-scroll"
     const shouldDrawBottomCenter = mode === "full" || mode === "center-scroll"
-    const headerRightmostPane = headerRenderModel.right.width > 0
-      ? "right"
-      : headerRenderModel.center.width > 0
-        ? "center"
-        : "left"
-
     const leftHeaderContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftHeaderChromeCanvasEl.value, headerRenderModel.left.width, headerRenderModel.left.height)
       : null
     if (leftHeaderContext) {
-      drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups, headerRightmostPane === "left")
+      drawGridChromeHeaderPane(leftHeaderContext, headerRenderModel.left, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
     }
 
     const centerHeaderContext = shouldDrawHeaderCenter
       ? prepareGridChromeCanvas(options.centerHeaderChromeCanvasEl.value, headerRenderModel.center.width, headerRenderModel.center.height)
       : null
-    drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups, headerRightmostPane === "center")
+    drawGridChromeHeaderPane(centerHeaderContext, headerRenderModel.center, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
 
     const rightHeaderContext = mode === "full"
       ? prepareGridChromeCanvas(options.rightHeaderChromeCanvasEl.value, headerRenderModel.right.width, headerRenderModel.right.height)
       : null
     if (rightHeaderContext) {
-      drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups, headerRightmostPane === "right")
+      drawGridChromeHeaderPane(rightHeaderContext, headerRenderModel.right, style.headerColumnDividerColor, style.headerColumnDividerWidth, options.hasPivotHeaderGroups)
     }
 
     const leftContext = shouldDrawBodyPinned
       ? prepareGridChromeCanvas(options.leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
       : null
     if (leftContext) {
-      drawGridChromeBodyPane(style, leftContext, renderModel.left, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
+      drawGridChromeBodyPane(style, leftContext, renderModel.left, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null, true)
     }
 
     const centerContext = shouldDrawBodyCenter
       ? prepareGridChromeCanvas(options.centerChromeCanvasEl.value, renderModel.center.width, renderModel.center.height)
       : null
-    drawGridChromeBodyPane(style, centerContext, renderModel.center, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
+    drawGridChromeBodyPane(style, centerContext, renderModel.center, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null, true)
 
     const rightContext = shouldDrawBodyPinned
       ? prepareGridChromeCanvas(options.rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
       : null
     if (rightContext) {
-      drawGridChromeBodyPane(style, rightContext, renderModel.right, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null)
+      drawGridChromeBodyPane(style, rightContext, renderModel.right, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null, true)
     }
 
     const leftBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftBottomChromeCanvasEl.value, bottomRenderModel.left.width, bottomRenderModel.left.height)
       : null
     if (leftBottomContext) {
-      drawGridChromeBodyPane(style, leftBottomContext, bottomRenderModel.left, options.hideBodyVerticalLines?.value)
+      drawGridChromeBodyPane(style, leftBottomContext, bottomRenderModel.left, options.hideBodyVerticalLines?.value, null, true)
     }
 
     const centerBottomContext = shouldDrawBottomCenter
       ? prepareGridChromeCanvas(options.centerBottomChromeCanvasEl.value, bottomRenderModel.center.width, bottomRenderModel.center.height)
       : null
-    drawGridChromeBodyPane(style, centerBottomContext, bottomRenderModel.center, options.hideBodyVerticalLines?.value)
+    drawGridChromeBodyPane(style, centerBottomContext, bottomRenderModel.center, options.hideBodyVerticalLines?.value, null, true)
 
     const rightBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.rightBottomChromeCanvasEl.value, bottomRenderModel.right.width, bottomRenderModel.right.height)
       : null
     if (rightBottomContext) {
-      drawGridChromeBodyPane(style, rightBottomContext, bottomRenderModel.right, options.hideBodyVerticalLines?.value)
+      drawGridChromeBodyPane(style, rightBottomContext, bottomRenderModel.right, options.hideBodyVerticalLines?.value, null, true)
     }
 
     if (options.perfTraceEnabled) {

@@ -386,6 +386,67 @@ describe("useDataGridStageViewportRuntime", () => {
     harness.unmount()
   })
 
+  it("routes both diagonal wheel deltas through their respective scroll owners", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: 120, deltaY: 240 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(144)
+    expect(sharedVerticalViewport.scrollTop).toBe(320)
+    expect(harness.viewport.handleViewportScroll).toHaveBeenCalled()
+
+    harness.unmount()
+  })
+
+  it("preserves both axes for an X-dominant diagonal wheel", () => {
+    const harness = createHarness({})
+    const bodyViewport = createViewportElement({ scrollLeft: 24 })
+    const sharedVerticalViewport = createViewportElement({ scrollTop: 80 })
+    defineScrollMetrics(bodyViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 1200,
+      scrollHeight: 240,
+    })
+    defineScrollMetrics(sharedVerticalViewport, {
+      clientWidth: 320,
+      clientHeight: 240,
+      scrollWidth: 320,
+      scrollHeight: 1200,
+    })
+
+    harness.runtime.captureBodyViewportRef(bodyViewport)
+    harness.runtime.captureSharedVerticalViewportRef(sharedVerticalViewport)
+    const wheelEvent = createWheelEvent({ deltaX: 240, deltaY: 120 })
+
+    harness.runtime.handleBodyViewportWheel(wheelEvent)
+
+    expect(wheelEvent.defaultPrevented).toBe(true)
+    expect(bodyViewport.scrollLeft).toBe(264)
+    expect(sharedVerticalViewport.scrollTop).toBe(200)
+
+    harness.unmount()
+  })
+
   it("retains horizontal body wheel ownership at the left boundary", () => {
     const harness = createHarness({})
     const bodyViewport = createViewportElement({ scrollLeft: 0 })

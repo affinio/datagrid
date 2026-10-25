@@ -11,7 +11,10 @@ const DataGridWithGanttImpl = defineComponent({
   setup(props, { attrs, slots, expose }) {
     provide(dataGridGanttStageKey, DataGridGanttStage)
     const gridRef = ref<any>(null)
-    expose(new Proxy({}, { get: (_, key: string | symbol) => gridRef.value?.[key] }))
+    expose(new Proxy({}, {
+      get: (_, key: string | symbol) => gridRef.value?.[key],
+      has: (_, key: string | symbol) => gridRef.value != null && Reflect.ownKeys(gridRef.value).includes(key),
+    }))
     return () => h(DataGrid as any, { ...props, ...attrs, ref: gridRef } as any, slots as any)
   },
 })

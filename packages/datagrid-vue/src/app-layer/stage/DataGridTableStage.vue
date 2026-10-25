@@ -1811,14 +1811,12 @@ function handlePinnedTopViewportScroll(event: Event): void {
   handlePinnedTopViewportScrollRaw(event)
 }
 
-function isHorizontalWheelGesture(event: WheelEvent): boolean {
-  const absX = Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0)
-  const absY = Math.abs(Number.isFinite(event.deltaY) ? event.deltaY : 0)
-  return absX > 0 && absX > absY
+function hasHorizontalWheelComponent(event: WheelEvent): boolean {
+  return Math.abs(Number.isFinite(event.deltaX) ? event.deltaX : 0) > 0.5
 }
 
 function handleLinkedViewportWheel(event: WheelEvent): void {
-  if (isHorizontalWheelGesture(event)) {
+  if (hasHorizontalWheelComponent(event)) {
     closeColumnMenuForViewportScroll(event, { horizontal: true })
   }
   handleLinkedViewportWheelRaw(event)

@@ -264,9 +264,15 @@ test("auto-height and Gantt sizing stay bounded by their selected layout", async
 })
 
 test("pinned bottom rows stay inside the table stage", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto("/vue/shell/timesheet-grid")
   const grid = page.locator(".affino-datagrid-app-root").first()
   await expect(grid.locator(".grid-body-shell--pinned-bottom")).toHaveCount(1)
+  await grid.locator(".grid-body-shared-vertical-scroll-shell").evaluate(element => {
+    const viewport = element as HTMLElement
+    viewport.scrollTop = viewport.scrollHeight
+  })
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
   const shellSizes = await grid.evaluate(root => {
     const stage = root.querySelector<HTMLElement>(".grid-stage")!
     const body = root.querySelector<HTMLElement>(".grid-body-shared-vertical-scroll-shell, .grid-body-viewport")!
@@ -274,6 +280,75 @@ test("pinned bottom rows stay inside the table stage", async ({ page }) => {
     return { stage: stage.getBoundingClientRect().height, body: body.getBoundingClientRect().height, bottom: bottom.getBoundingClientRect().height }
   })
   expect(shellSizes.body + shellSizes.bottom).toBeLessThanOrEqual(shellSizes.stage)
+  const chromeGeometry = await grid.evaluate(root => {
+    const readCell = (selector: string, key: string) => {
+      const cell = root.querySelector<HTMLElement>(`${selector} .grid-cell[data-column-key="${key}"]`)
+      const rect = cell?.getBoundingClientRect()
+      return rect ? { left: rect.left, right: rect.right, width: rect.width } : null
+    }
+    const bodySelector = ".grid-body-shell:not(.grid-body-shell--pinned-bottom) .grid-body-viewport--shared-vertical"
+    const bottomSelector = ".grid-body-shell--pinned-bottom .grid-body-viewport--pinned-bottom"
+    const canvas = root.querySelector<HTMLCanvasElement>(".grid-chrome-canvas--center-shell")
+    const sundayHeader = root.querySelector<HTMLElement>('.grid-header-viewport .grid-cell--header[data-column-key="sunday"]')
+    const totalHeader = root.querySelector<HTMLElement>('.grid-header-pane--right .grid-cell--header[data-column-key="total"]')
+    const totalBottom = root.querySelector<HTMLElement>('.grid-body-shell--pinned-bottom .grid-body-pane--right .grid-cell[data-column-key="total"]')
+    const stage = root.querySelector<HTMLElement>(".grid-stage")!
+    const bottomShell = root.querySelector<HTMLElement>(".grid-body-shell--pinned-bottom")!
+    const bodyShell = root.querySelector<HTMLElement>(".grid-body-shell:not(.grid-body-shell--pinned-top):not(.grid-body-shell--pinned-bottom)")!
+    const canvasRect = canvas?.getBoundingClientRect()
+    const context = canvas?.getContext("2d")
+    const pixelLines: number[] = []
+    if (canvas && canvasRect && context) {
+      const y = Math.max(0, Math.min(canvas.height - 1, Math.round(canvas.height / 2)))
+      const pixels = context.getImageData(0, y, canvas.width, 1).data
+      for (let x = 1; x < canvas.width - 1; x += 1) {
+        const offset = x * 4
+        const previous = (x - 1) * 4
+        const next = (x + 1) * 4
+        const contrast = Math.abs(pixels[offset]! - pixels[previous]!)
+          + Math.abs(pixels[offset + 1]! - pixels[previous + 1]!)
+          + Math.abs(pixels[offset + 2]! - pixels[previous + 2]!)
+          + Math.abs(pixels[offset]! - pixels[next]!)
+          + Math.abs(pixels[offset + 1]! - pixels[next + 1]!)
+          + Math.abs(pixels[offset + 2]! - pixels[next + 2]!)
+        if (contrast > 100) pixelLines.push((x / (window.devicePixelRatio || 1)) + canvasRect.left)
+      }
+    }
+    const rect = (element: HTMLElement | null) => {
+      const rect = element?.getBoundingClientRect()
+      return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height } : null
+    }
+    return {
+      bodyMon: readCell(bodySelector, "monday"),
+      bottomMon: readCell(bottomSelector, "monday"),
+      bodySun: readCell(bodySelector, "sunday"),
+      bottomSun: readCell(bottomSelector, "sunday"),
+      sundayHeaderHasTerminalDivider: sundayHeader?.classList.contains("grid-cell--header-terminal") ?? false,
+      stage: rect(stage),
+      bottomShell: rect(bottomShell),
+      bodyShell: rect(bodyShell),
+      bodyHorizontalLines: Array.from(root.querySelectorAll<HTMLElement>(".grid-chrome-layer--body-center .grid-chrome-layer__line--horizontal"))
+        .map(line => rect(line)!.bottom),
+      totalHeader: rect(totalHeader),
+      totalBottom: rect(totalBottom),
+      pixelLines,
+    }
+  })
+  expect(chromeGeometry.bodyMon).not.toBeNull()
+  expect(chromeGeometry.bottomMon).not.toBeNull()
+  expect(chromeGeometry.bodySun).not.toBeNull()
+  expect(chromeGeometry.bottomSun).not.toBeNull()
+  expect(chromeGeometry.bottomMon!.left).toBeCloseTo(chromeGeometry.bodyMon!.left, 1)
+  expect(chromeGeometry.bottomMon!.right).toBeCloseTo(chromeGeometry.bodyMon!.right, 1)
+  expect(chromeGeometry.bottomSun!.left).toBeCloseTo(chromeGeometry.bodySun!.left, 1)
+  expect(chromeGeometry.bottomSun!.right).toBeCloseTo(chromeGeometry.bodySun!.right, 1)
+  expect(chromeGeometry.sundayHeaderHasTerminalDivider).toBe(true)
+  expect(chromeGeometry.bottomShell!.top).toBeCloseTo(chromeGeometry.bodyShell!.bottom, 1)
+  expect(chromeGeometry.bottomShell!.bottom).toBeCloseTo(chromeGeometry.stage!.bottom - 1, 1)
+  expect(chromeGeometry.bodyHorizontalLines.every(lineBottom => Math.abs(lineBottom - chromeGeometry.bodyShell!.bottom) > 0.5)).toBe(true)
+  for (const boundary of [chromeGeometry.bottomMon!.right, chromeGeometry.bottomSun!.right]) {
+    expect(chromeGeometry.pixelLines.some(line => Math.abs(line - boundary) < 0.2)).toBe(true)
+  }
 })
 
 test("column flex resize does not move the pinned pane boundary or overflow the sandbox route", async ({ page }) => {
@@ -316,8 +391,8 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
   await expect(page.locator(".grid-body-pane--left")).toHaveCount(2)
   await expect(page.locator(".grid-body-pane--right")).toHaveCount(2)
 
-  const readCanvasSignatures = async (): Promise<number[][]> => page.evaluate(() => {
-    const hashCanvas = (canvas: HTMLCanvasElement): number => {
+  const readCanvasSignatures = async (): Promise<Array<Array<number | null>>> => page.evaluate(() => {
+    const hashCanvas = (canvas: HTMLCanvasElement): number | null => {
       if (canvas.width === 0 || canvas.height === 0) return 0
       const sample = document.createElement("canvas")
       sample.width = 128
@@ -327,14 +402,16 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
       context.drawImage(canvas, 0, 0, sample.width, sample.height)
       const { data } = context.getImageData(0, 0, sample.width, sample.height)
       let hash = 2166136261
+      let hasPaintedPixel = false
       for (let index = 0; index < data.length; index += 4) {
         if (data[index + 3] === 0) continue
+        hasPaintedPixel = true
         hash = Math.imul(hash ^ data[index]!, 16777619)
         hash = Math.imul(hash ^ data[index + 1]!, 16777619)
         hash = Math.imul(hash ^ data[index + 2]!, 16777619)
         hash = Math.imul(hash ^ data[index + 3]!, 16777619)
       }
-      return hash >>> 0
+      return hasPaintedPixel ? hash >>> 0 : null
     }
     return Array.from(document.querySelectorAll<HTMLElement>("[data-testid^='theme-grid-'] .grid-stage"), stage =>
       Array.from(stage.querySelectorAll<HTMLCanvasElement>("canvas.grid-chrome-canvas"), hashCanvas),
@@ -343,8 +420,8 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
   const waitForPaint = async (): Promise<void> => {
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
   }
-  const changedCanvasCount = (before: number[][], after: number[][]): number[] => before.map((grid, gridIndex) =>
-    grid.reduce((count, hash, canvasIndex) => count + (hash !== after[gridIndex]?.[canvasIndex] ? 1 : 0), 0),
+  const changedCanvasCount = (before: Array<Array<number | null>>, after: Array<Array<number | null>>): number[] => before.map((grid, gridIndex) =>
+    grid.reduce((count, hash, canvasIndex) => count + (hash !== null && hash !== after[gridIndex]?.[canvasIndex] ? 1 : 0), 0),
   )
 
   await page.evaluate(() => { document.documentElement.dataset.theme = "light" })
@@ -376,7 +453,7 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
     document.documentElement.dataset.theme = "dark"
     return { top: vertical.scrollTop, left: horizontal.scrollLeft }
   })
-  await expect.poll(async () => changedCanvasCount(light, await readCanvasSignatures())).toEqual([4, 4])
+  await expect.poll(async () => changedCanvasCount(light, await readCanvasSignatures())).toEqual([3, 3])
   const themeDraws = await page.evaluate(() => {
     const store = (window as typeof window & {
       __AFFINO_DATAGRID_PERF__?: { samples: Array<Record<string, string | number>> }
@@ -410,11 +487,11 @@ test("document and reactive theme changes repaint canvas chrome for every mounte
     delete document.documentElement.dataset.theme
     document.documentElement.classList.add("dark")
   })
-  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([4, 4])
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
 
   await page.evaluate(() => document.documentElement.classList.remove("dark"))
   await page.getByTestId("theme-prop-industrial").click()
-  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([4, 4])
+  await expect.poll(async () => changedCanvasCount(lightScrolled, await readCanvasSignatures())).toEqual([3, 3])
 
   await page.getByTestId("theme-prop-default").click()
   await waitForPaint()

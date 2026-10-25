@@ -413,7 +413,7 @@ export function useDataGridStageChromeModel(
   const bodyCenterChromeLayerModel = computed(() => {
     const rowOrigin = resolveChromeContentRowOrigin(options.viewport.value)
     const contentRowMetrics = resolveChromeContentRowMetrics(rowMetrics.value, rowOrigin)
-    return buildDataGridChromePaneModel({
+    const model = buildDataGridChromePaneModel({
       rowMetrics: contentRowMetrics,
       rowBands: resolveChromeContentRowBands(rowBands.value, rowOrigin),
       scrollTop: 0,
@@ -422,6 +422,18 @@ export function useDataGridStageChromeModel(
       columnWidths: centerChromeColumnWidths.value,
       scrollLeft: 0,
     })
+    // The shared body viewport's lower boundary is drawn by its shell (or by
+    // the pinned-bottom separator). Avoid drawing the final row divider there
+    // as well: adjacent 1px rules render as a visibly thicker seam.
+    const viewportBottomInContent = options.bodyViewportClientHeight.value
+      - rowOrigin
+      + options.bodyViewportScrollTop.value
+    return {
+      ...model,
+      horizontalLines: model.horizontalLines.filter(line => (
+        Math.abs(line.position - viewportBottomInContent) > 0.5
+      )),
+    }
   })
 
   watch(

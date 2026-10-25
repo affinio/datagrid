@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.16.2
+
+### Fixed
+
+- Corrected selection, viewport, pinned-pane, and canvas-chrome synchronization across scrolling, theme, and row-layout changes.
+- Fixed grouped hierarchy and Gantt wrapper behavior, and aligned formula, export, and clipboard workflows with current grid state.
+
+### Validation
+
+- Vue type-check, production build, packed-consumer checks, and focused sandbox browser regressions passed.
+
 ## 0.16.1
 
 ### Fixed

@@ -41,7 +41,7 @@
         <div
           v-if="showIndexColumn"
           class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
-          :class="{ 'grid-cell--header-merged-untitled': headerGroupDepth > 0, 'grid-cell--header-selected': isIndexHeaderSelected, 'grid-cell--focus-axis': focusedBodyColumnKey === null && focusedBodyRowIndex !== null }"
+          :class="{ 'grid-cell--header-merged-untitled': headerGroupDepth > 0, 'grid-cell--header-selected': isIndexHeaderSelected, 'grid-cell--focus-axis': focusedBodyColumnKey === null && focusedBodyRowIndex !== null && !hasMultiCellSelection }"
           :style="indexColumnHeaderStyle"
           :id="DATA_GRID_STAGE_ROW_INDEX_HEADER_ID"
           role="columnheader"
@@ -51,6 +51,7 @@
           aria-label="Row index"
           :aria-selected="isIndexHeaderSelected"
           @focus="selectAllIndexedRows"
+          @blur="handleIndexHeaderBlur"
           @click="focusRowIndexHeaderFromClick"
         >
           <div class="col-head col-head--index">
@@ -734,22 +735,34 @@ const indexedDataColumnIndexes = computed(() => visibleColumns.value
   .map((column, index) => isRowSelectionColumn(column) ? -1 : index)
   .filter(index => index >= 0))
 const centerHeaderScrollLeft = ref(0)
+const hasMultiCellSelection = computed(() => {
+  const ranges = selection.value.selectionRanges
+    ?? (selection.value.selectionRange ? [selection.value.selectionRange] : [])
+  return ranges.some(range => range.startRow !== range.endRow || range.startColumn !== range.endColumn)
+})
+const isIndexHeaderSelectionActive = ref(false)
 const isIndexHeaderSelected = computed(() => {
   const range = selection.value.selectionRange
   const firstColumn = indexedDataColumnIndexes.value[0]
   const lastColumn = indexedDataColumnIndexes.value[indexedDataColumnIndexes.value.length - 1]
   const lastRow = (selection.value.totalRowCount ?? 0) - 1
-  return range != null && firstColumn != null && lastColumn != null && lastRow >= 0
+  return isIndexHeaderSelectionActive.value
+    && range != null && firstColumn != null && lastColumn != null && lastRow >= 0
     && range.startRow === 0 && range.endRow >= lastRow
     && range.startColumn === firstColumn && range.endColumn >= lastColumn
 })
 
 function selectAllIndexedRows(): void {
+  isIndexHeaderSelectionActive.value = true
   const firstColumn = indexedDataColumnIndexes.value[0]
   const lastColumn = indexedDataColumnIndexes.value[indexedDataColumnIndexes.value.length - 1]
   if (firstColumn != null && lastColumn != null) {
     selection.value.selectColumnRange?.(firstColumn, lastColumn)
   }
+}
+
+function handleIndexHeaderBlur(): void {
+  isIndexHeaderSelectionActive.value = false
 }
 
 function focusRowIndexHeaderFromClick(event: MouseEvent): void {
@@ -760,6 +773,11 @@ const renderedColumns = computed(() => columns.value.renderedColumns)
 const centerHeaderColumns = computed(() => renderedColumns.value)
 const allCenterHeaderColumns = computed(() => visibleColumns.value.filter(column => column.pin !== "left" && column.pin !== "right"))
 const allCenterHeaderWidth = computed(() => allCenterHeaderColumns.value.reduce((sum, column) => sum + resolveColumnWidth(column), 0))
+const hasCenterTrailingWhitespace = computed(() => {
+  if (rightColumnSpacerWidth.value > 0) return false
+  const centerContentRight = allCenterHeaderWidth.value - centerHeaderScrollLeft.value
+  return paneWidths.value.center > centerContentRight + 0.5
+})
 const pinnedLeftColumns = computed(() => visibleColumns.value.filter(column => column.pin === "left"))
 const pinnedRightColumns = computed(() => visibleColumns.value.filter(column => column.pin === "right"))
 const interactionModeInput = computed(() => ({
@@ -975,9 +993,9 @@ function resolveHeaderCellClasses(
 ): Record<string, boolean> {
   const isTerminalCenterColumn = column.pin !== "left"
     && column.pin !== "right"
-    && pinnedRightColumns.value.length === 0
     && allCenterHeaderColumns.value[allCenterHeaderColumns.value.length - 1]?.key === column.key
-  const selectionEdges = resolveFullColumnSelectionRangeEdges(column)
+    && (pinnedRightColumns.value.length === 0 || hasCenterTrailingWhitespace.value)
+  const selectionEdges = resolveColumnSelectionRangeEdges(column)
   return {
     "grid-cell--header-selected": selectionEdges.selected,
     "grid-cell--focus-axis": props.focusedBodyColumnKey === column.key,
@@ -995,8 +1013,10 @@ function resolveHeaderCellClasses(
   }
 }
 
-function resolveFullColumnSelectionRangeEdges(column: TableColumn): { selected: boolean; start: boolean; end: boolean } {
-  const columnIndex = visibleColumns.value.findIndex(entry => entry.key === column.key)
+function resolveColumnSelectionRangeEdges(column: TableColumn): { selected: boolean; start: boolean; end: boolean } {
+  const columnIndex = isRowSelectionColumn(column)
+    ? -1
+    : visibleColumns.value.findIndex(entry => entry.key === column.key)
   const totalRowCount = selection.value.totalRowCount ?? 0
   if (columnIndex < 0 || totalRowCount <= 0) {
     return { selected: false, start: false, end: false }
@@ -1011,7 +1031,8 @@ function resolveFullColumnSelectionRangeEdges(column: TableColumn): { selected: 
     const endRow = Math.max(range.startRow, range.endRow)
     const startColumn = Math.min(range.startColumn, range.endColumn)
     const endColumn = Math.max(range.startColumn, range.endColumn)
-    if (startRow !== 0 || endRow < totalRowCount - 1 || columnIndex < startColumn || columnIndex > endColumn) continue
+    const intersectsRows = endRow >= 0 && startRow < totalRowCount
+    if (!intersectsRows || columnIndex < startColumn || columnIndex > endColumn) continue
     selected = true
     start ||= columnIndex === startColumn
     end ||= columnIndex === endColumn
@@ -1405,36 +1426,6 @@ function resolveHeaderCellElement(columnKey: string): HTMLElement | null {
     .find(element => element.dataset.columnKey === columnKey) ?? null
 }
 
-function captureHeaderCellPositions(): Map<string, { element: HTMLElement; left: number; top: number }> {
-  const stageRoot = headerShellElement.value?.closest(".grid-stage")
-  const positions = new Map<string, { element: HTMLElement; left: number; top: number }>()
-  for (const element of Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])) {
-    const key = element.dataset.columnKey
-    if (!key || positions.has(key)) continue
-    const bounds = element.getBoundingClientRect()
-    positions.set(key, { element, left: bounds.left, top: bounds.top })
-  }
-  return positions
-}
-
-function animateHeaderReorder(previous: Map<string, { element: HTMLElement; left: number; top: number }>): void {
-  if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
-  const stageRoot = headerShellElement.value?.closest(".grid-stage")
-  for (const element of Array.from(stageRoot?.querySelectorAll<HTMLElement>(".grid-header-shell .grid-cell--header[data-column-key]") ?? [])) {
-    const key = element.dataset.columnKey
-    const before = key ? previous.get(key) : undefined
-    if (!before || typeof element.animate !== "function") continue
-    const bounds = element.getBoundingClientRect()
-    const deltaX = before.left - bounds.left
-    const deltaY = before.top - bounds.top
-    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue
-    element.animate(
-      [{ transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` }, { transform: "translate3d(0, 0, 0)" }],
-      { duration: 140, easing: "ease-out" },
-    )
-  }
-}
-
 function revealHeaderColumnInBodyViewport(headerCell: HTMLElement): void {
   if (!headerCell.closest(".grid-header-viewport")) return
   const stageRoot = headerShellElement.value?.closest(".grid-stage")
@@ -1594,7 +1585,6 @@ function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
     const nextColumn = visibleColumns.value[columnIndex + keyboardDirection]
     if (column && nextColumn && column.pin === nextColumn.pin
       && isHeaderColumnDraggable(column) && isHeaderColumnDraggable(nextColumn)) {
-      const previousHeaderPositions = captureHeaderCellPositions()
       const moved = columns.value.reorderColumnsByHeader?.({
         sourceColumnKey: column.key,
         targetColumnKey: nextColumn.key,
@@ -1607,7 +1597,6 @@ function handleHeaderKeyboardNavigation(event: KeyboardEvent): void {
         // acting on the same logical column.
         void nextTick(() => {
           focusHeaderColumn(column.key, false)
-          animateHeaderReorder(previousHeaderPositions)
         })
       }
     }

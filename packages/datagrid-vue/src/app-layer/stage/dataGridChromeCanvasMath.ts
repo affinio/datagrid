@@ -84,9 +84,10 @@ export function resolveDeviceAlignedCanvasStrokeCenter(
   boundaryPosition: number,
   cssLineWidth: number,
   devicePixelRatio: number,
+  side: "before" | "after" = "before",
 ): number {
   const normalizedDevicePixelRatio = normalizeDevicePixelRatio(devicePixelRatio)
   const alignedLineWidth = resolveDeviceAlignedCanvasLineWidth(cssLineWidth, normalizedDevicePixelRatio)
   const snappedBoundary = Math.round(boundaryPosition * normalizedDevicePixelRatio) / normalizedDevicePixelRatio
-  return snappedBoundary - (alignedLineWidth / 2)
+  return snappedBoundary + (side === "after" ? 1 : -1) * (alignedLineWidth / 2)
 }

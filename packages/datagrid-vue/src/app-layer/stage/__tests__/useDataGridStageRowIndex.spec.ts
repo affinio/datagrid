@@ -282,6 +282,31 @@ describe("useDataGridStageRowIndex", () => {
     })
   })
 
+  it("marks every row index intersected by a partial cell range", () => {
+    const service = useDataGridStageRowIndex({
+      rows: ref({ showRowIndex: true, displayRows: [] } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>),
+      layout: ref({ indexColumnStyle: {} } as unknown as DataGridTableStageLayoutSection),
+      viewportRowStart: ref(0),
+      selectionRange: ref({ startRow: 1, endRow: 2, startColumn: 1, endColumn: 1 }),
+      visibleColumns: ref([createColumn("a"), createColumn("b"), createColumn("c")]),
+      isHoveredRow: () => false,
+      isStripedRow: () => false,
+      resolveAbsoluteRowIndex: (_row, rowOffset) => rowOffset,
+      resolveInlineRowStateFill: () => null,
+      isDataGridPlaceholderSurfaceRow: () => false,
+    })
+
+    expect(service.rowIndexCellClasses(createRow("r1"), 0)).not.toHaveProperty("grid-cell--index-selected")
+    expect(service.rowIndexCellClasses(createRow("r2"), 1)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-top": true,
+    })
+    expect(service.rowIndexCellClasses(createRow("r3"), 2)).toMatchObject({
+      "grid-cell--index-selected": true,
+      "grid-cell--index-selected-bottom": true,
+    })
+  })
+
   it("ignores touch-generated row index drag starts", () => {
     const rows = ref({
       showRowIndex: true,

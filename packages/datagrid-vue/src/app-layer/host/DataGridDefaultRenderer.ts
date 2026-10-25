@@ -2954,11 +2954,11 @@ export default defineComponent({
       scheduleViewportAnchorFocus()
     }
 
-    const resolveRuntimeRowById = (rowId: string): import("@affino/datagrid-vue/headless").DataGridRowNode<Record<string, unknown>> | null => {
+    const resolveRuntimeRowById = (rowId: string | number): import("@affino/datagrid-vue/headless").DataGridRowNode<Record<string, unknown>> | null => {
       const rowCount = props.runtime.api.rows.getCount()
       for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
         const row = props.runtime.api.rows.get(rowIndex)
-        if (row && String(row.rowId) === rowId) {
+        if (row && row.rowId === rowId) {
           return row
         }
       }
@@ -3224,6 +3224,12 @@ export default defineComponent({
         return String(candidateRecord.id)
       }
       return null
+    }
+
+    const resolveTypedDataRowId = (candidate: Record<string, unknown>): DataGridRowId | null => {
+      const candidateRecord = candidate as { rowId?: unknown; id?: unknown }
+      const rowId = candidateRecord.rowId ?? candidateRecord.id
+      return typeof rowId === "string" || typeof rowId === "number" ? rowId : null
     }
 
     const resolveSourceRowTemplateByRowId = (rowId: string): Record<string, unknown> | null => {
@@ -3513,6 +3519,56 @@ export default defineComponent({
       }
 
       return targetRowId.length > 0 && isDeletableRuntimeRowId(targetRowId) ? [targetRowId] : []
+    }
+
+    const resolveTypedDeleteRowIds = (targetRowId: DataGridRowId): readonly DataGridRowId[] => {
+      const isDeletable = (rowId: DataGridRowId): boolean => {
+        const rowIndex = props.runtime.resolveBodyRowIndexById(rowId)
+        const row = rowIndex >= 0 ? props.runtime.getBodyRowAtIndex(rowIndex) : null
+        return row != null && row.kind !== "group" && !isDataGridPlaceholderSurfaceRow(row)
+      }
+      const range = resolveCurrentSelectionRange()
+      const lastColumnIndex = resolveFullRowSelectionEndColumnIndex()
+      if (range && lastColumnIndex >= 0) {
+        const startColumn = Math.min(range.startColumn, range.endColumn)
+        const endColumn = Math.max(range.startColumn, range.endColumn)
+        const lastDataColumnIndex = Math.max(0, visibleColumns.value.length - 1)
+        const startRow = Math.min(range.startRow, range.endRow)
+        const endRow = Math.max(range.startRow, range.endRow)
+        const targetIndex = props.runtime.resolveBodyRowIndexById(targetRowId)
+        const targetVisualIndex = targetIndex >= 0
+          ? targetIndex
+          : resolvePlaceholderVisualRowIndex(String(targetRowId)) ?? -1
+        if (startColumn === 0
+          && (endColumn === lastColumnIndex || endColumn === lastDataColumnIndex)
+          && targetVisualIndex >= startRow && targetVisualIndex <= endRow) {
+          const rangedIds: DataGridRowId[] = []
+          for (let index = startRow; index <= endRow; index += 1) {
+            const row = props.runtime.getBodyRowAtIndex(index)
+            if (row && row.kind !== "group" && !isDataGridPlaceholderSurfaceRow(row) && isDeletable(row.rowId)) {
+              rangedIds.push(row.rowId)
+            }
+          }
+          if (rangedIds.length > 0) return rangedIds
+        }
+      }
+      const selected = (props.rowSelectionSnapshot.value?.selectedRows ?? []).filter(isDeletable)
+      if (selected.length > 0) return selected
+      return isDeletable(targetRowId) ? [targetRowId] : []
+    }
+
+    const currentSelectionIncludesPlaceholderRow = (): boolean => {
+      const range = resolveCurrentSelectionRange()
+      if (range) {
+        for (let rowIndex = Math.min(range.startRow, range.endRow); rowIndex <= Math.max(range.startRow, range.endRow); rowIndex += 1) {
+          const row = props.runtime.getBodyRowAtIndex(rowIndex)
+          if (row && isDataGridPlaceholderSurfaceRow(row)) return true
+        }
+      }
+      const snapshot = props.selectionSnapshot.value
+      const activeRange = snapshot?.ranges[snapshot.activeRangeIndex]
+      return [activeRange?.startRowId, activeRange?.endRowId, activeRange?.anchor.rowId, activeRange?.focus.rowId]
+        .some(id => typeof id === "string" && id.startsWith(PLACEHOLDER_ROW_ID_PREFIX))
     }
 
     const readCurrentRuntimeDataRows = (): Record<string, unknown>[] => {
@@ -4342,7 +4398,7 @@ export default defineComponent({
         return false
       }
       const normalizedRowId = String(rowId)
-      const selector = `.datagrid-stage__row-index-cell[data-row-id="${escapeCssAttributeValue(normalizedRowId)}"]`
+      const selector = `.datagrid-stage__row-index-cell[data-row-id-type="${typeof rowId}"][data-row-id="${escapeCssAttributeValue(normalizedRowId)}"]`
       const rowIndexCell = stageHostRef.value.querySelector<HTMLElement>(selector)
       if (!rowIndexCell) {
         return false
@@ -4353,7 +4409,7 @@ export default defineComponent({
         rect.bottom - 4,
         {
           zone: "row-index",
-          rowId: normalizedRowId,
+          rowId,
         } as unknown as Parameters<typeof openContextMenu>[2],
       )
       return true
@@ -4375,8 +4431,8 @@ export default defineComponent({
     ): Promise<boolean> {
       const normalizedRowId = String(rowId)
       const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(normalizedRowId)
-      const targetRow = placeholderVisualRowIndex == null ? resolveRuntimeRowById(normalizedRowId) : null
-      const selectedRowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+      const targetRow = placeholderVisualRowIndex == null ? resolveRuntimeRowById(rowId) : null
+      const selectedRowIds = resolveTypedDeleteRowIds(rowId)
       const delegated = await props.runStructuralRowAction?.({
         action,
         rowId,
@@ -4395,9 +4451,13 @@ export default defineComponent({
             return false
           }
           const beforeSnapshot = captureHistorySnapshot()
-          const removed = removeRuntimeRows(selectedRowIds)
+          const includesPlaceholder = currentSelectionIncludesPlaceholderRow()
+          const placeholderSelectedRowIds = resolveExistingRuntimeDataRowIds(resolveSelectedRuntimeRowIds(normalizedRowId))
+          const removed = removeRuntimeRows(placeholderSelectedRowIds)
           if (removed) {
-            recordRowMutation(beforeSnapshot, selectedRowIds.length > 1 ? `Delete ${selectedRowIds.length} rows` : "Delete row")
+            recordRowMutation(beforeSnapshot, includesPlaceholder || selectedRowIds.length <= 1
+              ? "Delete row"
+              : `Delete ${selectedRowIds.length} rows`)
           }
           return removed
         }
@@ -4431,13 +4491,30 @@ export default defineComponent({
       }
 
       if (action === "delete-selected-rows") {
-        if (selectedRowIds.length === 0) {
+        const targetId = targetRow?.rowId
+        const rowsToDelete = selectedRowIds.length > 0
+          ? selectedRowIds
+          : targetId != null ? [targetId] : []
+        if (rowsToDelete.length === 0) {
           return false
         }
         const beforeSnapshot = captureHistorySnapshot()
-        const removed = removeRuntimeRows(selectedRowIds)
+        const includesPlaceholder = currentSelectionIncludesPlaceholderRow()
+        const rowsById = new Set(rowsToDelete)
+        const nextRows = readCurrentRuntimeDataRows().filter(candidate => {
+          const candidateId = resolveTypedDataRowId(candidate)
+          return candidateId == null || !rowsById.has(candidateId)
+        })
+        const removed = nextRows.length !== props.runtime.api.rows.getCount()
+        if (removed) props.runtime.api.rows.replaceData(nextRows)
+        if (removed && props.runtime.api.rowSelection.hasSupport()) {
+          props.runtime.api.rowSelection.clearSelectedRows()
+          props.syncRowSelectionSnapshotFromRuntime?.()
+        }
         if (removed) {
-          recordRowMutation(beforeSnapshot, selectedRowIds.length > 1 ? `Delete ${selectedRowIds.length} rows` : "Delete row")
+          recordRowMutation(beforeSnapshot, includesPlaceholder
+            ? "Delete row"
+            : rowsToDelete.length > 1 ? `Delete ${rowsToDelete.length} rows` : "Delete row")
         }
         return removed
       }
@@ -4789,7 +4866,7 @@ export default defineComponent({
         return resolvePlacedCellMenuGroups(builtInGroups, customItems, {
           zone,
           columnKey,
-          rowId: contextMenu.value.rowId,
+          rowId: contextMenu.value.rowId == null ? null : String(contextMenu.value.rowId),
         })
       }
 
@@ -4797,7 +4874,7 @@ export default defineComponent({
         if (!props.rowIndexMenu.enabled) {
           return []
         }
-        const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(contextMenu.value.rowId ?? "")
+        const placeholderVisualRowIndex = resolvePlaceholderVisualRowIndex(String(contextMenu.value.rowId ?? ""))
         const items = resolveDataGridRowIndexMenuItems(props.rowIndexMenu)
         const disabledItems = new Set(resolveDataGridRowIndexMenuDisabledItems(props.rowIndexMenu))
         const disabledReasons = resolveDataGridRowIndexMenuDisabledReasons(props.rowIndexMenu)
@@ -4856,7 +4933,7 @@ export default defineComponent({
             }
             if (actionId === "delete-selected-rows") {
               const effectiveRowIds = resolveExistingRuntimeDataRowIds(
-                resolveSelectedRuntimeRowIds(contextMenu.value.rowId ?? ""),
+                resolveSelectedRuntimeRowIds(String(contextMenu.value.rowId ?? "")),
               )
               if (effectiveRowIds.length === 0) {
                 nextDisabled = true

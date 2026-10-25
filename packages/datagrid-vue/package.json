@@ -1,6 +1,7 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.16.1",
+  "version": "0.16.2",
+  "publishConfig": { "access": "public" },
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue DataGrid component and headless adapter for Affino DataGrid",

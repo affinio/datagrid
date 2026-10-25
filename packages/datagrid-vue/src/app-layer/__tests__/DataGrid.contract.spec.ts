@@ -2056,6 +2056,7 @@ describe("DataGrid app facade contract", () => {
 
     await flushRuntimeTasks()
 
+    expect(typeof resolveVm(wrapper).getSavedView).toBe("function")
     expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
     expect(wrapper.find(".datagrid-gantt-stage__splitter").exists()).toBe(true)
     expect((wrapper.find(".datagrid-gantt-stage__timeline-header").element as HTMLElement).style.height).not.toBe("")
@@ -3796,6 +3797,47 @@ describe("DataGrid app facade contract", () => {
 
       expect(writeText).toHaveBeenCalledWith("NOC\teu-west\t10")
       expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining("rowId"))
+    } finally {
+      wrapper.unmount()
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
+    }
+  })
+
+  it("copies the full column selected from its header and shows the clipboard range outline", async () => {
+    const originalClipboard = navigator.clipboard
+    const writeText = vi.fn<(_: string) => Promise<void>>().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
+    const wrapper = mount(DataGrid, {
+      props: { rows: BASE_ROWS, columns: COLUMNS },
+      attachTo: document.body,
+    })
+
+    try {
+      await flushRuntimeTasks()
+
+      const ownerHeader = wrapper.get('.grid-header-viewport .grid-cell--header[data-column-key="owner"]')
+      await ownerHeader.trigger("click")
+      await flushRuntimeTasks()
+      await ownerHeader.trigger("keydown", { key: "c", ctrlKey: true })
+      await flushRuntimeTasks()
+
+      expect(writeText).toHaveBeenCalledWith("NOC\nNOC\nPayments")
+      const ownerCells = wrapper.findAll('.grid-body-viewport .datagrid-stage__cell[data-column-key="owner"]')
+      expect(ownerCells).toHaveLength(BASE_ROWS.length)
+      expect(ownerCells[0]?.classes()).toContain("grid-cell--clipboard-pending")
+      expect(ownerCells[0]?.classes()).toContain("grid-cell--clipboard-pending-top")
+      expect(ownerCells[2]?.classes()).toContain("grid-cell--clipboard-pending-bottom")
+      expect(ownerCells[1]?.classes()).toContain("grid-cell--clipboard-pending-left")
+      expect(ownerCells[1]?.classes()).toContain("grid-cell--clipboard-pending-right")
+      expect(wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="region"]').classes())
+        .not.toContain("grid-cell--clipboard-pending")
     } finally {
       wrapper.unmount()
       Object.defineProperty(navigator, "clipboard", {
@@ -7635,6 +7677,51 @@ describe("DataGrid app facade contract", () => {
     expect(secondRowIndexCell.classes()).toContain("grid-cell--index-selected-middle")
     expect(thirdRowIndexCell.classes()).toContain("grid-cell--index-selected")
     expect(thirdRowIndexCell.classes()).toContain("grid-cell--index-selected-bottom")
+
+    wrapper.unmount()
+  })
+
+  it("highlights every row index and column header intersected by a cell range", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: BASE_ROWS,
+        columns: COLUMNS,
+      },
+    })
+
+    await flushRuntimeTasks()
+    resolveVm(wrapper).getApi?.()?.selection?.setSnapshot?.({
+      ranges: [
+        {
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 1,
+          startRowId: "r1",
+          endRowId: "r2",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
+          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+        },
+      ],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+    })
+    await flushRuntimeTasks()
+
+    for (const rowId of ["r1", "r2"]) {
+      expect(wrapper.find(`.datagrid-stage__row-index-cell[data-row-id="${rowId}"]`).classes())
+        .toContain("grid-cell--index-selected")
+    }
+    expect(wrapper.find('.datagrid-stage__row-index-cell[data-row-id="r3"]').classes())
+      .not.toContain("grid-cell--index-selected")
+
+    for (const columnKey of ["owner", "region"]) {
+      expect(wrapper.find(`.grid-header-shell .grid-cell--header[data-column-key="${columnKey}"]`).classes())
+        .toContain("grid-cell--header-selected")
+    }
+    expect(wrapper.find('.grid-header-shell .grid-cell--header[data-column-key="amount"]').classes())
+      .not.toContain("grid-cell--header-selected")
 
     wrapper.unmount()
   })

@@ -1425,6 +1425,60 @@ describe("DataGridTableStage contract", () => {
     wrapper.unmount()
   })
 
+  it("does not mark the row-index header for a cell range unless it owns the selection", async () => {
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(() => true, {
+        rowCount: 3,
+        selectionRange: { startRow: 0, endRow: 2, startColumn: 0, endColumn: 3 },
+      }),
+    })
+    const indexHeader = wrapper.get('[data-datagrid-row-index-header="true"]')
+    const dataCell = wrapper.get('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"]')
+    const rowIndexCell = wrapper.get('.grid-body-pane--left .datagrid-stage__row-index-cell[data-row-index="1"]')
+
+    expect(indexHeader.classes()).not.toContain("grid-cell--header-selected")
+
+    ;(indexHeader.element as HTMLElement).focus()
+    await nextTick()
+    expect(indexHeader.classes()).toContain("grid-cell--header-selected")
+
+    ;(dataCell.element as HTMLElement).focus()
+    await nextTick()
+    expect(indexHeader.classes()).not.toContain("grid-cell--header-selected")
+
+    ;(rowIndexCell.element as HTMLElement).focus()
+    await nextTick()
+    expect(indexHeader.classes()).not.toContain("grid-cell--focus-axis")
+
+    wrapper.unmount()
+  })
+
+  it("keeps header selection aligned with body column indexes after the row-selection column", () => {
+    const visibleColumns = [createRowSelectionColumn(), ...createColumns()]
+    const wrapper = mount(DataGridTableStage, {
+      attachTo: document.body,
+      props: createStageProps(
+        (_rowOffset, columnIndex) => columnIndex === 2,
+        {
+          visibleColumns,
+          selectionRange: { startRow: 0, endRow: 0, startColumn: 2, endColumn: 2 },
+          selectionAnchorCell: { rowIndex: 0, columnIndex: 2 },
+        },
+      ),
+    })
+
+    const selectedBodyCell = wrapper.find('.grid-body-viewport .datagrid-stage__cell[data-column-key="centerA"]')
+    const selectedHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerA"]')
+    const nextHeader = wrapper.find('.grid-header-viewport .grid-cell--header[data-column-key="centerB"]')
+
+    expect(selectedBodyCell.attributes("data-column-index")).toBe("2")
+    expect(selectedHeader.classes()).toContain("grid-cell--header-selected")
+    expect(nextHeader.classes()).not.toContain("grid-cell--header-selected")
+
+    wrapper.unmount()
+  })
+
   it("marks the focused cell's column header and row index across pinned and center panes", async () => {
     const wrapper = mount(DataGridTableStage, {
       attachTo: document.body,
