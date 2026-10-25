@@ -215,13 +215,19 @@ export function useDataGridStageRowIndex(
   function isSelectedRangeRowIndex(rowIndex: number): boolean {
     const columnBounds = dataColumnBounds.value
     if (!columnBounds) return false
+    const totalRowCount = Math.max(0, options.totalRowCount?.value ?? options.rows.value.displayRows?.length ?? 0)
     const ranges = options.selectionRanges?.value
       ?? (options.selectionRange.value ? [options.selectionRange.value] : [])
     return ranges.some(range => {
+      const rangeStartRow = Math.min(range.startRow, range.endRow)
+      const rangeEndRow = Math.max(range.startRow, range.endRow)
       const rangeStartColumn = Math.min(range.startColumn, range.endColumn)
       const rangeEndColumn = Math.max(range.startColumn, range.endColumn)
-      return rowIndex >= Math.min(range.startRow, range.endRow)
-        && rowIndex <= Math.max(range.startRow, range.endRow)
+      const coversAllRows = totalRowCount > 0 && rangeStartRow <= 0 && rangeEndRow >= totalRowCount - 1
+      const coversAllDataColumns = rangeStartColumn <= columnBounds.first && rangeEndColumn >= columnBounds.last
+      if (coversAllRows && !coversAllDataColumns) return false
+      return rowIndex >= rangeStartRow
+        && rowIndex <= rangeEndRow
         && rangeEndColumn >= columnBounds.first
         && rangeStartColumn <= columnBounds.last
     })

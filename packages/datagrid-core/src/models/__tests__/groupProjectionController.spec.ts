@@ -26,6 +26,10 @@ function createLeafRow(id: string, team: string, index: number): DataGridRowNode
   }
 }
 
+function groupValueCacheKey(rowId: string, field: string): string {
+  return `string:${rowId.length}:${rowId}${field.length}:${field}`
+}
+
 function project(
   inputRows: readonly DataGridRowNode<TeamRow>[],
   cache: Map<string, string>,
@@ -64,15 +68,15 @@ describe("groupProjectionController cache policy", () => {
     )
 
     expect(cache.size).toBe(2)
-    expect(cache.has("r1::team")).toBe(false)
-    expect(cache.has("r2::team")).toBe(true)
-    expect(cache.has("r3::team")).toBe(true)
+    expect(cache.has(groupValueCacheKey("r1", "team"))).toBe(false)
+    expect(cache.has(groupValueCacheKey("r2", "team"))).toBe(true)
+    expect(cache.has(groupValueCacheKey("r3", "team"))).toBe(true)
   })
 
   it("keeps insertion-order eviction policy when cache hits occur", () => {
     const cache = new Map<string, string>([
-      ["r1::team", "a"],
-      ["r2::team", "b"],
+      [groupValueCacheKey("r1", "team"), "a"],
+      [groupValueCacheKey("r2", "team"), "b"],
     ])
 
     project(
@@ -85,9 +89,9 @@ describe("groupProjectionController cache policy", () => {
     )
 
     expect(cache.size).toBe(2)
-    expect(cache.has("r1::team")).toBe(false)
-    expect(cache.has("r2::team")).toBe(true)
-    expect(cache.has("r3::team")).toBe(true)
+    expect(cache.has(groupValueCacheKey("r1", "team"))).toBe(false)
+    expect(cache.has(groupValueCacheKey("r2", "team"))).toBe(true)
+    expect(cache.has(groupValueCacheKey("r3", "team"))).toBe(true)
   })
 
   it("projects deep grouping levels without recursive stack overflow", () => {

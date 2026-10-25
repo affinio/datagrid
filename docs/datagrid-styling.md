@@ -93,9 +93,11 @@ cue follows focus rather than hover or the selection anchor.
 Selected index and header cells use `gridSelectionRangeBackgroundColor` for the
 fill and `gridAccentStrong` for the narrow leading strip on selected row-index
 cells. Selected or keyboard-focused column headers use a narrow top strip.
-Cell-range selection also highlights every row index and leaf-column header
-intersected by the selected ranges; these axis cues follow the selection extent,
-while `gridFocusAxisBackgroundColor` continues to identify keyboard focus.
+Rectangular cell ranges highlight the intersected row indices and leaf-column
+headers. A full-row range highlights the row-index axis, while a full-column
+range highlights the header axis; selecting the entire grid can highlight both.
+These axis cues follow the selection extent, while
+`gridFocusAxisBackgroundColor` continues to identify keyboard focus.
 
 ## Toolbar placement
 

@@ -1031,6 +1031,12 @@ function resolveColumnSelectionRangeEdges(column: TableColumn): { selected: bool
     const endRow = Math.max(range.startRow, range.endRow)
     const startColumn = Math.min(range.startColumn, range.endColumn)
     const endColumn = Math.max(range.startColumn, range.endColumn)
+    const firstDataColumn = indexedDataColumnIndexes.value[0]
+    const lastDataColumn = indexedDataColumnIndexes.value[indexedDataColumnIndexes.value.length - 1]
+    const coversAllRows = startRow <= 0 && endRow >= totalRowCount - 1
+    const coversAllDataColumns = firstDataColumn != null && lastDataColumn != null
+      && startColumn <= firstDataColumn && endColumn >= lastDataColumn
+    if (coversAllDataColumns && !coversAllRows) continue
     const intersectsRows = endRow >= 0 && startRow < totalRowCount
     if (!intersectsRows || columnIndex < startColumn || columnIndex > endColumn) continue
     selected = true

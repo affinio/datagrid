@@ -7696,16 +7696,16 @@ describe("DataGrid app facade contract", () => {
         {
           startRow: 0,
           endRow: 1,
-          startCol: 0,
-          endCol: 1,
+          startCol: 1,
+          endCol: 2,
           startRowId: "r1",
           endRowId: "r2",
-          anchor: { rowIndex: 0, colIndex: 0, rowId: "r1" },
-          focus: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+          anchor: { rowIndex: 0, colIndex: 1, rowId: "r1" },
+          focus: { rowIndex: 1, colIndex: 2, rowId: "r2" },
         },
       ],
       activeRangeIndex: 0,
-      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+      activeCell: { rowIndex: 1, colIndex: 2, rowId: "r2" },
     })
     await flushRuntimeTasks()
 
