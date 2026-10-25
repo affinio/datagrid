@@ -9,6 +9,7 @@ const WORKSPACE_ALIAS_TARGETS: Record<string, string> = {
   "@affino/datagrid-format/*": "packages/datagrid-format/src/*",
   "@affino/datagrid-theme": "packages/datagrid-theme/src/index.ts",
   "@affino/datagrid-theme/*": "packages/datagrid-theme/src/*",
+  "@affino/export-xlsx": "packages/export-xlsx/src/index.ts",
   "@affino/datagrid-plugins": "packages/datagrid-plugins/src/index.ts",
   "@affino/datagrid-plugins/*": "packages/datagrid-plugins/src/*",
   "@affino/datagrid-worker": "packages/datagrid-worker/src/index.ts",
