@@ -1,3 +1,5 @@
+import type { DataGridRowId } from "@affino/datagrid-core"
+
 export type DataGridContextMenuZone = "cell" | "range" | "header" | "row-index"
 
 export type DataGridContextMenuActionId =
@@ -24,7 +26,7 @@ export interface DataGridContextMenuState {
   y: number
   zone: DataGridContextMenuZone
   columnKey: string | null
-  rowId: string | null
+  rowId: DataGridRowId | null
 }
 
 export interface DataGridContextMenuAction {
@@ -35,5 +37,5 @@ export interface DataGridContextMenuAction {
 export interface OpenDataGridContextMenuInput {
   zone: DataGridContextMenuZone
   columnKey?: string | null
-  rowId?: string | null
+  rowId?: DataGridRowId | null
 }

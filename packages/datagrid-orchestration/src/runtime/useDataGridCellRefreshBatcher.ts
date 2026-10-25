@@ -151,16 +151,17 @@ export function useDataGridCellRefreshBatcher(
       return
     }
 
-    const flushOptions = resolvePendingFlushOptions()
-    api.refreshCellsByRanges(ranges, flushOptions)
-    options.onBatchFlush?.(ranges.length, cellsCount)
-
-    if (pendingByRow.size > 0) {
-      scheduleFlush()
-      return
+    try {
+      const flushOptions = resolvePendingFlushOptions()
+      api.refreshCellsByRanges(ranges, flushOptions)
+      options.onBatchFlush?.(ranges.length, cellsCount)
+    } finally {
+      if (pendingByRow.size > 0) {
+        scheduleFlush()
+      } else {
+        pendingReasons.clear()
+      }
     }
-
-    pendingReasons.clear()
   }
 
   const scheduleFlush = (): void => {
@@ -220,7 +221,13 @@ export function useDataGridCellRefreshBatcher(
   return {
     queueByRowKeys,
     queueByRanges,
-    flush: doFlush,
+    flush() {
+      if (frameHandle != null) {
+        scheduler.cancelFrame(frameHandle)
+        frameHandle = null
+      }
+      doFlush()
+    },
     dispose() {
       pendingByRow.clear()
       pendingReasons.clear()

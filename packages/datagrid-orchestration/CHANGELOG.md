@@ -1,5 +1,15 @@
 # @affino/datagrid-orchestration
 
+## 0.8.2
+
+### Fixed
+
+- Preserved numeric row IDs in context-menu routing and corrected group metadata and batched cell-refresh behavior.
+
+### Validation
+
+- Orchestration type-check, unit tests, contract tests, and public build passed.
+
 ## 0.8.1
 
 ### Fixed

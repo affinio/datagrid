@@ -10,13 +10,13 @@ interface DataGridContextMenuPasteOptions {
 export interface DataGridContextMenuActionRouterState {
   zone: DataGridContextMenuZone
   columnKey: string | null
-  rowId: string | null
+  rowId: string | number | null
 }
 
 export interface UseDataGridContextMenuActionRouterOptions {
   resolveContextMenuState: () => DataGridContextMenuActionRouterState
   runHeaderContextAction: (action: DataGridContextMenuActionId, columnKey: string) => boolean
-  runRowIndexContextAction: (action: DataGridContextMenuActionId, rowId: string) => Promise<boolean>
+  runRowIndexContextAction: (action: DataGridContextMenuActionId, rowId: string | number) => Promise<boolean>
   copySelection: (trigger: "context-menu") => Promise<boolean>
   pasteSelection: (trigger: "context-menu", options?: DataGridContextMenuPasteOptions) => Promise<boolean>
   cutSelection: (trigger: "context-menu") => Promise<boolean>

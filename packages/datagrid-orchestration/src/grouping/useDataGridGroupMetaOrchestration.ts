@@ -1,7 +1,9 @@
+import type { DataGridRowId } from "@affino/datagrid-core"
+
 export interface DataGridGroupMetaSnapshot {
-  starts: Set<string>
-  values: Map<string, string>
-  counts: Map<string, number>
+  starts: Set<DataGridRowId>
+  values: Map<DataGridRowId, string>
+  counts: Map<DataGridRowId, number>
   groups: number
 }
 
@@ -20,19 +22,19 @@ export function normalizeDataGridGroupValue(value: string | null | undefined): s
 export function useDataGridGroupMetaOrchestration<TRow, TGroupByKey extends string>(
   options: UseDataGridGroupMetaOrchestrationOptions<TRow, TGroupByKey>,
 ): DataGridGroupMetaSnapshot {
-  const starts = new Set<string>()
-  const values = new Map<string, string>()
-  const counts = new Map<string, number>()
+  const starts = new Set<DataGridRowId>()
+  const values = new Map<DataGridRowId, string>()
+  const counts = new Map<DataGridRowId, number>()
 
   if (options.groupBy === "none") {
     return { starts, values, counts, groups: 0 }
   }
 
   let previousGroupValue: string | null = null
-  let currentStartRowId: string | null = null
+  let currentStartRowId: DataGridRowId | null = null
 
   for (const row of options.rows) {
-    const rowId = String(options.resolveRowId(row))
+    const rowId = options.resolveRowId(row)
     const currentGroupValue = normalizeDataGridGroupValue(options.resolveGroupValue(row, options.groupBy))
     if (previousGroupValue === null || currentGroupValue !== previousGroupValue) {
       starts.add(rowId)
@@ -52,13 +54,12 @@ export function useDataGridGroupMetaOrchestration<TRow, TGroupByKey extends stri
 }
 
 export function isDataGridGroupStartRow(snapshot: DataGridGroupMetaSnapshot, rowId: string | number): boolean {
-  return snapshot.starts.has(String(rowId))
+  return snapshot.starts.has(rowId)
 }
 
 export function resolveDataGridGroupBadgeText(snapshot: DataGridGroupMetaSnapshot, rowId: string | number): string {
-  const normalizedRowId = String(rowId)
-  const groupValue = snapshot.values.get(normalizedRowId) ?? ""
-  const count = snapshot.counts.get(normalizedRowId) ?? 0
+  const groupValue = snapshot.values.get(rowId) ?? ""
+  const count = snapshot.counts.get(rowId) ?? 0
   return `${groupValue} (${count})`
 }
 

@@ -191,4 +191,54 @@ describe("useDataGridCellRefreshBatcher contract", () => {
 
     batcher.dispose()
   })
+
+  it("cancels the scheduled frame when a manual flush consumes the batch", () => {
+    vi.useFakeTimers()
+    try {
+      const refreshCalls: Array<readonly DataGridCellRefreshRange[]> = []
+      const batcher = useDataGridCellRefreshBatcher({
+        refreshCellsByRanges: ranges => refreshCalls.push(ranges),
+      })
+      batcher.queueByRanges([{ rowKey: "r1", columnKeys: ["c1"] }])
+
+      batcher.flush()
+      vi.runOnlyPendingTimers()
+
+      expect(refreshCalls).toHaveLength(1)
+      batcher.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("schedules remaining ranges after a refresh callback throws", () => {
+    vi.useFakeTimers()
+    try {
+      const attempted: string[] = []
+      const batcher = useDataGridCellRefreshBatcher(
+        {
+          refreshCellsByRanges: ranges => {
+            const rowKey = String(ranges[0]?.rowKey)
+            attempted.push(rowKey)
+            if (rowKey === "r1") throw new Error("refresh failed")
+          },
+        },
+        { maxBatchSize: 1 },
+      )
+      batcher.queueByRanges([
+        { rowKey: "r1", columnKeys: ["c1"] },
+        { rowKey: "r2", columnKeys: ["c1"] },
+        { rowKey: "r3", columnKeys: ["c1"] },
+      ])
+
+      expect(() => batcher.flush()).toThrow("refresh failed")
+      vi.advanceTimersByTime(16)
+      vi.advanceTimersByTime(16)
+
+      expect(attempted).toEqual(["r1", "r2", "r3"])
+      batcher.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

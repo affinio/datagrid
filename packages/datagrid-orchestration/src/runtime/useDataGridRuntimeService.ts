@@ -191,25 +191,34 @@ function cloneColumnInput(column: DataGridColumnInput): DataGridColumnInput {
   }
 }
 
+const columnCallbackIds = new WeakMap<Function, number>()
+let nextColumnCallbackId = 1
+
+function getColumnCallbackId(callback: unknown): number | null {
+  if (typeof callback !== "function") return null
+  let id = columnCallbackIds.get(callback)
+  if (id === undefined) {
+    id = nextColumnCallbackId++
+    columnCallbackIds.set(callback, id)
+  }
+  return id
+}
+
 function serializeBaseColumnsSignature(columns: readonly DataGridColumnInput[]): string {
-  return columns
-    .map((column) => {
-      return [
-        column.key,
-        column.field ?? "",
-        column.label ?? "",
-        column.dataType ?? "",
-        column.minWidth ?? "",
-        column.maxWidth ?? "",
-        stableSerializeUnknown(column.presentation ?? null),
-        stableSerializeUnknown(column.capabilities ?? null),
-        stableSerializeUnknown(column.constraints ?? null),
-        typeof column.valueGetter === "function" ? "getter:1" : "getter:0",
-        typeof column.valueSetter === "function" ? "setter:1" : "setter:0",
-        stableSerializeUnknown(column.meta ?? null),
-      ].join("|")
-    })
-    .join("||")
+  return JSON.stringify(columns.map(column => [
+    column.key,
+    column.field ?? null,
+    column.label ?? null,
+    column.dataType ?? null,
+    column.minWidth ?? null,
+    column.maxWidth ?? null,
+    stableSerializeUnknown(column.presentation ?? null),
+    stableSerializeUnknown(column.capabilities ?? null),
+    stableSerializeUnknown(column.constraints ?? null),
+    getColumnCallbackId(column.valueGetter),
+    getColumnCallbackId(column.valueSetter),
+    stableSerializeUnknown(column.meta ?? null),
+  ]))
 }
 
 function serializePivotColumnsSignature(columns: readonly DataGridPivotColumn[]): string {
@@ -388,8 +397,11 @@ function buildEffectiveColumns(
   }
 
   for (const pivotColumn of pivotColumns) {
-    if (!pivotColumn.id || seen.has(pivotColumn.id)) {
+    if (!pivotColumn.id) {
       continue
+    }
+    if (seen.has(pivotColumn.id)) {
+      throw new Error(`[DataGridPivot] Generated column key collides with an authored column key '${pivotColumn.id}'.`)
     }
     seen.add(pivotColumn.id)
     const columnDef = createPivotColumnDef(pivotColumn, sourceColumnLabelsByKey, hasSingleMetric)
@@ -413,6 +425,7 @@ export function useDataGridRuntimeService<TRow = unknown>(
   let disposed = false
   let pivotVisibilityRestore: Map<string, boolean> | null = null
   let pivotColumnsActive = false
+  let lastAppliedPivotModel = rowModel.getSnapshot().pivotModel ?? null
   let syncingPivotColumns = false
   const virtualWindowListeners = new Set<(snapshot: DataGridRuntimeVirtualWindowSnapshot | null) => void>()
 
@@ -543,11 +556,21 @@ export function useDataGridRuntimeService<TRow = unknown>(
     }
     lastColumnsSyncSignature = signature
     pivotColumnsActive = isPivotActive
+    lastAppliedPivotModel = rowSnapshot.pivotModel ?? null
     if (!isPivotActive) pivotVisibilityRestore = null
   }
 
   const unsubscribeRowModel = rowModel.subscribe(() => {
-    syncColumnsFromRowPivot()
+    try {
+      syncColumnsFromRowPivot()
+    } catch (error) {
+      // Keep the row projection and effective column model on the same
+      // configuration when a generated key is rejected as ambiguous.
+      if (rowModel.getSnapshot().pivotModel) {
+        rowModel.setPivotModel(lastAppliedPivotModel)
+      }
+      throw error
+    }
     recomputeVirtualWindow()
   })
   const unsubscribeColumnSchema = columnModel.subscribe(snapshot => {

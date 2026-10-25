@@ -133,10 +133,11 @@ export function useDataGridViewportContextMenuRouter<
       if (options.isRowIndexContextEnabled?.() === false) {
         return false
       }
-      const rowId = rowIndexCell.dataset.rowId ?? ""
-      if (!rowId) {
+      const rawRowId = rowIndexCell.dataset.rowId ?? ""
+      if (!rawRowId) {
         return false
       }
+      const rowId = rowIndexCell.dataset.rowIdType === "number" ? Number(rawRowId) : rawRowId
       event.preventDefault()
       options.openContextMenu(event.clientX, event.clientY, { zone: "row-index", rowId })
       return true
