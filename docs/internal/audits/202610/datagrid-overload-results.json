@@ -1,0 +1,1830 @@
+{
+  "audit": "overload/backpressure",
+  "capturedAt": "2026-10-24T19:19:30.215Z",
+  "commit": "79092ff0e7ba27181237c3e4db57b1186f157be0",
+  "workingTreeChangesAtCapture": [
+    " M docs/datagrid-accessibility.md",
+    " M docs/datagrid-clipboard.md",
+    " M docs/datagrid-styling.md",
+    " M docs/datagrid-troubleshooting-runbook.md",
+    " M e2e/sandbox-grid.spec.ts",
+    " M e2e/sandbox-interactions.spec.ts",
+    " M packages/datagrid-sandbox/src/components/CoreGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueFormulaGridCard.spec.ts",
+    " M packages/datagrid-sandbox/src/components/VueFormulaGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueShellGridCard.spec.ts",
+    " M packages/datagrid-sandbox/src/components/VueShellGridCard.vue",
+    " M packages/datagrid-sandbox/src/styles.css",
+    " M packages/datagrid-spreadsheet-vue-app/src/DataGridSpreadsheetWorkbookApp.vue",
+    " M packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/__tests__/ensureDataGridAppStyles.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/exportDataGridXlsx.ts",
+    " M packages/datagrid-vue/src/app-layer/gantt.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue",
+    " M packages/datagrid-vue/src/app-layer/stage/DataGridTableStagePinnedPane.vue",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/dataGridChromeCanvasMath.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageChromeCanvas.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageRowIndex.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/dataGridChromeCanvasMath.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeModel.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowIndex.ts",
+    " M packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts",
+    " M packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts",
+    " M packages/datagrid-vue/src/app/useDataGridAppClipboard.ts",
+    "?? e2e/sandbox-grouped-clipboard.spec.ts",
+    "?? packages/datagrid-sandbox/src/components/CoreGridCard.spec.ts",
+    "?? packages/datagrid-sandbox/src/components/VueGridCard.spec.ts"
+  ],
+  "sourceOwnerHashes": {
+    "packages/datagrid-core/src/core/gridApiLifecycleRuntime.ts": {
+      "sha256": "15b5539082cff9665c5e6dadc77044f6a611850ba8c5c319280615ddf6c2566b",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-core/src/runtime/rafScheduler.ts": {
+      "sha256": "9f89f9e3c5b90a54b9f60b242cac8aa63158d02edea5287ac8ae0747996d9450",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-core/src/models/server/dataSourceOptimisticMutationEngine.ts": {
+      "sha256": "f9aae0937059a78e5e6d70ab296788629bcd10c227894dcc372483045f0ff27b",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-core/src/models/server/dataSourceOptimisticCommitRuntime.ts": {
+      "sha256": "f1109aac3f6dc39be26b935b4c341197016a9215e5cf80193bec33ab2b0aad5a",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-core/src/models/server/dataSourcePullSchedulingRuntime.ts": {
+      "sha256": "22bc9ee919faf79799cec8d8a1655376a03b56d25cea6f46a120be1676087bbe",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-orchestration/src/runtime/useDataGridCellRefreshBatcher.ts": {
+      "sha256": "78472b0e2f82a94a87d159cba3a622d9a4b8f263dcca69200b61272c7c327ef6",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-worker/src/workerOwnedRowModel.ts": {
+      "sha256": "25847de1718034ecea32413319d9d49d71ab6c93508005d7bd28be19e59d5d7a",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-worker/src/postMessageTransport.ts": {
+      "sha256": "7a1b9ae3b0e830c0da304cd82c8fd21e198a3adc76b742813879b61fc04c7b3d",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-server-client/src/changeFeedPoller.ts": {
+      "sha256": "edfd42ce8f0106c19e1eb128114f20a76ce17bd82717ce5f0b435f46ed59b547",
+      "matchesHEAD": true
+    },
+    "packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts": {
+      "sha256": "46b1fdae05abe8079994282b1f777457133b48ba2af58145a33c11a3fc6e9922",
+      "matchesHEAD": true
+    }
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "v8": "13.6.233.17-node.53",
+    "platform": "linux",
+    "arch": "arm64",
+    "osRelease": "7.0.14-orbstack-00380-ga7e0a2dc9535",
+    "logicalCPUs": 10,
+    "cpu": "unknown",
+    "packages": {
+      "datagrid-core": "0.14.0",
+      "datagrid-orchestration": "0.8.1",
+      "datagrid-vue": "0.16.1",
+      "datagrid-worker": "0.7.0",
+      "datagrid-server-client": "0.2.0"
+    }
+  },
+  "diagnosticsWarning": "DIAGNOSTIC ONLY tests assert the observed defects, not product correctness.",
+  "queues": {
+    "lifecycleDrain": {
+      "queued": 1000,
+      "completed": 1000,
+      "rejected": 1,
+      "busyAfterDrain": false
+    },
+    "lifecycleAfterDispose": {
+      "queuedEffects": 1,
+      "newlySubmittedEffects": 1,
+      "state": "disposed"
+    },
+    "optimisticDrain": {
+      "accepted": 500,
+      "startedBeforeRelease": 1,
+      "pendingBeforeRelease": 500,
+      "diagnosticsBeforeRelease": {
+        "pullRequested": 1,
+        "pullCompleted": 1,
+        "pullAborted": 0,
+        "pullDropped": 0,
+        "pullCoalesced": 0,
+        "pullDeferred": 0,
+        "rowCacheEvicted": 0,
+        "pushApplied": 0,
+        "invalidatedRows": 0,
+        "inFlight": false,
+        "paused": true,
+        "hasPendingPull": false,
+        "rowCacheSize": 1,
+        "rowCacheLimit": 4096,
+        "prefetchScheduled": 0,
+        "prefetchStarted": 0,
+        "prefetchCompleted": 0,
+        "prefetchSkippedCached": 0,
+        "prefetchCoalesced": 0,
+        "prefetchDroppedStale": 0,
+        "prefetchAborted": 0,
+        "cachedAheadRows": 0,
+        "cachedBehindRows": 0,
+        "criticalInFlight": false,
+        "backgroundInFlight": false,
+        "placeholderExposureActiveRows": 0,
+        "placeholderExposureEvents": 0,
+        "placeholderExposureTotalMs": 0,
+        "placeholderExposureMaxMs": 0,
+        "placeholderExposureLastMs": 0,
+        "viewportDataAvailabilityEvents": 1,
+        "viewportDataAvailabilityTotalMs": 0.300619000000097,
+        "viewportDataAvailabilityMaxMs": 0.300619000000097,
+        "viewportDataAvailabilityLastMs": 0.300619000000097,
+        "viewportCacheHitRows": 1,
+        "viewportCacheMissRows": 0,
+        "viewportCacheHitRatio": 1,
+        "blankViewportActive": false,
+        "blankViewportEvents": 0,
+        "pullDurationEvents": 1,
+        "pullDurationTotalMs": 0.04583199999979115,
+        "pullDurationMaxMs": 0.04583199999979115,
+        "pullDurationLastMs": 0.04583199999979115
+      },
+      "committed": 500,
+      "finalValue": 500,
+      "flushDoesNotWaitWrites": true,
+      "pullPauseDoesNotPauseWrites": true
+    },
+    "optimisticAfterDispose": {
+      "startedBeforeDispose": 1,
+      "startedAfterDispose": 2,
+      "calls": [
+        1,
+        2,
+        3
+      ]
+    },
+    "optimisticDisposedRejection": {
+      "transportOutcome": "rejected",
+      "publicOutcome": "fulfilled"
+    },
+    "optimisticFailureDrain": {
+      "calls": 2,
+      "finalValue": 2,
+      "outcomes": [
+        "rejected",
+        "fulfilled"
+      ]
+    },
+    "viewportBurst": {
+      "produced": 1000,
+      "transportCalls": 2,
+      "diagnostics": {
+        "pullRequested": 2,
+        "pullCompleted": 1,
+        "pullAborted": 1,
+        "pullDropped": 1,
+        "pullCoalesced": 998,
+        "pullDeferred": 999,
+        "rowCacheEvicted": 0,
+        "pushApplied": 0,
+        "invalidatedRows": 0,
+        "inFlight": false,
+        "paused": false,
+        "hasPendingPull": false,
+        "rowCacheSize": 1,
+        "rowCacheLimit": 4096,
+        "prefetchScheduled": 0,
+        "prefetchStarted": 0,
+        "prefetchCompleted": 0,
+        "prefetchSkippedCached": 0,
+        "prefetchCoalesced": 0,
+        "prefetchDroppedStale": 0,
+        "prefetchAborted": 0,
+        "cachedAheadRows": 0,
+        "cachedBehindRows": 0,
+        "criticalInFlight": false,
+        "backgroundInFlight": false,
+        "placeholderExposureActiveRows": 9,
+        "placeholderExposureEvents": 9991,
+        "placeholderExposureTotalMs": 94.73867899999914,
+        "placeholderExposureMaxMs": 2.2789510000000064,
+        "placeholderExposureLastMs": 0.4281989999999496,
+        "viewportDataAvailabilityEvents": 0,
+        "viewportDataAvailabilityTotalMs": 0,
+        "viewportDataAvailabilityMaxMs": 0,
+        "viewportDataAvailabilityLastMs": 0,
+        "viewportCacheHitRows": 1,
+        "viewportCacheMissRows": 9,
+        "viewportCacheHitRatio": 0.1,
+        "blankViewportActive": false,
+        "blankViewportEvents": 1,
+        "pullDurationEvents": 2,
+        "pullDurationTotalMs": 10.009534999999914,
+        "pullDurationMaxMs": 9.89387099999999,
+        "pullDurationLastMs": 9.89387099999999
+      },
+      "latestValue": 999
+    },
+    "pausedPulls": {
+      "produced": 1000,
+      "transportCalls": 1,
+      "pausedAfterFlush": true,
+      "pausedAfterResume": false,
+      "diagnostics": {
+        "pullRequested": 1,
+        "pullCompleted": 1,
+        "pullAborted": 0,
+        "pullDropped": 0,
+        "pullCoalesced": 0,
+        "pullDeferred": 1000,
+        "rowCacheEvicted": 0,
+        "pushApplied": 0,
+        "invalidatedRows": 0,
+        "inFlight": false,
+        "paused": true,
+        "hasPendingPull": false,
+        "rowCacheSize": 0,
+        "rowCacheLimit": 4096,
+        "prefetchScheduled": 0,
+        "prefetchStarted": 0,
+        "prefetchCompleted": 0,
+        "prefetchSkippedCached": 0,
+        "prefetchCoalesced": 0,
+        "prefetchDroppedStale": 0,
+        "prefetchAborted": 0,
+        "cachedAheadRows": 0,
+        "cachedBehindRows": 0,
+        "criticalInFlight": false,
+        "backgroundInFlight": false,
+        "placeholderExposureActiveRows": 10,
+        "placeholderExposureEvents": 9990,
+        "placeholderExposureTotalMs": 57.372519999998985,
+        "placeholderExposureMaxMs": 0.6675270000000637,
+        "placeholderExposureLastMs": 0.0029589999999188876,
+        "viewportDataAvailabilityEvents": 0,
+        "viewportDataAvailabilityTotalMs": 0,
+        "viewportDataAvailabilityMaxMs": 0,
+        "viewportDataAvailabilityLastMs": 0,
+        "viewportCacheHitRows": 0,
+        "viewportCacheMissRows": 10,
+        "viewportCacheHitRatio": 0,
+        "blankViewportActive": true,
+        "blankViewportEvents": 1,
+        "pullDurationEvents": 1,
+        "pullDurationTotalMs": 0.019915999999966516,
+        "pullDurationMaxMs": 0.019915999999966516,
+        "pullDurationLastMs": 0.019915999999966516
+      }
+    },
+    "hungPullDispose": {
+      "flushSettledAfterDispose": false,
+      "diagnostics": {
+        "pullRequested": 1,
+        "pullCompleted": 0,
+        "pullAborted": 1,
+        "pullDropped": 0,
+        "pullCoalesced": 0,
+        "pullDeferred": 0,
+        "rowCacheEvicted": 0,
+        "pushApplied": 0,
+        "invalidatedRows": 0,
+        "inFlight": false,
+        "paused": false,
+        "hasPendingPull": false,
+        "rowCacheSize": 0,
+        "rowCacheLimit": 4096,
+        "prefetchScheduled": 0,
+        "prefetchStarted": 0,
+        "prefetchCompleted": 0,
+        "prefetchSkippedCached": 0,
+        "prefetchCoalesced": 0,
+        "prefetchDroppedStale": 0,
+        "prefetchAborted": 0,
+        "cachedAheadRows": 0,
+        "cachedBehindRows": 0,
+        "criticalInFlight": false,
+        "backgroundInFlight": false,
+        "placeholderExposureActiveRows": 0,
+        "placeholderExposureEvents": 0,
+        "placeholderExposureTotalMs": 0,
+        "placeholderExposureMaxMs": 0,
+        "placeholderExposureLastMs": 0,
+        "viewportDataAvailabilityEvents": 0,
+        "viewportDataAvailabilityTotalMs": 0,
+        "viewportDataAvailabilityMaxMs": 0,
+        "viewportDataAvailabilityLastMs": 0,
+        "viewportCacheHitRows": 0,
+        "viewportCacheMissRows": 1,
+        "viewportCacheHitRatio": 0,
+        "blankViewportActive": true,
+        "blankViewportEvents": 1,
+        "pullDurationEvents": 0,
+        "pullDurationTotalMs": 0,
+        "pullDurationMaxMs": 0,
+        "pullDurationLastMs": 0
+      },
+      "contractCondition": "transport ignores abort"
+    },
+    "uncooperativePulls": {
+      "produced": 100,
+      "unresolvedPhysicalRequestsAtPeak": 100,
+      "aborted": 99,
+      "logicalActiveLanes": 1,
+      "finalValue": 99
+    },
+    "refreshCoalescing": {
+      "requests": 1000,
+      "uniqueCells": 100,
+      "frames": 10,
+      "delivered": 100
+    },
+    "refreshOrphanFrames": {
+      "cycles": 1000,
+      "callbacksBeforeDispose": 1000,
+      "callbacksAfterDispose": 1000,
+      "deliveries": 1000
+    },
+    "refreshFailure": {
+      "scheduledAfterFailure": 0,
+      "strandedRows": 2,
+      "failedBatchDiscarded": [
+        "a"
+      ],
+      "manuallyRecovered": [
+        "b",
+        "c"
+      ]
+    },
+    "visibleRows": {
+      "requests": 1000,
+      "frames": 1,
+      "finalValue": 999,
+      "callbacksAfterDispose": 0
+    },
+    "computeCap": {
+      "produced": 1000,
+      "sent": 32,
+      "fallbackRequired": 968,
+      "statsAfterTimeout": {
+        "dispatched": 32,
+        "acked": 0,
+        "errored": 0,
+        "timedOut": 32,
+        "inflight": 0
+      }
+    },
+    "computePhysicalBacklog": {
+      "controlledDurationMs": 1000,
+      "backlogEvery100Ms": [
+        32,
+        64,
+        96,
+        128,
+        160,
+        192,
+        224,
+        256,
+        288,
+        320
+      ],
+      "metadataInflight": 0,
+      "timedOut": 320
+    },
+    "computeAfterDispose": {
+      "posts": 1,
+      "timers": 1,
+      "stats": {
+        "dispatched": 1,
+        "acked": 0,
+        "errored": 0,
+        "timedOut": 0,
+        "inflight": 1
+      }
+    },
+    "workerOrdering": {
+      "operations": [
+        "patch(1)",
+        "setRows(10)",
+        "patch(2)"
+      ],
+      "expected": 2,
+      "mirrorBeforeRefresh": 2,
+      "hostFinalViaProtocol": 10,
+      "proxyAfterExplicitRefresh": 2,
+      "diagnostics": {
+        "updatesReceived": 5,
+        "updatesApplied": 4,
+        "updatesDroppedStale": 1,
+        "updatesDroppedInitialAfterApplied": 0,
+        "commandsCoalesced": 1,
+        "patchCommandsCoalesced": 1,
+        "patchUpdatesReceived": 2,
+        "patchUpdatesDispatched": 1,
+        "patchUpdatesMergedAway": 1,
+        "immediateFlushCount": 0,
+        "queuePeak": 2,
+        "protocolVersion": 1,
+        "expectedPayloadSchemaVersion": 4,
+        "lastPayloadSchemaVersion": 4,
+        "payloadSchemaMismatches": 0,
+        "loadingSetCount": 0,
+        "loadingClearCount": 0
+      },
+      "messages": [
+        {
+          "id": 1,
+          "type": "sync"
+        },
+        {
+          "id": 4,
+          "type": "patch-rows"
+        },
+        {
+          "id": 3,
+          "type": "set-rows"
+        },
+        {
+          "id": 5,
+          "type": "refresh"
+        }
+      ]
+    },
+    "workerFormulaRegistration": {
+      "accepted": [
+        "a",
+        "b"
+      ],
+      "registered": [
+        "b"
+      ]
+    },
+    "workerMailbox": {
+      "produced": 1000,
+      "backlogEvery250": [
+        250,
+        500,
+        750,
+        1000
+      ],
+      "localQueuePeak": 1,
+      "finalValue": 1000
+    },
+    "optimisticSustained": {
+      "virtualProducerDurationMs": 400,
+      "produced": 200,
+      "pendingAtStop": 180,
+      "backlog": [
+        9,
+        18,
+        27,
+        36,
+        45,
+        54,
+        63,
+        72,
+        81,
+        90,
+        99,
+        108,
+        117,
+        126,
+        135,
+        144,
+        153,
+        162,
+        171,
+        180
+      ],
+      "maxStartAgeMs": 3600,
+      "virtualDrainDurationMs": 3600,
+      "busyAfterDrain": false
+    },
+    "streamingBurst": {
+      "produced": 1000,
+      "synchronousNotifications": 1000,
+      "finalValueBeforeDispose": 1000,
+      "unsubscribeCount": 1,
+      "retainedRowsAfterLatePush": 0
+    },
+    "pollingSlow": {
+      "controlledDurationMs": 10000,
+      "intervalMs": 250,
+      "calls": 1,
+      "pendingAfterResolution": false
+    },
+    "pollGeneration": {
+      "restartCalls": 2,
+      "pendingWhileSecondRequestActive": false,
+      "callsAfterPollNow": 3,
+      "delivered": [
+        3,
+        2
+      ],
+      "oldRequestHonorsAbort": true
+    },
+    "rafDisposalDuringDrain": {
+      "acceptedBeforeDispose": 2,
+      "notYetStartedEffectsAfterDispose": 1,
+      "newTaskRejected": true
+    }
+  },
+  "browserSummary": [
+    {
+      "n": 1000,
+      "kind": "burst",
+      "mutationMs": {
+        "count": 5,
+        "median": 19.300000071525574,
+        "min": 15.600000023841858,
+        "max": 23.199999928474426
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 30,
+        "min": 26,
+        "max": 32.800000071525574
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 23.399999976158142,
+        "min": 19.200000047683716,
+        "max": 27.100000023841858
+      },
+      "longTasks": []
+    },
+    {
+      "n": 1000,
+      "kind": "exclusive",
+      "mutationMs": {
+        "count": 5,
+        "median": 294.8000000715256,
+        "min": 271.60000002384186,
+        "max": 320.89999997615814
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 297.89999997615814,
+        "min": 275.3000000715256,
+        "max": 324.39999997615814
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 295.2999999523163,
+        "min": 272.2000000476837,
+        "max": 321.10000002384186
+      },
+      "longTasks": [
+        320,
+        318,
+        294,
+        271,
+        273
+      ]
+    },
+    {
+      "n": 1000,
+      "kind": "stream",
+      "mutationMs": {
+        "count": 5,
+        "median": 2.299999952316284,
+        "min": 2.100000023841858,
+        "max": 2.899999976158142
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 29.800000071525574,
+        "min": 27.399999976158142,
+        "max": 32.89999997615814
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 5.399999976158142,
+        "min": 3.700000047683716,
+        "max": 5.700000047683716
+      },
+      "longTasks": []
+    },
+    {
+      "n": 20000,
+      "kind": "burst",
+      "mutationMs": {
+        "count": 5,
+        "median": 360.60000002384186,
+        "min": 351.7999999523163,
+        "max": 433.39999997615814
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 367.10000002384186,
+        "min": 363.2999999523163,
+        "max": 446.89999997615814
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 363.89999997615814,
+        "min": 354.8000000715256,
+        "max": 436.89999997615814
+      },
+      "longTasks": [
+        436,
+        383,
+        363,
+        354,
+        361
+      ]
+    },
+    {
+      "n": 20000,
+      "kind": "exclusive",
+      "mutationMs": {
+        "count": 5,
+        "median": 650.5,
+        "min": 633.5,
+        "max": 680.5
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 653.6000000238419,
+        "min": 636.6000000238419,
+        "max": 685.2999999523163
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 650.6000000238419,
+        "min": 634.5,
+        "max": 680.6000000238419
+      },
+      "longTasks": [
+        650,
+        672,
+        638,
+        633,
+        680
+      ]
+    },
+    {
+      "n": 20000,
+      "kind": "stream",
+      "mutationMs": {
+        "count": 5,
+        "median": 2.899999976158142,
+        "min": 2.600000023841858,
+        "max": 3.200000047683716
+      },
+      "settledMs": {
+        "count": 5,
+        "median": 31.399999976158142,
+        "min": 29.700000047683716,
+        "max": 33.59999990463257
+      },
+      "inputQueueDelayMs": {
+        "count": 5,
+        "median": 6.700000047683716,
+        "min": 6,
+        "max": 7.300000071525574
+      },
+      "longTasks": []
+    }
+  ],
+  "browser": {
+    "browser": "145.0.7632.0",
+    "production": true,
+    "viewport": {
+      "width": 1200,
+      "height": 800
+    },
+    "warmups": 1,
+    "samples": 5,
+    "results": [
+      {
+        "n": 1000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 17.799999952316284,
+        "settledMs": 26.199999928474426,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": 2481,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 22.100000023841858
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 22.047308999999927
+      },
+      {
+        "n": 1000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 19.300000071525574,
+        "settledMs": 26,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": 2721,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 23.399999976158142
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 22.73576300000002
+      },
+      {
+        "n": 1000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 19.899999976158142,
+        "settledMs": 32.299999952316284,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": 2961,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 24.600000023841858
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 24.43573200000003
+      },
+      {
+        "n": 1000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 23.199999928474426,
+        "settledMs": 30,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": 3201,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 27.100000023841858
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 26.783740999999964
+      },
+      {
+        "n": 1000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 15.600000023841858,
+        "settledMs": 32.800000071525574,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": 3441,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 19.200000047683716
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 18.85177299999998
+      },
+      {
+        "n": 1000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 320.89999997615814,
+        "settledMs": 324.39999997615814,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": 2481,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 321.10000002384186
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 1179.7000000476837,
+            "duration": 320
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 321.28285299999993
+      },
+      {
+        "n": 1000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 318.09999990463257,
+        "settledMs": 321.89999997615814,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": 2721,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 318.39999997615814
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 1505.7000000476837,
+            "duration": 318
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 318.42687799999976
+      },
+      {
+        "n": 1000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 294.8000000715256,
+        "settledMs": 297.89999997615814,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": 2961,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 295.2999999523163
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 1829,
+            "duration": 294
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 295.077323
+      },
+      {
+        "n": 1000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 271.60000002384186,
+        "settledMs": 275.3000000715256,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": 3201,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 272.2000000476837
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 2128,
+            "duration": 271
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 271.9420449999998
+      },
+      {
+        "n": 1000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 273.7000000476837,
+        "settledMs": 276.60000002384186,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": 3441,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 273.7000000476837
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 2405.5,
+            "duration": 273
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 273.9623260000003
+      },
+      {
+        "n": 1000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.100000023841858,
+        "settledMs": 29.600000023841858,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 4.799999952316284
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 4.7917200000001685
+      },
+      {
+        "n": 1000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.899999976158142,
+        "settledMs": 27.399999976158142,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 3.700000047683716
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 4.1818020000000615
+      },
+      {
+        "n": 1000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.299999952316284,
+        "settledMs": 31.899999976158142,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 5.700000047683716
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.2362889999999425
+      },
+      {
+        "n": 1000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.3000000715255737,
+        "settledMs": 32.89999997615814,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 5.700000047683716
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 5.2909779999999955
+      },
+      {
+        "n": 1000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 1000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.200000047683716,
+        "settledMs": 29.800000071525574,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 5.399999976158142
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 5.089199999999892
+      },
+      {
+        "n": 20000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 433.39999997615814,
+        "settledMs": 446.89999997615814,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": 2481,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 436.89999997615814
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 3995.8000000715256,
+            "duration": 436
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 436.98769600000014
+      },
+      {
+        "n": 20000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 381.09999990463257,
+        "settledMs": 400.7999999523163,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": 2721,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 384.10000002384186
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 4443.800000071526,
+            "duration": 383
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 383.961679
+      },
+      {
+        "n": 20000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 360.60000002384186,
+        "settledMs": 367.10000002384186,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": 2961,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 363.89999997615814
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 4845.5,
+            "duration": 363
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 364.2186729999994
+      },
+      {
+        "n": 20000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 351.7999999523163,
+        "settledMs": 363.2999999523163,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": 3201,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 354.8000000715256
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 5213.700000047684,
+            "duration": 354
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 354.70143800000005
+      },
+      {
+        "n": 20000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 358.60000002384186,
+        "settledMs": 365.2999999523163,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": 3441,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 362.3000000715256
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 5578.100000023842,
+            "duration": 361
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 361.8309170000002
+      },
+      {
+        "n": 20000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 650.5,
+        "settledMs": 653.6000000238419,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": 2481,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 650.6000000238419
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 7105.600000023842,
+            "duration": 650
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 650.6421200000004
+      },
+      {
+        "n": 20000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 672,
+        "settledMs": 675,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": 2721,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 672.7999999523163
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 7760.300000071526,
+            "duration": 672
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 672.2375009999996
+      },
+      {
+        "n": 20000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 638.2000000476837,
+        "settledMs": 641.3000000715256,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": 2961,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 638.7000000476837
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 8436.899999976158,
+            "duration": 638
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 638.5152689999995
+      },
+      {
+        "n": 20000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 633.5,
+        "settledMs": 636.6000000238419,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": 3201,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 634.5
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 9079.300000071526,
+            "duration": 633
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 633.8547900000012
+      },
+      {
+        "n": 20000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 264
+        },
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 680.5,
+        "settledMs": 685.2999999523163,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": 3441,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 680.6000000238419
+          }
+        ],
+        "longTasks": [
+          {
+            "startTime": 9722.600000023842,
+            "duration": 680
+          }
+        ],
+        "busy": false,
+        "dispatchCompletionMs": 680.780635000001
+      },
+      {
+        "n": 20000,
+        "repeat": 0,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 3.200000047683716,
+        "settledMs": 31.399999976158142,
+        "expectedFinalValue": 1240,
+        "finalValue": 1240,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 6.600000023841858
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.729881000001114
+      },
+      {
+        "n": 20000,
+        "repeat": 1,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.9000000953674316,
+        "settledMs": 33,
+        "expectedFinalValue": 1360,
+        "finalValue": 1360,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 6.899999976158142
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.216832000000068
+      },
+      {
+        "n": 20000,
+        "repeat": 2,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.899999976158142,
+        "settledMs": 31.399999976158142,
+        "expectedFinalValue": 1480,
+        "finalValue": 1480,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 6
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.0338860000010754
+      },
+      {
+        "n": 20000,
+        "repeat": 3,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.899999976158142,
+        "settledMs": 33.59999990463257,
+        "expectedFinalValue": 1600,
+        "finalValue": 1600,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 6.700000047683716
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.104089000000386
+      },
+      {
+        "n": 20000,
+        "repeat": 4,
+        "fixture": {
+          "production": true,
+          "rows": 20000,
+          "cells": 336,
+          "datasource": true
+        },
+        "kind": "stream",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 2.600000023841858,
+        "settledMs": 29.700000047683716,
+        "expectedFinalValue": 1720,
+        "finalValue": 1720,
+        "computedValue": null,
+        "input": [
+          {
+            "key": "x",
+            "delayMs": 7.300000071525574
+          }
+        ],
+        "longTasks": [],
+        "busy": false,
+        "dispatchCompletionMs": 6.384695999999167
+      }
+    ],
+    "activation": [
+      {
+        "dispose": false,
+        "count": 200,
+        "statuses": {
+          "cancelled:superseded": 199,
+          "activated": 1
+        },
+        "settledMs": 167.89999997615814,
+        "selection": {
+          "ranges": [
+            {
+              "startRow": 191,
+              "endRow": 191,
+              "startCol": 1,
+              "endCol": 1,
+              "anchor": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "focus": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "startRowId": "r19",
+              "endRowId": "r19"
+            }
+          ],
+          "activeRangeIndex": 0,
+          "activeCell": {
+            "rowIndex": 191,
+            "colIndex": 1,
+            "rowId": "r19"
+          },
+          "projectionRevision": 1,
+          "columnRevision": 2
+        }
+      },
+      {
+        "dispose": true,
+        "count": 200,
+        "statuses": {
+          "cancelled:disposed": 200
+        },
+        "settledMs": 150.10000002384186,
+        "selection": null
+      }
+    ],
+    "activationCounted": [
+      {
+        "count": 1,
+        "statuses": {
+          "activated": 1
+        },
+        "settledMs": 7.200000047683716,
+        "selection": {
+          "ranges": [
+            {
+              "startRow": 0,
+              "endRow": 0,
+              "startCol": 1,
+              "endCol": 1,
+              "anchor": {
+                "rowIndex": 0,
+                "colIndex": 1,
+                "rowId": "r0"
+              },
+              "focus": {
+                "rowIndex": 0,
+                "colIndex": 1,
+                "rowId": "r0"
+              },
+              "startRowId": "r0",
+              "endRowId": "r0"
+            }
+          ],
+          "activeRangeIndex": 0,
+          "activeCell": {
+            "rowIndex": 0,
+            "colIndex": 1,
+            "rowId": "r0"
+          },
+          "projectionRevision": 1,
+          "columnRevision": 2
+        },
+        "geometryReads": 2,
+        "scrollTopWrites": 1,
+        "scrollLeftWrites": 0
+      },
+      {
+        "count": 20,
+        "statuses": {
+          "cancelled:superseded": 19,
+          "activated": 1
+        },
+        "settledMs": 31.399999976158142,
+        "selection": {
+          "ranges": [
+            {
+              "startRow": 191,
+              "endRow": 191,
+              "startCol": 1,
+              "endCol": 1,
+              "anchor": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "focus": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "startRowId": "r19",
+              "endRowId": "r19"
+            }
+          ],
+          "activeRangeIndex": 0,
+          "activeCell": {
+            "rowIndex": 191,
+            "colIndex": 1,
+            "rowId": "r19"
+          },
+          "projectionRevision": 1,
+          "columnRevision": 2
+        },
+        "geometryReads": 6,
+        "scrollTopWrites": 19,
+        "scrollLeftWrites": 0
+      },
+      {
+        "count": 200,
+        "statuses": {
+          "cancelled:superseded": 199,
+          "activated": 1
+        },
+        "settledMs": 159.60000002384186,
+        "selection": {
+          "ranges": [
+            {
+              "startRow": 191,
+              "endRow": 191,
+              "startCol": 1,
+              "endCol": 1,
+              "anchor": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "focus": {
+                "rowIndex": 191,
+                "colIndex": 1,
+                "rowId": "r19"
+              },
+              "startRowId": "r19",
+              "endRowId": "r19"
+            }
+          ],
+          "activeRangeIndex": 0,
+          "activeCell": {
+            "rowIndex": 191,
+            "colIndex": 1,
+            "rowId": "r19"
+          },
+          "projectionRevision": 1,
+          "columnRevision": 2
+        },
+        "geometryReads": 60,
+        "scrollTopWrites": 190,
+        "scrollLeftWrites": 0
+      }
+    ],
+    "countedLoads": [
+      {
+        "kind": "burst",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 19,
+        "settledMs": 32.300000071525574,
+        "expectedFinalValue": 1120,
+        "finalValue": 1120,
+        "computedValue": 2241,
+        "input": [],
+        "longTasks": [],
+        "busy": false,
+        "work": {
+          "getSnapshot": 756,
+          "getRow": 138,
+          "getRowsInRange": 1,
+          "domMutationDeliveries": 1
+        }
+      },
+      {
+        "kind": "exclusive",
+        "count": 120,
+        "calls": 120,
+        "mutationMs": 296.1999999284744,
+        "settledMs": 299.89999997615814,
+        "expectedFinalValue": 1120,
+        "finalValue": 1120,
+        "computedValue": 2241,
+        "input": [],
+        "longTasks": [
+          {
+            "startTime": 12944.700000047684,
+            "duration": 296
+          }
+        ],
+        "busy": false,
+        "work": {
+          "getSnapshot": 9681,
+          "getRow": 8349,
+          "getRowsInRange": 1,
+          "domMutationDeliveries": 1
+        }
+      }
+    ],
+    "memory": [
+      {
+        "accepted": 0,
+        "heapUsed": 15502884
+      },
+      {
+        "accepted": 1000,
+        "heapUsed": 16377928,
+        "pending": 1000,
+        "completed": 0,
+        "busy": true
+      },
+      {
+        "accepted": 5000,
+        "heapUsed": 19850820,
+        "pending": 5000,
+        "completed": 0,
+        "busy": true
+      },
+      {
+        "accepted": 10000,
+        "heapUsed": 24202740,
+        "pending": 10000,
+        "completed": 0,
+        "busy": true
+      },
+      {
+        "accepted": 10000,
+        "afterDrain": true,
+        "heapUsed": 15522616,
+        "pending": 0,
+        "completed": 10000,
+        "busy": false
+      }
+    ],
+    "errors": []
+  }
+}

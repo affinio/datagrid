@@ -1,0 +1,589 @@
+{
+  "capturedAt": "2026-10-25T07:41:26.795Z",
+  "commit": "79092ff0e7ba27181237c3e4db57b1186f157be0",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "arm64",
+    "pnpm": "10.30.3"
+  },
+  "workingTreeChangesAtCapture": [
+    "M docs/datagrid-accessibility.md",
+    " M docs/datagrid-clipboard.md",
+    " M docs/datagrid-styling.md",
+    " M docs/datagrid-troubleshooting-runbook.md",
+    " M docs/internal/README.md",
+    " M e2e/sandbox-grid.spec.ts",
+    " M e2e/sandbox-interactions.spec.ts",
+    " M packages/datagrid-core/src/core/gridApi.ts",
+    " M packages/datagrid-core/src/core/gridApiLifecycleRuntime.ts",
+    " M packages/datagrid-core/src/models/__tests__/dataSourceBackedRowModel.spec.ts",
+    " M packages/datagrid-core/src/models/server/dataSourceOptimisticCommitRuntime.ts",
+    " M packages/datagrid-core/src/models/server/dataSourceOptimisticMutationEngine.ts",
+    " M packages/datagrid-core/src/runtime/rafScheduler.ts",
+    " M packages/datagrid-orchestration/src/__tests__/useDataGridCellRefreshBatcher.contract.spec.ts",
+    " M packages/datagrid-orchestration/src/runtime/useDataGridCellRefreshBatcher.ts",
+    " M packages/datagrid-sandbox/src/components/CoreGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueFormulaGridCard.spec.ts",
+    " M packages/datagrid-sandbox/src/components/VueFormulaGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueGridCard.vue",
+    " M packages/datagrid-sandbox/src/components/VueShellGridCard.spec.ts",
+    " M packages/datagrid-sandbox/src/components/VueShellGridCard.vue",
+    " M packages/datagrid-sandbox/src/styles.css",
+    " M packages/datagrid-server-client/src/changeFeedPoller.spec.ts",
+    " M packages/datagrid-server-client/src/changeFeedPoller.ts",
+    " M packages/datagrid-spreadsheet-vue-app/src/DataGridSpreadsheetWorkbookApp.vue",
+    " M packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/__tests__/DataGridTableStage.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/__tests__/ensureDataGridAppStyles.contract.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/exportDataGridXlsx.ts",
+    " M packages/datagrid-vue/src/app-layer/gantt.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/DataGridTableStageHeader.vue",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/dataGridChromeCanvasMath.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageChromeCanvas.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/__tests__/useDataGridStageRowIndex.spec.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/dataGridChromeCanvasMath.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeCanvas.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageChromeModel.ts",
+    " M packages/datagrid-vue/src/app-layer/stage/useDataGridStageRowIndex.ts",
+    " M packages/datagrid-vue/src/app-layer/theme/ensureDataGridAppStyles.ts",
+    " M packages/datagrid-vue/src/app/__tests__/useDataGridAppClipboard.contract.spec.ts",
+    " M packages/datagrid-vue/src/app/useDataGridAppClipboard.ts",
+    " M packages/datagrid-worker/src/__tests__/postMessageTransport.spec.ts",
+    " M packages/datagrid-worker/src/__tests__/workerOwnedRowModel.spec.ts",
+    " M packages/datagrid-worker/src/postMessageTransport.ts",
+    " M packages/datagrid-worker/src/workerOwnedRowModel.ts",
+    "?? docs/internal/audits/202610/datagrid-overload-results.json",
+    "?? docs/internal/audits/datagrid-identity-scope-audit-2026-10.md",
+    "?? docs/internal/audits/datagrid-overload-audit-2026-10.md",
+    "?? docs/internal/audits/datagrid-overload-fixes-2026-10.md",
+    "?? e2e/sandbox-grouped-clipboard.spec.ts",
+    "?? packages/datagrid-core/src/core/__tests__/gridApiLifecycleRuntime.contract.spec.ts",
+    "?? packages/datagrid-core/src/runtime/__tests__/rafScheduler.contract.spec.ts",
+    "?? packages/datagrid-sandbox/src/components/CoreGridCard.spec.ts",
+    "?? packages/datagrid-sandbox/src/components/VueGridCard.spec.ts",
+    "?? scripts/audits/datagrid-identity/",
+    "?? scripts/audits/datagrid-overload/"
+  ],
+  "productTrackedDiffShaBefore": "5d36f28aa0e7bfe883d1745f142280b8ee0764def8a9b444ec754850cc983bb2",
+  "productTrackedDiffShaAtCapture": "5d36f28aa0e7bfe883d1745f142280b8ee0764def8a9b444ec754850cc983bb2",
+  "sourceSha256": {
+    "packages/datagrid-core/src/models/dataSourceBackedRowModel.ts": "05151b44d9dbfb695ec2a8548754f29ed328484b55e4012fc38c97ea5492480b",
+    "packages/datagrid-core/src/models/editModel.ts": "2b384b676a285a2bd0033740aeb341e77b16c96dad07f2346063b1308cd207f8",
+    "packages/datagrid-core/src/models/projection/groupProjectionController.ts": "05f44d61000a3cd1f0e705cad16eeda4e0343468df83c0264c414cc58f5c2b06",
+    "packages/datagrid-core/src/models/projection/clientRowProjectionSort.ts": "d1c8df3d34050019ea46b6931177a1a3d5ea52dc3c7e5ea59150206b973264c5",
+    "packages/datagrid-core/src/models/tree/treeProjectionParentMaterializer.ts": "5ed791e6ff1bfa05288d9545b351023ba7fa954f6979fc159b6697658e8ccbd8",
+    "packages/datagrid-core/src/models/state/clientRowRuntimeStateStore.ts": "ad05387ec856c02f9a158d6c427d9a10d5c47c9745fc1a69ae79dbd1036d4278",
+    "packages/datagrid-core/src/core/gridApiStateMethods.ts": "600c4e2d87f5f34e3133bb515390c14073619647c15e4802150e54015086c6b9",
+    "packages/datagrid-core/src/selection/virtualSelection.ts": "3385acf9ade1c1a073d8401f0d6deaaac0093a25f7a625f3b82e3a3046f6056c",
+    "packages/datagrid-orchestration/src/runtime/useDataGridRuntimeService.ts": "95126c4993feb277cb0495625fff574d413080e08c2c61e2e81e6d99e520f0bb",
+    "packages/datagrid-orchestration/src/grouping/useDataGridGroupMetaOrchestration.ts": "69e7173c316d7edde3d1178eea2fc28ecf07df005ecd5daf91c2ef10ea233b2f",
+    "packages/datagrid-vue/src/app-layer/host/DataGridDefaultRenderer.ts": "46b1fdae05abe8079994282b1f777457133b48ba2af58145a33c11a3fc6e9922",
+    "packages/datagrid-vue/src/app/useDataGridAppIntentHistory.ts": "aeb0b0de134246026a1944902572e3a60f0f15a7c93b09bb02451d98dad5c0df"
+  },
+  "headless": {
+    "typedSourceIds": {
+      "number": 30,
+      "string": 20,
+      "selected": [
+        1,
+        "1"
+      ]
+    },
+    "groupTypedIds": {
+      "source": [
+        {
+          "id": 1,
+          "g": "A"
+        },
+        {
+          "id": "1",
+          "g": "B"
+        }
+      ],
+      "expectedGroups": [
+        "A",
+        "B"
+      ],
+      "actual": [
+        {
+          "value": "A",
+          "count": 2
+        }
+      ]
+    },
+    "groupCompositeKeys": {
+      "actual": [
+        "child-A",
+        "parent-A"
+      ],
+      "expected": [
+        "child-A",
+        "child-B"
+      ],
+      "collidingKey": "a::b::c"
+    },
+    "editComposite": {
+      "expectedEdits": 2,
+      "actual": [
+        {
+          "rowId": "a::b",
+          "columnKey": "c",
+          "value": "second"
+        }
+      ],
+      "firstLookup": {
+        "rowId": "a::b",
+        "columnKey": "c",
+        "value": "second"
+      }
+    },
+    "sortTuple": {
+      "actual": [
+        "r1",
+        "r2"
+      ],
+      "expected": [
+        "r2",
+        "r1"
+      ],
+      "retainedSort": [
+        {
+          "key": "a:b",
+          "field": "c",
+          "direction": "asc"
+        }
+      ]
+    },
+    "treeTypedIds": {
+      "groupKeys": [
+        "tree:parent:1",
+        "tree:parent:1"
+      ],
+      "targetedParent": 1,
+      "actualCollapsedRows": [
+        1,
+        "n",
+        "1"
+      ],
+      "afterRefresh": [
+        1,
+        "1"
+      ],
+      "expectedCollapsedRows": [
+        1,
+        "1",
+        "s"
+      ]
+    },
+    "groupNamespace": {
+      "source": {
+        "id": "group:1:g1:A",
+        "g": "A"
+      },
+      "projectedIds": [
+        "group:1:g1:A",
+        "group:1:g1:A"
+      ],
+      "kinds": [
+        "group",
+        "leaf"
+      ]
+    },
+    "pivotAuthoredCollision": {
+      "generatedKey": "pivot|pivot:column:4:year4:2024|pivot:agg:3:sum0:7:revenue",
+      "field": "note",
+      "visible": false,
+      "visibleKeys": [
+        "team"
+      ]
+    },
+    "getterRoundtrip": {
+      "acceptedGetter": "new",
+      "afterPivotRoundtrip": "old",
+      "previousFindingRef": "consistency #6 incomplete callback identity coverage"
+    },
+    "legacyGroupMeta": {
+      "expectedGroups": 2,
+      "actualGroups": 1,
+      "badgeForNumberOne": "B (1)"
+    },
+    "formulaIdentityRoundtrip": {
+      "replace": 16,
+      "removeReadd": 6,
+      "unregisterReregister": 9
+    },
+    "retentionPolicy": {
+      "hiddenSelected": [
+        42
+      ],
+      "heightAfterIdReuse": 60,
+      "classification": "documented override retention; explicit ID selection capability owns lifecycle"
+    },
+    "restoreDatasetPolicy": {
+      "validation": {
+        "valid": true,
+        "applicableSections": [
+          "rows",
+          "columns",
+          "selection",
+          "viewport"
+        ],
+        "skippedSections": [
+          "viewportPosition"
+        ],
+        "issues": []
+      },
+      "classification": "explicit restore rebinds; no source dataset compatibility token in V1 state"
+    },
+    "columnRoundtrip": {
+      "sameKeyNewField": {
+        "status": "available",
+        "rowId": 42,
+        "columnKey": "v",
+        "sourceValue": "new",
+        "computedValue": "new",
+        "formattedValue": "new",
+        "displayValue": "new",
+        "value": "new",
+        "writeTarget": {
+          "kind": "row-patch",
+          "key": "next"
+        }
+      },
+      "removeReadd": "old source field"
+    },
+    "restoreMissingLogicalCell": {
+      "validation": {
+        "valid": true,
+        "applicableSections": [
+          "columns",
+          "selection",
+          "viewport"
+        ],
+        "skippedSections": [
+          "rows",
+          "viewportPosition"
+        ],
+        "issues": []
+      },
+      "snapshot": {
+        "activeCell": {
+          "rowIndex": 0,
+          "colIndex": 0,
+          "rowId": "A"
+        },
+        "activeRangeIndex": 0,
+        "ranges": [
+          {
+            "startRow": 0,
+            "endRow": 0,
+            "startCol": 0,
+            "endCol": 0,
+            "startRowId": "A",
+            "endRowId": "A",
+            "anchor": {
+              "rowIndex": 0,
+              "colIndex": 0,
+              "rowId": "A"
+            },
+            "focus": {
+              "rowIndex": 0,
+              "colIndex": 0,
+              "rowId": "A"
+            }
+          }
+        ],
+        "projectionRevision": 2,
+        "columnRevision": 1
+      },
+      "status": "current",
+      "actualRowAtIndexZero": "B"
+    },
+    "passThroughIdentity": {
+      "before": {
+        "revision": 1,
+        "projection": {
+          "version": 1,
+          "cycleVersion": 1,
+          "recomputeVersion": 0,
+          "staleStages": [],
+          "lastInvalidationReasons": [
+            "rowsChanged"
+          ],
+          "lastInvalidatedStages": [
+            "compute",
+            "filter",
+            "sort",
+            "group",
+            "pivot",
+            "aggregate",
+            "paginate",
+            "visible"
+          ],
+          "lastRecomputeHadActual": false,
+          "lastRecomputedStages": [],
+          "lastBlockedStages": [],
+          "pipeline": {
+            "rowCounts": {
+              "source": 1,
+              "afterCompute": 1,
+              "afterFilter": 1,
+              "afterSort": 1,
+              "afterGroup": 1,
+              "afterPivot": 1,
+              "afterAggregate": 1,
+              "afterPaginate": 1,
+              "visible": 1
+            }
+          },
+          "memory": {
+            "rowIndexBytes": 32,
+            "sortBufferBytes": 32,
+            "groupBuckets": 0,
+            "pivotCells": 0
+          }
+        }
+      },
+      "after": {
+        "revision": 3,
+        "projection": {
+          "version": 3,
+          "cycleVersion": 3,
+          "recomputeVersion": 0,
+          "staleStages": [],
+          "lastInvalidationReasons": [
+            "manualRefresh"
+          ],
+          "lastInvalidatedStages": [
+            "compute",
+            "filter",
+            "sort",
+            "group",
+            "pivot",
+            "aggregate",
+            "paginate",
+            "visible"
+          ],
+          "lastRecomputeHadActual": false,
+          "lastRecomputedStages": [],
+          "lastBlockedStages": [],
+          "pipeline": {
+            "rowCounts": {
+              "source": 1,
+              "afterCompute": 1,
+              "afterFilter": 1,
+              "afterSort": 1,
+              "afterGroup": 1,
+              "afterPivot": 1,
+              "afterAggregate": 1,
+              "afterPaginate": 1,
+              "visible": 1
+            }
+          },
+          "memory": {
+            "rowIndexBytes": 32,
+            "sortBufferBytes": 32,
+            "groupBuckets": 0,
+            "pivotCells": 0
+          }
+        }
+      },
+      "cellStatus": "current",
+      "allStatus": "current",
+      "selection": {
+        "activeCell": {
+          "rowIndex": 0,
+          "colIndex": 0,
+          "rowId": "A"
+        },
+        "activeRangeIndex": 0,
+        "ranges": [
+          {
+            "startRow": 0,
+            "endRow": 0,
+            "startCol": 0,
+            "endCol": 0,
+            "startRowId": "A",
+            "endRowId": "A",
+            "anchor": {
+              "rowIndex": 0,
+              "colIndex": 0,
+              "rowId": "A"
+            },
+            "focus": {
+              "rowIndex": 0,
+              "colIndex": 0,
+              "rowId": "A"
+            }
+          }
+        ],
+        "projectionRevision": 0,
+        "columnRevision": 1
+      },
+      "actualRowAtZero": "B"
+    },
+    "groupValues": {
+      "groups": [
+        {
+          "key": "group:1:g3:a|b",
+          "value": "a|b",
+          "count": 1
+        },
+        {
+          "key": "group:1:g3:a:b",
+          "value": "a:b",
+          "count": 1
+        },
+        {
+          "key": "group:1:g0:",
+          "value": "",
+          "count": 2
+        },
+        {
+          "key": "group:1:g1:雪",
+          "value": "雪",
+          "count": 1
+        },
+        {
+          "key": "group:1:g1:1",
+          "value": "1",
+          "count": 2
+        }
+      ],
+      "note": "implemented normalization merges null/empty and number/string axis values; typed source IDs are separate; raw-type grouping policy not explicitly documented"
+    },
+    "querySupersession": {
+      "pulls": 2,
+      "actual": {
+        "id": 42,
+        "v": "new"
+      },
+      "datasetVersion": 20
+    },
+    "optimisticQueryRollback": {
+      "initial": [
+        {
+          "id": "A",
+          "v": 10
+        },
+        {
+          "id": "B",
+          "v": 20
+        }
+      ],
+      "beforeReject": [
+        {
+          "id": "B",
+          "v": 20
+        },
+        {
+          "id": "A",
+          "v": 99
+        }
+      ],
+      "afterReject": [
+        {
+          "id": "A",
+          "v": 10
+        },
+        {
+          "id": "A",
+          "v": 99
+        }
+      ],
+      "expectedAfterReject": [
+        {
+          "id": "B",
+          "v": 20
+        },
+        {
+          "id": "A",
+          "v": 10
+        }
+      ]
+    },
+    "treePathEncoding": {
+      "paths": [
+        [
+          "a",
+          "b|c"
+        ],
+        [
+          "a|b",
+          "c"
+        ],
+        [
+          "a:b",
+          "雪"
+        ],
+        [
+          "a",
+          "b:c"
+        ]
+      ],
+      "groupKeys": [
+        "tree:path:1:a",
+        "tree:path:1:a3:b|c",
+        "tree:path:1:a3:b:c",
+        "tree:path:3:a|b",
+        "tree:path:3:a|b1:c",
+        "tree:path:3:a:b",
+        "tree:path:3:a:b1:雪"
+      ]
+    },
+    "sheetReuse": {
+      "canonicalCollisionRejected": true,
+      "old": "2",
+      "new": "7"
+    },
+    "independentScopes": {
+      "modelAComputed": 4,
+      "modelBUndefined": true,
+      "workbookA": 2,
+      "workbookB": 7
+    }
+  },
+  "vueJsdom": {
+    "typedMenuDelete": {
+      "inputIds": [
+        1,
+        "1"
+      ],
+      "target": 1,
+      "expectedRemainingIds": [
+        "1"
+      ],
+      "actualRemainingCount": 0,
+      "publicTypedActionRemainingCount": 0
+    },
+    "editorSchemaPolicy": {
+      "initial": {
+        "old": "same",
+        "next": "same"
+      },
+      "sameColumnKey": "display",
+      "editorSurvivedSchema": false,
+      "final": {
+        "rowId": 42,
+        "old": "same",
+        "next": "same"
+      },
+      "classification": "policy observation; source-field mutation under stable key is not documented"
+    },
+    "historyReusePolicy": {
+      "beforeUndo": {
+        "rowId": 42,
+        "name": "B",
+        "dataset": "B"
+      },
+      "undoResult": "commit-1",
+      "afterUndo": {
+        "rowId": 42,
+        "name": "A",
+        "dataset": "A"
+      },
+      "classification": "same ID in same mounted runtime means same logical target; dataset boundary policy unspecified"
+    }
+  }
+}
