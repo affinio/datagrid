@@ -22,11 +22,16 @@
           Group by
           <select v-model="groupByField">
             <option value="">None</option>
-            <option v-for="column in visibleColumns" :key="`group-by-${column.key}`" :value="column.key">
+            <option v-for="column in groupableColumns" :key="`group-by-${column.key}`" :value="column.key">
               {{ column.column.label ?? column.key }}
             </option>
+            <option value="owner,source">Owner → Source</option>
           </select>
         </label>
+        <div v-if="groupByField" class="group-actions">
+          <button type="button" @click="api.rows.expandAllGroups()">Expand all</button>
+          <button type="button" @click="api.rows.collapseAllGroups()">Collapse all</button>
+        </div>
         <label>
           Render
           <select v-model="rowRenderMode">
@@ -156,6 +161,7 @@
               :key="`header-${column.key}`"
               class="grid-cell grid-cell--header grid-cell--header-sortable"
               :style="columnStyle(column.key)"
+              :data-column-key="column.key"
               @click="toggleSortForColumn(column.key)"
             >
               <div class="col-head">
@@ -192,7 +198,7 @@
             v-for="(row, rowOffset) in displayRows"
             :key="String(row.rowId)"
             class="grid-row"
-            :class="{ 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset) }"
+            :class="{ 'grid-row--autosize-probe': isRowAutosizeProbe(row, rowOffset), 'row--group': row.kind === 'group' }"
             :style="rowStyle(row, rowOffset)"
           >
             <div class="grid-cell grid-cell--index" :style="indexColumnStyle">
@@ -229,6 +235,7 @@
                 :style="columnStyle(column.key)"
                 :data-row-index="viewportRange.start + rowOffset"
                 :data-column-index="columnIndex"
+                :data-column-key="column.key"
                 tabindex="0"
                 @mousedown.prevent="handleCellMouseDown($event, row, rowOffset, columnIndex)"
                 @keydown.stop="handleCellKeydown($event, row, rowOffset, columnIndex)"
@@ -251,6 +258,20 @@
                   @keydown.stop="handleEditorKeydown"
                   @blur="commitInlineEdit"
                 />
+                <button
+                  v-if="row.kind === 'group' && column.key === 'name'"
+                  type="button"
+                  class="datagrid-hierarchy-group core-group-cell"
+                  :style="{ '--datagrid-hierarchy-depth': row.groupMeta?.level ?? 0 }"
+                  :aria-label="`${row.state.expanded ? 'Collapse' : 'Expand'} ${String(row.groupMeta?.groupValue ?? row.rowId)}`"
+                  :aria-expanded="row.state.expanded ? 'true' : 'false'"
+                  @click.stop="toggleGroup(row)"
+                >
+                  <span aria-hidden="true">{{ row.state.expanded ? '▾' : '▸' }}</span>
+                  <span v-if="groupByField.includes(',')" class="core-group-cell__field">{{ row.groupMeta?.groupField }}</span>
+                  <strong>{{ String(row.groupMeta?.groupValue ?? row.rowId) }}</strong>
+                  <span class="core-group-cell__count">{{ row.groupMeta?.childrenCount ?? 0 }}</span>
+                </button>
                 <template v-else>{{ readCell(row, column.key) }}</template>
               </div>
             </div>
@@ -447,6 +468,10 @@ const core = createDataGridCore({
   },
 })
 const api = createDataGridApi<CoreBaseRow>({ core })
+api.rows.setAggregationModel({
+  basis: "filtered",
+  columns: [{ key: "amount", field: "amount", op: "sum" }],
+})
 
 const captureRowsSnapshot = (): GridRowsSnapshot<CoreBaseRow> => {
   const count = api.rows.getCount()
@@ -503,6 +528,11 @@ const resolveViewportRangeFromElement = (element: HTMLElement): DataGridViewport
   const end = Math.min(total - 1, start + visibleCount - 1)
   return { start, end }
 }
+
+watch(rowVersion, () => {
+  const element = bodyViewportRef.value
+  if (element) syncRangeRows(resolveViewportRangeFromElement(element))
+}, { flush: "post" })
 
 const syncHeaderScrollLeftFromBody = (bodyScrollLeft: number): void => {
   const headerViewport = headerViewportRef.value
@@ -621,22 +651,24 @@ watch([() => sortState.value?.key ?? "", () => sortState.value?.direction ?? "",
 }, { immediate: true, deep: true })
 
 const buildGroupBySpec = (field: string): DataGridGroupBySpec | null => {
-  const trimmed = field.trim()
-  if (!trimmed) {
+  const fields = field.split(",").map(value => value.trim()).filter(Boolean)
+  if (fields.length === 0) {
     return null
   }
   return {
-    fields: [trimmed],
+    fields,
     expandedByDefault: true,
   }
 }
 
 watch(groupByField, nextField => {
-  api.rows.setGroupBy(buildGroupBySpec(nextField))
+  const nextGroupBy = buildGroupBySpec(nextField)
+  api.rows.setGroupBy(nextGroupBy)
+  syncGroupedColumnVisibility(nextGroupBy?.fields ?? [])
   void nextTick(() => {
     syncViewportFromDom()
   })
-}, { immediate: true })
+})
 
 watch([rowRenderMode, paginationPageSize, paginationPage], () => {
   if (rowRenderMode.value === "pagination") {
@@ -808,6 +840,34 @@ const visibleColumns = computed<readonly DataGridColumnSnapshot[]>(() => {
   void columnVersion.value
   return columnModel.getSnapshot().visibleColumns
 })
+const groupableColumns = computed(() => {
+  void columnVersion.value
+  return columnModel.getSnapshot().columns.filter(column => column.column.capabilities?.groupable === true)
+})
+const groupedColumnVisibilityBeforeHide = new Map<string, boolean>()
+const syncGroupedColumnVisibility = (fields: readonly string[]): void => {
+  const groupedFields = new Set(fields)
+  for (const [key, wasVisible] of groupedColumnVisibilityBeforeHide) {
+    if (groupedFields.has(key)) continue
+    if (api.columns.getSnapshot().byKey[key]?.visible !== wasVisible) {
+      api.columns.setVisibility(key, wasVisible)
+    }
+    groupedColumnVisibilityBeforeHide.delete(key)
+  }
+  for (const field of groupedFields) {
+    const column = api.columns.getSnapshot().byKey[field]
+    if (!column) continue
+    if (!groupedColumnVisibilityBeforeHide.has(field)) {
+      groupedColumnVisibilityBeforeHide.set(field, column.visible)
+    }
+    if (column.visible) api.columns.setVisibility(field, false)
+  }
+}
+const toggleGroup = (row: DataGridRowNode<CoreBaseRow>): void => {
+  if (row.kind === "group" && row.groupMeta?.groupKey) {
+    api.rows.toggleGroup(row.groupMeta.groupKey)
+  }
+}
 const {
   isColumnLayoutPanelOpen,
   columnLayoutPanelItems,
@@ -2608,9 +2668,9 @@ const handleResizeDoubleClick = (event: MouseEvent, key: string): void => {
 
 const readCell = (row: DataGridRowNode<CoreBaseRow>, key: string): string => {
   if (row.kind === "group") {
-    return key === "name"
-      ? `[group] ${String(row.groupMeta?.groupValue ?? row.rowId)}`
-      : ""
+    if (key === "name") return `[group] ${String(row.groupMeta?.groupValue ?? row.rowId)}`
+    const aggregate = row.groupMeta?.aggregates?.[key]
+    return aggregate == null ? "" : String(aggregate)
   }
   const value = (row.data as Record<string, unknown>)[key]
   return value == null ? "" : String(value)

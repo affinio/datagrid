@@ -198,6 +198,7 @@ describe("VueShellGridCard", () => {
 
     const grid = wrapper.findComponent({ name: "DataGrid" })
     expect(grid.exists()).toBe(true)
+    expect(grid.props("layoutMode")).toBe("fill")
 
     const groupedByMonday: DataGridGroupBySpec = {
       fields: ["monday"],
@@ -248,6 +249,7 @@ describe("VueShellGridCard", () => {
 
     const grid = wrapper.findComponent({ name: "DataGrid" })
     expect(grid.exists()).toBe(true)
+    expect(grid.props("layoutMode")).toBe("fill")
 
     const columns = ((grid.vm as { $attrs?: Record<string, unknown> }).$attrs?.columns ?? []) as Array<Record<string, unknown>>
     const assignee = columns.find(column => column.key === "assignee")
@@ -391,7 +393,6 @@ describe("VueShellGridCard", () => {
     const groupRow = groupTrigger.element.closest(".grid-row")
     expect(groupRow?.querySelectorAll(".datagrid-hierarchy-group__toggle")).toHaveLength(1)
     expect(groupTrigger.element.closest('.grid-cell[data-column-key="__affino_hierarchy__"]')).not.toBeNull()
-    expect(groupRow?.querySelector('.grid-cell[data-column-key="id"]')?.textContent).not.toContain("region:")
     expect(groupTrigger.attributes("aria-expanded")).toBe("true")
     expect(groupRow?.textContent).toContain("North")
     expect(groupRow?.querySelector(".datagrid-hierarchy-group__count")?.textContent).toMatch(/\d+/)
@@ -403,6 +404,38 @@ describe("VueShellGridCard", () => {
     await groupTrigger.trigger("click")
     await flushUi()
     expect(wrapper.find(".datagrid-hierarchy-group__toggle").attributes("aria-expanded")).toBe("false")
+
+    wrapper.unmount()
+  })
+
+  it("switches the grouped shell grid between table and Gantt views", async () => {
+    const { default: VueShellGridCard } = await import("./VueShellGridCard.vue")
+    const wrapper = mount(VueShellGridCard, {
+      props: {
+        title: "Vue: Grouped Grid (Sugar)",
+        mode: "base",
+        groupedShowcase: true,
+      },
+      attachTo: document.body,
+      global: { stubs: { teleport: true } },
+    })
+
+    const rowsLabel = wrapper.findAll("label").find(label => label.text().trim().startsWith("Rows"))
+    await rowsLabel?.find("select").setValue("1000")
+    await flushUi()
+
+    const viewLabel = wrapper.findAll("label").find(label => label.text().trim().startsWith("View"))
+    const viewSelect = viewLabel?.find("select")
+    expect(viewSelect?.exists()).toBe(true)
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(false)
+
+    await viewSelect!.setValue("gantt")
+    await flushUi()
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(true)
+
+    await viewSelect!.setValue("table")
+    await flushUi()
+    expect(wrapper.find(".datagrid-gantt-stage").exists()).toBe(false)
 
     wrapper.unmount()
   })

@@ -4838,6 +4838,9 @@ function clearHoveredFormulaReferenceKey(): void {
 }
 
 .spreadsheet-card__header {
+  min-height: 0;
+  max-height: 44%;
+  overflow-y: auto;
   gap: 10px;
 }
 
@@ -5084,6 +5087,8 @@ function clearHoveredFormulaReferenceKey(): void {
 }
 
 .spreadsheet-grid-stage {
+  display: flex;
+  flex: 1 1 0%;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -5229,6 +5234,9 @@ function clearHoveredFormulaReferenceKey(): void {
 }
 
 .spreadsheet-grid-host {
+  display: flex;
+  flex: 1 1 0%;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--spreadsheet-border);

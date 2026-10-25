@@ -81,7 +81,7 @@
         ref="gridRef"
         :rows="rows"
         :columns="columns"
-        layout-mode="auto-height"
+        layout-mode="fill"
         :min-rows="8"
         :max-rows="16"
         fill-handle
@@ -95,6 +95,16 @@
         }"
         :client-row-model-options="clientRowModelOptions"
         :group-by="groupBy"
+        :grouping-presentation="{
+          display: 'hierarchy-column',
+          hierarchyColumn: {
+            headerName: 'Group / product',
+            leafColumnId: 'product',
+            hideLeafSourceColumn: true,
+            showCount: true,
+            showGroupFieldLabel: 'auto',
+          },
+        }"
         :aggregation-model="aggregationModel"
         :xlsx-export="{
           fileName: 'formula-export-workbench.xlsx',
@@ -358,7 +368,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     label: "Subtotal",
     dataType: "currency",
     initialState: { width: 118 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: { align: "right", headerAlign: "right", format: { number: { locale: "en-US", maximumFractionDigits: 2 } } },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     formula: "price * qty",
   },
@@ -367,7 +377,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     label: "Tax",
     dataType: "currency",
     initialState: { width: 110 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: { align: "right", headerAlign: "right", format: { number: { locale: "en-US", maximumFractionDigits: 2 } } },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     formula: "subtotal * taxRate",
   },
@@ -376,7 +386,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     label: "Total",
     dataType: "currency",
     initialState: { width: 118 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: { align: "right", headerAlign: "right", format: { number: { locale: "en-US", maximumFractionDigits: 2 } } },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     export: { style: WORKBOOK_CELL_STYLES.total },
     formula: "subtotal + tax + shipping - discount",
@@ -386,7 +396,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     label: "Margin",
     dataType: "currency",
     initialState: { width: 118 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: { align: "right", headerAlign: "right", format: { number: { locale: "en-US", maximumFractionDigits: 2 } } },
     capabilities: { sortable: true, filterable: true, aggregatable: true },
     formula: "total - cost",
   },
@@ -395,7 +405,7 @@ const columns = defineDataGridColumns<FormulaSandboxRow>()([
     label: "Margin %",
     dataType: "percent",
     initialState: { width: 108 },
-    presentation: { align: "right", headerAlign: "right" },
+    presentation: { align: "right", headerAlign: "right", format: { number: { locale: "en-US", style: "percent", maximumFractionDigits: 2 } } },
     capabilities: { sortable: true, filterable: true },
     export: { style: WORKBOOK_CELL_STYLES.marginPct },
     formula: "SAFE_DIVIDE(total - cost, total, 0)",
@@ -691,8 +701,17 @@ rebuildModel();
 <style scoped>
 .grid-host {
   display: flex;
+  flex: 1 1 0%;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.grid-host :deep(.affino-datagrid-app-root) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 :deep(.formula-workbench-cell--filtered-segment) {

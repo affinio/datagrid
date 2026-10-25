@@ -38,6 +38,19 @@
             </option>
           </select>
         </label>
+        <label v-if="props.mode === 'base'">
+          Group by
+          <select v-model="groupByField" @change="applyGroupByField">
+            <option value="">None</option>
+            <option
+              v-for="column in columns.filter(entry => entry.capabilities?.groupable === true)"
+              :key="`group-by-${column.key}`"
+              :value="column.key"
+            >
+              {{ column.label ?? column.key }}
+            </option>
+          </select>
+        </label>
         <label>
           Value filter
           <select v-model.number="valueFilterRowLimit">
@@ -108,6 +121,11 @@
           </select>
         </label>
         <div v-if="props.mode === 'tree' || props.mode === 'pivot' || (props.mode === 'base' && hasActiveGrouping)" class="group-actions">
+          <span v-for="(field, index) in activeGroupBy?.fields ?? []" :key="`grouped-field-${field}`">
+            {{ index + 1 }}. {{ columns.find(column => column.key === field)?.label ?? field }}
+            <button type="button" :aria-label="`Remove ${field} grouping`" @click="removeGroupByField(field)">×</button>
+          </span>
+          <button v-if="hasActiveGrouping" type="button" @click="clearGrouping">Clear grouping</button>
           <button type="button" @click="runtime.api.rows.expandAllGroups()">Expand all</button>
           <button type="button" @click="runtime.api.rows.collapseAllGroups()">Collapse all</button>
         </div>
@@ -210,9 +228,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue"
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from "vue"
 import { applyGridTheme, industrialNeutralTheme, resolveGridThemeTokens } from "@affino/datagrid-theme"
 import type {
+  DataGridAppGroupCellRenderer,
   DataGridColumnSnapshot,
   DataGridPivotSpec,
   UseDataGridRuntimeResult,
@@ -535,6 +554,29 @@ const props = defineProps<{
 const cardRootRef = ref<HTMLElement | null>(null)
 const tableStageRef = ref<DataGridTableStageExpose | null>(null)
 const sandboxThemeTokens = resolveGridThemeTokens(industrialNeutralTheme)
+const groupCellRenderer: DataGridAppGroupCellRenderer<VueSandboxRow> = ({ group }) => {
+  const expanded = group.renderMeta.isExpanded === true
+  return h("div", {
+    class: "datagrid-hierarchy-group",
+    style: { "--datagrid-hierarchy-depth": group.renderMeta.level },
+  }, [
+    h("button", {
+      type: "button",
+      class: "datagrid-hierarchy-group__toggle",
+      "aria-label": `${expanded ? "Collapse" : "Expand"} ${group.value}`,
+      "aria-expanded": expanded ? "true" : "false",
+      onClick: (event: MouseEvent) => {
+        event.stopPropagation()
+        group.toggle()
+      },
+    }, expanded ? "▾" : "▸"),
+    (activeGroupBy.value?.fields.length ?? 0) > 1
+      ? h("span", { class: "datagrid-hierarchy-group__field" }, String(group.field))
+      : null,
+    h("strong", { class: "datagrid-hierarchy-group__value" }, group.value),
+    h("span", { class: "datagrid-hierarchy-group__count" }, String(group.childrenCount)),
+  ])
+}
 
 watchEffect(() => {
   if (!cardRootRef.value) {
@@ -636,7 +678,11 @@ const rows = computed(() => {
   return buildVueRows(props.mode, rowCount.value, columnCount.value)
 })
 const columns = computed(() => {
-  const built = buildVueColumns(props.mode, columnCount.value)
+  const built = buildVueColumns(props.mode, columnCount.value).map(column => (
+    props.mode === "base" && column.key === "name"
+      ? { ...column, groupCellRenderer }
+      : column
+  ))
   if (!props.groupedHeaderShowcase) return built
   const groups: Record<string, { id: string; label: string }> = {
     id: { id: "identity", label: "Identity" },
@@ -736,6 +782,32 @@ const {
   },
 })
 runtimeRef = runtime
+const activeGroupBy = computed(() => {
+  void rowVersion.value
+  return runtime.api.rows.getSnapshot().groupBy ?? null
+})
+const groupedColumnVisibilityBeforeHide = new Map<string, boolean>()
+const syncGroupedColumnVisibility = (groupBy: ReturnType<typeof runtime.api.rows.getSnapshot>["groupBy"]): void => {
+  const desiredVisibility = new Map<string, boolean>()
+  for (const field of groupBy?.fields ?? []) desiredVisibility.set(field, false)
+  if (groupBy?.fields.length) desiredVisibility.set("name", true)
+  for (const [key, wasVisible] of groupedColumnVisibilityBeforeHide) {
+    if (desiredVisibility.has(key)) continue
+    if (runtime.api.columns.get(key)?.visible !== wasVisible) {
+      runtime.api.columns.setVisibility(key, wasVisible)
+    }
+    groupedColumnVisibilityBeforeHide.delete(key)
+  }
+  for (const [key, shouldBeVisible] of desiredVisibility) {
+    const column = runtime.api.columns.get(key)
+    if (!column) continue
+    if (!groupedColumnVisibilityBeforeHide.has(key)) {
+      groupedColumnVisibilityBeforeHide.set(key, column.visible)
+    }
+    if (column.visible !== shouldBeVisible) runtime.api.columns.setVisibility(key, shouldBeVisible)
+  }
+}
+watch(activeGroupBy, groupBy => syncGroupedColumnVisibility(groupBy), { immediate: true, flush: "post" })
 
 const {
   isAdvancedFilterPanelOpen,
@@ -841,7 +913,9 @@ const {
   },
 })
 
-const firstColumnKey = computed<string>(() => visibleColumns.value[0]?.key ?? "name")
+const firstColumnKey = computed<string>(() => activeGroupBy.value?.fields.length
+  ? "name"
+  : visibleColumns.value[0]?.key ?? "name")
 const {
   modeBadge,
   modeHint,
@@ -900,10 +974,6 @@ const columnMenuValueFilterEnabled = computed(() => {
 const stageSourceRows = computed<readonly VueSandboxRow[]>(() => (
   columnMenuValueFilterEnabled.value ? rows.value : []
 ))
-const activeGroupBy = computed(() => {
-  void rowVersion.value
-  return runtime.api.rows.getSnapshot().groupBy ?? null
-})
 const hasActiveGrouping = computed(() => (activeGroupBy.value?.fields.length ?? 0) > 0)
 const {
   tableStageProps,
@@ -990,6 +1060,29 @@ const applyColumnMenuGroupBy = (columnKey: string, grouped: boolean): void => {
       }
     : null)
   groupByField.value = nextFields[0] ?? ""
+  syncViewportFromDom()
+}
+
+const applyGroupByField = (): void => {
+  const field = groupByField.value.trim()
+  const nextGroupBy = field ? { fields: [field], expandedByDefault: true } : null
+  runtime.api.rows.setGroupBy(nextGroupBy)
+  syncGroupedColumnVisibility(nextGroupBy)
+  syncViewportFromDom()
+}
+
+const removeGroupByField = (columnKey: string): void => {
+  const nextFields = (activeGroupBy.value?.fields ?? []).filter(field => field !== columnKey)
+  runtime.api.rows.setGroupBy(nextFields.length > 0
+    ? { fields: nextFields, expandedByDefault: activeGroupBy.value?.expandedByDefault ?? true }
+    : null)
+  groupByField.value = nextFields[0] ?? ""
+  syncViewportFromDom()
+}
+
+const clearGrouping = (): void => {
+  runtime.api.rows.setGroupBy(null)
+  groupByField.value = ""
   syncViewportFromDom()
 }
 

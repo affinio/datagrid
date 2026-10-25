@@ -338,8 +338,8 @@
     </section>
 
     <footer class="card__footer">
-      Standard DataGrid package demo:
-      <code>import { DataGrid } from "@affino/datagrid-vue"</code>
+      Gantt-enabled DataGrid package demo:
+      <code>import { DataGrid } from "@affino/datagrid-vue/gantt"</code>
       <span v-if="toolbarActionStatus">{{ toolbarActionStatus }}</span>
       <span v-if="selectionAggregatesLabel">
         {{ selectionAggregatesLabel }}</span
@@ -350,8 +350,8 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, ref, watch } from "vue";
+import { DataGrid } from "@affino/datagrid-vue/gantt";
 import {
-  DataGrid,
   type DataGridAppColumnInput,
   type DataGridAppViewMode,
 } from "@affino/datagrid-vue";
@@ -1722,7 +1722,10 @@ const benchmarkCustomOverlays = computed<readonly DataGridTableStageCustomOverla
   });
 });
 const sandboxLayoutMode = computed(() => {
-  return viewMode.value === "gantt" || (props.mode === "base" && !props.timesheetShowcase)
+  return viewMode.value === "gantt"
+    || props.mode === "base"
+    || props.mode === "tree"
+    || props.timesheetShowcase
     ? "fill"
     : "auto-height";
 });
@@ -2111,8 +2114,16 @@ watch(
 
 watch(
   () => gridRef.value,
-  () => {
+  (grid, _previousGrid, onCleanup) => {
     syncPersistedSavedViewFlag();
+    if (!grid?.rowModel) return;
+    const syncGroupByFromRuntime = (): void => {
+      const nextGroupBy = grid.rowModel?.getSnapshot().groupBy ?? null;
+      if (JSON.stringify(nextGroupBy) !== JSON.stringify(groupByModel.value)) {
+        groupByModel.value = nextGroupBy;
+      }
+    };
+    onCleanup(grid.rowModel.subscribe(syncGroupByFromRuntime));
   },
   { immediate: true },
 );
