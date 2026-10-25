@@ -1218,7 +1218,20 @@ function toggleAddCurrentSelectionToFilter(event: Event): void {
 function handleApplyFilter(): void {
   if (!canApplyMenuFilters.value) return
   if (effectiveValueFilterEnabled.value && canApplyFilter.value) {
-    if (!hasSearchQuery.value && appliedFilterTokens.value.length === valueEntries.value.length) {
+    const currentTokens = Array.from(new Set(
+      props.selectedFilterTokens
+        .map(token => normalizeColumnMenuToken(String(token ?? "")))
+        .filter(Boolean),
+    ))
+    const nextTokens = Array.from(new Set(appliedFilterTokens.value))
+    const preservesCurrentFilter = currentTokens.length > 0
+      && currentTokens.length === nextTokens.length
+      && currentTokens.every(token => nextTokens.includes(token))
+    if (
+      !hasSearchQuery.value
+      && appliedFilterTokens.value.length === valueEntries.value.length
+      && !preservesCurrentFilter
+    ) {
       emit("clear-filter")
     } else {
       emit("apply-filter", [...appliedFilterTokens.value])

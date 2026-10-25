@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.16.3
+
+### Fixed
+
+- Preserved Excel-like and immutable projection membership when controlled Vue `rows` echo a committed patch; mutable mode still reapplies sort, filter, and grouping changes.
+- Reapplied the client projection when the native column filter Apply action is used with unchanged filter values.
+
+### Validation
+
+- Vue type-check and production build passed; all 1,142 Vue unit tests, packed Vue/Vite consumer checks, and the Chromium unchanged-filter regression passed.
+
 ## 0.16.2
 
 ### Fixed

@@ -1769,7 +1769,7 @@ export default defineComponent({
 
     const applySortAndFilter = (
       filterModelInput: DataGridFilterSnapshot = filterModelState.value,
-      options?: { filterModelNormalized?: boolean },
+      options?: { filterModelNormalized?: boolean; reapplyIfUnchanged?: boolean },
     ): {
       setSortModelMs: number
       projectionRebuildMs: number
@@ -1803,12 +1803,27 @@ export default defineComponent({
           )
 
       const setSortStartedAt = resolveDataGridPerfNow()
+      const appliedFilterModel = normalizedFilterModel ? pruneFilterModel(normalizedFilterModel) : null
+      const currentSnapshot = props.runtime.api.rows.getSnapshot()
+      const previousRecomputeVersion = Number(
+        currentSnapshot.projection?.recomputeVersion ?? currentSnapshot.projection?.version ?? 0,
+      )
       props.runtime.api.rows.setSortAndFilterModel({
         sortModel: nextSortModel,
-        filterModel: normalizedFilterModel ? pruneFilterModel(normalizedFilterModel) : null,
+        filterModel: appliedFilterModel,
       })
       const setSortEndedAt = resolveDataGridPerfNow()
       const snapshot = props.runtime.api.rows.getSnapshot()
+      const nextRecomputeVersion = Number(
+        snapshot.projection?.recomputeVersion ?? snapshot.projection?.version ?? 0,
+      )
+      if (
+        options?.reapplyIfUnchanged
+        && snapshot.kind === "client"
+        && nextRecomputeVersion <= previousRecomputeVersion
+      ) {
+        props.runtime.api.view.reapply()
+      }
       const projection = snapshot.projection as {
         recomputeVersion?: number
         performance?: {
@@ -2360,7 +2375,10 @@ export default defineComponent({
       }
       filterModelState.value = nextFilterModel
       filterModelStateNormalized.value = nextFilterModelNormalized
-      applySortAndFilter(nextFilterModel, { filterModelNormalized: nextFilterModelNormalized })
+      applySortAndFilter(nextFilterModel, {
+        filterModelNormalized: nextFilterModelNormalized,
+        reapplyIfUnchanged: true,
+      })
     }
 
     const clearColumnMenuFilter = (columnKey: string): void => {

@@ -205,6 +205,28 @@ Relevant regressions:
 - `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts` (placeholder edit, materialization, and undo contracts).
 - `packages/datagrid-vue/src/app/__tests__/useDataGridAppInlineEditing.contract.spec.ts` (source-value conflict detection).
 
+## Symptom: Applying an unchanged value filter does not remove an edited row
+
+Checks:
+- The default Excel-like edit policy can freeze the current projection after a row edit, including filter membership.
+- Applying the column-menu value filter is an explicit request to reapply the current view, even when the selected tokens are unchanged. It must evaluate membership against the edited source rows.
+- If the histogram only contains values already selected by the active filter, Apply must preserve that filter instead of treating it as Clear all.
+
+Relevant regression:
+- `e2e/sandbox-interactions.spec.ts` (`reapplies an unchanged value filter after an edit changed frozen membership`).
+
+## Symptom: A controlled Vue `rows` echo discards the current projection
+
+Checks:
+- With an internally owned Vue row model, the app layer is the only synchronizer for the `rows` prop. The runtime host must not also call `setRows()` for that same prop.
+- In `rows-update-mode="patch"`, value patches follow `api.rows.getAutoReapply()`: mutable mode recomputes sort, filter, and grouping; Excel-like and immutable modes keep the current projection until an explicit reapply. Structural changes still replace source rows and rebuild the projection.
+- Echoing the result of an already committed grid edit updates the controlled prop without replacing the row model or recalculating the frozen projection.
+- When a user presses the native column filter Apply action again, the current client projection is reapplied even if the selected filter tokens did not change.
+
+Relevant regressions:
+- `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts` (native select edit, controlled `rows` echo, frozen membership, and same-value filter Apply).
+- `packages/datagrid-vue/src/app-layer/__tests__/useDataGridAppRowModel.contract.spec.ts` (patch policy and structural updates).
+
 ## Standard Validation Commands
 
 - `pnpm run test:matrix:unit`

@@ -56,6 +56,58 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await expect.poll(async () => rowsInModel(page)).toBe(before)
   })
 
+  test("reapplies an unchanged value filter after an edit changed frozen membership", async ({ page }) => {
+    await gotoSandboxRoute(page, "/vue/shell/grouped-grid")
+
+    const stage = page.locator(".grid-stage:visible").first()
+    await page.locator('[data-datagrid-toolbar-action="column-layout"]').click()
+    const columnLayout = page.locator('[data-datagrid-overlay-surface-id="column-layout"]')
+    const stageVisibility = columnLayout.locator('input[name="datagrid-column-layout-visible-stage"]')
+    if (!(await stageVisibility.isChecked())) {
+      await stageVisibility.check()
+      await columnLayout.getByRole("button", { name: "Apply" }).click()
+    } else {
+      await columnLayout.getByRole("button", { name: "Cancel" }).click()
+    }
+    const bodyViewport = stage.locator(".grid-body-center-horizontal-scrollport--scroll-owner").first()
+    await bodyViewport.evaluate(element => { element.scrollLeft = element.scrollWidth })
+    const menuButton = stage.locator('[data-datagrid-column-menu-button="true"][aria-label^="Open column menu for Stage"]')
+    await expect(menuButton).toBeVisible({ timeout: 20_000 })
+    await menuButton.click()
+    const doneValue = page.locator('input[name="datagrid-column-menu-value-stage-string:done"]')
+    const valueCheckboxes = page.locator('input[name^="datagrid-column-menu-value-stage-"]')
+    await page.locator('[data-datagrid-column-menu-action="clear-all-values"]').click()
+    await expect(doneValue).not.toBeChecked()
+    await doneValue.check()
+    await expect(doneValue).toBeChecked()
+    await page.locator('[data-datagrid-column-menu-action="apply-filter"]').click()
+    await expect(stage.locator('.grid-cell[data-column-key="stage"]').filter({ hasText: "In Progress" })).toHaveCount(0)
+
+    const doneCell = stage.locator('.grid-cell[data-column-key="stage"][data-row-id]').filter({ hasText: "Done" }).first()
+    await expect(doneCell).toBeVisible({ timeout: 20_000 })
+    const rowId = await doneCell.getAttribute("data-row-id")
+    expect(rowId).toBeTruthy()
+
+    await doneCell.dblclick()
+    const editor = page.getByRole("combobox", { name: /Edit Stage/ })
+    await expect(editor).toBeVisible()
+    await page.getByRole("option", { name: "In Progress" }).click()
+    const editedCell = stage.locator(`.grid-cell[data-column-key="stage"][data-row-id="${rowId}"]`)
+    await expect(editedCell).toContainText("In Progress")
+
+    await bodyViewport.evaluate(element => { element.scrollLeft = element.scrollWidth })
+    await menuButton.click()
+    await expect(doneValue).toBeChecked()
+    expect(await valueCheckboxes.count()).toBeGreaterThan(1)
+    let selectedValues = 0
+    for (let index = 0; index < await valueCheckboxes.count(); index += 1) {
+      if (await valueCheckboxes.nth(index).isChecked()) selectedValues += 1
+    }
+    expect(selectedValues).toBe(1)
+    await page.locator('[data-datagrid-column-menu-action="apply-filter"]').click()
+    await expect(editedCell).toHaveCount(0)
+  })
+
   test("returns keyboard focus to a selected body cell after applying a filter", async ({ page }) => {
     await gotoSandboxRoute(page, "/vue/base-grid")
 

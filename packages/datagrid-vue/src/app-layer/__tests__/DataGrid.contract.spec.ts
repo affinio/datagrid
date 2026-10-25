@@ -5,6 +5,7 @@ import {
   createDataSourceBackedRowModel,
 } from "@affino/datagrid-vue/headless"
 import type {
+  DataGridApi,
   DataGridRowModel,
   DataGridRowNode,
   DataGridRowNodeInput,
@@ -8296,6 +8297,120 @@ describe("DataGrid app facade contract", () => {
 
     expect(resolveRowAt<{ stage: string }>(wrapper, 0)).toMatchObject({ stage: "planned" })
 
+    wrapper.unmount()
+  })
+
+  it("keeps an edited row in the Excel-like projection when controlled rows echo a native select edit", async () => {
+    let wrapper: ReturnType<typeof mount>
+    let api: DataGridApi<Record<string, unknown>> | null = null
+    let echo: Promise<void> | null = null
+    let recomputeVersionAfterEdit: number | null = null
+    const rows = [
+      { rowId: "status-1", status: "None" },
+      { rowId: "status-2", status: "None" },
+      { rowId: "status-3", status: "Open" },
+    ]
+    const columns = [{
+      key: "status",
+      label: "Status",
+      width: 180,
+      cellType: "select",
+      capabilities: { editable: true },
+      presentation: { options: [
+        { value: "None", label: "None" },
+        { value: "Deleted", label: "Deleted" },
+        { value: "Open", label: "Open" },
+      ] },
+    }]
+    wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows,
+        rowsUpdateMode: "patch",
+        columns,
+        columnMenu: true,
+        onReady: ({ api: readyApi }) => {
+          api = readyApi
+          readyApi.policy.setProjectionMode("excel-like")
+          readyApi.rows.setSortAndFilterModel({
+            sortModel: [],
+            filterModel: { columnFilters: { status: { kind: "valueSet", tokens: ["string:none"] } } },
+          })
+        },
+        onDataChange: event => {
+          const projection = api?.rows.getSnapshot().projection
+          recomputeVersionAfterEdit = Number(projection?.recomputeVersion ?? projection?.version ?? 0)
+          const byId = new Map(event.edits.map(edit => [edit.rowId, edit.newData]))
+          echo = wrapper.setProps({ rows: rows.map(row => byId.get(row.rowId) ?? row) })
+        },
+      },
+    })
+
+    await flushRuntimeTasks()
+    expect(api).not.toBeNull()
+    expect(api!.rows.getCount()).toBe(2)
+    expect(api!.rows.get(0)?.rowId).toBe("status-1")
+    expect(api!.rows.get(1)?.rowId).toBe("status-2")
+    const appliedFilter = api!.rows.getSnapshot().filterModel
+
+    const cell = queryBodyCell(wrapper, 0, 0)
+    await cell.trigger("dblclick")
+    await flushRuntimeTasks()
+    const editor = wrapper.find<HTMLInputElement>(".datagrid-cell-combobox__input")
+    const editorElement = editor.element as HTMLInputElement
+    editorElement.value = "Deleted"
+    editorElement.dispatchEvent(new Event("input", { bubbles: true }))
+    await flushRuntimeTasks()
+    const deletedOption = [...document.body.querySelectorAll<HTMLButtonElement>(".datagrid-cell-combobox__option")]
+      .find(option => option.textContent?.includes("Deleted"))
+    expect(deletedOption).toBeTruthy()
+    deletedOption!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    await echo
+    await flushRuntimeTasks()
+
+    expect(resolveRowAt<{ status: string }>(wrapper, 0)?.status).toBe("Deleted")
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Deleted")
+    expect(Number(api!.rows.getSnapshot().projection?.recomputeVersion ?? api!.rows.getSnapshot().projection?.version ?? 0))
+      .toBe(recomputeVersionAfterEdit)
+    expect(api!.rows.getSnapshot().filterModel).toEqual(appliedFilter)
+    expect(api!.rows.getCount()).toBe(2)
+    expect(api!.rows.get(0)?.rowId).toBe("status-1")
+    expect(api!.rows.get(1)?.rowId).toBe("status-2")
+
+    await wrapper.find('.grid-cell--header[data-column-key="status"] [data-datagrid-column-menu-button="true"]').trigger("click")
+    await flushRuntimeTasks()
+    const applyFilter = queryColumnMenuAction("apply-filter")
+    expect(applyFilter).toBeTruthy()
+    applyFilter!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    await flushRuntimeTasks()
+    expect(api!.rows.getSnapshot().filterModel).toEqual(appliedFilter)
+    expect(api!.rows.getCount()).toBe(1)
+    expect(api!.rows.get(0)?.rowId).toBe("status-2")
+
+    api!.policy.setProjectionMode("immutable")
+    await wrapper.setProps({ rows: [
+      { rowId: "status-1", status: "Deleted" },
+      { rowId: "status-2", status: "Deleted" },
+      { rowId: "status-3", status: "Open" },
+    ] })
+    await flushRuntimeTasks()
+    expect(api!.rows.getCount()).toBe(1)
+    expect(api!.rows.get(0)?.rowId).toBe("status-2")
+    expect(queryBodyCell(wrapper, 0, 0).text()).toContain("Deleted")
+    api!.view.reapply()
+    await flushRuntimeTasks()
+    expect(api!.rows.getCount()).toBe(0)
+
+    api!.policy.setProjectionMode("mutable")
+    await wrapper.setProps({ rows: [
+      { rowId: "status-1", status: "Deleted" },
+      { rowId: "status-2", status: "None" },
+      { rowId: "status-3", status: "Open" },
+    ] })
+    await flushRuntimeTasks()
+    expect(api!.rows.getCount()).toBe(1)
+    expect(api!.rows.get(0)?.rowId).toBe("status-2")
     wrapper.unmount()
   })
 

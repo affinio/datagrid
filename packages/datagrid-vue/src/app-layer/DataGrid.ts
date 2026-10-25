@@ -1447,6 +1447,7 @@ const DataGridRuntimeComponent = defineComponent({
       rowModel: toRef(props, "rowModel"),
       clientRowModelOptions: resolvedClientRowModelOptions,
       rowsUpdateMode: props.rowsUpdateMode,
+      shouldAutoReapplyProjection: () => dataGridRef.value?.api.rows.getAutoReapply() ?? false,
       onOwnedRowModelRecreated: () => {
         controlledState.dispose()
       },
@@ -2075,7 +2076,7 @@ const DataGridRuntimeComponent = defineComponent({
           ...attrs,
           ref: dataGridRef,
           key: dataGridInstanceKey.value,
-          rows: props.rows,
+          rows: props.rowModel ? props.rows : undefined,
           "data-persistence-loading": persistence.loading.value ? "true" : undefined,
           "aria-busy": persistence.loading.value || undefined,
           inert: persistence.loading.value ? true : undefined,

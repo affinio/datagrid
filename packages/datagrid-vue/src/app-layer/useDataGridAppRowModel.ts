@@ -173,6 +173,7 @@ export interface UseDataGridAppRowModelOptions {
   rowModel: Ref<DataGridRowModel<unknown> | undefined>
   clientRowModelOptions: Ref<Omit<CreateAdvancedClientRowModelOptions<unknown>, "rows"> | undefined>
   rowsUpdateMode?: DataGridAppRowsUpdateMode
+  shouldAutoReapplyProjection?: () => boolean
   onOwnedRowModelRecreated?: () => void
 }
 
@@ -253,7 +254,14 @@ export function useDataGridAppRowModel(
         )
         if (updates) {
           if (updates.length > 0) {
-            internalRowModel.value.patchRows(updates)
+            const shouldReapply = options.shouldAutoReapplyProjection?.()
+            internalRowModel.value.patchRows(updates, shouldReapply == null
+              ? undefined
+              : {
+                  recomputeSort: shouldReapply,
+                  recomputeFilter: shouldReapply,
+                  recomputeGroup: shouldReapply,
+                })
           }
           return
         }

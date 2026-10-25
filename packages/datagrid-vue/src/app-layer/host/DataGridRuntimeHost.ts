@@ -144,7 +144,7 @@ export default defineComponent({
   props: {
     rows: {
       type: Array as PropType<readonly unknown[]>,
-      default: () => [],
+      default: undefined,
     },
     rowModel: {
       type: Object as PropType<DataGridRowModel<unknown> | undefined>,
@@ -217,7 +217,7 @@ export default defineComponent({
     }
     let themeObserver: MutationObserver | null = null
     const runtime = useDataGridRuntime({
-      rows: computed(() => props.rows),
+      rows: props.rows ? computed(() => props.rows!) : undefined,
       rowModel: props.rowModel,
       columns: computed(() => props.columns),
       plugins: props.plugins,
