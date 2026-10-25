@@ -74,6 +74,8 @@ export function buildGroupedRowsProjection<T>(
   const cacheMaxSize = Number.isFinite(maxGroupValueCacheSize ?? 0)
     ? Math.max(0, Math.trunc(maxGroupValueCacheSize ?? 0))
     : 0
+  const sourceRowIds = new Set(inputRows.map(row => row.rowId))
+  const generatedGroupRowIds = new Set<DataGridRowId>(sourceRowIds)
   const rowIdPrefixById = cache
     ? new Map<DataGridRowId, string>()
     : null
@@ -85,10 +87,11 @@ export function buildGroupedRowsProjection<T>(
     if (cache && rowIdPrefixById) {
       let prefix = rowIdPrefixById.get(row.rowId)
       if (!prefix) {
-        prefix = `${String(row.rowId)}::`
+        const rowIdValue = String(row.rowId)
+        prefix = `${typeof row.rowId}:${rowIdValue.length}:${rowIdValue}`
         rowIdPrefixById.set(row.rowId, prefix)
       }
-      cacheKey = `${prefix}${field}`
+      cacheKey = `${prefix}${field.length}:${field}`
     }
     const cached = cache && cacheKey !== null
       ? cache.get(cacheKey)
@@ -132,6 +135,11 @@ export function buildGroupedRowsProjection<T>(
   }
 
   const createGroupNode = (bucket: BucketContext): DataGridRowNode<T> => {
+    let generatedRowId = bucket.groupKey
+    while (generatedGroupRowIds.has(generatedRowId)) {
+      generatedRowId = `@affino:group:${bucket.groupKey.length}:${bucket.groupKey}:${generatedRowId.length}:${generatedRowId}`
+    }
+    generatedGroupRowIds.add(generatedRowId)
     return {
       kind: "group",
       data: ({
@@ -149,7 +157,7 @@ export function buildGroupedRowsProjection<T>(
         level: bucket.level,
       } as unknown as T),
       rowKey: bucket.groupKey,
-      rowId: bucket.groupKey,
+      rowId: generatedRowId,
       sourceIndex: bucket.representative?.sourceIndex ?? 0,
       originalIndex: bucket.representative?.originalIndex ?? 0,
       displayIndex: -1,

@@ -1644,6 +1644,54 @@ describe("createDataSourceBackedRowModel", () => {
     model.dispose()
   })
 
+  it("cancels queued optimistic commits before they are dispatched on disposal", async () => {
+    const firstCommit = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull() {
+        return { rows: [{ index: 0, rowId: 1, row: { id: 1, value: "initial" } }], total: 1 }
+      },
+      commitEdits: firstCommit.commitEdits,
+    }
+    const model = createDataSourceBackedRowModel({ dataSource, resolveRowId: row => row.id, initialTotal: 1 })
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+
+    const first = Promise.resolve(model.patchRows?.([{ rowId: 1, data: { value: "first" } }]))
+    const second = Promise.resolve(model.patchRows?.([{ rowId: 1, data: { value: "second" } }]))
+    const secondOutcome = second.then(() => null, error => error)
+    await flushMicrotasks()
+    expect(firstCommit.calls).toHaveLength(1)
+
+    model.dispose()
+    expect(await secondOutcome).toMatchObject({ message: expect.stringMatching(/cancelled before dispatch/i) })
+    firstCommit.calls[0]?.resolve({ committed: [{ rowId: 1 }] })
+
+    await first
+    expect(firstCommit.calls).toHaveLength(1)
+  })
+
+  it("preserves the failure outcome of an optimistic commit already dispatched before disposal", async () => {
+    const commit = createDeferredCommitEdits<{ id: number; value: string }>()
+    const dataSource: DataGridDataSource<{ id: number; value: string }> = {
+      async pull() {
+        return { rows: [{ index: 0, rowId: 1, row: { id: 1, value: "initial" } }], total: 1 }
+      },
+      commitEdits: commit.commitEdits,
+    }
+    const model = createDataSourceBackedRowModel({ dataSource, resolveRowId: row => row.id, initialTotal: 1 })
+    model.setViewportRange({ start: 0, end: 0 })
+    await flushMicrotasks()
+    const failure = new Error("server rejected write")
+    const patch = Promise.resolve(model.patchRows?.([{ rowId: 1, data: { value: "edited" } }]))
+    await flushMicrotasks()
+    expect(commit.calls).toHaveLength(1)
+
+    model.dispose()
+    commit.calls[0]?.reject(failure)
+
+    await expect(patch).rejects.toThrow("server rejected write")
+  })
+
   it("keeps visible rows stable when commit success invalidates a touched row", async () => {
     const rows = [
       { id: 1, value: "row-1" },

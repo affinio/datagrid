@@ -89,6 +89,22 @@ function normalizePin(pin: unknown): DataGridColumnPin | null {
   return pin === "left" || pin === "right" || pin === "none" ? pin : null
 }
 
+function selectionTargetsMatchCurrentRows<TRow>(
+  snapshot: DataGridSelectionSnapshot,
+  rowModel: DataGridRowModel<TRow>,
+): boolean {
+  const points = [snapshot.activeCell, ...snapshot.ranges.flatMap(range => [range.anchor, range.focus])]
+  for (const point of points) {
+    if (!point || point.rowId == null) continue
+    if (rowModel.getRow(point.rowIndex)?.rowId !== point.rowId) return false
+  }
+  for (const range of snapshot.ranges) {
+    if (range.startRowId != null && rowModel.getRow(range.startRow)?.rowId !== range.startRowId) return false
+    if (range.endRowId != null && rowModel.getRow(range.endRow)?.rowId !== range.endRowId) return false
+  }
+  return true
+}
+
 function normalizeSortModel(value: unknown): readonly DataGridSortState[] {
   if (!Array.isArray(value)) {
     return []
@@ -258,6 +274,10 @@ export function createDataGridApiStateMethods<TRow = unknown>(
         if (migrated?.selection && !getSelectionCapability()) issues.push({ section: "selection", reason: "capability-unavailable" })
         if (migrated?.rowSelection && !getRowSelectionCapability()) issues.push({ section: "rowSelection", reason: "capability-unavailable" })
         if (migrated?.columnSelection && !getColumnSelectionCapability()) issues.push({ section: "columnSelection", reason: "capability-unavailable" })
+      }
+      if (migrated?.selection && options.applySelection !== false && options.applyRows === false
+        && !selectionTargetsMatchCurrentRows(migrated.selection, rowModel)) {
+        issues.push({ section: "selection", reason: "saved-row-target-does-not-match-current-projection" })
       }
       const candidates = ["rows", "columns", "selection", "viewport", "viewportPosition"]
       const enabled: Record<string, boolean> = {
@@ -472,14 +492,19 @@ export function createDataGridApiStateMethods<TRow = unknown>(
 
         activeSection = "selection"
         if (options.applySelection !== false) {
+          const selectionTargetsMatch = !migratedState.selection
+            || options.applyRows !== false
+            || selectionTargetsMatchCurrentRows(migratedState.selection, rowModel)
           const selectionCapability = getSelectionCapability()
           if (selectionCapability) {
             if (migratedState.selection) {
-              selectionCapability.setSelectionSnapshot({
-                ...cloneSerializable(migratedState.selection),
-                projectionRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
-                columnRevision: columnModel.getSnapshot().orderRevision,
-              })
+              selectionCapability.setSelectionSnapshot(selectionTargetsMatch
+                ? {
+                    ...cloneSerializable(migratedState.selection),
+                    projectionRevision: buildDataGridSelectionProjectionIdentity(rowModel.getSnapshot())?.revision ?? null,
+                    columnRevision: columnModel.getSnapshot().orderRevision,
+                  }
+                : cloneSerializable(migratedState.selection))
               onSelectionChanged?.(selectionCapability.getSelectionSnapshot())
             } else {
               selectionCapability.clearSelection()
@@ -526,7 +551,8 @@ export function createDataGridApiStateMethods<TRow = unknown>(
           } else if (options.strict && migratedState.columnSelection) {
             throw new Error("[DataGridApi] Cannot restore columnSelection state without columnSelection capability.")
           }
-          if (migratedState.selection || migratedState.rowSelection || migratedState.columnSelection) appliedSections.push("selection")
+          if (migratedState.selection && !selectionTargetsMatch) skippedSections.push("selection")
+          else if (migratedState.selection || migratedState.rowSelection || migratedState.columnSelection) appliedSections.push("selection")
           else skippedSections.push("selection")
         } else skippedSections.push("selection")
 

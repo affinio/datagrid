@@ -78,6 +78,9 @@ export function createRafScheduler(): RafScheduler {
     const entries = Array.from(tasks.values())
     tasks.clear()
     for (const task of entries) {
+      if (disposed) {
+        break
+      }
       try {
         task.callback()
       } catch (error) {

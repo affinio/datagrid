@@ -3,7 +3,28 @@ import { resolveExpansionToggledKeys } from "./treeProjectionExpansion.js"
 import type { TreeParentProjectionCache, TreeProjectionResult } from "./treeProjectionTypes.js"
 
 export function createTreeParentGroupKey(rowId: DataGridRowId): string {
-  return `tree:parent:${String(rowId)}`
+  const value = String(rowId)
+  return `tree:parent:${typeof rowId}:${value.length}:${value}`
+}
+
+function resolveTypedExpansionKeys<T>(
+  cache: TreeParentProjectionCache<T>,
+  snapshot: DataGridGroupExpansionSnapshot,
+  provided: ReadonlySet<string> | undefined,
+): ReadonlySet<string> {
+  const keys = new Set(provided ?? snapshot.toggledGroupKeys)
+  const legacyParents = new Map<string, { groupKey: string; count: number }>()
+  for (const [groupKey, rowId] of cache.groupRowIdByGroupKey) {
+    const legacyKey = `tree:parent:${String(rowId)}`
+    const current = legacyParents.get(legacyKey)
+    legacyParents.set(legacyKey, { groupKey, count: (current?.count ?? 0) + 1 })
+  }
+  for (const legacyKey of snapshot.toggledGroupKeys) {
+    const candidate = legacyParents.get(legacyKey)
+    // Old keys cannot identify a parent if number/string IDs shared their text.
+    if (candidate?.count === 1) keys.add(candidate.groupKey)
+  }
+  return keys
 }
 
 function createTreeParentGroupNode<T>(
@@ -89,7 +110,11 @@ export function materializeTreeParentProjection<T>(
   cache.groupIndexByRowId.clear()
   cache.groupIndexShiftHistory.length = 0
   cache.groupIndexBornAt.clear()
-  const expansionToggledKeys = resolveExpansionToggledKeys(expansionSnapshot, precomputedExpansionToggledKeys)
+  const expansionToggledKeys = resolveTypedExpansionKeys(
+    cache,
+    expansionSnapshot,
+    precomputedExpansionToggledKeys ?? resolveExpansionToggledKeys(expansionSnapshot),
+  )
   for (const rootId of cache.rootIncluded) {
     appendTreeParentRow(cache, rootId, 0, expansionSnapshot, expansionToggledKeys, projected)
   }

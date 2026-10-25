@@ -1,5 +1,17 @@
 # @affino/datagrid-core
 
+## 0.14.1
+
+### Fixed
+
+- Hardened lifecycle disposal so queued exclusive operations settle and no new work starts after disposal.
+- Validated restored cell-selection targets against current row identities when rows are not restored with the selection.
+- Fixed incremental projection, tree materialization, optimistic updates, and scheduler edge cases found by audit.
+
+### Validation
+
+- Core type-check, strict contract suite, and public build passed.
+
 ## 0.14.0
 
 ### Added

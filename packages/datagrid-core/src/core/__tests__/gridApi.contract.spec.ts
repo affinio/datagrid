@@ -2465,7 +2465,8 @@ describe("data grid api facade contracts", () => {
     expect(api.selection.hasSupport()).toBe(true)
     expect(api.selection.getSnapshot()).toMatchObject({
       ...snapshot,
-      projectionRevision: rowModel.getSnapshot().projection?.recomputeVersion
+      projectionRevision: rowModel.getSnapshot().projection?.identityVersion
+        ?? rowModel.getSnapshot().projection?.recomputeVersion
         ?? rowModel.getSnapshot().projection?.version
         ?? rowModel.getSnapshot().revision,
       columnRevision: columnModel.getSnapshot().orderRevision,

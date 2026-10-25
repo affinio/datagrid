@@ -516,7 +516,8 @@ export function buildDataGridSelectionProjectionIdentity(
     rowModelKind: snapshot.kind,
     // Row-model revisions also advance for viewport-window changes. Selection
     // coordinates only become stale when the materialized row projection does.
-    revision: snapshot.projection?.recomputeVersion
+    revision: snapshot.projection?.identityVersion
+      ?? snapshot.projection?.recomputeVersion
       ?? snapshot.projection?.version
       ?? (typeof snapshot.revision === "number" ? snapshot.revision : null),
     datasetVersion: snapshot.datasetVersion ?? null,

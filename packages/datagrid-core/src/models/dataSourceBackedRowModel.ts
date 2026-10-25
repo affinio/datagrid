@@ -507,8 +507,26 @@ export function createDataSourceBackedRowModel<T = unknown>(
       if (!baseline) {
         continue
       }
+      const current = findCachedRowById(rowId)
+      if (!current) {
+        continue
+      }
+      if (cacheStateKeyByIndex.get(current.index) !== buildRequestStateKey()) {
+        // A baseline index is scoped to the query that created the edit. After
+        // query changes, discard stale optimistic materialization and let the
+        // current viewport pull the authoritative row at its new position.
+        invalidateRows([rowId])
+        changed = true
+        continue
+      }
       const nextNode = applyPendingOptimisticEditsToNode(baseline)
-      writeRowCache(nextNode.sourceIndex, nextNode)
+      writeRowCache(current.index, {
+        ...current.node,
+        ...nextNode,
+        sourceIndex: current.index,
+        originalIndex: current.node.originalIndex,
+        displayIndex: current.node.displayIndex,
+      })
       changed = true
     }
     return changed

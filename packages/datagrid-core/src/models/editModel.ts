@@ -43,10 +43,6 @@ function assertColumnKey(columnKey: unknown): asserts columnKey is string {
   throw new Error("[DataGridEditModel] columnKey must be a non-empty string.")
 }
 
-function makeEditKey(rowId: DataGridRowId, columnKey: string): string {
-  return `${typeof rowId}:${String(rowId)}::${columnKey}`
-}
-
 function compareRowId(a: DataGridRowId, b: DataGridRowId): number {
   const typeA = typeof a
   const typeB = typeof b
@@ -72,7 +68,9 @@ function sortEdits(edits: readonly DataGridEditPatch[]): DataGridEditPatch[] {
 export function createDataGridEditModel(
   options: CreateDataGridEditModelOptions = {},
 ): DataGridEditModel {
-  const editStore = new Map<string, DataGridEditPatch>()
+  // Keep row identity typed and column keys opaque. Delimiter-based composite
+  // strings can alias valid (rowId, columnKey) pairs.
+  const editStore = new Map<DataGridRowId, Map<string, DataGridEditPatch>>()
   const listeners = new Set<DataGridEditModelListener>()
   let revision = 0
   let disposed = false
@@ -86,7 +84,7 @@ export function createDataGridEditModel(
   function materializeSnapshot(): DataGridEditModelSnapshot {
     return {
       revision,
-      edits: sortEdits(Array.from(editStore.values())),
+      edits: sortEdits(Array.from(editStore.values()).flatMap(byColumn => Array.from(byColumn.values()))),
     }
   }
 
@@ -113,8 +111,8 @@ export function createDataGridEditModel(
 
   function setEditInternal(patch: DataGridEditPatch): boolean {
     const normalized = normalizePatch(patch)
-    const key = makeEditKey(normalized.rowId, normalized.columnKey)
-    const previous = editStore.get(key)
+    let byColumn = editStore.get(normalized.rowId)
+    const previous = byColumn?.get(normalized.columnKey)
     const unchanged =
       previous &&
       previous.rowId === normalized.rowId &&
@@ -126,7 +124,11 @@ export function createDataGridEditModel(
       return false
     }
 
-    editStore.set(key, normalized)
+    if (!byColumn) {
+      byColumn = new Map()
+      editStore.set(normalized.rowId, byColumn)
+    }
+    byColumn.set(normalized.columnKey, normalized)
     return true
   }
 
@@ -143,7 +145,7 @@ export function createDataGridEditModel(
     getEdit(rowId: DataGridRowId, columnKey: string) {
       assertRowId(rowId)
       assertColumnKey(columnKey)
-      return editStore.get(makeEditKey(rowId, columnKey))
+      return editStore.get(rowId)?.get(columnKey)
     },
     setEdit(patch: DataGridEditPatch) {
       ensureActive()
@@ -174,10 +176,11 @@ export function createDataGridEditModel(
       ensureActive()
       assertRowId(rowId)
       assertColumnKey(columnKey)
-      const key = makeEditKey(rowId, columnKey)
-      if (!editStore.delete(key)) {
+      const byColumn = editStore.get(rowId)
+      if (!byColumn?.delete(columnKey)) {
         return
       }
+      if (byColumn.size === 0) editStore.delete(rowId)
       revision += 1
       emit()
     },

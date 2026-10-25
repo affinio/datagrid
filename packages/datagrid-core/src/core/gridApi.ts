@@ -417,6 +417,7 @@ export function createDataGridApi<TRow = unknown>(
     if (apiDisposePromise) return apiDisposePromise
     apiDisposePromise = (async () => {
       const errors: unknown[] = []
+      lifecycleRuntime.dispose()
       for (const cleanup of [
         () => pluginsRuntime.dispose(),
         () => cellRefreshRegistry.dispose(),

@@ -417,6 +417,8 @@ export interface DataGridProjectionDiagnostics {
   version: number
   cycleVersion?: number
   recomputeVersion?: number
+  /** Advances when projection work completes or row identity changes without recomputation. */
+  identityVersion?: number
   staleStages: readonly DataGridProjectionStage[]
   lastInvalidationReasons?: readonly DataGridProjectionInvalidationReason[]
   lastInvalidatedStages?: readonly DataGridProjectionStage[]

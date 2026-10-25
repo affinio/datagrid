@@ -14,13 +14,14 @@ export function serializeSortValueModelForCache(
   return sortModel
     .map(descriptor => {
       const dependencyFields = Array.isArray(descriptor.dependencyFields)
-        ? [...descriptor.dependencyFields].map(value => String(value).trim()).filter(Boolean).sort().join(",")
-        : ""
+        ? [...new Set((descriptor.dependencyFields as readonly unknown[]).map((value: unknown) => String(value).trim()).filter(Boolean))].sort()
+        : []
       const direction = includeDirection ? descriptor.direction ?? "asc" : ""
       const comparator = stableSerializeUnknown(descriptor.comparator ?? null)
-      return `${descriptor.key}:${descriptor.field ?? ""}:${direction}:${dependencyFields}:${comparator}`
+      return JSON.stringify([descriptor.key, descriptor.field ?? null, direction, dependencyFields, comparator])
     })
-    .join("|")
+    .map(value => `${value.length}:${value}`)
+    .join("")
 }
 
 export function isSameSortModel(

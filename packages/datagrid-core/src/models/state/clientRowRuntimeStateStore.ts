@@ -25,6 +25,7 @@ export interface DataGridClientRowRuntimeState<T> {
   groupRevision: number
   projectionCycleVersion: number
   projectionRecomputeVersion: number
+  projectionIdentityVersion: number
   lastInvalidationReasons: DataGridProjectionInvalidationReason[]
   lastRecomputeHadActual: boolean
   lastRecomputedStages: DataGridProjectionStage[]
@@ -151,6 +152,7 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     groupRevision: 0,
     projectionCycleVersion: 0,
     projectionRecomputeVersion: 0,
+    projectionIdentityVersion: 0,
     lastInvalidationReasons: [],
     lastRecomputeHadActual: false,
     lastRecomputedStages: [],
@@ -158,6 +160,8 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
     lastStageTimes: {},
     projectionFormulaDiagnostics: null,
   }
+  let lastCommittedRows = state.rows
+  let lastCommittedRowIds: DataGridRowNode<T>["rowId"][] = []
 
   return {
     state,
@@ -184,7 +188,21 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
       const resolvedMeta = typeof meta === "boolean"
         ? { hadActualRecompute: meta }
         : meta
+      const isFirstProjectionCommit = state.projectionCycleVersion === 0
       state.projectionCycleVersion += 1
+      if (!isFirstProjectionCommit && resolvedMeta.hadActualRecompute) {
+        state.projectionIdentityVersion += 1
+        lastCommittedRows = state.rows
+        lastCommittedRowIds = state.rows.map(row => row.rowId)
+      } else if (state.rows !== lastCommittedRows) {
+        const currentRowIds = state.rows.map(row => row.rowId)
+        if (!isFirstProjectionCommit && (currentRowIds.length !== lastCommittedRowIds.length
+          || currentRowIds.some((rowId, index) => rowId !== lastCommittedRowIds[index]))) {
+          state.projectionIdentityVersion += 1
+        }
+        lastCommittedRows = state.rows
+        lastCommittedRowIds = currentRowIds
+      }
       if (resolvedMeta.hadActualRecompute) {
         state.projectionRecomputeVersion += 1
       }
@@ -216,6 +234,7 @@ export function createClientRowRuntimeStateStore<T>(): DataGridClientRowRuntimeS
         version: state.projectionCycleVersion,
         cycleVersion: state.projectionCycleVersion,
         recomputeVersion: state.projectionRecomputeVersion,
+        identityVersion: state.projectionIdentityVersion,
         staleStages: getStaleStages(),
         lastInvalidationReasons,
         lastInvalidatedStages: resolveClientProjectionInvalidationStages(lastInvalidationReasons),

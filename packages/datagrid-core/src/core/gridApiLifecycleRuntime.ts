@@ -3,6 +3,7 @@ import type { DataGridCore } from "./gridCore"
 
 export interface DataGridApiLifecycleRuntime {
   namespace: DataGridApiLifecycleNamespace
+  dispose(): void
   runExclusiveSync<TResult>(operation: string, fn: () => TResult): TResult
   runExclusiveAsync<TResult>(operation: string, fn: () => TResult | Promise<TResult>): Promise<TResult>
 }
@@ -17,13 +18,19 @@ function createBusyError(operation: string): Error {
   )
 }
 
+function createDisposedError(): Error {
+  return new Error("[DataGridApi] cannot run an exclusive lifecycle operation after disposal.")
+}
+
 export function createDataGridApiLifecycleRuntime(
   input: CreateDataGridApiLifecycleRuntimeInput,
 ): DataGridApiLifecycleRuntime {
   const { coreLifecycle } = input
   let active = 0
   let queued = 0
-  let chain: Promise<void> = Promise.resolve()
+  let disposed = false
+  const queue: Array<{ start: () => void; cancel: () => void }> = []
+  let taskScheduled = false
   const idleWaiters = new Set<() => void>()
 
   const flushIdleWaiters = (): void => {
@@ -45,18 +52,74 @@ export function createDataGridApiLifecycleRuntime(
     flushIdleWaiters()
   }
 
-  const queueExclusive = <TResult>(fn: () => TResult | Promise<TResult>): Promise<TResult> => {
-    queued += 1
-    const task = chain.then(async () => {
-      queued = Math.max(0, queued - 1)
-      markEnter()
-      try {
-        return await fn()
-      } finally {
-        markExit()
+  const dispose = (): void => {
+    if (disposed) return
+    disposed = true
+    while (queue.length > 0) {
+      queue.shift()?.cancel()
+    }
+    flushIdleWaiters()
+  }
+
+  const scheduleNext = (): void => {
+    if (coreLifecycle.state === "disposed") {
+      dispose()
+      return
+    }
+    if (disposed || active !== 0 || taskScheduled || queue.length === 0) {
+      return
+    }
+    taskScheduled = true
+    queueMicrotask(() => {
+      taskScheduled = false
+      if (coreLifecycle.state === "disposed") {
+        dispose()
+        return
       }
+      if (disposed || active !== 0) return
+      queue.shift()?.start()
     })
-    chain = task.then(() => undefined, () => undefined)
+  }
+
+  const queueExclusive = <TResult>(fn: () => TResult | Promise<TResult>): Promise<TResult> => {
+    if (disposed || coreLifecycle.state === "disposed") {
+      dispose()
+      return Promise.reject(createDisposedError())
+    }
+    queued += 1
+    const task = new Promise<TResult>((resolve, reject) => {
+      queue.push({
+        start() {
+          queued = Math.max(0, queued - 1)
+          if (disposed || coreLifecycle.state === "disposed") {
+            reject(createDisposedError())
+            flushIdleWaiters()
+            return
+          }
+          markEnter()
+          let result: TResult | Promise<TResult>
+          try {
+            result = fn()
+          } catch (error) {
+            reject(error)
+            markExit()
+            scheduleNext()
+            return
+          }
+          Promise.resolve(result)
+            .then(resolve, reject)
+            .finally(() => {
+              markExit()
+              scheduleNext()
+            })
+        },
+        cancel() {
+          queued = Math.max(0, queued - 1)
+          reject(createDisposedError())
+        },
+      })
+    })
+    scheduleNext()
     return task
   }
 
@@ -83,7 +146,11 @@ export function createDataGridApiLifecycleRuntime(
         return queueExclusive(fn)
       },
     },
+    dispose,
     runExclusiveSync<TResult>(operation: string, fn: () => TResult): TResult {
+      if (disposed || coreLifecycle.state === "disposed") {
+        throw createDisposedError()
+      }
       if (active !== 0 || queued !== 0) {
         throw createBusyError(operation)
       }
@@ -95,13 +162,7 @@ export function createDataGridApiLifecycleRuntime(
       }
     },
     runExclusiveAsync<TResult>(_operation: string, fn: () => TResult | Promise<TResult>): Promise<TResult> {
-      return queueExclusive(async () => {
-        try {
-          return await fn()
-        } catch (error) {
-          throw error
-        }
-      })
+      return queueExclusive(fn)
     },
   }
 }

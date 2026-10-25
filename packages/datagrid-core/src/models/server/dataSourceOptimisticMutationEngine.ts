@@ -27,9 +27,46 @@ export interface DataSourceOptimisticMutationEngine<T> extends DataSourceRuntime
 
 export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimisticMutationEngine<T> {
   let transactionCounter = 0
-  let commitQueue: Promise<void> = Promise.resolve()
+  let commitRunning = false
+  let commitScheduled = false
+  const commitQueue: Array<{
+    task: () => Promise<void>
+    resolve: () => void
+    reject: (error: unknown) => void
+  }> = []
   const transactions = new Map<number, DataSourceOptimisticEditTransaction<T>>()
   const transactionOrder: number[] = []
+
+  const cancelQueuedCommits = (): void => {
+    const error = new Error("[DataGridDataSource] optimistic commit was cancelled before dispatch because the model is disposed.")
+    while (commitQueue.length > 0) {
+      commitQueue.shift()?.reject(error)
+    }
+  }
+
+  const scheduleNextCommit = (): void => {
+    if (lifecycle.isDisposed() || commitRunning || commitScheduled || commitQueue.length === 0) {
+      return
+    }
+    commitScheduled = true
+    queueMicrotask(() => {
+      commitScheduled = false
+      if (lifecycle.isDisposed()) {
+        cancelQueuedCommits()
+        return
+      }
+      const next = commitQueue.shift()
+      if (!next) return
+      commitRunning = true
+      Promise.resolve()
+        .then(next.task)
+        .then(next.resolve, next.reject)
+        .finally(() => {
+          commitRunning = false
+          scheduleNextCommit()
+        })
+    })
+  }
 
   function pendingTransactionsForRow(rowId: DataGridRowId): DataSourceOptimisticEditTransaction<T>[] {
     const pending: DataSourceOptimisticEditTransaction<T>[] = []
@@ -51,7 +88,10 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
   const lifecycle = createDataSourceRuntimeLifecycle({
     service: "optimistic-mutation-engine",
     onAttach: clearTransactions,
-    onDispose: clearTransactions,
+    onDispose() {
+      clearTransactions()
+      cancelQueuedCommits()
+    },
   })
 
   return {
@@ -115,10 +155,12 @@ export function createDataSourceOptimisticMutationEngine<T>(): DataSourceOptimis
     },
     enqueueCommit(task) {
       if (lifecycle.isDisposed()) {
-        return Promise.resolve()
+        return Promise.reject(new Error("[DataGridDataSource] optimistic commit engine is disposed."))
       }
-      const commitTask = commitQueue.then(task)
-      commitQueue = commitTask.then(() => undefined, () => undefined)
+      const commitTask = new Promise<void>((resolve, reject) => {
+        commitQueue.push({ task, resolve, reject })
+      })
+      scheduleNextCommit()
       return commitTask
     },
   }

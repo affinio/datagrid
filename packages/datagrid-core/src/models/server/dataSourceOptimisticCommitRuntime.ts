@@ -79,7 +79,11 @@ export function createDataSourceOptimisticCommitRuntime<T>(
         options.emit()
       }
     } catch (commitError) {
-      if (options.isDisposed()) return
+      if (options.isDisposed()) {
+        // A dispatched write has an external outcome. Disposal may suppress
+        // local publication, but it must not turn a rejected write into success.
+        throw commitError
+      }
       console.error(
         serverConfirmed
           ? "[DataGridDataSource] commit was confirmed but local publication or reconciliation failed."
