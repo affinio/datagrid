@@ -91,26 +91,27 @@ export function createChangeFeedPoller<TResponse>(
     }
   }
 
-  function createRequestSignal(signal?: AbortSignal): AbortSignal {
+  function createRequestSignal(signal?: AbortSignal): {
+    controller: AbortController
+    signal: AbortSignal
+    cleanup: (() => void) | null
+  } {
     const controller = new AbortController()
-    pollAbortController = controller
     if (!signal) {
-      pollAbortCleanup = null
-      return controller.signal
+      return { controller, signal: controller.signal, cleanup: null }
     }
     if (signal.aborted) {
       controller.abort()
-      pollAbortCleanup = null
-      return controller.signal
+      return { controller, signal: controller.signal, cleanup: null }
     }
     const abortListener = (): void => {
       controller.abort()
     }
     signal.addEventListener("abort", abortListener, { once: true })
-    pollAbortCleanup = () => {
+    const cleanup = () => {
       signal.removeEventListener("abort", abortListener)
     }
-    return controller.signal
+    return { controller, signal: controller.signal, cleanup }
   }
 
   function handleRetry(event: ServerDatasourceRetryEvent): void {
@@ -126,7 +127,10 @@ export function createChangeFeedPoller<TResponse>(
 
     const requestGeneration = pollGeneration
     const sinceVersion = options.getSinceVersion() ?? 0
-    const requestSignal = createRequestSignal(signal)
+    const request = createRequestSignal(signal)
+    const requestSignal = request.signal
+    pollAbortController = request.controller
+    pollAbortCleanup = request.cleanup
 
     lastSeenVersion = sinceVersion
     pollInFlight = true
@@ -149,6 +153,9 @@ export function createChangeFeedPoller<TResponse>(
       retryDelayMs = null
       options.onResponse(response, sinceVersion)
     } catch (caught) {
+      if (!pollingActive || requestGeneration !== pollGeneration) {
+        return
+      }
       if (options.isInvalidSinceVersionError?.(caught)) {
         consecutiveFailureCount += 1
         retryAttempt = 0
@@ -161,12 +168,12 @@ export function createChangeFeedPoller<TResponse>(
         options.onError?.(caught)
       }
     } finally {
-      if (pollAbortController !== null) {
+      if (pollAbortController === request.controller) {
         pollAbortController = null
+        clearAbortCleanup()
+        pollInFlight = false
+        emitDiagnostics()
       }
-      clearAbortCleanup()
-      pollInFlight = false
-      emitDiagnostics()
     }
   }
 

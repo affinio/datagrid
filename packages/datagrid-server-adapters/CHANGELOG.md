@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.2
+
+### Changed
+
+- Republished against `@affino/datagrid-core@0.14.1` and `@affino/datagrid-server-client@0.2.1` through workspace dependency resolution.
+
+### Validation
+
+- Server adapter type-check, public build, and package compatibility gate passed.
+
 ## 0.2.1
 
 ### Fixes

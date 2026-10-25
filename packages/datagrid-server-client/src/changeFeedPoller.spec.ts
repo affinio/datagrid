@@ -90,6 +90,42 @@ describe("createChangeFeedPoller", () => {
     poller.stop()
   })
 
+  it("keeps a restarted request's pending state when an older generation settles", async () => {
+    const requests: Array<ReturnType<typeof createDeferred<{ version: number }>>> = []
+    const onResponse = vi.fn()
+    const poller = createChangeFeedPoller({
+      getSinceVersion: () => 0,
+      loadSinceVersion: () => {
+        const request = createDeferred<{ version: number }>()
+        requests.push(request)
+        return request.promise
+      },
+      onResponse,
+    })
+
+    poller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    poller.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(requests).toHaveLength(2)
+
+    requests[0]?.reject(new DOMException("aborted", "AbortError"))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(poller.diagnostics().pending).toBe(true)
+
+    await poller.pollNow()
+    expect(requests).toHaveLength(2)
+    requests[1]?.resolve({ version: 2 })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onResponse).toHaveBeenCalledTimes(1)
+    expect(onResponse).toHaveBeenCalledWith({ version: 2 }, 0)
+    expect(poller.diagnostics().pending).toBe(false)
+    poller.stop()
+  })
+
   it("uses default and minimum intervals", () => {
     const pollerDefault = createChangeFeedPoller({
       getSinceVersion: () => 0,
