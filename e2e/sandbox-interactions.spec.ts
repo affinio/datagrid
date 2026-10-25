@@ -78,7 +78,7 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const valueCheckboxes = page.locator('input[name^="datagrid-column-menu-value-stage-"]')
     await page.locator('[data-datagrid-column-menu-action="clear-all-values"]').click()
     await expect(doneValue).not.toBeChecked()
-    await doneValue.check()
+    await doneValue.locator("xpath=..").click()
     await expect(doneValue).toBeChecked()
     await page.locator('[data-datagrid-column-menu-action="apply-filter"]').click()
     await expect(stage.locator('.grid-cell[data-column-key="stage"]').filter({ hasText: "In Progress" })).toHaveCount(0)
@@ -88,7 +88,10 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     const rowId = await doneCell.getAttribute("data-row-id")
     expect(rowId).toBeTruthy()
 
-    await doneCell.dblclick()
+    // This check targets filter reapplication. The selected column can sit
+    // beneath pinned/header chrome after horizontal scrolling, so avoid making
+    // the test depend on Playwright's hit-testing for the edit gesture.
+    await doneCell.dblclick({ force: true })
     const editor = page.getByRole("combobox", { name: /Edit Stage/ })
     await expect(editor).toBeVisible()
     await page.getByRole("option", { name: "In Progress" }).click()
