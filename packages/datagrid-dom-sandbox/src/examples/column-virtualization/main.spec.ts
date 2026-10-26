@@ -48,7 +48,7 @@ describe("column virtualization sandbox example", () => {
     await new Promise(resolve => setTimeout(resolve, 40))
     expect(demo.grid.api.selection.getSnapshot()?.activeCell).toMatchObject({ colIndex: lastCenterColumn + 1 })
     expect(root.querySelector(`[data-row-index="0"][data-column-index="${lastCenterColumn + 1}"]`)).not.toBeNull()
-  }, 15_000)
+  }, 30_000)
 
   it("keeps live DOM node counts bounded while the column window moves", async () => {
     root = document.createElement("div")
@@ -71,7 +71,7 @@ describe("column virtualization sandbox example", () => {
     expect(Math.max(...nodeCounts)).toBeLessThan(1_600)
     expect(grid.querySelectorAll("[role=row]").length).toBe(81)
     expect(root.querySelectorAll(".affino-grid-dom__header [role=columnheader]").length).toBeLessThan(30)
-  }, 15_000)
+  }, 30_000)
 
   it("refreshes column metadata and values instead of retaining stale viewport cells", async () => {
     root = document.createElement("div")

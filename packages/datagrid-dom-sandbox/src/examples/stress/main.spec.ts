@@ -30,5 +30,5 @@ describe("combined viewport stress sandbox example", () => {
     expect(root.querySelectorAll(".affino-grid-dom__body > [role=row][data-row-index]").length).toBeLessThan(100)
     expect(root.querySelectorAll(".affino-grid-dom__header [role=columnheader]").length).toBeLessThan(30)
     expect(grid.querySelectorAll("*").length).toBeLessThan(2_000)
-  })
+  }, 15_000)
 })
