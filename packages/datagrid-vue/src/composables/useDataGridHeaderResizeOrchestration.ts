@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref, getCurrentInstance, type ComputedRef } from "vue"
 import {
   type DataGridHeaderResizeApplyMode,
+  type DataGridHeaderResizeEdge,
   useDataGridHeaderResizeOrchestration as useDataGridHeaderResizeOrchestrationCore,
   type DataGridHeaderResizeState,
   type UseDataGridHeaderResizeOrchestrationOptions,
@@ -8,6 +9,7 @@ import {
 
 export type {
   DataGridHeaderResizeApplyMode,
+  DataGridHeaderResizeEdge,
   DataGridHeaderResizeState,
   UseDataGridHeaderResizeOrchestrationOptions,
 }
@@ -17,7 +19,7 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
   isColumnResizing: ComputedRef<boolean>
   setColumnWidth: (columnKey: string, width: number) => void
   estimateColumnAutoWidth: (columnKey: string) => number
-  onHeaderResizeHandleMouseDown: (columnKey: string, event: MouseEvent) => void
+  onHeaderResizeHandleMouseDown: (columnKey: string, event: MouseEvent, edge?: DataGridHeaderResizeEdge) => void
   onHeaderResizeHandleDoubleClick: (columnKey: string, event: MouseEvent) => void
   applyColumnResizeFromPointer: (clientX: number) => void
   stopColumnResize: () => void

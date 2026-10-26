@@ -7,6 +7,8 @@ export interface DataGridHeaderResizeState {
   lastWidth: number
 }
 
+export type DataGridHeaderResizeEdge = "left" | "right"
+
 export type DataGridHeaderResizeApplyMode = "sync" | "raf"
 
 export interface UseDataGridHeaderResizeOrchestrationOptions<TRow> {
@@ -38,7 +40,7 @@ export interface UseDataGridHeaderResizeOrchestrationResult {
   subscribe: (listener: (state: DataGridHeaderResizeState | null) => void) => () => void
   setColumnWidth: (columnKey: string, width: number) => void
   estimateColumnAutoWidth: (columnKey: string) => number
-  onHeaderResizeHandleMouseDown: (columnKey: string, event: MouseEvent) => void
+  onHeaderResizeHandleMouseDown: (columnKey: string, event: MouseEvent, edge?: DataGridHeaderResizeEdge) => void
   onHeaderResizeHandleDoubleClick: (columnKey: string, event: MouseEvent) => void
   applyColumnResizeFromPointer: (clientX: number) => void
   stopColumnResize: () => void
@@ -87,6 +89,7 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
   })
 
   let activeColumnResize: DataGridHeaderResizeState | null = null
+  let activeResizeEdge: DataGridHeaderResizeEdge = "right"
   let pendingResizeClientX: number | null = null
   let pendingResizeFrame: number | null = null
   const listeners = new Set<(state: DataGridHeaderResizeState | null) => void>()
@@ -142,7 +145,8 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     if (!activeColumnResize) {
       return false
     }
-    const delta = clientX - activeColumnResize.startClientX
+    const pointerDelta = clientX - activeColumnResize.startClientX
+    const delta = activeResizeEdge === "left" ? -pointerDelta : pointerDelta
     const nextWidth = clampColumnWidth(activeColumnResize.columnKey, activeColumnResize.startWidth + delta)
     if (nextWidth === activeColumnResize.lastWidth) {
       return false
@@ -207,7 +211,11 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     return clampColumnWidth(columnKey, estimated)
   }
 
-  function onHeaderResizeHandleMouseDown(columnKey: string, event: MouseEvent) {
+  function onHeaderResizeHandleMouseDown(
+    columnKey: string,
+    event: MouseEvent,
+    edge: DataGridHeaderResizeEdge = "right",
+  ) {
     if (event.button !== 0 || !options.isColumnResizable(columnKey)) {
       return
     }
@@ -221,6 +229,7 @@ export function useDataGridHeaderResizeOrchestration<TRow>(
     }
     cancelPendingResizeFrame()
     pendingResizeClientX = null
+    activeResizeEdge = edge
     const startWidth = resolveRenderedColumnWidthFromEvent(event) ?? resolveColumnCurrentWidth(columnKey)
     setActiveColumnResize({
       columnKey,

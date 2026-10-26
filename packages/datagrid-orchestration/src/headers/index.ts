@@ -18,6 +18,7 @@ export {
 } from "./useDataGridHeaderInteractionRouter"
 
 export {
+  type DataGridHeaderResizeEdge,
   type DataGridHeaderResizeApplyMode,
   type DataGridHeaderResizeState,
   type UseDataGridHeaderResizeOrchestrationOptions,

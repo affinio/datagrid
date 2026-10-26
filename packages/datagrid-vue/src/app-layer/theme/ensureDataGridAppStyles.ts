@@ -4093,6 +4093,11 @@ body.datagrid-fill-drag-cursor * {
   touch-action: none;
 }
 
+.col-resize--left {
+  left: 0;
+  right: auto;
+}
+
 .grid-stage--coarse-pointer .cell-fill-handle {
   right: 0;
   bottom: 0;

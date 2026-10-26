@@ -1,5 +1,15 @@
 # @affino/datagrid-vue
 
+## 0.16.4
+
+### Fixed
+
+- Allow resizing the leading right-pinned column from its left edge.
+
+### Validation
+
+- Vue type-check, production build, focused contract tests, and pinned-right resize browser regression passed.
+
 ## 0.16.3
 
 ### Fixed

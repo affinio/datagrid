@@ -79,6 +79,9 @@ or the grid's built-in filter state.
 | toolbar-layout | Declarative rows and start/center/end placement for built-in toolbar items and custom modules, plus text or icon presentation for undo/redo. |
 | theme | Theme preset or theme configuration. |
 
+The first column in the pinned-right pane can be resized from its left edge,
+which adjusts the pane boundary; other column handles remain on their right edge.
+
 `sticky-group-rows` accepts `{ enabled, mode: "root-only", transition: "push-off" }`.
 
 `grouping-presentation` opts into a generated hierarchy column while grouping is active:

@@ -547,9 +547,10 @@
               <button
                 type="button"
                 class="col-resize"
+                :class="{ 'col-resize--left': isLeadingPinnedRightColumn(column) }"
                 :aria-label="resolveColumnResizeLabel(column)"
-                @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @mousedown.stop="startResize($event, column.key, isLeadingPinnedRightColumn(column) ? 'left' : 'right')"
+                @touchstart.stop.passive="startTouchResize($event, column.key, isLeadingPinnedRightColumn(column) ? 'left' : 'right')"
                 @touchmove.stop.passive="handleTouchResizeMove($event)"
                 @touchend.stop.passive="handleTouchResizeEnd($event)"
                 @touchcancel.stop.passive="handleTouchResizeEnd($event)"
@@ -584,9 +585,10 @@
               <button
                 type="button"
                 class="col-resize"
+                :class="{ 'col-resize--left': isLeadingPinnedRightColumn(column) }"
                 :aria-label="resolveColumnResizeLabel(column)"
-                @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                @mousedown.stop="startResize($event, column.key, isLeadingPinnedRightColumn(column) ? 'left' : 'right')"
+                @touchstart.stop.passive="startTouchResize($event, column.key, isLeadingPinnedRightColumn(column) ? 'left' : 'right')"
                 @touchmove.stop.passive="handleTouchResizeMove($event)"
                 @touchend.stop.passive="handleTouchResizeEnd($event)"
                 @touchcancel.stop.passive="handleTouchResizeEnd($event)"
@@ -973,6 +975,10 @@ function isHeaderColumnDraggable(column: TableColumn): boolean {
     && !isRowSelectionColumn(column)
 }
 
+function isLeadingPinnedRightColumn(column: TableColumn): boolean {
+  return pinnedRightColumns.value[0]?.key === column.key
+}
+
 function isHeaderDragBlockedFromTarget(event: DragEvent): boolean {
   const target = event.target instanceof HTMLElement ? event.target : null
   return Boolean(target?.closest(".col-resize, .col-menu-trigger, .col-filter, .col-filter-input, input, button"))
@@ -1213,13 +1219,13 @@ function sortIndicator(columnKey: string): string {
   return columns.value.sortIndicator(columnKey)
 }
 
-function startResize(event: MouseEvent, columnKey: string): void {
+function startResize(event: MouseEvent, columnKey: string, edge: "left" | "right" = "right"): void {
   if (shouldPrioritizeNativeScrollForMouseDown(event, interactionModeInput.value)) {
     return
   }
   resizeClickGuard.armResizeGuard()
   event.preventDefault()
-  columns.value.startResize(event, columnKey)
+  columns.value.startResize(event, columnKey, edge)
 }
 
 function readTouchAt(touches: TouchList, identifier: number): Touch | null {
@@ -1248,7 +1254,7 @@ function createTouchResizeMouseEvent(type: "mousedown" | "mousemove" | "mouseup"
   })
 }
 
-function startTouchResize(event: TouchEvent, columnKey: string): void {
+function startTouchResize(event: TouchEvent, columnKey: string, edge: "left" | "right" = "right"): void {
   const touch = event.touches.length === 1 ? readFirstTouch(event.touches) : null
   if (!touch) {
     activeTouchResizeId = null

@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "publishConfig": { "access": "public" },
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",

@@ -1,6 +1,7 @@
 import { computed, type ComputedRef, type Ref } from "vue"
 import type { DataGridColumnSnapshot } from "@affino/datagrid-core"
 import { useDataGridHeaderResizeOrchestration } from "../advanced"
+import type { DataGridHeaderResizeEdge } from "../composables/useDataGridHeaderResizeOrchestration"
 import { shouldPrioritizeNativeScrollForMouseEvent } from "./dataGridMouseEventGuards"
 import {
   resolveDataGridAppInteractionOwnerSnapshot,
@@ -27,7 +28,7 @@ export interface UseDataGridAppHeaderResizeOptions<TRow> {
 export interface UseDataGridAppHeaderResizeResult {
   isColumnResizing: Ref<boolean>
   interactionOwnerSnapshot: ComputedRef<DataGridAppInteractionOwnerSnapshot>
-  startResize: (event: MouseEvent, key: string) => void
+  startResize: (event: MouseEvent, key: string, edge?: DataGridHeaderResizeEdge) => void
   handleResizeDoubleClick: (event: MouseEvent, key: string) => void
   applyColumnResizeFromPointer: (clientX: number) => void
   stopColumnResize: () => void
@@ -81,11 +82,11 @@ export function useDataGridAppHeaderResize<TRow>(
     resizeApplyMode: "sync",
   })
 
-  const startResize = (event: MouseEvent, key: string): void => {
+  const startResize = (event: MouseEvent, key: string, edge: DataGridHeaderResizeEdge = "right"): void => {
     if (shouldPrioritizeNativeScrollForMouseEvent(event)) {
       return
     }
-    headerResize.onHeaderResizeHandleMouseDown(key, event)
+    headerResize.onHeaderResizeHandleMouseDown(key, event, edge)
   }
 
   const handleResizeDoubleClick = (event: MouseEvent, key: string): void => {

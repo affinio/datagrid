@@ -35,6 +35,7 @@ export type DataGridTableStageCellClass =
   | string
   | readonly string[]
   | Readonly<Record<string, boolean>>
+export type DataGridTableResizeEdge = "left" | "right"
 
 export interface DataGridTableStageCustomOverlay {
   key: string
@@ -141,7 +142,7 @@ export interface DataGridTableStageColumnsSection {
   activeColumnMenu?: DataGridActiveColumnMenuState | null
   openColumnMenu?: (columnKey: string, anchorEl: HTMLElement, reason: DataGridColumnMenuOpenReason) => void
   closeColumnMenu?: () => void
-  startResize: (event: MouseEvent, columnKey: string) => void
+  startResize: (event: MouseEvent, columnKey: string, edge?: DataGridTableResizeEdge) => void
   handleResizeDoubleClick: (event: MouseEvent, columnKey: string) => void
 }
 

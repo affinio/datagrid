@@ -1,5 +1,11 @@
 # @affino/datagrid-orchestration
 
+## 0.8.3
+
+### Added
+
+- Added left-edge resize direction support to the shared header resize lifecycle.
+
 ## 0.8.2
 
 ### Fixed

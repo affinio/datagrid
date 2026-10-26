@@ -195,7 +195,7 @@ function createStageProps(
     reorderColumnsByHeader?: (payload: { sourceColumnKey: string; targetColumnKey: string; placement: "before" | "after" }) => boolean
     resizeColumnByKeyboard?: (columnKey: string, direction: -1 | 1) => boolean
     scrollToColumn?: (target: { columnKey: string; align: "nearest" }) => void
-    startResize?: (event: MouseEvent, columnKey: string) => void
+    startResize?: (event: MouseEvent, columnKey: string, edge?: "left" | "right") => void
     handleViewportKeydown?: (event: KeyboardEvent) => void
   },
 ): DataGridTableStageProps<DemoRow> {
@@ -1577,6 +1577,24 @@ describe("DataGridTableStage contract", () => {
 
     expect(startResize).toHaveBeenCalledTimes(1)
     expect(toggleSortForColumn).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it("exposes a left-edge resize handle for the leading pinned-right column", async () => {
+    const startResize = vi.fn()
+    const wrapper = mount(DataGridTableStage, {
+      props: createStageProps(() => false, { startResize }),
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    const header = wrapper.get('.grid-header-pane--right .grid-cell--header[data-column-key="right"]')
+    const resizeHandle = header.get(".col-resize")
+    expect(resizeHandle.classes()).toContain("col-resize--left")
+
+    await resizeHandle.trigger("mousedown", { button: 0, clientX: 300 })
+    expect(startResize).toHaveBeenCalledWith(expect.any(MouseEvent), "right", "left")
 
     wrapper.unmount()
   })

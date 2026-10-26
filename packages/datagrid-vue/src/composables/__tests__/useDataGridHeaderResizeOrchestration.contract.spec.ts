@@ -61,6 +61,41 @@ describe("useDataGridHeaderResizeOrchestration contract", () => {
     expect(setLastAction).toHaveBeenLastCalledWith("Resized service to 190px")
   })
 
+  it("inverts pointer movement when resizing from the left edge", () => {
+    const applyColumnWidth = vi.fn()
+    const orchestration = useDataGridHeaderResizeOrchestration<Row>({
+      resolveColumnBaseWidth: () => 120,
+      resolveColumnLabel: () => "Service",
+      resolveRowsForAutoSize: () => [],
+      resolveCellText: () => "",
+      resolveColumnWidthOverride: () => null,
+      resolveColumnMinWidth: () => 80,
+      applyColumnWidth,
+      isColumnResizable: () => true,
+      isFillDragging: () => false,
+      stopFillSelection: vi.fn(),
+      isDragSelecting: () => false,
+      stopDragSelection: vi.fn(),
+      setLastAction: vi.fn(),
+      autoSizeSampleLimit: 260,
+      autoSizeCharWidth: 7.2,
+      autoSizeHorizontalPadding: 28,
+      autoSizeMaxWidth: 640,
+      resizeApplyMode: "sync",
+    })
+
+    orchestration.onHeaderResizeHandleMouseDown("service", {
+      button: 0,
+      clientX: 200,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as MouseEvent, "left")
+    orchestration.applyColumnResizeFromPointer(170)
+
+    expect(applyColumnWidth).toHaveBeenLastCalledWith("service", 150)
+    orchestration.stopColumnResize()
+  })
+
   it("double-click auto-size respects min/max clamp and emits action", () => {
     const applyColumnWidth = vi.fn()
     const setLastAction = vi.fn()
