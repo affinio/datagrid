@@ -85,6 +85,10 @@
             <option value="custom">Custom items + button trigger</option>
           </select>
         </label>
+        <label v-if="props.mode === 'base'">
+          <input v-model="filterRowEnabled" type="checkbox" />
+          Engineering filter row
+        </label>
         <label v-if="props.mode === 'base' && !props.timesheetShowcase && viewMode === 'gantt'">
           Zoom
           <select v-model="ganttZoomLevel">
@@ -289,6 +293,7 @@
         fill-handle
         range-move
         :column-menu="columnMenu"
+        :filter-row="filterRowEnabled"
         :cell-menu="cellMenu"
         :row-index-menu="rowIndexMenu"
         column-reorder
@@ -1310,6 +1315,7 @@ const timesheetProjects = ref<readonly Omit<TimesheetRow, "total">[]>(
 );
 const themePreset = ref<ThemePreset>("sugar");
 const columnMenuPreset = ref<ColumnMenuPreset>("default");
+const filterRowEnabled = ref(false);
 const groupByModel = ref<DataGridGroupBySpec | null>(null);
 const rowHeightMode = ref<"fixed" | "auto">("fixed");
 const rowRenderMode = ref<"virtualization" | "pagination">("virtualization");

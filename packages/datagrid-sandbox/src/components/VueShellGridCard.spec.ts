@@ -367,6 +367,11 @@ describe("VueShellGridCard", () => {
       ]),
     })
     expect((resolvedAggregationModel as { columns?: Array<{ key: string }> }).columns?.some(column => column.key === "id")).toBe(false)
+    const engineeringFilterToggle = wrapper.findAll("label").find(label => label.text().includes("Engineering filter row"))
+    expect(engineeringFilterToggle).toBeTruthy()
+    await engineeringFilterToggle!.get("input").setValue(true)
+    await flushUi()
+    expect(readGridInput("filterRow", "filter-row")).toBe(true)
 
     const columns = (grid.props("columns") ?? gridVm.$props?.columns ?? gridVm.$attrs?.columns ?? []) as Array<Record<string, unknown>>
     const groupColumn = columns.find(column => column.key === "__affino_hierarchy__")

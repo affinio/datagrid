@@ -130,6 +130,19 @@ Checks:
 - Canvas body and pinned-bottom interior dividers align after the shared boundary, matching the DOM chrome layer's leading border. The stage frame owns the outer right and bottom edges; pinned-bottom shell owns the seam between the scrolling body and pinned rows.
 - Pivot/group header internal dividers remain CSS-owned. Header chrome does not draw an outer right edge already supplied by the stage frame.
 
+## Symptom: Merged header dividers do not line up across rows
+
+Checks:
+- In canvas-chrome mode, DOM header rows use leading borders on the next cell, matching the canvas stroke's device-pixel alignment.
+- Do not mix a trailing `border-right` on pinned header cells with leading `border-left` dividers in the center pane; the two strokes can land on adjacent device pixels.
+- The pinned pane separator owns the boundary between pinned and center panes. Keep that seam out of both adjacent cell borders and layer the separator above merged header rows.
+- Pinned leaf rows keep the normal 36px header track so index/checkbox dividers reach the same bottom edge as the center header, with or without group rows.
+- Pinned header cells use the same header surface tokens as the center pane; pinned body surface tokens must not tint headers. The rounded stage frame owns the outer left edge, so do not add a leading cell border there.
+- Compare the index and system-selection boundaries in each group row and leaf row, including their CSS border side and bounding-box coordinate.
+
+Relevant browser regression:
+- `e2e/sandbox-grid-header-edges.spec.ts` (`canvas chrome keeps merged pinned header dividers aligned across header rows`).
+
 ## Symptom: The sticky group row index divider is offset
 
 Checks:

@@ -1,5 +1,5 @@
 <template>
-  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture" @keydown="handleHeaderKeyboardNavigation">
+  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups, 'grid-header-shell--filter-row': filterRowEnabled }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture" @keydown="handleHeaderKeyboardNavigation">
     <slot name="center-chrome" />
 
     <div ref="leftPaneElement" class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
@@ -57,7 +57,6 @@
           <div class="col-head col-head--index">
             <span>#</span>
           </div>
-          <div v-if="!hasColumnMenu()" class="col-filter col-filter--index-spacer" aria-hidden="true" />
         </div>
         <template v-if="shouldUseColumnMenus()">
           <template v-for="column in pinnedLeftColumns" :key="`header-left-${column.key}`">
@@ -234,7 +233,7 @@
                   @click.stop
                 />
               </div>
-              <div class="col-filter" @click.stop>
+              <div v-if="!filterRowEnabled" class="col-filter" @click.stop>
                 <input
                   class="col-filter-input"
                   :name="`datagrid-header-filter-left-${column.key}`"
@@ -250,6 +249,33 @@
             </div>
           </template>
         </template>
+      </div>
+      <div v-if="filterRowEnabled" class="grid-header-row grid-pane-track grid-header-filter-row" :style="leftTrackStyle">
+        <div
+          v-if="showIndexColumn"
+          class="grid-header-filter-cell grid-header-filter-cell--index"
+          :style="indexColumnHeaderStyle"
+          aria-hidden="true"
+        />
+        <div
+          v-for="column in pinnedLeftColumns"
+          :key="`filter-left-${column.key}`"
+          class="grid-header-filter-cell"
+          :class="{ 'grid-header-filter-cell--selection': isRowSelectionColumn(column) }"
+          :style="headerColumnStyle(column)"
+          :data-column-key="column.key"
+        >
+          <DataGridHeaderFilterRow
+            v-if="!isRowSelectionColumn(column)"
+            :label="resolveHeaderDisplayLabel(column)"
+            :data-type="column.column.dataType"
+            :disabled="!isColumnFilterable(column)"
+            :draft="filterRowDraft(column.key)"
+            @update="updateFilterRowDraft(column.key, $event)"
+            @apply="applyFilterRowDraft(column.key)"
+            @cancel="cancelFilterRowDraft(column.key)"
+          />
+        </div>
       </div>
     </div>
 
@@ -372,8 +398,8 @@
                 type="button"
                 class="col-resize"
                 :aria-label="resolveColumnResizeLabel(column)"
-                @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
                 @touchmove.stop.passive="handleTouchResizeMove($event)"
                 @touchend.stop.passive="handleTouchResizeEnd($event)"
                 @touchcancel.stop.passive="handleTouchResizeEnd($event)"
@@ -416,8 +442,8 @@
                 type="button"
                 class="col-resize"
                 :aria-label="resolveColumnResizeLabel(column)"
-                @mousedown.stop="startResize($event, column.key)"
-                @touchstart.stop.passive="startTouchResize($event, column.key)"
+                  @mousedown.stop="startResize($event, column.key)"
+                  @touchstart.stop.passive="startTouchResize($event, column.key)"
                 @touchmove.stop.passive="handleTouchResizeMove($event)"
                 @touchend.stop.passive="handleTouchResizeEnd($event)"
                 @touchcancel.stop.passive="handleTouchResizeEnd($event)"
@@ -425,7 +451,7 @@
                 @click.stop
               />
             </div>
-            <div class="col-filter" @click.stop>
+            <div v-if="!filterRowEnabled" class="col-filter" @click.stop>
               <input
                 class="col-filter-input"
                 :name="`datagrid-header-filter-center-${column.key}`"
@@ -440,6 +466,37 @@
             </div>
           </div>
         </template>
+        <div
+          v-if="rightColumnSpacerWidth > 0"
+          class="grid-column-spacer"
+          :style="spacerStyle(rightColumnSpacerWidth)"
+        />
+      </div>
+      <div v-if="filterRowEnabled" class="grid-header-row grid-center-track grid-header-filter-row" :style="mainTrackStyle">
+        <div
+          v-if="leftColumnSpacerWidth > 0"
+          class="grid-column-spacer"
+          :style="spacerStyle(leftColumnSpacerWidth)"
+        />
+        <div
+          v-for="column in centerHeaderColumns"
+          :key="`filter-center-${column.key}`"
+          class="grid-header-filter-cell"
+          :class="{ 'grid-header-filter-cell--selection': isRowSelectionColumn(column) }"
+          :style="headerColumnStyle(column)"
+          :data-column-key="column.key"
+        >
+          <DataGridHeaderFilterRow
+            v-if="!isRowSelectionColumn(column)"
+            :label="resolveHeaderDisplayLabel(column)"
+            :data-type="column.column.dataType"
+            :disabled="!isColumnFilterable(column)"
+            :draft="filterRowDraft(column.key)"
+            @update="updateFilterRowDraft(column.key, $event)"
+            @apply="applyFilterRowDraft(column.key)"
+            @cancel="cancelFilterRowDraft(column.key)"
+          />
+        </div>
         <div
           v-if="rightColumnSpacerWidth > 0"
           class="grid-column-spacer"
@@ -596,7 +653,7 @@
                 @click.stop
               />
             </div>
-            <div class="col-filter" @click.stop>
+              <div v-if="!filterRowEnabled" class="col-filter" @click.stop>
               <input
                 class="col-filter-input"
                 :name="`datagrid-header-filter-right-${column.key}`"
@@ -612,6 +669,27 @@
           </div>
         </template>
       </div>
+      <div v-if="filterRowEnabled" class="grid-header-row grid-pane-track grid-header-filter-row" :style="rightTrackStyle">
+        <div
+          v-for="column in pinnedRightColumns"
+          :key="`filter-right-${column.key}`"
+          class="grid-header-filter-cell"
+          :class="{ 'grid-header-filter-cell--selection': isRowSelectionColumn(column) }"
+          :style="headerColumnStyle(column)"
+          :data-column-key="column.key"
+        >
+          <DataGridHeaderFilterRow
+            v-if="!isRowSelectionColumn(column)"
+            :label="resolveHeaderDisplayLabel(column)"
+            :data-type="column.column.dataType"
+            :disabled="!isColumnFilterable(column)"
+            :draft="filterRowDraft(column.key)"
+            @update="updateFilterRowDraft(column.key, $event)"
+            @apply="applyFilterRowDraft(column.key)"
+            @cancel="cancelFilterRowDraft(column.key)"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -621,6 +699,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type CSSPro
 import type { DataGridExternalFilterIndicator } from "../config/dataGridExternalFilterIndicators"
 import { useDataGridResizeClickGuard } from "@affino/datagrid-vue/advanced"
 import type { DataGridColumnMenuTriggerMode } from "../overlays/dataGridColumnMenu"
+import DataGridHeaderFilterRow from "./DataGridHeaderFilterRow.vue"
 import type { DataGridTableStageBodyColumn as TableColumn } from "./dataGridTableStageBody.types"
 import type { DataGridColumnMenuOpenReason } from "./dataGridTableStage.types"
 import {
@@ -827,6 +906,7 @@ const mainTrackStyle = computed(() => layout.value.mainTrackStyle)
 const leftColumnSpacerWidth = computed(() => viewport.value.leftColumnSpacerWidth)
 const rightColumnSpacerWidth = computed(() => viewport.value.rightColumnSpacerWidth)
 const columnFilterTextByKey = computed(() => columns.value.columnFilterTextByKey)
+const filterRowEnabled = computed(() => columns.value.filterRowEnabled === true)
 const draggedHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderColumnKey = ref<string | null>(null)
 const dragOverHeaderPlacement = ref<"before" | "after" | null>(null)
@@ -1262,7 +1342,7 @@ function startTouchResize(event: TouchEvent, columnKey: string, edge: "left" | "
   }
   resizeClickGuard.armResizeGuard()
   activeTouchResizeId = touch.identifier
-  columns.value.startResize(createTouchResizeMouseEvent("mousedown", touch), columnKey)
+  columns.value.startResize(createTouchResizeMouseEvent("mousedown", touch), columnKey, edge)
 }
 
 function handleTouchResizeMove(event: TouchEvent): void {
@@ -1300,6 +1380,22 @@ function handleResizeDoubleClick(event: MouseEvent, columnKey: string): void {
 
 function setColumnFilterText(columnKey: string, value: string): void {
   columns.value.setColumnFilterText(columnKey, value)
+}
+
+function filterRowDraft(columnKey: string) {
+  return columns.value.filterRowDraftByKey?.[columnKey] ?? { operator: "contains", value: "", value2: "" }
+}
+
+function updateFilterRowDraft(columnKey: string, draft: { operator: string; value: string; value2: string }): void {
+  columns.value.updateFilterRowDraft?.(columnKey, draft)
+}
+
+function applyFilterRowDraft(columnKey: string): void {
+  columns.value.applyFilterRowDraft?.(columnKey)
+}
+
+function cancelFilterRowDraft(columnKey: string): void {
+  columns.value.cancelFilterRowDraft?.(columnKey)
 }
 
 function headerViewportRef(value: Element | { $el?: unknown } | null): void {

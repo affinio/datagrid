@@ -71,6 +71,7 @@ import type {
   DataGridActiveColumnMenuState,
   DataGridColumnMenuOpenReason,
   DataGridColumnMenuValueEntriesResult,
+  DataGridHeaderFilterDraft,
   DataGridTableRow,
   DataGridTableStageCellClass,
   DataGridTableStageCenterPaneDiagnostics,
@@ -280,6 +281,11 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   flushRowSelectionSnapshotUpdates?: () => void
   firstColumnKey: Ref<string>
   columnFilterTextByKey: Ref<Record<string, string>>
+  filterRowEnabled?: Ref<boolean>
+  filterRowDraftByKey?: Ref<Record<string, DataGridHeaderFilterDraft>>
+  updateFilterRowDraft?: (columnKey: string, draft: DataGridHeaderFilterDraft) => void
+  applyFilterRowDraft?: (columnKey: string) => void
+  cancelFilterRowDraft?: (columnKey: string) => void
   virtualization: Ref<DataGridVirtualizationOptions>
   reorderColumnsByHeader?: (payload: {
     sourceColumnKey: string
@@ -2182,6 +2188,11 @@ export function useDataGridTableStageRuntime<
     rowHover: computed(() => options.rowHover?.value === true),
     stripedRows: computed(() => options.stripedRows?.value === true),
     columnFilterTextByKey: options.columnFilterTextByKey,
+    filterRowEnabled: options.filterRowEnabled,
+    filterRowDraftByKey: options.filterRowDraftByKey,
+    updateFilterRowDraft: options.updateFilterRowDraft,
+    applyFilterRowDraft: options.applyFilterRowDraft,
+    cancelFilterRowDraft: options.cancelFilterRowDraft,
     scrollToColumn: options.runtime.scrollToColumn,
     gridContentStyle,
     mainTrackStyle,

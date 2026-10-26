@@ -1212,6 +1212,11 @@ const DATA_GRID_APP_STYLES = `
   left: 0;
 }
 
+.grid-header-pane--left::after,
+.grid-header-pane--right::before {
+  z-index: 8;
+}
+
 .grid-header-pane {
   border-bottom: var(--datagrid-header-divider-size) solid var(--datagrid-header-divider-color);
   background: var(--datagrid-header-row-bg);
@@ -1862,6 +1867,10 @@ body.datagrid-fill-drag-cursor * {
   z-index: 7;
 }
 
+.grid-header-shell .grid-header-row:not(.grid-header-row--pivot-groups):not(.grid-header-filter-row) {
+  min-height: 36px;
+}
+
 .grid-header-shell--pivot-groups .grid-header-row:not(.grid-header-row--pivot-groups) .grid-cell--header {
   border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
 }
@@ -1873,6 +1882,43 @@ body.datagrid-fill-drag-cursor * {
 .grid-stage--canvas-chrome .grid-header-shell--pivot-groups .grid-header-viewport .grid-cell,
 .grid-stage--canvas-chrome .grid-header-shell--pivot-groups .grid-header-viewport .grid-column-spacer {
   border-right: 0;
+}
+
+/* Canvas separators use the leading edge of the next cell. Keep every DOM
+   header row on that same edge so pinned and merged cells rasterize in line
+   with the canvas grid below. */
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-cell,
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-column-spacer {
+  border-right: 0;
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-cell:not(:first-child),
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-column-spacer:not(:first-child) {
+  border-left: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-header-filter-cell,
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-column-spacer {
+  border-right: 0;
+}
+
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-header-filter-cell:not(:first-child),
+.grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-column-spacer:not(:first-child) {
+  border-left: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-cell,
+  .grid-stage--canvas-chrome .grid-header-shell .grid-header-row > .grid-column-spacer {
+    border-left: 0;
+    border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  }
+
+  .grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-header-filter-cell,
+  .grid-stage--canvas-chrome .grid-header-shell .grid-header-filter-row > .grid-column-spacer {
+    border-left: 0;
+    border-right: var(--datagrid-header-column-divider-size) solid var(--datagrid-header-column-divider-color);
+  }
 }
 
 .grid-stage--canvas-chrome .grid-header-shell .grid-header-viewport .grid-cell--header-terminal {
@@ -1934,11 +1980,11 @@ body.datagrid-fill-drag-cursor * {
 }
 
 .grid-cell--pinned-left.grid-cell--header-merged-untitled::before {
-  background: var(--datagrid-pinned-left-bg);
+  background: var(--datagrid-header-cell-bg);
 }
 
 .grid-cell--pinned-right.grid-cell--header-merged-untitled::before {
-  background: var(--datagrid-pinned-right-bg);
+  background: var(--datagrid-header-cell-bg);
 }
 
 .grid-cell--header-merged-untitled > * {
@@ -1952,6 +1998,40 @@ body.datagrid-fill-drag-cursor * {
 
 .grid-stage--canvas-chrome .grid-header-shell .grid-cell--header.grid-cell--checkbox {
   background: var(--datagrid-header-cell-bg);
+}
+
+.grid-header-shell .grid-cell--header.grid-cell--pinned-left:not(.grid-cell--header-group) {
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-header-shell .grid-cell--header.grid-cell--pinned-right:not(.grid-cell--header-group) {
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-left[data-datagrid-pivot-group-depth="0"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 72%, var(--datagrid-header-cell-bg) 28%);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-left[data-datagrid-pivot-group-depth="1"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 82%, var(--datagrid-header-cell-bg) 18%);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-left[data-datagrid-pivot-group-depth="2"],
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-left[data-datagrid-pivot-group-depth="3"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 88%, var(--datagrid-header-cell-bg) 12%);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-right[data-datagrid-pivot-group-depth="0"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 72%, var(--datagrid-header-cell-bg) 28%);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-right[data-datagrid-pivot-group-depth="1"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 82%, var(--datagrid-header-cell-bg) 18%);
+}
+
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-right[data-datagrid-pivot-group-depth="2"],
+.grid-header-shell .grid-cell--header-group.grid-cell--pinned-right[data-datagrid-pivot-group-depth="3"] {
+  background: color-mix(in srgb, var(--datagrid-header-row-bg) 88%, var(--datagrid-header-cell-bg) 12%);
 }
 
 .grid-cell--header.grid-cell--checkbox.grid-cell--header-merged-untitled::before {
@@ -2522,9 +2602,56 @@ body.datagrid-fill-drag-cursor * {
   padding-right: 8px;
 }
 
-.col-filter--index-spacer {
-  height: 22px;
-  pointer-events: none;
+.col-filter--engineering {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: 2px;
+  align-items: center;
+  min-width: 0;
+}
+
+.col-filter--engineering-between {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.col-filter--engineering-operandless {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.col-filter-input--operator {
+  padding-inline: 2px;
+}
+
+.grid-header-filter-row {
+  min-height: 34px;
+}
+
+.grid-header-shell--filter-row .grid-header-row:not(.grid-header-filter-row) > .grid-cell--index-header > .col-head,
+.grid-header-shell--filter-row .grid-header-row:not(.grid-header-filter-row) > .grid-cell--row-selection > .col-head {
+  transform: translateY(17px);
+}
+
+.grid-header-shell--filter-row .grid-header-row:not(.grid-header-filter-row):not(.grid-header-row--pivot-groups) {
+  z-index: 7;
+}
+
+.grid-header-filter-cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 34px;
+  padding: 3px 4px;
+  border: 0;
+  background: var(--datagrid-header-cell-bg);
+}
+
+.grid-header-filter-cell--index {
+  background: var(--datagrid-header-row-bg);
+}
+
+.grid-header-filter-cell--selection {
+  background: var(--datagrid-header-cell-bg);
 }
 
 .col-filter-input {

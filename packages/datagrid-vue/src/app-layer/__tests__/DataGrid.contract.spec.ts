@@ -4561,6 +4561,64 @@ describe("DataGrid app facade contract", () => {
     wrapper.unmount()
   })
 
+  it("applies typed filters from the optional header filter row while keeping the column menu", async () => {
+    const wrapper = mount(DataGrid, {
+      props: {
+        rows: BASE_ROWS,
+        columns: [
+          { key: "owner", label: "Owner", pin: "left", width: 180 },
+          { key: "region", label: "Region", width: 160 },
+          { key: "amount", label: "Amount", dataType: "number", pin: "right", width: 140 },
+        ],
+        columnMenu: true,
+        filterRow: true,
+      },
+    })
+
+    await flushRuntimeTasks()
+
+    expect(wrapper.findAll(".col-filter--engineering")).toHaveLength(3)
+    for (const filter of wrapper.findAll(".col-filter--engineering")) {
+      expect(filter.element.closest(".grid-header-filter-row")).not.toBeNull()
+      expect(filter.element.closest(".grid-cell--header")).toBeNull()
+    }
+    expect(wrapper.find('.grid-cell--header[data-column-key="amount"] [data-datagrid-column-menu-button="true"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Apply Amount filter"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Clear Amount filter"]').exists()).toBe(false)
+    vi.useFakeTimers()
+    try {
+      await wrapper.get('[aria-label="Amount filter operator"]').setValue("gt")
+      await wrapper.get('[aria-label="Amount filter value"]').setValue("15")
+      await flushRuntimeTasks()
+
+      expect(resolveRowModel(wrapper)?.getSnapshot().rowCount).toBe(3)
+      vi.advanceTimersByTime(300)
+      await flushRuntimeTasks()
+
+      expect(resolveRowModel(wrapper)?.getSnapshot()).toMatchObject({
+        rowCount: 2,
+        filterModel: {
+          columnFilters: {
+            amount: { kind: "predicate", operator: "gt", value: 15 },
+          },
+        },
+      })
+      expect(resolveRowAt<DemoRow>(wrapper, 0)?.amount).toBe(20)
+      expect(resolveRowAt<DemoRow>(wrapper, 1)?.amount).toBe(30)
+
+      await wrapper.get('[aria-label="Amount filter operator"]').setValue("")
+      expect(resolveRowModel(wrapper)?.getSnapshot().rowCount).toBe(2)
+      vi.advanceTimersByTime(300)
+      await flushRuntimeTasks()
+      expect(resolveRowModel(wrapper)?.getSnapshot().rowCount).toBe(3)
+    }
+    finally {
+      vi.useRealTimers()
+    }
+
+    wrapper.unmount()
+  })
+
   it("keeps value filter options selectable after clearing all selections", async () => {
     const wrapper = mount(DataGrid, {
       props: {

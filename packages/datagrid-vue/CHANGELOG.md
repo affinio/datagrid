@@ -1,5 +1,15 @@
 # @affino/datagrid-vue
 
+## 0.17.0
+
+### Added
+
+- Added an optional engineering filter row with typed operators and debounced filtering.
+
+### Validation
+
+- Vue type-check, all unit tests, and production build passed.
+
 ## 0.16.4
 
 ### Fixed

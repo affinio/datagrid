@@ -104,6 +104,11 @@ export interface DataGridTableStageColumnsSection {
   renderedColumns: readonly DataGridColumnSnapshot[]
   scrollToColumn?: (target: DataGridViewportColumnTarget) => void
   columnFilterTextByKey: Readonly<Record<string, string>>
+  filterRowEnabled?: boolean
+  filterRowDraftByKey?: Readonly<Record<string, DataGridHeaderFilterDraft>>
+  updateFilterRowDraft?: (columnKey: string, draft: DataGridHeaderFilterDraft) => void
+  applyFilterRowDraft?: (columnKey: string) => void
+  cancelFilterRowDraft?: (columnKey: string) => void
   reorderColumnsByHeader?: (payload: {
     sourceColumnKey: string
     targetColumnKey: string
@@ -144,6 +149,12 @@ export interface DataGridTableStageColumnsSection {
   closeColumnMenu?: () => void
   startResize: (event: MouseEvent, columnKey: string, edge?: DataGridTableResizeEdge) => void
   handleResizeDoubleClick: (event: MouseEvent, columnKey: string) => void
+}
+
+export interface DataGridHeaderFilterDraft {
+  operator: string
+  value: string
+  value2: string
 }
 
 export interface DataGridTableStageRowsSection<TRow extends Record<string, unknown>> {

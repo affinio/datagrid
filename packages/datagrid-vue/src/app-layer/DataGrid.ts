@@ -679,6 +679,10 @@ const dataGridProps = {
     type: [Boolean, Object] as PropType<DataGridColumnMenuProp | undefined>,
     default: undefined,
   },
+  filterRow: {
+    type: Boolean,
+    default: false,
+  },
   cellMenu: {
     type: [Boolean, Object] as PropType<DataGridCellMenuProp | undefined>,
     default: undefined,
@@ -1975,6 +1979,7 @@ const DataGridRuntimeComponent = defineComponent({
         renderMode: resolvedRenderMode.value,
         virtualization: resolvedVirtualization.value,
         columnMenu: resolvedColumnMenu.value,
+        filterRow: props.filterRow,
         cellMenu: resolvedCellMenu.value,
         rowIndexMenu: resolvedRowIndexMenu.value,
         columnLayout: resolvedColumnLayout.value,

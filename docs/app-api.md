@@ -122,6 +122,34 @@ available. Applying edits the selected column's condition in place, preserving
 other conditions and adding an AND condition when that column has no condition yet.
 Closing the menu without applying leaves the current filter unchanged.
 
+### Header filter row
+
+For users who prefer condition controls in the grid header, enable the optional
+`filterRow` prop alongside the column menu:
+
+```vue
+<DataGrid
+  :rows="rows"
+  :columns="columns"
+  column-menu
+  filter-row
+/>
+```
+
+The row exposes a type-appropriate operator and value controls for each
+filterable column. Text columns support contains/equality/prefix/suffix checks;
+numeric columns support comparisons and ranges; boolean columns offer true/false
+equality. Changes apply after a short debounce; press Enter to apply immediately,
+or Escape to discard the pending draft and restore its committed value. Choose
+**No filter** to clear the column's header predicate. The column menu remains available for sorting,
+pinning, grouping, and value filters. Applying a header predicate replaces an
+existing value filter for that same column; filters on other columns and the
+advanced expression are preserved. Clearing the header entry does not remove a
+separate condition stored in the advanced expression.
+
+The legacy simple header inputs remain available when the column menu is
+disabled and `filterRow` is omitted or false.
+
 Hide the action globally or for selected columns:
 
 ```ts

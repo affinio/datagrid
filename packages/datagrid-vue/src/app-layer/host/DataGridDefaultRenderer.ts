@@ -142,6 +142,7 @@ import type {
   DataGridActiveColumnMenuState,
   DataGridColumnMenuOpenReason,
   DataGridColumnMenuValueEntriesResult,
+  DataGridHeaderFilterDraft,
   DataGridTableStageCenterPaneDiagnostics,
   DataGridTableStageCellClass,
   DataGridTableStageCustomOverlay,
@@ -986,6 +987,10 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    filterRow: {
+      type: Boolean,
+      default: false,
+    },
     appColumns: {
       type: Array as PropType<readonly DataGridAppColumnInput[]>,
       default: () => [],
@@ -1254,8 +1259,12 @@ export default defineComponent({
     let pendingColumnMenuSortFrameId: number | null = null
     let pendingColumnMenuSortRequestId = 0
     let quickFilterDebounceTimer: ReturnType<typeof globalThis.setTimeout> | null = null
+    const filterRowDebounceTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
+    const filterRowDebounceMs = 300
     const filterModelState = ref<DataGridFilterSnapshot>(cloneFilterModelState(props.filterModel))
     const filterModelStateNormalized = ref(props.filterModelNormalized)
+    const filterRowDraftByKey = ref<Record<string, DataGridHeaderFilterDraft>>({})
+    const dirtyFilterRowKeys = new Set<string>()
     const columnFilterTextByKey = computed<Record<string, string>>(() => (
       resolveInitialFilterTexts(filterModelState.value)
     ))
@@ -1307,6 +1316,10 @@ export default defineComponent({
       unsubscribeRowModel()
       cancelPendingColumnMenuSortFrame()
       cancelPendingQuickFilterDebounce()
+      for (const timer of filterRowDebounceTimers.values()) {
+        globalThis.clearTimeout(timer)
+      }
+      filterRowDebounceTimers.clear()
     })
 
     watch(
@@ -1378,6 +1391,36 @@ export default defineComponent({
       activeColumnMenu.value = null
     }
     const allColumns = computed(() => props.runtime.columnSnapshot.value.columns ?? [])
+    const defaultFilterRowDraft = (columnKey: string): DataGridHeaderFilterDraft => {
+      const column = allColumns.value.find(candidate => candidate.key === columnKey)
+      const dataType = column?.column.dataType?.toLowerCase() ?? "text"
+      const numeric = ["number", "integer", "float", "numeric", "currency", "percent"].includes(dataType)
+      return { operator: numeric || dataType === "boolean" ? "equals" : "contains", value: "", value2: "" }
+    }
+    const resolveFilterRowDraft = (columnKey: string): DataGridHeaderFilterDraft => {
+      const entry = filterModelState.value.columnFilters[columnKey]
+      if (entry?.kind === "predicate") {
+        return {
+          operator: entry.operator,
+          value: entry.value == null ? "" : String(entry.value),
+          value2: entry.value2 == null ? "" : String(entry.value2),
+        }
+      }
+      return defaultFilterRowDraft(columnKey)
+    }
+    watch(
+      filterModelState,
+      () => {
+        const next = { ...filterRowDraftByKey.value }
+        for (const column of allColumns.value) {
+          if (!dirtyFilterRowKeys.has(column.key)) {
+            next[column.key] = resolveFilterRowDraft(column.key)
+          }
+        }
+        filterRowDraftByKey.value = next
+      },
+      { deep: true, immediate: true },
+    )
     const advancedFilterColumns = computed<readonly DataGridAppAdvancedFilterColumnOption[]>(() => {
       return visibleColumns.value
         .filter(column => column.visible !== false)
@@ -2094,6 +2137,90 @@ export default defineComponent({
       reportGridStatus(normalizedValue
         ? `${resolveColumnStatusLabel(columnKey)} filtered`
         : `${resolveColumnStatusLabel(columnKey)} filter cleared`)
+    }
+
+    const updateFilterRowDraft = (columnKey: string, draft: DataGridHeaderFilterDraft): void => {
+      dirtyFilterRowKeys.add(columnKey)
+      filterRowDraftByKey.value = { ...filterRowDraftByKey.value, [columnKey]: { ...draft } }
+      const pendingTimer = filterRowDebounceTimers.get(columnKey)
+      if (pendingTimer !== undefined) {
+        globalThis.clearTimeout(pendingTimer)
+      }
+      filterRowDebounceTimers.set(columnKey, globalThis.setTimeout(() => {
+        filterRowDebounceTimers.delete(columnKey)
+        applyFilterRowDraft(columnKey)
+      }, filterRowDebounceMs))
+    }
+
+    const cancelFilterRowDraft = (columnKey: string): void => {
+      const pendingTimer = filterRowDebounceTimers.get(columnKey)
+      if (pendingTimer !== undefined) {
+        globalThis.clearTimeout(pendingTimer)
+        filterRowDebounceTimers.delete(columnKey)
+      }
+      dirtyFilterRowKeys.delete(columnKey)
+      filterRowDraftByKey.value = {
+        ...filterRowDraftByKey.value,
+        [columnKey]: resolveFilterRowDraft(columnKey),
+      }
+    }
+
+    const applyFilterRowDraft = (columnKey: string): void => {
+      const pendingTimer = filterRowDebounceTimers.get(columnKey)
+      if (pendingTimer !== undefined) {
+        globalThis.clearTimeout(pendingTimer)
+        filterRowDebounceTimers.delete(columnKey)
+      }
+      const column = allColumns.value.find(candidate => candidate.key === columnKey)
+      if (!column || column.column.capabilities?.filterable === false) return
+      const draft = filterRowDraftByKey.value[columnKey] ?? defaultFilterRowDraft(columnKey)
+      if (!draft.operator) {
+        const nextFilterModel = cloneFilterModelState(filterModelState.value)
+        delete nextFilterModel.columnFilters[columnKey]
+        filterModelState.value = nextFilterModel
+        filterModelStateNormalized.value = false
+        dirtyFilterRowKeys.delete(columnKey)
+        applySortAndFilter()
+        reportGridStatus(`${resolveColumnStatusLabel(columnKey)} filter cleared`)
+        return
+      }
+      const operandless = ["isEmpty", "notEmpty", "isNull", "notNull"].includes(draft.operator)
+      const value = draft.value.trim()
+      const value2 = draft.value2.trim()
+      const nextFilterModel = cloneFilterModelState(filterModelState.value)
+      if (!operandless && (!value || (draft.operator === "between" && !value2))) {
+        if (!value && !value2) {
+          delete nextFilterModel.columnFilters[columnKey]
+          filterModelState.value = nextFilterModel
+          filterModelStateNormalized.value = false
+          dirtyFilterRowKeys.delete(columnKey)
+          applySortAndFilter()
+          return
+        }
+        reportGridStatus("Enter all required filter values")
+        return
+      }
+      const dataType = column?.column.dataType?.toLowerCase() ?? "text"
+      const numeric = ["number", "integer", "float", "numeric", "currency", "percent"].includes(dataType)
+      const parseValue = (input: string): unknown => numeric ? Number(input) : dataType === "boolean" ? input === "true" : input
+      const parsedValue = operandless ? undefined : parseValue(value)
+      const parsedValue2 = draft.operator === "between" ? parseValue(value2) : undefined
+      if (numeric && [parsedValue, parsedValue2].some(candidate => candidate !== undefined && (typeof candidate !== "number" || !Number.isFinite(candidate)))) {
+        reportGridStatus("Enter valid numeric filter values")
+        return
+      }
+      nextFilterModel.columnFilters[columnKey] = {
+        kind: "predicate",
+        operator: draft.operator as NonNullable<Extract<DataGridColumnFilterEntry, { kind: "predicate" }>["operator"]>,
+        ...(parsedValue !== undefined ? { value: parsedValue } : {}),
+        ...(parsedValue2 !== undefined ? { value2: parsedValue2 } : {}),
+        caseSensitive: false,
+      }
+      filterModelState.value = nextFilterModel
+      filterModelStateNormalized.value = false
+      dirtyFilterRowKeys.delete(columnKey)
+      applySortAndFilter()
+      reportGridStatus(`${resolveColumnStatusLabel(columnKey)} filter applied`)
     }
 
     const applyRowHeightSettings = (): void => {
@@ -4011,6 +4138,11 @@ export default defineComponent({
       reportFillPlumbingDetail: props.reportFillPlumbingDetail,
       firstColumnKey,
       columnFilterTextByKey,
+      filterRowEnabled: computed(() => props.filterRow),
+      filterRowDraftByKey,
+      updateFilterRowDraft,
+      applyFilterRowDraft,
+      cancelFilterRowDraft,
       virtualization: computed(() => props.virtualization),
       toggleSortForColumn,
       sortIndicator,
@@ -5179,6 +5311,11 @@ export default defineComponent({
       columns: {
         ...tableStageProps.value.columns,
         columnMenuEnabled: props.columnMenu.enabled,
+        filterRowEnabled: props.filterRow,
+        filterRowDraftByKey,
+        updateFilterRowDraft,
+        applyFilterRowDraft,
+        cancelFilterRowDraft,
         columnMenuTrigger: props.columnMenu.trigger,
         columnMenuMaxFilterValues: props.columnMenu.maxFilterValues,
         resolveColumnMenuItems,
