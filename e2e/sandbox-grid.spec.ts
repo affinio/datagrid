@@ -1690,7 +1690,7 @@ async function gotoSandboxRoute(page: Page, route: string): Promise<void> {
   try {
     await expect(rowsMeta).toBeVisible({ timeout: 10_000 })
   } catch {
-    await expect(page.locator(".grid-body-shared-vertical-scroll-shell:visible, .grid-body-viewport.table-wrap:visible, .table-wrap:visible").first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.locator(".grid-stage:visible [role=grid]:visible").first()).toBeVisible({ timeout: 20_000 })
   }
 }
 

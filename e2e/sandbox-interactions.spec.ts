@@ -76,10 +76,15 @@ test.describe("sandbox interaction contracts (adapted from affinio datagrid inte
     await menuButton.click()
     const doneValue = page.locator('input[name="datagrid-column-menu-value-stage-string:done"]')
     const valueCheckboxes = page.locator('input[name^="datagrid-column-menu-value-stage-"]')
-    await page.locator('[data-datagrid-column-menu-action="clear-all-values"]').click()
-    await expect(doneValue).not.toBeChecked()
-    await doneValue.locator("xpath=..").click()
+    const filterSummary = page.locator(".datagrid-column-menu__summary")
+    await expect(filterSummary).toHaveText("5 / 5 selected")
+    const otherValues = page.locator('input[name^="datagrid-column-menu-value-stage-"]:not([name="datagrid-column-menu-value-stage-string:done"])')
+    for (let index = 0; index < await otherValues.count(); index += 1) {
+      await otherValues.nth(index).uncheck()
+      await expect(filterSummary).toHaveText(`${4 - index} / 5 selected`)
+    }
     await expect(doneValue).toBeChecked()
+    await expect(filterSummary).toHaveText("1 / 5 selected")
     await page.locator('[data-datagrid-column-menu-action="apply-filter"]').click()
     await expect(stage.locator('.grid-cell[data-column-key="stage"]').filter({ hasText: "In Progress" })).toHaveCount(0)
 
