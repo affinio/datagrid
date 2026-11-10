@@ -1,5 +1,15 @@
 # @affino/datagrid-vue
 
+## 0.17.7
+
+### Fixed
+
+- Preserve distinct pinned left and right cell backgrounds when body row chrome is rendered to canvas.
+
+### Validation
+
+- Canvas chrome contract verifies both pinned background tokens.
+
 ## 0.17.6
 
 ### Fixed

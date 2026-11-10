@@ -28,9 +28,11 @@ function createRenderModel(includeRightEdge = false, includeBottomEdge = false):
 type CanvasContextStub = CanvasRenderingContext2D & {
   moveTo: ReturnType<typeof vi.fn>
   lineTo: ReturnType<typeof vi.fn>
+  fillStyles: string[]
 }
 
 function createCanvasContext(): CanvasContextStub {
+  const fillStyles: string[] = []
   return {
     setTransform: vi.fn(),
     clearRect: vi.fn(),
@@ -41,8 +43,9 @@ function createCanvasContext(): CanvasContextStub {
     lineTo: vi.fn(),
     stroke: vi.fn(),
     fillRect: vi.fn(),
+    fillStyles,
     set strokeStyle(_value: string) {},
-    set fillStyle(_value: string) {},
+    set fillStyle(value: string) { fillStyles.push(value) },
     set lineWidth(_value: number) {},
   } as unknown as CanvasContextStub
 }
@@ -194,6 +197,29 @@ describe("useDataGridStageChromeCanvas", () => {
     api.flushGridChromeRedraw("full")
 
     expect(context.moveTo.mock.calls.some(([, y]) => y === 47.5)).toBe(false)
+  })
+
+  it("paints left and right pinned pane backgrounds from their dedicated theme tokens", () => {
+    const stageRoot = document.createElement("div")
+    stageRoot.style.setProperty("--datagrid-row-band-base-bg", "#center")
+    stageRoot.style.setProperty("--datagrid-pinned-bg", "#pinned")
+    stageRoot.style.setProperty("--datagrid-pinned-left-bg", "#left-pinned")
+    stageRoot.style.setProperty("--datagrid-pinned-right-bg", "#right-pinned")
+    const context = installCanvasContextMock()
+    const api = createChromeCanvasApi(false, { stageRoot })
+
+    api.flushGridChromeRedraw("full")
+
+    const paneBackgrounds = context.fillRect.mock.calls.flatMap(([left, top, _width, height], index) => (
+      left === 0 && top === 0 && height === 48 ? [context.fillStyles[index]] : []
+    ))
+    expect(paneBackgrounds).toEqual([
+      "#left-pinned",
+      "#right-pinned",
+      "#left-pinned",
+      "#right-pinned",
+    ])
+    expect(context.fillStyles).toContain("#center")
   })
 
   it("sets the header scrollport width to the body width after a classic vertical scrollbar reduces it", () => {

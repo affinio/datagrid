@@ -62,6 +62,8 @@ interface GridChromeResolvedStyle {
   columnDividerColor: string
   headerColumnDividerColor: string
   rowBandBaseColor: string
+  pinnedLeftBackgroundColor: string
+  pinnedRightBackgroundColor: string
   rowBandSelectedColor: string
   rowBandHoverColor: string
   rowBandStripedColor: string
@@ -228,13 +230,21 @@ function drawGridChromeBands(
   style: GridChromeResolvedStyle,
   context: CanvasRenderingContext2D,
   pane: DataGridChromePaneModel,
+  baseBackgroundColor: string,
+  fillPaneBackground: boolean,
 ): void {
-  if (pane.width <= 0 || pane.height <= 0 || pane.bands.length === 0) {
+  if (pane.width <= 0 || pane.height <= 0) {
     return
   }
   context.save()
+  if (fillPaneBackground) {
+    context.fillStyle = baseBackgroundColor
+    context.fillRect(0, 0, pane.width, pane.height)
+  }
   for (const band of pane.bands) {
-    const fillStyle = resolveGridChromeBandColor(style, band.kind)
+    const fillStyle = band.kind === "base"
+      ? baseBackgroundColor
+      : resolveGridChromeBandColor(style, band.kind)
     if (!fillStyle) {
       continue
     }
@@ -297,11 +307,13 @@ function drawGridChromeBodyPane(
   hideVerticalLines = false,
   stickyPlacement: StickyGroupPlacement | null = null,
   excludePaneBottomEdge = false,
+  baseBackgroundColor = style.rowBandBaseColor,
+  fillPaneBackground = false,
 ): void {
   if (!context) {
     return
   }
-  drawGridChromeBands(style, context, pane)
+  drawGridChromeBands(style, context, pane, baseBackgroundColor, fillPaneBackground)
   drawGridChromeHorizontalLines(context, pane, style.rowDividerColor, style.rowDividerWidth, excludePaneBottomEdge)
   if (!hideVerticalLines) {
     drawGridChromeVerticalLines(context, pane, style.columnDividerColor, style.columnDividerWidth)
@@ -449,6 +461,9 @@ export function useDataGridStageChromeCanvas(
     const columnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-column-divider-color", "rgba(0, 0, 0, 0.08)")
     const headerColumnDividerColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-header-column-divider-color", columnDividerColor)
     const rowBandBaseColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-base-bg", "rgba(255, 255, 255, 1)")
+    const pinnedBackgroundColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-pinned-bg", rowBandBaseColor)
+    const pinnedLeftBackgroundColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-pinned-left-bg", pinnedBackgroundColor)
+    const pinnedRightBackgroundColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-pinned-right-bg", pinnedBackgroundColor)
     const rowBandSelectedColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-selected-background-color", "rgba(59, 130, 246, 0.12)")
     const rowBandHoverColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-hover-bg", "rgba(251, 146, 60, 0.18)")
     const rowBandStripedColor = resolveGridChromeColor(options.stageRootEl, "--datagrid-row-band-striped-bg", "rgba(59, 130, 246, 0.06)")
@@ -464,6 +479,8 @@ export function useDataGridStageChromeCanvas(
       columnDividerColor,
       headerColumnDividerColor,
       rowBandBaseColor,
+      pinnedLeftBackgroundColor,
+      pinnedRightBackgroundColor,
       rowBandSelectedColor,
       rowBandHoverColor,
       rowBandStripedColor,
@@ -617,7 +634,16 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.leftChromeCanvasEl.value, renderModel.left.width, renderModel.left.height)
       : null
     if (leftContext) {
-      drawGridChromeBodyPane(style, leftContext, renderModel.left, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null, true)
+      drawGridChromeBodyPane(
+        style,
+        leftContext,
+        renderModel.left,
+        options.hideBodyVerticalLines?.value,
+        options.stickyRowPlacement?.value ?? null,
+        true,
+        style.pinnedLeftBackgroundColor,
+        true,
+      )
     }
 
     const centerContext = shouldDrawBodyCenter
@@ -629,14 +655,32 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.rightChromeCanvasEl.value, renderModel.right.width, renderModel.right.height)
       : null
     if (rightContext) {
-      drawGridChromeBodyPane(style, rightContext, renderModel.right, options.hideBodyVerticalLines?.value, options.stickyRowPlacement?.value ?? null, true)
+      drawGridChromeBodyPane(
+        style,
+        rightContext,
+        renderModel.right,
+        options.hideBodyVerticalLines?.value,
+        options.stickyRowPlacement?.value ?? null,
+        true,
+        style.pinnedRightBackgroundColor,
+        true,
+      )
     }
 
     const leftBottomContext = mode === "full"
       ? prepareGridChromeCanvas(options.leftBottomChromeCanvasEl.value, bottomRenderModel.left.width, bottomRenderModel.left.height)
       : null
     if (leftBottomContext) {
-      drawGridChromeBodyPane(style, leftBottomContext, bottomRenderModel.left, options.hideBodyVerticalLines?.value, null, true)
+      drawGridChromeBodyPane(
+        style,
+        leftBottomContext,
+        bottomRenderModel.left,
+        options.hideBodyVerticalLines?.value,
+        null,
+        true,
+        style.pinnedLeftBackgroundColor,
+        true,
+      )
     }
 
     const centerBottomContext = shouldDrawBottomCenter
@@ -648,7 +692,16 @@ export function useDataGridStageChromeCanvas(
       ? prepareGridChromeCanvas(options.rightBottomChromeCanvasEl.value, bottomRenderModel.right.width, bottomRenderModel.right.height)
       : null
     if (rightBottomContext) {
-      drawGridChromeBodyPane(style, rightBottomContext, bottomRenderModel.right, options.hideBodyVerticalLines?.value, null, true)
+      drawGridChromeBodyPane(
+        style,
+        rightBottomContext,
+        bottomRenderModel.right,
+        options.hideBodyVerticalLines?.value,
+        null,
+        true,
+        style.pinnedRightBackgroundColor,
+        true,
+      )
     }
 
     if (options.perfTraceEnabled) {
