@@ -564,7 +564,7 @@ describe("DataGridTableStage contract", () => {
     expect(sharedShell.attributes("aria-multiselectable")).toBe("true")
     expect(sharedShell.attributes("tabindex")).toBe("-1")
     const centerHorizontal = sharedShell.find(".grid-body-center-horizontal-scrollport--scroll-owner")
-    expect(centerHorizontal.attributes("tabindex")).toBe("-1")
+    expect(centerHorizontal.attributes("tabindex")).toBeUndefined()
     expect(centerHorizontal.attributes("role")).toBeUndefined()
     expect(centerHorizontal.attributes("aria-rowcount")).toBeUndefined()
     expect(centerHorizontal.attributes("aria-colcount")).toBeUndefined()
@@ -594,7 +594,7 @@ describe("DataGridTableStage contract", () => {
     const tabbableCells = wrapper.findAll('.datagrid-stage__cell[tabindex="0"]')
 
     expect(sharedShell.attributes("tabindex")).toBe("0")
-    expect(centerHorizontal.attributes("tabindex")).toBe("-1")
+    expect(centerHorizontal.attributes("tabindex")).toBeUndefined()
     expect(tabbableCells).toHaveLength(0)
 
     await sharedShell.trigger("keydown", { key: "ArrowDown" })

@@ -1,4 +1,5 @@
 import { defineComponent, h, nextTick, onUnmounted, ref } from "vue"
+import axe from "axe-core"
 import { flushPromises, mount } from "@vue/test-utils"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import {
@@ -1961,6 +1962,49 @@ describe("DataGrid app facade contract", () => {
     expect(wrapper.find(".grid-cell--row-selection").exists()).toBe(false)
 
     wrapper.unmount()
+  })
+
+  it("keeps public grid headers and body rows in a valid ARIA structure", async () => {
+    const columns = Array.from({ length: 6 }, (_unused, index) => ({
+      key: `column-${index + 1}`,
+      label: `Column ${index + 1}`,
+      width: 120,
+    }))
+    const populatedRows = [{
+      rowId: "aria-row-1",
+      ...Object.fromEntries(columns.map(column => [column.key, column.label])),
+    }]
+    const ruleTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]
+
+    for (const rows of [[], populatedRows]) {
+      const wrapper = mount(DataGrid, {
+        attachTo: document.body,
+        props: {
+          rows,
+          columns,
+          rowSelection: false,
+          showRowIndex: false,
+          virtualization: { rows: false, columns: false },
+        },
+      })
+
+      await flushRuntimeTasks()
+
+      const columnHeaders = Array.from(wrapper.element.querySelectorAll<HTMLElement>("[role=columnheader]"))
+      expect(columnHeaders).toHaveLength(6)
+      expect(columnHeaders.every(header => header.parentElement?.getAttribute("role") === "row")).toBe(true)
+      expect(wrapper.get(".grid-body-center-horizontal-scrollport--scroll-owner").attributes("tabindex")).toBeUndefined()
+
+      const results = await axe.run(wrapper.element, {
+        runOnly: { type: "tag", values: ruleTags },
+      })
+      expect(results.violations.map(({ id, nodes }) => ({
+        id,
+        nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })),
+      }))).toEqual([])
+
+      wrapper.unmount()
+    }
   })
 
   it("applies declarative row-selection column width", async () => {

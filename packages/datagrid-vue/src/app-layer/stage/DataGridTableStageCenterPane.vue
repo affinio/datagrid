@@ -20,7 +20,6 @@
       :aria-rowcount="undefined"
       :aria-colcount="undefined"
       :aria-multiselectable="undefined"
-      :tabindex="innerHorizontalScrollport ? viewportTabIndex : undefined"
       @wheel="handleInnerWheel"
       @contextmenu="handleInnerContextMenu"
       @keydown.stop="handleInnerKeydown"
@@ -29,16 +28,24 @@
         <slot name="content-chrome" />
         <div
           v-if="emptyState && emptyStateAlignment === 'content'"
-          class="datagrid-empty-state"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
+          class="grid-row grid-row--empty-state"
+          role="row"
+          aria-rowindex="1"
+          :style="layout.mainTrackStyle"
         >
-          <slot name="empty-state" :state="emptyState">
-            <span>
-              {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
-            </span>
-          </slot>
+          <div
+            class="grid-empty-state-cell"
+            role="gridcell"
+            :aria-colspan="Math.max(1, gridAriaColumnCount)"
+          >
+            <div class="datagrid-empty-state" role="status" aria-live="polite" aria-atomic="true">
+              <slot name="empty-state" :state="emptyState">
+                <span>
+                  {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
+                </span>
+              </slot>
+            </div>
+          </div>
         </div>
       <div v-if="topSpacerHeight > 0" class="grid-spacer" :style="{ height: `${topSpacerHeight}px` }" />
       <div
@@ -224,16 +231,20 @@
       </div>
       <div
         v-if="emptyState && emptyStateAlignment === 'viewport'"
-        class="datagrid-empty-state datagrid-empty-state--viewport"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
+        class="grid-row grid-row--empty-state grid-row--empty-state-viewport"
+        role="row"
+        aria-rowindex="1"
+        :style="layout.mainTrackStyle"
       >
-        <slot name="empty-state" :state="emptyState">
-          <span>
-            {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
-          </span>
-        </slot>
+        <div class="grid-empty-state-cell" role="gridcell" :aria-colspan="Math.max(1, gridAriaColumnCount)">
+          <div class="datagrid-empty-state datagrid-empty-state--viewport" role="status" aria-live="polite" aria-atomic="true">
+            <slot name="empty-state" :state="emptyState">
+              <span>
+                {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
+              </span>
+            </slot>
+          </div>
+        </div>
       </div>
     </div>
   </div>

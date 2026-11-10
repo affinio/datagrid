@@ -1,5 +1,5 @@
 <template>
-  <div ref="headerShellElement" class="grid-header-shell" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups, 'grid-header-shell--filter-row': filterRowEnabled }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture" @keydown="handleHeaderKeyboardNavigation">
+  <div :id="rowGroupId" ref="headerShellElement" class="grid-header-shell" role="rowgroup" :class="{ 'grid-header-shell--pivot-groups': hasHeaderGroups, 'grid-header-shell--filter-row': filterRowEnabled }" :style="paneLayoutStyle" @click.capture="resizeClickGuard.onHeaderClickCapture" @keydown="handleHeaderKeyboardNavigation">
     <slot name="center-chrome" />
 
     <div ref="leftPaneElement" class="grid-header-pane grid-header-pane--left" :style="leftPaneStyle" @wheel="onLinkedViewportWheel">
@@ -8,6 +8,7 @@
         v-for="(headerGroups, rowIndex) in leftHeaderGroupRows"
         :key="`left-pivot-group-row-${rowIndex}`"
         class="grid-header-row grid-pane-track grid-header-row--pivot-groups"
+        :role="headerGroups.length > 0 ? 'row' : undefined"
         :style="leftTrackStyle"
       >
         <div
@@ -20,6 +21,7 @@
           v-for="(group, groupIndex) in headerGroups"
           :key="group.key"
           class="grid-cell grid-cell--header grid-cell--header-group grid-cell--pinned-left"
+          role="columnheader"
           :class="{
             'grid-cell--header-group-empty': !group.label,
             'grid-cell--header-group-last': groupIndex === headerGroups.length - 1,
@@ -37,7 +39,7 @@
           <button v-if="group.label && group.resizeColumnKey" type="button" class="col-resize col-resize--group" :aria-label="`Resize ${group.label} group`" :data-column-key="group.resizeColumnKey" :data-datagrid-resize-column-width="group.resizeColumnWidth" @mousedown.stop="startResize($event, group.resizeColumnKey)" @touchstart.stop.passive="startTouchResize($event, group.resizeColumnKey)" @touchmove.stop.prevent="handleTouchResizeMove" @touchend.stop="handleTouchResizeEnd" @touchcancel.stop="handleTouchResizeEnd" @dblclick.stop="handleResizeDoubleClick($event, group.resizeColumnKey)" @click.stop />
         </div>
       </div>
-      <div class="grid-header-row grid-pane-track" :style="leftTrackStyle">
+      <div class="grid-header-row grid-pane-track" :role="showIndexColumn || pinnedLeftColumns.length > 0 ? 'row' : undefined" :style="leftTrackStyle">
         <div
           v-if="showIndexColumn"
           class="grid-cell grid-cell--header grid-cell--index grid-cell--index-header"
@@ -289,6 +291,7 @@
         v-for="(headerGroups, rowIndex) in centerHeaderGroupRows"
         :key="`center-pivot-group-row-${rowIndex}`"
         class="grid-header-row grid-center-track grid-header-row--pivot-groups"
+        :role="headerGroups.length > 0 ? 'row' : undefined"
         :style="mainTrackStyle"
       >
         <div
@@ -300,6 +303,7 @@
           v-for="(group, groupIndex) in headerGroups"
           :key="group.key"
           class="grid-cell grid-cell--header grid-cell--header-group"
+          role="columnheader"
           :class="{
             'grid-cell--header-group-empty': !group.label,
             'grid-cell--header-group-last': groupIndex === headerGroups.length - 1 && rightColumnSpacerWidth <= 0,
@@ -322,7 +326,7 @@
           :style="spacerStyle(rightColumnSpacerWidth)"
         />
       </div>
-      <div class="grid-header-row grid-center-track" :style="mainTrackStyle">
+      <div class="grid-header-row grid-center-track" :role="centerHeaderColumns.length > 0 ? 'row' : undefined" :style="mainTrackStyle">
         <div
           v-if="leftColumnSpacerWidth > 0"
           class="grid-column-spacer"
@@ -511,12 +515,14 @@
         v-for="(headerGroups, rowIndex) in rightHeaderGroupRows"
         :key="`right-pivot-group-row-${rowIndex}`"
         class="grid-header-row grid-pane-track grid-header-row--pivot-groups"
+        :role="headerGroups.length > 0 ? 'row' : undefined"
         :style="rightTrackStyle"
       >
         <div
           v-for="(group, groupIndex) in headerGroups"
           :key="group.key"
           class="grid-cell grid-cell--header grid-cell--header-group grid-cell--pinned-right"
+          role="columnheader"
           :class="{
             'grid-cell--header-group-empty': !group.label,
             'grid-cell--header-group-last': groupIndex === headerGroups.length - 1,
@@ -534,7 +540,7 @@
           <button v-if="group.label && group.resizeColumnKey" type="button" class="col-resize col-resize--group" :aria-label="`Resize ${group.label} group`" :data-column-key="group.resizeColumnKey" :data-datagrid-resize-column-width="group.resizeColumnWidth" @mousedown.stop="startResize($event, group.resizeColumnKey)" @touchstart.stop.passive="startTouchResize($event, group.resizeColumnKey)" @touchmove.stop.prevent="handleTouchResizeMove" @touchend.stop="handleTouchResizeEnd" @touchcancel.stop="handleTouchResizeEnd" @dblclick.stop="handleResizeDoubleClick($event, group.resizeColumnKey)" @click.stop />
         </div>
       </div>
-      <div class="grid-header-row grid-pane-track" :style="rightTrackStyle">
+      <div class="grid-header-row grid-pane-track" :role="pinnedRightColumns.length > 0 ? 'row' : undefined" :style="rightTrackStyle">
         <template v-if="shouldUseColumnMenus()">
           <div
             v-for="column in pinnedRightColumns"
@@ -746,6 +752,10 @@ interface DataGridHeaderCellA11yAttributes {
 }
 
 const props = defineProps({
+  rowGroupId: {
+    type: String,
+    required: true,
+  },
   externalFilterIndicators: {
     type: Array as PropType<readonly DataGridExternalFilterIndicator[]>,
     default: () => [],

@@ -52,7 +52,7 @@ describe("DataGrid empty state", () => {
 
     expect(wrapper.find(".datagrid-empty-state").exists()).toBe(true)
     expect(wrapper.find(".grid-stage").classes()).toContain("grid-stage--empty-state")
-    expect(wrapper.find(".datagrid-empty-state").element.parentElement?.classList.contains("grid-body-content")).toBe(true)
+    expect(wrapper.find(".datagrid-empty-state").element.closest(".grid-body-content")).not.toBeNull()
     expect(wrapper.find("[data-test='custom-empty']").text()).toBe("no-rows")
     expect(renderEmptyState).toHaveBeenCalledWith({
       reason: "no-rows",
@@ -163,7 +163,7 @@ describe("DataGrid empty state", () => {
     const emptyState = wrapper.find(".datagrid-empty-state--viewport")
     const horizontalScrollport = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner")
     expect(emptyState.exists()).toBe(true)
-    expect(emptyState.element.parentElement).toBe(horizontalScrollport.element)
+    expect(emptyState.element.closest(".grid-body-center-horizontal-scrollport--scroll-owner")).toBe(horizontalScrollport.element)
     expect(wrapper.find(".grid-body-shell .grid-body-pane--left").exists()).toBe(true)
     expect(wrapper.find(".grid-body-shell .grid-body-pane--right").exists()).toBe(true)
 
@@ -172,7 +172,7 @@ describe("DataGrid empty state", () => {
     await nextTick()
 
     expect(horizontalScrollport.element.scrollLeft).toBe(640)
-    expect(emptyState.element.parentElement).toBe(horizontalScrollport.element)
+    expect(emptyState.element.closest(".grid-body-center-horizontal-scrollport--scroll-owner")).toBe(horizontalScrollport.element)
     wrapper.unmount()
   })
 

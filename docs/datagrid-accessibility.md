@@ -16,7 +16,9 @@ This document is the current-state accessibility contract for the Affino DataGri
 
 The mounted table stage currently exposes baseline ARIA metadata for the virtualized body:
 
-- the center body viewport exposes `role="grid"`, `aria-rowcount`, `aria-colcount`, and `aria-multiselectable="true"`;
+- the shared vertical body scroll shell exposes `role="grid"`, `aria-rowcount`, `aria-colcount`, and `aria-multiselectable="true"`;
+- the public header rowgroup is associated with that grid through `aria-owns`; rendered leaf and group header rows expose `role="row"`, and their headers expose `role="columnheader"`;
+- the center horizontal scrollport remains the horizontal scroll owner but is not a nested tab stop; keyboard fallback focus stays on the shared vertical grid owner;
 - rendered body rows expose `role="row"` and one-based `aria-rowindex`;
 - rendered center body cells expose one-based `aria-rowindex` and `aria-colindex`;
 - rendered pinned body cells use the same row indexes and logical column indexes as the center pane;
@@ -43,8 +45,9 @@ The mounted table stage currently exposes baseline ARIA metadata for the virtual
 - placeholder cells that cannot materialize into editable rows expose disabled state while preserving their row/column coordinates;
 - decorative canvas chrome, selection overlays, fill overlays, and move overlays are hidden from assistive technologies;
 - app status regions use polite live-region semantics for clipboard, edit, fill, range move, history, sort/filter, and row-model loading/error outcomes.
+- empty-state content is exposed as a grid row and spanning grid cell, with a nested polite status live region.
 
-This stage contract is covered by component tests in `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`, mounted-grid coverage in `e2e/sandbox-interactions.spec.ts`, and the focused large-grid A11Y browser benchmark `pnpm run bench:datagrid:enterprise:a11y:browser:assert`.
+This stage contract is covered by component tests in `packages/datagrid-vue/src/app-layer/__tests__/DataGrid.contract.spec.ts`, including axe-core 4.14 WCAG A/AA and best-practice rules for empty and populated public grids. Mounted-grid coverage remains in `e2e/sandbox-interactions.spec.ts` and the focused large-grid A11Y browser benchmark `pnpm run bench:datagrid:enterprise:a11y:browser:assert`.
 
 ## Focus Model
 
@@ -62,13 +65,14 @@ Under the current roving-focus model:
 - Pivot header group semantics and deeper menu relationship metadata still need browser-level validation.
 - A future treegrid proposal would be required before adding hierarchy-only row metadata such as full tree levels/positions.
 - Datasource loading/error placeholders need stronger per-row screen-reader context beyond the grid-level status message.
-- Axe-style static checks and manual assistive-technology validation are still required before claiming enterprise screen-reader readiness.
+- Browser-level axe checks and manual assistive-technology validation are still required before claiming enterprise screen-reader readiness.
 
 ## Validation Expectations
 
 Runtime accessibility slices should include the smallest relevant validation first:
 
 - component tests for rendered ARIA roles, counts, indexes, labels, focus ownership, and state;
+- axe-core WCAG A/AA and best-practice checks for empty and populated public Vue grids;
 - Playwright `@a11y` tests for browser-mounted behavior across scroll, virtualization remount, pinned panes, editing, grouped rows, and datasource placeholders;
 - `pnpm run bench:datagrid:enterprise:a11y:browser:assert` for large-grid scroll paths when adding ARIA state to hot render surfaces;
 - manual screen-reader smoke testing before claiming WCAG conformance or enterprise screen-reader readiness.

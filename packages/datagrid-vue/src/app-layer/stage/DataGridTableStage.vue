@@ -19,6 +19,7 @@
     :style="layout.stageStyle"
   >
     <DataGridTableStageHeader
+      :row-group-id="headerRowGroupId"
       :pane-layout-style="paneLayoutStyle"
       :left-pane-style="leftPaneStyle"
       :right-pane-style="rightPaneStyle"
@@ -102,6 +103,7 @@
         :style="[paneLayoutStyle, sharedVerticalScrollStyle]"
         data-datagrid-scroll-owner="shared-vertical"
         role="grid"
+        :aria-owns="headerRowGroupId"
         :aria-rowcount="gridAriaRowCount"
         :aria-colcount="gridAriaColumnCount"
         aria-multiselectable="true"
@@ -291,7 +293,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
+import { computed, defineAsyncComponent, getCurrentInstance, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type CSSProperties, type PropType } from "vue"
 import DataGridTableStageHeader from "./DataGridTableStageHeader.vue"
 import DataGridTableStageCenterPane from "./DataGridTableStageCenterPane.vue"
 import DataGridTableStageFillActionMenu from "./DataGridTableStageFillActionMenu.vue"
@@ -474,6 +476,7 @@ const props = defineProps({
 const stageContext = props.stageContext ?? createDataGridTableStageContextFromProps(
   props as DataGridTableStageProps<Record<string, unknown>>,
 )
+const headerRowGroupId = `affino-datagrid-header-${getCurrentInstance()?.uid ?? 0}`
 
 provideDataGridTableStageContext(stageContext)
 
