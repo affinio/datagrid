@@ -6,7 +6,7 @@ on:
 jobs:
   sandbox-e2e:
     name: sandbox-browser-checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6

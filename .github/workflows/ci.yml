@@ -8,7 +8,7 @@ on:
 jobs:
   quality-gates:
     name: datagrid-quality-gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -31,7 +31,7 @@ jobs:
 
   benchmark-gates:
     name: datagrid-benchmark-gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: quality-gates
     steps:
       - uses: actions/checkout@v6
