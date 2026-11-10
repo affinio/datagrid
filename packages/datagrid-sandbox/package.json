@@ -25,14 +25,14 @@
     "@affino/popover-vue": "^1.1.0",
     "@affino/world-map-core": "workspace:*",
     "@affino/world-map-vue": "workspace:*",
-    "vue": "3.4.38",
+    "vue": "3.5.42",
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
     "topojson-client": "^3.1.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "vite": "^7.3.8",
     "vue-tsc": "^3.2.5"
   }
 }

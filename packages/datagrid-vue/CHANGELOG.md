@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.17.4
+
+### Fixed
+
+- Publish the corrected ARIA grid structure with the aligned core, orchestration, worker, and XLSX dependency graph.
+- Update bundled Vue and build dependencies to patched releases.
+
+### Validation
+
+- Vue type-check, unit tests, and public package build.
+
 ## 0.17.1
 
 ### Fixed

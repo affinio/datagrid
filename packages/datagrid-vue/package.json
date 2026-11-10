@@ -1,7 +1,9 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.17.3",
-  "publishConfig": { "access": "public" },
+  "version": "0.17.4",
+  "publishConfig": {
+    "access": "public"
+  },
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Vue DataGrid component and headless adapter for Affino DataGrid",
@@ -100,7 +102,9 @@
   "files": [
     "dist"
   ],
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/export-xlsx build && pnpm --filter @affino/datagrid-formula-engine build && pnpm --filter @affino/datagrid-core... build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker... build && pnpm --filter @affino/datagrid-chrome... build && pnpm --filter @affino/datagrid-theme... build && pnpm --filter @affino/datagrid-gantt... build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist/headless && vite build --config vite.app.config.ts && vue-tsc -p tsconfig.app.json --declaration --emitDeclarationOnly --outDir dist/app && node scripts/write-unified-root.mjs && rm -f dist/tsconfig.public.tsbuildinfo",
     "prepack": "pnpm run build",
@@ -139,7 +143,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
     "typescript": "^5.9.3",
-    "vite": "^7.3.2",
+    "vite": "^7.3.8",
     "vue-tsc": "^3.2.5"
   },
   "repository": {

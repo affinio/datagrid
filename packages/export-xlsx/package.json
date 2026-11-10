@@ -1,6 +1,6 @@
 {
   "name": "@affino/export-xlsx",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Minimal XLSX writer package for Affino exports",
@@ -24,7 +24,7 @@
     "demo:generate": "pnpm run build && node ./scripts/generate-demo.mjs"
   },
   "dependencies": {
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.3"
   },
   "repository": {
     "type": "git",
