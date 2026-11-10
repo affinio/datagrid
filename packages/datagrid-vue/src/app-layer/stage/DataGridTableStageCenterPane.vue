@@ -234,7 +234,6 @@
         class="grid-row grid-row--empty-state grid-row--empty-state-viewport"
         role="row"
         aria-rowindex="1"
-        :style="layout.mainTrackStyle"
       >
         <div class="grid-empty-state-cell" role="gridcell" :aria-colspan="Math.max(1, gridAriaColumnCount)">
           <div class="datagrid-empty-state datagrid-empty-state--viewport" role="status" aria-live="polite" aria-atomic="true">

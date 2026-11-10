@@ -1367,8 +1367,24 @@ const DATA_GRID_APP_STYLES = `
   min-width: 0;
 }
 
+.grid-row--empty-state-viewport {
+  align-items: stretch;
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+}
+
+.grid-row--empty-state-viewport > .grid-empty-state-cell {
+  align-items: stretch;
+  display: flex;
+  flex: 0 0 100%;
+  width: 100%;
+}
+
 .datagrid-empty-state--viewport {
+  height: 100%;
   left: 0;
+  min-height: 100%;
   position: sticky;
   width: 100%;
 }

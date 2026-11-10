@@ -1,5 +1,38 @@
 import { expect, type Locator, type Page, test } from "@playwright/test"
 
+test("viewport-aligned empty state fills and centers in the visible center lane", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  for (const pinMode of ["unpinned", "pinned"] as const) {
+    await page.goto(`/vue/empty-state-viewport/${pinMode}`)
+    const centerViewport = page.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
+    const emptyState = page.locator(".datagrid-empty-state--viewport")
+    await expect(centerViewport).toBeVisible()
+    await expect(emptyState).toBeVisible()
+
+    const geometry = await page.evaluate(() => {
+      const viewport = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+      const empty = document.querySelector<HTMLElement>(".datagrid-empty-state--viewport")!
+      const viewportRect = viewport.getBoundingClientRect()
+      const emptyRect = empty.getBoundingClientRect()
+      return {
+        viewportWidth: viewport.clientWidth,
+        scrollWidth: viewport.scrollWidth,
+        viewportCenterX: viewportRect.left + viewport.clientWidth / 2,
+        viewportCenterY: viewportRect.top + viewport.clientHeight / 2,
+        emptyCenterX: emptyRect.left + emptyRect.width / 2,
+        emptyCenterY: emptyRect.top + emptyRect.height / 2,
+        emptyWidth: emptyRect.width,
+      }
+    })
+
+    expect(geometry.scrollWidth).toBeGreaterThan(geometry.viewportWidth)
+    expect(geometry.emptyWidth).toBeCloseTo(geometry.viewportWidth, 0)
+    expect(geometry.emptyCenterX).toBeCloseTo(geometry.viewportCenterX, 0)
+    expect(geometry.emptyCenterY).toBeCloseTo(geometry.viewportCenterY, 0)
+  }
+})
+
 test("Vue sandbox manages whole-column selection through the public grid API", async ({ page }) => {
   await page.goto("/vue/column-selection-grid")
   const result = page.getByTestId("column-selection-result")

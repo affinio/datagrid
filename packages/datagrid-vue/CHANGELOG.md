@@ -1,11 +1,21 @@
 # @affino/datagrid-vue
 
+## 0.17.5
+
+### Fixed
+
+- Keep viewport-aligned empty state centered across the visible center lane in fill layouts, including virtualized columns and pinned panes.
+
+### Validation
+
+- Vue type-check, unit tests, and pinned/unpinned browser geometry regression.
+
 ## 0.17.4
 
 ### Fixed
 
 - Publish the corrected ARIA grid structure with the aligned core, orchestration, worker, and XLSX dependency graph.
-- Update bundled Vue and build dependencies to patched releases.
+- Update Vue and build-tool dependencies to patched releases.
 
 ### Validation
 
