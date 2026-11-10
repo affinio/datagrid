@@ -1,6 +1,7 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
   "compilerOptions": {
+    "target": "ES2022",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {

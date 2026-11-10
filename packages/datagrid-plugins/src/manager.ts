@@ -1,7 +1,7 @@
 // src/datagrid/plugins/manager.ts
 // Runtime manager responsible for installing, updating, and disposing DataGrid plugins.
 
-import { DataGridPluginEventBus } from "./eventBus"
+import { DataGridPluginEventBus } from "./eventBus.js"
 import type {
   DataGridEventArgs,
   DataGridEventMap,
@@ -10,7 +10,7 @@ import type {
   DataGridPlugin,
   DataGridPluginDefinition,
   DataGridPluginSetupContext,
-} from "./types"
+} from "./types.js"
 
 type HostEmit = (event: string, ...args: readonly unknown[]) => void
 

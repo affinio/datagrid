@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-plugins",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
   "description": "Plugin contracts and runtime helpers for Affino DataGrid",
@@ -17,7 +17,8 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "find src -type f -name '*.js' -delete && find src -type f -name '*.js.map' -delete && find src -type f -name '*.d.ts' -delete && find src -type f -name '*.d.ts.map' -delete && tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist"
+    "build": "rm -rf dist && tsc -p tsconfig.json && node ../../scripts/fix-esm-specifiers.mjs dist && rm -f dist/tsconfig.tsbuildinfo",
+    "prepack": "pnpm run build"
   },
   "repository": {
     "type": "git",

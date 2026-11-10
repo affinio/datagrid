@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.17.1
+
+### Fixed
+
+- Rebuilt the published ESM graph with Node-resolvable relative imports and pinned the Vue menu/popover adapters to latest `@affino/menu-vue@2.2.1` and `@affino/popover-vue@1.1.1` releases.
+- Added package prepack builds so tarballs contain current output.
+
+### Validation
+
+- Native Node 26 packed consumer fixture and package tests.
+
 ## 0.17.0
 
 ### Added

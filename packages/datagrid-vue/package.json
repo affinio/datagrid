@@ -1,6 +1,6 @@
 {
   "name": "@affino/datagrid-vue",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "publishConfig": { "access": "public" },
   "author": "Anton Pavlov <a.pavlov@affino.dev>",
   "type": "module",
@@ -102,7 +102,8 @@
   ],
   "sideEffects": ["**/*.css"],
   "scripts": {
-    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/export-xlsx build && pnpm --filter @affino/datagrid-formula-engine build && pnpm --filter @affino/datagrid-core... build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker... build && pnpm --filter @affino/datagrid-chrome... build && pnpm --filter @affino/datagrid-theme... build && pnpm --filter @affino/datagrid-gantt... build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist/headless && vite build --config vite.app.config.ts && vue-tsc -p tsconfig.app.json --declaration --emitDeclarationOnly --outDir dist/app && node scripts/write-unified-root.mjs",
+    "build": "rm -rf dist tsconfig.public.tsbuildinfo && pnpm --filter @affino/export-xlsx build && pnpm --filter @affino/datagrid-formula-engine build && pnpm --filter @affino/datagrid-core... build && pnpm --filter @affino/datagrid-orchestration build && pnpm --filter @affino/datagrid-worker... build && pnpm --filter @affino/datagrid-chrome... build && pnpm --filter @affino/datagrid-theme... build && pnpm --filter @affino/datagrid-gantt... build && tsc -p tsconfig.public.json && node ../../scripts/fix-esm-specifiers.mjs dist/headless && vite build --config vite.app.config.ts && vue-tsc -p tsconfig.app.json --declaration --emitDeclarationOnly --outDir dist/app && node scripts/write-unified-root.mjs && rm -f dist/tsconfig.public.tsbuildinfo",
+    "prepack": "pnpm run build",
     "type-check": "tsc -p tsconfig.json --noEmit && vue-tsc -p tsconfig.app.json --noEmit && vue-tsc -p tsconfig.type-contracts.app.json --noEmit",
     "type-check:public": "node ./scripts/type-check-public.mjs",
     "test:unit": "vitest run --config vitest.config.ts --passWithNoTests",
@@ -132,8 +133,8 @@
     "@affino/datagrid-worker": "workspace:*",
     "@affino/datagrid-chrome": "workspace:*",
     "@affino/datagrid-theme": "workspace:*",
-    "@affino/menu-vue": "^2.2.0",
-    "@affino/popover-vue": "^1.1.0"
+    "@affino/menu-vue": "2.2.1",
+    "@affino/popover-vue": "1.1.1"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",

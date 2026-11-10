@@ -381,11 +381,11 @@ importers:
         specifier: workspace:*
         version: link:../export-xlsx
       '@affino/menu-vue':
-        specifier: ^2.2.0
-        version: 2.2.0(vue@3.4.38(typescript@5.9.3))
+        specifier: 2.2.1
+        version: 2.2.1(vue@3.4.38(typescript@5.9.3))
       '@affino/popover-vue':
-        specifier: ^1.1.0
-        version: 1.1.0(vue@3.4.38(typescript@5.9.3))
+        specifier: 1.1.1
+        version: 1.1.1(vue@3.4.38(typescript@5.9.3))
       pinia:
         specifier: ^2.1.0 || ^3.0.0
         version: 3.0.4(typescript@5.9.3)(vue@3.4.38(typescript@5.9.3))
@@ -450,8 +450,16 @@ packages:
   '@affino/menu-core@1.2.0':
     resolution: {integrity: sha512-sG8GGC1Uh17gHnBsHPDxpyHX1sLXbuWZKSpc8xR9t2bec7CTeqNvuxoAFqiQNHhq2XjNlXtw3GdkjPM1I1iXrw==}
 
+  '@affino/menu-core@1.2.1':
+    resolution: {integrity: sha512-Gp4HOrkPv4lvV66TTnJpv12Wuf7LZMnwFqD3Tagz1U6xCFc48Dezfd0JVgH+6Vbv9EjuJMRmmDcLl0pFCY3Iiw==}
+
   '@affino/menu-vue@2.2.0':
     resolution: {integrity: sha512-u0ewm+w8yL4/iwLwhxV86/eEirja/vimTu/Ft/dZniUQCZ2ZvFFDIfK4/QEYNNcoKznxn5MFjL6FMfs1LinNRQ==}
+    peerDependencies:
+      vue: 3.4.38
+
+  '@affino/menu-vue@2.2.1':
+    resolution: {integrity: sha512-j77s54gyUr5jSsGvpJa6uSLCbFYNHETt8nls172XNQBlIUitYnQcJwHdd0PT4ndvFtktp0asKSp8dFl/FtSwTw==}
     peerDependencies:
       vue: 3.4.38
 
@@ -461,16 +469,30 @@ packages:
   '@affino/overlay-kernel@0.2.0':
     resolution: {integrity: sha512-yPbhRuzMKBuUEDVM8ZhKTQcWH9jonuhTEaG6UXlpYaLNNiaWofYmmqOuP3J46ZZmlbHZInXIGFNuXo5LdhzeCg==}
 
+  '@affino/overlay-kernel@0.2.1':
+    resolution: {integrity: sha512-iJkEotSxS2n9b2XBgJpPXOQTN7R2ZFCoFugqovftl8PsnnHwt+KaN2TuQXMX8F6l3WJE5rm+HR95OpKSH7ybaQ==}
+
   '@affino/popover-core@1.1.0':
     resolution: {integrity: sha512-cURD9EpEKijS+IUWtQ+boKo2k9FAmcmMmdmNCV2UcLbKAtAWyX2YhEZvpnjdIqUekHut4xN+n7YOeTNNfzQmjQ==}
+
+  '@affino/popover-core@1.1.1':
+    resolution: {integrity: sha512-rTrDNlKDuOGGlbVrM3g+/rk4ZSjQEWW9RXS2kLOGLD/cca1UCK03l/NmbK56il1typCkD+JCawzJ9fCkRbvlIg==}
 
   '@affino/popover-vue@1.1.0':
     resolution: {integrity: sha512-7sqZuhoGc/aJggYUJ0pU8FqAMdrAcK/utcYGovP9+jiNqOxAraxopowjDFCyj5830RoJJ2epbxV3sM/VZ5h+QA==}
     peerDependencies:
       vue: 3.4.38
 
+  '@affino/popover-vue@1.1.1':
+    resolution: {integrity: sha512-tMZUBEZQZ1JLt8LIWSyBD2mVEhem/jcgr+9ckpZIVUobowcq1dp5KdR42v69laL5muLnsbjoDJnXXcEeGkTB/Q==}
+    peerDependencies:
+      vue: 3.4.38
+
   '@affino/surface-core@1.1.0':
     resolution: {integrity: sha512-9BtgLjWR6brOMMb+QQc6nlX0dY5nS1IgYZL3BhTO56Dt9XJpy0/uu00AW5dHnAIqku5VlZx1hmIW3vEBd/CWCw==}
+
+  '@affino/surface-core@1.1.1':
+    resolution: {integrity: sha512-1Iw9l5C3ob4F2NRMF+6yBLbD6kIrD0yIGYm9rf9BVko09GG2D8P0FhWvhtJFYrxzSeeB4Gcd7EJ/V5nOqG/J/Q==}
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -2307,6 +2329,11 @@ snapshots:
       '@affino/overlay-kernel': 0.2.0
       '@affino/surface-core': 1.1.0
 
+  '@affino/menu-core@1.2.1':
+    dependencies:
+      '@affino/overlay-kernel': 0.2.1
+      '@affino/surface-core': 1.1.1
+
   '@affino/menu-vue@2.2.0(vue@3.4.38(typescript@5.9.3))':
     dependencies:
       '@affino/focus-utils': 1.1.0
@@ -2315,14 +2342,29 @@ snapshots:
       '@affino/overlay-kernel': 0.2.0
       vue: 3.4.38(typescript@5.9.3)
 
+  '@affino/menu-vue@2.2.1(vue@3.4.38(typescript@5.9.3))':
+    dependencies:
+      '@affino/focus-utils': 1.1.0
+      '@affino/menu-core': 1.2.1
+      '@affino/overlay-host': 1.1.0
+      '@affino/overlay-kernel': 0.2.1
+      vue: 3.4.38(typescript@5.9.3)
+
   '@affino/overlay-host@1.1.0': {}
 
   '@affino/overlay-kernel@0.2.0': {}
+
+  '@affino/overlay-kernel@0.2.1': {}
 
   '@affino/popover-core@1.1.0':
     dependencies:
       '@affino/overlay-kernel': 0.2.0
       '@affino/surface-core': 1.1.0
+
+  '@affino/popover-core@1.1.1':
+    dependencies:
+      '@affino/overlay-kernel': 0.2.1
+      '@affino/surface-core': 1.1.1
 
   '@affino/popover-vue@1.1.0(vue@3.4.38(typescript@5.9.3))':
     dependencies:
@@ -2331,7 +2373,16 @@ snapshots:
       '@affino/popover-core': 1.1.0
       vue: 3.4.38(typescript@5.9.3)
 
+  '@affino/popover-vue@1.1.1(vue@3.4.38(typescript@5.9.3))':
+    dependencies:
+      '@affino/overlay-host': 1.1.0
+      '@affino/overlay-kernel': 0.2.1
+      '@affino/popover-core': 1.1.1
+      vue: 3.4.38(typescript@5.9.3)
+
   '@affino/surface-core@1.1.0': {}
+
+  '@affino/surface-core@1.1.1': {}
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:

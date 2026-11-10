@@ -328,3 +328,15 @@
   - tests run (unit/integration/critical e2e)
   - quality gates result
   - benchmark/performance gate result (if relevant)
+# @affino/datagrid-core
+
+## 0.14.2
+
+### Fixed
+
+- Depend on the Node-resolvable `@affino/datagrid-plugins@0.2.3` release.
+- Rebuild public output before packing.
+
+### Validation
+
+- Public build and native Node 26 packed consumer fixture.

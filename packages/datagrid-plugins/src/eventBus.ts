@@ -6,7 +6,7 @@ import type {
   DataGridEventMap,
   DataGridEventName,
   DataGridPluginEventHandler,
-} from "./types"
+} from "./types.js"
 
 type UntypedHandler = DataGridPluginEventHandler<readonly unknown[]>
 
