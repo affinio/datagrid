@@ -16,6 +16,7 @@
     <div
       :ref="captureInnerHorizontalScrollportRef"
       :class="centerHorizontalScrollportClass"
+      :data-datagrid-scroll-owner="innerHorizontalScrollport ? 'center-horizontal' : undefined"
       :role="undefined"
       :aria-rowcount="undefined"
       :aria-colcount="undefined"
@@ -234,9 +235,16 @@
         class="grid-row grid-row--empty-state grid-row--empty-state-viewport"
         role="row"
         aria-rowindex="1"
+        :style="layout.gridContentStyle"
       >
         <div class="grid-empty-state-cell" role="gridcell" :aria-colspan="Math.max(1, gridAriaColumnCount)">
-          <div class="datagrid-empty-state datagrid-empty-state--viewport" role="status" aria-live="polite" aria-atomic="true">
+          <div
+            class="datagrid-empty-state datagrid-empty-state--viewport"
+            :style="viewportEmptyStateStyle"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             <slot name="empty-state" :state="emptyState">
               <span>
                 {{ emptyState.reason === "filtered" ? "No rows match the current filters." : "No rows to display." }}
@@ -371,6 +379,10 @@ const props = defineProps({
     type: String as PropType<DataGridEmptyStateAlignment>,
     default: "content",
   },
+  emptyStateViewportWidth: {
+    type: Number,
+    default: 0,
+  },
   reportCenterPaneDiagnostics: {
     type: Function as PropType<((payload: DataGridTableStageCenterPaneDiagnostics) => void) | undefined>,
     default: undefined,
@@ -415,6 +427,11 @@ const {
 
 const topSpacerHeight = computed(() => props.topSpacerHeight ?? viewport.value.topSpacerHeight)
 const bottomSpacerHeight = computed(() => props.bottomSpacerHeight ?? viewport.value.bottomSpacerHeight)
+const viewportEmptyStateStyle = computed(() => ({
+  "--datagrid-empty-state-viewport-width": props.emptyStateViewportWidth > 0
+    ? `${props.emptyStateViewportWidth}px`
+    : "100%",
+}))
 const handleScroll = computed(() => props.handleScroll ?? renderApi.value.handleCenterViewportScroll)
 const handleWheel = computed(() => props.handleWheel ?? renderApi.value.handleBodyViewportWheel)
 const handleKeydown = computed(() => props.handleKeydown ?? renderApi.value.handleViewportKeydown)

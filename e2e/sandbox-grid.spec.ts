@@ -5,13 +5,13 @@ test("viewport-aligned empty state fills and centers in the visible center lane"
 
   for (const pinMode of ["unpinned", "pinned"] as const) {
     await page.goto(`/vue/empty-state-viewport/${pinMode}`)
-    const centerViewport = page.locator(".grid-body-center-horizontal-scrollport--scroll-owner")
+    const centerViewport = page.locator('[data-datagrid-scroll-owner="center-horizontal"]')
     const emptyState = page.locator(".datagrid-empty-state--viewport")
     await expect(centerViewport).toBeVisible()
     await expect(emptyState).toBeVisible()
 
     const geometry = await page.evaluate(() => {
-      const viewport = document.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")!
+      const viewport = document.querySelector<HTMLElement>('[data-datagrid-scroll-owner="center-horizontal"]')!
       const empty = document.querySelector<HTMLElement>(".datagrid-empty-state--viewport")!
       const viewportRect = viewport.getBoundingClientRect()
       const emptyRect = empty.getBoundingClientRect()
@@ -30,6 +30,30 @@ test("viewport-aligned empty state fills and centers in the visible center lane"
     expect(geometry.emptyWidth).toBeCloseTo(geometry.viewportWidth, 0)
     expect(geometry.emptyCenterX).toBeCloseTo(geometry.viewportCenterX, 0)
     expect(geometry.emptyCenterY).toBeCloseTo(geometry.viewportCenterY, 0)
+
+    await centerViewport.evaluate(element => {
+      const viewport = element as HTMLElement
+      viewport.scrollLeft = viewport.scrollWidth - viewport.clientWidth
+      viewport.dispatchEvent(new Event("scroll", { bubbles: true }))
+    })
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())))
+    const scrolledGeometry = await page.evaluate(() => {
+      const viewport = document.querySelector<HTMLElement>('[data-datagrid-scroll-owner="center-horizontal"]')!
+      const empty = document.querySelector<HTMLElement>(".datagrid-empty-state--viewport")!
+      const viewportRect = viewport.getBoundingClientRect()
+      const emptyRect = empty.getBoundingClientRect()
+      return {
+        scrollLeft: viewport.scrollLeft,
+        viewportWidth: viewport.clientWidth,
+        scrollWidth: viewport.scrollWidth,
+        viewportCenterX: viewportRect.left + viewport.clientWidth / 2,
+        emptyCenterX: emptyRect.left + emptyRect.width / 2,
+        emptyWidth: emptyRect.width,
+      }
+    })
+    expect(scrolledGeometry.scrollLeft).toBeGreaterThan(0)
+    expect(scrolledGeometry.emptyWidth).toBeCloseTo(scrolledGeometry.viewportWidth, 0)
+    expect(scrolledGeometry.emptyCenterX).toBeCloseTo(scrolledGeometry.viewportCenterX, 0)
   }
 })
 

@@ -1547,7 +1547,7 @@ function resolveHeaderCellElement(columnKey: string): HTMLElement | null {
 function revealHeaderColumnInBodyViewport(headerCell: HTMLElement): void {
   if (!headerCell.closest(".grid-header-viewport")) return
   const stageRoot = headerShellElement.value?.closest(".grid-stage")
-  const bodyViewport = stageRoot?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
+  const bodyViewport = stageRoot?.querySelector<HTMLElement>('[data-datagrid-scroll-owner="center-horizontal"]')
     ?? stageRoot?.querySelector<HTMLElement>(".grid-body-viewport")
   const headerViewport = centerHeaderViewportElement
   if (!bodyViewport || !headerViewport) return

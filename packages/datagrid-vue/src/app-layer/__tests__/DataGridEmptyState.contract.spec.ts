@@ -163,6 +163,7 @@ describe("DataGrid empty state", () => {
     const emptyState = wrapper.find(".datagrid-empty-state--viewport")
     const horizontalScrollport = wrapper.find(".grid-body-center-horizontal-scrollport--scroll-owner")
     expect(emptyState.exists()).toBe(true)
+    expect(horizontalScrollport.attributes("data-datagrid-scroll-owner")).toBe("center-horizontal")
     expect(emptyState.element.closest(".grid-body-center-horizontal-scrollport--scroll-owner")).toBe(horizontalScrollport.element)
     expect(wrapper.find(".grid-body-shell .grid-body-pane--left").exists()).toBe(true)
     expect(wrapper.find(".grid-body-shell .grid-body-pane--right").exists()).toBe(true)

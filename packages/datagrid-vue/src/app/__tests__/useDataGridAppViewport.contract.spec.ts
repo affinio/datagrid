@@ -2052,7 +2052,7 @@ describe("useDataGridAppViewport contract", () => {
     const sharedVerticalViewport = document.createElement("div")
     sharedVerticalViewport.dataset.datagridScrollOwner = "shared-vertical"
     const centerHorizontalViewport = document.createElement("div")
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
+    centerHorizontalViewport.dataset.datagridScrollOwner = "center-horizontal"
     Object.defineProperty(sharedVerticalViewport, "clientHeight", { configurable: true, value: 100 })
     Object.defineProperty(sharedVerticalViewport, "clientWidth", { configurable: true, value: 500 })
     Object.defineProperty(centerHorizontalViewport, "clientHeight", { configurable: true, value: 100 })

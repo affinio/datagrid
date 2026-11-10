@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.17.6
+
+### Fixed
+
+- Keep viewport-aligned empty state centered during horizontal scrolling by sizing its sticky surface to the measured center scroll owner and spanning the virtual content track.
+- Mark the center horizontal scroll owner explicitly in the rendered DOM and use that marker for package viewport lookup.
+
+### Validation
+
+- Vue type-check, empty-state contracts, and pinned/unpinned browser geometry checks before and after horizontal scrolling.
+
 ## 0.17.5
 
 ### Fixed

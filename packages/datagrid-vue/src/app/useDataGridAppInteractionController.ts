@@ -971,7 +971,7 @@ export function useDataGridAppInteractionController<
       return bodyViewport
     }
     return bodyViewport.closest(".grid-stage")
-      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
+      ?.querySelector<HTMLElement>('[data-datagrid-scroll-owner="center-horizontal"]')
       ?? bodyViewport
   }
 

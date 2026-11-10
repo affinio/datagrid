@@ -160,7 +160,7 @@ describe("useDataGridAppActiveCellViewport contract", () => {
     const viewport = createViewport()
     viewport.dataset.datagridScrollOwner = "shared-vertical"
     const horizontalViewport = createViewport()
-    horizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
+    horizontalViewport.dataset.datagridScrollOwner = "center-horizontal"
     horizontalViewport.scrollLeft = 120
     stage.append(viewport, horizontalViewport)
     document.body.appendChild(stage)

@@ -933,7 +933,7 @@ describe("useDataGridAppInteractionController contract", () => {
       stage.appendChild(bodyShell)
     }
     const centerHorizontalViewport = document.createElement("div")
-    centerHorizontalViewport.className = "grid-body-center-horizontal-scrollport--scroll-owner"
+    centerHorizontalViewport.dataset.datagridScrollOwner = "center-horizontal"
     Object.defineProperty(centerHorizontalViewport, "scrollLeft", { configurable: true, writable: true, value: 0 })
     Object.defineProperty(centerHorizontalViewport, "scrollWidth", { configurable: true, value: 1_200 })
     Object.defineProperty(centerHorizontalViewport, "clientWidth", { configurable: true, value: 200 })

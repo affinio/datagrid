@@ -154,6 +154,7 @@
           :overlay-lanes="centerCustomOverlayLanes"
           :empty-state="props.emptyState"
           :empty-state-alignment="props.emptyStateAlignment"
+          :empty-state-viewport-width="bodyViewportClientWidth"
           :render-api="centerPaneRenderApi"
         >
           <template #content-chrome>

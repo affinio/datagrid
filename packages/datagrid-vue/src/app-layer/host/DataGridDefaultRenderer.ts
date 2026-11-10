@@ -2459,7 +2459,7 @@ export default defineComponent({
         requestDataGridAnimationFrame(() => {
           const stage = stageHostRef.value
           const horizontalViewport = stage?.querySelector<HTMLElement>(
-            ".grid-body-center-horizontal-scrollport--scroll-owner",
+            '[data-datagrid-scroll-owner="center-horizontal"]',
           ) ?? stage?.querySelector<HTMLElement>(".grid-body-viewport")
           if (horizontalViewport) {
             horizontalViewport.scrollLeft = 0

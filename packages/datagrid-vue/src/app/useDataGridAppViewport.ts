@@ -725,7 +725,7 @@ export function useDataGridAppViewport<TRow>(
       return verticalViewport
     }
     return verticalViewport.closest(".grid-stage")
-      ?.querySelector<HTMLElement>(".grid-body-center-horizontal-scrollport--scroll-owner")
+      ?.querySelector<HTMLElement>('[data-datagrid-scroll-owner="center-horizontal"]')
       ?? verticalViewport
   }
 

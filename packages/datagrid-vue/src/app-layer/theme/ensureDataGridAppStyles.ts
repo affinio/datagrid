@@ -1386,7 +1386,7 @@ const DATA_GRID_APP_STYLES = `
   left: 0;
   min-height: 100%;
   position: sticky;
-  width: 100%;
+  width: var(--datagrid-empty-state-viewport-width, 100%);
 }
 
 .grid-pane-content {
