@@ -4,6 +4,7 @@ import AnalyticsChartsDemo from "./features/charts/AnalyticsChartsDemo.vue"
 import ChartsDemo from "./features/charts/ChartsDemo.vue"
 import ShowcaseLanding from "./components/ShowcaseLanding.vue"
 import VueCellRendererGridCard from "./components/VueCellRendererGridCard.vue"
+import VueCellSelectionModeDemo from "./components/VueCellSelectionModeDemo.vue"
 import VueColumnSelectionGridCard from "./components/VueColumnSelectionGridCard.vue"
 import VueFormulaGridCard from "./components/VueFormulaGridCard.vue"
 import VueGridCard from "./components/VueGridCard.vue"
@@ -91,6 +92,10 @@ const routes = [
   {
     path: "/vue/cell-renderer-grid",
     component: VueCellRendererGridCard,
+  },
+  {
+    path: "/vue/cell-selection-mode",
+    component: VueCellSelectionModeDemo,
   },
   {
     path: "/vue/row-selection-grid",

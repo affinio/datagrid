@@ -177,6 +177,7 @@ export interface UseDataGridTableStageRuntimeOptions<TRow extends Record<string,
   placeholderRows: Ref<DataGridPlaceholderRowsOptions<TRow>>
   enableFillHandle: Ref<boolean>
   enableRangeMove: Ref<boolean>
+  enableCellSelection?: Ref<boolean>
   rows: Ref<readonly TRow[]>
   sourceRows?: Ref<readonly TRow[]>
   resolveSourceRowId?: (row: TRow, index: number) => string | number | null | undefined
@@ -724,6 +725,7 @@ export function useDataGridTableStageRuntime<
 
   const selectionController = useDataGridAppCellSelection<TRow>({
     mode: options.mode,
+    enableCellSelection: options.enableCellSelection,
     runtime: {
       api: selectableRuntime.api,
       getBodyRowAtIndex: resolveSelectableRowAtIndex,
@@ -1028,6 +1030,8 @@ export function useDataGridTableStageRuntime<
     sourceRows: options.sourceRows ?? options.rows,
     resolveSourceRowId: options.resolveSourceRowId,
     rowSelectionSnapshot: rowSelectionSnapshotRef,
+    cellSelectionSnapshot: options.selectionSnapshot,
+    enableCellSelection: options.enableCellSelection,
     applyRowSelectionMutation: mutator => {
       if (!options.runtime.api.rowSelection.hasSupport()) {
         return
@@ -1864,6 +1868,7 @@ export function useDataGridTableStageRuntime<
     mode: options.mode,
     enableFillHandle: options.enableFillHandle,
     enableRangeMove: options.enableRangeMove,
+    enableCellSelection: options.enableCellSelection,
     runtime: selectableRuntime as never,
     totalRows: totalSelectableRows,
     visibleColumns: orderedVisibleColumns,
@@ -1995,7 +2000,11 @@ export function useDataGridTableStageRuntime<
     commitRowSelectionSession: rowSelectionService.commitRowSelectionSession,
     cancelRowSelectionSession: rowSelectionService.cancelRowSelectionSession,
     rowHeaderAction: options.rowHeaderAction,
-    selectCellRangeByRowId: rowSelectionService.selectCellRangeByRowId,
+    selectCellRangeByRowId: (rowId, extend) => {
+      if (options.enableCellSelection?.value !== false) {
+        rowSelectionService.selectCellRangeByRowId(rowId, extend)
+      }
+    },
     resolveRowSelectionTargetAtPoint: (pointer: { clientX: number; clientY: number }) => {
       if (typeof document === "undefined") return null
       const cell = document.elementFromPoint(pointer.clientX, pointer.clientY)
@@ -2163,6 +2172,7 @@ export function useDataGridTableStageRuntime<
     tableStageContext,
   } = useDataGridTableStageBindings<TRow>({
     mode: options.mode,
+    enableCellSelection: options.enableCellSelection,
     rowHeightMode: options.rowHeightMode,
     stickyGroupRows: options.stickyGroupRows ?? computed(() => ({
       enabled: false,

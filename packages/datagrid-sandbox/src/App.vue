@@ -30,6 +30,7 @@ const navGroups = [
       { to: "/vue/base-grid", label: "Vue Runtime Grid" },
       { to: "/vue/worker-grid", label: "Background Data Processing" },
       { to: "/vue/cell-renderer-grid", label: "Custom Cell Presentation" },
+      { to: "/vue/cell-selection-mode", label: "Cell Selection Mode" },
       { to: "/vue/typed-facade-grid", label: "Typed Integration" },
     ],
   },

@@ -275,6 +275,7 @@ export interface UseDataGridAppInteractionControllerOptions<
   mode: Ref<DataGridAppMode>
   enableFillHandle?: Ref<boolean>
   enableRangeMove?: Ref<boolean>
+  enableCellSelection?: Ref<boolean>
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex" | "resolveBodyRowIndexById" | "rowModel">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -615,6 +616,24 @@ export function useDataGridAppInteractionController<
   }
   const isFillHandleEnabled = computed(() => options.enableFillHandle?.value !== false)
   const isRangeMoveEnabled = computed(() => options.enableRangeMove?.value !== false)
+  const isCellSelectionEnabled = computed(() => options.enableCellSelection?.value !== false)
+  const setCellSelectionOrFocus = (
+    row: DataGridRowNode<TRow>,
+    rowOffset: number,
+    columnIndex: number,
+    extend: boolean,
+    additive = false,
+  ): void => {
+    if (isCellSelectionEnabled.value) {
+      options.setCellSelection(row, rowOffset, columnIndex, extend, additive)
+      return
+    }
+    options.applyCellSelectionByCoord({
+      rowIndex: resolveRowIndex(row, rowOffset),
+      columnIndex,
+      rowId: row.rowId ?? null,
+    }, false)
+  }
 
   const isPointerSelectingCells = ref(false)
   const isRowSelectionDragging = ref(false)
@@ -933,6 +952,13 @@ export function useDataGridAppInteractionController<
     clearPendingDragSelection()
     clearPendingRangeMove()
   }
+
+  watch(isCellSelectionEnabled, enabled => {
+    if (enabled) return
+    stopPointerSelection()
+    rangeMoveLifecycle.stopRangeMove(false)
+    options.clearCellSelection()
+  }, { flush: "sync" })
 
   const resolveColumnPin = (columnIndex: number): DataGridAppPinnedOrigin => {
     const pin = options.visibleColumns.value[columnIndex]?.pin
@@ -2184,7 +2210,7 @@ export function useDataGridAppInteractionController<
       return resolveDirectionalSemanticJumpTarget(current, direction, event)
     },
     applyCellSelection: (nextCoord, extend, fallbackAnchor) => {
-      options.applyCellSelectionByCoord(nextCoord, extend, fallbackAnchor)
+      options.applyCellSelectionByCoord(nextCoord, extend && isCellSelectionEnabled.value, fallbackAnchor)
     },
     onNavigationApplied: nextCoord => {
       void nextTick(() => {
@@ -2684,7 +2710,7 @@ export function useDataGridAppInteractionController<
     focusViewport,
     openContextMenuFromCurrentCell,
     selectAllCells: () => {
-      if (!supportsCellSelectionMode()) {
+      if (!supportsCellSelectionMode() || !isCellSelectionEnabled.value) {
         return
       }
       let selectAllEndRowIndex = options.totalRows.value - 1
@@ -3329,6 +3355,10 @@ export function useDataGridAppInteractionController<
       return
     }
     const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    const eventTarget = event.target instanceof HTMLElement ? event.target : null
+    const isInteractiveTarget = Boolean(eventTarget?.closest(
+      'button, input, select, textarea, [contenteditable="true"], [role="button"], [role="textbox"], .cell-editor-control, .datagrid-cell-combobox__input',
+    ))
     const rowIndex = resolveRowIndex(row, rowOffset)
     const coord = options.normalizeCellCoord({
       rowIndex,
@@ -3339,7 +3369,7 @@ export function useDataGridAppInteractionController<
       cancelFillPreviewState()
       if (event.button === 0 && coord) {
         event.preventDefault()
-        options.setCellSelection(row, rowOffset, columnIndex, false, false)
+        setCellSelectionOrFocus(row, rowOffset, columnIndex, false, false)
         target?.focus({ preventScroll: true })
       }
       return
@@ -3348,6 +3378,7 @@ export function useDataGridAppInteractionController<
 
     if (
       options.mode.value === "base"
+      && isCellSelectionEnabled.value
       && isRangeMoveEnabled.value
       && event.button === 0
       && !event.shiftKey
@@ -3368,7 +3399,7 @@ export function useDataGridAppInteractionController<
       return
     }
 
-    if (supportsCellSelectionMode()) {
+    if (supportsCellSelectionMode() && isCellSelectionEnabled.value) {
       const handled = cellPointerDownRouter.dispatchCellPointerDown(row, columnKey, event)
       if (handled) {
         dragSelectionOriginPin.value = resolveColumnPin(columnIndex)
@@ -3376,12 +3407,18 @@ export function useDataGridAppInteractionController<
         return
       }
     }
+    if (!isCellSelectionEnabled.value && !eventTarget?.closest(".cell-editor-input, .cell-editor-control, .datagrid-cell-combobox__input")) {
+      commitActiveInlineEditForInteraction()
+    }
 
     if (event.button !== 0) {
       return
     }
-    options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey, event.ctrlKey || event.metaKey)
-    if (!supportsCellSelectionMode()) {
+    setCellSelectionOrFocus(row, rowOffset, columnIndex, event.shiftKey, event.ctrlKey || event.metaKey)
+    if (!supportsCellSelectionMode() || !isCellSelectionEnabled.value) {
+      if (!isInteractiveTarget) {
+        target?.focus({ preventScroll: true })
+      }
       return
     }
     pendingDragSelection.value = true
@@ -3424,7 +3461,7 @@ export function useDataGridAppInteractionController<
       }
     }
     if (!options.selectionSnapshot.value?.activeCell) {
-      options.setCellSelection(row, rowOffset, columnIndex, false)
+      setCellSelectionOrFocus(row, rowOffset, columnIndex, false)
     }
     if (keyboardCommandRouter.dispatchKeyboardCommands(event)) {
       return
@@ -3484,7 +3521,7 @@ export function useDataGridAppInteractionController<
       && !event.altKey
       && (keyboardAction !== "invoke" || editable)
     ) {
-      keyboardNavigationExtendsSelection.value = event.shiftKey
+      keyboardNavigationExtendsSelection.value = event.shiftKey && isCellSelectionEnabled.value
       const navigationHandled = cellNavigation.dispatchNavigation(event)
       keyboardNavigationExtendsSelection.value = false
       if (navigationHandled) {
@@ -3494,7 +3531,7 @@ export function useDataGridAppInteractionController<
 
     if (keyboardAction === "toggle" && columnSnapshot && columnKey) {
       event.preventDefault()
-      options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+      setCellSelectionOrFocus(row, rowOffset, columnIndex, event.shiftKey)
       void applyDirectCellEdit(
         row,
         rowIndex,
@@ -3510,7 +3547,7 @@ export function useDataGridAppInteractionController<
     }
     if (keyboardAction === "invoke" && columnSnapshot) {
       event.preventDefault()
-      options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+      setCellSelectionOrFocus(row, rowOffset, columnIndex, event.shiftKey)
       invokeDataGridCellInteraction({
         column: columnSnapshot.column,
         row: row.kind !== "group" ? row.data : undefined,
@@ -3549,7 +3586,7 @@ export function useDataGridAppInteractionController<
       }
       return
     }
-    keyboardNavigationExtendsSelection.value = event.shiftKey
+    keyboardNavigationExtendsSelection.value = event.shiftKey && isCellSelectionEnabled.value
     const navigationHandled = cellNavigation.dispatchNavigation(event)
     keyboardNavigationExtendsSelection.value = false
     if (navigationHandled) {
@@ -3557,7 +3594,7 @@ export function useDataGridAppInteractionController<
     }
     if (event.key === " " || event.key === "Spacebar") {
       event.preventDefault()
-      options.setCellSelection(row, rowOffset, columnIndex, event.shiftKey)
+      setCellSelectionOrFocus(row, rowOffset, columnIndex, event.shiftKey)
     }
   }
 

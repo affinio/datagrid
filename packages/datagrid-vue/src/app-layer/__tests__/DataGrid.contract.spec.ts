@@ -875,6 +875,55 @@ async function dragMoveSelectedBodyCell(
 }
 
 describe("DataGrid app facade contract", () => {
+  it("defaults cell selection on, clears it when disabled, and blocks API selection writes", async () => {
+    const wrapper = mount(DataGrid, {
+      attachTo: document.body,
+      props: {
+        rows: [{ rowId: "a", name: "A" }, { rowId: "b", name: "B" }],
+        columns: [{ key: "name", field: "name" }],
+      },
+    })
+    try {
+      await flushRuntimeTasks()
+      const api = (wrapper.vm as unknown as DataGridInstance<{ rowId: string; name: string }>).getApi()
+      if (!api) throw new Error("DataGrid API did not mount")
+      const snapshot = {
+        ranges: [{
+          startRow: 0,
+          endRow: 1,
+          startCol: 0,
+          endCol: 0,
+          startRowId: "a",
+          endRowId: "b",
+          anchor: { rowIndex: 0, colIndex: 0, rowId: "a" },
+          focus: { rowIndex: 1, colIndex: 0, rowId: "b" },
+        }],
+        activeRangeIndex: 0,
+        activeCell: { rowIndex: 1, colIndex: 0, rowId: "b" },
+      }
+
+      api.selection.setSnapshot(snapshot as never)
+      expect(api.selection.getSnapshot()?.ranges).toHaveLength(1)
+
+      await wrapper.setProps({ enableCellSelection: false })
+      expect(api.selection.getSnapshot()).toBeNull()
+      api.selection.setSnapshot(snapshot as never)
+      expect(api.selection.getSnapshot()).toBeNull()
+
+      await queryBodyCell(wrapper, 1, 0).trigger("mousedown", { button: 0, clientX: 20, clientY: 40 })
+      await flushRuntimeTasks()
+      expect(wrapper.findAll(".grid-body-viewport .grid-row")[1]!.classes()).toContain("grid-row--focused")
+      expect(wrapper.find(".grid-header .grid-cell--focus-axis").exists()).toBe(false)
+
+      await wrapper.setProps({ enableCellSelection: true })
+      api.selection.setSnapshot(snapshot as never)
+      expect(api.selection.getSnapshot()?.ranges).toHaveLength(1)
+    } finally {
+      wrapper.unmount()
+      document.body.replaceChildren()
+    }
+  })
+
   it("resolves activateCell selection against the latest projection after asynchronous reveal", async () => {
     const wrapper = mount(DataGrid, {
       attachTo: document.body,
@@ -912,6 +961,7 @@ describe("DataGrid app facade contract", () => {
 
     expect(publicProps).not.toContain("licenseKey")
     expect(publicProps).toContain("diagnostics")
+    expect(publicProps).toContain("enableCellSelection")
     expect(publicProps).toContain("formulaRuntime")
     expect(publicProps).toContain("formulaPacks")
     expect(publicProps).toContain("performance")

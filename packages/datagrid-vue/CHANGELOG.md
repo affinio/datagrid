@@ -1,5 +1,16 @@
 # @affino/datagrid-vue
 
+## 0.17.8
+
+### Added
+
+- Add the public `enable-cell-selection` prop to disable cell and range selection while preserving focused-cell navigation.
+- Highlight the active row when cell selection is disabled, including canvas chrome rendering, and suppress the focus-axis marker in the column header.
+
+### Validation
+
+- Vue selection, DataGrid, and canvas chrome regression tests; package and sandbox type-checks and production builds.
+
 ## 0.17.7
 
 ### Fixed

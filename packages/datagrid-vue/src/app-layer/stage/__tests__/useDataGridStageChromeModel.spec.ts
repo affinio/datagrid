@@ -50,6 +50,7 @@ describe("useDataGridStageChromeModel", () => {
     const displayRows = computed<readonly DataGridTableStageBodyRow[]>(() => ([
       { rowId: "row-0", displayIndex: 0 } as unknown as DataGridTableStageBodyRow,
       { rowId: "row-1", displayIndex: 1 } as unknown as DataGridTableStageBodyRow,
+      { rowId: "row-2", displayIndex: 2 } as unknown as DataGridTableStageBodyRow,
     ]))
     const pinnedBottomRows = computed<readonly DataGridTableStageBodyRow[]>(() => ([
       { rowId: "pinned-0", displayIndex: 2 } as unknown as DataGridTableStageBodyRow,
@@ -98,7 +99,7 @@ describe("useDataGridStageChromeModel", () => {
       topSpacerHeight: 60,
       bottomSpacerHeight: 0,
       viewportRowStart: 0,
-      viewportRowEnd: 1,
+      viewportRowEnd: 2,
       virtualRowTotal: 10,
       baseRowHeight: 31,
       resolveRowHeight: undefined,
@@ -128,6 +129,7 @@ describe("useDataGridStageChromeModel", () => {
         return ""
       },
       isRowCheckboxSelected: (row: DataGridTableStageBodyRow) => row.rowId === "row-1",
+      isRowFocused: (row: DataGridTableStageBodyRow) => row.rowId === "row-2",
       stripedRows: true,
       rowHover: false,
     } as unknown as DataGridTableStageRowsSection<Record<string, unknown>>))
@@ -136,14 +138,17 @@ describe("useDataGridStageChromeModel", () => {
     row0.className = "grid-row"
     const row1 = document.createElement("div")
     row1.className = "grid-row"
+    const row2 = document.createElement("div")
+    row2.className = "grid-row"
     const content = document.createElement("div")
     content.className = "grid-body-content"
-    content.append(row0, row1)
+    content.append(row0, row1, row2)
     const viewportEl = document.createElement("div")
     viewportEl.scrollTop = 100
     setRect(viewportEl, 10, 180)
     setRect(row0, 18, 31)
     setRect(row1, 49, 31)
+    setRect(row2, 80, 31)
     viewportEl.append(content)
     bodyViewportEl.value = viewportEl
 
@@ -186,6 +191,7 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.rowMetrics.value).toEqual([
       { top: 108, height: 31 },
       { top: 139, height: 31 },
+      { top: 170, height: 31 },
     ])
     expect(result.pinnedBottomRowMetrics.value).toEqual([
       { top: 0, height: 42 },
@@ -196,11 +202,12 @@ describe("useDataGridStageChromeModel", () => {
     expect(result.bodyCenterChromeLayerModel.value.width).toBe(320)
     expect(result.bodyCenterChromeLayerModel.value.height).toBe(180)
     expect(result.bodyCenterChromeLayerModel.value.verticalLines.map(line => line.position)).toEqual([12, 132, 140])
-    expect(result.bodyCenterChromeLayerModel.value.horizontalLines.map(line => line.position)).toEqual([79, 110])
-    expect(result.rowMetricsSignature.value).toBe("108:31|139:31")
+    expect(result.bodyCenterChromeLayerModel.value.horizontalLines.map(line => line.position)).toEqual([79, 110, 141])
+    expect(result.rowMetricsSignature.value).toBe("108:31|139:31|170:31")
     expect(result.pinnedBottomRowMetricsSignature.value).toBe("0:42")
     expect(result.rowBandsSignature.value).toContain("pivot-group:108:31")
     expect(result.rowBandsSignature.value).toContain("selected:139:31")
+    expect(result.rowBandsSignature.value).toContain("selected:170:31")
     expect(result.pinnedBottomRowBandsSignature.value).toBe("tree:0:42")
     expect(result.headerPivotGroupsSignature.value).toBe("none")
 

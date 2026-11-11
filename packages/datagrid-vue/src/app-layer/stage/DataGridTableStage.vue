@@ -28,8 +28,8 @@
       :row-index-column-style="resolvedRowIndexColumnStyle"
       :show-index-column="showRowIndex"
       :navigate-to-row-index="navigateToRowIndex"
-      :focused-body-column-key="focusedBodyColumnKey"
-      :focused-body-row-index="focusedBodyRowIndex"
+      :focused-body-column-key="props.enableCellSelection === false ? null : focusedBodyColumnKey"
+      :focused-body-row-index="props.enableCellSelection === false ? null : focusedBodyRowIndex"
       :copy-selected-cells="selection.copySelectedCells"
       :external-filter-indicators="props.externalFilterIndicators"
       :is-coarse-pointer="isCoarsePointer"
@@ -383,6 +383,10 @@ const props = defineProps({
   mode: {
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["mode"]>,
     required: true,
+  },
+  enableCellSelection: {
+    type: Boolean,
+    default: true,
   },
   rowHeightMode: {
     type: String as PropType<DataGridTableStageProps<Record<string, unknown>>["rowHeightMode"]>,

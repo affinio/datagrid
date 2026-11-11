@@ -855,6 +855,10 @@ const dataGridProps = {
     type: Boolean,
     default: false,
   },
+  enableCellSelection: {
+    type: Boolean,
+    default: true,
+  },
   rangeMove: {
     type: Boolean,
     default: false,
@@ -1399,6 +1403,7 @@ const DataGridRuntimeComponent = defineComponent({
     const rowSelectionColumnWidth = computed(() => resolvedRowSelection.value.columnWidth)
     const selectionOptions = {
       mode: computed(() => inferredMode.value),
+      enableCellSelection: toRef(props, "enableCellSelection"),
       resolveRuntime: () => dataGridRef.value,
       visibleColumns,
       totalRows,
@@ -1443,6 +1448,13 @@ const DataGridRuntimeComponent = defineComponent({
         columnSelectionService,
       }),
     }))
+    watch(toRef(props, "enableCellSelection"), enabled => {
+      if (enabled) return
+      selectionAnchor.value = null
+      selectionSnapshot.value = null
+      dataGridRef.value?.api.selection.clear()
+      selectionService.clearSelection?.()
+    }, { flush: "sync" })
     const {
       dataGridInstanceKey,
       resolvedRowModel,
@@ -1998,6 +2010,7 @@ const DataGridRuntimeComponent = defineComponent({
         maxRows: resolvedLayout.value.maxRows,
         placeholderRows: resolvedPlaceholderRows.value,
         fillHandle: props.fillHandle,
+        enableCellSelection: props.enableCellSelection,
         rangeMove: props.rangeMove,
         rowHover: props.rowHover,
         stripedRows: props.stripedRows,

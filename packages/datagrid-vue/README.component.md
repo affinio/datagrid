@@ -1086,6 +1086,7 @@ Affino DataGrid works well for:
 - `max-rows`
 - `fill-handle`
 - `range-move`
+- `enable-cell-selection`
 - `column-menu`
 - `column-layout`
 - `advanced-filter`
@@ -2129,6 +2130,18 @@ Use `runStructuralRowAction(...)` when row inserts or deletes must be delegated 
 
 - `getSelectionAggregatesLabel()`
 - `getSelectionSummary()`
+
+Cell and range selection is enabled by default. Set `enable-cell-selection`
+to `false` when a grid should retain keyboard focus and navigation without
+creating cell ranges:
+
+```vue
+<DataGrid :enable-cell-selection="false" />
+```
+
+Disabling this option clears the current cell selection and prevents pointer,
+Shift+keyboard, select-all, and programmatic selection snapshot writes. It does
+not disable row selection, sorting, filtering, editing, or native text selection.
 
 ### Pivot
 

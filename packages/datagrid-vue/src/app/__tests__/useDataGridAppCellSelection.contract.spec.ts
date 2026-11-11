@@ -1,5 +1,5 @@
 import { ref } from "vue"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { DataGridSelectionSnapshot } from "@affino/datagrid-core"
 import { useDataGridAppCellSelection } from "../useDataGridAppCellSelection"
 
@@ -105,6 +105,40 @@ describe("useDataGridAppCellSelection contract", () => {
       activeCell: { rowIndex: 2, colIndex: 1, rowId: "r3" },
     })
     expect(api.isSelectionAnchorCell(2, 1)).toBe(true)
+  })
+
+  it("keeps only the active focus cell when cell selection is disabled", () => {
+    const selectionSnapshot = ref<DataGridSelectionSnapshot | null>(null)
+    const selectionAnchor = ref<{ rowIndex: number; colIndex: number; rowId: string | null } | null>(null)
+    const setSnapshot = vi.fn()
+    const api = useDataGridAppCellSelection({
+      mode: ref("base"),
+      enableCellSelection: ref(false),
+      runtime: {
+        api: {
+          selection: { hasSupport: () => true, setSnapshot },
+        },
+        getBodyRowAtIndex: (rowIndex: number) => ({ rowId: `r${rowIndex + 1}` }),
+      } as never,
+      totalRows: ref(2),
+      visibleColumns: ref([{ key: "a" }, { key: "b" }] as never),
+      viewportRowStart: ref(0),
+      selectionSnapshot,
+      selectionAnchor,
+      isEditingCell: () => false,
+    })
+
+    api.applyCellSelectionByCoord({ rowIndex: 1, columnIndex: 1, rowId: "r2" }, true)
+    api.applySelectionRange({ startRow: 0, endRow: 1, startColumn: 0, endColumn: 1 })
+
+    expect(selectionSnapshot.value).toEqual({
+      ranges: [],
+      activeRangeIndex: 0,
+      activeCell: { rowIndex: 1, colIndex: 1, rowId: "r2" },
+    })
+    expect(selectionAnchor.value).toBeNull()
+    expect(setSnapshot).toHaveBeenCalledTimes(1)
+    expect(setSnapshot).toHaveBeenCalledWith(expect.objectContaining({ ranges: [] }))
   })
 
   it("extends tree-mode ranges through grouped rows by flattened row order", () => {

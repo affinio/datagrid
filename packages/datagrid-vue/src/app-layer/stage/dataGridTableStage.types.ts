@@ -299,6 +299,7 @@ export interface DataGridTableStageSectionedProps<TRow extends Record<string, un
 export interface DataGridTableStageProps<TRow extends Record<string, unknown>>
   extends DataGridTableStageSectionedProps<TRow> {
   mode: DataGridTableMode
+  enableCellSelection?: boolean
   rowHeightMode: "fixed" | "auto"
   stickyGroupRows?: StickyGroupRowsOptions
   layoutMode: DataGridLayoutMode
@@ -323,6 +324,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
     DataGridTableStageCellsSection<TRow>,
     DataGridTableStageInteractionSection<TRow> {
   mode: DataGridTableMode
+  enableCellSelection: boolean
   rowHeightMode: "fixed" | "auto"
   stickyGroupRows: StickyGroupRowsOptions
   layoutMode: DataGridLayoutMode
@@ -332,7 +334,7 @@ interface DataGridTableStageBindingsSource<TRow extends Record<string, unknown>>
 export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string, unknown>>
   extends Omit<{
     [K in keyof DataGridTableStageBindingsSource<TRow>]: DataGridMaybeRef<DataGridTableStageBindingsSource<TRow>[K]>
-  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef"> {
+  }, "editingCellValue" | "headerViewportRef" | "bodyViewportRef" | "enableCellSelection"> {
   editingCellValueRef: Ref<string>
   headerViewportRef: Ref<HTMLElement | null>
   bodyViewportRef: Ref<HTMLElement | null>
@@ -341,4 +343,5 @@ export interface UseDataGridTableStageBindingsOptions<TRow extends Record<string
   reportFillPlumbingState?: DataGridMaybeRef<(layer: string, present: boolean) => void>
   reportFillPlumbingDetail?: DataGridMaybeRef<(layer: string, value: string) => void>
   rendererPolicy?: DataGridMaybeRef<DataGridTableStageProps<TRow>["rendererPolicy"]>
+  enableCellSelection?: DataGridMaybeRef<boolean>
 }

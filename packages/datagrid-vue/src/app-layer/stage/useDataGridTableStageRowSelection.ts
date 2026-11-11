@@ -2,6 +2,7 @@ import type {
   DataGridColumnSnapshot,
   DataGridRowId,
   DataGridRowSelectionSnapshot,
+  DataGridSelectionSnapshot,
   UseDataGridRuntimeResult,
 } from "@affino/datagrid-vue/headless"
 import {
@@ -76,6 +77,8 @@ export interface UseDataGridTableStageRowSelectionOptions<TRow extends Record<st
   sourceRows?: Ref<readonly TRow[]>
   resolveSourceRowId?: (row: TRow, index: number) => DataGridRowId | null | undefined
   rowSelectionSnapshot: Ref<DataGridRowSelectionSnapshot | null>
+  cellSelectionSnapshot?: Ref<DataGridSelectionSnapshot | null>
+  enableCellSelection?: Ref<boolean>
   applyRowSelectionMutation?: (mutator: (api: DataGridTableStageRowSelectionApi<TRow>) => void) => void
   viewportRowStart: Ref<number>
   selectionAnchorCell: ComputedRef<DataGridTableStageAnchorCell | null>
@@ -259,7 +262,12 @@ export function useDataGridTableStageRowSelection<TRow extends Record<string, un
   })
 
   const isRowFocused = (row: DataGridTableRow<TRow>): boolean => {
-    return !isPlaceholderRow(row) && row.rowId != null && options.rowSelectionSnapshot.value?.focusedRow === row.rowId
+    if (isPlaceholderRow(row) || row.rowId == null) return false
+    return options.rowSelectionSnapshot.value?.focusedRow === row.rowId
+      || (
+        options.enableCellSelection?.value === false
+        && options.cellSelectionSnapshot?.value?.activeCell?.rowId === row.rowId
+      )
   }
 
   const resolveCheckboxState = (row: DataGridTableRow<TRow>): "true" | "false" | "mixed" => {

@@ -130,6 +130,7 @@ function createControllerHarness(options: {
   isCellEditable?: (rowIndex: number, columnIndex: number) => boolean
   enableFillHandle?: boolean
   enableRangeMove?: boolean
+  enableCellSelection?: boolean
   firstRowKind?: "data" | "group"
   firstRowExpanded?: boolean
   firstRowGroupKey?: string
@@ -420,6 +421,7 @@ function createControllerHarness(options: {
     mode: ref(mode),
     enableFillHandle: ref(options.enableFillHandle ?? true),
     enableRangeMove: ref(options.enableRangeMove ?? true),
+    enableCellSelection: ref(options.enableCellSelection ?? true),
     runtime: {
         api: {
           rows: {
@@ -606,6 +608,43 @@ afterEach(() => {
 })
 
 describe("useDataGridAppInteractionController contract", () => {
+  it("does not start pointer or keyboard range selection when cell selection is disabled", () => {
+    const { controller, row, applyCellSelectionByCoord, applySelectionRange } = createControllerHarness({
+      enableCellSelection: false,
+    })
+    const cell = createCell(0, 0)
+    const pointerDown = createMouseEvent("mousedown", cell, {
+      button: 0,
+      shiftKey: true,
+      clientX: 1,
+      clientY: 10,
+    })
+
+    controller.handleCellMouseDown(pointerDown, row, 0, 0)
+    controller.handleWindowMouseMove(new MouseEvent("mousemove", {
+      buttons: 1,
+      clientX: 12,
+      clientY: 10,
+    }))
+    expect(controller.isPointerSelectingCells.value).toBe(false)
+    expect(applyCellSelectionByCoord).toHaveBeenCalledTimes(1)
+    expect(applyCellSelectionByCoord).toHaveBeenLastCalledWith(expect.any(Object), false)
+
+    controller.handleCellKeydown(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      bubbles: true,
+    }), row, 0, 0)
+    expect(applyCellSelectionByCoord.mock.calls.every(call => call[1] === false)).toBe(true)
+
+    controller.handleCellKeydown(new KeyboardEvent("keydown", {
+      key: "a",
+      ctrlKey: true,
+      bubbles: true,
+    }), row, 0, 0)
+    expect(applySelectionRange).not.toHaveBeenCalled()
+  })
+
   it("owns row-header dragging and commits its latest preview on release", () => {
     let acquireOwner: () => (() => void) | null = () => null
     let releaseOwner: (() => void) | null = null

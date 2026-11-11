@@ -117,7 +117,7 @@ function resolveChromeRowBandKind(
   row: DataGridTableStageBodyRow,
   rowOffset: number,
 ): string | null {
-  if (rows.value.isRowCheckboxSelected?.(row) === true) {
+  if (rows.value.isRowCheckboxSelected?.(row) === true || rows.value.isRowFocused?.(row) === true) {
     return "selected"
   }
   if (isHoveredRow(row, rowOffset)) {

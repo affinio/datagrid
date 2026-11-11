@@ -28,6 +28,7 @@ export type DataGridAppSelectionAnchorLike =
 
 export interface UseDataGridAppCellSelectionOptions<TRow> {
   mode: Ref<DataGridAppMode>
+  enableCellSelection?: Ref<boolean>
   runtime: Pick<UseDataGridRuntimeResult<TRow>, "api" | "getBodyRowAtIndex">
   totalRows: Ref<number>
   visibleColumns: Ref<readonly DataGridColumnSnapshot[]>
@@ -86,6 +87,8 @@ export function useDataGridAppCellSelection<TRow>(
   const supportsCellSelectionMode = (): boolean => {
     return options.mode.value === "base" || options.mode.value === "tree" || options.mode.value === "worker"
   }
+
+  const isCellSelectionEnabled = (): boolean => options.enableCellSelection?.value !== false
 
   const resolveAnchorColumnIndex = (anchor: DataGridAppSelectionAnchorLike): number => {
     return "columnIndex" in anchor ? anchor.columnIndex : anchor.colIndex
@@ -327,6 +330,7 @@ export function useDataGridAppCellSelection<TRow>(
   }
 
   const applySelectionRange = (range: DataGridCopyRange): void => {
+    if (!isCellSelectionEnabled()) return
     const normalized = normalizeSelectionRange(range)
     if (!normalized || !options.runtime.api.selection.hasSupport()) {
       return
@@ -362,6 +366,21 @@ export function useDataGridAppCellSelection<TRow>(
     }
     const normalizedCoord = normalizeCellCoord(coord)
     if (!normalizedCoord) {
+      return
+    }
+    if (!isCellSelectionEnabled()) {
+      options.selectionAnchor.value = null
+      const focusOnlySnapshot: DataGridSelectionSnapshot = {
+        ranges: [],
+        activeRangeIndex: 0,
+        activeCell: {
+          rowIndex: normalizedCoord.rowIndex,
+          colIndex: normalizedCoord.columnIndex,
+          rowId: normalizedCoord.rowId,
+        },
+      }
+      options.selectionSnapshot.value = focusOnlySnapshot
+      options.runtime.api.selection.setSnapshot(focusOnlySnapshot)
       return
     }
     const context = buildSelectionContext()

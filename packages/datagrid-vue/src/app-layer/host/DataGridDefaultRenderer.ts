@@ -1087,6 +1087,10 @@ export default defineComponent({
       type: Boolean,
       default: false,
     },
+    enableCellSelection: {
+      type: Boolean,
+      default: true,
+    },
     rangeMove: {
       type: Boolean,
       default: false,
@@ -4075,6 +4079,7 @@ export default defineComponent({
       placeholderRows: computed(() => props.placeholderRows),
       enableFillHandle: computed(() => props.fillHandle),
       enableRangeMove: computed(() => props.rangeMove),
+      enableCellSelection: computed(() => props.enableCellSelection),
       rows: rowsRef,
       sourceRows: rowsRef,
       resolveSourceRowId: props.resolveSourceRowId,

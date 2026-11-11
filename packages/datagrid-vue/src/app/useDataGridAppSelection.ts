@@ -26,6 +26,7 @@ function resolveMaybeRef<T>(value: MaybeRef<T>): T {
 
 export interface UseDataGridAppSelectionOptions<TRow> {
   mode: MaybeRef<DataGridAppMode>
+  enableCellSelection?: MaybeRef<boolean>
   resolveRuntime?: () => (Pick<UseDataGridRuntimeResult<TRow>, "api"> & Partial<Pick<UseDataGridRuntimeResult<TRow>, "rowModel">>) | null
   visibleColumns?: Ref<readonly DataGridColumnSnapshot[]>
   totalRows?: Ref<number>
@@ -129,13 +130,17 @@ export function useDataGridAppSelection<TRow>(
     const runtime = options.resolveRuntime?.() ?? null
     const rowSnapshot = runtime?.api.rows?.getSnapshot?.()
     const columnSnapshot = runtime?.api.columns?.getSnapshot?.()
-    const currentSnapshot = snapshot && rowSnapshot && columnSnapshot
+    const selectionDisabled = resolveMaybeRef(options.enableCellSelection ?? true) === false
+    const selectionWithoutRanges = selectionDisabled && snapshot?.ranges.length
+      ? { ...snapshot, ranges: [], activeRangeIndex: 0 }
+      : snapshot
+    const currentSnapshot = selectionWithoutRanges && rowSnapshot && columnSnapshot
       ? {
-          ...snapshot,
+          ...selectionWithoutRanges,
           projectionRevision: buildDataGridSelectionProjectionIdentity(rowSnapshot)?.revision ?? null,
           columnRevision: columnSnapshot.orderRevision,
         }
-      : snapshot
+      : selectionWithoutRanges
     selectionSnapshot.value = currentSnapshot
     if (!currentSnapshot || currentSnapshot.ranges.length === 0) {
       selectionAnchor.value = null
@@ -158,6 +163,9 @@ export function useDataGridAppSelection<TRow>(
     getSelectionSnapshot: () => selectionSnapshot.value ?? pendingReconcileSnapshot,
     setSelectionSnapshot: snapshot => {
       pendingReconcileSnapshot = null
+      if (resolveMaybeRef(options.enableCellSelection ?? true) === false && snapshot?.ranges.length) {
+        return
+      }
       syncSelectionState(snapshot)
     },
     clearSelection: () => {

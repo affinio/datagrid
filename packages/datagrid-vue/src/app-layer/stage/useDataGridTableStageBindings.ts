@@ -212,6 +212,7 @@ export function useDataGridTableStageBindings<TRow extends Record<string, unknow
 
   const tableStageProps = computed<DataGridTableStageProps<TRow>>(() => ({
     mode: unref(options.mode),
+    enableCellSelection: unref(options.enableCellSelection ?? true),
     rowHeightMode: unref(options.rowHeightMode),
     stickyGroupRows: unref(options.stickyGroupRows),
     layoutMode: unref(options.layoutMode),
